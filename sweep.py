@@ -43,7 +43,7 @@ class Sweep(object):
             self._procedure = procedure
         else:
             raise TypeError("Must pass a Procedure subclass.")
-        
+
         # Container for SweptParmeters
         self._parameters =  []
         self._current_index = -1
@@ -61,7 +61,7 @@ class Sweep(object):
 
     def __iter__(self):
         return self
-        
+
     def add_parameter(self, param, start_value, stop_value, steps=None, interval=None):
         if not isinstance(param, Parameter):
             raise TypeError("A parameter not deriving from the base class Parameter was provided to the add_parameter method.")
@@ -72,7 +72,7 @@ class Sweep(object):
             values = np.linspace(start_value, stop_value, steps).tolist()
             self._parameters.append(SweptParameter(param, values))
         elif interval is not None:
-            values = np.arange(start_value, stop_value + 0.5*interval, interval).tolist() 
+            values = np.arange(start_value, stop_value + 0.5*interval, interval).tolist()
             self._parameters.append(SweptParameter(param, values))
         else:
             raise ValueError("Invalid specification of Parameter Sweep")
@@ -82,7 +82,7 @@ class Sweep(object):
 
     def add_writer(self, filename, dataset_name, *quants, **kwargs):
         """Add a dataset that updates based on the supplied quantities"""
-        
+
         # Loop through and check the supplied quantities
         for q in quants:
             if not isinstance(q, Quantity):
@@ -92,7 +92,7 @@ class Sweep(object):
         if filename not in self._filenames:
             self._filenames.append(filename)
             self._files[filename] = h5py.File(filename, 'w')
-        
+
         if dataset_name not in self._files[filename]:
             # Determine the dataset dimensions
             sweep_dims = [ p.length for p in self._parameters ]
@@ -129,8 +129,13 @@ class Sweep(object):
     def generate_sweep(self):
         self._sweep_generator = itertools.product(*[sp.values for sp in self._parameters])
 
+    #Python 3 compatible iterator
+    #TODO if we go all in on Python 3, remove this and replace next with __next__ below
+    def __next__(self):
+        return self.next()
+
     def next(self):
-        ps = self._sweep_generator.next()
+        ps = next(self._sweep_generator)
 
         for i, p in enumerate(self._parameters):
             p.parameter.value = ps[i]
