@@ -6,6 +6,8 @@ import numpy as np
 import scipy as sp
 import pandas as pd
 
+import h5py
+
 import time
 
 class Quantity(object):
@@ -18,6 +20,14 @@ class Quantity(object):
         self._value = None
         self.delay_before = 0
         self.delay_after = 0
+
+    @property
+    def value(self):
+        return self._value
+
+    @value.setter
+    def value(self, value):
+        self._value = value
 
     def set_method(self, method):
         logging.debug("Setting method of Quantity %s to %s" % (self.name, str(method)) )

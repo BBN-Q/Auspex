@@ -32,16 +32,15 @@ class Keithley(Instrument):
 class TestProcedure(Procedure):
 
     # Parameters
-    field       = FloatParameter("Field", unit="G")
-    frequency   = FloatParameter("Frequency", unit="Hz")
+    field = FloatParameter("Field", unit="G")
+    frequency = FloatParameter("Frequency", unit="Hz")
 
     # Quantities
-    resistance_trans  = Quantity("Transverse Resistance", unit="Ohm")
-    resistance_long   = Quantity("Longitudinal Resistance", unit="Ohm")
+    resistance_trans = Quantity("Transverse Resistance", unit="Ohm")
+    resistance_long = Quantity("Longitudinal Resistance", unit="Ohm")
 
     def __init__(self):
         super(TestProcedure,self).__init__()
-
 
 if __name__ == '__main__':
 
@@ -64,14 +63,14 @@ if __name__ == '__main__':
 
     # Define a sweep over prarameters
     sweep1 = Sweep(proc)
-    sweep1.add_parameter(proc.frequency, 1e9, 5e9, interval=1e9)
-    sweep1.add_parameter(proc.field, 0, 1000, interval=200)
-    sweep1.generate_sweep()
+    proc.frequency.value = 1.0e9
+    # sweep1.add_parameter(proc.frequency, 1e9, 5e9, interval=0.5e9)
+    sweep1.add_parameter(proc.field, 0, 1000, interval=5)
 
+    sweep1.add_writer('MainData.h5', 'RTvsH', proc.field, proc.resistance_trans, proc.resistance_long)
+    sweep1.add_writer('MainData.h5', 'RLvsH', proc.field, proc.resistance_long)
+    
     for i in sweep1:
-
-        # This runs the procedure with the now updated parameters
-        proc.run()
 
         # This returns the values obtained during the loop
         logging.info("Fake results: %s,\t%s" % (proc.resistance_trans, proc.resistance_long) )

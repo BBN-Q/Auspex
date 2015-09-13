@@ -7,8 +7,9 @@ import scipy as sp
 import pandas as pd
 
 import time
+import h5py
 
-from procedure import Procedure, Parameter
+from procedure import Procedure, Parameter, Quantity
 
 def cartesian(arrays, out=None):
     """
@@ -61,6 +62,13 @@ def cartesian(arrays, out=None):
             out[j*m:(j+1)*m,1:] = out[0:m,1:]
     return out
 
+class Writer(object):
+    """Basically a data structure"""
+    def __init__(self, dataset, params_and_quants):
+        super(Writer, self).__init__()
+        self.dataset = dataset
+        self.params_and_quants = params_and_quants
+
 class Sweep(object):
     """For controlling sweeps over arbitrary number of arbitrary parameters. The order of sweeps\
     is defined by the order of the parameters passed to the add_parameter method. The first\
@@ -76,9 +84,18 @@ class Sweep(object):
             raise TypeError("Must pass a Procedure subclass.")
         self._parameters =  []
         self._values = []
+
+        # Would be better to have this all in a dictionary
+        # but just store the lengths there for now.
+        self._sweep_lengths = {}
+
         self._current_index = -1
         self._quantities = []
-        self._data = []
+
+        # Contains a list of tuples (dataset_object, [list of parameters and quantities] )
+        self._filenames = []
+        self._files = {}
+        self._writers = []
 
     def __iter__(self):
         return self
@@ -100,17 +117,65 @@ class Sweep(object):
         else:
             raise ValueError("Invalid specification of Parameter Sweep")
 
+        # Keep track of the record lengths
+        self._sweep_lengths[param] = len(self._values[-1]) 
+
+        # Generate the full set of permutations
+        self.generate_sweep()
+
+    def add_writer(self, filename, dataset_name, *params_and_quants, **kwargs):
+        """Add a dataset that updates based on the supplies quantities"""
+        
+        params = []
+        quants = []
+
+        for pq in params_and_quants:
+            if not (isinstance(pq, Parameter) or isinstance(pq, Quantity)):
+                raise TypeError("Expecting Parameter or Quantity, not %s" % str(type(pq)) )
+            elif isinstance(pq, Parameter):
+                params.append(pq)
+            elif isinstance(pq, Quantity):
+                quants.append(pq)
+
+        # Look before we leap
+        if filename not in self._filenames:
+            self._filenames.append(filename)
+            self._files[filename] = h5py.File(filename, 'w')
+        if dataset_name not in self._files[filename]:
+            # Construct the dimensions (sweep1_length, sweep2_length, num_params + num_quants)
+            p_dimensions = [self._sweep_lengths[p] for p in params]
+            q_dimensions = [len(quants)+len(params)]
+            dataset_dimensions = tuple(p_dimensions + q_dimensions)
+
+            # Get the datatype
+            dtype = kwargs['dtype'] if 'dtype' in kwargs else 'f'
+
+            # Create the data set
+            dset = self._files[filename].create_dataset(dataset_name, dataset_dimensions, dtype=dtype)
+
+            # Create a new instances of the data structure and store it
+            self._writers.append( Writer(dset, params_and_quants) )
+        else:
+            raise Exception("Cannot have the same dataset name twice in the same file.")
+
+    def write(self):
+        for w in self._writers:
+            for i, pq in enumerate(w.params_and_quants):
+                w.dataset[self._current_index, i] = pq.value
+
     def generate_sweep(self):
         self._sweep_values = cartesian(self._values)
-        # print(len(self._sweep_values))
 
     def next(self):
         logging.info("Sweep moving to step %d" % self._current_index)
         if self._current_index >= len(self._sweep_values)-1:
+            for p in self._parameters:
+                p.swept = False
             raise StopIteration()
         else:
             self._current_index += 1
             for i in range(len(self._parameters)):
                 self._parameters[i].value = self._sweep_values[self._current_index][i]
 
-            # self._data.append( [quant.measure() for quant in self._quantities] )
+            self._procedure.run()
+            self.write()
