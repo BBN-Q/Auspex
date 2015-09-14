@@ -73,7 +73,8 @@ def add_command(instr, name, cmd):
         set_value = cmd.convert_set(val)
         self.interface.write(cmd.set_string % set_value)
 
-    setattr(instr, name, property(fget, fset, None, cmd.doc))
+    #Using None prevents deletion or setting/getting unsettable/gettable attributes
+    setattr(instr, name, property(fget if cmd.get_string else None, fset if cmd.set_string else None, None, cmd.doc))
 
 class MetaInstrument(type):
     """Meta class to create instrument classes with controls turned into descriptors.
