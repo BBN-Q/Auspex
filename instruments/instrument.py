@@ -13,7 +13,7 @@ class Command(object):
     value_map keyword argument allows specification of a dictionary map between python values
     such as True and False and the strange 'on' and 'off' type of values frequently used
     by instruments. Translation occurs via the provided 'convert_set' and 'convert_get' methods."""
-    def __init__(self, name, set_string=None, get_string=None, value_map=None, type=float, range=None, allowed_values=None):
+    def __init__(self, name, set_string=None, get_string=None, value_map=None, type=float, value_range=None, allowed_values=None):
         """Initialize the class with optional set and get string corresponding to instrument
         commands. Also a map containing pairs of e.g. {python_value1: instr_value1, python_value2: instr_value2}"""
         super(Command, self).__init__()
@@ -27,6 +27,16 @@ class Command(object):
         if value_map is not None:
             self.python_to_instr = value_map
             self.instr_to_python = {v: k for k, v in value_map.items()}
+
+        if allowed_values is None:
+            self.allowed_values = None
+        else:
+            self.allowed_values = allowed_values
+
+        if value_range is None:
+            self.value_range = None
+        else:
+            self.value_range = (min(value_range), max(value_range))
 
         # We neeed to do something or other
         if set_string is None and get_string is None:
@@ -113,6 +123,12 @@ class Instrument(object):
                     # Using the default argument is a hacky way to create a local copy
                     # of the command object. We can't create a setter only property.
                     def fset(self, value, command=command):
+                        if command.range is not None:
+                            if (value < command.range[0]) or (value > command.range[1]):
+                                raise ValueError("Outside of the allowable range specified for instrument '%s'." % self.name)
+                        if allowed_values is not None:
+                            if value is not in self.allowed_values:
+                                raise ValueError("Not in the allowable set of values specified for instrument '%s': %s" % (self.name, self.allowed_values) )
                         set_value = command.convert_set(value)
                         self.interface.write(command.set_string % set_value)
                     setattr(self.__class__, 'set_'+item, fset)
