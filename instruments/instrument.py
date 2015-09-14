@@ -123,11 +123,11 @@ class Instrument(object):
                     # Using the default argument is a hacky way to create a local copy
                     # of the command object. We can't create a setter only property.
                     def fset(self, value, command=command):
-                        if command.range is not None:
+                        if command.value_range is not None:
                             if (value < command.range[0]) or (value > command.range[1]):
                                 raise ValueError("Outside of the allowable range specified for instrument '%s'." % self.name)
-                        if allowed_values is not None:
-                            if value is not in self.allowed_values:
+                        if command.allowed_values is not None:
+                            if not value in self.allowed_values:
                                 raise ValueError("Not in the allowable set of values specified for instrument '%s': %s" % (self.name, self.allowed_values) )
                         set_value = command.convert_set(value)
                         self.interface.write(command.set_string % set_value)

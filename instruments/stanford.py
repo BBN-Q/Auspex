@@ -1,10 +1,10 @@
-from .instrument import instrument
+from .instrument import Instrument, Command
 
 def indexed_map(values):
 	return {v: i for i, v in enumerate(values)}
 
-class SR830(Instrument):
-	"""The SR830 lock-in amplifier."""
+class SRS830(Instrument):
+	"""The SRS830 lock-in amplifier."""
 	SAMPLE_FREQUENCY_VALUES = [62.5e-3, 125e-3, 250e-3, 500e-3, 1, 2, 4, 8, 16,
                                 32, 64, 128, 256, 512]
     TIME_CONSTANT_VALUES = [10e-6, 30e-6, 100e-6, 300e-6, 1e-3, 3e-3, 10e-3, 
@@ -30,19 +30,19 @@ class SR830(Instrument):
     CHANNEL1_MAP = indexed_map(CHANNEL1_MAP)
     CHANNEL2_MAP = indexed_map(CHANNEL2_MAP)
 
-    amplitude = Control("amplitude", get_string="SLVL?", set_string="SLVL%0.3f")
-    frequency = Control("frequency", get_string="FREQ?", set_string="FREQ%0.3e")
-    phase = Control("phase", get_string="PHAS?", set_string="PHAS%0.2f")
+    amplitude = Command("amplitude", get_string="SLVL?", set_string="SLVL%0.3f")
+    frequency = Command("frequency", get_string="FREQ?", set_string="FREQ%0.3e")
+    phase = Command("phase", get_string="PHAS?", set_string="PHAS%0.2f")
     
-    x = Control("x", get_string="OUTP?1")
-    y = Control("y", get_string="OUTP?2")
-    magnitude = Control("magnitude", get_string="OUTP?3")
-    theta = Control("theta", get_string="OUTP?4")
+    x = Command("x", get_string="OUTP?1")
+    y = Command("y", get_string="OUTP?2")
+    magnitude = Command("magnitude", get_string="OUTP?3")
+    theta = Command("theta", get_string="OUTP?4")
 
-    channel_1 = Control("Channel 1", get_string="DDEF?1;", set_string="DDEF1,%d,0", allowed_values=CHANNEL1_VALUES, value_map=CHANNEL1_MAP)
-    channel_2 = Control("Channel 2", get_string="DDEF?2;", set_string="DDEF2,%d,0", allowed_values=CHANNEL2_VALUES, value_map=CHANNEL2_MAP)
-    sample_frequency = Control("Sample Frequency", get_string="SRAT?;", set_string="SRAT%f", allowed_values=SAMPLE_FREQUENCY_VALUES, value_map=SAMPLE_FREQUENCY_MAP)
-    sensitivity = Control("Sensitivity", get_string="SENS?;", set_string="SENS%f", allowed_values=SENSITIVITY_VALUES, value_map=SENSITIVITY_MAP)
-    time_constant = Control("Time Constant", get_string="OFLT?;", set_string="OFLT%f", allowed_values=TIME_CONSTANT_VALUES, value_map=TIME_CONSTANT_MAP)
-    filter_slope = Control("Filter Slope", get_string="OFSL?;", set_string="OFSL%f", allowed_values=FILTER_SLOPE_VALUES, value_map=FILTER_SLOPE_MAP)
-    reserve_mode = Control("Reserve Mode", get_string="RMOD?;", set_string="RMOD%f", allowed_values=RESERVE_VALUES, value_map=RESERVE_MAP)
+    channel_1 = Command("Channel 1", get_string="DDEF?1;", set_string="DDEF1,%d,0", allowed_values=CHANNEL1_VALUES, value_map=CHANNEL1_MAP)
+    channel_2 = Command("Channel 2", get_string="DDEF?2;", set_string="DDEF2,%d,0", allowed_values=CHANNEL2_VALUES, value_map=CHANNEL2_MAP)
+    sample_frequency = Command("Sample Frequency", get_string="SRAT?;", set_string="SRAT%f", allowed_values=SAMPLE_FREQUENCY_VALUES, value_map=SAMPLE_FREQUENCY_MAP)
+    sensitivity = Command("Sensitivity", get_string="SENS?;", set_string="SENS%f", allowed_values=SENSITIVITY_VALUES, value_map=SENSITIVITY_MAP)
+    time_constant = Command("Time Constant", get_string="OFLT?;", set_string="OFLT%f", allowed_values=TIME_CONSTANT_VALUES, value_map=TIME_CONSTANT_MAP)
+    filter_slope = Command("Filter Slope", get_string="OFSL?;", set_string="OFSL%f", allowed_values=FILTER_SLOPE_VALUES, value_map=FILTER_SLOPE_MAP)
+    reserve_mode = Command("Reserve Mode", get_string="RMOD?;", set_string="RMOD%f", allowed_values=RESERVE_VALUES, value_map=RESERVE_MAP)

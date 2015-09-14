@@ -1,4 +1,4 @@
-from .instrument import Instrument
+from .instrument import Instrument, Command
 
 class BOP2020M(Instrument):
 	"""For controlling the BOP2020M power supply via GPIB interface card"""
