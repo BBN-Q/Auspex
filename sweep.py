@@ -80,6 +80,11 @@ class Sweep(object):
         # Generate the full set of permutations
         self.generate_sweep()
 
+    def add_parameter_hack(self, param, sweep_list):
+        values = sweep_list
+        self._parameters.append(SweptParameter(param, values))
+        self.generate_sweep()
+
     def add_writer(self, filename, dataset_name, *quants, **kwargs):
         """Add a dataset that updates based on the supplied quantities"""
 
