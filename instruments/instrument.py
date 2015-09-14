@@ -73,6 +73,11 @@ def add_command(instr, name, cmd):
         set_value = cmd.convert_set(val)
         self.interface.write(cmd.set_string % set_value)
 
+    #Add getter and setter methods for passing around
+    if cmd.get_string:
+        setattr(instr, "get_" + name, fget)
+    if cmd.set_string:
+        setattr(instr, "set_" + name, fset)
     #Using None prevents deletion or setting/getting unsettable/gettable attributes
     setattr(instr, name, property(fget if cmd.get_string else None, fset if cmd.set_string else None, None, cmd.doc))
 
