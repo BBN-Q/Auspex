@@ -90,7 +90,10 @@ class MetaInstrument(type):
 class Instrument(object):
     __metaclass__ = MetaInstrument
 
-    def __init__(self):
+    def __init__(self, name, resource_name):
+        self.name = name
+        self.resource_name = resource_name
+
         self.interface = Interface()
 
 
