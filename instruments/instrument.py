@@ -6,6 +6,9 @@ import numpy as np
 import scipy as sp
 import pandas as pd
 
+import visa
+
+import os
 import time
 
 class Command(object):
@@ -72,6 +75,28 @@ class Interface(object):
         logging.debug("Returning values %s" % query)
         return np.random.random()    
 
+class VisaInterface(Interface):
+    """PyVISA interface for communicating with instruments."""
+    def __init__(self, resource_name):
+        super(VisaInterface, self).__init__()
+        try:
+            if os.name == "nt":
+                visa_loc = 'C:\\windows\\system32\\visa64.dll'
+                rm = visa.ResourceManager(visa_loc)
+            else:
+                rm = visa.ResourceManager()
+            self._instrument = rm.open_resource(resource_name)
+        except:
+            raise Exception("Unable to create the resource '%s'" % resource_name)
+    def values(self, query_string):
+        return self._instrument.query_ascii_values(query_string, container=np.array)
+    def value(self, query_string):
+        return self._instrument.query_ascii_values(query_string)
+    def write(self, write_string):
+        self._instrument.write(write_string)
+    def query(self, query_string):
+        return self._instrument.query(query_string)
+
 class Instrument(object):
     """This provides all of the actual device functionality, and contains the interface class
     that allows for communication for the physial instrument. When subclassing Instrument, calling
@@ -81,7 +106,7 @@ class Instrument(object):
 
     parsed_commands = False
 
-    def __init__(self, name, resource_name, check_errors_on_get=False, check_errors_on_set=False):
+    def __init__(self, name, resource_name, interface_type=None, check_errors_on_get=False, check_errors_on_set=False):
         super(Instrument, self).__init__()
         self.name = name
         self.resource_name = resource_name
@@ -90,7 +115,17 @@ class Instrument(object):
 
         self.check_errors_on_get = check_errors_on_get
         self.check_errors_on_set = check_errors_on_set
-        self.interface = Interface()
+        
+        if interface_type is None:
+            # Load the dummy interface, unless we see that GPIB is in the resource string
+            if 'GPIB' in resource_name:
+                self.interface = VisaInterface(resource_name)
+            else:
+                self.interface = Interface()
+        elif interface_type == "VISA":
+            self.interface = VisaInterface(resource_name)
+        else:
+            raise ValueError("That interface type is not yet recognized.")
 
         # Parse class attributes, making sure not to do so multiple times
         # if we have multiple instances of the same instrument type.
@@ -113,7 +148,7 @@ class Instrument(object):
                     # Using the default argument is a hacky way to create a local copy
                     # of the command object.
                     def fget(self, command=command):
-                        value = self.interface.query(command.get_string)
+                        value = self.interface.value(command.get_string)
                         return command.convert_get(value)
 
                     setattr(self.__class__, item, property(fget))
@@ -124,13 +159,13 @@ class Instrument(object):
                     # of the command object. We can't create a setter only property.
                     def fset(self, value, command=command):
                         if command.value_range is not None:
-                            if (value < command.range[0]) or (value > command.range[1]):
+                            if (value < command.value_range[0]) or (value > command.value_range[1]):
                                 raise ValueError("Outside of the allowable range specified for instrument '%s'." % self.name)
                         if command.allowed_values is not None:
                             if not value in self.allowed_values:
                                 raise ValueError("Not in the allowable set of values specified for instrument '%s': %s" % (self.name, self.allowed_values) )
                         set_value = command.convert_set(value)
-                        self.interface.write(command.set_string % set_value)
+                        self.interface.write( command.set_string.format(set_value) )
                     setattr(self.__class__, 'set_'+item, fset)
 
                 if command.set_string is not None and command.get_string is not None:
