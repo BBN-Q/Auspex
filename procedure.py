@@ -97,7 +97,7 @@ class Parameter(object):
         return result + ")>"
 
     def set_method(self, method):
-        logging.debug("Setting method of Paremter %s to %s" % (self.name, str(method)) )
+        logging.debug("Setting method of Parameter %s to %s" % (self.name, str(method)) )
         self.method = method
 
     def push(self):
