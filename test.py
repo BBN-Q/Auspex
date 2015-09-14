@@ -7,6 +7,7 @@ import scipy as sp
 import pandas as pd
 
 from instruments.instrument import Instrument, Command
+from instruments.picosecond import Picosecond10070A
 from sweep import Sweep
 from procedure import FloatParameter, Quantity, Procedure
 
