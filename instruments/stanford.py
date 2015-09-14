@@ -1,11 +1,11 @@
 from .instrument import Instrument, Command
 
 def indexed_map(values):
-	return {v: i for i, v in enumerate(values)}
+    return {v: i for i, v in enumerate(values)}
 
-class SRS830(Instrument):
-	"""The SRS830 lock-in amplifier."""
-	SAMPLE_FREQUENCY_VALUES = [62.5e-3, 125e-3, 250e-3, 500e-3, 1, 2, 4, 8, 16,
+class SR830(Instrument):
+    """The SR830 lock-in amplifier."""
+    SAMPLE_FREQUENCY_VALUES = [62.5e-3, 125e-3, 250e-3, 500e-3, 1, 2, 4, 8, 16,
                                 32, 64, 128, 256, 512]
     TIME_CONSTANT_VALUES = [10e-6, 30e-6, 100e-6, 300e-6, 1e-3, 3e-3, 10e-3, 
                             30e-3, 100e-3, 300e-3, 1, 3, 10, 3, 100, 300, 1e3, 
@@ -25,10 +25,10 @@ class SRS830(Instrument):
     TIME_CONSTANT_MAP = indexed_map(TIME_CONSTANT_VALUES)
     SENSITIVITY_MAP = indexed_map(SENSITIVITY_VALUES)
     EXPANSION_MAP = indexed_map(EXPANSION_VALUES)
-	FILTER_SLOPE_MAP = indexed_map(FILTER_SLOPE_VALUES)
-    RESERVE_MAP = indexed_map(RESERVE_MAP)
-    CHANNEL1_MAP = indexed_map(CHANNEL1_MAP)
-    CHANNEL2_MAP = indexed_map(CHANNEL2_MAP)
+    FILTER_SLOPE_MAP = indexed_map(FILTER_SLOPE_VALUES)
+    RESERVE_MAP = indexed_map(RESERVE_VALUES)
+    CHANNEL1_MAP = indexed_map(CHANNEL1_VALUES)
+    CHANNEL2_MAP = indexed_map(CHANNEL2_VALUES)
 
     amplitude = Command("amplitude", get_string="SLVL?", set_string="SLVL%0.3f")
     frequency = Command("frequency", get_string="FREQ?", set_string="FREQ%0.3e")
