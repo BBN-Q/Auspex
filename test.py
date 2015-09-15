@@ -12,7 +12,7 @@ from sweep import Sweep
 from procedure import FloatParameter, Quantity, Procedure
 
 class SignalGenerator(Instrument):
-    power = Command("power", get_string=":pow?", set_string=":pow %g dbm;")
+    power = Command("power", get_string=":pow?", set_string=":pow %g dbm;", aliases=["amplitude", "amp"])
     frequency = Command("frequency", get_string=":freq?", set_string=":freq %g Hz;")
     center_frequency = Command("center_frequency", get_string=":SOUR:FREQ:CENT?", set_string=":SOUR:FREQ:CENT %e HZ")
     start_frequency = Command("start_frequency", get_string=":SOUR:FREQ:STAR?", set_string=":SOUR:FREQ:STAR %e HZ")
