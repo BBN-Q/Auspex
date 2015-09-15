@@ -1,6 +1,5 @@
 from __future__ import print_function, division
 import logging
-logging.basicConfig(format='%(levelname)s:\t%(message)s', level=logging.DEBUG)
 
 import numpy as np
 import scipy as sp
@@ -154,6 +153,7 @@ def add_command(instr, name, cmd):
             # Go straight to the desired value
             set_value = cmd.convert_set(val)
             logging.debug("Formatting '%s' with string '%s'" % (cmd.set_string, set_value))
+            logging.debug("The seult of the formatting is %s" % cmd.set_string.format(set_value))
             self.interface.write(cmd.set_string.format(set_value))
 
     #Add getter and setter methods for passing around

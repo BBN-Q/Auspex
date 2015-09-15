@@ -3,6 +3,9 @@ from .instrument import Instrument, Command, FloatCommand
 def indexed_map(values):
     return {v: '%d' % i for i, v in enumerate(values)}
 
+def indexed_map_chan(values):
+    return {v: '%d,0' % i for i, v in enumerate(values)}
+
 class SR830(Instrument):
     """The SR830 lock-in amplifier."""
     SAMPLE_FREQUENCY_VALUES = [62.5e-3, 125e-3, 250e-3, 500e-3, 1, 2, 4, 8, 16,
@@ -27,25 +30,25 @@ class SR830(Instrument):
     EXPANSION_MAP = indexed_map(EXPANSION_VALUES)
     FILTER_SLOPE_MAP = indexed_map(FILTER_SLOPE_VALUES)
     RESERVE_MAP = indexed_map(RESERVE_VALUES)
-    CHANNEL1_MAP = indexed_map(CHANNEL1_VALUES)
-    CHANNEL2_MAP = indexed_map(CHANNEL2_VALUES)
+    CHANNEL1_MAP = indexed_map_chan(CHANNEL1_VALUES)
+    CHANNEL2_MAP = indexed_map_chan(CHANNEL2_VALUES)
 
-    amplitude = FloatCommand("amplitude", get_string="SLVL?", set_string="SLVL%0.3f")
-    frequency = FloatCommand("frequency", get_string="FREQ?", set_string="FREQ%0.3e", aliases=['freq'])
-    phase = FloatCommand("phase", get_string="PHAS?", set_string="PHAS%0.2f")
+    amplitude = FloatCommand("amplitude", get_string="SLVL?", set_string="SLVL {:f}")
+    frequency = FloatCommand("frequency", get_string="FREQ?", set_string="FREQ {:f}", aliases=['freq'])
+    phase = FloatCommand("phase", get_string="PHAS?", set_string="PHAS{:g}")
     
-    x = FloatCommand("x", get_string="OUTP?1")
-    y = FloatCommand("y", get_string="OUTP?2")
+    x = FloatCommand("x", get_string="OUTP?1", aliases=["ch1"])
+    y = FloatCommand("y", get_string="OUTP?2", aliases=["ch2"])
     magnitude = FloatCommand("magnitude", get_string="OUTP?3", aliases=['r', 'mag'])
     theta = FloatCommand("theta", get_string="OUTP?4")
 
-    channel_1 = Command("Channel 1", get_string="DDEF?1;", set_string="DDEF1,%d,0", allowed_values=CHANNEL1_VALUES, value_map=CHANNEL1_MAP)
-    channel_2 = Command("Channel 2", get_string="DDEF?2;", set_string="DDEF2,%d,0", allowed_values=CHANNEL2_VALUES, value_map=CHANNEL2_MAP)
-    sample_frequency = Command("Sample Frequency", get_string="SRAT?;", set_string="SRAT%f", allowed_values=SAMPLE_FREQUENCY_VALUES, value_map=SAMPLE_FREQUENCY_MAP)
-    sensitivity = Command("Sensitivity", get_string="SENS?;", set_string="SENS%f", allowed_values=SENSITIVITY_VALUES, value_map=SENSITIVITY_MAP)
-    time_constant = Command("Time Constant", get_string="OFLT?;", set_string="OFLT%f", allowed_values=TIME_CONSTANT_VALUES, value_map=TIME_CONSTANT_MAP, aliases=['tc', 'TC'])
-    filter_slope = Command("Filter Slope", get_string="OFSL?;", set_string="OFSL%f", allowed_values=FILTER_SLOPE_VALUES, value_map=FILTER_SLOPE_MAP)
-    reserve_mode = Command("Reserve Mode", get_string="RMOD?;", set_string="RMOD%f", allowed_values=RESERVE_VALUES, value_map=RESERVE_MAP)
+    channel_1_type = Command("Channel 1", get_string="DDEF?1;", set_string="DDEF1,{:s}", allowed_values=CHANNEL1_VALUES, value_map=CHANNEL1_MAP)
+    channel_2_type = Command("Channel 2", get_string="DDEF?2;", set_string="DDEF2,{:s}", allowed_values=CHANNEL2_VALUES, value_map=CHANNEL2_MAP)
+    sample_frequency = Command("Sample Frequency", get_string="SRAT?;", set_string="SRAT{:f}", allowed_values=SAMPLE_FREQUENCY_VALUES, value_map=SAMPLE_FREQUENCY_MAP)
+    sensitivity = Command("Sensitivity", get_string="SENS?;", set_string="SENS{:f}", allowed_values=SENSITIVITY_VALUES, value_map=SENSITIVITY_MAP)
+    time_constant = Command("Time Constant", get_string="OFLT?;", set_string="OFLT{:f}", allowed_values=TIME_CONSTANT_VALUES, value_map=TIME_CONSTANT_MAP, aliases=['tc', 'TC'])
+    filter_slope = Command("Filter Slope", get_string="OFSL?;", set_string="OFSL{:f}", allowed_values=FILTER_SLOPE_VALUES, value_map=FILTER_SLOPE_MAP)
+    reserve_mode = Command("Reserve Mode", get_string="RMOD?;", set_string="RMOD{:f}", allowed_values=RESERVE_VALUES, value_map=RESERVE_MAP)
 
     def __init__(self, name, resource_name, mode='current', **kwargs):
         super(SR830, self).__init__(name, resource_name, **kwargs)
