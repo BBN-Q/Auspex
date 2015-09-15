@@ -16,11 +16,13 @@ class Command(object):
     value_map keyword argument allows specification of a dictionary map between python values
     such as True and False and the strange 'on' and 'off' type of values frequently used
     by instruments. Translation occurs via the provided 'convert_set' and 'convert_get' methods."""
-    def __init__(self, name, set_string=None, get_string=None, value_map=None, type=float, value_range=None, allowed_values=None):
+    def __init__(self, name, set_string=None, get_string=None, value_map=None, value_range=None, allowed_values=None, aliases=None, delay=None):
         """Initialize the class with optional set and get string corresponding to instrument
         commands. Also a map containing pairs of e.g. {python_value1: instr_value1, python_value2: instr_value2}"""
         super(Command, self).__init__()
         self.name = name
+        self.aliases = aliases
+
         self.set_string = set_string
         self.get_string = get_string
 
@@ -32,6 +34,7 @@ class Command(object):
         if value_map is not None:
             self.python_to_instr = value_map
             self.instr_to_python = {v: k for k, v in value_map.items()}
+            logging.debug("Constructed map and inverse map for command values:\n--- %s\n--- %s'" % (self.python_to_instr, self.instr_to_python))
 
         if allowed_values is None:
             self.allowed_values = None
@@ -61,6 +64,32 @@ class Command(object):
             return get_value_instrument
         else:
             return self.instr_to_python[get_value_instrument]
+
+class FloatCommand(Command):
+    def convert_get(self, get_value_instrument):
+        """Convert the instrument's returned values to something conveniently accessed
+        through python."""
+        if self.python_to_instr is None:
+            return float(get_value_instrument)
+        else:
+            return float(self.instr_to_python[get_value_instrument])
+
+class IntCommand(Command):
+    def convert_get(self, get_value_instrument):
+        """Convert the instrument's returned values to something conveniently accessed
+        through python."""
+        if self.python_to_instr is None:
+            return int(get_value_instrument)
+        else:
+            return int(self.instr_to_python[get_value_instrument])
+
+class RampCommand(FloatCommand):
+    """For quantities that are to be ramped from present to desired value. These will always be floats..."""
+    def __init__(self, name, increment, pause=0.0, **kwargs):
+        super(RampCommand, self).__init__(name, **kwargs)
+        self.name = name
+        self.increment = increment
+        self.pause = pause
 
 class Interface(object):
     """Currently just a dummy standing in for a PyVISA instrument."""
@@ -108,13 +137,24 @@ def add_command(instr, name, cmd):
 
     def fset(self, val):
         if cmd.value_range is not None:
-            if (value < cmd.range[0]) or (value > cmd.range[1]):
+            if (val < cmd.value_range[0]) or (val > cmd.value_range[1]):
                 raise ValueError("Outside of the allowable range specified for instrument '%s'." % self.name)
         if cmd.allowed_values is not None:
-            if not value in cmd.allowed_values:
+            if not val in cmd.allowed_values:
                 raise ValueError("Not in the allowable set of values specified for instrument '%s': %s" % (self.name, cmd.allowed_values) )
-        set_value = cmd.convert_set(val)
-        self.interface.write(cmd.set_string % set_value)
+        if isinstance(cmd, RampCommand):
+            # Ramp from one value to another, making sure we actually take some steps
+            start_value = float(self.interface.query(cmd.get_string))
+            approx_steps = int(abs(val-start_value)/cmd.increment)
+            values = np.linspace(start_value, val, approx_steps+2)
+            for v in values:
+                self.interface.write(cmd.set_string.format(v))
+                time.sleep(cmd.pause)
+        else:
+            # Go straight to the desired value
+            set_value = cmd.convert_set(val)
+            logging.debug("Formatting '%s' with string '%s'" % (cmd.set_string, set_value))
+            self.interface.write(cmd.set_string.format(set_value))
 
     #Add getter and setter methods for passing around
     if cmd.get_string:
@@ -134,6 +174,10 @@ class MetaInstrument(type):
             if isinstance(v, Command):
                 logging.debug("Adding '%s' command", k)
                 add_command(self, k, v)
+                if v.aliases is not None:
+                    for a in v.aliases:
+                        logging.debug("------> Adding alias '%s'" % a)
+                        add_command(self, a, v)
 
 class Instrument(object):
     """This provides all of the actual device functionality, and contains the interface class
@@ -148,8 +192,6 @@ class Instrument(object):
         super(Instrument, self).__init__()
         self.name = name
         self.resource_name = resource_name
-
-        self._commands = {} 
 
         self.check_errors_on_get = check_errors_on_get
         self.check_errors_on_set = check_errors_on_set
