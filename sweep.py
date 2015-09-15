@@ -26,9 +26,7 @@ class SweptParameter(object):
         self.parameter = parameter
         self.values = values
         self.length = len(values)
-
-    def index_of(self, value):
-        return self.values.index(value)
+        self.indices = range(self.length)
 
 class Sweep(object):
     """For controlling sweeps over arbitrary number of arbitrary parameters. The order of sweeps\
@@ -96,7 +94,7 @@ class Sweep(object):
         # Look before we leap
         if filename not in self._filenames:
             self._filenames.append(filename)
-            self._files[filename] = h5py.File(filename, 'w')
+            self._files[filename] = h5py.File(filename, 'a')
 
         if dataset_name not in self._files[filename]:
             # Determine the dataset dimensions
@@ -118,21 +116,24 @@ class Sweep(object):
             raise Exception("Cannot have the same dataset name twice in the same file.")
 
     def write(self):
+        indices = list(next(self._index_generator))
+
         for w in self._writers:
             current_p_values = [p.parameter.value for p in self._parameters]
-            current_p_indices = [p.index_of(pv) for p, pv in zip(self._parameters, current_p_values)]
-            logging.debug("Current indicies are: %s" % str(current_p_indices) )
+
+            logging.debug("Current indicies are: %s" % str(indices) )
 
             for i, p in enumerate(self._parameters):
-                coords = tuple(current_p_indices + [i])
+                coords = tuple( indices + [i] )
                 logging.debug("Coords: %s" % str(coords) )
                 w.dataset[coords] = p.parameter.value
             for i, q in enumerate(w.quantities):
-                coords = tuple( current_p_indices + [len(self._parameters) + i] )
+                coords = tuple( indices + [len(self._parameters) + i] )
                 w.dataset[coords] = q.value
 
     def generate_sweep(self):
         self._sweep_generator = itertools.product(*[sp.values for sp in self._parameters])
+        self._index_generator = itertools.product(*[sp.indices for sp in self._parameters])
 
     #Python 3 compatible iterator
     #TODO if we go all in on Python 3, remove this and replace next with __next__ below

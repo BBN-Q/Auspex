@@ -1,7 +1,7 @@
 from __future__ import print_function, division
 import time
 import logging
-logging.basicConfig(format='%(levelname)s:\t%(message)s', level=logging.DEBUG)
+logging.basicConfig(format='%(levelname)s:\t%(message)s', level=logging.INFO)
 
 import numpy as np
 import scipy as sp
@@ -21,12 +21,12 @@ class FieldTest(Procedure):
     lock = SR830("Lockin Amplifier", "GPIB1::9::INSTR")
 
     def instruments_init(self):
-        self.tc_delay = 5*self.lock.tc
-        self.averages = 5
+        self.tc_delay = 9*self.lock.tc
+        self.averages = 25
         self.bop.output = True
 
         def lockin_measure():
-            time.sleep(self.lock.tc_delay)
+            time.sleep(self.tc_delay)
             return np.mean( [self.lock.r for i in range(self.averages)] )
 
         self.current.set_method(self.bop.set_current)
@@ -48,11 +48,11 @@ if __name__ == '__main__':
 
     # Define a sweep over prarameters
     sw = Sweep(proc)
-    values = np.append(np.arange(-15, 15.1, 0.5), np.arange(14.99,-15,-0.5)).tolist()
+    values = np.append(np.arange(-5, 15.1, 0.25), np.arange(15.0,-5.1,-0.25)).tolist()
     sw.add_parameter_hack(proc.current, values)
 
     # Define a writer
-    # sw.add_writer('SweepField.h5', 'VvsH', proc.voltage)
+    sw.add_writer('SweepField.h5', 'VvsH', proc.voltage)
 
     proc.instruments_init()
     for i in sw:
