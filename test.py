@@ -46,10 +46,10 @@ class TestProcedure(Procedure):
 if __name__ == '__main__':
 
     # Create instances of instruments
-    sg = SignalGenerator('SG1', "GPIB0::4::INSTR")
-    mag = Magnet("GMW", "GPIB0::5::INSTR")
-    keith1 = Keithley("Keithley Transverse", "GPIB0::6::INSTR")
-    keith2 = Keithley("Keithley Longitudinal", "GPIB0::7::INSTR")
+    sg = SignalGenerator('SG1', "FAKE::RESOURE::NAME")
+    mag = Magnet("GMW", "FAKE::RESOURE::NAME")
+    keith1 = Keithley("Keithley Transverse", "FAKE::RESOURE::NAME")
+    keith2 = Keithley("Keithley Longitudinal", "FAKE::RESOURE::NAME")
 
     # Create an instance of the procedure
     proc = TestProcedure()
