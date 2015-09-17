@@ -44,7 +44,6 @@ class Sweep(object):
 
         # Container for SweptParmeters
         self._parameters =  []
-        self._current_index = -1
 
         # Container for written Quantities
         self._quantities = []
@@ -60,27 +59,8 @@ class Sweep(object):
     def __iter__(self):
         return self
 
-    def add_parameter(self, param, start_value, stop_value, steps=None, interval=None):
-        if not isinstance(param, Parameter):
-            raise TypeError("A parameter not deriving from the base class Parameter was provided to the add_parameter method.")
-
-        if steps is None and interval is None:
-            raise ValueError("Must specify either number of steps or step interval")
-        elif steps is not None:
-            values = np.linspace(start_value, stop_value, steps).tolist()
-            self._parameters.append(SweptParameter(param, values))
-        elif interval is not None:
-            values = np.arange(start_value, stop_value + 0.5*interval, interval).tolist()
-            self._parameters.append(SweptParameter(param, values))
-        else:
-            raise ValueError("Invalid specification of Parameter Sweep")
-
-        # Generate the full set of permutations
-        self.generate_sweep()
-
-    def add_parameter_hack(self, param, sweep_list):
-        values = sweep_list
-        self._parameters.append(SweptParameter(param, values))
+    def add_parameter(self, param, sweep_list):
+        self._parameters.append(SweptParameter(param, sweep_list))
         self.generate_sweep()
 
     def add_writer(self, filename, dataset_name, *quants, **kwargs):
