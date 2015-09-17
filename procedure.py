@@ -5,9 +5,9 @@ logging.basicConfig(format='%(levelname)s:\t%(message)s', level=logging.DEBUG)
 import numpy as np
 import scipy as sp
 import pandas as pd
-
 import h5py
 
+import inspect
 import time
 
 class Quantity(object):
@@ -62,24 +62,34 @@ class Quantity(object):
         return result + ")>"
 
 class Parameter(object):
-    """ Encapsulates the information for an experiment parameter\
-    with information about the name, and unit if supplied. Parameter name can not contain a colon ':'.
-    """
+    """ Encapsulates the information for an experiment parameter"""
 
     def __init__(self, name, unit=None, default=None):
-        self.name    = name
-        self._value  = default
-        self.unit    = unit
-        self.default = default
-        self.method  = None
-        self.swept   = False
+        self.name     = name
+        self._value   = default
+        self.unit     = unit
+        self.default  = default
+        self.method   = None
+        self.changed  = True
         
+    def check_if_changed(self, value):
+        if value is None:
+            self.changed = True
+        else:
+            if value != self._value:
+                logging.debug("In '{:s}', value was {:s}, will be {:s}.".format(self.name, str(self._value), str(value)) )
+                self.changed = True
+            else:
+                logging.debug("In '{:s}', value was {:s}, will be {:s}.".format(self.name, str(self._value), str(value)) )
+                self.changed = False
+
     @property
     def value(self):
         return self._value
 
     @value.setter
     def value(self, value):
+        self.check_if_changed(value)
         self._value = value
 
     def __str__(self):
@@ -101,7 +111,10 @@ class Parameter(object):
         self.method = method
 
     def push(self):
-        self.method(self._value)
+        if self.changed:
+            logging.debug("Telling '{:s}' to call set method, since the value has changed.".format(self.name))
+            self.method(self._value)
+        self.changed = False
 
 class FloatParameter(Parameter):
     
@@ -111,6 +124,7 @@ class FloatParameter(Parameter):
     
     @value.setter
     def value(self, value):
+        self.check_if_changed(value)
         try:
             self._value = float(value)
         except ValueError:
@@ -120,6 +134,25 @@ class FloatParameter(Parameter):
     def __repr__(self):
         result = super(FloatParameter, self).__repr__()
         return result.replace("<Parameter", "<FloatParameter", 1)
+
+class IntParameter(Parameter):
+    
+    @property
+    def value(self):
+        return self._value
+    
+    @value.setter
+    def value(self, value):
+        self.check_if_changed(value)
+        try:
+            self._value = int(value)
+        except ValueError:
+            raise ValueError("IntParameter given non-int value of "
+                             "type '%s'" % type(value))
+    
+    def __repr__(self):
+        result = super(IntParameter, self).__repr__()
+        return result.replace("<Parameter", "<IntParameter", 1)
 
 class Procedure(object):
     """The measurement loop to be run for each set of sweep parameters."""
