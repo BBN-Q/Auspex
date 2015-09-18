@@ -1,5 +1,7 @@
 from __future__ import print_function, division
 import logging
+import datetime
+
 logging.basicConfig(format='%(levelname)s:\t%(message)s', level=logging.DEBUG)
 
 import numpy as np
@@ -71,29 +73,48 @@ class Sweep(object):
             if not isinstance(q, Quantity):
                 raise TypeError("Expecting Quantity, not %s" % str(type(q)) )
 
-        # Look before we leap
+        # See if we've already made the file
         if filename not in self._filenames:
             self._filenames.append(filename)
             self._files[filename] = h5py.File(filename, 'a')
+        f = self._files[filename]
 
-        if dataset_name not in self._files[filename]:
-            # Determine the dataset dimensions
-            sweep_dims = [ p.length for p in self._parameters ]
-            logging.debug("Sweep dims are %s for the list of swept parameters in the writer %s, %s." % (str(sweep_dims), filename, dataset_name) )
+        # See if there is already a group matching today's date
+        date_str = datetime.date.today().strftime('%Y-%m-%d')
+        if date_str not in f.keys():
+            f.create_group(date_str)
+        g = f[date_str]
 
-            data_dims = [len(quants)+len(self._parameters)]
-            dataset_dimensions = tuple(sweep_dims + data_dims)
+        # See if there is already a dataset with the same name
+        # increment the actual dataset name by 1 and store this
+        # as dataset_name-0001 dataset_name-0002, etc. First we
+        # parse any filenames already in the group, then we make
+        # sure we store a new file with the name incremented by
+        # 1.
 
-            # Get the datatype, defaulting to float
-            dtype = kwargs['dtype'] if 'dtype' in kwargs else 'f'
-
-            # Create the data set
-            dset = self._files[filename].create_dataset(dataset_name, dataset_dimensions, dtype=dtype)
-
-            # Create a new instances of the data structure and store it
-            self._writers.append( Writer(dset, quants) )
+        files_with_same_prefix = ["-".join(k.split("-")[:-1]) for k in g.keys() if dataset_name == "-".join(k.split("-")[:-1])]
+        if dataset_name not in files_with_same_prefix:
+            dataset_name = "{:s}-{:04d}".format(dataset_name, 1)
         else:
-            raise Exception("Cannot have the same dataset name twice in the same file.")
+            largest_index = max([int(k.split("-")[-1]) for k in g.keys() if dataset_name in k])
+            logging.info("Largest index is {:d}".format(largest_index))
+            dataset_name = "{:s}-{:04d}".format(dataset_name, largest_index + 1)
+            
+        # Determine the dataset dimensions
+        sweep_dims = [ p.length for p in self._parameters ]
+        logging.debug("Sweep dims are %s for the list of swept parameters in the writer %s, %s." % (str(sweep_dims), filename, dataset_name) )
+
+        data_dims = [len(quants)+len(self._parameters)]
+        dataset_dimensions = tuple(sweep_dims + data_dims)
+
+        # Get the datatype, defaulting to float
+        dtype = kwargs['dtype'] if 'dtype' in kwargs else 'f'
+
+        # Create the data set
+        dset = g.create_dataset(dataset_name, dataset_dimensions, dtype=dtype)
+
+        # Create a new instances of the data structure and store it
+        self._writers.append( Writer(dset, quants) )
 
     def write(self):
         indices = list(next(self._index_generator))
