@@ -42,6 +42,16 @@ class SR830(Instrument):
     magnitude = FloatCommand("magnitude", get_string="OUTP?3;", aliases=['r', 'mag'])
     theta = FloatCommand("theta", get_string="OUTP?4;")
 
+    aux_in_1 = FloatCommand("Auxiliary Input 1", get_string="OAUX?1;", aliases=["ai1"])
+    aux_in_2 = FloatCommand("Auxiliary Input 2", get_string="OAUX?2;", aliases=["ai2"])
+    aux_in_3 = FloatCommand("Auxiliary Input 3", get_string="OAUX?3;", aliases=["ai3"])
+    aux_in_4 = FloatCommand("Auxiliary Input 4", get_string="OAUX?4;", aliases=["ai4"])
+    
+    aux_out_1 = FloatCommand("Auxiliary Output 1", get_string="AUXV?1;", set_string="AUXV1,{:f}", aliases=["ao1"])
+    aux_out_2 = FloatCommand("Auxiliary Output 2", get_string="AUXV?2;", set_string="AUXV2,{:f}", aliases=["ao2"])
+    aux_out_3 = FloatCommand("Auxiliary Output 3", get_string="AUXV?3;", set_string="AUXV3,{:f}", aliases=["ao3"])
+    aux_out_4 = FloatCommand("Auxiliary Output 4", get_string="AUXV?4;", set_string="AUXV4,{:f}", aliases=["ao4"])
+
     channel_1_type = Command("Channel 1", get_string="DDEF?1;", set_string="DDEF1,{:s}", allowed_values=CHANNEL1_VALUES, value_map=CHANNEL1_MAP)
     channel_2_type = Command("Channel 2", get_string="DDEF?2;", set_string="DDEF2,{:s}", allowed_values=CHANNEL2_VALUES, value_map=CHANNEL2_MAP)
     sample_frequency = Command("Sample Frequency", get_string="SRAT?;", set_string="SRAT{:s}", allowed_values=SAMPLE_FREQUENCY_VALUES, value_map=SAMPLE_FREQUENCY_MAP)
@@ -84,7 +94,7 @@ class SR865(Instrument):
 
     channel_1_type = Command("Channel 1", get_string="DDEF?1;", set_string="DDEF1,{:s}", allowed_values=CHANNEL1_VALUES, value_map=CHANNEL1_MAP)
     channel_2_type = Command("Channel 2", get_string="DDEF?2;", set_string="DDEF2,{:s}", allowed_values=CHANNEL2_VALUES, value_map=CHANNEL2_MAP)
-    sample_frequency = Command("Sample Frequency", get_string="SRAT?;", set_string="SRAT{:s}", allowed_values=SAMPLE_FREQUENCY_VALUES, value_map=SAMPLE_FREQUENCY_MAP)
+    # sample_frequency = Command("Sample Frequency", get_string="SRAT?;", set_string="SRAT{:s}", allowed_values=SAMPLE_FREQUENCY_VALUES, value_map=SAMPLE_FREQUENCY_MAP)
     sensitivity = Command("Sensitivity", get_string="SCAL?;", set_string="SCAL {:s}", allowed_values=SENSITIVITY_VALUES, value_map=SENSITIVITY_MAP)
     time_constant = Command("Time Constant", get_string="OFLT?;", set_string="OFLT{:s}", allowed_values=TIME_CONSTANT_VALUES, value_map=TIME_CONSTANT_MAP, aliases=['tc', 'TC'])
     filter_slope = Command("Filter Slope", get_string="OFSL?;", set_string="OFSL{:s}", allowed_values=FILTER_SLOPE_VALUES, value_map=FILTER_SLOPE_MAP)
@@ -92,4 +102,3 @@ class SR865(Instrument):
     def __init__(self, name, resource_name, mode='current', **kwargs):
         super(SR865, self).__init__(name, resource_name, **kwargs)
         self.interface._instrument.read_termination = u"\n"
-        
