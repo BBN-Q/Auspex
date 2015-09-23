@@ -1,0 +1,5 @@
+# Hall Probe Calibration 9/23/2015
+# First line, SR830 analog output voltage across probe and 1kOhm resistor
+# Second line represents polynomial coefficients of the fit in order of decreasing power
+2.0
+343.27701229	3.1479185

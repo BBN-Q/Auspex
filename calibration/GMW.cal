@@ -1,0 +1,4 @@
+# GMW Calibration 9/23/2015
+# Gives coefficients for current(field) = a x^n + b x^(n-1) + ...
+# First (and only) line represents polynomial coefficients of the fit in order of decreasing power
+0.01596706		-0.86450203
