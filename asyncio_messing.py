@@ -9,6 +9,12 @@ import datetime
 import logging
 logging.basicConfig(format="%(levelname)s: %(asctime)s %(message)s", level=logging.INFO)
 
+def shutdown(loop):
+    pending = asyncio.Task.all_tasks()
+    for t in pending:
+        t.cancel()
+    loop.stop()
+
 class DataProducer(object):
 
     async def take_data(self, loop, timeout):
@@ -18,7 +24,7 @@ class DataProducer(object):
             logging.info("Acquired data and putting in queue")
             await self.queue.put("Queue has data at " + timeStamp )
             if (loop.time() + 1.0) >= end_time:
-                loop.stop()
+                shutdown(loop)
                 break
             await asyncio.sleep(1)
 
@@ -50,7 +56,7 @@ class DataInterconnect(object):
         self.crossbar.setdefault(src, []).append(name)
 
     @staticmethod
-    async def connect_input_output(inQ, outQs):
+    async def broadcast(inQ, outQs):
         while True:
             logging.info("DataInterconnect waiting for data")
             data = await inQ.get()
@@ -60,7 +66,7 @@ class DataInterconnect(object):
 
     def run(self, loop):
         for inQ_name, inQ in self.input_queues.items():
-            loop.create_task(DataInterconnect().connect_input_output(inQ,
+            loop.create_task(DataInterconnect().broadcast(inQ,
                 [self.output_queues[outQ] for outQ in self.crossbar[inQ_name]]) )
 
 if __name__ == '__main__':
@@ -81,8 +87,10 @@ if __name__ == '__main__':
         asyncio.ensure_future(fakeDigitizer.take_data(loop, 5))]
     try:
         loop.run_until_complete(asyncio.wait(tasks))
+    except asyncio.CancelledError:
+        logging.info("Caught CancelledError")
     finally:
         logging.info("Cancelled!")
-        for t in tasks:
-            t.cancel()
         loop.close()
+
+    logging.info("Hello!")
