@@ -65,7 +65,7 @@ class Sweep(object):
         self._parameters.append(SweptParameter(param, sweep_list))
         self.generate_sweep()
 
-    def add_writer(self, filename, dataset_name, *quants, **kwargs):
+    def add_writer(self, filename, sample_name, dataset_name, *quants, **kwargs):
         """Add a dataset that updates based on the supplied quantities"""
 
         # Loop through and check the supplied quantities
@@ -79,11 +79,16 @@ class Sweep(object):
             self._files[filename] = h5py.File(filename, 'a')
         f = self._files[filename]
 
+        # See if there is already a group matching this sample
+        if sample_name not in f.keys():
+            f.create_group(sample_name)
+        s = f[sample_name]
+
         # See if there is already a group matching today's date
         date_str = datetime.date.today().strftime('%Y-%m-%d')
-        if date_str not in f.keys():
-            f.create_group(date_str)
-        g = f[date_str]
+        if date_str not in s.keys():
+            s.create_group(date_str)
+        g = s[date_str]
 
         # See if there is already a dataset with the same name
         # increment the actual dataset name by 1 and store this
