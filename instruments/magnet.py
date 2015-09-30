@@ -1,4 +1,5 @@
 import numpy as np
+import time
 
 class Electromagnet(object):
     """Wrapper for electromagnet """
@@ -9,10 +10,12 @@ class Electromagnet(object):
             if len(lines) != 1:
                 raise Exception("Invalid magnet control calibration file, must contain one line.")
             try:
+                # Construct the fit
                 poly_coeffs = np.array( map( float, lines[0].split() ) )
                 self.current_vs_field = np.poly1d(poly_coeffs)
             except:
                 raise TypeError("Could not convert calibration coefficients into list of floats")
+
         self.field_getter = field_getter
         self.current_setter = current_setter
         self.current_getter = current_getter
@@ -24,33 +27,25 @@ class Electromagnet(object):
     def field(self):
         return np.mean( [self.field_getter() for i in range(self.field_averages)] )
     @field.setter
-    def field(self, set_field):
+    def field(self, target_field):
         careful = True
+        monotonic = False
+        refinements = 1
 
-        if careful:
-            # Go most of the way there
-            initial_field = self.field
-            initial_current = self.current_getter()
-            print("Initial current %f" % initial_current )
-            next_field = initial_field + 0.95*(set_field - initial_field)
-            print("Next field %f" % next_field )
+        self.current_setter( self.current_vs_field(target_field) )
+        time.sleep(0.6)
+        # print("Arrived at: %f" % self.field)
+        field_offset = self.field - target_field
+        # print("Revising: Field offset is %f" % field_offset)
+        revised_field = target_field - field_offset
+        # print("Revising: Revised target field is %f" % revised_field)
+        self.current_setter( self.current_vs_field(revised_field) )
+        # print("Arrived at: %f, repeat measurement %f" % (self.field, self.field) )
 
-            next_current = self.current_vs_field(next_field) 
-            print("Corresponding current %f" % next_current )
-            self.current_setter( next_current )
+    # hackathon
+    def set_field(self, value):
+        self.field = value
 
-            # Calculate the actual Delta_field/Delta_current
-            actual_field = self.field
-            print("Actually went to field %f" % actual_field )
-            new_slope = (next_current - initial_current) / (actual_field - initial_field)
-            print("New slope %f" % new_slope )
-            
-            # Go the rest of the way
-            next_current = initial_current + new_slope*(set_field - initial_field)
-            print("Next current %f" % next_current )
-            self.current_setter( next_current )
-
-            print("Final field %f" % self.field )
-
-        else:
-            self.current_setter( self.current_vs_field(set_field) )
+    # hackathon continues
+    def get_field(self):
+        return self.field
