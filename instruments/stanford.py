@@ -87,10 +87,10 @@ class SR865(Instrument):
     phase = FloatCommand("phase", get_string="PHAS?", set_string="PHAS {:g}")
     offset = FloatCommand("DC offset", get_string="SOFF?", set_string="SOFF {:f}", aliases=['dc', 'DC'])
 
-    x = FloatCommand("x", get_string="OUTP?1;", aliases=["ch1"])
-    y = FloatCommand("y", get_string="OUTP?2;", aliases=["ch2"])
-    magnitude = FloatCommand("magnitude", get_string="OUTP?3;", aliases=['r', 'mag'])
-    theta = FloatCommand("theta", get_string="OUTP?4;")
+    x = FloatCommand("x", get_string="OUTP? 0;", aliases=["ch1"])
+    y = FloatCommand("y", get_string="OUTP? 1;", aliases=["ch2"])
+    magnitude = FloatCommand("magnitude", get_string="OUTP? 2;", aliases=['r', 'mag'])
+    theta = FloatCommand("theta", get_string="OUTP? 3;")
 
     channel_1_type = Command("Channel 1", get_string="DDEF?1;", set_string="DDEF1,{:s}", allowed_values=CHANNEL1_VALUES, value_map=CHANNEL1_MAP)
     channel_2_type = Command("Channel 2", get_string="DDEF?2;", set_string="DDEF2,{:s}", allowed_values=CHANNEL2_VALUES, value_map=CHANNEL2_MAP)

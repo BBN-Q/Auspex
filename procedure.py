@@ -29,7 +29,7 @@ class Quantity(object):
     def value(self, value):
         self._value = value
 
-    def set_method(self, method):
+    def assign_method(self, method):
         logging.debug("Setting method of Quantity %s to %s" % (self.name, str(method)) )
         self.method = method
 
@@ -106,7 +106,7 @@ class Parameter(object):
             result += ",unit='%s'" % self.unit
         return result + ")>"
 
-    def set_method(self, method):
+    def assign_method(self, method):
         logging.debug("Setting method of Parameter %s to %s" % (self.name, str(method)) )
         self.method = method
 
