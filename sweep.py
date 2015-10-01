@@ -1,8 +1,17 @@
 from __future__ import print_function, division
 import logging
 import datetime
+import string
 
-logging.basicConfig(format='%(levelname)s:\t%(message)s', level=logging.DEBUG)
+logging.basicConfig(format='%(levelname)s:\t%(message)s', level=logging.INFO)
+
+# Fot plotting
+import threading
+from collections import deque
+import json
+from flask import Flask, jsonify, request
+from bokeh.server.crossdomain import crossdomain
+import urllib2
 
 import numpy as np
 import scipy as sp
@@ -10,6 +19,9 @@ import pandas as pd
 import itertools
 import time
 import h5py
+
+from bokeh.plotting import figure, show, output_file, hplot, vplot
+from bokeh.models.sources import AjaxDataSource
 
 from procedure import Procedure, Parameter, Quantity
 
@@ -20,6 +32,23 @@ class Writer(object):
         self.dataset = dataset
         self.quantities = quantities
 
+class Plotter(object):
+    """Attach a plotter to the sweep."""
+    def __init__(self, title, x, y, *args, **kwargs):
+        super(Plotter, self).__init__()
+        self.title = title
+        self.filename = string.replace(title, ' ', '_')
+        output_file(self.filename, title=self.title)
+        self.plot_args = kwargs
+
+        # These are parameters and quantities
+        self.x = x
+        self.y = y
+        self.data = deque()
+
+    def update(self):
+        self.data.append( (self.x.value, self.y.value) )
+        
 class SweptParameter(object):
     """Data structure for a swept Parameters, contains the Parameter
     object rather than subclassing it since we just need to keep track
@@ -29,6 +58,60 @@ class SweptParameter(object):
         self.values = values
         self.length = len(values)
         self.indices = range(self.length)
+
+class FlaskThread(threading.Thread):
+    def __init__(self, plotters):
+        self.data_lookup = {p.filename: p.data for p in plotters}
+        self.filenames = [p.filename for p in plotters]
+        self.plotter_lookup = {p.filename: p for p in plotters}
+
+        self.app = Flask(__name__)
+        @self.app.route('/<filename>', methods=['GET', 'OPTIONS'])
+        @crossdomain(origin="*", methods=['GET', 'POST'], headers=None)
+        def fetch_func(filename):
+            if filename == "shutdown":
+                func = request.environ.get('werkzeug.server.shutdown')
+                if func is None:
+                    raise RuntimeError('Not running with the Werkzeug Server')
+                func()
+                return 'Server shutting down...'
+            else:
+                xs = []
+                ys = []
+                while True:
+                    try:
+                        x, y = self.data_lookup[filename].popleft()
+                        xs.append(x)
+                        ys.append(y)
+                    except:
+                        break
+                return jsonify(x=xs, y=ys)
+
+        super(FlaskThread, self).__init__()
+
+    def run(self):
+        output_file("main.html", title="Plotting Output")
+        plots = []
+        sources = []
+
+        for f in self.filenames:
+            source = AjaxDataSource(data_url='http://localhost:5050/'+f,
+                                    polling_interval=750, mode="append")
+            p = self.plotter_lookup[f]
+            xlabel = p.x.name + (" ("+p.x.unit+")" if p.x.unit is not None else '')
+            ylabel = p.y.name + (" ("+p.y.unit+")" if p.y.unit is not None else '')
+            plot = figure(webgl=True, title=p.title,
+                          x_axis_label=xlabel, y_axis_label=ylabel, 
+                          tools="save,crosshair",
+                          **p.plot_args)
+            plots.append(plot)
+            sources.append(source)
+
+            plots[-1].line('x', 'y', source=sources[-1], color="firebrick", line_width=2)
+            
+        q = hplot(*plots)
+        show(q)
+        self.app.run(port=5050)
 
 class Sweep(object):
     """For controlling sweeps over arbitrary number of arbitrary parameters. The order of sweeps\
@@ -57,6 +140,7 @@ class Sweep(object):
         self._filenames = []
         self._files = {}
         self._writers = []
+        self._plotters = []
 
     def __iter__(self):
         return self
@@ -102,7 +186,6 @@ class Sweep(object):
             dataset_name = "{:s}-{:04d}".format(dataset_name, 1)
         else:
             largest_index = max([int(k.split("-")[-1]) for k in g.keys() if dataset_name in k])
-            logging.info("Largest index is {:d}".format(largest_index))
             dataset_name = "{:s}-{:04d}".format(dataset_name, largest_index + 1)
             
         # Determine the dataset dimensions
@@ -137,6 +220,13 @@ class Sweep(object):
                 coords = tuple( indices + [len(self._parameters) + i] )
                 w.dataset[coords] = q.value
 
+    def add_plotter(self, title, x, y, *args, **kwargs):
+        self._plotters.append(Plotter(title, x, y, *args, **kwargs))
+
+    def plot(self):
+        for p in self._plotters:
+            p.update()
+
     def generate_sweep(self):
         self._sweep_generator = itertools.product(*[sp.values for sp in self._parameters])
         self._index_generator = itertools.product(*[sp.indices for sp in self._parameters])
@@ -154,3 +244,29 @@ class Sweep(object):
 
         self._procedure.run()
         self.write()
+        self.plot()
+
+    def run(self):
+        """Run everything all at once..."""
+
+        if len(self._plotters) > 0:
+            t = FlaskThread(self._plotters)
+            t.start()
+
+        for param_values in self._sweep_generator:
+            
+            # Update the paramater values
+            for i, p in enumerate(self._parameters):
+                p.parameter.value = param_values[i]
+
+            # Run the procedure
+            self._procedure.run()
+
+            # Push values to file and update plots
+            self.write()
+            self.plot()
+
+        if len(self._plotters) > 0:
+            time.sleep(0.5)
+            response = urllib2.urlopen('http://localhost:5050/shutdown').read()
+            t.join()
