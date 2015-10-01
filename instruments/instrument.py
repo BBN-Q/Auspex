@@ -207,7 +207,7 @@ class Instrument(object):
         
         if interface_type is None:
             # Load the dummy interface, unless we see that GPIB is in the resource string
-            if 'GPIB' in resource_name:
+            if 'GPIB' in resource_name or 'USB' in resource_name:
                 self.interface = VisaInterface(resource_name)
             else:
                 self.interface = Interface()

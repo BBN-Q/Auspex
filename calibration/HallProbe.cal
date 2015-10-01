@@ -2,4 +2,7 @@
 # First line, SR830 analog output voltage across probe and 1kOhm resistor
 # Second line represents polynomial coefficients of the fit in order of decreasing power
 2.0
-343.27701229	3.1479185
+# 9/23/2015 Large Gap
+# 343.27701229	3.1479185 
+# 9/30/2015 Medium Gap (spacer on Hall probe side)
+525.45152685  -84.33340866
