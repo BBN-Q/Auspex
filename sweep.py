@@ -2,10 +2,12 @@ from __future__ import print_function, division
 import logging
 import datetime
 import string
+import signal
+import sys
 
 logging.basicConfig(format='%(levelname)s:\t%(message)s', level=logging.INFO)
 
-# Fot plotting
+# For plotting
 import threading
 from collections import deque
 import json
@@ -48,7 +50,7 @@ class Plotter(object):
 
     def update(self):
         self.data.append( (self.x.value, self.y.value) )
-        
+
 class SweptParameter(object):
     """Data structure for a swept Parameters, contains the Parameter
     object rather than subclassing it since we just need to keep track
@@ -101,14 +103,14 @@ class FlaskThread(threading.Thread):
             xlabel = p.x.name + (" ("+p.x.unit+")" if p.x.unit is not None else '')
             ylabel = p.y.name + (" ("+p.y.unit+")" if p.y.unit is not None else '')
             plot = figure(webgl=True, title=p.title,
-                          x_axis_label=xlabel, y_axis_label=ylabel, 
+                          x_axis_label=xlabel, y_axis_label=ylabel,
                           tools="save,crosshair",
                           **p.plot_args)
             plots.append(plot)
             sources.append(source)
 
             plots[-1].line('x', 'y', source=sources[-1], color="firebrick", line_width=2)
-            
+
         q = hplot(*plots)
         show(q)
         self.app.run(port=5050)
@@ -187,7 +189,7 @@ class Sweep(object):
         else:
             largest_index = max([int(k.split("-")[-1]) for k in g.keys() if dataset_name in k])
             dataset_name = "{:s}-{:04d}".format(dataset_name, largest_index + 1)
-            
+
         # Determine the dataset dimensions
         sweep_dims = [ p.length for p in self._parameters ]
         logging.debug("Sweep dims are %s for the list of swept parameters in the writer %s, %s." % (str(sweep_dims), filename, dataset_name) )
@@ -253,8 +255,21 @@ class Sweep(object):
             t = FlaskThread(self._plotters)
             t.start()
 
+        def shutdown():
+            if len(self._plotters) > 0:
+                time.sleep(0.5)
+                response = urllib2.urlopen('http://localhost:5050/shutdown').read()
+                t.join()
+
+        def catch_ctrl_c(signum, frame):
+            logging.info("Caught SIGINT.  Shutting down.")
+            shutdown()
+            sys.exit(0)
+
+        signal.signal(signal.SIGINT, catch_ctrl_c)
+
         for param_values in self._sweep_generator:
-            
+
             # Update the paramater values
             for i, p in enumerate(self._parameters):
                 p.parameter.value = param_values[i]
@@ -266,7 +281,5 @@ class Sweep(object):
             self.write()
             self.plot()
 
-        if len(self._plotters) > 0:
-            time.sleep(0.5)
-            response = urllib2.urlopen('http://localhost:5050/shutdown').read()
-            t.join()
+
+        shutdown()
