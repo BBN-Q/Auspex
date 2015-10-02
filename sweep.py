@@ -3,7 +3,7 @@ import logging
 import datetime
 import string
 
-logging.basicConfig(format='%(levelname)s:\t%(message)s', level=logging.INFO)
+# logging.basicConfig(format='%(levelname)s:\t%(message)s', level=logging.INFO)
 
 # Fot plotting
 import threading
@@ -34,20 +34,28 @@ class Writer(object):
 
 class Plotter(object):
     """Attach a plotter to the sweep."""
-    def __init__(self, title, x, y, *args, **kwargs):
+    def __init__(self, title, x, ys, **figure_args):
         super(Plotter, self).__init__()
         self.title = title
         self.filename = string.replace(title, ' ', '_')
         output_file(self.filename, title=self.title)
-        self.plot_args = kwargs
+        self.figure_args = figure_args
 
         # These are parameters and quantities
         self.x = x
-        self.y = y
+        if isinstance(ys, list):
+            self.ys = ys
+        else:
+            self.ys = [ys]
+        self.num_ys = len(self.ys)
+
+        # FIFO data container
         self.data = deque()
 
     def update(self):
-        self.data.append( (self.x.value, self.y.value) )
+        data = [self.x.value]
+        data.extend([y.value for y in self.ys])
+        self.data.append( tuple(data) )
         
 class SweptParameter(object):
     """Data structure for a swept Parameters, contains the Parameter
@@ -76,16 +84,21 @@ class FlaskThread(threading.Thread):
                 func()
                 return 'Server shutting down...'
             else:
+                p = self.plotter_lookup[filename]
+
                 xs = []
-                ys = []
+                ys = [[] for i in range(p.num_ys)]
                 while True:
                     try:
-                        x, y = self.data_lookup[filename].popleft()
-                        xs.append(x)
-                        ys.append(y)
+                        data = self.data_lookup[filename].popleft()
+                        xs.append(data[0])
+                        for i in range(p.num_ys):
+                            ys[i].append(data[i+1])
                     except:
                         break
-                return jsonify(x=xs, y=ys)
+                kwargs = { 'y{:d}'.format(i+1): ys[i] for i in range(p.num_ys) }
+                kwargs['x'] = xs
+                return jsonify(**kwargs)
 
         super(FlaskThread, self).__init__()
 
@@ -95,20 +108,27 @@ class FlaskThread(threading.Thread):
         sources = []
 
         for f in self.filenames:
+            p = self.plotter_lookup[f]
             source = AjaxDataSource(data_url='http://localhost:5050/'+f,
                                     polling_interval=750, mode="append")
-            p = self.plotter_lookup[f]
+            
             xlabel = p.x.name + (" ("+p.x.unit+")" if p.x.unit is not None else '')
-            ylabel = p.y.name + (" ("+p.y.unit+")" if p.y.unit is not None else '')
+            ylabel = p.ys[0].name + (" ("+p.ys[0].unit+")" if p.ys[0].unit is not None else '')
             plot = figure(webgl=True, title=p.title,
                           x_axis_label=xlabel, y_axis_label=ylabel, 
-                          tools="save,crosshair",
-                          **p.plot_args)
+                          tools="save,crosshair")
             plots.append(plot)
             sources.append(source)
 
-            plots[-1].line('x', 'y', source=sources[-1], color="firebrick", line_width=2)
+            # plots[-1].line('x', 'y', source=sources[-1], color="firebrick", line_width=2)
+            xargs = ['x' for i in range(p.num_ys)]
+            yargs = ['y{:d}'.format(i+1) for i in range(p.num_ys)]
             
+            if p.num_ys > 1:
+                plots[-1].multi_line(xargs, yargs, source=sources[-1], **p.figure_args)
+            else:
+                plots[-1].line('x', 'y1', source=sources[-1], **p.figure_args)
+
         q = hplot(*plots)
         show(q)
         self.app.run(port=5050)
