@@ -11,7 +11,7 @@ class BOP2020M(Instrument):
         super(BOP2020M, self).__init__(name, resource_name, **kwargs)
         self.interface._instrument.write_termination = u"\n"
         self.mode = 'current'
-        self.interface._instrument.write('VOLT MAX')
+        self.interface.write('VOLT MAX')
         self.output = True
 
     def shutdown(self):
