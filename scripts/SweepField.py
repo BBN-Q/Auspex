@@ -61,15 +61,16 @@ if __name__ == '__main__':
 
     # Define a sweep over prarameters
     sw = Sweep(proc)
-    values = np.append(np.arange(-700, -100, 20), np.arange(-100, -700, -20)).tolist()
+    values = np.append(np.arange(-700, -101, 15), np.arange(-100, -701, -15)).tolist()
     sw.add_parameter(proc.set_field, values)
 
     # Define a writer
-    sw.add_writer('data/FieldLoops.h5', 'SWS2129(2,0)G-(011,09)', 'MinorLoop-MediumGap', proc.field, proc.voltage)
+    sw.add_writer('data/JunkLoops.h5', 'SWS2129(2,0)G-(011,09)', 'MinorLoop-MediumGap', proc.field, proc.voltage)
 
     # Define a plotter
-    sw.add_plotter("Resistance Vs Field", proc.field, proc.voltage)
-    sw.add_plotter("Field Vs Set Field", proc.set_field, proc.field)
+    sw.add_plotter("Resistance Vs Field", proc.field, proc.voltage, color="firebrick", line_width=2)
+    sw.add_plotter("Field Vs Set Field", proc.set_field, proc.field, color="navy", line_width=2)
+    # sw.add_plotter("Field Vs Set Field", proc.set_field, [proc.set_field, proc.field], color=["firebrick", "navy"], line_width=2)
 
     proc.instruments_init()
     sw.run()
