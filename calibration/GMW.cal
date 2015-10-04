@@ -1,0 +1,7 @@
+# GMW Calibration
+# Gives coefficients for current(field) = a x^n + b x^(n-1) + ...
+# First (and only) line represents polynomial coefficients of the fit in order of decreasing power
+# 9/23/2015 - Large Gap
+# 0.01596706		-0.86450203
+# 9/30/2015 - Medium Gap (spacer on Hall probe side)
+0.00805538		0.0724984

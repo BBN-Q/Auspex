@@ -8,7 +8,7 @@ import scipy as sp
 import pandas as pd
 
 from instruments.kepco import BOP2020M
-from instruments.stanford import SR830
+from instruments.stanford import SR865
 from sweep import Sweep
 from procedure import FloatParameter, Quantity, Procedure
 
@@ -18,11 +18,11 @@ class FieldTest(Procedure):
     voltage = Quantity("Magnitude", unit="V")
 
     bop = BOP2020M("Kepco Power Supply", "GPIB1::1::INSTR")
-    lock = SR830("Lockin Amplifier", "GPIB1::9::INSTR")
+    lock = SR865("Lockin Amplifier", "GPIB1::9::INSTR")
 
     def instruments_init(self):
         self.tc_delay = 9*self.lock.tc
-        self.averages = 25
+        self.averages = 10
         self.bop.output = True
 
         def lockin_measure():
@@ -48,16 +48,13 @@ if __name__ == '__main__':
 
     # Define a sweep over prarameters
     sw = Sweep(proc)
-    values = np.append(np.arange(-5, 15.1, 0.25), np.arange(15.0,-5.1,-0.25)).tolist()
-    sw.add_parameter_hack(proc.current, values)
+    values = np.append(np.arange(-2, 10.1, 0.1), np.arange(10.0,-2.1,-0.1)).tolist()
+    sw.add_parameter(proc.current, values)
 
     # Define a writer
-    sw.add_writer('SweepField.h5', 'VvsH', proc.voltage)
+    sw.add_writer('CurrentLoops.h5', 'Test', proc.voltage)
 
     proc.instruments_init()
     for i in sw:
-        logging.info("Current, Lockin Magnitude: %f" % (proc.current.value) )
+        logging.info("Current, Lockin Magnitude: {:f}, {:g}".format(proc.current.value, proc.voltage.value) )
     proc.instruments_shutdown()
-
-    # proc.current.value = 0.0
-    

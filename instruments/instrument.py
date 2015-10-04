@@ -15,9 +15,11 @@ class Command(object):
     value_map keyword argument allows specification of a dictionary map between python values
     such as True and False and the strange 'on' and 'off' type of values frequently used
     by instruments. Translation occurs via the provided 'convert_set' and 'convert_get' methods."""
-    def __init__(self, name, set_string=None, get_string=None, value_map=None, value_range=None, allowed_values=None, aliases=None, delay=None):
+    def __init__(self, name, set_string=None, get_string=None, value_map=None, value_range=None,
+                 allowed_values=None, aliases=None, delay=None):
         """Initialize the class with optional set and get string corresponding to instrument
-        commands. Also a map containing pairs of e.g. {python_value1: instr_value1, python_value2: instr_value2}"""
+        commands. Also a map containing pairs of e.g. {python_value1: instr_value1, python_value2: instr_value2, ...}."""
+
         super(Command, self).__init__()
         self.name = name
         self.aliases = aliases
@@ -138,14 +140,19 @@ def add_command(instr, name, cmd):
         if cmd.value_range is not None:
             if (val < cmd.value_range[0]) or (val > cmd.value_range[1]):
                 raise ValueError("Outside of the allowable range specified for instrument '%s'." % self.name)
+        
         if cmd.allowed_values is not None:
             if not val in cmd.allowed_values:
                 raise ValueError("Not in the allowable set of values specified for instrument '%s': %s" % (self.name, cmd.allowed_values) )
+        
         if isinstance(cmd, RampCommand):
             # Ramp from one value to another, making sure we actually take some steps
             start_value = float(self.interface.query(cmd.get_string))
             approx_steps = int(abs(val-start_value)/cmd.increment)
-            values = np.linspace(start_value, val, approx_steps+2)
+            if approx_steps == 0:
+                values = [val]
+            else:
+                values = np.linspace(start_value, val, approx_steps+2)
             for v in values:
                 self.interface.write(cmd.set_string.format(v))
                 time.sleep(cmd.pause)
@@ -153,14 +160,16 @@ def add_command(instr, name, cmd):
             # Go straight to the desired value
             set_value = cmd.convert_set(val)
             logging.debug("Formatting '%s' with string '%s'" % (cmd.set_string, set_value))
-            logging.debug("The seult of the formatting is %s" % cmd.set_string.format(set_value))
+            logging.debug("The result of the formatting is %s" % cmd.set_string.format(set_value))
             self.interface.write(cmd.set_string.format(set_value))
 
-    #Add getter and setter methods for passing around
+    # Add getter and setter methods for passing around
     if cmd.get_string:
         setattr(instr, "get_" + name, fget)
+    
     if cmd.set_string:
         setattr(instr, "set_" + name, fset)
+        
     #Using None prevents deletion or setting/getting unsettable/gettable attributes
     setattr(instr, name, property(fget if cmd.get_string else None, fset if cmd.set_string else None, None, cmd.doc))
 
@@ -198,7 +207,7 @@ class Instrument(object):
         
         if interface_type is None:
             # Load the dummy interface, unless we see that GPIB is in the resource string
-            if 'GPIB' in resource_name:
+            if 'GPIB' in resource_name or 'USB' in resource_name:
                 self.interface = VisaInterface(resource_name)
             else:
                 self.interface = Interface()

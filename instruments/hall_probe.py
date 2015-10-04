@@ -1,0 +1,31 @@
+import numpy as np
+
+class HallProbe(object):
+    """Simple wrapper for converting Hall probe voltage measurements to 
+    actual fields values."""
+    def __init__(self, calibration_file, supply_voltage_method, readout_voltage_method):
+        super(HallProbe, self).__init__()
+        with open(calibration_file) as cf:
+            lines = [l for l in cf.readlines() if l[0] != '#']
+            if len(lines) != 2:
+                raise Exception("Invalid Hall probe calibration file, must contain two lines.")
+            try:
+                self.output_voltage = float(lines[0])
+            except:
+                raise TypeError("Could not convert output voltage to floating point value.")
+            try:
+                poly_coeffs = np.array( map( float, lines[1].split() ) )
+                self.field_vs_voltage = np.poly1d(poly_coeffs)
+            except:
+                raise TypeError("Could not convert calibration coefficients into list of floats")
+        self.getter = readout_voltage_method
+        self.setter = supply_voltage_method
+
+        self.setter(self.output_voltage)
+
+    @property
+    def field(self):
+        return self.get_field()
+
+    def get_field(self):
+        return self.field_vs_voltage( self.getter() )
