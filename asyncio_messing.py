@@ -4,8 +4,13 @@ Messing around with asyncio for streaming data flow.
 Requires Python 3.5
 """
 
+import abc
 import asyncio
 import datetime
+import numpy as np
+from scipy.signal import lfilter
+import pandas as pd
+
 import logging
 logging.basicConfig(format="%(levelname)s: %(asctime)s %(message)s", level=logging.INFO)
 
@@ -16,31 +21,63 @@ def shutdown(loop):
     loop.stop()
 
 class DataProducer(object):
+    def __init__(self, name):
+        self.name = name
+        self.out_queue = asyncio.Queue()
+
+class ADC(DataProducer):
 
     async def take_data(self, loop, timeout):
         end_time = loop.time() + timeout
         while True:
+            data = np.sin(2*np.pi*2*0.1*np.arange(100)) + 0.1*np.random.randn(100)
             timeStamp = str(datetime.datetime.now())
             logging.info("Acquired data and putting in queue")
-            await self.queue.put("Queue has data at " + timeStamp )
+            await self.out_queue.put(data)
             if (loop.time() + 1.0) >= end_time:
                 shutdown(loop)
                 break
             await asyncio.sleep(1)
 
 class DataCruncher(object):
-    def __init__(self):
-        self.queue = asyncio.Queue()
+    __metaclass__ = abc.ABCMeta
+
+    def __init__(self, name):
+        self.name = name
+        self.out_queue = asyncio.Queue()
+        self.in_queue = asyncio.Queue()
 
     async def wait_for_data(self):
         while True:
-            logging.info("DataCruncher waiting for data")
-            data = await self.queue.get()
+            data = await self.in_queue.get()
             logging.info("DataCruncher got data")
-            self.process_data(data)
+            await self.process_data(data)
 
-    def process_data(self, data):
-        logging.info("DataCruncher processed data from queue: " + data)
+    @abc.abstractmethod
+    async def process_data(self, data):
+        "Process the latest data"
+        return
+
+class FIR(DataCruncher):
+    def __init__(self, name, b, a):
+        super().__init__(name)
+        self.b = b
+        self.a = a
+
+    async def process_data(self, data):
+        await self.out_queue.put(lfilter(self.b, self.a, data))
+        logging.info("DataCruncher processed data")
+
+class DataWriter(object):
+    def __init__(self):
+        self.in_queues = {}
+
+    async def run():
+        store = pd.HDFStore()
+        while True:
+            for q in asyncio.as_completed(self.in_queues):
+                data = await q.get()
+
 
 class DataInterconnect(object):
     def __init__(self):
@@ -70,21 +107,21 @@ class DataInterconnect(object):
                 [self.output_queues[outQ] for outQ in self.crossbar[inQ_name]]) )
 
 if __name__ == '__main__':
-    fakeDigitizer = DataProducer()
-    fakeDSP = DataCruncher()
+    fakeADC = ADC("ADC")
+    fakeDSP = FIR(1/5*np.ones(5), 1)
 
     fakeInterconnect = DataInterconnect()
 
-    fakeInterconnect.register_input("fakeDigitizer")
-    fakeInterconnect.register_output("fakeDSP", fakeDSP.queue, "fakeDigitizer")
+    fakeInterconnect.register_input("fakeADC")
+    fakeInterconnect.register_output("fakeDSP", fakeDSP.in_queue, "fakeADC")
 
-    fakeDigitizer.queue = fakeInterconnect.input_queues["fakeDigitizer"]
+    fakeADC.out_queue = fakeInterconnect.input_queues["fakeADC"]
 
     loop = asyncio.get_event_loop()
     fakeInterconnect.run(loop)
     tasks = [
         asyncio.ensure_future(fakeDSP.wait_for_data()),
-        asyncio.ensure_future(fakeDigitizer.take_data(loop, 5))]
+        asyncio.ensure_future(fakeADC.take_data(loop, 5))]
     try:
         loop.run_until_complete(asyncio.wait(tasks))
     except asyncio.CancelledError:
@@ -93,4 +130,4 @@ if __name__ == '__main__':
         logging.info("Cancelled!")
         loop.close()
 
-    logging.info("Hello!")
+    logging.info("Made it out of asyncio land!")
