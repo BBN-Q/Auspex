@@ -72,12 +72,17 @@ class DataWriter(object):
     def __init__(self):
         self.in_queues = {}
 
-    async def run():
-        store = pd.HDFStore()
-        while True:
-            for q in asyncio.as_completed(self.in_queues):
-                data = await q.get()
+    def add_stream(self, name):
+        self.in_queues[name] = asyncio.Queue()
 
+    async def run(self):
+        store = pd.HDFStore("silly.h5")
+        while True:
+            results, _ = await asyncio.wait([q.get() for q in self.in_queues.values()])
+            logging.info("DataWriter got data")
+            data = [r.result() for r in results]
+            df = pd.DataFrame({n:d for n,d in zip(self.in_queues.keys(), data)})
+            store.append("data", df, index=False)
 
 class DataInterconnect(object):
     def __init__(self):
@@ -108,12 +113,15 @@ class DataInterconnect(object):
 
 if __name__ == '__main__':
     fakeADC = ADC("ADC")
-    fakeDSP = FIR(1/5*np.ones(5), 1)
+    fakeDSP = FIR("FIR1", 1/5*np.ones(5), 1)
+    myWriter = DataWriter()
 
     fakeInterconnect = DataInterconnect()
 
     fakeInterconnect.register_input("fakeADC")
     fakeInterconnect.register_output("fakeDSP", fakeDSP.in_queue, "fakeADC")
+    myWriter.add_stream("fakeADC")
+    fakeInterconnect.register_output("myWriter", myWriter.in_queues["fakeADC"], "fakeADC")
 
     fakeADC.out_queue = fakeInterconnect.input_queues["fakeADC"]
 
@@ -121,7 +129,8 @@ if __name__ == '__main__':
     fakeInterconnect.run(loop)
     tasks = [
         asyncio.ensure_future(fakeDSP.wait_for_data()),
-        asyncio.ensure_future(fakeADC.take_data(loop, 5))]
+        asyncio.ensure_future(fakeADC.take_data(loop, 5)),
+        asyncio.ensure_future(myWriter.run())]
     try:
         loop.run_until_complete(asyncio.wait(tasks))
     except asyncio.CancelledError:
