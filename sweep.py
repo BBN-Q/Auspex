@@ -5,8 +5,6 @@ import string
 import signal
 import sys
 
-# logging.basicConfig(format='%(levelname)s:\t%(message)s', level=logging.INFO)
-
 # For plotting
 import threading
 from collections import deque
