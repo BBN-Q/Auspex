@@ -79,7 +79,7 @@ class SweptParameter(object):
         for pph in self.parameter.pre_push_hooks:
             pph()
         self.parameter.push()
-        for pph in self.paraeter.post_push_hooks:
+        for pph in self.parameter.post_push_hooks:
             pph()
 
 class FlaskThread(threading.Thread):

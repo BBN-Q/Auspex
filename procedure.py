@@ -109,7 +109,8 @@ class Parameter(object):
         self.method = method
 
     def push(self):
-        self.method(self._value)
+        if not self.abstract:
+            self.method(self._value)
 
 class FloatParameter(Parameter):
     
