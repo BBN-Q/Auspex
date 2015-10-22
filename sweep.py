@@ -67,21 +67,19 @@ class SweptParameter(object):
         self.length = len(values)
         self.indices = range(self.length)
 
-        # Hooks to be called before or after updating a sweep parameter
-        self._pre_push_hooks = []
-        self._post_push_hooks = []
+    @property
+    def value(self):
+        return self.parameter.value
 
-    def add_pre_push_hook(self, hook):
-        self._pre_push_hooks.append(hook)
-
-    def add_post_push_hook(self, hook):
-        self._post_push_hooks.append(hook)
+    @value.setter
+    def value(self, value):
+        self.parameter.value = value
 
     def push(self):
-        for pph in self._pre_push_hooks:
+        for pph in self.parameter.pre_push_hooks:
             pph()
         self.parameter.push()
-        for pph in self._post_push_hooks:
+        for pph in self.paraeter.post_push_hooks:
             pph()
 
 class FlaskThread(threading.Thread):
@@ -272,7 +270,7 @@ class Sweep(object):
         self._index_generator = itertools.product(*[sp.indices for sp in self._swept_parameters])
 
     def run(self):
-        """Run everything all at once..."""
+        self._procedure.init_instruments()
 
         if len(self._plotters) > 0:
             t = FlaskThread(self._plotters)
@@ -283,6 +281,7 @@ class Sweep(object):
                 time.sleep(0.5)
                 response = urllib2.urlopen('http://localhost:5050/shutdown').read()
                 t.join()
+            self._procedure.shutdown_instruments()
 
         def catch_ctrl_c(signum, frame):
             logging.info("Caught SIGINT.  Shutting down.")
@@ -298,13 +297,13 @@ class Sweep(object):
 
             # Update the parameter values. Unles set and push if there has been a change
             # in the value from the previous iteration.
-            for i, p in enumerate(self._swept_parameters):
+            for i, sp in enumerate(self._swept_parameters):
                 if last_param_values is None or param_values[i] != last_param_values[i]:
-                    p.parameter.value = param_values[i]
-                    p.parameter.push()
-                    logging.info("Updated {:s} to {:g} since the value changed.".format(p.parameter.name, p.parameter.value))
+                    sp.value = param_values[i]
+                    sp.push()
+                    logging.info("Updated {:s} to {:g} since the value changed.".format(sp.parameter.name, sp.value))
                 else:
-                    logging.info("Didn't update {:s} since the value didn't change.".format(p.parameter.name))
+                    logging.info("Didn't update {:s} since the value didn't change.".format(sp.parameter.name))
 
             # update previous values
             last_param_values = param_values

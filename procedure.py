@@ -72,6 +72,16 @@ class Parameter(object):
         self.method   = None
         self.abstract = abstract # Is this something we can actually push?
 
+        # Hooks to be called before or after updating a sweep parameter
+        self._pre_push_hooks = []
+        self._post_push_hooks = []
+
+    def add_pre_push_hook(self, hook):
+        self._pre_push_hooks.append(hook)
+
+    def add_post_push_hook(self, hook):
+        self._post_push_hooks.append(hook)
+        
     @property
     def value(self):
         return self._value
@@ -165,8 +175,14 @@ class Procedure(object):
             if isinstance(quantity, Quantity):
                 self._quantities[item] = quantity
 
+    def init_instruments(self):
+        """Gets run before a sweep starts"""
+        pass
+
+    def shutdown_instruments(self):
+        """Gets run after a sweep ends, or when the program is terminated."""
+        pass
+
     def run(self):
-        # for param in self._parameters:
-        #     self._parameters[param].push()
-        for quant in self._quantities:
-            self._quantities[quant].measure()
+        """The actual measurement that gets run for each set of values in a sweep."""
+        pass
