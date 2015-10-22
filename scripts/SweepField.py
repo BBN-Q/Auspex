@@ -8,7 +8,7 @@ import scipy as sp
 import pandas as pd
 
 from instruments.kepco import BOP2020M
-from instruments.stanford import SR830, SR865
+from instruments.stanford import SR830
 from instruments.magnet import Electromagnet
 from instruments.hall_probe import HallProbe
 from sweep import Sweep
@@ -16,18 +16,17 @@ from procedure import FloatParameter, Quantity, Procedure
 
 # import ipdb
 
-class FieldTest(Procedure):
+class MeasureLockinVoltage(Procedure):
     set_field = FloatParameter("Set Field", unit="G")
     field     = Quantity("Field", unit="G")
     voltage   = Quantity("Magnitude", unit="V")
 
     bop       = BOP2020M("Kepco Power Supply", "GPIB1::1::INSTR")
     lock      = SR830("Lockin Amplifier", "GPIB1::9::INSTR")
-    # fast_lock = SR865("Lockin Amplifier", "USB0::0xB506::0x2000::002638::INSTR")
     hp        = HallProbe("calibration/HallProbe.cal", lock.set_ao1, lock.get_ai1)
     mag       = Electromagnet('calibration/GMW.cal', hp.get_field, bop.set_current, bop.get_current)
 
-    def instruments_init(self):
+    def init_instruments(self):
         self.tc_delay = self.lock.measure_delay()
         self.averages = 10
 
@@ -42,6 +41,9 @@ class FieldTest(Procedure):
         self.field.assign_method(self.mag.get_field)
         self.voltage.assign_method(lockin_measure)
 
+        for param in self._parameters:
+            self._parameters[param].push()
+
     def run(self):
         """This is run for each step in a sweep."""
         for param in self._parameters:
@@ -50,12 +52,12 @@ class FieldTest(Procedure):
             self._quantities[quant].measure()
         logging.info("Field, Lockin Magnitude: {:f}, {:g}".format(self.field.value, self.voltage.value) )
 
-    def instruments_shutdown(self):
+    def shutdown_instruments(self):
         self.bop.current = 0.0
 
 if __name__ == '__main__':
 
-    proc = FieldTest()
+    proc = MeasureLockinVoltage()
 
     # Define a sweep over prarameters
     sw = Sweep(proc)
@@ -67,10 +69,5 @@ if __name__ == '__main__':
 
     # Define a plotter
     sw.add_plotter("Resistance Vs Field", proc.field, proc.voltage, color="firebrick", line_width=2)
-    # sw.add_plotter("Field Vs Set Field", proc.set_field, proc.field, color="navy", line_width=2)
-    # sw.add_plotter("Field Vs Set Field", proc.set_field, [proc.set_field, proc.field], color=["firebrick", "navy"], line_width=2)
 
-    proc.instruments_init()
     sw.run()
-    proc.instruments_shutdown()
-
