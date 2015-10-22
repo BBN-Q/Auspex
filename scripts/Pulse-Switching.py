@@ -155,5 +155,4 @@ if __name__ == '__main__':
     sw.add_plotter('Pulse Voltage', proc.pulse_duration, proc.attempt_number, color="green", line_width=2)
 
     sw.run()
-    proc.shutdown_instruments()
     
