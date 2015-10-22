@@ -73,14 +73,14 @@ class Parameter(object):
         self.abstract = abstract # Is this something we can actually push?
 
         # Hooks to be called before or after updating a sweep parameter
-        self._pre_push_hooks = []
-        self._post_push_hooks = []
+        self.pre_push_hooks = []
+        self.post_push_hooks = []
 
     def add_pre_push_hook(self, hook):
-        self._pre_push_hooks.append(hook)
+        self.pre_push_hooks.append(hook)
 
     def add_post_push_hook(self, hook):
-        self._post_push_hooks.append(hook)
+        self.post_push_hooks.append(hook)
         
     @property
     def value(self):
