@@ -64,36 +64,30 @@ class Quantity(object):
 class Parameter(object):
     """ Encapsulates the information for an experiment parameter"""
 
-    def __init__(self, name, unit=None, default=None):
+    def __init__(self, name, unit=None, default=None, abstract=False):
         self.name     = name
         self._value   = default
         self.unit     = unit
         self.default  = default
         self.method   = None
-        self.changed  = True
+        self.abstract = abstract # Is this something we can actually push?
 
-        # Special routines to execute
-        self._pre_push_routines = []
-        self._post_push_routines = []
+        # Hooks to be called before or after updating a sweep parameter
+        self.pre_push_hooks = []
+        self.post_push_hooks = []
+
+    def add_pre_push_hook(self, hook):
+        self.pre_push_hooks.append(hook)
+
+    def add_post_push_hook(self, hook):
+        self.post_push_hooks.append(hook)
         
-    def check_if_changed(self, value):
-        if value is None:
-            self.changed = True
-        else:
-            if value != self._value:
-                logging.debug("In '{:s}', value was {:s}, will be {:s}.".format(self.name, str(self._value), str(value)) )
-                self.changed = True
-            else:
-                logging.debug("In '{:s}', value was {:s}, will be {:s}.".format(self.name, str(self._value), str(value)) )
-                self.changed = False
-
     @property
     def value(self):
         return self._value
 
     @value.setter
     def value(self, value):
-        self.check_if_changed(value)
         self._value = value
 
     def __str__(self):
@@ -114,21 +108,9 @@ class Parameter(object):
         logging.debug("Setting method of Parameter %s to %s" % (self.name, str(method)) )
         self.method = method
 
-    def add_pre_push_routine(self, routine):
-        self._pre_push_routines.append(routine)
-
-    def add_post_push_routine(self, routine):
-        self._post_push_routines.append(routine)
-
     def push(self):
-        if self.changed:
-            logging.debug("Telling '{:s}' to call set method, since the value has changed.".format(self.name))
-            if self._value is not None:
-                [ppr() for ppr in self._pre_push_routines]
+        if not self.abstract:
             self.method(self._value)
-            if self._value is not None:
-                [ppr() for ppr in self._post_push_routines]
-        self.changed = False
 
 class FloatParameter(Parameter):
     
@@ -138,7 +120,6 @@ class FloatParameter(Parameter):
     
     @value.setter
     def value(self, value):
-        self.check_if_changed(value)
         try:
             self._value = float(value)
         except ValueError:
@@ -157,7 +138,6 @@ class IntParameter(Parameter):
     
     @value.setter
     def value(self, value):
-        self.check_if_changed(value)
         try:
             self._value = int(value)
         except ValueError:
@@ -196,8 +176,14 @@ class Procedure(object):
             if isinstance(quantity, Quantity):
                 self._quantities[item] = quantity
 
+    def init_instruments(self):
+        """Gets run before a sweep starts"""
+        pass
+
+    def shutdown_instruments(self):
+        """Gets run after a sweep ends, or when the program is terminated."""
+        pass
+
     def run(self):
-        # for param in self._parameters:
-        #     self._parameters[param].push()
-        for quant in self._quantities:
-            self._quantities[quant].measure()
+        """The actual measurement that gets run for each set of values in a sweep."""
+        pass

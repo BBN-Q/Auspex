@@ -5,8 +5,6 @@ import string
 import signal
 import sys
 
-# logging.basicConfig(format='%(levelname)s:\t%(message)s', level=logging.INFO)
-
 # For plotting
 import threading
 from collections import deque
@@ -68,6 +66,21 @@ class SweptParameter(object):
         self.values = values
         self.length = len(values)
         self.indices = range(self.length)
+
+    @property
+    def value(self):
+        return self.parameter.value
+
+    @value.setter
+    def value(self, value):
+        self.parameter.value = value
+
+    def push(self):
+        for pph in self.parameter.pre_push_hooks:
+            pph()
+        self.parameter.push()
+        for pph in self.parameter.post_push_hooks:
+            pph()
 
 class FlaskThread(threading.Thread):
     def __init__(self, plotters):
@@ -171,6 +184,9 @@ class Sweep(object):
         self._swept_parameters.append(SweptParameter(param, sweep_list))
         self.generate_sweep()
 
+        # Set the value of the parameter to the initial value of the sweep
+        param.value = sweep_list[0]
+
     def add_writer(self, filename, sample_name, dataset_name, *quants, **kwargs):
         """Add a dataset that updates based on the supplied quantities"""
 
@@ -253,23 +269,8 @@ class Sweep(object):
         self._sweep_generator = itertools.product(*[sp.values for sp in self._swept_parameters])
         self._index_generator = itertools.product(*[sp.indices for sp in self._swept_parameters])
 
-    #Python 3 compatible iterator
-    #TODO if we go all in on Python 3, remove this and replace next with __next__ below
-    def __next__(self):
-        return self.next()
-
-    def next(self):
-        ps = next(self._sweep_generator)
-
-        for i, p in enumerate(self._swept_parameters):
-            p.parameter.value = ps[i]
-
-        self._procedure.run()
-        self.write()
-        self.plot()
-
     def run(self):
-        """Run everything all at once..."""
+        self._procedure.init_instruments()
 
         if len(self._plotters) > 0:
             t = FlaskThread(self._plotters)
@@ -280,6 +281,7 @@ class Sweep(object):
                 time.sleep(0.5)
                 response = urllib2.urlopen('http://localhost:5050/shutdown').read()
                 t.join()
+            self._procedure.shutdown_instruments()
 
         def catch_ctrl_c(signum, frame):
             logging.info("Caught SIGINT.  Shutting down.")
@@ -288,12 +290,23 @@ class Sweep(object):
 
         signal.signal(signal.SIGINT, catch_ctrl_c)
 
+        # Keep track of the previous values
+        last_param_values = None 
+
         for param_values in self._sweep_generator:
 
-            # Update the paramater values
-            for i, p in enumerate(self._swept_parameters):
-                p.parameter.value = param_values[i]
-                p.parameter.push()
+            # Update the parameter values. Unles set and push if there has been a change
+            # in the value from the previous iteration.
+            for i, sp in enumerate(self._swept_parameters):
+                if last_param_values is None or param_values[i] != last_param_values[i]:
+                    sp.value = param_values[i]
+                    sp.push()
+                    logging.info("Updated {:s} to {:g} since the value changed.".format(sp.parameter.name, sp.value))
+                else:
+                    logging.info("Didn't update {:s} since the value didn't change.".format(sp.parameter.name))
+
+            # update previous values
+            last_param_values = param_values
 
             # Run the procedure
             self._procedure.run()
