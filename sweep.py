@@ -253,21 +253,6 @@ class Sweep(object):
         self._sweep_generator = itertools.product(*[sp.values for sp in self._swept_parameters])
         self._index_generator = itertools.product(*[sp.indices for sp in self._swept_parameters])
 
-    #Python 3 compatible iterator
-    #TODO if we go all in on Python 3, remove this and replace next with __next__ below
-    def __next__(self):
-        return self.next()
-
-    def next(self):
-        ps = next(self._sweep_generator)
-
-        for i, p in enumerate(self._swept_parameters):
-            p.parameter.value = ps[i]
-
-        self._procedure.run()
-        self.write()
-        self.plot()
-
     def run(self):
         """Run everything all at once..."""
 
