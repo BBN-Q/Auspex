@@ -71,6 +71,10 @@ class Parameter(object):
         self.default  = default
         self.method   = None
         self.changed  = True
+
+        # Special routines to execute
+        self._pre_push_routines = []
+        self._post_push_routines = []
         
     def check_if_changed(self, value):
         if value is None:
@@ -110,10 +114,20 @@ class Parameter(object):
         logging.debug("Setting method of Parameter %s to %s" % (self.name, str(method)) )
         self.method = method
 
+    def add_pre_push_routine(self, routine):
+        self._pre_push_routines.append(routine)
+
+    def add_post_push_routine(self, routine):
+        self._post_push_routines.append(routine)
+
     def push(self):
         if self.changed:
             logging.debug("Telling '{:s}' to call set method, since the value has changed.".format(self.name))
+            if self._value is not None:
+                [ppr() for ppr in self._pre_push_routines]
             self.method(self._value)
+            if self._value is not None:
+                [ppr() for ppr in self._post_push_routines]
         self.changed = False
 
 class FloatParameter(Parameter):
@@ -183,7 +197,7 @@ class Procedure(object):
                 self._quantities[item] = quantity
 
     def run(self):
-        for param in self._parameters:
-            self._parameters[param].push()
+        # for param in self._parameters:
+        #     self._parameters[param].push()
         for quant in self._quantities:
             self._quantities[quant].measure()

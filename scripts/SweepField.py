@@ -14,6 +14,7 @@ from instruments.hall_probe import HallProbe
 from sweep import Sweep
 from procedure import FloatParameter, Quantity, Procedure
 
+# import ipdb
 
 class FieldTest(Procedure):
     set_field = FloatParameter("Set Field", unit="G")
@@ -27,7 +28,7 @@ class FieldTest(Procedure):
     mag       = Electromagnet('calibration/GMW.cal', hp.get_field, bop.set_current, bop.get_current)
 
     def instruments_init(self):
-        self.tc_delay = 9*self.lock.tc
+        self.tc_delay = self.lock.measure_delay()
         self.averages = 10
 
         def lockin_measure():
@@ -35,8 +36,6 @@ class FieldTest(Procedure):
             vals = []
             for i in range(self.averages):
                 vals.append(self.lock.r)
-                # vals.append(self.fast_lock.r)
-                # time.sleep(0.03)
             return np.mean(vals)
 
         self.set_field.assign_method(self.mag.set_field)
@@ -49,7 +48,6 @@ class FieldTest(Procedure):
             self._parameters[param].push()
         for quant in self._quantities:
             self._quantities[quant].measure()
-
         logging.info("Field, Lockin Magnitude: {:f}, {:g}".format(self.field.value, self.voltage.value) )
 
     def instruments_shutdown(self):
@@ -61,15 +59,15 @@ if __name__ == '__main__':
 
     # Define a sweep over prarameters
     sw = Sweep(proc)
-    values = np.append(np.arange(-700, -101, 15), np.arange(-100, -701, -15)).tolist()
+    values = np.append(np.arange(-800, -99, 10), np.arange(-100, -801, -10)).tolist()
     sw.add_parameter(proc.set_field, values)
 
     # Define a writer
-    sw.add_writer('data/JunkLoops.h5', 'SWS2129(2,0)G-(011,09)', 'MinorLoop-MediumGap', proc.field, proc.voltage)
+    sw.add_writer('data/FieldLoops.h5', 'SWS2129(2,0)G-(009,05)', 'MinorLoop-3.3K', proc.field, proc.voltage)
 
     # Define a plotter
     sw.add_plotter("Resistance Vs Field", proc.field, proc.voltage, color="firebrick", line_width=2)
-    sw.add_plotter("Field Vs Set Field", proc.set_field, proc.field, color="navy", line_width=2)
+    # sw.add_plotter("Field Vs Set Field", proc.set_field, proc.field, color="navy", line_width=2)
     # sw.add_plotter("Field Vs Set Field", proc.set_field, [proc.set_field, proc.field], color=["firebrick", "navy"], line_width=2)
 
     proc.instruments_init()

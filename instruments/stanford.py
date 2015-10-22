@@ -64,6 +64,21 @@ class SR830(Instrument):
         super(SR830, self).__init__(name, resource_name, **kwargs)
         self.interface._instrument.read_termination = u"\n"
 
+    def measure_delay(self):
+        """Return how long we must wait for the values to have settled, based on the filter slope."""
+        fs = self.filter_slope
+        tc = self.time_constant
+        if fs <= 7: # 6dB/oct
+            return 5*tc
+        elif fs <= 13: # 12dB/oct
+            return 7*tc
+        elif fs <= 19: # 18dB/oct
+            return 9*tc
+        elif fs <= 25: # 24dB/oct
+            return 10*tc
+        else:
+            raise Exception("Unknown delay for unknown filter slope {:f}".format(fs))
+
 class SR865(Instrument):
     """The SR865 lock-in amplifier."""
     TIME_CONSTANT_VALUES = [1e-6, 3e-9, 10e-6, 30e-6, 100e-6, 300e-6, 1e-3, 3e-3, 10e-3, 

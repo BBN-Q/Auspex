@@ -150,7 +150,7 @@ class Sweep(object):
             raise TypeError("Must pass a Procedure subclass.")
 
         # Container for SweptParmeters
-        self._parameters =  []
+        self._swept_parameters =  []
 
         # Container for written Quantities
         self._quantities = []
@@ -168,7 +168,7 @@ class Sweep(object):
         return self
 
     def add_parameter(self, param, sweep_list):
-        self._parameters.append(SweptParameter(param, sweep_list))
+        self._swept_parameters.append(SweptParameter(param, sweep_list))
         self.generate_sweep()
 
     def add_writer(self, filename, sample_name, dataset_name, *quants, **kwargs):
@@ -211,10 +211,10 @@ class Sweep(object):
             dataset_name = "{:s}-{:04d}".format(dataset_name, largest_index + 1)
 
         # Determine the dataset dimensions
-        sweep_dims = [ p.length for p in self._parameters ]
+        sweep_dims = [ p.length for p in self._swept_parameters ]
         logging.debug("Sweep dims are %s for the list of swept parameters in the writer %s, %s." % (str(sweep_dims), filename, dataset_name) )
 
-        data_dims = [len(quants)+len(self._parameters)]
+        data_dims = [len(quants)+len(self._swept_parameters)]
         dataset_dimensions = tuple(sweep_dims + data_dims)
 
         # Get the datatype, defaulting to float
@@ -230,16 +230,16 @@ class Sweep(object):
         indices = list(next(self._index_generator))
 
         for w in self._writers:
-            current_p_values = [p.parameter.value for p in self._parameters]
+            current_p_values = [p.parameter.value for p in self._swept_parameters]
 
             logging.debug("Current indicies are: %s" % str(indices) )
 
-            for i, p in enumerate(self._parameters):
+            for i, p in enumerate(self._swept_parameters):
                 coords = tuple( indices + [i] )
                 logging.debug("Coords: %s" % str(coords) )
                 w.dataset[coords] = p.parameter.value
             for i, q in enumerate(w.quantities):
-                coords = tuple( indices + [len(self._parameters) + i] )
+                coords = tuple( indices + [len(self._swept_parameters) + i] )
                 w.dataset[coords] = q.value
 
     def add_plotter(self, title, x, y, *args, **kwargs):
@@ -250,8 +250,8 @@ class Sweep(object):
             p.update()
 
     def generate_sweep(self):
-        self._sweep_generator = itertools.product(*[sp.values for sp in self._parameters])
-        self._index_generator = itertools.product(*[sp.indices for sp in self._parameters])
+        self._sweep_generator = itertools.product(*[sp.values for sp in self._swept_parameters])
+        self._index_generator = itertools.product(*[sp.indices for sp in self._swept_parameters])
 
     #Python 3 compatible iterator
     #TODO if we go all in on Python 3, remove this and replace next with __next__ below
@@ -261,7 +261,7 @@ class Sweep(object):
     def next(self):
         ps = next(self._sweep_generator)
 
-        for i, p in enumerate(self._parameters):
+        for i, p in enumerate(self._swept_parameters):
             p.parameter.value = ps[i]
 
         self._procedure.run()
@@ -291,8 +291,9 @@ class Sweep(object):
         for param_values in self._sweep_generator:
 
             # Update the paramater values
-            for i, p in enumerate(self._parameters):
+            for i, p in enumerate(self._swept_parameters):
                 p.parameter.value = param_values[i]
+                p.parameter.push()
 
             # Run the procedure
             self._procedure.run()
