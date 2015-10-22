@@ -67,6 +67,23 @@ class SweptParameter(object):
         self.length = len(values)
         self.indices = range(self.length)
 
+        # Hooks to be called before or after updating a sweep parameter
+        self._pre_push_hooks = []
+        self._post_push_hooks = []
+
+    def add_pre_push_hook(self, hook):
+        self._pre_push_hooks.append(hook)
+
+    def add_post_push_hook(self, hook):
+        self._post_push_hooks.append(hook)
+
+    def push(self):
+        for pph in self._pre_push_hooks:
+            pph()
+        self.parameter.push()
+        for pph in self._post_push_hooks:
+            pph()
+
 class FlaskThread(threading.Thread):
     def __init__(self, plotters):
         self.data_lookup = {p.filename: p.data for p in plotters}
@@ -168,6 +185,9 @@ class Sweep(object):
     def add_parameter(self, param, sweep_list):
         self._swept_parameters.append(SweptParameter(param, sweep_list))
         self.generate_sweep()
+
+        # Set the value of the parameter to the initial value of the sweep
+        param.value = sweep_list[0]
 
     def add_writer(self, filename, sample_name, dataset_name, *quants, **kwargs):
         """Add a dataset that updates based on the supplied quantities"""
@@ -271,12 +291,23 @@ class Sweep(object):
 
         signal.signal(signal.SIGINT, catch_ctrl_c)
 
+        # Keep track of the previous values
+        last_param_values = None 
+
         for param_values in self._sweep_generator:
 
-            # Update the paramater values
+            # Update the parameter values. Unles set and push if there has been a change
+            # in the value from the previous iteration.
             for i, p in enumerate(self._swept_parameters):
-                p.parameter.value = param_values[i]
-                p.parameter.push()
+                if last_param_values is None or param_values[i] != last_param_values[i]:
+                    p.parameter.value = param_values[i]
+                    p.parameter.push()
+                    logging.info("Updated {:s} to {:g} since the value changed.".format(p.parameter.name, p.parameter.value))
+                else:
+                    logging.info("Didn't update {:s} since the value didn't change.".format(p.parameter.name))
+
+            # update previous values
+            last_param_values = param_values
 
             # Run the procedure
             self._procedure.run()

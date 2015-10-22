@@ -64,28 +64,13 @@ class Quantity(object):
 class Parameter(object):
     """ Encapsulates the information for an experiment parameter"""
 
-    def __init__(self, name, unit=None, default=None):
+    def __init__(self, name, unit=None, default=None, abstract=False):
         self.name     = name
         self._value   = default
         self.unit     = unit
         self.default  = default
         self.method   = None
-        self.changed  = True
-
-        # Special routines to execute
-        self._pre_push_routines = []
-        self._post_push_routines = []
-        
-    def check_if_changed(self, value):
-        if value is None:
-            self.changed = True
-        else:
-            if value != self._value:
-                logging.debug("In '{:s}', value was {:s}, will be {:s}.".format(self.name, str(self._value), str(value)) )
-                self.changed = True
-            else:
-                logging.debug("In '{:s}', value was {:s}, will be {:s}.".format(self.name, str(self._value), str(value)) )
-                self.changed = False
+        self.abstract = abstract # Is this something we can actually push?
 
     @property
     def value(self):
@@ -93,7 +78,6 @@ class Parameter(object):
 
     @value.setter
     def value(self, value):
-        self.check_if_changed(value)
         self._value = value
 
     def __str__(self):
@@ -114,21 +98,8 @@ class Parameter(object):
         logging.debug("Setting method of Parameter %s to %s" % (self.name, str(method)) )
         self.method = method
 
-    def add_pre_push_routine(self, routine):
-        self._pre_push_routines.append(routine)
-
-    def add_post_push_routine(self, routine):
-        self._post_push_routines.append(routine)
-
     def push(self):
-        if self.changed:
-            logging.debug("Telling '{:s}' to call set method, since the value has changed.".format(self.name))
-            if self._value is not None:
-                [ppr() for ppr in self._pre_push_routines]
-            self.method(self._value)
-            if self._value is not None:
-                [ppr() for ppr in self._post_push_routines]
-        self.changed = False
+        self.method(self._value)
 
 class FloatParameter(Parameter):
     
@@ -138,7 +109,6 @@ class FloatParameter(Parameter):
     
     @value.setter
     def value(self, value):
-        self.check_if_changed(value)
         try:
             self._value = float(value)
         except ValueError:
@@ -157,7 +127,6 @@ class IntParameter(Parameter):
     
     @value.setter
     def value(self, value):
-        self.check_if_changed(value)
         try:
             self._value = int(value)
         except ValueError:
