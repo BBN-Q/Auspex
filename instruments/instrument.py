@@ -139,11 +139,11 @@ def add_command(instr, name, cmd):
     def fset(self, val):
         if cmd.value_range is not None:
             if (val < cmd.value_range[0]) or (val > cmd.value_range[1]):
-                raise ValueError("Outside of the allowable range specified for instrument '%s'." % self.name)
+                raise ValueError("The value {:g} is outside of the allowable range specified for instrument '{:s}'.".format(val, self.name))
         
         if cmd.allowed_values is not None:
             if not val in cmd.allowed_values:
-                raise ValueError("Not in the allowable set of values specified for instrument '%s': %s" % (self.name, cmd.allowed_values) )
+                raise ValueError("The value {:g} is not in the allowable set of values specified for instrument '{:s}': {:s}".format(val, self.name, cmd.allowed_values) )
         
         if isinstance(cmd, RampCommand):
             # Ramp from one value to another, making sure we actually take some steps
