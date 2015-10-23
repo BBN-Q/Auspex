@@ -1,5 +1,6 @@
 import numpy as np
 import time
+import logging
 
 class Electromagnet(object):
     """Wrapper for electromagnet """
@@ -28,19 +29,16 @@ class Electromagnet(object):
         return np.mean( [self.field_getter() for i in range(self.field_averages)] )
     @field.setter
     def field(self, target_field):
-        careful = True
-        monotonic = False
-        refinements = 1
-
+        # logging.info("Appropriate current is: %f" % self.current_vs_field(target_field))
         self.current_setter( self.current_vs_field(target_field) )
         time.sleep(0.6)
-        # print("Arrived at: %f" % self.field)
+        # logging.info("Arrived at: %f" % self.field)
         field_offset = self.field - target_field
-        # print("Revising: Field offset is %f" % field_offset)
+        # logging.info("Revising: Field offset is %f" % field_offset)
         revised_field = target_field - field_offset
-        # print("Revising: Revised target field is %f" % revised_field)
+        # logging.info("Revising: Revised target field is %f" % revised_field)
         self.current_setter( self.current_vs_field(revised_field) )
-        # print("Arrived at: %f, repeat measurement %f" % (self.field, self.field) )
+        # logging.info("Arrived at: %f, repeat measurement %f" % (self.field, self.field) )
 
     # hackathon
     def set_field(self, value):
