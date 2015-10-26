@@ -9,6 +9,7 @@ lab-book entries.
 import os, sys
 from xmlrpclib import ServerProxy, Binary
 import time
+import urllib
 import argparse
 
 
@@ -70,8 +71,9 @@ def upload_image(ploneServer, folderPath, imageFile, imageDescrip='', tags=[]):
     imagePost = {folderPath+'/'+imageTitle.lower(): [{'title': imageTitle, 'description': imageDescrip, 'Subject': tags, 'image': Binary(open(imageFile, 'rb').read())}, 'Image']}
     print('Image Post %s' % str(imagePost))
     imagePath = ploneServer.post_object(imagePost)
+    urlencodedPath = urllib.quote(imagePath[0])
     print('Create a link to this image in Markdown with:\n' + \
-         '[![]({0}/@@images/image/preview)]({0})'.format(imagePath[0]))
+         '[![]({0}/@@images/image/preview)]({0})'.format(urlencodedPath))
 
 
 if __name__ == "__main__":
