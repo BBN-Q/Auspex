@@ -117,17 +117,19 @@ class VisaInterface(Interface):
                 rm = visa.ResourceManager(visa_loc)
             else:
                 rm = visa.ResourceManager()
-            self._instrument = rm.open_resource(resource_name)
+            self._resource = rm.open_resource(resource_name)
         except:
             raise Exception("Unable to create the resource '%s'" % resource_name)
     def values(self, query_string):
-        return self._instrument.query_ascii_values(query_string, container=np.array)
+        return self._resource.query_ascii_values(query_string, container=np.array)
     def value(self, query_string):
-        return self._instrument.query_ascii_values(query_string)
+        return self._resource.query_ascii_values(query_string)
     def write(self, write_string):
-        self._instrument.write(write_string)
+        self._resource.write(write_string)
+    def read(self):
+        return self._resource.read()
     def query(self, query_string):
-        return self._instrument.query(query_string)
+        return self._resource.query(query_string)
 
 def add_command(instr, name, cmd):
     """Helper function for parsing Instrument attributes and turning them into
@@ -140,11 +142,11 @@ def add_command(instr, name, cmd):
         if cmd.value_range is not None:
             if (val < cmd.value_range[0]) or (val > cmd.value_range[1]):
                 raise ValueError("The value {:g} is outside of the allowable range specified for instrument '{:s}'.".format(val, self.name))
-        
+
         if cmd.allowed_values is not None:
             if not val in cmd.allowed_values:
                 raise ValueError("The value {:g} is not in the allowable set of values specified for instrument '{:s}': {:s}".format(val, self.name, cmd.allowed_values) )
-        
+
         if isinstance(cmd, RampCommand):
             # Ramp from one value to another, making sure we actually take some steps
             start_value = float(self.interface.query(cmd.get_string))
@@ -166,10 +168,10 @@ def add_command(instr, name, cmd):
     # Add getter and setter methods for passing around
     if cmd.get_string:
         setattr(instr, "get_" + name, fget)
-    
+
     if cmd.set_string:
         setattr(instr, "set_" + name, fset)
-        
+
     #Using None prevents deletion or setting/getting unsettable/gettable attributes
     setattr(instr, name, property(fget if cmd.get_string else None, fset if cmd.set_string else None, None, cmd.doc))
 
@@ -204,7 +206,7 @@ class Instrument(object):
 
         self.check_errors_on_get = check_errors_on_get
         self.check_errors_on_set = check_errors_on_set
-        
+
         if interface_type is None:
             # Load the dummy interface, unless we see that GPIB is in the resource string
             if 'GPIB' in resource_name or 'USB' in resource_name:

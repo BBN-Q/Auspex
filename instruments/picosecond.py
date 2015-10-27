@@ -14,7 +14,7 @@ class Picosecond10070A(Instrument):
         super(Picosecond10070A, self).__init__(name, resource_name, *args, **kwargs)
         self.interface.write("header off")
         self.interface.write("trigger GPIB")
-        self.interface._instrument.read_termination = u"\n"
+        self.interface._resource.read_termination = u"\n"
 
     # This command is syntactically screwy
     @property

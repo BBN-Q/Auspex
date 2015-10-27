@@ -62,7 +62,7 @@ class SR830(Instrument):
 
     def __init__(self, name, resource_name, mode='current', **kwargs):
         super(SR830, self).__init__(name, resource_name, **kwargs)
-        self.interface._instrument.read_termination = u"\n"
+        self.interface._resource.read_termination = u"\n"
 
     def measure_delay(self):
         """Return how long we must wait for the values to have settled, based on the filter slope."""
@@ -116,4 +116,4 @@ class SR865(Instrument):
 
     def __init__(self, name, resource_name, mode='current', **kwargs):
         super(SR865, self).__init__(name, resource_name, **kwargs)
-        self.interface._instrument.read_termination = u"\n"
+        self.interface._resource.read_termination = u"\n"

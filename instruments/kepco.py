@@ -9,8 +9,8 @@ class BOP2020M(Instrument):
 
     def __init__(self, name, resource_name, mode='current', **kwargs):
         super(BOP2020M, self).__init__(name, resource_name, **kwargs)
-        self.interface._instrument.write_termination = u"\n"
-        self.interface._instrument.read_termination = u"\n"
+        self.interface._resource.write_termination = u"\n"
+        self.interface._resource.read_termination = u"\n"
         self.mode = 'current'
         self.interface.write('VOLT MAX')
         self.output = True
