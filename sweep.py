@@ -6,12 +6,8 @@ import signal
 import sys
 
 # For plotting
-import threading
 from collections import deque
-import json
-from flask import Flask, jsonify, request
-from bokeh.server.crossdomain import crossdomain
-import urllib2
+from FlaskPlotter import FlaskPlotter
 
 import numpy as np
 import scipy as sp
@@ -81,72 +77,6 @@ class SweptParameter(object):
         self.parameter.push()
         for pph in self.parameter.post_push_hooks:
             pph()
-
-class FlaskThread(threading.Thread):
-    def __init__(self, plotters):
-        self.data_lookup = {p.filename: p.data for p in plotters}
-        self.filenames = [p.filename for p in plotters]
-        self.plotter_lookup = {p.filename: p for p in plotters}
-
-        self.app = Flask(__name__)
-        @self.app.route('/<filename>', methods=['GET', 'OPTIONS'])
-        @crossdomain(origin="*", methods=['GET', 'POST'], headers=None)
-        def fetch_func(filename):
-            if filename == "shutdown":
-                func = request.environ.get('werkzeug.server.shutdown')
-                if func is None:
-                    raise RuntimeError('Not running with the Werkzeug Server')
-                func()
-                return 'Server shutting down...'
-            else:
-                p = self.plotter_lookup[filename]
-
-                xs = []
-                ys = [[] for i in range(p.num_ys)]
-                while True:
-                    try:
-                        data = self.data_lookup[filename].popleft()
-                        xs.append(data[0])
-                        for i in range(p.num_ys):
-                            ys[i].append(data[i+1])
-                    except:
-                        break
-                kwargs = { 'y{:d}'.format(i+1): ys[i] for i in range(p.num_ys) }
-                kwargs['x'] = xs
-                return jsonify(**kwargs)
-
-        super(FlaskThread, self).__init__()
-
-    def run(self):
-        output_file("main.html", title="Plotting Output")
-        plots = []
-        sources = []
-
-        for f in self.filenames:
-            p = self.plotter_lookup[f]
-            source = AjaxDataSource(data_url='http://localhost:5050/'+f,
-                                    polling_interval=750, mode="append")
-            
-            xlabel = p.x.name + (" ("+p.x.unit+")" if p.x.unit is not None else '')
-            ylabel = p.ys[0].name + (" ("+p.ys[0].unit+")" if p.ys[0].unit is not None else '')
-            plot = figure(webgl=True, title=p.title,
-                          x_axis_label=xlabel, y_axis_label=ylabel, 
-                          tools="save,crosshair")
-            plots.append(plot)
-            sources.append(source)
-
-            # plots[-1].line('x', 'y', source=sources[-1], color="firebrick", line_width=2)
-            xargs = ['x' for i in range(p.num_ys)]
-            yargs = ['y{:d}'.format(i+1) for i in range(p.num_ys)]
-            
-            if p.num_ys > 1:
-                plots[-1].multi_line(xargs, yargs, source=sources[-1], **p.figure_args)
-            else:
-                plots[-1].line('x', 'y1', source=sources[-1], **p.figure_args)
-
-        q = hplot(*plots)
-        show(q)
-        self.app.run(port=5050)
 
 class Sweep(object):
     """For controlling sweeps over arbitrary number of arbitrary parameters. The order of sweeps\
@@ -273,14 +203,12 @@ class Sweep(object):
         self._procedure.init_instruments()
 
         if len(self._plotters) > 0:
-            t = FlaskThread(self._plotters)
-            t.start()
+            fp = FlaskPlotter(self._plotters)
+            fp.start()
 
         def shutdown():
             if len(self._plotters) > 0:
-                time.sleep(0.5)
-                response = urllib2.urlopen('http://localhost:5050/shutdown').read()
-                t.join()
+                fp.shutdown()
             self._procedure.shutdown_instruments()
 
         def catch_ctrl_c(signum, frame):
@@ -291,7 +219,7 @@ class Sweep(object):
         signal.signal(signal.SIGINT, catch_ctrl_c)
 
         # Keep track of the previous values
-        last_param_values = None 
+        last_param_values = None
 
         for param_values in self._sweep_generator:
 
