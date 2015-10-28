@@ -7,7 +7,6 @@ class Attenuator(Instrument):
     """BBN 3 Channel Instrument"""
     def __init__(self, name, resource_name):
         super(Attenuator, self).__init__(name, resource_name, interface_type="VISA")
-        self.name = name
         self.interface._resource.baud_rate = 115200
         self.interface._resource.read_termination = u"\r\n"
         self.interface._resource.write_termination = u"\n"
