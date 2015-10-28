@@ -10,14 +10,14 @@ class SR830(Instrument):
     """The SR830 lock-in amplifier."""
     SAMPLE_FREQUENCY_VALUES = [62.5e-3, 125e-3, 250e-3, 500e-3, 1, 2, 4, 8, 16,
                                 32, 64, 128, 256, 512]
-    TIME_CONSTANT_VALUES = [10e-6, 30e-6, 100e-6, 300e-6, 1e-3, 3e-3, 10e-3, 
-                            30e-3, 100e-3, 300e-3, 1, 3, 10, 3, 100, 300, 1e3, 
+    TIME_CONSTANT_VALUES = [10e-6, 30e-6, 100e-6, 300e-6, 1e-3, 3e-3, 10e-3,
+                            30e-3, 100e-3, 300e-3, 1, 3, 10, 3, 100, 300, 1e3,
                             3e3, 10e3, 30e3]
-    SENSITIVITY_VALUES = [2e-9, 5e-9, 10e-9, 20e-9, 50e-9, 100e-9, 200e-9, 
-                          500e-9, 1e-6, 2e-6, 5e-6, 10e-6, 20e-6, 50e-6, 100e-6, 
+    SENSITIVITY_VALUES = [2e-9, 5e-9, 10e-9, 20e-9, 50e-9, 100e-9, 200e-9,
+                          500e-9, 1e-6, 2e-6, 5e-6, 10e-6, 20e-6, 50e-6, 100e-6,
                           200e-6, 500e-6, 1e-3, 2e-3, 5e-3, 10e-3, 20e-3,
                           50e-3, 100e-3, 200e-3, 500e-3, 1]
-    
+
     EXPANSION_VALUES = [0, 10, 100]
     FILTER_SLOPE_VALUES = [6, 12, 18, 24]
     RESERVE_VALUES = ['High Reserve', 'Normal', 'Low Noise']
@@ -36,9 +36,12 @@ class SR830(Instrument):
     amplitude = FloatCommand("amplitude", get_string="SLVL?", set_string="SLVL {:f}")
     frequency = FloatCommand("frequency", get_string="FREQ?", set_string="FREQ {:f}", aliases=['freq'])
     phase = FloatCommand("phase", get_string="PHAS?", set_string="PHAS{:g}")
-    
-    x = FloatCommand("x", get_string="OUTP?1;", aliases=["ch1"])
-    y = FloatCommand("y", get_string="OUTP?2;", aliases=["ch2"])
+
+    x = FloatCommand("x", get_string="OUTP?1;")
+    y = FloatCommand("y", get_string="OUTP?2;")
+    channel_1 = FloatCommand("Channel 1", get_string="OUTR?1;", aliases=["ch1"])
+    channel_2 = FloatCommand("Channel 2", get_string="OUTR?2;", aliases=["ch2"])
+
     magnitude = FloatCommand("magnitude", get_string="OUTP?3;", aliases=['r', 'mag'])
     theta = FloatCommand("theta", get_string="OUTP?4;")
 
@@ -46,7 +49,7 @@ class SR830(Instrument):
     aux_in_2 = FloatCommand("Auxiliary Input 2", get_string="OAUX?2;", aliases=["ai2"])
     aux_in_3 = FloatCommand("Auxiliary Input 3", get_string="OAUX?3;", aliases=["ai3"])
     aux_in_4 = FloatCommand("Auxiliary Input 4", get_string="OAUX?4;", aliases=["ai4"])
-    
+
     aux_out_1 = FloatCommand("Auxiliary Output 1", get_string="AUXV?1;", set_string="AUXV1,{:f}", aliases=["ao1"])
     aux_out_2 = FloatCommand("Auxiliary Output 2", get_string="AUXV?2;", set_string="AUXV2,{:f}", aliases=["ao2"])
     aux_out_3 = FloatCommand("Auxiliary Output 3", get_string="AUXV?3;", set_string="AUXV3,{:f}", aliases=["ao3"])
@@ -81,11 +84,11 @@ class SR830(Instrument):
 
 class SR865(Instrument):
     """The SR865 lock-in amplifier."""
-    TIME_CONSTANT_VALUES = [1e-6, 3e-9, 10e-6, 30e-6, 100e-6, 300e-6, 1e-3, 3e-3, 10e-3, 
-                            30e-3, 100e-3, 300e-3, 1, 3, 10, 3, 100, 300, 1e3, 
+    TIME_CONSTANT_VALUES = [1e-6, 3e-9, 10e-6, 30e-6, 100e-6, 300e-6, 1e-3, 3e-3, 10e-3,
+                            30e-3, 100e-3, 300e-3, 1, 3, 10, 3, 100, 300, 1e3,
                             3e3, 10e3, 30e3]
-    SENSITIVITY_VALUES = [ 1, 5e-1, 2e-1, 1e-1, 5e-2, 2e-2, 1e-2, 5e-3, 2e-3, 1e-3, 
-                           5e-4, 2e-4, 1e-4, 5e-5, 2e-5, 1e-5, 5e-6, 2e-6, 1e-6, 
+    SENSITIVITY_VALUES = [ 1, 5e-1, 2e-1, 1e-1, 5e-2, 2e-2, 1e-2, 5e-3, 2e-3, 1e-3,
+                           5e-4, 2e-4, 1e-4, 5e-5, 2e-5, 1e-5, 5e-6, 2e-6, 1e-6,
                            5e-7, 2e-7, 1e-7, 5e-8, 2e-8, 1e-8, 5e-9, 2e-9, 1e-9]
     FILTER_SLOPE_VALUES = [6, 12, 18, 24]
     CHANNEL1_VALUES = ['X', 'R', 'X Noise', 'Aux In 1', 'Aux In 2']
