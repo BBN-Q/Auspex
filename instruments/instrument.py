@@ -120,6 +120,7 @@ class VisaInterface(Interface):
             self._resource = rm.open_resource(resource_name)
         except:
             raise Exception("Unable to create the resource '%s'" % resource_name)
+
     def values(self, query_string):
         return self._resource.query_ascii_values(query_string, container=np.array)
     def value(self, query_string):
@@ -217,6 +218,10 @@ class Instrument(object):
             self.interface = VisaInterface(resource_name)
         else:
             raise ValueError("That interface type is not yet recognized.")
+
+    def __del__(self):
+        #close the VISA resource
+        self.interface._resource.close()
 
     def check_errors(self):
         pass
