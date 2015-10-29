@@ -45,14 +45,11 @@ class FlaskPlotter(object):
 
             xs = []
             ys = [[] for i in range(p.num_ys)]
-            while True:
-                try:
-                    data = self.data_lookup[filename].popleft()
-                    xs.append(data[0])
-                    for i in range(p.num_ys):
-                        ys[i].append(data[i+1])
-                except:
-                    break
+            while not self.data_lookup[filename].empty():
+                data = self.data_lookup[filename].get_nowait()
+                xs.append(data[0])
+                for i in range(p.num_ys):
+                    ys[i].append(data[i+1])
             kwargs = { 'y{:d}'.format(i+1): ys[i] for i in range(p.num_ys) }
             kwargs['x'] = xs
             return jsonify(**kwargs)

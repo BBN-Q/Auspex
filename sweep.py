@@ -6,7 +6,7 @@ import signal
 import sys
 
 # For plotting
-from collections import deque
+from Queue import Queue
 from FlaskPlotter import FlaskPlotter
 
 import numpy as np
@@ -46,12 +46,12 @@ class Plotter(object):
         self.num_ys = len(self.ys)
 
         # FIFO data container
-        self.data = deque()
+        self.data = Queue()
 
     def update(self):
         data = [self.x.value]
         data.extend([y.value for y in self.ys])
-        self.data.append( tuple(data) )
+        self.data.put( tuple(data) )
 
 class SweptParameter(object):
     """Data structure for a swept Parameters, contains the Parameter
