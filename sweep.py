@@ -107,6 +107,11 @@ class Sweep(object):
         self._writers = []
         self._plotters = []
 
+    def __del__(self):
+        #Close the h5 files
+        for fid in self._filenames.values():
+            fid.close()
+
     def __iter__(self):
         return self
 
