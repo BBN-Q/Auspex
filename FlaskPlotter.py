@@ -19,12 +19,11 @@ class FlaskPlotter(object):
         self.data_lookup = {p.filename: p.data for p in plotters}
         self.filenames = [p.filename for p in plotters]
         self.plotter_lookup = {p.filename: p for p in plotters}
-        self.thread = threading.Thread(target=IOLoop.instance().start)
         self.setup_data_server()
-        self.setup_bokeh_plots()
-
-    def start(self):
+        self.thread = threading.Thread(target=IOLoop.instance().start)
+        self.thread.daemon = True
         self.thread.start()
+        self.setup_bokeh_plots()
 
     def shutdown(self):
         def shutdown_callback():
@@ -96,7 +95,6 @@ if __name__ == "__main__":
         fp.shutdown()
 
     signal.signal(signal.SIGINT, sig_handler)
-    fp.start()
     print "server started"
     while fp.thread.isAlive():
         time.sleep(.2)

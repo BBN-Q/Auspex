@@ -204,7 +204,6 @@ class Sweep(object):
 
         if len(self._plotters) > 0:
             fp = FlaskPlotter(self._plotters)
-            fp.start()
 
         def shutdown():
             if len(self._plotters) > 0:
