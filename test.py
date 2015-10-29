@@ -62,10 +62,3 @@ if __name__ == '__main__':
 
     sweep1.run()
 
-    # sweep1.add_writer('MainData.h5', 'RTvsH', proc.resistance_trans, proc.resistance_long)
-    # sweep1.add_writer('MainData.h5', 'RLvsH', proc.resistance_long)
-    
-    # for i in sweep1:
-    #     logging.info("Fake results: %s,\t%s" % (proc.resistance_trans, proc.resistance_long) )
-
-
