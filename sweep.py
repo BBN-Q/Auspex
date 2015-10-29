@@ -4,14 +4,13 @@ import datetime
 import string
 import signal
 import sys
-
-# For plotting
 import threading
-from collections import deque
-import json
-from flask import Flask, jsonify, request
-from bokeh.server.crossdomain import crossdomain
-import urllib2
+
+# Bokeh Server
+import bokeh.server
+import bokeh.server.start
+from bokeh.plotting import figure, show, output_file, output_server, hplot, vplot, cursession
+from bokeh.models.renderers import GlyphRenderer
 
 import numpy as np
 import scipy as sp
@@ -20,8 +19,6 @@ import itertools
 import time
 import h5py
 
-from bokeh.plotting import figure, show, output_file, hplot, vplot
-from bokeh.models.sources import AjaxDataSource
 
 from procedure import Procedure, Parameter, Quantity
 
@@ -34,28 +31,38 @@ class Writer(object):
 
 class Plotter(object):
     """Attach a plotter to the sweep."""
-    def __init__(self, title, x, ys, **figure_args):
+    def __init__(self, title, x, y, **plot_args):
         super(Plotter, self).__init__()
         self.title = title
         self.filename = string.replace(title, ' ', '_')
-        output_file(self.filename, title=self.title)
-        self.figure_args = figure_args
+
+        # Figure
+        self.figure = figure(plot_width=400, plot_height=400)
+        self.plot = self.figure.line([],[], name=title)
+        renderers = self.plot.select(dict(name=title))
+        self.renderer = [r for r in renderers if isinstance(r, GlyphRenderer)][0]
+        for r in renderers:
+            logging.info("{:s}".format(r))
+        self.data_source = self.renderer.data_source
+
+        # Data containers
+        self.x_data = []
+        self.y_data = []
 
         # These are parameters and quantities
         self.x = x
-        if isinstance(ys, list):
-            self.ys = ys
-        else:
-            self.ys = [ys]
-        self.num_ys = len(self.ys)
-
-        # FIFO data container
-        self.data = deque()
-
+        self.y = y
+        
     def update(self):
-        data = [self.x.value]
-        data.extend([y.value for y in self.ys])
-        self.data.append( tuple(data) )
+        self.x_data.append(self.x.value)
+        self.y_data.append(self.y.value)
+        self.data_source.data["x"] = self.x_data
+        self.data_source.data["y"] = self.y_data
+        cursession().store_objects(self.data_source)
+
+    def clear(self):
+        self.x_data = []
+        self.y_data = []
 
 class SweptParameter(object):
     """Data structure for a swept Parameters, contains the Parameter
@@ -82,71 +89,25 @@ class SweptParameter(object):
         for pph in self.parameter.post_push_hooks:
             pph()
 
-class FlaskThread(threading.Thread):
-    def __init__(self, plotters):
-        self.data_lookup = {p.filename: p.data for p in plotters}
-        self.filenames = [p.filename for p in plotters]
-        self.plotter_lookup = {p.filename: p for p in plotters}
-
-        self.app = Flask(__name__)
-        @self.app.route('/<filename>', methods=['GET', 'OPTIONS'])
-        @crossdomain(origin="*", methods=['GET', 'POST'], headers=None)
-        def fetch_func(filename):
-            if filename == "shutdown":
-                func = request.environ.get('werkzeug.server.shutdown')
-                if func is None:
-                    raise RuntimeError('Not running with the Werkzeug Server')
-                func()
-                return 'Server shutting down...'
-            else:
-                p = self.plotter_lookup[filename]
-
-                xs = []
-                ys = [[] for i in range(p.num_ys)]
-                while True:
-                    try:
-                        data = self.data_lookup[filename].popleft()
-                        xs.append(data[0])
-                        for i in range(p.num_ys):
-                            ys[i].append(data[i+1])
-                    except:
-                        break
-                kwargs = { 'y{:d}'.format(i+1): ys[i] for i in range(p.num_ys) }
-                kwargs['x'] = xs
-                return jsonify(**kwargs)
-
-        super(FlaskThread, self).__init__()
+class BokehServerThread(threading.Thread):
+    def __init__(self):
+        super(BokehServerThread, self).__init__()
+        self.setDaemon(True)
+        self.server = None
 
     def run(self):
-        output_file("main.html", title="Plotting Output")
-        plots = []
-        sources = []
+        # Need to store some reference to this since bokeh uses global
+        # variable "server" for some reason.
+        try:
+            bokeh.server.server = self.server
+            bokeh.server.run()
+        except:
+            logging.info("Server could not be launched, may already be running.")
+            raise Exception("Couldn't start server.")
 
-        for f in self.filenames:
-            p = self.plotter_lookup[f]
-            source = AjaxDataSource(data_url='http://localhost:5050/'+f,
-                                    polling_interval=750, mode="append")
-            
-            xlabel = p.x.name + (" ("+p.x.unit+")" if p.x.unit is not None else '')
-            ylabel = p.ys[0].name + (" ("+p.ys[0].unit+")" if p.ys[0].unit is not None else '')
-            plot = figure(webgl=True, title=p.title,
-                          x_axis_label=xlabel, y_axis_label=ylabel, 
-                          tools="save,crosshair")
-            plots.append(plot)
-            sources.append(source)
-
-            # plots[-1].line('x', 'y', source=sources[-1], color="firebrick", line_width=2)
-            xargs = ['x' for i in range(p.num_ys)]
-            yargs = ['y{:d}'.format(i+1) for i in range(p.num_ys)]
-            
-            if p.num_ys > 1:
-                plots[-1].multi_line(xargs, yargs, source=sources[-1], **p.figure_args)
-            else:
-                plots[-1].line('x', 'y1', source=sources[-1], **p.figure_args)
-
-        q = hplot(*plots)
-        show(q)
-        self.app.run(port=5050)
+    def join(self, timeout=None):
+        bokeh.server.start.stop()
+        super(BokehServerThread, self).join(timeout=timeout)
 
 class Sweep(object):
     """For controlling sweeps over arbitrary number of arbitrary parameters. The order of sweeps\
@@ -258,8 +219,9 @@ class Sweep(object):
                 coords = tuple( indices + [len(self._swept_parameters) + i] )
                 w.dataset[coords] = q.value
 
-    def add_plotter(self, title, x, y, *args, **kwargs):
-        self._plotters.append(Plotter(title, x, y, *args, **kwargs))
+    def add_plotter(self, title, x, y, **kwargs):
+        self._plotters.append(Plotter(title, x, y, **kwargs))
+        return self._plotters[-1]
 
     def plot(self):
         for p in self._plotters:
@@ -273,13 +235,15 @@ class Sweep(object):
         self._procedure.init_instruments()
 
         if len(self._plotters) > 0:
-            t = FlaskThread(self._plotters)
+            t = BokehServerThread()
             t.start()
+            output_server("Pycontrol Bokeh Server")
+            q = hplot(*[p.figure for p in self._plotters])
+            show(q)
 
         def shutdown():
             if len(self._plotters) > 0:
                 time.sleep(0.5)
-                response = urllib2.urlopen('http://localhost:5050/shutdown').read()
                 t.join()
             self._procedure.shutdown_instruments()
 
@@ -301,9 +265,9 @@ class Sweep(object):
                 if last_param_values is None or param_values[i] != last_param_values[i]:
                     sp.value = param_values[i]
                     sp.push()
-                    logging.info("Updated {:s} to {:g} since the value changed.".format(sp.parameter.name, sp.value))
+                    logging.debug("Updated {:s} to {:g} since the value changed.".format(sp.parameter.name, sp.value))
                 else:
-                    logging.info("Didn't update {:s} since the value didn't change.".format(sp.parameter.name))
+                    logging.debug("Didn't update {:s} since the value didn't change.".format(sp.parameter.name))
 
             # update previous values
             last_param_values = param_values
