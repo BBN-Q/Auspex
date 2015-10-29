@@ -34,12 +34,16 @@ class Writer(object):
 
 class Plotter(object):
     """Attach a plotter to the sweep."""
-    def __init__(self, title, x, ys, **figure_args):
+    def __init__(self, title, x, ys, **plot_args):
         super(Plotter, self).__init__()
         self.title = title
         self.filename = string.replace(title, ' ', '_')
         output_file(self.filename, title=self.title)
-        self.figure_args = figure_args
+
+        self.fig_args = {'x_axis_type': plot_args.pop('x_axis_type'),
+                         'y_axis_type': plot_args.pop('y_axis_type')}
+        logging.info("Plot Args: {:s}".format(plot_args))
+        self.plot_args = plot_args
 
         # These are parameters and quantities
         self.x = x
@@ -119,32 +123,32 @@ class FlaskThread(threading.Thread):
 
     def run(self):
         output_file("main.html", title="Plotting Output")
-        plots = []
+        figures = []
         sources = []
 
         for f in self.filenames:
             p = self.plotter_lookup[f]
             source = AjaxDataSource(data_url='http://localhost:5050/'+f,
                                     polling_interval=750, mode="append")
-            
+
             xlabel = p.x.name + (" ("+p.x.unit+")" if p.x.unit is not None else '')
             ylabel = p.ys[0].name + (" ("+p.ys[0].unit+")" if p.ys[0].unit is not None else '')
-            plot = figure(webgl=True, title=p.title,
-                          x_axis_label=xlabel, y_axis_label=ylabel, 
-                          tools="save,crosshair")
-            plots.append(plot)
+            fig = figure(webgl=True, title=p.title,
+                         x_axis_label=xlabel, y_axis_label=ylabel,
+                         tools="save,crosshair", **p.fig_args)
+            figures.append(fig)
             sources.append(source)
 
-            # plots[-1].line('x', 'y', source=sources[-1], color="firebrick", line_width=2)
+            # figures[-1].line('x', 'y', source=sources[-1], color="firebrick", line_width=2)
             xargs = ['x' for i in range(p.num_ys)]
             yargs = ['y{:d}'.format(i+1) for i in range(p.num_ys)]
-            
-            if p.num_ys > 1:
-                plots[-1].multi_line(xargs, yargs, source=sources[-1], **p.figure_args)
-            else:
-                plots[-1].line('x', 'y1', source=sources[-1], **p.figure_args)
 
-        q = hplot(*plots)
+            if p.num_ys > 1:
+                figures[-1].multi_line(xargs, yargs, source=sources[-1], **p.plot_args)
+            else:
+                figures[-1].line('x', 'y1', source=sources[-1], **p.plot_args)
+
+        q = hplot(*figures)
         show(q)
         self.app.run(port=5050)
 
@@ -258,8 +262,10 @@ class Sweep(object):
                 coords = tuple( indices + [len(self._swept_parameters) + i] )
                 w.dataset[coords] = q.value
 
-    def add_plotter(self, title, x, y, *args, **kwargs):
-        self._plotters.append(Plotter(title, x, y, *args, **kwargs))
+    def add_plotter(self, title, x, y, x_axis_type='auto', y_axis_type='auto', **kwargs):
+        kwargs['x_axis_type'] = x_axis_type
+        kwargs['y_axis_type'] = y_axis_type
+        self._plotters.append(Plotter(title, x, y, **kwargs))
 
     def plot(self):
         for p in self._plotters:
@@ -291,7 +297,7 @@ class Sweep(object):
         signal.signal(signal.SIGINT, catch_ctrl_c)
 
         # Keep track of the previous values
-        last_param_values = None 
+        last_param_values = None
 
         for param_values in self._sweep_generator:
 
