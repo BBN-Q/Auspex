@@ -38,7 +38,7 @@ class Plotter(object):
 
         # Figure
         self.figure = figure(plot_width=400, plot_height=400)
-        self.plot = self.figure.line([],[], name=title)
+        self.plot = self.figure.line([],[], name=title, **plot_args)
         renderers = self.plot.select(dict(name=title))
         self.renderer = [r for r in renderers if isinstance(r, GlyphRenderer)][0]
         for r in renderers:
