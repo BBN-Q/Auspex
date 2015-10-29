@@ -9,6 +9,7 @@ from tornado.httpserver import HTTPServer
 from tornado.ioloop import IOLoop
 
 # bokeh
+import h5py
 from bokeh.server.crossdomain import crossdomain
 from bokeh.plotting import figure, show, output_file, hplot, vplot
 from bokeh.models.sources import AjaxDataSource
