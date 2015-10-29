@@ -209,11 +209,15 @@ class Instrument(object):
 
         if interface_type is None:
             # Load the dummy interface, unless we see that GPIB is in the resource string
-            if 'GPIB' in resource_name or 'USB' in resource_name:
-                self.interface = VisaInterface(resource_name)
-            else:
-                self.interface = Interface()
+            if "GPIB" in resource_name or "USB" in resource_name or "SOCKET" in resource_name:
+                interface_type = "VISA"
+
+        if interface_type is None:
+            self.interface = Interface()
         elif interface_type == "VISA":
+            if "SOCKET" in resource_name:
+                ## assume single NIC for now
+                resource_name = "TCPIP0::" + resource_name
             self.interface = VisaInterface(resource_name)
         else:
             raise ValueError("That interface type is not yet recognized.")
