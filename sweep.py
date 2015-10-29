@@ -16,9 +16,6 @@ import itertools
 import time
 import h5py
 
-from bokeh.plotting import figure, show, output_file, hplot, vplot
-from bokeh.models.sources import AjaxDataSource
-
 from procedure import Procedure, Parameter, Quantity
 
 class Writer(object):
@@ -34,7 +31,6 @@ class Plotter(object):
         super(Plotter, self).__init__()
         self.title = title
         self.filename = string.replace(title, ' ', '_')
-        output_file(self.filename, title=self.title)
 
         self.fig_args = {'x_axis_type': plot_args.pop('x_axis_type'),
                          'y_axis_type': plot_args.pop('y_axis_type')}
