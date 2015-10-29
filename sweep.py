@@ -30,12 +30,16 @@ class Writer(object):
 
 class Plotter(object):
     """Attach a plotter to the sweep."""
-    def __init__(self, title, x, ys, **figure_args):
+    def __init__(self, title, x, ys, **plot_args):
         super(Plotter, self).__init__()
         self.title = title
         self.filename = string.replace(title, ' ', '_')
         output_file(self.filename, title=self.title)
-        self.figure_args = figure_args
+
+        self.fig_args = {'x_axis_type': plot_args.pop('x_axis_type'),
+                         'y_axis_type': plot_args.pop('y_axis_type')}
+        logging.info("Plot Args: {:s}".format(plot_args))
+        self.plot_args = plot_args
 
         # These are parameters and quantities
         self.x = x
@@ -188,8 +192,10 @@ class Sweep(object):
                 coords = tuple( indices + [len(self._swept_parameters) + i] )
                 w.dataset[coords] = q.value
 
-    def add_plotter(self, title, x, y, *args, **kwargs):
-        self._plotters.append(Plotter(title, x, y, *args, **kwargs))
+    def add_plotter(self, title, x, y, x_axis_type='auto', y_axis_type='auto', **kwargs):
+        kwargs['x_axis_type'] = x_axis_type
+        kwargs['y_axis_type'] = y_axis_type
+        self._plotters.append(Plotter(title, x, y, **kwargs))
 
     def plot(self):
         for p in self._plotters:
