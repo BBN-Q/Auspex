@@ -69,7 +69,7 @@ class FlaskPlotter(object):
             ylabel = p.ys[0].name + (" ("+p.ys[0].unit+")" if p.ys[0].unit is not None else '')
             plot = figure(webgl=True, title=p.title,
                           x_axis_label=xlabel, y_axis_label=ylabel,
-                          tools="save,crosshair")
+                          tools="save,crosshair", **p.fig_args)
             plots.append(plot)
             sources.append(source)
 
@@ -78,9 +78,9 @@ class FlaskPlotter(object):
             yargs = ['y{:d}'.format(i+1) for i in range(p.num_ys)]
 
             if p.num_ys > 1:
-                plots[-1].multi_line(xargs, yargs, source=sources[-1], **p.figure_args)
+                plots[-1].multi_line(xargs, yargs, source=sources[-1], **p.plot_args)
             else:
-                plots[-1].line('x', 'y1', source=sources[-1], **p.figure_args)
+                plots[-1].line('x', 'y1', source=sources[-1], **p.plot_args)
 
         q = hplot(*plots)
         show(q)
