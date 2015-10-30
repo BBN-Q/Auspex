@@ -6,6 +6,8 @@ import time
 
 import numpy as np
 
+# Bokeh
+import h5py
 import bokeh.server
 import bokeh.server.start
 from bokeh.plotting import figure, cursession
