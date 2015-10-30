@@ -33,6 +33,50 @@ class BokehServerThread(threading.Thread):
         bokeh.server.start.stop()
         super(BokehServerThread, self).join(timeout=timeout)
 
+class MultiPlotter(object):
+    """Attach a plotter to the sweep."""
+    def __init__(self, title, xs, ys, **plot_args):
+        super(MultiPlotter, self).__init__()
+        self.title = title
+        self.filename = string.replace(title, ' ', '_')
+        self.update_interval = 0.5
+        self.last_update = time.time()
+
+        assert len(xs) == len(ys)
+
+        # These are parameters and quantities
+        self.xs = xs
+        self.ys = ys
+
+        # Data containers
+        self.x_data = [[] for x in self.xs]
+        self.y_data = [[] for y in self.ys]
+
+        # Figure
+        self.figure = figure(plot_width=400, plot_height=400)
+        self.plot = self.figure.multi_line(self.x_data, self.y_data, name=title, **plot_args)
+        renderers = self.plot.select(dict(name=title))
+        self.renderer = [r for r in renderers if isinstance(r, GlyphRenderer)][0]
+        self.data_source = self.renderer.data_source
+        # import ipdb
+        # ipdb.set_trace()
+        # logging.warning(self.data_source)
+
+    def update(self, force=False):
+        for x, y, xd, yd in zip(self.xs, self.ys, self.x_data, self.y_data):
+            xd.append(x.value)
+            yd.append(y.value)
+        if (time.time() - self.last_update >= self.update_interval) or force:
+            # for i, (x,y) in enumerate(zip(self.x_data, self.y_data)):
+            self.data_source.data["xs"] = self.x_data
+            self.data_source.data["ys"] = self.y_data
+            cursession().store_objects(self.data_source)
+            self.last_update = time.time()
+
+    def clear(self):
+        self.x_data = [[] for x in self.xs]
+        self.y_data = [[] for y in self.ys]
+
 class Plotter(object):
     """Attach a plotter to the sweep."""
     def __init__(self, title, x, y, **plot_args):
@@ -42,22 +86,20 @@ class Plotter(object):
         self.update_interval = 0.5
         self.last_update = time.time()
         
+        # These are parameters and quantities
+        self.x = x
+        self.y = y
+        
+        # Data containers
+        self.x_data = []
+        self.y_data = []
+
         # Figure
         self.figure = figure(plot_width=400, plot_height=400)
         self.plot = self.figure.line([],[], name=title, **plot_args)
         renderers = self.plot.select(dict(name=title))
         self.renderer = [r for r in renderers if isinstance(r, GlyphRenderer)][0]
-        for r in renderers:
-            logging.info("{:s}".format(r))
         self.data_source = self.renderer.data_source
-
-        # Data containers
-        self.x_data = []
-        self.y_data = []
-
-        # These are parameters and quantities
-        self.x = x
-        self.y = y
         
     def update(self, force=False):
         self.x_data.append(self.x.value)

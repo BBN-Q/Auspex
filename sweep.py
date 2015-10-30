@@ -11,7 +11,7 @@ import h5py
 
 from bokeh.plotting import show, output_server, hplot, cursession
 
-from plotting import BokehServerThread, Plotter, Plotter2D
+from plotting import BokehServerThread, Plotter, Plotter2D, MultiPlotter
 from procedure import Procedure, Parameter, Quantity
 
 class Writer(object):
@@ -164,6 +164,10 @@ class Sweep(object):
 
     def add_plotter2d(self, title, x, y, z, **kwargs):
         self._plotters.append(Plotter2D(title, x, y, z, **kwargs))
+        return self._plotters[-1]
+
+    def add_multiplotter(self, title, xs, ys, **kwargs):
+        self._plotters.append(MultiPlotter(title, xs, ys, **kwargs))
         return self._plotters[-1]
 
     def plot(self, force=False):
