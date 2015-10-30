@@ -141,7 +141,7 @@ class SweptParameter(object):
 class BokehServerThread(threading.Thread):
     def __init__(self):
         super(BokehServerThread, self).__init__()
-        self.setDaemon(True)
+        self.daemon = True
         self.server = None
 
     def run(self):
