@@ -34,7 +34,7 @@ class Plotter(object):
         super(Plotter, self).__init__()
         self.title = title
         self.filename = string.replace(title, ' ', '_')
-        self.update_interval = 1.0
+        self.update_interval = 0.5
         self.last_update = time.time()
         
         # Figure
@@ -73,7 +73,7 @@ class Plotter2D(object):
         super(Plotter2D, self).__init__()
         self.title = title
         self.filename = string.replace(title, ' ', '_')
-        self.update_interval = 1.0
+        self.update_interval = 0.5
         self.last_update = time.time()
 
         # Figure
