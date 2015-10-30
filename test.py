@@ -1,6 +1,7 @@
 from __future__ import print_function, division
 import logging
 import time
+from functools import partial
 logging.basicConfig(format='%(levelname)s: \t%(asctime)s: \t%(message)s', level=logging.WARNING)
 
 import numpy as np
@@ -56,12 +57,19 @@ if __name__ == '__main__':
     field_y = sweep1.add_parameter(proc.field_x, np.arange(-100, 101, 5))
     
     plot1 = sweep1.add_plotter("ResistanceL Vs Field", proc.field_x, proc.resistance_long, color="firebrick", line_width=2)
-    plot2 = sweep1.add_plotter("ResistanceT Vs Field", proc.field_x, proc.resistance_trans, color="navy", line_width=2)
+    plot2 = sweep1.add_multiplotter("Resistances Vs Field", [proc.field_x, proc.field_x], [proc.resistance_trans, proc.resistance_long], 
+                                    line_color=["firebrick","navy"], line_width=2)
     
     # Have to pass sweep parmaters here in order that the plotter knows the x,y grid
     plot3 = sweep1.add_plotter2d("A Whole New Dimension", field_x, field_y, proc.resistance_trans, palette="Spectral11")
+
+    # Hooks for clearing the plots at the end of a sub-sweep
     proc.field_y.add_post_push_hook(plot1.clear)
     proc.field_y.add_post_push_hook(plot2.clear)
+
+    # Make sure we update the data at the end of a trace
+    proc.field_y.add_pre_push_hook(partial(plot1.update, force=True))
+    proc.field_y.add_pre_push_hook(partial(plot2.update, force=True))
 
     sweep1.run()
 
