@@ -54,10 +54,10 @@ class Plotter(object):
         self.x = x
         self.y = y
         
-    def update(self):
+    def update(self, force=False):
         self.x_data.append(self.x.value)
         self.y_data.append(self.y.value)
-        if time.time() - self.last_update >= self.update_interval:
+        if (time.time() - self.last_update >= self.update_interval) or force:
             self.data_source.data["x"] = self.x_data
             self.data_source.data["y"] = self.y_data
             cursession().store_objects(self.data_source)
@@ -99,11 +99,11 @@ class Plotter2D(object):
         self.renderer = [r for r in renderers if isinstance(r, GlyphRenderer)][0]
         self.data_source = self.renderer.data_source
         
-    def update(self):
+    def update(self, force=False):
         # Find the coordinates and then set the array element
         new_data_loc = np.where(  np.logical_and(self.x_mesh == self.x.value, self.y_mesh == self.y.value)  )
         self.z_data[new_data_loc] = self.z.value
-        if time.time() - self.last_update >= self.update_interval:
+        if (time.time() - self.last_update >= self.update_interval) or force:
             self.data_source.data["image"] = [self.z_data]
             cursession().store_objects(self.data_source)
             self.last_update = time.time()
@@ -155,6 +155,8 @@ class BokehServerThread(threading.Thread):
             raise Exception("Couldn't start server.")
 
     def join(self, timeout=None):
+        # from bokeh.server.websocket.manager import WebSocketManager as wsm
+        # logging.info(wsm.clientid_topic_map)
         bokeh.server.start.stop()
         super(BokehServerThread, self).join(timeout=timeout)
 
@@ -278,9 +280,9 @@ class Sweep(object):
         self._plotters.append(Plotter2D(title, x, y, z, **kwargs))
         return self._plotters[-1]
 
-    def plot(self):
+    def plot(self, force=False):
         for p in self._plotters:
-            p.update()
+            p.update(force=force)
 
     def generate_sweep(self):
         self._sweep_generator = itertools.product(*[sp.values for sp in self._swept_parameters])
@@ -333,5 +335,7 @@ class Sweep(object):
             # Push values to file and update plots
             self.write()
             self.plot()
+
+        self.plot(force=True)
 
         shutdown()
