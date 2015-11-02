@@ -109,7 +109,7 @@ class Sweep(object):
 
     def __del__(self):
         #Close the h5 files
-        for fid in self._filenames.values():
+        for fid in self._files.values():
             fid.close()
 
     def __iter__(self):
