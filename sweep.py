@@ -10,7 +10,6 @@ import time
 import h5py
 
 from bokeh.plotting import show, output_server, hplot, cursession
-
 from plotting import BokehServerThread, Plotter, Plotter2D, MultiPlotter
 from procedure import Procedure, Parameter, Quantity
 
@@ -74,6 +73,11 @@ class Sweep(object):
         self._files = {}
         self._writers = []
         self._plotters = []
+
+    def __del__(self):
+        #Close the h5 files
+        for fid in self._files.values():
+            fid.close()
 
     def __iter__(self):
         return self
@@ -158,7 +162,9 @@ class Sweep(object):
                 coords = tuple( indices + [len(self._swept_parameters) + i] )
                 w.dataset[coords] = q.value
 
-    def add_plotter(self, title, x, y, **kwargs):
+    def add_plotter(self, title, x, y, x_axis_type='auto', y_axis_type='auto', **kwargs):
+        kwargs['x_axis_type'] = x_axis_type
+        kwargs['y_axis_type'] = y_axis_type
         self._plotters.append(Plotter(title, x, y, **kwargs))
         return self._plotters[-1]
 
@@ -202,7 +208,7 @@ class Sweep(object):
         signal.signal(signal.SIGINT, catch_ctrl_c)
 
         # Keep track of the previous values
-        last_param_values = None 
+        last_param_values = None
 
         for param_values in self._sweep_generator:
 
