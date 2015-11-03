@@ -54,7 +54,7 @@ class MultiPlotter(object):
 
         # Figure
         self.figure = figure(plot_width=400, plot_height=400)
-        self.plot = self.figure.multi_line(self.x_data, self.y_data, name=title, **plot_args)
+        self.plot = self.figure.multi_line(self.x_data, self.y_data, name=self.title, **plot_args)
         renderers = self.plot.select(dict(name=title))
         self.renderer = [r for r in renderers if isinstance(r, GlyphRenderer)][0]
         self.data_source = self.renderer.data_source
@@ -86,6 +86,10 @@ class Plotter(object):
         self.update_interval = 0.5
         self.last_update = time.time()
         
+        # Pop the figure arguments
+        self.fig_args = {'x_axis_type': plot_args.pop('x_axis_type'),
+                         'y_axis_type': plot_args.pop('y_axis_type')}
+
         # These are parameters and quantities
         self.x = x
         self.y = y
@@ -95,7 +99,10 @@ class Plotter(object):
         self.y_data = []
 
         # Figure
-        self.figure = figure(plot_width=400, plot_height=400)
+        self.xlabel = self.x.name + (" ("+self.x.unit+")" if self.x.unit is not None else '')
+        self.ylabel = self.y.name + (" ("+self.y.unit+")" if self.y.unit is not None else '')
+        self.figure = figure(plot_width=400, plot_height=400, title=self.title,
+                             x_axis_label=self.xlabel, y_axis_label=self.ylabel, **self.fig_args)
         self.plot = self.figure.line([],[], name=title, **plot_args)
         renderers = self.plot.select(dict(name=title))
         self.renderer = [r for r in renderers if isinstance(r, GlyphRenderer)][0]
@@ -139,9 +146,12 @@ class Plotter2D(object):
         self.z = z
 
         # Construct the plot
-        self.figure = figure(x_range=[xmin, xmax], y_range=[ymin, ymax], plot_width=400, plot_height=400)
+        self.xlabel = self.x.name + (" ("+self.x.unit+")" if self.x.unit is not None else '')
+        self.ylabel = self.y.name + (" ("+self.y.unit+")" if self.y.unit is not None else '')
+        self.figure = figure(x_range=[xmin, xmax], y_range=[ymin, ymax], plot_width=400, plot_height=400,
+                             x_axis_label=self.xlabel, y_axis_label=self.ylabel, title=self.title)
         self.plot = self.figure.image(image=[self.z_data], x=[xmin], y=[ymin], 
-                                           dw=[xmax-xmin], dh=[ymax-ymin], name=title, **plot_args)
+                                      dw=[xmax-xmin], dh=[ymax-ymin], name=self.title, **plot_args)
         renderers = self.plot.select(dict(name=title))
         self.renderer = [r for r in renderers if isinstance(r, GlyphRenderer)][0]
         self.data_source = self.renderer.data_source

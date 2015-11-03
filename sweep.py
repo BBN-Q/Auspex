@@ -29,6 +29,8 @@ class SweptParameter(object):
         self.values = values
         self.length = len(values)
         self.indices = range(self.length)
+        self.name = parameter.name
+        self.unit = parameter.unit
 
     @property
     def value(self):
