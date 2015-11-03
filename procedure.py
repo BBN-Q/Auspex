@@ -1,6 +1,5 @@
 from __future__ import print_function, division
 import logging
-logging.basicConfig(format='%(levelname)s:\t%(message)s', level=logging.DEBUG)
 
 import numpy as np
 import scipy as sp

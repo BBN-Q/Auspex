@@ -1,21 +1,16 @@
 from __future__ import print_function, division
 import logging
 import datetime
-import string
 import signal
 import sys
 
-# For plotting
-from Queue import Queue
-from FlaskPlotter import FlaskPlotter
-
 import numpy as np
-import scipy as sp
-import pandas as pd
 import itertools
 import time
 import h5py
 
+from bokeh.plotting import show, output_server, hplot, cursession
+from plotting import BokehServerThread, Plotter, Plotter2D, MultiPlotter
 from procedure import Procedure, Parameter, Quantity
 
 class Writer(object):
@@ -24,34 +19,6 @@ class Writer(object):
         super(Writer, self).__init__()
         self.dataset = dataset
         self.quantities = quantities
-
-class Plotter(object):
-    """Attach a plotter to the sweep."""
-    def __init__(self, title, x, ys, **plot_args):
-        super(Plotter, self).__init__()
-        self.title = title
-        self.filename = string.replace(title, ' ', '_')
-
-        self.fig_args = {'x_axis_type': plot_args.pop('x_axis_type'),
-                         'y_axis_type': plot_args.pop('y_axis_type')}
-        logging.info("Plot Args: {:s}".format(plot_args))
-        self.plot_args = plot_args
-
-        # These are parameters and quantities
-        self.x = x
-        if isinstance(ys, list):
-            self.ys = ys
-        else:
-            self.ys = [ys]
-        self.num_ys = len(self.ys)
-
-        # FIFO data container
-        self.data = Queue()
-
-    def update(self):
-        data = [self.x.value]
-        data.extend([y.value for y in self.ys])
-        self.data.put( tuple(data) )
 
 class SweptParameter(object):
     """Data structure for a swept Parameters, contains the Parameter
@@ -62,6 +29,8 @@ class SweptParameter(object):
         self.values = values
         self.length = len(values)
         self.indices = range(self.length)
+        self.name = parameter.name
+        self.unit = parameter.unit
 
     @property
     def value(self):
@@ -116,11 +85,13 @@ class Sweep(object):
         return self
 
     def add_parameter(self, param, sweep_list):
-        self._swept_parameters.append(SweptParameter(param, sweep_list))
+        p = SweptParameter(param, sweep_list)
+        self._swept_parameters.append(p)
         self.generate_sweep()
 
         # Set the value of the parameter to the initial value of the sweep
         param.value = sweep_list[0]
+        return p
 
     def add_writer(self, filename, sample_name, dataset_name, *quants, **kwargs):
         """Add a dataset that updates based on the supplied quantities"""
@@ -197,10 +168,19 @@ class Sweep(object):
         kwargs['x_axis_type'] = x_axis_type
         kwargs['y_axis_type'] = y_axis_type
         self._plotters.append(Plotter(title, x, y, **kwargs))
+        return self._plotters[-1]
 
-    def plot(self):
+    def add_plotter2d(self, title, x, y, z, **kwargs):
+        self._plotters.append(Plotter2D(title, x, y, z, **kwargs))
+        return self._plotters[-1]
+
+    def add_multiplotter(self, title, xs, ys, **kwargs):
+        self._plotters.append(MultiPlotter(title, xs, ys, **kwargs))
+        return self._plotters[-1]
+
+    def plot(self, force=False):
         for p in self._plotters:
-            p.update()
+            p.update(force=force)
 
     def generate_sweep(self):
         self._sweep_generator = itertools.product(*[sp.values for sp in self._swept_parameters])
@@ -210,11 +190,16 @@ class Sweep(object):
         self._procedure.init_instruments()
 
         if len(self._plotters) > 0:
-            fp = FlaskPlotter(self._plotters)
+            t = BokehServerThread()
+            t.start()
+            output_server("Pycontrol Bokeh Server")
+            q = hplot(*[p.figure for p in self._plotters])
+            show(q)
 
         def shutdown():
             if len(self._plotters) > 0:
-                fp.shutdown()
+                time.sleep(0.5)
+                t.join()
             self._procedure.shutdown_instruments()
 
         def catch_ctrl_c(signum, frame):
@@ -235,9 +220,9 @@ class Sweep(object):
                 if last_param_values is None or param_values[i] != last_param_values[i]:
                     sp.value = param_values[i]
                     sp.push()
-                    logging.info("Updated {:s} to {:g} since the value changed.".format(sp.parameter.name, sp.value))
+                    logging.debug("Updated {:s} to {:g} since the value changed.".format(sp.parameter.name, sp.value))
                 else:
-                    logging.info("Didn't update {:s} since the value didn't change.".format(sp.parameter.name))
+                    logging.debug("Didn't update {:s} since the value didn't change.".format(sp.parameter.name))
 
             # update previous values
             last_param_values = param_values
@@ -248,5 +233,7 @@ class Sweep(object):
             # Push values to file and update plots
             self.write()
             self.plot()
+
+        self.plot(force=True)
 
         shutdown()
