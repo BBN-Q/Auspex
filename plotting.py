@@ -1,7 +1,5 @@
-from __future__ import print_function, division
 import logging
 import threading
-import string
 import time
 
 import numpy as np
@@ -38,7 +36,7 @@ class MultiPlotter(object):
     def __init__(self, title, xs, ys, **plot_args):
         super(MultiPlotter, self).__init__()
         self.title = title
-        self.filename = string.replace(title, ' ', '_')
+        self.filename = title.replace(' ', '_')
         self.update_interval = 0.5
         self.last_update = time.time()
 
@@ -82,10 +80,10 @@ class Plotter(object):
     def __init__(self, title, x, y, **plot_args):
         super(Plotter, self).__init__()
         self.title = title
-        self.filename = string.replace(title, ' ', '_')
+        self.filename = title.replace(' ', '_')
         self.update_interval = 0.5
         self.last_update = time.time()
-        
+
         # Pop the figure arguments
         self.fig_args = {'x_axis_type': plot_args.pop('x_axis_type'),
                          'y_axis_type': plot_args.pop('y_axis_type')}
@@ -93,7 +91,7 @@ class Plotter(object):
         # These are parameters and quantities
         self.x = x
         self.y = y
-        
+
         # Data containers
         self.x_data = []
         self.y_data = []
@@ -107,7 +105,7 @@ class Plotter(object):
         renderers = self.plot.select(dict(name=title))
         self.renderer = [r for r in renderers if isinstance(r, GlyphRenderer)][0]
         self.data_source = self.renderer.data_source
-        
+
     def update(self, force=False):
         self.x_data.append(self.x.value)
         self.y_data.append(self.y.value)
@@ -126,7 +124,7 @@ class Plotter2D(object):
     def __init__(self, title, x, y, z, **plot_args):
         super(Plotter2D, self).__init__()
         self.title = title
-        self.filename = string.replace(title, ' ', '_')
+        self.filename = title.replace(' ', '_')
         self.update_interval = 0.5
         self.last_update = time.time()
 
@@ -134,7 +132,7 @@ class Plotter2D(object):
         xmax = max(x.values)
         ymax = max(y.values)
         xmin = min(x.values)
-        ymin = min(y.values) 
+        ymin = min(y.values)
 
         # Mesh grid of x and y values from the sweep
         self.x_mesh, self.y_mesh = np.meshgrid(x.values, y.values)
@@ -150,12 +148,12 @@ class Plotter2D(object):
         self.ylabel = self.y.name + (" ("+self.y.unit+")" if self.y.unit is not None else '')
         self.figure = figure(x_range=[xmin, xmax], y_range=[ymin, ymax], plot_width=400, plot_height=400,
                              x_axis_label=self.xlabel, y_axis_label=self.ylabel, title=self.title)
-        self.plot = self.figure.image(image=[self.z_data], x=[xmin], y=[ymin], 
+        self.plot = self.figure.image(image=[self.z_data], x=[xmin], y=[ymin],
                                       dw=[xmax-xmin], dh=[ymax-ymin], name=self.title, **plot_args)
         renderers = self.plot.select(dict(name=title))
         self.renderer = [r for r in renderers if isinstance(r, GlyphRenderer)][0]
         self.data_source = self.renderer.data_source
-        
+
     def update(self, force=False):
         # Find the coordinates and then set the array element
         new_data_loc = np.where(  np.logical_and(self.x_mesh == self.x.value, self.y_mesh == self.y.value)  )
