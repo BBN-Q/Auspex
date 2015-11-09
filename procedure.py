@@ -1,4 +1,3 @@
-from __future__ import print_function, division
 import logging
 
 import numpy as np
@@ -52,7 +51,7 @@ class Quantity(object):
         if self.unit:
             result += " %s" % self.unit
         return result
-        
+
     def __repr__(self):
         result = "<Quantity(name='%s'" % self.name
         result += ",value=%s" % repr(self._value)
@@ -80,7 +79,7 @@ class Parameter(object):
 
     def add_post_push_hook(self, hook):
         self.post_push_hooks.append(hook)
-        
+
     @property
     def value(self):
         return self._value
@@ -95,7 +94,7 @@ class Parameter(object):
         if self.unit:
             result += " %s" % self.unit
         return result
-        
+
     def __repr__(self):
         result = "<Parameter(name='%s'" % self.name
         result += ",value=%s" % repr(self.value)
@@ -112,11 +111,11 @@ class Parameter(object):
             self.method(self._value)
 
 class FloatParameter(Parameter):
-    
+
     @property
     def value(self):
         return self._value
-    
+
     @value.setter
     def value(self, value):
         try:
@@ -124,17 +123,17 @@ class FloatParameter(Parameter):
         except ValueError:
             raise ValueError("FloatParameter given non-float value of "
                              "type '%s'" % type(value))
-    
+
     def __repr__(self):
         result = super(FloatParameter, self).__repr__()
         return result.replace("<Parameter", "<FloatParameter", 1)
 
 class IntParameter(Parameter):
-    
+
     @property
     def value(self):
         return self._value
-    
+
     @value.setter
     def value(self, value):
         try:
@@ -142,7 +141,7 @@ class IntParameter(Parameter):
         except ValueError:
             raise ValueError("IntParameter given non-int value of "
                              "type '%s'" % type(value))
-    
+
     def __repr__(self):
         result = super(IntParameter, self).__repr__()
         return result.replace("<Parameter", "<IntParameter", 1)
@@ -165,7 +164,7 @@ class Procedure(object):
             parameter = getattr(self, item)
             if isinstance(parameter, Parameter):
                 self._parameters[item] = parameter
-    
+
     def _gather_quantities(self):
         """ Collects all the Quantity objects for this procedure and stores\
         them in a dictionary.

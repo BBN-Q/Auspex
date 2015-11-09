@@ -12,7 +12,7 @@ class Electromagnet(object):
                 raise Exception("Invalid magnet control calibration file, must contain one line.")
             try:
                 # Construct the fit
-                poly_coeffs = np.array( map( float, lines[0].split() ) )
+                poly_coeffs = np.array(lines[0].split(), dtype=np.float)
                 self.current_vs_field = np.poly1d(poly_coeffs)
             except:
                 raise TypeError("Could not convert calibration coefficients into list of floats")

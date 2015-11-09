@@ -1,4 +1,3 @@
-from __future__ import print_function, division
 import logging
 
 import numpy as np
@@ -191,14 +190,12 @@ class MetaInstrument(type):
                         logging.debug("------> Adding alias '%s'" % a)
                         add_command(self, a, v)
 
-class Instrument(object):
+class Instrument(metaclass=MetaInstrument):
     """This provides all of the actual device functionality, and contains the interface class
     that allows for communication for the physial instrument. When subclassing Instrument, calling
     the __init__ method of this base class will parse the class attributes and convert any Command
     objects such as to provide convenient get_xx and set_xx setter/getter methods as well
     as python @properties therof."""
-
-    __metaclass__ = MetaInstrument
 
     def __init__(self, name, resource_name, interface_type=None, check_errors_on_get=False, check_errors_on_set=False):
         super(Instrument, self).__init__()

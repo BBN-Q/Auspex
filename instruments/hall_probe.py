@@ -1,7 +1,7 @@
 import numpy as np
 
 class HallProbe(object):
-    """Simple wrapper for converting Hall probe voltage measurements to 
+    """Simple wrapper for converting Hall probe voltage measurements to
     actual fields values."""
     def __init__(self, calibration_file, supply_voltage_method, readout_voltage_method):
         super(HallProbe, self).__init__()
@@ -14,7 +14,7 @@ class HallProbe(object):
             except:
                 raise TypeError("Could not convert output voltage to floating point value.")
             try:
-                poly_coeffs = np.array( map( float, lines[1].split() ) )
+                poly_coeffs = np.array(lines[1].split(), dtype=np.float)
                 self.field_vs_voltage = np.poly1d(poly_coeffs)
             except:
                 raise TypeError("Could not convert calibration coefficients into list of floats")
