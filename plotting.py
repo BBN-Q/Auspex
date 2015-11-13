@@ -15,13 +15,9 @@ class BokehServerThread(threading.Thread):
     def __init__(self):
         super(BokehServerThread, self).__init__()
         self.daemon = True
-        self.server = None
 
     def run(self):
-        # Need to store some reference to this since bokeh uses global
-        # variable "server" for some reason.
         try:
-            bokeh.server.server = self.server
             bokeh.server.run()
         except:
             logging.info("Server could not be launched, may already be running.")
