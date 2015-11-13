@@ -222,7 +222,8 @@ class Instrument(metaclass=MetaInstrument):
 
     def __del__(self):
         #close the VISA resource
-        self.interface._resource.close()
+        if hasattr(self.interface, "_resource"):
+            self.interface._resource.close()
 
     def check_errors(self):
         pass
