@@ -31,20 +31,29 @@ class Command(object):
         self.python_to_instr = None
         self.instr_to_python = None
 
-        if value_map is not None:
-            self.python_to_instr = value_map
-            self.instr_to_python = {v: k for k, v in value_map.items()}
-            logging.debug("Constructed map and inverse map for command values:\n--- %s\n--- %s'" % (self.python_to_instr, self.instr_to_python))
+        if value_range is None:
+            self.value_range = None
+        else:
+            self.value_range = (min(value_range), max(value_range))
 
         if allowed_values is None:
             self.allowed_values = None
         else:
             self.allowed_values = allowed_values
 
-        if value_range is None:
-            self.value_range = None
-        else:
-            self.value_range = (min(value_range), max(value_range))
+        if value_map is not None:
+            self.python_to_instr = value_map
+            self.instr_to_python = {v: k for k, v in value_map.items()}
+
+            if self.value_range is not None:
+                raise Exception("Cannot specify both value_range and value_map as they are redundant.")
+
+            if self.allowed_values is not None:
+                raise Exception("Cannot specify both value_map and allowed_values as they are redundant.")
+            else:
+                self.allowed_values=list(self.python_to_instr.keys())
+
+            logging.debug("Constructed map and inverse map for command values:\n--- %s\n--- %s'" % (self.python_to_instr, self.instr_to_python))
 
         # We neeed to do something or other
         if set_string is None and get_string is None:
