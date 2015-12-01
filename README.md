@@ -1,5 +1,7 @@
 # PyControl #
 
+[![build status](https://qiplab.bbn.com/ci/projects/1/status.png?ref=master)](https://qiplab.bbn.com/ci/projects/1?ref=master)
+
 Supports running physics experiments with:
 
 1. Instrument control classes wrapping [PyVISA](https://github.com/hgrecco/pyvisa)
