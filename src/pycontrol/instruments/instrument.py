@@ -135,10 +135,14 @@ class VisaInterface(Interface):
         return self._resource.query_ascii_values(query_string)
     def write(self, write_string):
         self._resource.write(write_string)
+    def write_raw(self, raw_string):
+        self._resource.write_raw(raw_string)
     def read(self):
         return self._resource.read()
     def query(self, query_string):
         return self._resource.query(query_string)
+    def write_binary_values(self, query_string, values, **kwargs):
+        return self._resource.write_binary_values(query_string, values, **kwargs)
 
 def add_command(instr, name, cmd):
     """Helper function for parsing Instrument attributes and turning them into
