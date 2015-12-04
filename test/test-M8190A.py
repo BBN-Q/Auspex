@@ -14,13 +14,13 @@ if __name__ == '__main__':
     arb.waveform_output_mode = "WSPEED"
 
     times = np.arange(0, 42.6e-9, 1/12e9)
-    volts = [waveform(t, rise_time=0.00e-9, fall_time=1.0e-9) for t in times]
+    volts = [waveform(t, rise_time=0.10e-9, fall_time=1.0e-9) for t in times]
 
     sync_mkr = np.zeros(len(volts), dtype=np.int16)
     samp_mkr = np.zeros(len(volts), dtype=np.int16)
     samp_mkr[0:128] = 1
     sync_mkr[:128] = 1
 
-    segment_id = 1
-    wf = arb.create_binary_wf_data(volts, sync_mkr=sync_mkr, samp_mkr=samp_mkr)
+    segment_id = 2
+    wf = arb.create_binary_wf_data(np.array(volts), sync_mkr=sync_mkr, samp_mkr=samp_mkr)
     arb.use_waveform(wf, segment_id)

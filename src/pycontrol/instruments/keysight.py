@@ -23,9 +23,12 @@ class M8190A(Instrument):
         super(M8190A, self).__init__(name, resource_name, *args, **kwargs)
         self.interface._resource.read_termination = u"\n"
 
-    def abort(self, channel):
+    def abort(self, channel=None):
         """Abort/stop signal generation on a channel"""
-        self.interface.write(":ABORT{:d}")
+        if channel is None:
+            self.interface.write(":ABORT")
+        else:
+            self.interface.write(":ABORT{:d}")
 
     def initiate(self, channel=1):
         self.interface.write(":INIT:IMM{:d}".format(channel))
@@ -52,7 +55,7 @@ class M8190A(Instrument):
         if binary:
             # Explicity set the endianess of the transfer
             # self.interface.write(":FORMat:BORD NORM")
-            self.interface.write_binary_values(command_string, wf_data, datatype='i', is_big_endian=True)
+            self.interface.write_binary_values(command_string, wf_data, datatype='h')
         else:
             ascii_string = ",".join(["{:d}".format(val) for val in wf_data])
             self.interface.write(command_string + ascii_string)
@@ -64,10 +67,10 @@ class M8190A(Instrument):
         self.interface.write(":TRAC{:d}:SEL {:d}".format(channel, segment_id))
 
     def use_waveform(self, wf_data, segment_id, channel=1):
-        self.abort(channel)
+        self.abort()
         self.delete_waveform(segment_id, channel=channel)
         self.define_waveform(segment_id, len(wf_data), channel=channel)
-        self.upload_waveform(wf_data, segment_id, channel=channel, binary=False)
+        self.upload_waveform(wf_data, segment_id, channel=channel)
         self.select_waveform(segment_id, channel=channel)
         self.initiate(channel=channel)
 
