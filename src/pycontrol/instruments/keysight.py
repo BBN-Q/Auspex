@@ -75,7 +75,7 @@ class M8190A(Instrument):
         self.initiate(channel=channel)
 
     @staticmethod
-    def create_binary_wf_data(wf, sync_mkr=None, samp_mkr=None, vertical_resolution=12):
+    def create_binary_wf_data(wf, sync_mkr=0, samp_mkr=0, vertical_resolution=12):
         """Given numpy arrays of waveform and marker data convert to binary format.
         Assumes waveform data is np.float in range -1 to 1 and marker data can be cast to bool
         Binary format is waveform in MSB and and markers in LSB
@@ -89,12 +89,6 @@ class M8190A(Instrument):
         #convert waveform to integers
         scale_factor = 2**(vertical_resolution-1)
         bin_data = np.int16((scale_factor-1)*np.array(wf))
-
-        if sync_mkr is None:
-            sync_mkr = np.zeros_like(wf, dtype=np.int16)
-
-        if samp_mkr is None:
-            samp_mkr = np.zeros_like(wf, dtype=np.int16)
 
         #clip if necessary
         if np.max(bin_data) > scale_factor-1 or np.min(bin_data) < -scale_factor:
