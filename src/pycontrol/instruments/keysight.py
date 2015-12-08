@@ -7,18 +7,17 @@ import numpy as np
 class M8190A(Instrument):
     """M8190A arbitrary waveform generator"""
 
-    ref_source = Command("reference source", get_string=":ROSC:SOUR?", set_string="ROSC:SOUR {:s}", allowed_values=("EXTERNAL", "AXI", "INTERNAL"))
-    ref_source_freq = FloatCommand("reference source frequency", get_string=":ROSC:FREQ?", set_string=":ROSC:FREQ {:E}", value_range=(1e6, 200e6))
-    sample_freq = FloatCommand("internal sample frequency", get_string=":FREQ:RAST?", set_string=":FREQ:RAST {:E}")
-    sample_freq_ext = FloatCommand("external sample frequency", get_string=":FREQ:RAST:EXT?", set_string=":FREQ:RAST:EXT {:E}")
-    sample_freq_source = Command("sample frequency source", get_string=":FREQ:RAST:SOUR?", set_string=":FREQ:RAST:SOUR", allowed_values=("INTERNAL", "EXTERNAL"))
-
-    waveform_output_mode = Command("waveform output mode", get_string=":TRAC:DWID?", set_string=":TRAC:DWID {:s}",
-                                   allowed_values=("WSPEED", "WPRECISION", "INTX3", "INTX12", "INTX24", "INT48"))
-    output1 = Command("channel 1 output", get_string=":OUTP1:NORM?", set_string=":OUTP1:NORM {:s}", value_map={False:"0", True:"1"})
-    output2 = Command("channel 2 output", get_string=":OUTP2:NORM?", set_string=":OUTP2:NORM {:s}", value_map={False:"0", True:"1"})
-    output = Command("Channel output", get_string=":OUTP{channel:s}:NORM?", set_string=":OUTP{channel:s}:NORM {:s}",
-                     value_map={False:"0", True:"1"}, additional_args=['channel'])
+    ref_source         = Command("reference source", scpi_string=":ROSC:SOUR",
+        allowed_values=("EXTERNAL", "AXI", "INTERNAL"))
+    ref_source_freq    = FloatCommand("reference source frequency", scpi_string=":ROSC:FREQ", value_range=(1e6, 200e6))
+    sample_freq        = FloatCommand("internal sample frequency", scpi_string=":FREQ:RAST")
+    sample_freq_ext    = FloatCommand("external sample frequency", scpi_string=":FREQ:RAST:EXT")
+    sample_freq_source = Command("sample frequency source", scpi_string=":FREQ:RAST:SOUR",
+        allowed_values=("INTERNAL", "EXTERNAL"))
+    waveform_output_mode = Command("waveform output mode", scpi_string=":TRAC:DWID",
+        allowed_values=("WSPEED", "WPRECISION", "INTX3", "INTX12", "INTX24", "INT48"))
+    output = Command("Channel output", scpi_string=":OUTP{channel:s}:NORM",
+        value_map={False:"0", True:"1"}, additional_args=['channel'])
 
     def __init__(self, name, resource_name, *args, **kwargs):
         resource_name += "::hislip0::INSTR" #user guide recommends HiSLIP protocol

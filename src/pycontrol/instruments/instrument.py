@@ -14,7 +14,9 @@ class Command(object):
     value_map keyword argument allows specification of a dictionary map between python values
     such as True and False and the strange 'on' and 'off' type of values frequently used
     by instruments. Translation occurs via the provided 'convert_set' and 'convert_get' methods."""
-    def __init__(self, name, set_string=None, get_string=None, value_map=None, value_range=None,
+    formatter = '{:s}'
+
+    def __init__(self, name, set_string=None, get_string=None, scpi_string=None, value_map=None, value_range=None,
                  allowed_values=None, aliases=None, delay=None, additional_args=None):
         """Initialize the class with optional set and get string corresponding to instrument
         commands. Also a map containing pairs of e.g. {python_value1: instr_value1, python_value2: instr_value2, ...}."""
@@ -23,8 +25,13 @@ class Command(object):
         self.name = name
         self.aliases = aliases
 
-        self.set_string = set_string
-        self.get_string = get_string
+        if scpi_string:
+            # Construct get and set strings using this base scpi_string
+            self.get_string = scpi_string+"?;"
+            self.set_string = scpi_string+" "+self.formatter
+        else:
+            self.set_string = set_string
+            self.get_string = get_string
 
         self.doc = ""
 
@@ -54,7 +61,7 @@ class Command(object):
             logging.debug("Constructed map and inverse map for command values:\n--- %s\n--- %s'" % (self.python_to_instr, self.instr_to_python))
 
         # We neeed to do something or other
-        if set_string is None and get_string is None:
+        if self.set_string is None and self.get_string is None:
             raise ValueError("Neither a setter nor a getter was specified.")
 
     def convert_set(self, set_value_python):
@@ -73,6 +80,7 @@ class Command(object):
             return self.instr_to_python[get_value_instrument]
 
 class FloatCommand(Command):
+    formatter = '{:E}'
     def convert_get(self, get_value_instrument):
         """Convert the instrument's returned values to something conveniently accessed
         through python."""
@@ -82,6 +90,7 @@ class FloatCommand(Command):
             return float(self.instr_to_python[get_value_instrument])
 
 class IntCommand(Command):
+    formatter = '{:d}'
     def convert_get(self, get_value_instrument):
         """Convert the instrument's returned values to something conveniently accessed
         through python."""

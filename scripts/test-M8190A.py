@@ -8,13 +8,14 @@ def waveform(time, delay=1.5e-9, rise_time=150e-12, fall_time=2.0e-9):
         return np.exp(-(time-delay)/fall_time)
 
 if __name__ == '__main__':
-    arb = M8190A("Test Arb", "128.33.89.22")
+    arb = M8190A("Test Arb", "192.168.5.108")
     print(arb.interface.query("*IDN?"))
 
     arb.set_output(True, channel=1)
     arb.set_output(False, channel=2)
-
+    print(arb.get_output(channel=1))
     arb.sample_freq = 12.0e9
+    print(arb.sample_freq)
     arb.waveform_output_mode = "WSPEED"
 
     times = np.arange(0, 42.6e-9, 1/12e9)
