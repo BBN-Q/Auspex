@@ -128,7 +128,6 @@ class VisaInterface(Interface):
             self._resource = rm.open_resource(resource_name)
         except:
             raise Exception("Unable to create the resource '%s'" % resource_name)
-
     def values(self, query_string):
         return self._resource.query_ascii_values(query_string, container=np.array)
     def value(self, query_string):
@@ -139,6 +138,10 @@ class VisaInterface(Interface):
         return self._resource.read()
     def query(self, query_string):
         return self._resource.query(query_string)
+    def query_binary_values(self, query_string, container=np.array, datatype=u'h',
+                is_big_endian=False):
+        return self._resource.query_binary_values(query_string, container=container, datatype=datatype,
+                is_big_endian=is_big_endian)
 
 def add_command(instr, name, cmd):
     """Helper function for parsing Instrument attributes and turning them into
