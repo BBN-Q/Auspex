@@ -15,7 +15,7 @@ class Command(object):
     such as True and False and the strange 'on' and 'off' type of values frequently used
     by instruments. Translation occurs via the provided 'convert_set' and 'convert_get' methods."""
     def __init__(self, name, set_string=None, get_string=None, value_map=None, value_range=None,
-                 allowed_values=None, aliases=None, delay=None):
+                 allowed_values=None, aliases=None, delay=None, additional_args=None):
         """Initialize the class with optional set and get string corresponding to instrument
         commands. Also a map containing pairs of e.g. {python_value1: instr_value1, python_value2: instr_value2, ...}."""
 
@@ -36,10 +36,8 @@ class Command(object):
         else:
             self.value_range = (min(value_range), max(value_range))
 
-        if allowed_values is None:
-            self.allowed_values = None
-        else:
-            self.allowed_values = allowed_values
+        self.allowed_values = allowed_values
+        self.additional_args = additional_args
 
         if value_map is not None:
             self.python_to_instr = value_map
@@ -147,11 +145,11 @@ class VisaInterface(Interface):
 def add_command(instr, name, cmd):
     """Helper function for parsing Instrument attributes and turning them into
     setters and getters."""
-    def fget(self):
-        val = self.interface.query(cmd.get_string)
+    def fget(self, **kwargs):
+        val = self.interface.query( cmd.get_string.format( **{k: str(v) for k,v in kwargs.items()} ) )
         return cmd.convert_get(val)
 
-    def fset(self, val):
+    def fset(self, val, **kwargs):
         if cmd.value_range is not None:
             if (val < cmd.value_range[0]) or (val > cmd.value_range[1]):
                 raise ValueError("The value {:g} is outside of the allowable range specified for instrument '{:s}'.".format(val, self.name))
@@ -175,18 +173,21 @@ def add_command(instr, name, cmd):
             # Go straight to the desired value
             set_value = cmd.convert_set(val)
             logging.debug("Formatting '%s' with string '%s'" % (cmd.set_string, set_value))
-            logging.debug("The result of the formatting is %s" % cmd.set_string.format(set_value))
-            self.interface.write(cmd.set_string.format(set_value))
+            logging.debug("The result of the formatting is %s" % cmd.set_string.format(set_value, **{k: str(v) for k,v in kwargs.items()}))
+            self.interface.write(cmd.set_string.format(set_value, **{k: str(v) for k,v in kwargs.items()}))
 
     # Add getter and setter methods for passing around
+    if cmd.additional_args is None:
+        # We add properties in this case since not additional arguments are required
+        # Using None prevents deletion or setting/getting unsettable/gettable attributes
+        setattr(instr, name, property(fget if cmd.get_string else None, fset if cmd.set_string else None, None, cmd.doc))
+
+    # In this case we can't create a property given additional arguments
     if cmd.get_string:
         setattr(instr, "get_" + name, fget)
 
     if cmd.set_string:
         setattr(instr, "set_" + name, fset)
-
-    #Using None prevents deletion or setting/getting unsettable/gettable attributes
-    setattr(instr, name, property(fget if cmd.get_string else None, fset if cmd.set_string else None, None, cmd.doc))
 
 class MetaInstrument(type):
     """Meta class to create instrument classes with controls turned into descriptors.

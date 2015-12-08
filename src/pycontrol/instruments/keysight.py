@@ -17,6 +17,8 @@ class M8190A(Instrument):
                                    allowed_values=("WSPEED", "WPRECISION", "INTX3", "INTX12", "INTX24", "INT48"))
     output1 = Command("channel 1 output", get_string=":OUTP1:NORM?", set_string=":OUTP1:NORM {:s}", value_map={False:"0", True:"1"})
     output2 = Command("channel 2 output", get_string=":OUTP2:NORM?", set_string=":OUTP2:NORM {:s}", value_map={False:"0", True:"1"})
+    output = Command("Channel output", get_string=":OUTP{channel:s}:NORM?", set_string=":OUTP{channel:s}:NORM {:s}",
+                     value_map={False:"0", True:"1"}, additional_args=['channel'])
 
     def __init__(self, name, resource_name, *args, **kwargs):
         resource_name += "::hislip0::INSTR" #user guide recommends HiSLIP protocol
