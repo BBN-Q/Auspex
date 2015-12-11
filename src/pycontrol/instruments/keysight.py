@@ -20,7 +20,7 @@ class M8190A(Instrument):
         value_map={False:"0", True:"1"}, additional_args=['channel'])
 
     def __init__(self, name, resource_name, *args, **kwargs):
-        resource_name += "::hislip0::INSTR" #user guide recommends HiSLIP protocol
+        resource_name += "::inst0::INSTR" #user guide recommends HiSLIP protocol
         super(M8190A, self).__init__(name, resource_name, *args, **kwargs)
         self.interface._resource.read_termination = u"\n"
 
