@@ -41,8 +41,16 @@ class M8190A(Instrument):
             raise ValueError("reference source must be one of {:s}".format(str(allowed_values)))
         return self.interface.query(":ROSC:SOUR:CHEC? {:s}".format(source)) == '1'
 
-    def define_waveform(self, segment_id, length, channel=1):
-        self.interface.write(":TRAC{:d}:DEF {:d},{:d}".format(channel, segment_id, length))
+    def define_waveform(self, length, segment_id=None, channel=1):
+        if segment_id:
+            self.interface.write(":TRAC{:d}:DEF {:d},{:d}".format(channel, segment_id, length))
+        else:
+            r = self.interface.query(":TRAC{:d}:DEF:NEW? {:d}".format(channel, length))
+            try:
+                segment_id = int(r)
+            except:
+                raise ValueError("M8190A did not return a reasonable segment ID, but rather {}".format(r))
+        return segment_id
 
     def upload_waveform(self, wf_data, segment_id, channel=1, binary=True):
         """Uploads the waveform to the device. Technically we should split the data into multiple chunks
@@ -64,13 +72,18 @@ class M8190A(Instrument):
     def delete_waveform(self, segment_id, channel=1):
         self.interface.write(":TRAC{:d}:DEL {:d}".format(channel, segment_id))
 
+    def delete_all_waveforms(self, channel=1):
+        self.interface.write(":TRAC{:d}:DEL:ALL".format(channel) )
+
     def select_waveform(self, segment_id, channel=1):
         self.interface.write(":TRAC{:d}:SEL {:d}".format(channel, segment_id))
 
-    def use_waveform(self, wf_data, segment_id, channel=1):
+    def use_waveform(self, wf_data, segment_id=None, channel=1):
         self.abort()
-        self.delete_waveform(segment_id, channel=channel)
-        self.define_waveform(segment_id, len(wf_data), channel=channel)
+        if segment_id:
+            self.delete_waveform(segment_id, channel=channel)
+        segment_id = self.define_waveform(len(wf_data), segment_id=segment_id, channel=channel)
+        print("Returned segment id {}".format(segment_id))
         self.upload_waveform(wf_data, segment_id, channel=channel)
         self.select_waveform(segment_id, channel=channel)
         self.initiate(channel=channel)
