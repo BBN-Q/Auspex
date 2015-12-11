@@ -1,4 +1,4 @@
-from pycontrol.instruments.keysight import M8190A
+from pycontrol.instruments.keysight import *
 import numpy as np
 
 def waveform(time, delay=1.5e-9, rise_time=150e-12, fall_time=2.0e-9):
@@ -39,26 +39,34 @@ if __name__ == '__main__':
         sync_mkr = np.zeros(len(volts), dtype=np.int16)
         sync_mkr[:320] = 1
         wf_data = arb.create_binary_wf_data(np.array(volts), sync_mkr=sync_mkr)
-
         segment_id = arb.define_waveform(len(wf_data))
         segment_ids.append(segment_id)
-        # print("Returned segment id {} for fall time {}".format(segment_id, ft))
-
         arb.upload_waveform(wf_data, segment_id)
 
-    idx = 0
-    arb.interface.write('STAB1:DATA {:d}, {:d}, 10, 1, {:d}, 0, {:d}'.format(idx, 0x11000000, 1, 0xffffffff) )
-    idx += 1
-    arb.interface.write('STAB1:DATA {:d}, {:d}, 1, 0, 0, 6400, 0'.format(idx, 0xc0000000) )
-    idx += 1
-    for si in segment_ids[1:-1]:
-        arb.interface.write('STAB1:DATA {:d}, {:d}, 10, 1, {:d}, 0, {:d}'.format(idx, 0x11000000, si, 0xffffffff) )
-        idx += 1
-        arb.interface.write('STAB1:DATA {:d}, {:d}, 1, 0, 0, 6400, 0'.format(idx, 0xc0000000) )
-        idx += 1
-    arb.interface.write('STAB1:DATA {:d}, {:d}, 10, 1, {:d}, 0, {:d}'.format(idx, 0x11000000, len(segment_ids), 0xffffffff) )
-    idx += 1
-    arb.interface.write('STAB1:DATA {:d}, {:d}, 1, 0, 0, 6400, 0'.format(idx, 0xe0000000) )
+
+    scenario = Scenario()
+    for si in segment_ids:
+        seq = Sequence()
+        seq.add_waveform(si, loop_ct=10)
+        seq.add_idle(6400, 0.0)
+        scenario.sequences.append(seq)
+
+    arb.upload_scenario(scenario)
+
+    #
+    # idx = 0
+    # arb.interface.write('STAB1:DATA {:d}, {:d}, 10, 1, {:d}, 0, {:d}'.format(idx, 0x11000000, 1, 0xffffffff) )
+    # idx += 1
+    # arb.interface.write('STAB1:DATA {:d}, {:d}, 1, 0, 0, 6400, 0'.format(idx, 0xc0000000) )
+    # idx += 1
+    # for si in segment_ids[1:-1]:
+    #     arb.interface.write('STAB1:DATA {:d}, {:d}, 10, 1, {:d}, 0, {:d}'.format(idx, 0x11000000, si, 0xffffffff) )
+    #     idx += 1
+    #     arb.interface.write('STAB1:DATA {:d}, {:d}, 1, 0, 0, 6400, 0'.format(idx, 0xc0000000) )
+    #     idx += 1
+    # arb.interface.write('STAB1:DATA {:d}, {:d}, 10, 1, {:d}, 0, {:d}'.format(idx, 0x11000000, len(segment_ids), 0xffffffff) )
+    # idx += 1
+    # arb.interface.write('STAB1:DATA {:d}, {:d}, 1, 0, 0, 6400, 0'.format(idx, 0xe0000000) )
 
     # arb.select_waveform(segment_id)
     # arb.initiate()
