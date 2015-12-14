@@ -120,21 +120,21 @@ class Scenario(object):
         super(Scenario, self).__init__()
         self.sequences = []
 
-    def scpi_strings(self):
-        scpi_strings = []
+    def scpi_strings(self, start_idx=0):
+        scpi_strs = []
         #Extract SCPI strings from sequences
         for seq in self.sequences:
-            scpi_strings.extend(seq.scpi_strings())
+            scpi_strs.extend(seq.scpi_strings())
         #interpolate in table indcies
-        scpi_strings = [s.format(ct) for ct,s in enumerate(scpi_strings)]
+        scpi_strs = [s.format(ct + start_idx) for ct,s in enumerate(scpi_strs)]
         #add end scenario flag
-        last_control_word_str = scpi_strings[-1].split(',')[1]
+        last_control_word_str = scpi_strs[-1].split(',')[1]
         last_control_word = SequenceControlWord()
         last_control_word.packed = int(last_control_word_str)
         last_control_word.end_marker_scenario = 1
-        scpi_strings[-1] = scpi_strings[-1].replace(last_control_word_str, str(last_control_word.packed))
+        scpi_strs[-1] = scpi_strs[-1].replace(last_control_word_str, str(last_control_word.packed))
 
-        return scpi_strings
+        return scpi_strs
 
 
 class M8190A(Instrument):
@@ -149,8 +149,11 @@ class M8190A(Instrument):
         allowed_values=("INTERNAL", "EXTERNAL"))
     waveform_output_mode = Command("waveform output mode", scpi_string=":TRAC:DWID",
         allowed_values=("WSPEED", "WPRECISION", "INTX3", "INTX12", "INTX24", "INT48"))
+    sequence_mode = Command("sequence mode", scpi_string=":FUNC:MODE",
+        value_map={"ARBITRARY":"ARB", "SEQUENCE":"STS", "SCENARIO":"STSC"})
     output = Command("Channel output", scpi_string=":OUTP{channel:s}:NORM",
         value_map={False:"0", True:"1"}, additional_args=['channel'])
+
 
     def __init__(self, name, resource_name, *args, **kwargs):
         resource_name += "::inst0::INSTR" #user guide recommends HiSLIP protocol
@@ -254,7 +257,13 @@ class M8190A(Instrument):
     def reset_sequence_table(self):
         self.interface.write(":STAB:RES")
 
-    def upload_scenario(self, scenario):
-        strs = scenario.scpi_strings()
+    def upload_scenario(self, scenario, start_idx=0):
+        strs = scenario.scpi_strings(start_idx=start_idx)
         for s in strs:
             self.interface.write(s)
+
+    def advance(channel=1):
+        self.interface.write(":TRIG:ADV{:d}".format(channel))
+
+    def trigger(channel=1):
+        self.interface.write(":TRIG:BEG{:d}".format(channel))

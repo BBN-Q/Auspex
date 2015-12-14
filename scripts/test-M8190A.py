@@ -43,15 +43,51 @@ if __name__ == '__main__':
         segment_ids.append(segment_id)
         arb.upload_waveform(wf_data, segment_id)
 
+    for amp in np.arange(-0.1, -0.9, -0.1):
+        volts = np.concatenate((np.linspace(0, amp, 12032), np.zeros(2048)))
+        sync_mkr = np.zeros(len(volts), dtype=np.int16)
+        sync_mkr[:320] = 1
+        wf_data = arb.create_binary_wf_data(np.array(volts), sync_mkr=sync_mkr)
+        segment_id = arb.define_waveform(len(wf_data))
+        segment_ids.append(segment_id)
+        arb.upload_waveform(wf_data, segment_id)
 
     scenario = Scenario()
-    for si in segment_ids:
-        seq = Sequence()
-        seq.add_waveform(si, loop_ct=10)
+    start_idx = 0
+    for si,si2 in zip(segment_ids[:8], segment_ids[8:]):
+        seq = Sequence(sequence_loop_ct=3)
+        seq.add_waveform(si)
         seq.add_idle(6400, 0.0)
+        seq.add_waveform(si2)
+        seq.add_idle(12800, 0.0)
+        scenario.sequences.append(seq)
+        seq = Sequence(sequence_loop_ct=3)
+        seq.add_waveform(si2)
+        seq.add_idle(6400, 0.0)
+        seq.add_waveform(si)
+        seq.add_idle(12800, 0.0)
         scenario.sequences.append(seq)
 
-    arb.upload_scenario(scenario)
+    arb.upload_scenario(scenario, start_idx=start_idx)
+    start_idx += len(scenario.scpi_strings())
+
+    scenario = Scenario()
+    for si,si2 in zip(segment_ids[:8], segment_ids[8:]):
+        seq = Sequence(sequence_loop_ct=3)
+        seq.add_waveform(si2)
+        seq.add_idle(6400, 0.0)
+        seq.add_waveform(si)
+        seq.add_idle(12800, 0.0)
+        scenario.sequences.append(seq)
+        seq = Sequence(sequence_loop_ct=3)
+        seq.add_waveform(si)
+        seq.add_idle(6400, 0.0)
+        seq.add_waveform(si2)
+        seq.add_idle(12800, 0.0)
+        scenario.sequences.append(seq)
+
+    arb.upload_scenario(scenario, start_idx=start_idx)
+
 
     #
     # idx = 0
