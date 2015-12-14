@@ -1,8 +1,141 @@
 from .instrument import Instrument, Command, FloatCommand, IntCommand
+from .binutils import BitField, BitFieldUnion
 
 import logging
 import warnings
 import numpy as np
+import h5py
+
+class SequenceControlWord(metaclass=BitFieldUnion):
+    reserved0             = BitField(12)
+    freq_table_increment  = BitField(1)
+    freq_table_init       = BitField(1)
+    amp_table_increment   = BitField(1)
+    amp_table_init        = BitField(1)
+    advance_mode_segment  = BitField(4)
+    advance_mode_sequence = BitField(4)
+    marker_enable         = BitField(1)
+    reserved1             = BitField(3)
+    init_marker_sequence  = BitField(1)
+    end_marker_scenario   = BitField(1)
+    end_marker_sequence   = BitField(1)
+    data_cmd_sel          = BitField(1)
+
+class WaveformEntry(object):
+    """Waveform entry for sequence table"""
+
+    fmt_str = "STAB{:d}:DATA {{:d}}, {:d}, {:d}, {:d}, {:d}, {:d}, {:d}"
+
+    def __init__(self, segment_id, loop_ct=1, marker_enable=True):
+        super(WaveformEntry, self).__init__()
+        self.segment_id = segment_id
+        self.loop_ct    = loop_ct
+
+class IdleEntry(object):
+    """Idle entry for sequence table"""
+
+    fmt_str = "STAB{:d}:DATA {{:d}}, {:d}, {:d}, 0, {:d}, {:d}, 0"
+
+    def __init__(self, length, amp):
+        super(IdleEntry, self).__init__()
+        #in WSPEED mode min is 640, in WRPRECISION min is 480
+        if length < 640:
+            raise ValueError("Minimum idle entry is 640")
+        self.length = length
+        self.amp    = amp
+
+    def dac_level(self, vertical_resolution=12):
+        """Calculate DAC level for amplitude"""
+        scale = 2**(vertical_resolution-1)
+        dac_level = int(scale * self.amp)
+        return np.clip(dac_level, -scale, scale-1)
+
+# class ConfigEntry(object):
+#     """Idle object"""
+#     def __init__(self, start=False, stop=False):
+#         super(ConfigEntry, self).__init__()
+#         self.start = start
+#         self.stop = stop
+#         self.word = SequenceControlWord()
+#         if self.start:
+#             self.word.init_marker
+#
+
+class SequenceControlWord(metaclass=BitFieldUnion):
+    reserved0             = BitField(12)
+    freq_table_increment  = BitField(1)
+    freq_table_init       = BitField(1)
+    amp_table_increment   = BitField(1)
+    amp_table_init        = BitField(1)
+    advance_mode_segment  = BitField(4)
+    advance_mode_sequence = BitField(4)
+    marker_enable         = BitField(1)
+    reserved1             = BitField(3)
+    init_marker_sequence  = BitField(1)
+    end_marker_scenario   = BitField(1)
+    end_marker_sequence   = BitField(1)
+    data_cmd_sel          = BitField(1)
+
+class Sequence(object):
+    """Bundle of sequence table entries as a "sequence" """
+    def __init__(self, channel=1, sequence_loop_ct=1):
+        super(Sequence, self).__init__()
+        self.channel = channel
+        self.sequence_loop_ct = sequence_loop_ct
+        self.sequence_items = []
+
+    def add_waveform(self, segment_id, **kwargs):
+        self.sequence_items.append(WaveformEntry(segment_id, **kwargs))
+
+    def add_idle(self, length, amp=0):
+        self.sequence_items.append(IdleEntry(length, amp))
+
+    def add_command(self):
+        pass
+
+    def scpi_strings(self):
+        """Returns a list of SCPI strings that can be pushed to instrument after formatting with index"""
+        scpi_strs = []
+        for ct, entry in enumerate(self.sequence_items):
+            control_word = SequenceControlWord()
+            if ct == 0:
+                control_word.init_marker_sequence = 1
+            elif ct == len(self.sequence_items)-1:
+                control_word.end_marker_sequence = 1
+            if isinstance(entry, WaveformEntry):
+                control_word.marker_enable = 1
+                scpi_str = entry.fmt_str.format(self.channel, control_word.packed, self.sequence_loop_ct if ct==0 else 0, entry.loop_ct, entry.segment_id, 0, 0xffffffff)
+            elif isinstance(entry, IdleEntry):
+                control_word.data_cmd_sel = 1
+                scpi_str = entry.fmt_str.format(self.channel, control_word.packed, self.sequence_loop_ct if ct==0 else 0, entry.dac_level(), entry.length)
+            else:
+                raise TypeError("Unhandled sequence entry type")
+
+            scpi_strs.append(scpi_str)
+        return scpi_strs
+
+class Scenario(object):
+    """Bundle of sequences as a "scenario" """
+    def __init__(self):
+        super(Scenario, self).__init__()
+        self.sequences = []
+
+    def scpi_strings(self, start_idx=0):
+        scpi_strs = []
+        #Extract SCPI strings from sequences
+        for seq in self.sequences:
+            scpi_strs.extend(seq.scpi_strings())
+        #interpolate in table indcies
+        scpi_strs = [s.format(ct + start_idx) for ct,s in enumerate(scpi_strs)]
+        #add end scenario flag
+        last_control_word_str = scpi_strs[-1].split(',')[1]
+        last_control_word = SequenceControlWord()
+        last_control_word.packed = int(last_control_word_str)
+        last_control_word.end_marker_scenario = 1
+        scpi_strs[-1] = scpi_strs[-1].replace(last_control_word_str, str(last_control_word.packed))
+
+        return scpi_strs
+
 
 class M8190A(Instrument):
     """M8190A arbitrary waveform generator"""
@@ -16,11 +149,14 @@ class M8190A(Instrument):
         allowed_values=("INTERNAL", "EXTERNAL"))
     waveform_output_mode = Command("waveform output mode", scpi_string=":TRAC:DWID",
         allowed_values=("WSPEED", "WPRECISION", "INTX3", "INTX12", "INTX24", "INT48"))
+    sequence_mode = Command("sequence mode", scpi_string=":FUNC:MODE",
+        value_map={"ARBITRARY":"ARB", "SEQUENCE":"STS", "SCENARIO":"STSC"})
     output = Command("Channel output", scpi_string=":OUTP{channel:s}:NORM",
         value_map={False:"0", True:"1"}, additional_args=['channel'])
 
+
     def __init__(self, name, resource_name, *args, **kwargs):
-        resource_name += "::hislip0::INSTR" #user guide recommends HiSLIP protocol
+        resource_name += "::inst0::INSTR" #user guide recommends HiSLIP protocol
         super(M8190A, self).__init__(name, resource_name, *args, **kwargs)
         self.interface._resource.read_termination = u"\n"
 
@@ -41,8 +177,16 @@ class M8190A(Instrument):
             raise ValueError("reference source must be one of {:s}".format(str(allowed_values)))
         return self.interface.query(":ROSC:SOUR:CHEC? {:s}".format(source)) == '1'
 
-    def define_waveform(self, segment_id, length, channel=1):
-        self.interface.write(":TRAC{:d}:DEF {:d},{:d}".format(channel, segment_id, length))
+    def define_waveform(self, length, segment_id=None, channel=1):
+        if segment_id:
+            self.interface.write(":TRAC{:d}:DEF {:d},{:d}".format(channel, segment_id, length))
+        else:
+            r = self.interface.query(":TRAC{:d}:DEF:NEW? {:d}".format(channel, length))
+            try:
+                segment_id = int(r)
+            except:
+                raise ValueError("M8190A did not return a reasonable segment ID, but rather {}".format(r))
+        return segment_id
 
     def upload_waveform(self, wf_data, segment_id, channel=1, binary=True):
         """Uploads the waveform to the device. Technically we should split the data into multiple chunks
@@ -64,13 +208,18 @@ class M8190A(Instrument):
     def delete_waveform(self, segment_id, channel=1):
         self.interface.write(":TRAC{:d}:DEL {:d}".format(channel, segment_id))
 
+    def delete_all_waveforms(self, channel=1):
+        self.interface.write(":TRAC{:d}:DEL:ALL".format(channel) )
+
     def select_waveform(self, segment_id, channel=1):
         self.interface.write(":TRAC{:d}:SEL {:d}".format(channel, segment_id))
 
-    def use_waveform(self, wf_data, segment_id, channel=1):
+    def use_waveform(self, wf_data, segment_id=None, channel=1):
         self.abort()
-        self.delete_waveform(segment_id, channel=channel)
-        self.define_waveform(segment_id, len(wf_data), channel=channel)
+        if segment_id:
+            self.delete_waveform(segment_id, channel=channel)
+        segment_id = self.define_waveform(len(wf_data), segment_id=segment_id, channel=channel)
+        print("Returned segment id {}".format(segment_id))
         self.upload_waveform(wf_data, segment_id, channel=channel)
         self.select_waveform(segment_id, channel=channel)
         self.initiate(channel=channel)
@@ -104,3 +253,17 @@ class M8190A(Instrument):
         bin_data = np.bitwise_or(bin_data, np.bitwise_or(np.left_shift(np.bitwise_and(sync_mkr, 0x1), 1), np.bitwise_and(samp_mkr, 0x1)))
 
         return bin_data
+
+    def reset_sequence_table(self):
+        self.interface.write(":STAB:RES")
+
+    def upload_scenario(self, scenario, start_idx=0):
+        strs = scenario.scpi_strings(start_idx=start_idx)
+        for s in strs:
+            self.interface.write(s)
+
+    def advance(channel=1):
+        self.interface.write(":TRIG:ADV{:d}".format(channel))
+
+    def trigger(channel=1):
+        self.interface.write(":TRIG:BEG{:d}".format(channel))

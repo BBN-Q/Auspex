@@ -233,13 +233,13 @@ class Instrument(metaclass=MetaInstrument):
 
         if interface_type is None:
             # Load the dummy interface, unless we see that GPIB is in the resource string
-            if any([x in resource_name for x in ["GPIB", "USB", "SOCKET", "hislip"]]):
+            if any([x in resource_name for x in ["GPIB", "USB", "SOCKET", "hislip", "inst0"]]):
                 interface_type = "VISA"
 
         if interface_type is None:
             self.interface = Interface()
         elif interface_type == "VISA":
-            if "SOCKET" in resource_name or "hislip" in resource_name:
+            if "SOCKET" in resource_name or "hislip" in resource_name or "inst0" in resource_name:
                 ## assume single NIC for now
                 resource_name = "TCPIP0::" + resource_name
             self.interface = VisaInterface(resource_name)
