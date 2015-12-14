@@ -147,18 +147,40 @@ class M8190A(Instrument):
     sample_freq_ext    = FloatCommand("external sample frequency", scpi_string=":FREQ:RAST:EXT")
     sample_freq_source = Command("sample frequency source", scpi_string=":FREQ:RAST:SOUR",
         allowed_values=("INTERNAL", "EXTERNAL"))
+
     waveform_output_mode = Command("waveform output mode", scpi_string=":TRAC:DWID",
         allowed_values=("WSPEED", "WPRECISION", "INTX3", "INTX12", "INTX24", "INT48"))
     sequence_mode = Command("sequence mode", scpi_string=":FUNC:MODE",
         value_map={"ARBITRARY":"ARB", "SEQUENCE":"STS", "SCENARIO":"STSC"})
-    output = Command("Channel output", scpi_string=":OUTP{channel:s}:NORM",
-        value_map={False:"0", True:"1"}, additional_args=['channel'])
+    scenario_loop_ct = IntCommand("Scenario loop count", scpi_string=":STAB:SCEN:COUN")
+    scenario_advance_mode = Command("scenario advance mode", scpi_string=":STAB:SCEN:ADV",
+        value_map={"AUTOMATIC":"AUTO", "CONDITIONAL":"COND", "REPEAT":"REP", "SINGLE":"SING"})
+    scenario_start_index = IntCommand("scenario start index", scpi_string=":STAB:SCEN:SEL")
 
+    output = Command("Channel output", scpi_string=":OUTP{channel:d}:NORM",
+        value_map={False:"0", True:"1"}, additional_args=['channel'])
+    output_complement = Command("Channel output", scpi_string=":OUTP{channel:d}:COMP",
+        value_map={False:"0", True:"1"}, additional_args=['channel'])
+    output_route = Command("Channel output route", scpi_string=":OUTP{channel:d}:ROUT", allowed_values=["DAC","AC","DC"], additional_args=["channel"])
+
+    voltage_amplitude = FloatCommand("output voltage amplitude", scpi_string=":VOLT:AMPL")
+    #TODO: voltage_amplitude for the different output routes
+    voltage_offset = FloatCommand("output voltage amplitude", scpi_string=":VOLT:OFFS")
+
+    marker_level_low = FloatCommand("marker (sync/samp) low", scpi_string=":MARK{channel:d}:{marker_type:s}:VOLT:LOW", additional_args=["channel", "marker_type"])
+    marker_level_high = FloatCommand("marker (sync/samp) high", scpi_string=":MARK{channel:d}:{marker_type:s}:VOLT:HIGH", additional_args=["channel", "marker_type"])
+
+    continuous_mode = Command("continuous mode", scpi_string=":INIT:CONT:STAT", value_map={True:"1", False:"0"})
+    gate_mode = Command("gate mode", scpi_string=":INIT:GATE:STAT", value_map={True:"1", False:"0"})
 
     def __init__(self, name, resource_name, *args, **kwargs):
         resource_name += "::inst0::INSTR" #user guide recommends HiSLIP protocol
         super(M8190A, self).__init__(name, resource_name, *args, **kwargs)
         self.interface._resource.read_termination = u"\n"
+
+        #Aliases for run/stop
+        self.run = self.initiate
+        self.stop = self.abort
 
     def abort(self, channel=None):
         """Abort/stop signal generation on a channel"""
@@ -262,8 +284,8 @@ class M8190A(Instrument):
         for s in strs:
             self.interface.write(s)
 
-    def advance(channel=1):
+    def advance(self, channel=1):
         self.interface.write(":TRIG:ADV{:d}".format(channel))
 
-    def trigger(channel=1):
+    def trigger(self, channel=1):
         self.interface.write(":TRIG:BEG{:d}".format(channel))

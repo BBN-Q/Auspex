@@ -160,7 +160,7 @@ def add_command(instr, name, cmd):
     """Helper function for parsing Instrument attributes and turning them into
     setters and getters."""
     def fget(self, **kwargs):
-        val = self.interface.query( cmd.get_string.format( **{k: str(v) for k,v in kwargs.items()} ) )
+        val = self.interface.query( cmd.get_string.format( **kwargs ) )
         return cmd.convert_get(val)
 
     def fset(self, val, **kwargs):
@@ -186,9 +186,9 @@ def add_command(instr, name, cmd):
         else:
             # Go straight to the desired value
             set_value = cmd.convert_set(val)
-            logging.debug("Formatting '%s' with string '%s'" % (cmd.set_string, set_value))
-            logging.debug("The result of the formatting is %s" % cmd.set_string.format(set_value, **{k: str(v) for k,v in kwargs.items()}))
-            self.interface.write(cmd.set_string.format(set_value, **{k: str(v) for k,v in kwargs.items()}))
+            # logging.debug("Formatting '%s' with string '%s'" % (cmd.set_string, set_value))
+            # logging.debug("The result of the formatting is %s" % cmd.set_string.format(set_value, **{k: str(v) for k,v in kwargs.items()}))
+            self.interface.write(cmd.set_string.format(set_value, **kwargs))
 
     # Add getter and setter methods for passing around
     if cmd.additional_args is None:
