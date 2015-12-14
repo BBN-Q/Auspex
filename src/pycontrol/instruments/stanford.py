@@ -1,4 +1,6 @@
-from .instrument import Instrument, Command, FloatCommand
+from .instrument import Instrument, Command, FloatCommand, IntCommand
+import numpy as np
+import time
 
 def indexed_map(values):
     return {v: '%d' % i for i, v in enumerate(values)}
@@ -8,8 +10,8 @@ def indexed_map_chan(values):
 
 class SR830(Instrument):
     """The SR830 lock-in amplifier."""
-    SAMPLE_FREQUENCY_VALUES = [62.5e-3, 125e-3, 250e-3, 500e-3, 1, 2, 4, 8, 16,
-                                32, 64, 128, 256, 512]
+    SAMPLE_RATE_VALUES = [62.5e-3, 125e-3, 250e-3, 500e-3, 1, 2, 4, 8, 16,
+                                32, 64, 128, 256, 512, "Trigger"]
     TIME_CONSTANT_VALUES = [10e-6, 30e-6, 100e-6, 300e-6, 1e-3, 3e-3, 10e-3,
                             30e-3, 100e-3, 300e-3, 1, 3, 10, 3, 100, 300, 1e3,
                             3e3, 10e3, 30e3]
@@ -24,7 +26,7 @@ class SR830(Instrument):
     CHANNEL1_VALUES = ['X', 'R', 'X Noise', 'Aux In 1', 'Aux In 2']
     CHANNEL2_VALUES = ['Y', 'Theta', 'Y Noise', 'Aux In 3', 'Aux In 4']
 
-    SAMPLE_FREQUENCY_MAP = indexed_map(SAMPLE_FREQUENCY_VALUES)
+    SAMPLE_RATE_MAP = indexed_map(SAMPLE_RATE_VALUES)
     TIME_CONSTANT_MAP = indexed_map(TIME_CONSTANT_VALUES)
     SENSITIVITY_MAP = indexed_map(SENSITIVITY_VALUES)
     EXPANSION_MAP = indexed_map(EXPANSION_VALUES)
@@ -33,9 +35,9 @@ class SR830(Instrument):
     CHANNEL1_MAP = indexed_map_chan(CHANNEL1_VALUES)
     CHANNEL2_MAP = indexed_map_chan(CHANNEL2_VALUES)
 
-    amplitude = FloatCommand("amplitude", get_string="SLVL?", set_string="SLVL {:f}")
-    frequency = FloatCommand("frequency", get_string="FREQ?", set_string="FREQ {:f}", aliases=['freq'])
-    phase = FloatCommand("phase", get_string="PHAS?", set_string="PHAS{:g}")
+    amplitude = FloatCommand("amplitude", scpi_string="SLVL")
+    frequency = FloatCommand("frequency", scpi_string="FREQ", aliases=['freq'])
+    phase = FloatCommand("phase", scpi_string="PHAS")
 
     x = FloatCommand("x", get_string="OUTP?1;")
     y = FloatCommand("y", get_string="OUTP?2;")
@@ -57,11 +59,34 @@ class SR830(Instrument):
 
     channel_1_type = Command("Channel 1", get_string="DDEF?1;", set_string="DDEF1,{:s}", value_map=CHANNEL1_MAP)
     channel_2_type = Command("Channel 2", get_string="DDEF?2;", set_string="DDEF2,{:s}", value_map=CHANNEL2_MAP)
-    sample_frequency = Command("Sample Frequency", get_string="SRAT?;", set_string="SRAT{:s}", value_map=SAMPLE_FREQUENCY_MAP)
-    sensitivity = Command("Sensitivity", get_string="SENS?;", set_string="SENS{:s}", value_map=SENSITIVITY_MAP)
-    time_constant = Command("Time Constant", get_string="OFLT?;", set_string="OFLT{:s}", value_map=TIME_CONSTANT_MAP, aliases=['tc', 'TC'])
-    filter_slope = Command("Filter Slope", get_string="OFSL?;", set_string="OFSL{:s}", value_map=FILTER_SLOPE_MAP)
-    reserve_mode = Command("Reserve Mode", get_string="RMOD?;", set_string="RMOD{:s}", value_map=RESERVE_MAP)
+    sensitivity    = Command("Sensitivity", get_string="SENS?;", set_string="SENS{:s}", value_map=SENSITIVITY_MAP)
+    time_constant  = Command("Time Constant", get_string="OFLT?;", set_string="OFLT{:s}", value_map=TIME_CONSTANT_MAP, aliases=['tc', 'TC'])
+    filter_slope   = Command("Filter Slope", get_string="OFSL?;", set_string="OFSL{:s}", value_map=FILTER_SLOPE_MAP)
+    reserve_mode   = Command("Reserve Mode", get_string="RMOD?;", set_string="RMOD{:s}", value_map=RESERVE_MAP)
+
+    sample_rate    = Command("Sample Rate", get_string="SRAT?;", set_string="SRAT{:s}", value_map=SAMPLE_RATE_MAP)
+    buffer_mode    = Command("Buffer Mode", get_string="SEND?;", set_string="SEND{:s}", value_map={"SHOT": "0", "LOOP": "1"})
+    buffer_trigger_mode = Command("Buffer Trigger Mode", get_string="TSTR?;", set_string="TSTR{:s}",
+                                  value_map={True: "1", False: "0"})
+    buffer_points  = IntCommand("Buffer Points", get_string="SPTS?;")
+
+    def get_buffer(self, channel):
+        stored_points = self.buffer_points
+        self.interface.write("TRCB?{:d},0,{:d}".format(channel, stored_points))
+        buf = self.interface.read_raw()
+        return np.frombuffer(buf, dtype=np.float32)
+
+    def buffer_start(self):
+        self.interface.write("STRT;")
+        # Inconsistent behavior missing first trigger/data point,
+        # pause seems to address this issue.
+        time.sleep(0.1)
+    def buffer_pause(self):
+        self.interface.write("PAUS;")
+    def buffer_reset(self):
+        self.interface.write("REST;")
+    def trigger(self):
+        self.interface.write("TRIG;")
 
     def __init__(self, name, resource_name, mode='current', **kwargs):
         super(SR830, self).__init__(name, resource_name, **kwargs)
@@ -112,7 +137,7 @@ class SR865(Instrument):
 
     channel_1_type = Command("Channel 1", get_string="DDEF?1;", set_string="DDEF1,{:s}", value_map=CHANNEL1_MAP)
     channel_2_type = Command("Channel 2", get_string="DDEF?2;", set_string="DDEF2,{:s}", value_map=CHANNEL2_MAP)
-    # sample_frequency = Command("Sample Frequency", get_string="SRAT?;", set_string="SRAT{:s}", value_map=SAMPLE_FREQUENCY_MAP)
+    # sample_frequency = Command("Sample Frequency", get_string="SRAT?;", set_string="SRAT{:s}", value_map=SAMPLE_RATE_MAP)
     sensitivity = Command("Sensitivity", get_string="SCAL?;", set_string="SCAL {:s}", value_map=SENSITIVITY_MAP)
     time_constant = Command("Time Constant", get_string="OFLT?;", set_string="OFLT{:s}", value_map=TIME_CONSTANT_MAP, aliases=['tc', 'TC'])
     filter_slope = Command("Filter Slope", get_string="OFSL?;", set_string="OFSL{:s}", value_map=FILTER_SLOPE_MAP)

@@ -145,6 +145,8 @@ class VisaInterface(Interface):
         self._resource.write_raw(raw_string)
     def read(self):
         return self._resource.read()
+    def read_raw(self):
+        return self._resource.read_raw()
     def query(self, query_string):
         return self._resource.query(query_string)
     def write_binary_values(self, query_string, values, **kwargs):
