@@ -7,12 +7,12 @@ import numpy as np
 import scipy as sp
 import pandas as pd
 
-from instruments.kepco import BOP2020M
-from instruments.stanford import SR830
-from instruments.magnet import Electromagnet
-from instruments.hall_probe import HallProbe
-from sweep import Sweep
-from procedure import FloatParameter, Quantity, Procedure
+from pycontrol.instruments.kepco import BOP2020M
+from pycontrol.instruments.stanford import SR830
+from pycontrol.instruments.magnet import Electromagnet
+from pycontrol.instruments.hall_probe import HallProbe
+from pycontrol.sweep import Sweep
+from pycontrol.procedure import FloatParameter, Quantity, Procedure
 
 # import ipdb
 
@@ -21,8 +21,8 @@ class MeasureLockinVoltage(Procedure):
     field     = Quantity("Field", unit="G")
     voltage   = Quantity("Magnitude", unit="V")
 
-    bop       = BOP2020M("Kepco Power Supply", "GPIB1::1::INSTR")
-    lock      = SR830("Lockin Amplifier", "GPIB1::9::INSTR")
+    bop       = BOP2020M("Kepco Power Supply", "GPIB0::1::INSTR")
+    lock      = SR830("Lockin Amplifier", "GPIB0::9::INSTR")
     hp        = HallProbe("calibration/HallProbe.cal", lock.set_ao1, lock.get_ai1)
     mag       = Electromagnet('calibration/GMW.cal', hp.get_field, bop.set_current, bop.get_current)
 
@@ -65,7 +65,7 @@ if __name__ == '__main__':
     sw.add_parameter(proc.set_field, values)
 
     # Define a writer
-    sw.add_writer('data/FieldLoops.h5', 'SWS2129(2,0)G-(009,05)', 'MinorLoop-3.3K', proc.field, proc.voltage)
+    # sw.add_writer('data/FieldLoops.h5', 'SWS2129(2,0)G-(009,05)', 'MinorLoop-3.3K', proc.field, proc.voltage)
 
     # Define a plotter
     sw.add_plotter("Resistance Vs Field", proc.field, proc.voltage, color="firebrick", line_width=2)
