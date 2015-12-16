@@ -142,6 +142,61 @@ class SR865(Instrument):
     time_constant = Command("Time Constant", get_string="OFLT?;", set_string="OFLT{:s}", value_map=TIME_CONSTANT_MAP, aliases=['tc', 'TC'])
     filter_slope = Command("Filter Slope", get_string="OFSL?;", set_string="OFSL{:s}", value_map=FILTER_SLOPE_MAP)
 
+    capture_quants = Command("Buffer quantities", scpi_string="CAPTURECFG", value_map={"X": "0", "XY": "1", "RT": "2", "XYRT": "3"})
+    max_capture_rate = Command("Maximum capture rate", get_string="CAPTURERATEMAX?")
+    capture_rate = IntCommand("Capture rate", scpi_string="CAPTURERATE")
+
+    ao1 = FloatCommand("Analog output 1", set_string="AUXV 0, {:g};", get_string="AUXV? 0;")
+    ao2 = FloatCommand("Analog output 2", set_string="AUXV 1, {:g};", get_string="AUXV? 1;")
+    ao3 = FloatCommand("Analog output 3", set_string="AUXV 2, {:g};", get_string="AUXV? 2;")
+    ao4 = FloatCommand("Analog output 4", set_string="AUXV 3, {:g};", get_string="AUXV? 3;")
+
+    ai1 = FloatCommand("Analog output 1", get_string="OAUX? 0;")
+    ai2 = FloatCommand("Analog output 2", get_string="OAUX? 1;")
+    ai3 = FloatCommand("Analog output 3", get_string="OAUX? 2;")
+    ai4 = FloatCommand("Analog output 4", get_string="OAUX? 3;")
+
     def __init__(self, name, resource_name, mode='current', **kwargs):
         super(SR865, self).__init__(name, resource_name, **kwargs)
         self.interface._resource.read_termination = u"\n"
+
+    @property
+    def capture_length(self):
+        quants = self.capture_quants
+        num_vars = len(quants) # Length of the string HAPPENS to correspond to number of quantities
+        return int(int(self.interface.query("CAPTURELEN?"))*1024/(4*num_vars))
+    @capture_length.setter
+    def capture_length(self, num_points):
+        quants = self.capture_quants
+        num_vars = len(quants) # Length of the string HAPPENS to correspond to number of quantities
+        kb = int(4*num_vars*num_points/1024)
+        self.interface.write("CAPTURELEN {:d}".format(kb))
+
+    @property
+    def capture_rate(self):
+        return float(self.interface.query("CAPTURERATE?"))
+    @capture_rate.setter
+    def capture_rate(self, value):
+        allowed_values = 1.25e6/np.power(2, np.arange(0,21,1))
+        if value not in allowed_values:
+            raise ValueError("Capture rate must be the base clock 1.25 MHz / 2^n, where 0 <= n <= 20.")
+        else:
+            divs_of_base_rate = int(np.log2(1.25e6/value))
+            self.interface.write("CAPTURERATE {:d}".format(divs_of_base_rate))
+
+    def get_capture(self, channel):
+        kb = int(self.interface.query("CAPTURELEN?"))
+        return self.interface.query_binary_values("CAPTUREGET? {:d},{:d}".format(0, kb), datatype='f')
+
+    def capture_done(self):
+        bits = int(self.interface.query("CAPTURESTAT?"))
+        return 0x1 & (bits >> 2)
+
+    def capture_start(self, mode="ONE", hw_trigger=False):
+        if mode not in ["ONE", "CONT"]:
+            raise ValueError("mode must be either ONE or CONT")
+        trig = "ON" if hw_trigger else "OFF"
+        self.interface.write("CAPTURESTART {:s},{:s};".format(mode, trig))
+
+    def capture_stop(self):
+        self.interface.write("CAPTURESTOP;")

@@ -14,7 +14,7 @@ class Command(object):
     value_map keyword argument allows specification of a dictionary map between python values
     such as True and False and the strange 'on' and 'off' type of values frequently used
     by instruments. Translation occurs via the provided 'convert_set' and 'convert_get' methods."""
-    formatter = '{:s}'
+    formatter = '{}'
 
     def __init__(self, name, set_string=None, get_string=None, scpi_string=None, value_map=None, value_range=None,
                  allowed_values=None, aliases=None, delay=None, additional_args=None):
