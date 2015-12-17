@@ -3,8 +3,16 @@ from pycontrol.instruments.stanford import SR830, SR865
 from pycontrol.instruments.kepco import BOP2020M
 from pycontrol.instruments.magnet import Electromagnet
 from pycontrol.instruments.hall_probe import HallProbe
+
+from PyDAQmx import *
+
 import numpy as np
 import time
+import seaborn as sns
+import matplotlib.pyplot as plt
+from sklearn.cluster import KMeans
+from tqdm import tqdm
+from scipy.stats import beta
 
 def waveform(time, delay=1.5e-9, rise_time=150e-12, fall_time=2.0e-9):
     if time<=delay:
@@ -55,23 +63,14 @@ if __name__ == '__main__':
     arb.continuous_mode = False
     arb.gate_mode = False
 
-    # times = np.arange(0, 42.6e-9, 1/12e9)
-    # fall_times = np.arange(1.0e-9, 10.1e-9, 1.0e-9)
-
     segment_ids = []
-
-    for amp in np.arange(0.90, 1.00, 0.05):
+    amps = np.arange(0.6, 1.00, 0.01)
+    for amp in amps:
         waveform   = pulse(amp, 0.5e-9)
         wf_data    = M8190A.create_binary_wf_data(waveform)
         segment_id = arb.define_waveform(len(wf_data))
         segment_ids.append(segment_id)
         arb.upload_waveform(wf_data, segment_id)
-
-    # Add the blank waveform
-    waveform_blank   = pulse(amp, 0.5e-9)
-    wf_data_blank    = M8190A.create_binary_wf_data(waveform_blank)
-    blank_segment_id = arb.define_waveform(len(wf_data_blank))
-    arb.upload_waveform(wf_data_blank, blank_segment_id)
 
     # Trigger waveform
     trig_wf = M8190A.create_binary_wf_data(np.zeros(3200), sync_mkr=1)
@@ -82,30 +81,17 @@ if __name__ == '__main__':
 
     rate = 1.25e6/(2**8)
 
+    reps = 1024
+    lockin_settle_delay = 250e-6
+    lockin_settle_pts = int(640*np.ceil(lockin_settle_delay * 12e9 / 640))
+
     for si in segment_ids:
         scenario = Scenario()
-
-        # Add the trigger pulse
-        seq_trig = Sequence()
-        seq_trig.add_waveform(trig_segment_id)
-        scenario.sequences.append(seq_trig)
-
-        # Add the dummy pulses
-        seq = Sequence(sequence_loop_ct=128)
-        seq.add_waveform(blank_segment_id)
-        # seq.add_idle(1 << 24, 0.0) # Lockin TC
-        # seq.add_waveform(trig_segment_id)
-        # seq.add_idle(1 << 25, 0.0) # Lockin sample rate
-        seq.add_idle(int(12e9/rate - len(wf_data_blank)))
-        scenario.sequences.append(seq)
-
-        # Add the real pulses
-        seq = Sequence(sequence_loop_ct=128)
+        seq = Sequence(sequence_loop_ct=reps)
         seq.add_waveform(si)
-        # seq.add_idle(1 << 24, 0.0) # Lockin TC
-        # seq.add_waveform(trig_segment_id)
-        # seq.add_idle(1 << 25, 0.0) # Lockin sample rate
-        seq.add_idle(int(12e9/rate - len(wf_data)))
+        seq.add_idle(lockin_settle_pts, 0.0)
+        seq.add_waveform(trig_segment_id)
+        seq.add_idle(1 << 17, 0.0) # Lockin sample rate delay 1 << 17 = 11us
         scenario.sequences.append(seq)
 
         arb.upload_scenario(scenario, start_idx=start_idxs[-1])
@@ -116,44 +102,93 @@ if __name__ == '__main__':
 
     arb.sequence_mode = "SCENARIO"
     arb.scenario_advance_mode = "SINGLE"
-    #
-    # lock.sample_rate = "Trigger"
-    # lock.buffer_mode = "SHOT"
-    # lock.sample_rate = "Trigger"
-    # lock.buffer_trigger_mode = False
 
-    # 865
-
-    lock.capture_rate   = 1.25e6/(2**8)
-    lock.capture_length = 1024
-    lock.capture_quants = "RT"
-    # lock.capture_start(hw_trigger=True)
-
-    buffers = np.empty((len(segment_ids), 1024))
     mag.field = -364
-    time.sleep(4)
+    time.sleep(2)
 
-    for i, idx in enumerate(start_idxs):
-        # lock.buffer_reset()
-        # lock.buffer_start()
-        lock.capture_start(hw_trigger=True)
-        time.sleep(0.1)
+    analog_input = Task()
+    read = int32()
+    data = np.empty((1000,), dtype=np.float64)
+
+    # DAQmx Configure Code
+    analog_input.CreateAIVoltageChan("Dev1/ai0", "", DAQmx_Val_RSE, -10.0,10.0, DAQmx_Val_Volts, None)
+    analog_input.CfgSampClkTiming("/Dev1/PFI0", 10000.0, DAQmx_Val_Rising, DAQmx_Val_ContSamps, reps)
+
+    # DAQmx Start Code
+    analog_input.StartTask()
+
+    buffers = np.empty((len(segment_ids), reps))
+
+    for ct, idx in enumerate(tqdm(start_idxs)):
         arb.stop()
         arb.scenario_start_index = idx
         arb.run()
         arb.trigger()
-        # Pause for complete acquisition
-        # while lock.buffer_points < 512:
-            # time.sleep(0.1)
-        while not lock.capture_done:
-            time.sleep(0.1)
-        lock.capture_stop()
-        buf = lock.get_capture(1)[::2]
-        # buf = lock.get_buffer(1)
-        buffers[i] = buf
+        analog_input.ReadAnalogF64(reps, -1, DAQmx_Val_GroupByChannel, buffers[ct], reps, byref(read), None)
+
+    analog_input.StopTask()
+    arb.stop()
 
     mag.field = 0
     bop.current = 0
 
-    # lock.capture_stop()
-    # lock.buffer_pause()
+    #Get an idea of SNR
+    #Cluster all the data into two based with starting point based on edges
+    all_vals = buffers.flatten()
+    all_vals.resize((all_vals.size,1))
+    init_guess = np.array([np.min(all_vals), np.max(all_vals)])
+    init_guess.resize((2,1))
+    clusterer = KMeans(init=init_guess, n_clusters=2)
+    state = clusterer.fit_predict(all_vals)
+
+    #Approximate SNR from centre distance and variance
+    std0 = np.std(all_vals[state == 0])
+    std1 = np.std(all_vals[state == 1])
+    mean_std = 0.5*(std0 + std1)
+    centre0 = clusterer.cluster_centers_[0,0]
+    centre1 = clusterer.cluster_centers_[1,0]
+    centre_dist = centre1 - centre0
+    print("Centre distance = {:.3f} with widths = {:.4f} / {:.4f} gives SNR ratio {:.3}".format(centre_dist, std0, std1, centre_dist/mean_std))
+
+    #Have a look at the distributions
+    plt.figure()
+    sns.distplot(all_vals[state == 0])
+    sns.distplot(all_vals[state == 1])
+
+    #calculate some switching matrices for each amplitude
+    # 0->0 0->1
+    # 1->0 1->1
+    counts = []
+    for buf in buffers:
+        state = clusterer.predict(buf.reshape((reps,1)))
+        init_state = state[:-1]
+        final_state = state[1:]
+        switched = np.logical_xor(init_state, final_state)
+
+        count_mat = np.zeros((2,2), dtype=np.int)
+
+        count_mat[0,0] = np.sum(np.logical_and(init_state == 0, np.logical_not(switched) ))
+        count_mat[0,1] = np.sum(np.logical_and(init_state == 0, switched ))
+        count_mat[1,0] = np.sum(np.logical_and(init_state == 1, switched ))
+        count_mat[1,1] = np.sum(np.logical_and(init_state == 1, np.logical_not(switched) ))
+
+        counts.append(count_mat)
+
+    plt.figure()
+    mean_PtoAP = [beta.mean(1+c[0,1], 1+c[0,0]) for c in counts]
+    mean_APtoP = [beta.mean(1+c[1,0], 1+c[1,1]) for c in counts]
+    ci68_PtoAP = [beta.interval(0.68, 1+c[0,1], 1+c[0,0]) for c in counts]
+    ci68_APtoP = [beta.interval(0.68, 1+c[1,0], 1+c[1,1]) for c in counts]
+    ci95_PtoAP = [beta.interval(0.95, 1+c[0,1], 1+c[0,0]) for c in counts]
+    ci95_APtoP = [beta.interval(0.95, 1+c[1,0], 1+c[1,1]) for c in counts]
+    current_palette = sns.color_palette()
+    plt.plot(amps, mean_PtoAP)
+    plt.fill_between(amps, [ci[0] for ci in ci68_PtoAP], [ci[1] for ci in ci68_PtoAP], color=current_palette[0], alpha=0.2, edgecolor="none")
+    plt.fill_between(amps, [ci[0] for ci in ci95_PtoAP], [ci[1] for ci in ci95_PtoAP], color=current_palette[0], alpha=0.2, edgecolor="none")
+    plt.plot(amps, mean_APtoP)
+    plt.fill_between(amps, [ci[0] for ci in ci68_APtoP], [ci[1] for ci in ci68_APtoP], color=current_palette[1], alpha=0.2, edgecolor="none")
+    plt.fill_between(amps, [ci[0] for ci in ci95_APtoP], [ci[1] for ci in ci95_APtoP], color=current_palette[1], alpha=0.2, edgecolor="none")
+
+    plt.legend(("P->AP", "AP->P"))
+
+    plt.show()
