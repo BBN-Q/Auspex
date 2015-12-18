@@ -9,6 +9,7 @@ class Picosecond10070A(Instrument):
     period    = FloatCommand("period", get_string="period?", set_string="period {:g}")
     frequency = FloatCommand("frequency", get_string="frequency?", set_string="frequency {:g}")
     offset    = FloatCommand("offset", get_string="offset?", set_string="offset {:g}")
+    trigger_source = Command("trigger source", scpi_string="trigger", allowed_values=["INT", "EXT", "GPIB"])
 
     def __init__(self, name, resource_name, *args, **kwargs):
         super(Picosecond10070A, self).__init__(name, resource_name, *args, **kwargs)
