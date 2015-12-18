@@ -66,7 +66,7 @@ if __name__ == '__main__':
     segment_ids = []
     amps = np.arange(0.6, 1.00, 0.01)
     for amp in amps:
-        waveform   = pulse(amp, 0.5e-9)
+        waveform   = pulse(amp, 0.6e-9)
         wf_data    = M8190A.create_binary_wf_data(waveform)
         segment_id = arb.define_waveform(len(wf_data))
         segment_ids.append(segment_id)
@@ -81,8 +81,8 @@ if __name__ == '__main__':
 
     rate = 1.25e6/(2**8)
 
-    reps = 1024
-    lockin_settle_delay = 250e-6
+    reps = 4096
+    lockin_settle_delay = 60e-6
     lockin_settle_pts = int(640*np.ceil(lockin_settle_delay * 12e9 / 640))
 
     for si in segment_ids:
@@ -108,11 +108,10 @@ if __name__ == '__main__':
 
     analog_input = Task()
     read = int32()
-    data = np.empty((1000,), dtype=np.float64)
 
     # DAQmx Configure Code
     analog_input.CreateAIVoltageChan("Dev1/ai0", "", DAQmx_Val_RSE, -10.0,10.0, DAQmx_Val_Volts, None)
-    analog_input.CfgSampClkTiming("/Dev1/PFI0", 10000.0, DAQmx_Val_Rising, DAQmx_Val_ContSamps, reps)
+    analog_input.CfgSampClkTiming("/Dev1/PFI0", 20000.0, DAQmx_Val_Rising, DAQmx_Val_ContSamps, reps)
 
     # DAQmx Start Code
     analog_input.StartTask()
