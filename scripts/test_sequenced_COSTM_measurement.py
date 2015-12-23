@@ -81,16 +81,16 @@ if __name__ == '__main__':
 
     rate = 1.25e6/(2**8)
 
-    reps = 4096
-    lockin_settle_delay = 60e-6
+    reps = 1 << 13
+    lockin_settle_delay = 30e-6
     lockin_settle_pts = int(640*np.ceil(lockin_settle_delay * 12e9 / 640))
 
     for si in segment_ids:
         scenario = Scenario()
         seq = Sequence(sequence_loop_ct=reps)
-        seq.add_waveform(si)
-        seq.add_idle(lockin_settle_pts, 0.0)
-        seq.add_waveform(trig_segment_id)
+        seq.add_waveform(si) # Apply pulse to the sample
+        seq.add_idle(lockin_settle_pts, 0.0) # Wait for the measurement to settle
+        seq.add_waveform(trig_segment_id) # Trigger the NIDAQ measurement
         seq.add_idle(1 << 17, 0.0) # Lockin sample rate delay 1 << 17 = 11us
         scenario.sequences.append(seq)
 

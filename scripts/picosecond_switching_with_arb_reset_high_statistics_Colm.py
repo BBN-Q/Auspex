@@ -72,7 +72,7 @@ if __name__ == '__main__':
     nidaq_trig_segment_id = arb.define_waveform(len(nidaq_trig_wf))
     arb.upload_waveform(nidaq_trig_wf, nidaq_trig_segment_id)
 
-    reps = 1 << 11
+    reps = 1<<17
     lockin_settle_delay = 40e-6
     lockin_settle_pts = int(640*np.ceil(lockin_settle_delay * 12e9 / 640))
 
@@ -119,22 +119,26 @@ if __name__ == '__main__':
 
     arb.scenario_start_index = 0
     arb.run()
-    attens = np.arange(-11,-6,0.025)
-    durations = 1e-9*np.arange(0.1, 1.41, 0.0125)
+    # attens = np.arange(-7.5,-6,0.01)
+    attens    = [-6.01]
+    durations = 1e-9*np.arange(0.38, 0.65, 0.01)
+    # durations = [0.6e-9]
     buffers = np.empty((len(attens)*len(durations), 2*reps))
     idx = 0
+    # lock.ao3 = attenuator_lookup(atten)
+    lock.ao3 = attenuator_lookup(attens[0])
+    time.sleep(0.01)
+    # for atten in tqdm(attens):
+    # pspl.duration = durations[0]
+
     for dur in tqdm(durations):
         pspl.duration = dur
         time.sleep(0.1)
-        for atten in attens:
-            lock.ao3 = attenuator_lookup(atten)
-            time.sleep(0.01)
+        arb.advance()
+        arb.trigger()
+        analog_input.ReadAnalogF64(2*reps, -1, DAQmx_Val_GroupByChannel, buffers[idx], 2*reps, byref(read), None)
 
-            arb.advance()
-            arb.trigger()
-            analog_input.ReadAnalogF64(2*reps, -1, DAQmx_Val_GroupByChannel, buffers[idx], 2*reps, byref(read), None)
-
-            idx += 1
+        idx += 1
 
     analog_input.StopTask()
     arb.stop()
@@ -149,7 +153,8 @@ if __name__ == '__main__':
     all_vals.resize((all_vals.size,1))
     init_guess = np.array([np.min(all_vals), np.max(all_vals)])
     init_guess.resize((2,1))
-    clusterer = KMeans(init=init_guess, n_clusters=2)
+    clusterer = KMeans(init=init_guess, n_clusters=2, max_iter=1000, n_jobs=-1, tol=1e-5)
+    # clusterer = DBSCAN()
     state = clusterer.fit_predict(all_vals)
 
     #Approximate SNR from centre distance and variance
@@ -192,27 +197,26 @@ if __name__ == '__main__':
     ci95_PtoAP = np.array([beta.interval(0.95, 1+c[0,1], 1+c[0,0]) for c in counts])
     ci95_APtoP = np.array([beta.interval(0.95, 1+c[1,0], 1+c[1,1]) for c in counts])
 
-    # current_palette = sns.color_palette()
-    # plt.plot(attens, mean_PtoAP)
-    # plt.fill_between(attens, [ci[0] for ci in ci68_PtoAP], [ci[1] for ci in ci68_PtoAP], color=current_palette[0], alpha=0.2, edgecolor="none")
-    # plt.fill_between(attens, [ci[0] for ci in ci95_PtoAP], [ci[1] for ci in ci95_PtoAP], color=current_palette[0], alpha=0.2, edgecolor="none")
-    # plt.plot(attens, mean_APtoP)
-    # plt.fill_between(attens, [ci[0] for ci in ci68_APtoP], [ci[1] for ci in ci68_APtoP], color=current_palette[1], alpha=0.2, edgecolor="none")
-    # plt.fill_between(attens, [ci[0] for ci in ci95_APtoP], [ci[1] for ci in ci95_APtoP], color=current_palette[1], alpha=0.2, edgecolor="none")
     plt.figure()
-    plt.title("P to AP")
+    # volts = 7.5*np.power(10, (-5+attens)/20)
+    current_palette = sns.color_palette()
+    plt.plot(durations, mean_PtoAP)
+    plt.fill_between(durations, [ci[0] for ci in ci68_PtoAP], [ci[1] for ci in ci68_PtoAP], color=current_palette[0], alpha=0.2, edgecolor="none")
+    plt.fill_between(durations, [ci[0] for ci in ci95_PtoAP], [ci[1] for ci in ci95_PtoAP], color=current_palette[0], alpha=0.2, edgecolor="none")
+    plt.plot(durations, mean_APtoP)
+    plt.fill_between(durations, [ci[0] for ci in ci68_APtoP], [ci[1] for ci in ci68_APtoP], color=current_palette[1], alpha=0.2, edgecolor="none")
+    plt.fill_between(durations, [ci[0] for ci in ci95_APtoP], [ci[1] for ci in ci95_APtoP], color=current_palette[1], alpha=0.2, edgecolor="none")
+    # plt.xlabel("Pulse Amp (V)")
     plt.xlabel("Pulse Duration (ns)")
-    plt.ylabel("Pulse Amplitude (V)")
-    means_diagram_PtoAP = mean_PtoAP.reshape(len(attens), len(durations), order='F')
-    volts = 7.5*np.power(10, (-4+attens)/20)
-    plt.pcolormesh(durations*1e9, volts, means_diagram_PtoAP, cmap="RdGy")
-    plt.colorbar()
-    plt.figure()
-    plt.title("AP to P")
-    plt.xlabel("Pulse Duration (ns)")
-    plt.ylabel("Pulse Amplitude (V)")
-    means_diagram_APtoP = mean_APtoP.reshape(len(attens), len(durations), order='F')
-    plt.pcolormesh(durations*1e9, volts, means_diagram_APtoP, cmap="RdGy")
-    plt.colorbar()
+    plt.ylabel("Estimated Switching Probability")
+    # plt.title("P to AP")
+    # means_diagram_PtoAP = mean_PtoAP.reshape(len(attens), len(durations), order='F')
+    # plt.pcolormesh(durations*1e9, volts, means_diagram_PtoAP, cmap="RdGy")
+    # plt.colorbar()
+    # plt.figure()
+    # plt.title("AP to P")
+    # means_diagram_APtoP = mean_APtoP.reshape(len(attens), len(durations), order='F')
+    # plt.pcolormesh(durations*1e9, volts, means_diagram_APtoP, cmap="RdGy")
+    # plt.colorbar()
 
     plt.show()
