@@ -200,3 +200,18 @@ class SR865(Instrument):
 
     def capture_stop(self):
         self.interface.write("CAPTURESTOP;")
+
+    def measure_delay(self):
+        """Return how long we must wait for the values to have settled, based on the filter slope."""
+        fs = self.filter_slope
+        tc = self.time_constant
+        if fs <= 7: # 6dB/oct
+            return 5*tc
+        elif fs <= 13: # 12dB/oct
+            return 7*tc
+        elif fs <= 19: # 18dB/oct
+            return 9*tc
+        elif fs <= 25: # 24dB/oct
+            return 10*tc
+        else:
+            raise Exception("Unknown delay for unknown filter slope {:f}".format(fs))
