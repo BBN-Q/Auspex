@@ -5,16 +5,86 @@ logging.basicConfig(format='%(levelname)s:\t%(message)s', level=logging.WARNING)
 
 import numpy as np
 import pandas as pd
+from sklearn.cluster import KMeans
+from scipy.stats import beta
+from scipy.interpolate import interp1d
 
-from instruments.kepco import BOP2020M
-from instruments.magnet import Electromagnet
-from instruments.hall_probe import HallProbe
-from instruments.stanford import SR830
-from instruments.picosecond import Picosecond10070A
-from sweep import Sweep
-from procedure import FloatParameter, IntParameter, Quantity, Procedure
+from PyDAQmx import *
 
-class Switching(Procedure):
+from pycontrol.instruments.kepco import BOP2020M
+from pycontrol.instruments.magnet import Electromagnet
+from pycontrol.instruments.hall_probe import HallProbe
+from pycontrol.instruments.stanford import SR865
+from pycontrol.instruments.picosecond import Picosecond10070A
+from pycontrol.instruments.keysight import *
+
+from pycontrol.sweep import Sweep
+from pycontrol.procedure import FloatParameter, IntParameter, Quantity, Procedure
+
+class Trace(object):
+    """Object for storing trace data"""
+    def __init__(self, unit=None, length=None):
+        super(Trace, self).__init__()
+        self.length = length
+        self.buffer = np.empty(shape=(0 if length is None else length))
+        self.
+
+    def register_output()
+
+
+class SwitchingAWG(Procedure):
+    """Simple square pulse switching, to and fro, using only AWG pulses."""
+
+    # Parameters
+    attempt_number = IntParameter("Switching attempts", default=1024, abstract=True)
+    field_setpoint = FloatParameter("Field Setpoint", unit="G")
+    pulse_voltage  = FloatParameter("Pulse Amplitude", unit="V")
+    pulse_duration = FloatParameter("Pulse Duration", unit="s")
+
+    # Instrument resources
+    bop  = BOP2020M("Kepco Power Supply", "GPIB0::1::INSTR")
+    lock = SR865("Lockin Amplifier", "USB0::0xB506::0x2000::002638::INSTR"))
+    hp   = HallProbe("calibration/HallProbe.cal", lock.set_ao1, lock.get_ai1)
+    mag  = Electromagnet('calibration/GMW.cal', hp.get_field, bop.set_current, bop.get_current)
+    pspl = Picosecond10070A("Pulse Generator", "GPIB0::24::INSTR")
+
+    # Quantities
+    field = Quantity("Field", unit="G")
+
+    # Traces
+    raw_trace = Trace("P")
+
+    # Filters
+    clusterer   = Clusterer(input=raw_trace)
+    probability = CollapseProbability(input=clusterer)
+
+
+
+    def init_instruments(self):
+
+        # AWG Initialization
+        arb.set_output(True, channel=1)
+        arb.set_output(False, channel=2)
+        arb.sample_freq = 12.0e9
+        arb.waveform_output_mode = "WSPEED"
+
+        arb.abort()
+        arb.delete_all_waveforms()
+        arb.interface.write(":STAB:RES")
+
+        arb.set_output_route("DC", channel=1)
+        arb.voltage_amplitude = 1.0
+
+        arb.set_marker_level_low(0.0, channel=1, marker_type="sync")
+        arb.set_marker_level_high(1.5, channel=1, marker_type="sync")
+
+        arb.continuous_mode = False
+        arb.gate_mode = False
+        arb.sequence_mode = "SCENARIO"
+        arb.scenario_advance_mode = "SINGLE"
+
+
+class SwitchingPSPL(Procedure):
 
     # instrument_settings = {"lock":{"amp":0.1, "freq":167}}
 
@@ -76,7 +146,7 @@ class Switching(Procedure):
             num_pulses = 40
             durs = np.linspace(0.15e-9, 1.0e-9, 10)
             probs = []
-            
+
             for dur in durs:
                 self.pspl.duration = dur
                 ivs = []
@@ -155,4 +225,3 @@ if __name__ == '__main__':
     sw.add_plotter('Pulse Voltage', proc.pulse_duration, proc.attempt_number, color="green", line_width=2)
 
     sw.run()
-    
