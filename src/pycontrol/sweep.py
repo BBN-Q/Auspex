@@ -10,8 +10,8 @@ import time
 import h5py
 
 from bokeh.plotting import show, output_server, hplot, cursession
-from plotting import BokehServerThread, Plotter, Plotter2D, MultiPlotter
-from procedure import Procedure, Parameter, Quantity
+from .plotting import BokehServerThread, Plotter, Plotter2D, MultiPlotter
+from .procedure import Procedure, Parameter, Quantity
 
 class Writer(object):
     """Data structure for the written quantities"""
