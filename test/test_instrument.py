@@ -1,10 +1,12 @@
 import unittest
 
-from pycontrol.instruments.instrument import Instrument, FloatCommand, IntCommand
+from pycontrol.instruments.instrument import Instrument, Command, FloatCommand, IntCommand
 
 class TestInstrument(Instrument):
-	frequency = FloatCommand("frequency", get_string="frequency?", set_string="frequency {:g}")
+	frequency = FloatCommand("frequency", get_string="frequency?", set_string="frequency {:g}", value_range=(0.1, 10))
 	serial_number = IntCommand("serial number", get_string="serial?")
+	mode = Command("enumerated mode", scpi_string=":mode", allowed_values=["A", "B", "C"])
+
 
 class InstrumentTestCase(unittest.TestCase):
 	"""
@@ -26,5 +28,15 @@ class InstrumentTestCase(unittest.TestCase):
 		self.assertTrue(hasattr(self.instrument, "get_serial_number") and callable(self.instrument.get_frequency)) #getter
 		self.assertFalse(hasattr(self.instrument, "set_serial_number")) #setter should be deleted
 
+	def test_allowed_values(self):
+		"""Check that allowed values raises error on unallowed value."""
+		self.instrument.mode = "A"
+		with self.assertRaises(ValueError):
+			self.instrument.mode = "D"
+
+	def test_value_range(self):
+		"""Check that setting value outside range raises error."""
+		with self.assertRaises(ValueError):
+			self.instrument.frequency = 11
 if __name__ == '__main__':
 	unittest.main()
