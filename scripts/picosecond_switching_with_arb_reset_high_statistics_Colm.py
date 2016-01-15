@@ -9,11 +9,7 @@ from PyDAQmx import *
 
 import numpy as np
 import time
-import seaborn as sns
-import matplotlib.pyplot as plt
-from sklearn.cluster import KMeans
 from tqdm import tqdm
-from scipy.stats import beta
 from scipy.interpolate import interp1d
 import pandas as pd
 
@@ -54,31 +50,44 @@ if __name__ == '__main__':
     arb.continuous_mode = False
     arb.gate_mode = False
 
-    segment_ids = []
-
-    reset_wf    = arb_pulse(0.7, 0.6e-9)
+    reset_wf    = arb_pulse(0.75, 3.0/12e9)
     wf_data     = M8190A.create_binary_wf_data(reset_wf)
     rst_segment_id  = arb.define_waveform(len(wf_data))
-    segment_ids.append(rst_segment_id)
     arb.upload_waveform(wf_data, rst_segment_id)
+
+    no_reset_wf = arb_pulse(0.0, 3.0/12e9)
+    wf_data     = M8190A.create_binary_wf_data(no_reset_wf)
+    no_rst_segment_id  = arb.define_waveform(len(wf_data))
+    arb.upload_waveform(wf_data, no_rst_segment_id)
+
 
     # Picosecond trigger waveform
     pspl_trig_wf = M8190A.create_binary_wf_data(np.zeros(3200), samp_mkr=1)
     pspl_trig_segment_id = arb.define_waveform(len(pspl_trig_wf))
     arb.upload_waveform(pspl_trig_wf, pspl_trig_segment_id)
 
-    # Picosecond trigger waveform
+    # NIDAQ trigger waveform
     nidaq_trig_wf = M8190A.create_binary_wf_data(np.zeros(3200), sync_mkr=1)
     nidaq_trig_segment_id = arb.define_waveform(len(nidaq_trig_wf))
     arb.upload_waveform(nidaq_trig_wf, nidaq_trig_segment_id)
 
-    reps = 1<<17
-    lockin_settle_delay = 40e-6
+    reps = 1 << 17
+    lockin_settle_delay = 100e-6
     lockin_settle_pts = int(640*np.ceil(lockin_settle_delay * 12e9 / 640))
 
     scenario = Scenario()
-    seq = Sequence(sequence_loop_ct=reps)
+    seq = Sequence(sequence_loop_ct=int(reps/2))
+    #First try with reset flipping pulse
     seq.add_waveform(rst_segment_id)
+    seq.add_idle(lockin_settle_pts, 0.0)
+    seq.add_waveform(nidaq_trig_segment_id)
+    seq.add_idle(1 << 14, 0.0) # bonus non-contiguous memory delay
+    seq.add_waveform(pspl_trig_segment_id)
+    seq.add_idle(lockin_settle_pts, 0.0)
+    seq.add_waveform(nidaq_trig_segment_id)
+    seq.add_idle(1 << 14, 0.0) # bonus non-contiguous memory delay
+    #second try without
+    seq.add_waveform(no_rst_segment_id)
     seq.add_idle(lockin_settle_pts, 0.0)
     seq.add_waveform(nidaq_trig_segment_id)
     seq.add_idle(1 << 14, 0.0) # bonus non-contiguous memory delay
@@ -111,7 +120,7 @@ if __name__ == '__main__':
     read = int32()
 
     # DAQmx Configure Code
-    analog_input.CreateAIVoltageChan("Dev1/ai0", "", DAQmx_Val_RSE, -2.0,2.0, DAQmx_Val_Volts, None)
+    analog_input.CreateAIVoltageChan("Dev1/ai0", "", DAQmx_Val_RSE, -10.0,10.0, DAQmx_Val_Volts, None)
     analog_input.CfgSampClkTiming("/Dev1/PFI0", 20000.0, DAQmx_Val_Rising, DAQmx_Val_ContSamps, 2*reps)
 
     # DAQmx Start Code
@@ -121,7 +130,7 @@ if __name__ == '__main__':
     arb.run()
     # attens = np.arange(-7.5,-6,0.01)
     attens    = [-6.01]
-    durations = 1e-9*np.arange(0.38, 0.65, 0.01)
+    durations = 1e-9*np.arange(0.35, 0.65, 0.01)
     # durations = [0.6e-9]
     buffers = np.empty((len(attens)*len(durations), 2*reps))
     idx = 0
@@ -133,7 +142,7 @@ if __name__ == '__main__':
 
     for dur in tqdm(durations):
         pspl.duration = dur
-        time.sleep(0.1)
+        time.sleep(0.2)
         arb.advance()
         arb.trigger()
         analog_input.ReadAnalogF64(2*reps, -1, DAQmx_Val_GroupByChannel, buffers[idx], 2*reps, byref(read), None)
