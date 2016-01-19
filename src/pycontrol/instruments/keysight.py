@@ -24,7 +24,7 @@ class SequenceControlWord(BitFieldUnion):
 class WaveformEntry(object):
     """Waveform entry for sequence table"""
 
-    fmt_str = "STAB{:d}:DATA {{:d}}, {:d}, {:d}, {:d}, {:d}, {:d}, {:d}"
+    fmt_str = "STAB{{{{:d}}}}:DATA {{:d}}, {:d}, {:d}, {:d}, {:d}, {:d}, {:d}"
 
     def __init__(self, segment_id, loop_ct=1, marker_enable=True):
         super(WaveformEntry, self).__init__()
@@ -34,7 +34,7 @@ class WaveformEntry(object):
 class IdleEntry(object):
     """Idle entry for sequence table"""
 
-    fmt_str = "STAB{:d}:DATA {{:d}}, {:d}, {:d}, 0, {:d}, {:d}, 0"
+    fmt_str = "STAB{{{{:d}}}}:DATA {{:d}}, {:d}, {:d}, 0, {:d}, {:d}, 0"
 
     def __init__(self, length, amp):
         super(IdleEntry, self).__init__()
@@ -59,14 +59,12 @@ class IdleEntry(object):
 #         self.word = SequenceControlWord()
 #         if self.start:
 #             self.word.init_marker
-#
 
 
 class Sequence(object):
     """Bundle of sequence table entries as a "sequence" """
-    def __init__(self, channel=1, sequence_loop_ct=1):
+    def __init__(self, sequence_loop_ct=1):
         super(Sequence, self).__init__()
-        self.channel = channel
         self.sequence_loop_ct = sequence_loop_ct
         self.sequence_items = []
 
@@ -90,14 +88,38 @@ class Sequence(object):
                 data_cmd_sel = 1 if isinstance(entry, IdleEntry) else 0 \
             )
             if isinstance(entry, WaveformEntry):
-                scpi_str = entry.fmt_str.format(self.channel, control_word.packed, self.sequence_loop_ct if ct==0 else 0, entry.loop_ct, entry.segment_id, 0, 0xffffffff)
+                scpi_str = entry.fmt_str.format(control_word.packed, self.sequence_loop_ct if ct==0 else 0, entry.loop_ct, entry.segment_id, 0, 0xffffffff)
             elif isinstance(entry, IdleEntry):
-                scpi_str = entry.fmt_str.format(self.channel, control_word.packed, self.sequence_loop_ct if ct==0 else 0, entry.dac_level(), entry.length)
+                scpi_str = entry.fmt_str.format(control_word.packed, self.sequence_loop_ct if ct==0 else 0, entry.dac_level(), entry.length)
             else:
                 raise TypeError("Unhandled sequence entry type")
 
             scpi_strs.append(scpi_str)
         return scpi_strs
+
+    def table(self):
+        """Return a 2D array of UInt32 representing the sequence"""
+        table = np.zeros((len(self.sequence_items), 6), dtype=np.uint32)
+        for ct, entry in enumerate(self.sequence_items):
+            control_word = SequenceControlWord(\
+                init_marker_sequence = 1 if ct==0 else 0, \
+                end_marker_sequence = 1 if ct==0 else 0, \
+                marker_enable = 1 if isinstance(entry, WaveformEntry) else 0, \
+                data_cmd_sel = 1 if isinstance(entry, IdleEntry) else 0 \
+            )
+            table[ct,0] = control_word.packed
+            table[ct,1] = self.sequence_loop_ct if ct==0 else 0
+            if isinstance(entry, WaveformEntry):
+                table[ct, 2] = entry.loop_ct
+                table[ct, 3] = entry.segment_id
+                table[ct, 5] = 0xffffffff
+            elif isinstance(entry, IdleEntry):
+                table[ct, 3] = entry.dac_level()
+                table[ct, 4] = entry.length
+            else:
+                raise TypeError("Unhandled sequence entry type")
+
+        return table
 
 class Scenario(object):
     """Bundle of sequences as a "scenario" """
@@ -110,17 +132,26 @@ class Scenario(object):
         #Extract SCPI strings from sequences
         for seq in self.sequences:
             scpi_strs.extend(seq.scpi_strings())
-        #interpolate in table indcies
+        #interpolate in table indices
         scpi_strs = [s.format(ct + start_idx) for ct,s in enumerate(scpi_strs)]
         #add end scenario flag
         last_control_word_str = scpi_strs[-1].split(',')[1]
-        last_control_word = SequenceControlWord()
-        last_control_word.packed = int(last_control_word_str)
+        last_control_word = SequenceControlWord(packed=int(last_control_word_str))
         last_control_word.end_marker_scenario = 1
         scpi_strs[-1] = scpi_strs[-1].replace(last_control_word_str, str(last_control_word.packed))
 
         return scpi_strs
 
+    def table(self):
+        table = np.empty((0,6), dtype=np.uint32)
+        for seq in self.sequences:
+            table = np.concatenate((table, seq.table()), axis=0)
+        #add end scenario flag
+        last_control_word = SequenceControlWord(packed=table[-1, 0])
+        last_control_word.end_marker_scenario = 1
+        table[-1,0] = last_control_word.packed
+
+        return table
 
 class M8190A(Instrument):
     """M8190A arbitrary waveform generator"""
@@ -264,10 +295,14 @@ class M8190A(Instrument):
     def reset_sequence_table(self):
         self.interface.write(":STAB:RES")
 
-    def upload_scenario(self, scenario, start_idx=0):
-        strs = scenario.scpi_strings(start_idx=start_idx)
-        for s in strs:
-            self.interface.write(s)
+    def upload_scenario(self, scenario, channel=1, start_idx=0, binary=True):
+        if binary:
+            cmd_str = ":STAB{:d}:DATA {:d},".format(channel, start_idx)
+            self.interface.write_binary_values(cmd_str, scenario.table().flatten(), datatype="I")
+        else:
+            strs = scenario.scpi_strings(start_idx=start_idx)
+            for s in strs:
+                self.interface.write(s.format(channel))
 
     def advance(self, channel=1):
         self.interface.write(":TRIG:ADV{:d}".format(channel))
