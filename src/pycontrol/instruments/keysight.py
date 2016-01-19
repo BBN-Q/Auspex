@@ -6,7 +6,7 @@ import warnings
 import numpy as np
 import h5py
 
-class SequenceControlWord(metaclass=BitFieldUnion):
+class SequenceControlWord(BitFieldUnion):
     reserved0             = BitField(12)
     freq_table_increment  = BitField(1)
     freq_table_init       = BitField(1)
@@ -83,16 +83,15 @@ class Sequence(object):
         """Returns a list of SCPI strings that can be pushed to instrument after formatting with index"""
         scpi_strs = []
         for ct, entry in enumerate(self.sequence_items):
-            control_word = SequenceControlWord()
-            if ct == 0:
-                control_word.init_marker_sequence = 1
-            elif ct == len(self.sequence_items)-1:
-                control_word.end_marker_sequence = 1
+            control_word = SequenceControlWord(\
+                init_marker_sequence = 1 if ct==0 else 0, \
+                end_marker_sequence = 1 if ct==0 else 0, \
+                marker_enable = 1 if isinstance(entry, WaveformEntry) else 0, \
+                data_cmd_sel = 1 if isinstance(entry, IdleEntry) else 0 \
+            )
             if isinstance(entry, WaveformEntry):
-                control_word.marker_enable = 1
                 scpi_str = entry.fmt_str.format(self.channel, control_word.packed, self.sequence_loop_ct if ct==0 else 0, entry.loop_ct, entry.segment_id, 0, 0xffffffff)
             elif isinstance(entry, IdleEntry):
-                control_word.data_cmd_sel = 1
                 scpi_str = entry.fmt_str.format(self.channel, control_word.packed, self.sequence_loop_ct if ct==0 else 0, entry.dac_level(), entry.length)
             else:
                 raise TypeError("Unhandled sequence entry type")
