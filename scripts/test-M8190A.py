@@ -28,7 +28,7 @@ if __name__ == '__main__':
 
     arb.abort()
     arb.delete_all_waveforms()
-    arb.interface.write(":STAB:RES")
+    arb.reset_sequence_table()
 
     segment_ids = []
 

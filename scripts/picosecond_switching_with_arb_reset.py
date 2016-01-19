@@ -43,7 +43,7 @@ if __name__ == '__main__':
 
     arb.abort()
     arb.delete_all_waveforms()
-    arb.interface.write(":STAB:RES")
+    arb.reset_sequence_table()
 
     arb.set_output_route("DC", channel=1)
     arb.voltage_amplitude = 1.0
