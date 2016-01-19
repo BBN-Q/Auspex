@@ -61,20 +61,6 @@ class IdleEntry(object):
 #             self.word.init_marker
 #
 
-class SequenceControlWord(metaclass=BitFieldUnion):
-    reserved0             = BitField(12)
-    freq_table_increment  = BitField(1)
-    freq_table_init       = BitField(1)
-    amp_table_increment   = BitField(1)
-    amp_table_init        = BitField(1)
-    advance_mode_segment  = BitField(4)
-    advance_mode_sequence = BitField(4)
-    marker_enable         = BitField(1)
-    reserved1             = BitField(3)
-    init_marker_sequence  = BitField(1)
-    end_marker_scenario   = BitField(1)
-    end_marker_sequence   = BitField(1)
-    data_cmd_sel          = BitField(1)
 
 class Sequence(object):
     """Bundle of sequence table entries as a "sequence" """
