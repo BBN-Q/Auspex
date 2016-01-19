@@ -9,11 +9,7 @@ from PyDAQmx import *
 
 import numpy as np
 import time
-import seaborn as sns
-import matplotlib.pyplot as plt
-from sklearn.cluster import KMeans
 from tqdm import tqdm
-from scipy.stats import beta
 from scipy.interpolate import interp1d
 import pandas as pd
 
@@ -54,31 +50,44 @@ if __name__ == '__main__':
     arb.continuous_mode = False
     arb.gate_mode = False
 
-    segment_ids = []
-
-    reset_wf    = arb_pulse(0.7, 0.6e-9)
+    reset_wf    = arb_pulse(0.75, 3.0/12e9)
     wf_data     = M8190A.create_binary_wf_data(reset_wf)
     rst_segment_id  = arb.define_waveform(len(wf_data))
-    segment_ids.append(rst_segment_id)
     arb.upload_waveform(wf_data, rst_segment_id)
+
+    no_reset_wf = arb_pulse(0.0, 3.0/12e9)
+    wf_data     = M8190A.create_binary_wf_data(no_reset_wf)
+    no_rst_segment_id  = arb.define_waveform(len(wf_data))
+    arb.upload_waveform(wf_data, no_rst_segment_id)
+
 
     # Picosecond trigger waveform
     pspl_trig_wf = M8190A.create_binary_wf_data(np.zeros(3200), samp_mkr=1)
     pspl_trig_segment_id = arb.define_waveform(len(pspl_trig_wf))
     arb.upload_waveform(pspl_trig_wf, pspl_trig_segment_id)
 
-    # Picosecond trigger waveform
+    # NIDAQ trigger waveform
     nidaq_trig_wf = M8190A.create_binary_wf_data(np.zeros(3200), sync_mkr=1)
     nidaq_trig_segment_id = arb.define_waveform(len(nidaq_trig_wf))
     arb.upload_waveform(nidaq_trig_wf, nidaq_trig_segment_id)
 
-    reps = 1<<17
-    lockin_settle_delay = 40e-6
+    reps = 1 << 17
+    lockin_settle_delay = 100e-6
     lockin_settle_pts = int(640*np.ceil(lockin_settle_delay * 12e9 / 640))
 
     scenario = Scenario()
-    seq = Sequence(sequence_loop_ct=reps)
+    seq = Sequence(sequence_loop_ct=int(reps/2))
+    #First try with reset flipping pulse
     seq.add_waveform(rst_segment_id)
+    seq.add_idle(lockin_settle_pts, 0.0)
+    seq.add_waveform(nidaq_trig_segment_id)
+    seq.add_idle(1 << 14, 0.0) # bonus non-contiguous memory delay
+    seq.add_waveform(pspl_trig_segment_id)
+    seq.add_idle(lockin_settle_pts, 0.0)
+    seq.add_waveform(nidaq_trig_segment_id)
+    seq.add_idle(1 << 14, 0.0) # bonus non-contiguous memory delay
+    #second try without
+    seq.add_waveform(no_rst_segment_id)
     seq.add_idle(lockin_settle_pts, 0.0)
     seq.add_waveform(nidaq_trig_segment_id)
     seq.add_idle(1 << 14, 0.0) # bonus non-contiguous memory delay
@@ -111,7 +120,7 @@ if __name__ == '__main__':
     read = int32()
 
     # DAQmx Configure Code
-    analog_input.CreateAIVoltageChan("Dev1/ai0", "", DAQmx_Val_RSE, -2.0,2.0, DAQmx_Val_Volts, None)
+    analog_input.CreateAIVoltageChan("Dev1/ai0", "", DAQmx_Val_RSE, -10.0,10.0, DAQmx_Val_Volts, None)
     analog_input.CfgSampClkTiming("/Dev1/PFI0", 20000.0, DAQmx_Val_Rising, DAQmx_Val_ContSamps, 2*reps)
 
     # DAQmx Start Code
@@ -121,7 +130,7 @@ if __name__ == '__main__':
     arb.run()
     # attens = np.arange(-7.5,-6,0.01)
     attens    = [-6.01]
-    durations = 1e-9*np.arange(0.38, 0.65, 0.01)
+    durations = 1e-9*np.arange(0.35, 0.65, 0.01)
     # durations = [0.6e-9]
     buffers = np.empty((len(attens)*len(durations), 2*reps))
     idx = 0
@@ -133,7 +142,7 @@ if __name__ == '__main__':
 
     for dur in tqdm(durations):
         pspl.duration = dur
-        time.sleep(0.1)
+        time.sleep(0.2)
         arb.advance()
         arb.trigger()
         analog_input.ReadAnalogF64(2*reps, -1, DAQmx_Val_GroupByChannel, buffers[idx], 2*reps, byref(read), None)
@@ -146,77 +155,3 @@ if __name__ == '__main__':
     mag.field = 0
     bop.current = 0
     pspl.output = False
-
-    #Get an idea of SNR
-    #Cluster all the data into two based with starting point based on edges
-    all_vals = buffers.flatten()
-    all_vals.resize((all_vals.size,1))
-    init_guess = np.array([np.min(all_vals), np.max(all_vals)])
-    init_guess.resize((2,1))
-    clusterer = KMeans(init=init_guess, n_clusters=2, max_iter=1000, n_jobs=-1, tol=1e-5)
-    # clusterer = DBSCAN()
-    state = clusterer.fit_predict(all_vals)
-
-    #Approximate SNR from centre distance and variance
-    std0 = np.std(all_vals[state == 0])
-    std1 = np.std(all_vals[state == 1])
-    mean_std = 0.5*(std0 + std1)
-    centre0 = clusterer.cluster_centers_[0,0]
-    centre1 = clusterer.cluster_centers_[1,0]
-    centre_dist = centre1 - centre0
-    print("Centre distance = {:.3f} with widths = {:.4f} / {:.4f} gives SNR ratio {:.3}".format(centre_dist, std0, std1, centre_dist/mean_std))
-
-    #Have a look at the distributions
-    plt.figure()
-    sns.distplot(all_vals[state == 0])
-    sns.distplot(all_vals[state == 1])
-
-    #calculate some switching matrices for each amplitude
-    # 0->0 0->1
-    # 1->0 1->1
-    counts = []
-    for buf in buffers:
-        state = clusterer.predict(buf.reshape((2*reps,1)))
-        init_state = state[::2]
-        final_state = state[1::2]
-        switched = np.logical_xor(init_state, final_state)
-
-        count_mat = np.zeros((2,2), dtype=np.int)
-
-        count_mat[0,0] = np.sum(np.logical_and(init_state == 0, np.logical_not(switched) ))
-        count_mat[0,1] = np.sum(np.logical_and(init_state == 0, switched ))
-        count_mat[1,0] = np.sum(np.logical_and(init_state == 1, switched ))
-        count_mat[1,1] = np.sum(np.logical_and(init_state == 1, np.logical_not(switched) ))
-
-        counts.append(count_mat)
-
-    mean_PtoAP = np.array([beta.mean(1+c[0,1], 1+c[0,0]) for c in counts])
-    mean_APtoP = np.array([beta.mean(1+c[1,0], 1+c[1,1]) for c in counts])
-    ci68_PtoAP = np.array([beta.interval(0.68, 1+c[0,1], 1+c[0,0]) for c in counts])
-    ci68_APtoP = np.array([beta.interval(0.68, 1+c[1,0], 1+c[1,1]) for c in counts])
-    ci95_PtoAP = np.array([beta.interval(0.95, 1+c[0,1], 1+c[0,0]) for c in counts])
-    ci95_APtoP = np.array([beta.interval(0.95, 1+c[1,0], 1+c[1,1]) for c in counts])
-
-    plt.figure()
-    # volts = 7.5*np.power(10, (-5+attens)/20)
-    current_palette = sns.color_palette()
-    plt.plot(durations, mean_PtoAP)
-    plt.fill_between(durations, [ci[0] for ci in ci68_PtoAP], [ci[1] for ci in ci68_PtoAP], color=current_palette[0], alpha=0.2, edgecolor="none")
-    plt.fill_between(durations, [ci[0] for ci in ci95_PtoAP], [ci[1] for ci in ci95_PtoAP], color=current_palette[0], alpha=0.2, edgecolor="none")
-    plt.plot(durations, mean_APtoP)
-    plt.fill_between(durations, [ci[0] for ci in ci68_APtoP], [ci[1] for ci in ci68_APtoP], color=current_palette[1], alpha=0.2, edgecolor="none")
-    plt.fill_between(durations, [ci[0] for ci in ci95_APtoP], [ci[1] for ci in ci95_APtoP], color=current_palette[1], alpha=0.2, edgecolor="none")
-    # plt.xlabel("Pulse Amp (V)")
-    plt.xlabel("Pulse Duration (ns)")
-    plt.ylabel("Estimated Switching Probability")
-    # plt.title("P to AP")
-    # means_diagram_PtoAP = mean_PtoAP.reshape(len(attens), len(durations), order='F')
-    # plt.pcolormesh(durations*1e9, volts, means_diagram_PtoAP, cmap="RdGy")
-    # plt.colorbar()
-    # plt.figure()
-    # plt.title("AP to P")
-    # means_diagram_APtoP = mean_APtoP.reshape(len(attens), len(durations), order='F')
-    # plt.pcolormesh(durations*1e9, volts, means_diagram_APtoP, cmap="RdGy")
-    # plt.colorbar()
-
-    plt.show()
