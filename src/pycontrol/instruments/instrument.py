@@ -131,7 +131,7 @@ class VisaInterface(Interface):
                 visa_loc = 'C:\\windows\\system32\\visa64.dll'
                 rm = visa.ResourceManager(visa_loc)
             else:
-                rm = visa.ResourceManager()
+                rm = visa.ResourceManager("@py")
             self._resource = rm.open_resource(resource_name)
         except:
             raise Exception("Unable to create the resource '%s'" % resource_name)
