@@ -1,6 +1,4 @@
-from __future__ import print_function, division
 import logging
-logging.basicConfig(format='%(levelname)s:\t%(message)s', level=logging.DEBUG)
 
 import numpy as np
 import scipy as sp
@@ -53,7 +51,7 @@ class Quantity(object):
         if self.unit:
             result += " %s" % self.unit
         return result
-        
+
     def __repr__(self):
         result = "<Quantity(name='%s'" % self.name
         result += ",value=%s" % repr(self._value)
@@ -64,24 +62,23 @@ class Quantity(object):
 class Parameter(object):
     """ Encapsulates the information for an experiment parameter"""
 
-    def __init__(self, name, unit=None, default=None):
+    def __init__(self, name, unit=None, default=None, abstract=False):
         self.name     = name
         self._value   = default
         self.unit     = unit
         self.default  = default
         self.method   = None
-        self.changed  = True
-        
-    def check_if_changed(self, value):
-        if value is None:
-            self.changed = True
-        else:
-            if value != self._value:
-                logging.debug("In '{:s}', value was {:s}, will be {:s}.".format(self.name, str(self._value), str(value)) )
-                self.changed = True
-            else:
-                logging.debug("In '{:s}', value was {:s}, will be {:s}.".format(self.name, str(self._value), str(value)) )
-                self.changed = False
+        self.abstract = abstract # Is this something we can actually push?
+
+        # Hooks to be called before or after updating a sweep parameter
+        self.pre_push_hooks = []
+        self.post_push_hooks = []
+
+    def add_pre_push_hook(self, hook):
+        self.pre_push_hooks.append(hook)
+
+    def add_post_push_hook(self, hook):
+        self.post_push_hooks.append(hook)
 
     @property
     def value(self):
@@ -89,7 +86,6 @@ class Parameter(object):
 
     @value.setter
     def value(self, value):
-        self.check_if_changed(value)
         self._value = value
 
     def __str__(self):
@@ -98,7 +94,7 @@ class Parameter(object):
         if self.unit:
             result += " %s" % self.unit
         return result
-        
+
     def __repr__(self):
         result = "<Parameter(name='%s'" % self.name
         result += ",value=%s" % repr(self.value)
@@ -111,45 +107,41 @@ class Parameter(object):
         self.method = method
 
     def push(self):
-        if self.changed:
-            logging.debug("Telling '{:s}' to call set method, since the value has changed.".format(self.name))
+        if not self.abstract:
             self.method(self._value)
-        self.changed = False
 
 class FloatParameter(Parameter):
-    
+
     @property
     def value(self):
         return self._value
-    
+
     @value.setter
     def value(self, value):
-        self.check_if_changed(value)
         try:
             self._value = float(value)
         except ValueError:
             raise ValueError("FloatParameter given non-float value of "
                              "type '%s'" % type(value))
-    
+
     def __repr__(self):
         result = super(FloatParameter, self).__repr__()
         return result.replace("<Parameter", "<FloatParameter", 1)
 
 class IntParameter(Parameter):
-    
+
     @property
     def value(self):
         return self._value
-    
+
     @value.setter
     def value(self, value):
-        self.check_if_changed(value)
         try:
             self._value = int(value)
         except ValueError:
             raise ValueError("IntParameter given non-int value of "
                              "type '%s'" % type(value))
-    
+
     def __repr__(self):
         result = super(IntParameter, self).__repr__()
         return result.replace("<Parameter", "<IntParameter", 1)
@@ -172,7 +164,7 @@ class Procedure(object):
             parameter = getattr(self, item)
             if isinstance(parameter, Parameter):
                 self._parameters[item] = parameter
-    
+
     def _gather_quantities(self):
         """ Collects all the Quantity objects for this procedure and stores\
         them in a dictionary.
@@ -182,8 +174,14 @@ class Procedure(object):
             if isinstance(quantity, Quantity):
                 self._quantities[item] = quantity
 
+    def init_instruments(self):
+        """Gets run before a sweep starts"""
+        pass
+
+    def shutdown_instruments(self):
+        """Gets run after a sweep ends, or when the program is terminated."""
+        pass
+
     def run(self):
-        for param in self._parameters:
-            self._parameters[param].push()
-        for quant in self._quantities:
-            self._quantities[quant].measure()
+        """The actual measurement that gets run for each set of values in a sweep."""
+        pass

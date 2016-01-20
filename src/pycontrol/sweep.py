@@ -1,29 +1,17 @@
 from __future__ import print_function, division
 import logging
 import datetime
-import string
-
-logging.basicConfig(format='%(levelname)s:\t%(message)s', level=logging.INFO)
-
-# Fot plotting
-import threading
-from collections import deque
-import json
-from flask import Flask, jsonify, request
-from bokeh.server.crossdomain import crossdomain
-import urllib2
+import signal
+import sys
 
 import numpy as np
-import scipy as sp
-import pandas as pd
 import itertools
 import time
 import h5py
 
-from bokeh.plotting import figure, show, output_file, hplot, vplot
-from bokeh.models.sources import AjaxDataSource
-
-from procedure import Procedure, Parameter, Quantity
+from bokeh.plotting import show, output_server, hplot, cursession
+from .plotting import BokehServerThread, Plotter, Plotter2D, MultiPlotter
+from .procedure import Procedure, Parameter, Quantity
 
 class Writer(object):
     """Data structure for the written quantities"""
@@ -32,23 +20,6 @@ class Writer(object):
         self.dataset = dataset
         self.quantities = quantities
 
-class Plotter(object):
-    """Attach a plotter to the sweep."""
-    def __init__(self, title, x, y, *args, **kwargs):
-        super(Plotter, self).__init__()
-        self.title = title
-        self.filename = string.replace(title, ' ', '_')
-        output_file(self.filename, title=self.title)
-        self.plot_args = kwargs
-
-        # These are parameters and quantities
-        self.x = x
-        self.y = y
-        self.data = deque()
-
-    def update(self):
-        self.data.append( (self.x.value, self.y.value) )
-        
 class SweptParameter(object):
     """Data structure for a swept Parameters, contains the Parameter
     object rather than subclassing it since we just need to keep track
@@ -58,60 +29,23 @@ class SweptParameter(object):
         self.values = values
         self.length = len(values)
         self.indices = range(self.length)
+        self.name = parameter.name
+        self.unit = parameter.unit
 
-class FlaskThread(threading.Thread):
-    def __init__(self, plotters):
-        self.data_lookup = {p.filename: p.data for p in plotters}
-        self.filenames = [p.filename for p in plotters]
-        self.plotter_lookup = {p.filename: p for p in plotters}
+    @property
+    def value(self):
+        return self.parameter.value
 
-        self.app = Flask(__name__)
-        @self.app.route('/<filename>', methods=['GET', 'OPTIONS'])
-        @crossdomain(origin="*", methods=['GET', 'POST'], headers=None)
-        def fetch_func(filename):
-            if filename == "shutdown":
-                func = request.environ.get('werkzeug.server.shutdown')
-                if func is None:
-                    raise RuntimeError('Not running with the Werkzeug Server')
-                func()
-                return 'Server shutting down...'
-            else:
-                xs = []
-                ys = []
-                while True:
-                    try:
-                        x, y = self.data_lookup[filename].popleft()
-                        xs.append(x)
-                        ys.append(y)
-                    except:
-                        break
-                return jsonify(x=xs, y=ys)
+    @value.setter
+    def value(self, value):
+        self.parameter.value = value
 
-        super(FlaskThread, self).__init__()
-
-    def run(self):
-        output_file("main.html", title="Plotting Output")
-        plots = []
-        sources = []
-
-        for f in self.filenames:
-            source = AjaxDataSource(data_url='http://localhost:5050/'+f,
-                                    polling_interval=750, mode="append")
-            p = self.plotter_lookup[f]
-            xlabel = p.x.name + (" ("+p.x.unit+")" if p.x.unit is not None else '')
-            ylabel = p.y.name + (" ("+p.y.unit+")" if p.y.unit is not None else '')
-            plot = figure(webgl=True, title=p.title,
-                          x_axis_label=xlabel, y_axis_label=ylabel, 
-                          tools="save,crosshair",
-                          **p.plot_args)
-            plots.append(plot)
-            sources.append(source)
-
-            plots[-1].line('x', 'y', source=sources[-1], color="firebrick", line_width=2)
-            
-        q = hplot(*plots)
-        show(q)
-        self.app.run(port=5050)
+    def push(self):
+        for pph in self.parameter.pre_push_hooks:
+            pph()
+        self.parameter.push()
+        for pph in self.parameter.post_push_hooks:
+            pph()
 
 class Sweep(object):
     """For controlling sweeps over arbitrary number of arbitrary parameters. The order of sweeps\
@@ -128,7 +62,7 @@ class Sweep(object):
             raise TypeError("Must pass a Procedure subclass.")
 
         # Container for SweptParmeters
-        self._parameters =  []
+        self._swept_parameters =  []
 
         # Container for written Quantities
         self._quantities = []
@@ -142,12 +76,22 @@ class Sweep(object):
         self._writers = []
         self._plotters = []
 
+    def __del__(self):
+        #Close the h5 files
+        for fid in self._files.values():
+            fid.close()
+
     def __iter__(self):
         return self
 
     def add_parameter(self, param, sweep_list):
-        self._parameters.append(SweptParameter(param, sweep_list))
+        p = SweptParameter(param, sweep_list)
+        self._swept_parameters.append(p)
         self.generate_sweep()
+
+        # Set the value of the parameter to the initial value of the sweep
+        param.value = sweep_list[0]
+        return p
 
     def add_writer(self, filename, sample_name, dataset_name, *quants, **kwargs):
         """Add a dataset that updates based on the supplied quantities"""
@@ -187,12 +131,12 @@ class Sweep(object):
         else:
             largest_index = max([int(k.split("-")[-1]) for k in g.keys() if dataset_name in k])
             dataset_name = "{:s}-{:04d}".format(dataset_name, largest_index + 1)
-            
+
         # Determine the dataset dimensions
-        sweep_dims = [ p.length for p in self._parameters ]
+        sweep_dims = [ p.length for p in self._swept_parameters ]
         logging.debug("Sweep dims are %s for the list of swept parameters in the writer %s, %s." % (str(sweep_dims), filename, dataset_name) )
 
-        data_dims = [len(quants)+len(self._parameters)]
+        data_dims = [len(quants)+len(self._swept_parameters)]
         dataset_dimensions = tuple(sweep_dims + data_dims)
 
         # Get the datatype, defaulting to float
@@ -208,56 +152,86 @@ class Sweep(object):
         indices = list(next(self._index_generator))
 
         for w in self._writers:
-            current_p_values = [p.parameter.value for p in self._parameters]
+            current_p_values = [p.parameter.value for p in self._swept_parameters]
 
             logging.debug("Current indicies are: %s" % str(indices) )
 
-            for i, p in enumerate(self._parameters):
+            for i, p in enumerate(self._swept_parameters):
                 coords = tuple( indices + [i] )
                 logging.debug("Coords: %s" % str(coords) )
                 w.dataset[coords] = p.parameter.value
             for i, q in enumerate(w.quantities):
-                coords = tuple( indices + [len(self._parameters) + i] )
+                coords = tuple( indices + [len(self._swept_parameters) + i] )
                 w.dataset[coords] = q.value
 
-    def add_plotter(self, title, x, y, *args, **kwargs):
-        self._plotters.append(Plotter(title, x, y, *args, **kwargs))
+    def add_plotter(self, title, x, y, x_axis_type='auto', y_axis_type='auto', **kwargs):
+        kwargs['x_axis_type'] = x_axis_type
+        kwargs['y_axis_type'] = y_axis_type
+        self._plotters.append(Plotter(title, x, y, **kwargs))
+        return self._plotters[-1]
 
-    def plot(self):
+    def add_plotter2d(self, title, x, y, z, **kwargs):
+        self._plotters.append(Plotter2D(title, x, y, z, **kwargs))
+        return self._plotters[-1]
+
+    def add_multiplotter(self, title, xs, ys, **kwargs):
+        self._plotters.append(MultiPlotter(title, xs, ys, **kwargs))
+        return self._plotters[-1]
+
+    def plot(self, force=False):
         for p in self._plotters:
-            p.update()
+            p.update(force=force)
 
     def generate_sweep(self):
-        self._sweep_generator = itertools.product(*[sp.values for sp in self._parameters])
-        self._index_generator = itertools.product(*[sp.indices for sp in self._parameters])
-
-    #Python 3 compatible iterator
-    #TODO if we go all in on Python 3, remove this and replace next with __next__ below
-    def __next__(self):
-        return self.next()
-
-    def next(self):
-        ps = next(self._sweep_generator)
-
-        for i, p in enumerate(self._parameters):
-            p.parameter.value = ps[i]
-
-        self._procedure.run()
-        self.write()
-        self.plot()
+        self._sweep_generator = itertools.product(*[sp.values for sp in self._swept_parameters])
+        self._index_generator = itertools.product(*[sp.indices for sp in self._swept_parameters])
 
     def run(self):
-        """Run everything all at once..."""
+        self._procedure.init_instruments()
 
         if len(self._plotters) > 0:
-            t = FlaskThread(self._plotters)
+            t = BokehServerThread()
             t.start()
+            #On some systems there is a possibility the `output_server` line is executed before the
+            #the server on the BokehServerThread has started.  Possible solutions tried:
+            # * We can't send an event from plotting thread because the `bokeh.server.run()` is blocking.
+            # *I can't catch the error here because it gets caught somewhere in Bokeh
+            # So reluctantly just go with a hacky pause for now
+            time.sleep(0.05)
+            output_server("Pycontrol Bokeh Server")
+            q = hplot(*[p.figure for p in self._plotters])
+            show(q)
+
+        def shutdown():
+            if len(self._plotters) > 0:
+                time.sleep(0.5)
+                t.join()
+            self._procedure.shutdown_instruments()
+
+        def catch_ctrl_c(signum, frame):
+            logging.info("Caught SIGINT.  Shutting down.")
+            shutdown()
+            sys.exit(0)
+
+        signal.signal(signal.SIGINT, catch_ctrl_c)
+
+        # Keep track of the previous values
+        last_param_values = None
 
         for param_values in self._sweep_generator:
-            
-            # Update the paramater values
-            for i, p in enumerate(self._parameters):
-                p.parameter.value = param_values[i]
+
+            # Update the parameter values. Unles set and push if there has been a change
+            # in the value from the previous iteration.
+            for i, sp in enumerate(self._swept_parameters):
+                if last_param_values is None or param_values[i] != last_param_values[i]:
+                    sp.value = param_values[i]
+                    sp.push()
+                    logging.debug("Updated {:s} to {:g} since the value changed.".format(sp.parameter.name, sp.value))
+                else:
+                    logging.debug("Didn't update {:s} since the value didn't change.".format(sp.parameter.name))
+
+            # update previous values
+            last_param_values = param_values
 
             # Run the procedure
             self._procedure.run()
@@ -266,7 +240,6 @@ class Sweep(object):
             self.write()
             self.plot()
 
-        if len(self._plotters) > 0:
-            time.sleep(0.5)
-            response = urllib2.urlopen('http://localhost:5050/shutdown').read()
-            t.join()
+        self.plot(force=True)
+
+        shutdown()

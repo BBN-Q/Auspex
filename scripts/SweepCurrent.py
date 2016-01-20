@@ -8,17 +8,25 @@ import scipy as sp
 import pandas as pd
 
 from instruments.kepco import BOP2020M
-from instruments.stanford import SR865
+from instruments.stanford import SR865, SR830
+from instruments.magnet import Electromagnet
+from instruments.hall_probe import HallProbe
 from sweep import Sweep
 from procedure import FloatParameter, Quantity, Procedure
 
 
-class FieldTest(Procedure):
-    current = FloatParameter("Supply Current", unit="A")
-    voltage = Quantity("Magnitude", unit="V")
+class CurrentLoop(Procedure):
+    field        = FloatParameter("Magnetic Field Setpoint", unit="G")
+    dc_bias      = FloatParameter("DC Bias", unit="V")
 
-    bop = BOP2020M("Kepco Power Supply", "GPIB1::1::INSTR")
-    lock = SR865("Lockin Amplifier", "GPIB1::9::INSTR")
+    actual_field = Quantity("Magnitude Field", unit="G")
+    voltage      = Quantity("Magnitude", unit="V")
+
+    bop       = BOP2020M("Kepco Power Supply", "GPIB1::1::INSTR")
+    lock      = SR830("Lockin Amplifier", "GPIB1::9::INSTR")
+    fast_lock = SR865("Lockin Amplifier", "USB0::0xB506::0x2000::002638::INSTR")
+    hp        = HallProbe("calibration/HallProbe.cal", lock.set_ao1, lock.get_ai1)
+    mag       = Electromagnet('calibration/GMW.cal', hp.get_field, bop.set_current, bop.get_current)
 
     def instruments_init(self):
         self.tc_delay = 9*self.lock.tc
@@ -27,10 +35,16 @@ class FieldTest(Procedure):
 
         def lockin_measure():
             time.sleep(self.tc_delay)
-            return np.mean( [self.lock.r for i in range(self.averages)] )
+            vals = []
+            for i in range(self.averages):
+                vals.append(self.fast_lock.r)
+                time.sleep(0.03)
+            return np.mean(vals)
 
-        self.current.set_method(self.bop.set_current)
-        self.voltage.set_method(lockin_measure)
+        self.field.assign_method(self.mag.set_field)
+        self.actual_field.assign_method(self.mag.get_field)
+        self.dc_bias.assign_method(self.fast_lock.set_offset)
+        self.voltage.assign_method(lockin_measure)
 
     def run(self):
         """This is run for each step in a sweep."""
@@ -44,17 +58,19 @@ class FieldTest(Procedure):
 
 if __name__ == '__main__':
 
-    proc = FieldTest()
+    proc = CurrentLoop()
+    proc.field.value = 390.0
 
     # Define a sweep over prarameters
     sw = Sweep(proc)
-    values = np.append(np.arange(-2, 10.1, 0.1), np.arange(10.0,-2.1,-0.1)).tolist()
-    sw.add_parameter(proc.current, values)
+    values = np.append(np.arange(-3.0, 3.01, 0.1), np.arange(3.0,-3.01,-0.1)).tolist()
+    sw.add_parameter(proc.dc_bias, values)
 
     # Define a writer
-    sw.add_writer('CurrentLoops.h5', 'Test', proc.voltage)
+    sw.add_writer('data/CurrentLoops.h5', 'SWS2129(2,0)G-(011,09)', 'Loop', proc.voltage)
+    # sw.add_writer('data/CurrentLoops.h5', 'Test', proc.voltage)
 
     proc.instruments_init()
     for i in sw:
-        logging.info("Current, Lockin Magnitude: {:f}, {:g}".format(proc.current.value, proc.voltage.value) )
+        logging.info("Bias (V), Lockin Magnitude (V): {:f}, {:g}".format(proc.dc_bias.value, proc.voltage.value) )
     proc.instruments_shutdown()

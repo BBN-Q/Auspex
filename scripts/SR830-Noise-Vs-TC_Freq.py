@@ -13,46 +13,50 @@ from sweep import Sweep
 from procedure import FloatParameter, Quantity, Procedure
 
 
-class FieldTest(Procedure):
+class NoiseTest(Procedure):
     frequency = FloatParameter("Lockin Frequency", unit="Hz")
     time_constant = FloatParameter("Time Constant", unit="s")
     noise = Quantity("Noise", unit="V/Hz^1/2")
 
     lock = SR830("Lockin Amplifier", "GPIB1::9::INSTR")
 
-    def instruments_init(self):
-        self.averages = 5
-        
-
-
+    def init_instruments(self):
+        self.averages = 1
         self.lock.channel_1_type = 'X Noise'
 
         def lockin_measure():
-            self.tc_delay = 9*self.lock.tc
-            time.sleep(self.tc_delay)
+            time.sleep(self.time_constant.value*50)
             return np.mean( [self.lock.ch1 for i in range(self.averages)] )
 
-        self.frequency.set_method(self.lock.set_frequency)
-        self.time_constant.set_method(self.lock.set_tc)
-        self.noise.set_method(lockin_measure)
+        self.frequency.assign_method(self.lock.set_frequency)
+        self.time_constant.assign_method(self.lock.set_tc)
+        self.noise.assign_method(lockin_measure)
 
-    def instruments_shutdown(self):
-        self.lock.channel_1_type = 'X'   
+    def run(self):
+        for param in self._parameters:
+            self._parameters[param].push()
+        for quant in self._quantities:
+            self._quantities[quant].measure()
+
+    def shutdown_instruments(self):
+        self.lock.channel_1_type = 'R'
 
 if __name__ == '__main__':
 
-    proc = FieldTest()
+    proc = NoiseTest()
 
     # Define a sweep over prarameters
     sw = Sweep(proc)
-    values = np.append( np.append(np.arange(10,105,5), np.arange(200,1100,50)), np.arange(2000,7000,500)).tolist()
-    sw.add_parameter_hack(proc.frequency, values)
-    sw.add_parameter_hack(proc.time_constant, [1e-3, 3e-3, 10e-3, 30e-3, 100e-3, 300e-3])
+    sw.add_parameter(proc.frequency, np.logspace(2, 5, 100))
+    proc.time_constant.value = 100e-3
 
     # Define a writer
-    sw.add_writer('SweepFrequencyTC.h5', 'NoiseVsFreqAndTC', proc.noise)
+    sw.add_plotter('X Noise vs. Frequency', proc.frequency, proc.noise, color="navy", line_width=2)
+    #sw.add_writer('SweepFrequencyTC.h5', 'NoiseVsFreqAndTC', proc.noise)
 
-    proc.instruments_init()
-    for i in sw:
-        logging.info("Freq, TC, Noise: %f, %g, %g" % (proc.frequency.value, proc.time_constant.value, proc.noise.value) )
-    proc.instruments_shutdown()
+    sw.run()
+
+    # proc.instruments_init()
+    # for i in sw:
+    #     logging.info("Freq, TC, Noise: %f, %g, %g" % (proc.frequency.value, proc.time_constant.value, proc.noise.value) )
+    # proc.instruments_shutdown()

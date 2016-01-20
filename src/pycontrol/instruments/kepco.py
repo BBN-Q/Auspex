@@ -1,15 +1,16 @@
 from .instrument import Instrument, Command, RampCommand
 
 class BOP2020M(Instrument):
-    """For controlling the BOP2020M power supply via GPIB interface card"""
-    output = Command("Output", get_string=":OUTP?", set_string=":OUTP {:s}", value_map={True: "ON", False: "OFF"})
+    """For controlling the BOP2020M piower supply via GPIB interface card"""
+    output = Command("Output", get_string="OUTPUT?", set_string="OUTPUT {:s}", value_map={True: '1', False: '0'})
     current = RampCommand("Current", increment=0.1, pause=20e-3, get_string=":CURR?", set_string=":CURR:LEV:IMM {:g}", value_range=(-20,20))
     voltage = RampCommand("Voltage", increment=0.1, pause=20e-3, get_string=":VOLT?", set_string=":VOLT:LEV:IMM {:g}", value_range=(-20,20))
     mode = Command("Mode", get_string="FUNC:MODE?", set_string="FUNC:MODE {:s}", value_map={'voltage': "VOLT", 'current': "CURR"})
 
     def __init__(self, name, resource_name, mode='current', **kwargs):
         super(BOP2020M, self).__init__(name, resource_name, **kwargs)
-        self.interface._instrument.write_termination = u"\n"
+        self.interface._resource.write_termination = u"\n"
+        self.interface._resource.read_termination = u"\n"
         self.mode = 'current'
         self.interface.write('VOLT MAX')
         self.output = True
