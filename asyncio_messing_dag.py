@@ -112,109 +112,68 @@ class DataCruncher(object):
                 output_stream.points_taken += len(new_data)
             idx += len(new_data)
 
-# class Processor(object):
-#     """docstring for Processor"""
-#     def __init__(self):
-#         super(Processor, self).__init__()
+class Combiner(object):
+    """docstring for Combiner"""
+    def __init__(self):
+        super(Combiner, self).__init__()
+        self.input_streams = []
+        self.output_streams = []
+        self.data_containers = []
+        self.descriptor = None       
         
-#         self.input_stream = None
-#         self.output_stream = None
+    def add_input_stream(self, stream):
+        self.input_streams.append(stream)
+        self.data_containers.append(np.empty(stream.num_points()))
+        if len(self.input_streams) == 0:
+            self.descriptor = stream.descriptor
 
-#     def set_input_stream(self, stream):
-#         self.input_stream = stream
-#         self.q = stream.subscribe()
-#         self.data = np.empty(stream.num_points())
+    def add_output_stream(self, stream):
+        self.output_streams.append(stream)
 
-#         # By default, copy the descriptor of the input stream
-#         in_desc = stream.descriptor
+    async def run(self):
+        print("Combiner running")
+        # We can only push when queues are of commensurate length
+        # So keep track of what's been pushed.
+        last_push_idx = 0
+        idxs = [0]*len(self.input_streams)
+
+        while True:
+            if False not in [ins.done() for ins in self.input_streams]:
+                if len(self.output_streams) > 0:
+                    if False not in [os.done() for os in self.output_streams]:
+                        print("Combiner finished combining (clearing outputs).")
+                        break
+                else:
+                    print("Combiner finished combining.")
+                    break
             
-#         # Establish an output stream
-#         self.output_stream = DataStream(in_desc)
-
-#     async def run(self):
-#         idx = 0
-#         while True:
-#             if self.input_stream.done():
-#                 break
-#             new_data = await self.q.get()
-#             print("Processed fake new data at {:s}!".format(str(self)))
-#             self.data[idx:idx+len(new_data)] = new_data
-#             await self.output_stream.push(new_data)
-#             self.output_stream.points_taken += len(new_data)
-#             idx += len(new_data)
-
-
-# class FakeProcessor(Processor):
-#     def __init__(self, a, b):
-#         super(FakeProcessor, self).__init__()
-#         self.a = a
-#         self.b = b
-    
-#     async def run(self):
-#         idx = 0
-#         while True:
-#             if self.input_stream.done():
-#                 break
-#             new_data = await self.q.get()
-#             print("Processed fake new data at {:s}: {:s}!".format(str(self),str(new_data)))
-#             self.data[idx:idx+len(new_data)] = new_data
-#             await self.output_stream.push(self.a*new_data + self.b)
-#             self.output_stream.points_taken += len(new_data)
-#             idx += len(new_data)
-
-# class Combiner(object):
-#     """docstring for Combiner"""
-#     def __init__(self):
-#         super(Combiner, self).__init__()
-        
-#         self.input_streams = []
-#         self.qs = []
-#         self.data_containers = []
-#         self.output_stream = None
-
-#     def set_input_stream(self, stream):
-#         self.input_streams.append(stream)
-#         self.qs.append(stream.subscribe())
-#         print("Created new q {:s} for {:s}!".format(str(self.qs[-1]), str(self)))
-#         self.data_containers.append(np.empty(stream.num_points()))
-
-#         if self.output_stream is None:
-#             # By default, copy the descriptor of the most recently added input stream
-#             in_desc = stream.descriptor
-#             # Establish an output stream
-#             self.output_stream = DataStream(in_desc)
-
-#     async def run(self):
-#         # We can only push when queues are of commensurate length
-#         # So keep track of what's been pushed.
-#         last_push_idx = 0
-#         idxs = [0]*len(self.qs)
-
-#         while True:
-#             if False not in [ins.done() for ins in self.input_streams]:
-#                 break
+            # Accumulate new data from all the queues
+            # print(str(self.input_streams))
+            for i, (container, input_stream) in enumerate(zip(self.data_containers, self.input_streams)):
+                print("COmbiner waiting on stream")
+                new_data = await input_stream.queue.get()
+                print("Combiner: new data {:s} on stream {:s}".format(str(new_data), str(input_stream)))
+                # print("Last push: {:d}, Idxs: {:s}".format(last_push_idx, str(idxs)))
+                container[idxs[i]:idxs[i]+len(new_data)] = new_data
+                idxs[i] += len(new_data)
             
-#             # Accumulate new data from all the queues
-#             for i, (q, d) in enumerate(zip(self.qs, self.data_containers)):
-#                 new_data = await q.get()
-#                 d[idxs[i]:idxs[i]+len(new_data)] = new_data
-#                 idxs[i] += len(new_data)
-            
-#             # Once all of the queues have surpassed the last push point, write to the stream
-#             print("Last push: {:d}, Idxs: {:s}".format(last_push_idx, str(idxs)))
+            # Once all of the queues have surpassed the last push point, write to the stream
+            # print("Last push: {:d}, Idxs: {:s}".format(last_push_idx, str(idxs)))
 
-#             if np.min(idxs) > last_push_idx:
-#                 new_data_length = np.min(idxs) - last_push_idx
-#                 print("Adding {:d} points".format(new_data_length))
-#                 #Let's just add everything by default:
-#                 new_data = np.sum(self.data_containers[:,last_push_idx:new_data_length], axis=0)   
+            if np.min(idxs) > last_push_idx:
+                new_data_length = np.min(idxs) - last_push_idx
+                print("Adding {:d} points".format(new_data_length))
+                
+                #Let's just sum everything by default:
+                new_data = np.zeros(new_data_length)
+                for dc in self.data_containers:
+                    new_data = new_data + dc[last_push_idx:last_push_idx+new_data_length]
+                print("Combined fake new data into {:s}!".format(str(new_data)))
 
-#                 await self.output_stream.push(new_data)
-#                 self.output_stream.points_taken += len(new_data)
-#                 last_push_idx += new_data_length
-
-#                 print("Combined fake new data from q {:s} at {:s}!".format(str(q), str(self)))
-
+                for output_stream in self.output_streams:
+                    await output_stream.push(new_data)
+                    output_stream.points_taken += len(new_data)
+                last_push_idx += new_data_length
 
 def create_graph(edges):
     dag = nx.DiGraph()
@@ -249,18 +208,17 @@ if __name__ == '__main__':
     descrip.add_axis(DataAxis("time", 1e-9*np.arange(1000)))
 
     ADC        = DataTaker(descrip)
-    # fake_processor1 = FakeProcessor(0.2, 1)
-    # fake_processor2 = FakeProcessor(0.1, 2)
-    # fake_processor3 = FakeProcessor(0.4, 2)
     cruncher1  = DataCruncher()
     cruncher2  = DataCruncher()
     cruncher3  = DataCruncher()
-    # combiner   = Combiner()
+    combiner   = Combiner()
 
     edges = [
         (ADC, cruncher1),
         (ADC, cruncher2),
-        (cruncher2, cruncher3)
+        (cruncher2, cruncher3),
+        (cruncher2, combiner),
+        (cruncher1, combiner)
     ]
 
     dag, tasks = create_graph(edges)
