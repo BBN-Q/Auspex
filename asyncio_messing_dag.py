@@ -58,11 +58,9 @@ class DataTaker(object):
         self.descriptor = descriptor
 
     def add_output_stream(self, stream):
-        print("Added output stream {:s} to {:s}".format(str(stream), str(self)))
         self.output_streams.append(stream)
 
     async def run(self):
-        print("Running {:s}!".format(str(self)))
         while True:
             #Produce fake data every 0.02 seconds until we have 1000 points
             if False not in [os.done() for os in self.output_streams]:
@@ -70,7 +68,6 @@ class DataTaker(object):
                 break
             await asyncio.sleep(0.02)
             new_data = np.random.rand(50)
-            print("Generated fake new data {:s} at {:s}!".format(str(new_data[:5]),str(self)))
             for os in self.output_streams:
                 await os.push(new_data)
                 os.points_taken += 50
@@ -92,12 +89,9 @@ class DataCruncher(object):
             raise Exception("DataCruncher takes only one input")
 
     def add_output_stream(self, stream):
-        print("Added output stream to {:s}".format(str(self)))
         self.output_streams.append(stream)
-        print("Streams are now {:s}!".format(str(self.output_streams)))
 
     async def run(self):
-        print("Streams are now {:s} at beginning of lop!".format(str(self.output_streams)))
         idx = 0
         while True:
             if self.input_stream.done():
@@ -111,16 +105,12 @@ class DataCruncher(object):
                     break
 
             new_data = await self.input_stream.queue.get()
-            print("Crunched fake new data {:s} at {:s}!".format(str(new_data[:5]),str(self)))
 
             self.data[idx:idx+len(new_data)] = new_data
             for output_stream in self.output_streams:
-                print("Pushing data {:s} to output stream".format(str(new_data[:10])))
                 await output_stream.push(new_data)
                 output_stream.points_taken += len(new_data)
             idx += len(new_data)
-
-
 
 # class Processor(object):
 #     """docstring for Processor"""
