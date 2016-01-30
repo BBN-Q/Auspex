@@ -140,7 +140,10 @@ class NodeCanvas(QGraphicsScene):
     """docstring for NodeCanvas"""
     def __init__(self):
         super(NodeCanvas, self).__init__()
+    
     def contextMenuEvent(self, event):
+        self.last_click = event.scenePos()
+
         menu = QMenu()
         awg_menu = menu.addMenu("Filter")
         scope_menu = menu.addMenu("Combine")
@@ -151,9 +154,15 @@ class NodeCanvas(QGraphicsScene):
         out_menu.addAction(save)
         out_menu.addAction(plot)
         # testAction = QAction('Test', None)
-        # testAction.triggered.connect(self.print_out)
+        save.triggered.connect(self.add_h5)
         # menu.addMenu(testAction)
         menu.exec_(event.screenPos())
+
+    def add_h5(self):
+        node = Node("Save to h5", self)
+        node.add_input(Connector("Data", self))
+        node.setPos(self.last_click)
+        self.addItem(node)
 
 
 if __name__ == "__main__":
@@ -167,21 +176,24 @@ if __name__ == "__main__":
     node.add_output(Connector("Output", scene))
     node.add_input(Connector("Waveform", scene))
     node.add_input(Connector("Kernel", scene))
+    node.setPos(200,0)
     scene.addItem(node)
 
     node = Node("Decimate", scene)
     node.add_input(Connector("Waveform", scene))
     node.add_input(Connector("Factor", scene))
     node.add_output(Connector("Output", scene))
+    node.setPos(0,0)
     scene.addItem(node)
 
     node = Node("Data Taker", scene)
     node.add_output(Connector("Output", scene))
+    node.setPos(-200,0)
     scene.addItem(node)
 
     view = QGraphicsView(scene)
     view.setRenderHint(QPainter.Antialiasing)
-    view.resize(600, 400)
+    view.resize(800, 600)
     view.show()
 
     # view.window().activateWindow()
