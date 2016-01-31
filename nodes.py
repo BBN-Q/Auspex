@@ -62,6 +62,12 @@ class Node(QGraphicsRectItem):
                     w.set_end(v.scenePos())
         return QGraphicsRectItem.itemChange(self, change, value)
 
+
+    def paint(self, painter, options, widget):
+        painter.setBrush(QBrush(QColor(100,100,100)))
+        painter.setPen(QPen(QColor(200,200,200), 0.75))
+        painter.drawRoundedRect(self.rect(), 5.0, 5.0)
+
 class Wire(QGraphicsPathItem):
     """docstring for Wire"""
     def __init__(self, start_obj):
