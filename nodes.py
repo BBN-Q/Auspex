@@ -2,6 +2,7 @@
 
 from PyQt4.QtGui import *
 from PyQt4.QtCore import *
+import json
 
 rad = 5
 
@@ -186,6 +187,12 @@ class NodeCanvas(QGraphicsScene):
         # testAction = QAction('Test', None)
         save.triggered.connect(self.add_h5)
         # menu.addMenu(testAction)
+
+        menu.addSeparator()
+        capture = QAction('Export Experiment', None)
+        capture.triggered.connect(self.export_experiment)
+        menu.addAction(capture)
+
         menu.exec_(event.screenPos())
 
     def add_h5(self):
@@ -193,6 +200,10 @@ class NodeCanvas(QGraphicsScene):
         node.add_input(Connector("Data", self))
         node.setPos(self.last_click)
         self.addItem(node)
+
+    def export_experiment(self):
+        wires = [i for i in self.items() if isinstance(i, Wire)]
+        print(wires)
 
 
 if __name__ == "__main__":
