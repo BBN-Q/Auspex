@@ -65,8 +65,8 @@ class Node(QGraphicsRectItem):
         # label.setPos(5,20+15*(len(self.inputs)+len(self.outputs))+35*len(self.parameters))
         # new_param = Parameter(param)
         param.setParentItem(self)
-        self.setRect(0,0,100,self.rect().height()+35)
-        param.setPos(0,30+15*(len(self.inputs)+len(self.outputs))+35*len(self.parameters))
+        self.setRect(0,0,100,self.rect().height()+42)
+        param.setPos(0,30+15*(len(self.inputs)+len(self.outputs))+42*len(self.parameters))
         # label.setDefaultTextColor(Qt.black)
         self.parameters[param.name] = param
 
@@ -165,14 +165,22 @@ class Parameter(QGraphicsEllipseItem):
         # Text label and area
         self.label = QGraphicsTextItem(self.name, parent=self)
         self.label.setPos(5,-10)
-        self.text_area = QGraphicsTextItem("0", parent=self)
-        self.text_area.setPos(5,5)
-        self.text_area.setTextInteractionFlags(Qt.TextEditable)
-        self.text_area.setZValue(10)
+        # self.text_area = QGraphicsTextItem("0", parent=self)
+        # self.text_area.setPos(5,5)
+        # self.text_area.setTextInteractionFlags(Qt.TextEditable)
+        # self.text_area.setZValue(10)
 
-        self.text_area_bg = QGraphicsRectItem(4,7,92,16, parent=self)
-        self.text_area_bg.setZValue(9)
-        self.text_area_bg.setBrush(QBrush(QColor(200,200,200)))
+        # Background
+        # self.text_area_bg = QGraphicsRectItem(4,7,92,16, parent=self)
+        # self.text_area_bg.setZValue(9)
+        # self.text_area_bg.setBrush(QBrush(QColor(200,200,200)))
+
+        # Proxy widget for editing
+        self.spin_box = QDoubleSpinBox()
+        self.proxy_widget = QGraphicsProxyWidget(self)
+        self.proxy_widget.setFocusPolicy(Qt.StrongFocus)
+        self.proxy_widget.setWidget(self.spin_box)
+        self.proxy_widget.setGeometry(QRectF(4,7,92,16))
 
 class Connector(QGraphicsEllipseItem):
     """docstring for Connector"""
