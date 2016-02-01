@@ -2,6 +2,7 @@
 
 from PyQt4.QtGui import *
 from PyQt4.QtCore import *
+from functools import partial
 import json
 
 rad = 5
@@ -171,35 +172,57 @@ class NodeCanvas(QGraphicsScene):
     """docstring for NodeCanvas"""
     def __init__(self):
         super(NodeCanvas, self).__init__()
-    
+        self.menu = QMenu()
+        self.sub_menus = []
+        self.generate_menus()
+        self.menu.addSeparator()
+        capture = QAction('Export Experiment', self)
+        capture.triggered.connect(self.export_experiment)
+        self.menu.addAction(capture)
+
     def contextMenuEvent(self, event):
         self.last_click = event.scenePos()
+        self.menu.exec_(event.screenPos())
 
-        menu = QMenu()
-        awg_menu = menu.addMenu("Filter")
-        scope_menu = menu.addMenu("Combine")
-        out_menu = menu.addMenu("Output")
+    def generate_menus(self, json_file='nodes.json'):
+        with open(json_file) as data_file:
+            try:
+                data = json.load(data_file)
+                for cat_name, cat_items in data.items():
+                    print("Found node type {:s}".format(cat_name))
+                    sm = self.menu.addMenu(cat_name)
+                    self.sub_menus.append(sm)
+                    for item in cat_items:
+                        print("Adding node {}".format(item['name']))
+                        
+                        # Create a QAction and add to the menu
+                        action = QAction(item['name'], self)
+                        
+                        # Create function for dropping node on canvas
+                        def create(the_item):
+                            print("I am {}".format(self))
+                            node = Node(the_item['name'], self)
+                            for ip in the_item['inputs']:
+                                node.add_input(Connector(ip, self))
+                            for op in the_item['outputs']:
+                                node.add_output(Connector(op, self))
+                            node.setPos(self.last_click)
+                            self.addItem(node)
+                            
+                        # # Add to class
+                        name = "create_"+("".join(item['name'].split()))
+                        print("Adding {} method to class.".format(name))
 
-        save = QAction('Save to h5', None)
-        plot = QAction('Plot to Bokeh-Server', None)
-        out_menu.addAction(save)
-        out_menu.addAction(plot)
-        # testAction = QAction('Test', None)
-        save.triggered.connect(self.add_h5)
-        # menu.addMenu(testAction)
+                        setattr(self, name, create)
+                        func = getattr(self, name)
+                        print("Getattr yields {}.".format(getattr(self, name)))
 
-        menu.addSeparator()
-        capture = QAction('Export Experiment', None)
-        capture.triggered.connect(self.export_experiment)
-        menu.addAction(capture)
+                        # Connect trigger for action
+                        action.triggered.connect(partial(func, item))
+                        self.sub_menus[-1].addAction(action)
 
-        menu.exec_(event.screenPos())
-
-    def add_h5(self):
-        node = Node("Save to h5", self)
-        node.add_input(Connector("Data", self))
-        node.setPos(self.last_click)
-        self.addItem(node)
+            except:
+                print("Error processing JSON file.")
 
     def export_experiment(self):
         wires = [i for i in self.items() if isinstance(i, Wire)]
