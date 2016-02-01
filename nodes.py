@@ -18,8 +18,9 @@ class Node(QGraphicsRectItem):
 
         self.outputs = {}
         self.inputs = {}
+        self.parameters = {}
 
-        self.setRect(0,0,100,100)
+        self.setRect(0,0,100,30)
         self.setBrush(QBrush(QColor(100,100,100)))
         self.setPen(QPen(QColor(200,200,200), 0.75))
 
@@ -31,7 +32,7 @@ class Node(QGraphicsRectItem):
 
         self.label = QGraphicsTextItem(self.name, parent=self)
         self.label.setDefaultTextColor(Qt.white)
-        self.label.setTextInteractionFlags(Qt.TextEditable)
+        # self.label.setTextInteractionFlags(Qt.TextEditable)
 
     def add_output(self, port):
         port.connector_type = 'output'
@@ -40,7 +41,8 @@ class Node(QGraphicsRectItem):
         port.setPos(100,30+15*(len(self.outputs)+len(self.inputs)))
         label = QGraphicsTextItem(port.name, parent=self)
         top_right = label.boundingRect().topRight()
-        label.setPos(95-top_right.x(),20+15*(len(self.outputs)+len(self.outputs)))
+        label.setPos(95-top_right.x(),20+15*(len(self.outputs)+len(self.inputs)))
+        self.setRect(0,0,100,self.rect().height()+15)
         label.setDefaultTextColor(Qt.black)
         self.outputs[port.name] = port
 
@@ -48,13 +50,25 @@ class Node(QGraphicsRectItem):
         port.connector_type = 'input'
         port.setBrush(Qt.green)
         port.setParentItem(self)
+        print(len(self.outputs))
         port.setPos(000,30+15*(len(self.inputs)+len(self.outputs)))
         label = QGraphicsTextItem(port.name, parent=self)
         w = label.textWidth()
         label.setPos(5,20+15*(len(self.inputs)+len(self.outputs)))
+        self.setRect(0,0,100,self.rect().height()+15)
         label.setDefaultTextColor(Qt.black)
-        self.outputs[port.name] = port
         self.inputs[port.name] = port
+
+    def add_parameter(self, param):
+        # label = QGraphicsTextItem(param.name, parent=self)
+        # w = label.textWidth()
+        # label.setPos(5,20+15*(len(self.inputs)+len(self.outputs))+35*len(self.parameters))
+        # new_param = Parameter(param)
+        param.setParentItem(self)
+        self.setRect(0,0,100,self.rect().height()+35)
+        param.setPos(0,30+15*(len(self.inputs)+len(self.outputs))+35*len(self.parameters))
+        # label.setDefaultTextColor(Qt.black)
+        self.parameters[param.name] = param
 
     def itemChange(self, change, value):
         if change == QGraphicsItem.ItemPositionChange:
@@ -65,7 +79,6 @@ class Node(QGraphicsRectItem):
                 for w in v.wires_in:
                     w.set_end(v.scenePos())
         return QGraphicsRectItem.itemChange(self, change, value)
-
 
     def paint(self, painter, options, widget):
         painter.setBrush(QBrush(QColor(100,100,100)))
@@ -138,6 +151,29 @@ class Wire(QGraphicsPathItem):
         self.setPath(self.path)
         
 
+class Parameter(QGraphicsEllipseItem):
+    """docstring for Parameter"""
+    def __init__(self, name, scene):
+        self.scene = scene
+        rad = 5
+        super(Parameter, self).__init__(-rad, -rad, 2*rad, 2*rad)
+        self.name = name
+        self.setBrush(QBrush(QColor(200,200,240)))
+        self.setPen(Qt.blue)
+        self.setZValue(1)
+
+        # Text label and area
+        self.label = QGraphicsTextItem(self.name, parent=self)
+        self.label.setPos(5,-10)
+        self.text_area = QGraphicsTextItem("0", parent=self)
+        self.text_area.setPos(5,5)
+        self.text_area.setTextInteractionFlags(Qt.TextEditable)
+        self.text_area.setZValue(10)
+
+        self.text_area_bg = QGraphicsRectItem(4,7,92,16, parent=self)
+        self.text_area_bg.setZValue(9)
+        self.text_area_bg.setBrush(QBrush(QColor(200,200,200)))
+
 class Connector(QGraphicsEllipseItem):
     """docstring for Connector"""
     def __init__(self, name, scene, connector_type='output'):
@@ -202,10 +238,12 @@ class NodeCanvas(QGraphicsScene):
                         def create(the_item):
                             print("I am {}".format(self))
                             node = Node(the_item['name'], self)
-                            for ip in the_item['inputs']:
-                                node.add_input(Connector(ip, self))
                             for op in the_item['outputs']:
                                 node.add_output(Connector(op, self))
+                            for ip in the_item['inputs']:
+                                node.add_input(Connector(ip, self))
+                            for p in the_item['parameters']:
+                                node.add_parameter(Parameter(p, self))
                             node.setPos(self.last_click)
                             self.addItem(node)
                             

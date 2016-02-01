@@ -1,0 +1,44 @@
+{"Inputs":[
+	{"name":"Fake Waveform Generator",
+	 "outputs": ["Waveform"],
+	 "inputs": [],
+	 "parameters": []			
+	 }
+ ],
+ "Outputs":
+ [
+	{"name":"Output to HDF5",
+	 "outputs": [],
+	 "inputs": ["Data"],
+	 "parameters": ["Filename", "Compression"]		
+	 },
+	{"name":"Plot in Bokeh Server",
+	 "outputs": [],
+	 "inputs": ["Data"],
+	 "parameters":[]		
+	 },
+	 {"name":"Output to raw text",
+	 "outputs": [],
+	 "inputs": ["Data"],
+	 "parameters":["Filname"]		
+	 }
+ ],
+ "Filters":
+ [
+ 	{"name":"Decimate",
+	 "outputs": ["Filtered"],
+	 "inputs": ["Data"],
+	 "parameters": ["Factor"]		
+	 },
+ 	{"name":"Low Pass",
+	 "outputs": ["Filtered"],
+	 "inputs": ["Data"],
+	 "parameters": ["Cutoff", "Slope"]		
+	 },
+  	{"name":"High Pass",
+	 "outputs": ["Filtered"],
+	 "inputs": ["Data"],
+	 "parameters": ["Cutoff", "Slope"]		
+	 }
+ ]
+}
