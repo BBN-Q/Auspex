@@ -32,7 +32,7 @@ class Node(QGraphicsRectItem):
 
         self.label = QGraphicsTextItem(self.name, parent=self)
         self.label.setDefaultTextColor(Qt.white)
-        # self.label.setTextInteractionFlags(Qt.TextEditable)
+        self.label.setTextInteractionFlags(Qt.TextEditable)
 
     def add_output(self, port):
         port.connector_type = 'output'
@@ -60,14 +60,9 @@ class Node(QGraphicsRectItem):
         self.inputs[port.name] = port
 
     def add_parameter(self, param):
-        # label = QGraphicsTextItem(param.name, parent=self)
-        # w = label.textWidth()
-        # label.setPos(5,20+15*(len(self.inputs)+len(self.outputs))+35*len(self.parameters))
-        # new_param = Parameter(param)
         param.setParentItem(self)
         self.setRect(0,0,100,self.rect().height()+42)
         param.setPos(0,30+15*(len(self.inputs)+len(self.outputs))+42*len(self.parameters))
-        # label.setDefaultTextColor(Qt.black)
         self.parameters[param.name] = param
 
     def itemChange(self, change, value):
@@ -165,15 +160,6 @@ class Parameter(QGraphicsEllipseItem):
         # Text label and area
         self.label = QGraphicsTextItem(self.name, parent=self)
         self.label.setPos(5,-10)
-        # self.text_area = QGraphicsTextItem("0", parent=self)
-        # self.text_area.setPos(5,5)
-        # self.text_area.setTextInteractionFlags(Qt.TextEditable)
-        # self.text_area.setZValue(10)
-
-        # Background
-        # self.text_area_bg = QGraphicsRectItem(4,7,92,16, parent=self)
-        # self.text_area_bg.setZValue(9)
-        # self.text_area_bg.setBrush(QBrush(QColor(200,200,200)))
 
         # Proxy widget for editing
         self.spin_box = QDoubleSpinBox()
@@ -281,25 +267,6 @@ if __name__ == "__main__":
 
     scene = NodeCanvas()
     scene.setBackgroundBrush(QBrush(QColor(60,60,60)))
-
-    node = Node("Convolve", scene)
-    node.add_output(Connector("Output", scene))
-    node.add_input(Connector("Waveform", scene))
-    node.add_input(Connector("Kernel", scene))
-    node.setPos(200,0)
-    scene.addItem(node)
-
-    node = Node("Decimate", scene)
-    node.add_output(Connector("Output", scene))
-    node.add_input(Connector("Waveform", scene))
-    node.add_input(Connector("Factor", scene))
-    node.setPos(0,0)
-    scene.addItem(node)
-
-    node = Node("Data Taker", scene)
-    node.add_output(Connector("Output", scene))
-    node.setPos(-200,0)
-    scene.addItem(node)
 
     view = QGraphicsView(scene)
     view.setRenderHint(QPainter.Antialiasing)

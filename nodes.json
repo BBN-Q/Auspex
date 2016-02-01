@@ -1,5 +1,5 @@
 {"Inputs":[
-	{"name":"Fake Waveform Generator",
+	{"name":"Fake WG",
 	 "outputs": ["Waveform"],
 	 "inputs": [],
 	 "parameters": []			
