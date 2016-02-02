@@ -5,7 +5,6 @@ from PyQt4.QtCore import *
 from functools import partial
 import json
 
-rad = 5
 
 class Node(QGraphicsRectItem):
     """docstring for Node"""
@@ -193,6 +192,7 @@ class Parameter(QGraphicsEllipseItem):
 
         # Proxy widget for editing
         self.spin_box = QDoubleSpinBox()
+        self.spin_box.setStyleSheet("background-color:transparent;")
         self.proxy_widget = QGraphicsProxyWidget(self)
         self.proxy_widget.setFocusPolicy(Qt.StrongFocus)
         self.proxy_widget.setWidget(self.spin_box)
