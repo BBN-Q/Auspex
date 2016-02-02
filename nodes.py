@@ -73,7 +73,7 @@ class Node(QGraphicsRectItem):
         return QGraphicsRectItem.itemChange(self, change, value)
 
     def paint(self, painter, options, widget):
-        painter.setBrush(QBrush(QColor(100,100,100)))
+        painter.setBrush(QBrush(QColor(200,200,200)))
         painter.setPen(QPen(QColor(200,200,200), 0.75))
         painter.drawRoundedRect(self.rect(), 5.0, 5.0)
 
@@ -142,7 +142,7 @@ class Wire(QGraphicsPathItem):
         drop_site = self.scene.itemAt(event.scenePos())
         if isinstance(drop_site, Connector):
             if drop_site.connector_type == 'input':
-                print("Good drop!")
+                print("Connecting to data-flow connector")
                 self.set_end(drop_site.scenePos())
                 self.setVisible(True)
                 self.end_obj = drop_site
@@ -150,6 +150,13 @@ class Wire(QGraphicsPathItem):
                 self.start_obj.wires_out.append(self)
             else:
                 print("Can't connect to output")
+        elif isinstance(drop_site, Parameter):
+            print("Connecting to parameter connector")
+            self.set_end(drop_site.scenePos())
+            self.setVisible(True)
+            self.end_obj = drop_site
+            drop_site.wires_in.append(self)
+            self.start_obj.wires_out.append(self)
         else:
             print("Bad drop!")
 
