@@ -21,7 +21,7 @@ class Node(QGraphicsRectItem):
         self.parameters = {}
 
         self.setRect(0,0,100,30)
-        self.setBrush(QBrush(QColor(100,100,100)))
+        self.setBrush(QBrush(QColor(240,240,240)))
         self.setPen(QPen(QColor(200,200,200), 0.75))
 
         # Title bar
@@ -29,56 +29,81 @@ class Node(QGraphicsRectItem):
         self.title_bar.setRect(0,0,100,20)
         self.title_bar.setBrush(QBrush(QColor(80,80,100)))
         self.title_bar.setPen(QPen(QColor(200,200,200), 0.75))
-
         self.label = QGraphicsTextItem(self.name, parent=self)
         self.label.setDefaultTextColor(Qt.white)
-        self.label.setTextInteractionFlags(Qt.TextEditable)
 
-    def add_output(self, port):
-        port.connector_type = 'output'
-        port.setBrush(Qt.blue)
-        port.setParentItem(self)
-        port.setPos(100,30+15*(len(self.outputs)+len(self.inputs)))
-        label = QGraphicsTextItem(port.name, parent=self)
-        top_right = label.boundingRect().topRight()
-        label.setPos(95-top_right.x(),20+15*(len(self.outputs)+len(self.inputs)))
-        self.setRect(0,0,100,self.rect().height()+15)
-        label.setDefaultTextColor(Qt.black)
-        self.outputs[port.name] = port
+        # Resize Handle
+        self.resize_handle = ResizeHandle(parent=self)
+        self.resize_handle.setPos(self.rect().width()-8, self.rect().height()-8)
 
-    def add_input(self, port):
-        port.connector_type = 'input'
-        port.setBrush(Qt.green)
-        port.setParentItem(self)
-        print(len(self.outputs))
-        port.setPos(000,30+15*(len(self.inputs)+len(self.outputs)))
-        label = QGraphicsTextItem(port.name, parent=self)
-        w = label.textWidth()
-        label.setPos(5,20+15*(len(self.inputs)+len(self.outputs)))
-        self.setRect(0,0,100,self.rect().height()+15)
-        label.setDefaultTextColor(Qt.black)
-        self.inputs[port.name] = port
+    def add_output(self, connector):
+        connector.setParentItem(self)
+        connector.setPos(self.rect().width(),30+15*(len(self.outputs)+len(self.inputs)))
+        self.setRect(0,0,self.rect().width(),self.rect().height()+15)
+        self.outputs[connector.name] = connector
+
+    def add_input(self, connector):
+        connector.setParentItem(self)
+        connector.setPos(0,30+15*(len(self.inputs)+len(self.outputs)))
+        self.setRect(0,0,self.rect().width(),self.rect().height()+15)
+        self.inputs[connector.name] = connector
 
     def add_parameter(self, param):
         param.setParentItem(self)
-        self.setRect(0,0,100,self.rect().height()+42)
+        self.setRect(0,0,self.rect().width(),self.rect().height()+42)
         param.setPos(0,30+15*(len(self.inputs)+len(self.outputs))+42*len(self.parameters))
         self.parameters[param.name] = param
 
     def itemChange(self, change, value):
         if change == QGraphicsItem.ItemPositionChange:
             for k, v in self.outputs.items():
+                v.setX(self.rect().width())
                 for w in v.wires_out:
                     w.set_start(v.scenePos())
             for k, v in self.inputs.items():
                 for w in v.wires_in:
                     w.set_end(v.scenePos())
+            for k, v in self.parameters.items():
+                v.set_box_width(self.rect().width())
+                for w in v.wires_in:
+                    w.set_end(v.scenePos())
+        if hasattr(self, 'resize_handle'):
+            self.resize_handle.setPos(self.rect().width()-8, self.rect().height()-8)
+        if hasattr(self, 'title_bar'):
+            self.title_bar.setRect(0,0,self.rect().width(),20)
         return QGraphicsRectItem.itemChange(self, change, value)
 
     def paint(self, painter, options, widget):
         painter.setBrush(QBrush(QColor(100,100,100)))
         painter.setPen(QPen(QColor(200,200,200), 0.75))
         painter.drawRoundedRect(self.rect(), 5.0, 5.0)
+
+class ResizeHandle(QGraphicsRectItem):
+    """docstring for ResizeHandle"""
+    def __init__(self, parent=None):
+        super(ResizeHandle, self).__init__()
+        self.dragging = False
+        self.parent = parent
+        self.drag_start = None
+        self.setParentItem(parent)
+        self.setRect(0,0,5,5)
+        self.setBrush(QColor(20,20,20))
+
+    def mousePressEvent(self, event):
+        self.dragging = True
+        self.drag_start = event.scenePos()
+
+    def mouseMoveEvent(self, event):
+        if self.dragging:
+            delta = event.scenePos() - self.drag_start
+            r = self.parent.rect()
+            r.adjust(0,0,delta.x(), delta.y())
+            self.parent.setRect(r)
+            self.parent.itemChange(QGraphicsItem.ItemPositionChange, None)
+            self.drag_start = event.scenePos()
+
+    def mouseReleaseEvent(self, event):
+        self.dragging = False
 
 class Wire(QGraphicsPathItem):
     """docstring for Wire"""
@@ -144,21 +169,26 @@ class Wire(QGraphicsPathItem):
         halfway_x = self.start.x() + 0.5*(self.end.x()-self.start.x())
         self.path.cubicTo(halfway_x, self.start.y(), halfway_x, self.end.y(), self.end.x(), self.end.y())
         self.setPath(self.path)
-        
 
 class Parameter(QGraphicsEllipseItem):
     """docstring for Parameter"""
     def __init__(self, name, scene):
+        self.name = name
         self.scene = scene
         rad = 5
         super(Parameter, self).__init__(-rad, -rad, 2*rad, 2*rad)
-        self.name = name
+        
         self.setBrush(QBrush(QColor(200,200,240)))
-        self.setPen(Qt.blue)
+        self.setPen(Qt.black)
         self.setZValue(1)
+
+        self.temp_wire = None
+        self.wires_in  = []
+        self.wires_out = []
 
         # Text label and area
         self.label = QGraphicsTextItem(self.name, parent=self)
+        self.label.setDefaultTextColor(Qt.black)
         self.label.setPos(5,-10)
 
         # Proxy widget for editing
@@ -168,23 +198,35 @@ class Parameter(QGraphicsEllipseItem):
         self.proxy_widget.setWidget(self.spin_box)
         self.proxy_widget.setGeometry(QRectF(4,7,92,16))
 
+    def set_box_width(self, width):
+        self.proxy_widget.setGeometry(QRectF(4,7,width-6,16))
+
 class Connector(QGraphicsEllipseItem):
     """docstring for Connector"""
-    def __init__(self, name, scene, connector_type='output'):
-        self.scene = scene
+    def __init__(self, name, connector_type, scene):
         rad = 5
         super(Connector, self).__init__(-rad, -rad, 2*rad, 2*rad)
         self.name = name
-        self.setBrush(Qt.white)
-        self.setPen(Qt.blue)
-
+        self.scene = scene
+        self.connector_type = connector_type
         self.setZValue(1)
 
         self.temp_wire = None
         self.wires_in  = []
         self.wires_out = []
 
-        self.connector_type = connector_type
+        # Text label and area
+        self.label = QGraphicsTextItem(self.name, parent=self)
+        self.label.setDefaultTextColor(Qt.black)
+
+        if self.connector_type == 'output':
+            self.label.setPos(-5-self.label.boundingRect().topRight().x(),-10)      
+            self.setBrush(Qt.white)
+            self.setPen(Qt.blue)
+        else:
+            self.label.setPos(5,-10)      
+            self.setBrush(Qt.white)
+            self.setPen(Qt.blue)
 
     def mousePressEvent(self, event):
         self.temp_wire = Wire(self, self.scene)
@@ -196,7 +238,6 @@ class Connector(QGraphicsEllipseItem):
 
     def mouseReleaseEvent(self, event):
         self.temp_wire.decide_drop(event)
-   
 
 class NodeCanvas(QGraphicsScene):
     """docstring for NodeCanvas"""
@@ -233,9 +274,9 @@ class NodeCanvas(QGraphicsScene):
                             print("I am {}".format(self))
                             node = Node(the_item['name'], self)
                             for op in the_item['outputs']:
-                                node.add_output(Connector(op, self))
+                                node.add_output(Connector(op, 'output', self))
                             for ip in the_item['inputs']:
-                                node.add_input(Connector(ip, self))
+                                node.add_input(Connector(ip, 'input', self))
                             for p in the_item['parameters']:
                                 node.add_parameter(Parameter(p, self))
                             node.setPos(self.last_click)
