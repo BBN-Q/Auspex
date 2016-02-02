@@ -245,7 +245,9 @@ class NodeCanvas(QGraphicsScene):
         super(NodeCanvas, self).__init__()
         self.menu = QMenu()
         self.sub_menus = []
-        self.generate_menus()
+        self.generate_menus(json_file='nodes.json')
+        self.menu.addSeparator()
+        self.generate_menus(json_file='nodes_instruments.json')
         self.menu.addSeparator()
         capture = QAction('Export Experiment', self)
         capture.triggered.connect(self.export_experiment)

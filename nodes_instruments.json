@@ -1,0 +1,30 @@
+{
+ "Microwave Sources":
+ [
+	{"name":"Autodyne M3",
+	 "outputs": ["ID"],
+	 "inputs": [],
+	 "parameters": ["Address", "Power", "Frequency", "Output", "ALC", "Modulation", "Pulse Modulate", "Pulse Source", "Ref. Source"]		
+	 },
+	{"name":"Autodyne M4",
+	 "outputs": ["ID"],
+	 "inputs": [],
+	 "parameters": ["Address", "Power", "Frequency", "Output", "ALC", "Modulation", "Pulse Modulate", "Pulse Source"]		
+	 },
+	{"name":"LO",
+	 "outputs": ["ID"],
+	 "inputs": [],
+	 "parameters": ["Address", "Power", "Frequency", "Output", "ALC", "Modulation", "Pulse Modulate", "Pulse Source", "Ref. Source"]		
+	 },
+ 	{"name":"Q3 Source",
+	 "outputs": ["ID"],
+	 "inputs": [],
+	 "parameters": ["Address", "Power", "Frequency", "Output", "ALC", "Modulation", "Pulse Modulate", "Pulse Source", "Ref. Source"]		
+	 },
+ 	{"name":"Q4 Source",
+	 "outputs": ["ID"],
+	 "inputs": [],
+	 "parameters": ["Address", "Power", "Frequency", "Output", "ALC", "Modulation", "Pulse Modulate", "Pulse Source", "Ref. Source"]		
+	 }
+ ]
+}
