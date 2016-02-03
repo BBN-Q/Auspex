@@ -8,10 +8,9 @@ import json
 
 class Node(QGraphicsRectItem):
     """docstring for Node"""
-    def __init__(self, name, scene):
-        super(Node, self).__init__()
+    def __init__(self, name, parent=None):
+        super(Node, self).__init__(parent=parent)
         self.name = name
-        self.scene = scene
         self.setFlag(QGraphicsItem.ItemIsMovable)
         self.setFlag(QGraphicsItem.ItemSendsGeometryChanges)
 
@@ -19,21 +18,34 @@ class Node(QGraphicsRectItem):
         self.inputs = {}
         self.parameters = {}
 
+        self.bg_color = QColor(240,240,240)
         self.setRect(0,0,100,30)
-        self.setBrush(QBrush(QColor(240,240,240)))
+        self.setBrush(QBrush(self.bg_color))
         self.setPen(QPen(QColor(200,200,200), 0.75))
 
         # Title bar
         self.title_bar = QGraphicsRectItem(parent=self)
         self.title_bar.setRect(0,0,100,20)
-        self.title_bar.setBrush(QBrush(QColor(80,80,100)))
+        self.title_color = QColor(80,80,100)
+        self.title_bar.setBrush(QBrush(self.title_color))
         self.title_bar.setPen(QPen(QColor(200,200,200), 0.75))
         self.label = QGraphicsTextItem(self.name, parent=self)
         self.label.setDefaultTextColor(Qt.white)
 
+        if self.label.boundingRect().topRight().x() > 100:
+            self.setRect(0,0,self.label.boundingRect().topRight().x(),30)
+        
         # Resize Handle
         self.resize_handle = ResizeHandle(parent=self)
         self.resize_handle.setPos(self.rect().width()-8, self.rect().height()-8)
+
+    def set_title_color(self, color):
+        self.title_color = color
+        self.title_bar.setBrush(QBrush(color))
+
+    def set_bg_color(self, color):
+        self.bg_color = color
+        self.setBrush(QBrush(color))
 
     def add_output(self, connector):
         connector.setParentItem(self)
@@ -73,7 +85,7 @@ class Node(QGraphicsRectItem):
         return QGraphicsRectItem.itemChange(self, change, value)
 
     def paint(self, painter, options, widget):
-        painter.setBrush(QBrush(QColor(200,200,200)))
+        painter.setBrush(QBrush(self.bg_color))
         painter.setPen(QPen(QColor(200,200,200), 0.75))
         painter.drawRoundedRect(self.rect(), 5.0, 5.0)
 
@@ -106,11 +118,11 @@ class ResizeHandle(QGraphicsRectItem):
 
 class Wire(QGraphicsPathItem):
     """docstring for Wire"""
-    def __init__(self, start_obj, scene):
+    def __init__(self, start_obj, parent=None):
         self.path = QPainterPath()
-        super(Wire, self).__init__(self.path)
+        super(Wire, self).__init__(self.path, parent=parent)
 
-        self.scene     = scene
+        self.parent    = parent
         self.start     = start_obj.scenePos()
         self.end       = self.start
         self.start_obj = start_obj
@@ -118,6 +130,7 @@ class Wire(QGraphicsPathItem):
         self.make_path()
 
         self.setZValue(5)
+        self.set_start(self.start)
 
         self.setPen(QPen(QColor(200,200,200), 0.75))
 
@@ -139,7 +152,7 @@ class Wire(QGraphicsPathItem):
 
     def decide_drop(self, event):
         self.setVisible(False)
-        drop_site = self.scene.itemAt(event.scenePos())
+        drop_site = self.scene().itemAt(event.scenePos())
         if isinstance(drop_site, Connector):
             if drop_site.connector_type == 'input':
                 print("Connecting to data-flow connector")
@@ -178,11 +191,10 @@ class Wire(QGraphicsPathItem):
 
 class Parameter(QGraphicsEllipseItem):
     """docstring for Parameter"""
-    def __init__(self, name, scene):
+    def __init__(self, name, parent=None):
         self.name = name
-        self.scene = scene
         rad = 5
-        super(Parameter, self).__init__(-rad, -rad, 2*rad, 2*rad)
+        super(Parameter, self).__init__(-rad, -rad, 2*rad, 2*rad, parent=parent)
         
         self.setBrush(QBrush(QColor(200,200,240)))
         self.setPen(Qt.black)
@@ -210,11 +222,10 @@ class Parameter(QGraphicsEllipseItem):
 
 class Connector(QGraphicsEllipseItem):
     """docstring for Connector"""
-    def __init__(self, name, connector_type, scene):
+    def __init__(self, name, connector_type, parent=None):
         rad = 5
-        super(Connector, self).__init__(-rad, -rad, 2*rad, 2*rad)
+        super(Connector, self).__init__(-rad, -rad, 2*rad, 2*rad, parent=parent)
         self.name = name
-        self.scene = scene
         self.connector_type = connector_type
         self.setZValue(1)
 
@@ -236,8 +247,8 @@ class Connector(QGraphicsEllipseItem):
             self.setPen(Qt.blue)
 
     def mousePressEvent(self, event):
-        self.temp_wire = Wire(self, self.scene)
-        self.scene.addItem(self.temp_wire)
+        self.temp_wire = Wire(self)
+        self.scene().addItem(self.temp_wire)
 
     def mouseMoveEvent(self, event):
         if self.temp_wire is not None:
@@ -246,15 +257,21 @@ class Connector(QGraphicsEllipseItem):
     def mouseReleaseEvent(self, event):
         self.temp_wire.decide_drop(event)
 
-class NodeCanvas(QGraphicsScene):
-    """docstring for NodeCanvas"""
+class NodeScene(QGraphicsScene):
+    """docstring for NodeScene"""
     def __init__(self):
-        super(NodeCanvas, self).__init__()
+        super(NodeScene, self).__init__()
+        self.backdrop = QGraphicsRectItem()
+        self.backdrop.setRect(-10000,-10000,20000,20000)
+        self.backdrop.setZValue(-100)
+
+        self.addItem(self.backdrop)
+        self.view = None
+
         self.menu = QMenu()
         self.sub_menus = []
         self.generate_menus(json_file='nodes.json')
         self.menu.addSeparator()
-        self.generate_menus(json_file='nodes_instruments.json')
         self.menu.addSeparator()
         capture = QAction('Export Experiment', self)
         capture.triggered.connect(self.export_experiment)
@@ -269,38 +286,40 @@ class NodeCanvas(QGraphicsScene):
             try:
                 data = json.load(data_file)
                 for cat_name, cat_items in data.items():
-                    print("Found node type {:s}".format(cat_name))
                     sm = self.menu.addMenu(cat_name)
                     self.sub_menus.append(sm)
                     for item in cat_items:
-                        print("Adding node {}".format(item['name']))
                         
                         # Create a QAction and add to the menu
                         action = QAction(item['name'], self)
                         
                         # Create function for dropping node on canvas
-                        def create(the_item):
-                            print("I am {}".format(self))
-                            node = Node(the_item['name'], self)
+                        def create(the_item, cat_name):
+                            node = Node(the_item['name'])
                             for op in the_item['outputs']:
-                                node.add_output(Connector(op, 'output', self))
+                                node.add_output(Connector(op, 'output'))
                             for ip in the_item['inputs']:
-                                node.add_input(Connector(ip, 'input', self))
+                                node.add_input(Connector(ip, 'input'))
                             for p in the_item['parameters']:
-                                node.add_parameter(Parameter(p, self))
+                                node.add_parameter(Parameter(p))
+                            # Custom coloring
+                            if cat_name == "Inputs":
+                                node.set_title_color(QColor(80,100,70))
+                            elif cat_name == "Outputs":
+                                node.set_title_color(QColor(120,70,70))
+
+                            node.setPos(self.backdrop.mapFromParent(self.last_click))
+                            
                             node.setPos(self.last_click)
                             self.addItem(node)
                             
                         # # Add to class
                         name = "create_"+("".join(item['name'].split()))
-                        print("Adding {} method to class.".format(name))
-
                         setattr(self, name, create)
                         func = getattr(self, name)
-                        print("Getattr yields {}.".format(getattr(self, name)))
 
                         # Connect trigger for action
-                        action.triggered.connect(partial(func, item))
+                        action.triggered.connect(partial(func, item, cat_name))
                         self.sub_menus[-1].addAction(action)
 
             except:
@@ -310,19 +329,49 @@ class NodeCanvas(QGraphicsScene):
         wires = [i for i in self.items() if isinstance(i, Wire)]
         print(wires)
 
+class NodeView(QGraphicsView):
+    """docstring for NodeView"""
+    def __init__(self, scene):
+        super(NodeView, self).__init__(scene)
+        self.scene = scene        
+        self.setTransformationAnchor(QGraphicsView.AnchorUnderMouse) 
+        self.backdrop = None
+        self.current_scale = 1.0
+
+    def wheelEvent(self, event):
+        change = 0.001*event.delta()
+        self.scale(1+change, 1+change)
+        self.current_scale *= 1+change
+
+    def mousePressEvent(self, event):
+        if (event.button() == Qt.MidButton):
+            self.setDragMode(QGraphicsView.ScrollHandDrag)
+            fake = QMouseEvent(event.type(), event.pos(), Qt.LeftButton, Qt.LeftButton, event.modifiers())
+            return super(NodeView, self).mousePressEvent(fake)
+        else:
+            return super(NodeView, self).mousePressEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        if (event.button() == Qt.MidButton):
+            self.setDragMode(QGraphicsView.NoDrag)
+            fake = QMouseEvent(event.type(), event.pos(), Qt.LeftButton, Qt.LeftButton, event.modifiers())
+            return super(NodeView, self).mouseReleaseEvent(fake)
+        else:
+            return super(NodeView, self).mouseReleaseEvent(event)
 
 if __name__ == "__main__":
 
     app = QApplication([])
 
-    scene = NodeCanvas()
+    scene = NodeScene()
     scene.setBackgroundBrush(QBrush(QColor(60,60,60)))
 
-    view = QGraphicsView(scene)
+    view = NodeView(scene)
+    view.backdrop = scene.backdrop
+
     view.setRenderHint(QPainter.Antialiasing)
     view.resize(800, 600)
     view.show()
 
-    # view.window().activateWindow()
     view.window().raise_()
     app.exec_()
