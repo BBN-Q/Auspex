@@ -147,8 +147,10 @@ class Wire(QGraphicsPathItem):
         self.end_image.mouseReleaseEvent = lambda e: self.decide_drop(e)
 
     def unhook(self, event):
+        print("Unhooking")
         self.end_obj.wires_in.remove(self)
         self.start_obj.wires_out.remove(self)
+        self.end_obj = None
 
     def decide_drop(self, event):
         self.setVisible(False)
@@ -157,7 +159,6 @@ class Wire(QGraphicsPathItem):
             if drop_site.connector_type == 'input':
                 print("Connecting to data-flow connector")
                 self.set_end(drop_site.scenePos())
-                self.setVisible(True)
                 self.end_obj = drop_site
                 drop_site.wires_in.append(self)
                 self.start_obj.wires_out.append(self)
@@ -166,12 +167,14 @@ class Wire(QGraphicsPathItem):
         elif isinstance(drop_site, Parameter):
             print("Connecting to parameter connector")
             self.set_end(drop_site.scenePos())
-            self.setVisible(True)
             self.end_obj = drop_site
             drop_site.wires_in.append(self)
             self.start_obj.wires_out.append(self)
         else:
             print("Bad drop!")
+
+        self.setVisible(True)
+        self.scene().clear_wires(only_clear_orphaned=True)
 
     def set_start(self, start):
         self.start = start
@@ -217,6 +220,10 @@ class Parameter(QGraphicsEllipseItem):
         self.proxy_widget.setWidget(self.spin_box)
         self.proxy_widget.setGeometry(QRectF(4,7,92,16))
 
+    def __del__(self):
+        # These don't die on their own...
+        self.proxy_widget.close()
+
     def set_box_width(self, width):
         self.proxy_widget.setGeometry(QRectF(4,7,width-6,16))
 
@@ -256,6 +263,7 @@ class Connector(QGraphicsEllipseItem):
 
     def mouseReleaseEvent(self, event):
         self.temp_wire.decide_drop(event)
+        self.scene().clear_wires(only_clear_orphaned=True)
 
 class NodeScene(QGraphicsScene):
     """docstring for NodeScene"""
@@ -271,11 +279,27 @@ class NodeScene(QGraphicsScene):
         self.menu = QMenu()
         self.sub_menus = []
         self.generate_menus(json_file='nodes.json')
-        self.menu.addSeparator()
+        
         self.menu.addSeparator()
         capture = QAction('Export Experiment', self)
         capture.triggered.connect(self.export_experiment)
         self.menu.addAction(capture)
+
+        self.menu.addSeparator()
+        clear_wires = QAction('Clear Wires', self)
+        clear_wires.triggered.connect(self.clear_wires)
+        self.menu.addAction(clear_wires)
+
+        self.last_click = self.backdrop.pos()
+
+    def clear_wires(self, only_clear_orphaned=False):
+        wires = [i for i in self.items() if isinstance(i, Wire)]
+        for wire in wires:
+            if only_clear_orphaned:
+                if wire.end_obj is None:
+                    self.removeItem(wire)
+            else:
+                self.removeItem(wire)
 
     def contextMenuEvent(self, event):
         self.last_click = event.scenePos()
@@ -312,14 +336,16 @@ class NodeScene(QGraphicsScene):
                             
                             node.setPos(self.last_click)
                             self.addItem(node)
+
+                            return node
                             
                         # # Add to class
                         name = "create_"+("".join(item['name'].split()))
-                        setattr(self, name, create)
+                        setattr(self, name, partial(create, item, cat_name))
                         func = getattr(self, name)
 
                         # Connect trigger for action
-                        action.triggered.connect(partial(func, item, cat_name))
+                        action.triggered.connect(func)
                         self.sub_menus[-1].addAction(action)
 
             except:
@@ -372,6 +398,9 @@ if __name__ == "__main__":
     view.setRenderHint(QPainter.Antialiasing)
     view.resize(800, 600)
     view.show()
+
+    ps = scene.create_PipelineStart()
+    ps.setPos(-300,0)
 
     view.window().raise_()
     app.exec_()
