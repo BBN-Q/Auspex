@@ -67,17 +67,18 @@ class Node(QGraphicsRectItem):
 
     def itemChange(self, change, value):
         if change == QGraphicsItem.ItemPositionChange:
+
             for k, v in self.outputs.items():
                 v.setX(self.rect().width())
                 for w in v.wires_out:
-                    w.set_start(v.scenePos())
+                    w.set_start(v.pos()+value)
             for k, v in self.inputs.items():
                 for w in v.wires_in:
-                    w.set_end(v.scenePos())
+                    w.set_end(v.pos()+value)
             for k, v in self.parameters.items():
                 v.set_box_width(self.rect().width())
                 for w in v.wires_in:
-                    w.set_end(v.scenePos())
+                    w.set_end(v.pos()+value)
         if hasattr(self, 'resize_handle'):
             self.resize_handle.setPos(self.rect().width()-8, self.rect().height()-8)
         if hasattr(self, 'title_bar'):
@@ -129,17 +130,15 @@ class Wire(QGraphicsPathItem):
         self.end_obj   = None
         self.make_path()
 
-        self.setZValue(5)
+        self.setZValue(0)
         self.set_start(self.start)
-
-        self.setPen(QPen(QColor(200,200,200), 0.75))
 
         # Add endpoint circle
         rad = 5
         self.end_image = QGraphicsEllipseItem(-rad, -rad, 2*rad, 2*rad, parent=self)
         self.end_image.setBrush(Qt.white)
         self.end_image.setPos(self.start)
-        self.end_image.setZValue(10)
+        # self.end_image.setZValue(10)
 
         # Setup behavior for unlinking the end of the wire, monkeypatch!
         self.end_image.mousePressEvent = lambda e: self.unhook(e)
@@ -187,10 +186,20 @@ class Wire(QGraphicsPathItem):
 
     def make_path(self):
         self.path = QPainterPath()
-        self.path.moveTo(self.start)
+        self.path.moveTo(self.start.x()+5, self.start.y()+1)
         halfway_x = self.start.x() + 0.5*(self.end.x()-self.start.x())
-        self.path.cubicTo(halfway_x, self.start.y(), halfway_x, self.end.y(), self.end.x(), self.end.y())
+        self.path.cubicTo(halfway_x, self.start.y(), halfway_x, self.end.y()+3, self.end.x(), self.end.y()+3)
+        self.path.lineTo(self.end.x(), self.end.y()-3)
+        self.path.cubicTo(halfway_x, self.end.y(), halfway_x, self.start.y()-3, self.start.x()+5, self.start.y()-1)
+        self.path.lineTo(self.start.x()+5, self.start.y()+1)
         self.setPath(self.path)
+
+        linearGradient = QLinearGradient(self.start, self.end)
+        linearGradient.setColorAt(0, QColor(128, 128, 128))
+        linearGradient.setColorAt(1.0, Qt.white)
+        self.setBrush(QBrush(linearGradient))
+        self.setPen(QPen(QColor(128, 128, 128), 0.25))
+
 
 class Parameter(QGraphicsEllipseItem):
     """docstring for Parameter"""
