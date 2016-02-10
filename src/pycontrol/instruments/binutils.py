@@ -9,13 +9,8 @@ class BitField(object):
 class BitFieldUnionMeta(type):
     """Metaclass for injecting bitfield descriptors"""
     @classmethod
-    def __prepare__(self, name, bases):
+    def __prepare__(metacls, name, bases):
         return collections.OrderedDict()
-
-    def __new__(cls, name, bases, classdict):
-        classdict['__ordered__'] = [key for key in classdict.keys()
-                if key not in ('__module__', '__qualname__')]
-        return type.__new__(cls, name, bases, classdict)
 
     def __init__(self, name, bases, dct):
         type.__init__(self, name, bases, dct)
