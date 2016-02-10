@@ -5,7 +5,7 @@ class DataStream(object):
     def __init__(self, descriptor):
         super(DataStream, self).__init__()
         self.descriptor = descriptor
-        self.queues = []
+        self.queue = None
         self.points_taken = 0
 
     def num_points(self):
@@ -47,6 +47,16 @@ class DataAxis(object):
         super(DataAxis, self).__init__()
         self.label = label
         self.points = points
+
+class DataNotes(object):
+    """DataNodes produce and consume DataStreams"""
+    def __init__(self):
+        super(DataNotes, self).__init__()
+        self.input_streams = None
+        self.output_streams = None
+
+
+
 
 import numpy as np
 
