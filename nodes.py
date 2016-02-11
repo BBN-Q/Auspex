@@ -32,12 +32,19 @@ class Node(QGraphicsRectItem):
         self.label = QGraphicsTextItem(self.name, parent=self)
         self.label.setDefaultTextColor(Qt.white)
 
-        if self.label.boundingRect().topRight().x() > 100:
-            self.setRect(0,0,self.label.boundingRect().topRight().x(),30)
+        if self.label.boundingRect().topRight().x() > 80:
+            self.setRect(0,0,self.label.boundingRect().topRight().x()+20,30)
         
         # Resize Handle
         self.resize_handle = ResizeHandle(parent=self)
         self.resize_handle.setPos(self.rect().width()-8, self.rect().height()-8)
+
+        # Remove box
+        self.remove_box = RemoveBox(parent=self)
+        self.remove_box.setPos(self.rect().width()-13, 5)
+
+        # Disable box
+        self.disable_box = None
 
     def set_title_color(self, color):
         self.title_color = color
@@ -83,7 +90,22 @@ class Node(QGraphicsRectItem):
             self.resize_handle.setPos(self.rect().width()-8, self.rect().height()-8)
         if hasattr(self, 'title_bar'):
             self.title_bar.setRect(0,0,self.rect().width(),20)
+        if hasattr(self, 'remove_box'):
+            self.remove_box.setPos(self.rect().width()-13, 5)
+
         return QGraphicsRectItem.itemChange(self, change, value)
+
+    def disconnect(self):
+        for k, v in self.outputs.items():
+            for w in v.wires_out:
+                w.start_obj = None
+        for k, v in self.inputs.items():
+            for w in v.wires_in:
+                w.end_obj = None
+        for k, v in self.parameters.items():
+            for w in v.wires_in:
+                w.end_obj = None
+        self.scene().clear_wires(only_clear_orphaned=True)
 
     def paint(self, painter, options, widget):
         painter.setBrush(QBrush(self.bg_color))
@@ -116,6 +138,24 @@ class ResizeHandle(QGraphicsRectItem):
 
     def mouseReleaseEvent(self, event):
         self.dragging = False
+
+class RemoveBox(QGraphicsRectItem):
+    """docstring for RemoveBox"""
+    def __init__(self, parent=None):
+        super(RemoveBox, self).__init__(parent=parent)
+        self.parent = parent
+        self.setRect(0,0,10,10)
+        self.setBrush(QColor(60,60,60))
+        self.setPen(QPen(Qt.black, 1.0))
+        self.close_started = False
+    
+    def mousePressEvent(self, event):
+        self.close_started = True
+
+    def mouseReleaseEvent(self, event):
+        # if event.pos()
+        self.parent.disconnect()
+        self.scene().removeItem(self.parent)
 
 class Wire(QGraphicsPathItem):
     """docstring for Wire"""
@@ -306,6 +346,8 @@ class NodeScene(QGraphicsScene):
         for wire in wires:
             if only_clear_orphaned:
                 if wire.end_obj is None:
+                    self.removeItem(wire)
+                elif wire.start_obj is None:
                     self.removeItem(wire)
             else:
                 self.removeItem(wire)
