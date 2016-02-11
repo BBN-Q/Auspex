@@ -98,15 +98,17 @@ class Node(QGraphicsRectItem):
         return QGraphicsRectItem.itemChange(self, change, value)
 
     def itemResize(self, delta):
-        # Keep track of extraneous dragging beyong the minimum size
-        extra_drag = QPointF(0,0)
+        # Keep track of actual change
+        actual_delta = QPointF(0,0)
 
         r = self.rect()
         if r.width()+delta.x() >= self.min_width:
             r.adjust(0, 0, delta.x(), 0)
-        
+            actual_delta.setX(delta.x())
+
         if r.height()+delta.y() >= self.min_height:
             r.adjust(0, 0, 0, delta.y())
+            actual_delta.setY(delta.y())
 
         self.setRect(r)
         delta.setY(0.0)
@@ -118,20 +120,22 @@ class Node(QGraphicsRectItem):
         if hasattr(self, 'remove_box'):
             self.remove_box.setPos(self.rect().width()-13, 5)
 
+        conn_delta = actual_delta.toPoint()
+        conn_delta.setY(0.0)
+
         # Move the outputs
         for k, v in self.outputs.items():
             v.setX(self.rect().width())
             for w in v.wires_out:
-                w.set_start(v.scenePos()+delta)
+                w.set_start(v.scenePos()+conn_delta)
 
         # Resize the parameters
         for k, v in self.parameters.items():
             v.set_box_width(self.rect().width())
             for w in v.wires_in:
-                w.set_end(v.pos()+value)
+                w.set_end(v.pos()+conn_delta)
 
-        print(extra_drag)
-        return extra_drag
+        return actual_delta
 
     def disconnect(self):
         for k, v in self.outputs.items():
@@ -168,8 +172,8 @@ class ResizeHandle(QGraphicsRectItem):
     def mouseMoveEvent(self, event):
         if self.dragging:
             delta = event.scenePos() - self.drag_start
-            extra_drag = self.parent.itemResize(delta)
-            self.drag_start = event.scenePos() - extra_drag
+            actual_delta = self.parent.itemResize(delta)
+            self.drag_start = self.drag_start + actual_delta
 
     def mouseReleaseEvent(self, event):
         self.dragging = False
