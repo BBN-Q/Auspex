@@ -83,7 +83,7 @@ class Sequence(object):
         for ct, entry in enumerate(self.sequence_items):
             control_word = SequenceControlWord(\
                 init_marker_sequence = 1 if ct==0 else 0, \
-                end_marker_sequence = 1 if ct==0 else 0, \
+                end_marker_sequence = 1 if ct==(len(self.sequence_items) - 1) else 0, \
                 marker_enable = 1 if isinstance(entry, WaveformEntry) else 0, \
                 data_cmd_sel = 1 if isinstance(entry, IdleEntry) else 0 \
             )
@@ -103,7 +103,7 @@ class Sequence(object):
         for ct, entry in enumerate(self.sequence_items):
             control_word = SequenceControlWord(\
                 init_marker_sequence = 1 if ct==0 else 0, \
-                end_marker_sequence = 1 if ct==0 else 0, \
+                end_marker_sequence = 1 if ct==(len(self.sequence_items) - 1) else 0, \
                 marker_enable = 1 if isinstance(entry, WaveformEntry) else 0, \
                 data_cmd_sel = 1 if isinstance(entry, IdleEntry) else 0 \
             )
