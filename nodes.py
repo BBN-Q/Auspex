@@ -30,6 +30,7 @@ class Node(QGraphicsRectItem):
         self.title_bar.setBrush(QBrush(self.title_color))
         self.title_bar.setPen(QPen(QColor(200,200,200), 0.75))
         self.label = QGraphicsTextItem(self.name, parent=self)
+        self.label.setTextInteractionFlags(Qt.TextEditorInteraction)
         self.label.setDefaultTextColor(Qt.white)
 
         if self.label.boundingRect().topRight().x() > 80:
