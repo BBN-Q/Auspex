@@ -4,7 +4,7 @@ from PyQt4.QtGui import *
 from PyQt4.QtCore import *
 from functools import partial
 import json
-
+import sys
 
 class Node(QGraphicsRectItem):
     """docstring for Node"""
@@ -321,6 +321,7 @@ class NodeScene(QGraphicsScene):
         self.backdrop = QGraphicsRectItem()
         self.backdrop.setRect(-10000,-10000,20000,20000)
         self.backdrop.setZValue(-100)
+        self.setBackgroundBrush(QBrush(QColor(60,60,60)))
 
         self.addItem(self.backdrop)
         self.view = None
@@ -412,7 +413,7 @@ class NodeView(QGraphicsView):
         super(NodeView, self).__init__(scene)
         self.scene = scene        
         self.setTransformationAnchor(QGraphicsView.AnchorUnderMouse) 
-        self.backdrop = None
+        self.setRenderHint(QPainter.Antialiasing)
         self.current_scale = 1.0
 
     def wheelEvent(self, event):
@@ -436,22 +437,34 @@ class NodeView(QGraphicsView):
         else:
             return super(NodeView, self).mouseReleaseEvent(event)
 
+class NodeWindow(QMainWindow):
+    """docstring for NodeWindow"""
+    def __init__(self, parent=None):
+        super(NodeWindow, self).__init__(parent=parent)
+        self.setWindowTitle("Nodes")
+        self.setGeometry(50,50,800,600)
+        
+        self.scene = NodeScene()
+        self.view  = NodeView(self.scene)
+
+        self.hbox = QHBoxLayout()
+        self.hbox.addWidget(self.view)
+        self.hbox.setContentsMargins(0,0,0,0)
+
+        self.main_widget = QWidget()
+        self.main_widget.setLayout(self.hbox)
+
+        self.setCentralWidget(self.main_widget)
+
+        # Create the pipeline start node if possible
+        if hasattr(self.scene, 'create_PipelineStart'):
+            ps = self.scene.create_PipelineStart()
+            ps.setPos(-300,0)
+
 if __name__ == "__main__":
 
     app = QApplication([])
+    window = NodeWindow()
+    window.show()
 
-    scene = NodeScene()
-    scene.setBackgroundBrush(QBrush(QColor(60,60,60)))
-
-    view = NodeView(scene)
-    view.backdrop = scene.backdrop
-
-    view.setRenderHint(QPainter.Antialiasing)
-    view.resize(800, 600)
-    view.show()
-
-    ps = scene.create_PipelineStart()
-    ps.setPos(-300,0)
-
-    view.window().raise_()
-    app.exec_()
+    sys.exit(app.exec_())
