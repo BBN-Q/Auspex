@@ -14,9 +14,9 @@ from sklearn.cluster import KMeans
 from tqdm import tqdm
 from scipy.stats import beta
 
-def ntron_pulse(amplitude=1.0, rise_time=80e-12, fall_time=1.0e-9, sample_rate=12e9):
+def ntron_pulse(amplitude=1.0, rise_time=80e-12, hold_time=320e-12, fall_time=1.0e-9, sample_rate=12e9):
     delay    = 2.0e-9 # Wait a few TCs for the rising edge
-    duration = delay + 6.0*fall_time # Wait 6 TCs for the slow decay
+    duration = delay + hold_time + 6.0*fall_time # Wait 6 TCs for the slow decay
     pulse_points = int(duration*sample_rate)
 
     if pulse_points < 320:
@@ -28,10 +28,13 @@ def ntron_pulse(amplitude=1.0, rise_time=80e-12, fall_time=1.0e-9, sample_rate=1
         times = np.arange(0, duration, 1/sample_rate)
 
     rise_mask = np.less(times, delay)
-    fall_mask = np.greater_equal(times, delay)
+    hold_mask = np.less(times, delay + hold_time)*np.greater_equal(times, delay)
+    fall_mask = np.greater_equal(times, delay + hold_time)
 
     wf  = rise_mask*np.exp((times-delay)/rise_time)
-    wf += fall_mask*np.exp(-(times-delay)/fall_time)
+    wf += hold_mask
+    wf += fall_mask*np.exp(-(times-delay-hold_time)/fall_time)
+
     return amplitude*wf
 
 def arb_pulse(amplitude, duration, sample_rate=12e9):
@@ -74,8 +77,8 @@ if __name__ == '__main__':
     arb.gate_mode = False
 
     segment_ids = []
-    amplitudes = np.arange(0.43, 0.95, 0.008)
-    fall_times = np.arange(0.10e-9, 1.50e-9, 0.15*1/12e9)
+    amplitudes = np.arange(0.43, 0.95, 0.02)
+    fall_times = np.arange(0.50e-9, 1.50e-9, 0.05e-9)
     for fall_time in fall_times:
         for amplitude in amplitudes:
             waveform   = ntron_pulse(amplitude=amplitude, fall_time=fall_time)
@@ -99,7 +102,7 @@ if __name__ == '__main__':
 
     rate = 1.25e6/(2**8)
 
-    reps = 1 << 11
+    reps = 1 << 8
     lockin_settle_delay = 52e-6
     lockin_settle_pts = int(640*np.ceil(lockin_settle_delay * 12e9 / 640))
 
