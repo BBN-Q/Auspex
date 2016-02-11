@@ -421,7 +421,7 @@ class NodeView(QGraphicsView):
         self.current_scale *= 1+change
 
     def mousePressEvent(self, event):
-        if (event.button() == Qt.MidButton):
+        if (event.button() == Qt.MidButton) or (event.button() == Qt.LeftButton and event.modifiers() == Qt.ShiftModifier):
             self.setDragMode(QGraphicsView.ScrollHandDrag)
             fake = QMouseEvent(event.type(), event.pos(), Qt.LeftButton, Qt.LeftButton, event.modifiers())
             return super(NodeView, self).mousePressEvent(fake)
@@ -429,7 +429,7 @@ class NodeView(QGraphicsView):
             return super(NodeView, self).mousePressEvent(event)
 
     def mouseReleaseEvent(self, event):
-        if (event.button() == Qt.MidButton):
+        if (event.button() == Qt.MidButton) or (event.button() == Qt.LeftButton and event.modifiers() == Qt.ShiftModifier):
             self.setDragMode(QGraphicsView.NoDrag)
             fake = QMouseEvent(event.type(), event.pos(), Qt.LeftButton, Qt.LeftButton, event.modifiers())
             return super(NodeView, self).mouseReleaseEvent(fake)
