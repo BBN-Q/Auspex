@@ -1,0 +1,5 @@
+{"name":"Output to raw text",
+	 "outputs": [],
+	 "inputs": ["Data"],
+	 "parameters":["Filname"]
+	 }

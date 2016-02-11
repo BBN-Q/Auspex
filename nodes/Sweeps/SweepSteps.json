@@ -1,0 +1,5 @@
+{"name":"Sweep by Steps",
+ "outputs": ["Sweep Target"],
+ "inputs": [],
+ "parameters": ["Sweep Order", "Start", "Stop", "Num. Steps"]
+ }

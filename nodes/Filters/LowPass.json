@@ -1,0 +1,6 @@
+{
+"name": "Low Pass",
+"outputs": ["Filtered"],
+"inputs": ["Data"],
+"parameters": ["Cutoff", "Slope"]
+}

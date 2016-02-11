@@ -1,0 +1,6 @@
+{
+"name": "Decimate",
+"outputs": ["Filtered"],
+"inputs": ["Data"],
+"parameters": ["Factor"]
+}

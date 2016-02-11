@@ -5,6 +5,8 @@ from PyQt4.QtCore import *
 from functools import partial
 import json
 import sys
+import glob
+import os.path
 
 class Node(QGraphicsRectItem):
     """docstring for Node"""
@@ -367,8 +369,8 @@ class NodeScene(QGraphicsScene):
         self.view = None
 
         self.menu = QMenu()
-        self.sub_menus = []
-        self.generate_menus(json_file='nodes.json')
+        self.sub_menus = {}
+        self.generate_menus()
         
         self.menu.addSeparator()
         capture = QAction('Export Experiment', self)
@@ -397,51 +399,53 @@ class NodeScene(QGraphicsScene):
         self.last_click = event.scenePos()
         self.menu.exec_(event.screenPos())
 
-    def generate_menus(self, json_file='nodes.json'):
-        with open(json_file) as data_file:
-            try:
+    def generate_menus(self):
+        def parse_node_file(filename):
+            with open(filename) as data_file:
+                cat  = os.path.basename(os.path.dirname(filename))
                 data = json.load(data_file)
-                for cat_name, cat_items in data.items():
-                    sm = self.menu.addMenu(cat_name)
-                    self.sub_menus.append(sm)
-                    for item in cat_items:
-                        
-                        # Create a QAction and add to the menu
-                        action = QAction(item['name'], self)
-                        
-                        # Create function for dropping node on canvas
-                        def create(the_item, cat_name):
-                            node = Node(the_item['name'])
-                            for op in the_item['outputs']:
-                                node.add_output(Connector(op, 'output'))
-                            for ip in the_item['inputs']:
-                                node.add_input(Connector(ip, 'input'))
-                            for p in the_item['parameters']:
-                                node.add_parameter(Parameter(p))
-                            # Custom coloring
-                            if cat_name == "Inputs":
-                                node.set_title_color(QColor(80,100,70))
-                            elif cat_name == "Outputs":
-                                node.set_title_color(QColor(120,70,70))
+                
+                # Create a QAction and add to the menu
+                action = QAction(data['name'], self)
+                
+                # Create function for dropping node on canvas
+                def create(the_data, cat_name):
+                    node = Node(the_data['name'])
+                    for op in the_data['outputs']:
+                        node.add_output(Connector(op, 'output'))
+                    for ip in the_data['inputs']:
+                        node.add_input(Connector(ip, 'input'))
+                    for p in the_data['parameters']:
+                        node.add_parameter(Parameter(p))
+                    # Custom coloring
+                    if cat_name == "Inputs":
+                        node.set_title_color(QColor(80,100,70))
+                    elif cat_name == "Outputs":
+                        node.set_title_color(QColor(120,70,70))
 
-                            node.setPos(self.backdrop.mapFromParent(self.last_click))
-                            
-                            node.setPos(self.last_click)
-                            self.addItem(node)
+                    node.setPos(self.backdrop.mapFromParent(self.last_click))
+                    node.setPos(self.last_click)
+                    self.addItem(node)
+                    return node
+                    
+                # Add to class
+                name = "create_"+("".join(data['name'].split()))
+                setattr(self, name, partial(create, data, cat))
+                func = getattr(self, name)
 
-                            return node
-                            
-                        # # Add to class
-                        name = "create_"+("".join(item['name'].split()))
-                        setattr(self, name, partial(create, item, cat_name))
-                        func = getattr(self, name)
+                # Connect trigger for action
+                action.triggered.connect(func)
+                self.sub_menus[cat].addAction(action)
 
-                        # Connect trigger for action
-                        action.triggered.connect(func)
-                        self.sub_menus[-1].addAction(action)
+        node_files = sorted(glob.glob('nodes/*/*.json'))
+        categories = set([os.path.basename(os.path.dirname(nf)) for nf in node_files])
+        
+        for cat in categories:
+            sm = self.menu.addMenu(cat)
+            self.sub_menus[cat] = sm
 
-            except:
-                print("Error processing JSON file.")
+        for nf in node_files:
+            parse_node_file(nf)
 
     def export_experiment(self):
         wires = [i for i in self.items() if isinstance(i, Wire)]

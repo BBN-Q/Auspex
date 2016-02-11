@@ -1,0 +1,6 @@
+{
+"name":"Pipeline Start",
+ "outputs": ["Data"],
+ "inputs": [],
+ "parameters": []
+ }
