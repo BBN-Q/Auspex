@@ -33,8 +33,13 @@ class Node(QGraphicsRectItem):
         self.label.setDefaultTextColor(Qt.white)
 
         if self.label.boundingRect().topRight().x() > 80:
+            self.min_width = self.label.boundingRect().topRight().x()+20
             self.setRect(0,0,self.label.boundingRect().topRight().x()+20,30)
-        
+        else:
+            self.min_width = 80.0
+
+        self.min_height = 30
+
         # Resize Handle
         self.resize_handle = ResizeHandle(parent=self)
         self.resize_handle.setPos(self.rect().width()-8, self.rect().height()-8)
@@ -45,6 +50,9 @@ class Node(QGraphicsRectItem):
 
         # Disable box
         self.disable_box = None
+
+        # Make sure things are properly sized
+        self.itemResize(QPointF(0.0,0.0))
 
     def set_title_color(self, color):
         self.title_color = color
@@ -58,23 +66,28 @@ class Node(QGraphicsRectItem):
         connector.setParentItem(self)
         connector.setPos(self.rect().width(),30+15*(len(self.outputs)+len(self.inputs)))
         self.setRect(0,0,self.rect().width(),self.rect().height()+15)
+        self.min_height += 15
         self.outputs[connector.name] = connector
+        self.itemResize(QPointF(0.0,0.0))
 
     def add_input(self, connector):
         connector.setParentItem(self)
         connector.setPos(0,30+15*(len(self.inputs)+len(self.outputs)))
         self.setRect(0,0,self.rect().width(),self.rect().height()+15)
+        self.min_height += 15
         self.inputs[connector.name] = connector
+        self.itemResize(QPointF(0.0,0.0))
 
     def add_parameter(self, param):
         param.setParentItem(self)
         self.setRect(0,0,self.rect().width(),self.rect().height()+42)
+        self.min_height += 42
         param.setPos(0,30+15*(len(self.inputs)+len(self.outputs))+42*len(self.parameters))
         self.parameters[param.name] = param
+        self.itemResize(QPointF(0.0,0.0))
 
     def itemChange(self, change, value):
         if change == QGraphicsItem.ItemPositionChange:
-
             for k, v in self.outputs.items():
                 v.setX(self.rect().width())
                 for w in v.wires_out:
@@ -82,10 +95,22 @@ class Node(QGraphicsRectItem):
             for k, v in self.inputs.items():
                 for w in v.wires_in:
                     w.set_end(v.pos()+value)
-            for k, v in self.parameters.items():
-                v.set_box_width(self.rect().width())
-                for w in v.wires_in:
-                    w.set_end(v.pos()+value)
+        return QGraphicsRectItem.itemChange(self, change, value)
+
+    def itemResize(self, delta):
+        # Keep track of extraneous dragging beyong the minimum size
+        extra_drag = QPointF(0,0)
+
+        r = self.rect()
+        if r.width()+delta.x() >= self.min_width:
+            r.adjust(0, 0, delta.x(), 0)
+        
+        if r.height()+delta.y() >= self.min_height:
+            r.adjust(0, 0, 0, delta.y())
+
+        self.setRect(r)
+        delta.setY(0.0)
+
         if hasattr(self, 'resize_handle'):
             self.resize_handle.setPos(self.rect().width()-8, self.rect().height()-8)
         if hasattr(self, 'title_bar'):
@@ -93,7 +118,20 @@ class Node(QGraphicsRectItem):
         if hasattr(self, 'remove_box'):
             self.remove_box.setPos(self.rect().width()-13, 5)
 
-        return QGraphicsRectItem.itemChange(self, change, value)
+        # Move the outputs
+        for k, v in self.outputs.items():
+            v.setX(self.rect().width())
+            for w in v.wires_out:
+                w.set_start(v.scenePos()+delta)
+
+        # Resize the parameters
+        for k, v in self.parameters.items():
+            v.set_box_width(self.rect().width())
+            for w in v.wires_in:
+                w.set_end(v.pos()+value)
+
+        print(extra_drag)
+        return extra_drag
 
     def disconnect(self):
         for k, v in self.outputs.items():
@@ -130,11 +168,8 @@ class ResizeHandle(QGraphicsRectItem):
     def mouseMoveEvent(self, event):
         if self.dragging:
             delta = event.scenePos() - self.drag_start
-            r = self.parent.rect()
-            r.adjust(0,0,delta.x(), delta.y())
-            self.parent.setRect(r)
-            self.parent.itemChange(QGraphicsItem.ItemPositionChange, None)
-            self.drag_start = event.scenePos()
+            extra_drag = self.parent.itemResize(delta)
+            self.drag_start = event.scenePos() - extra_drag
 
     def mouseReleaseEvent(self, event):
         self.dragging = False
