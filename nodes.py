@@ -67,6 +67,7 @@ class Node(QGraphicsRectItem):
 
     def add_output(self, connector):
         connector.setParentItem(self)
+        connector.parent = self
         connector.setPos(self.rect().width(),30+15*(len(self.outputs)+len(self.inputs)))
         self.setRect(0,0,self.rect().width(),self.rect().height()+15)
         self.min_height += 15
@@ -75,6 +76,7 @@ class Node(QGraphicsRectItem):
 
     def add_input(self, connector):
         connector.setParentItem(self)
+        connector.parent = self
         connector.setPos(0,30+15*(len(self.inputs)+len(self.outputs)))
         self.setRect(0,0,self.rect().width(),self.rect().height()+15)
         self.min_height += 15
@@ -83,6 +85,7 @@ class Node(QGraphicsRectItem):
 
     def add_parameter(self, param):
         param.setParentItem(self)
+        param.parent = self
         self.setRect(0,0,self.rect().width(),self.rect().height()+42)
         self.min_height += 42
         param.setPos(0,30+15*(len(self.inputs)+len(self.outputs))+42*len(self.parameters))
@@ -156,6 +159,14 @@ class Node(QGraphicsRectItem):
         painter.setBrush(QBrush(self.bg_color))
         painter.setPen(QPen(QColor(200,200,200), 0.75))
         painter.drawRoundedRect(self.rect(), 5.0, 5.0)
+
+    def dict_repr(self):
+        dat = {}
+        dat['name'] = self.label.toPlainText()
+        for k, v in self.parameters.items():
+            dat[k] = v.value()
+        dat['pos'] = [self.scenePos().x(), self.scenePos().y()]
+        return dat
 
 class ResizeHandle(QGraphicsRectItem):
     """docstring for ResizeHandle"""
@@ -282,6 +293,11 @@ class Wire(QGraphicsPathItem):
         self.setBrush(QBrush(linearGradient))
         self.setPen(QPen(QColor(128, 128, 128), 0.25))
 
+    def dict_repr(self):
+        dat = {}
+        dat['start'] = {'node': self.start_obj.parent.name, 'connector_name': self.start_obj.name}
+        dat['end'] = {'node': self.end_obj.parent.name, 'connector_name': self.end_obj.name}
+        return dat
 
 class Parameter(QGraphicsEllipseItem):
     """docstring for Parameter"""
@@ -318,12 +334,16 @@ class Parameter(QGraphicsEllipseItem):
     def set_box_width(self, width):
         self.proxy_widget.setGeometry(QRectF(4,7,width-6,16))
 
+    def value(self):
+        return self.spin_box.value()
+
 class Connector(QGraphicsEllipseItem):
     """docstring for Connector"""
     def __init__(self, name, connector_type, parent=None):
         rad = 5
         super(Connector, self).__init__(-rad, -rad, 2*rad, 2*rad, parent=parent)
         self.name = name
+        self.parent = parent
         self.connector_type = connector_type
         self.setZValue(1)
 
@@ -451,6 +471,21 @@ class NodeScene(QGraphicsScene):
         wires = [i for i in self.items() if isinstance(i, Wire)]
         print(wires)
 
+    def load(self, filename):
+        print("Loading"+filename)
+
+    def save(self, filename):
+        with open(filename, 'w') as df:
+            nodes = [i for i in self.items() if isinstance(i, Node)]
+            wires = [i for i in self.items() if isinstance(i, Wire)]
+            
+            data = {}
+            data['nodes'] = [n.dict_repr() for n in nodes]
+            data['wires'] = [n.dict_repr() for n in wires]
+            print(data)
+            json.dump(data, df)
+
+
 class NodeView(QGraphicsView):
     """docstring for NodeView"""
     def __init__(self, scene):
@@ -488,9 +523,35 @@ class NodeWindow(QMainWindow):
         self.setWindowTitle("Nodes")
         self.setGeometry(50,50,800,600)
         
+        # Setup graphics
         self.scene = NodeScene()
         self.view  = NodeView(self.scene)
 
+        # Setup menu
+        self.statusBar()
+
+        exitAction = QAction(QIcon('exit.png'), '&Exit', self)        
+        exitAction.setShortcut('Ctrl+Q')
+        exitAction.setStatusTip('Exit application')
+        exitAction.triggered.connect(qApp.quit)
+
+        saveAction = QAction(QIcon('save.png'), '&Save', self)        
+        saveAction.setShortcut('Ctrl+S')
+        saveAction.setStatusTip('Save')
+        saveAction.triggered.connect(self.save)
+
+        openAction = QAction(QIcon('open.png'), '&Open', self)        
+        openAction.setShortcut('Ctrl+O')
+        openAction.setStatusTip('Open')
+        openAction.triggered.connect(self.load)
+
+        fileMenu = self.menuBar().addMenu('&File')
+        helpMenu = self.menuBar().addMenu('&Help')
+        fileMenu.addAction(exitAction)
+        fileMenu.addAction(saveAction)
+        fileMenu.addAction(openAction)
+
+        # Setup layout
         self.hbox = QHBoxLayout()
         self.hbox.addWidget(self.view)
         self.hbox.setContentsMargins(0,0,0,0)
@@ -504,6 +565,18 @@ class NodeWindow(QMainWindow):
         if hasattr(self.scene, 'create_PipelineStart'):
             ps = self.scene.create_PipelineStart()
             ps.setPos(-300,0)
+
+    def load(self):
+        path = os.path.dirname(os.path.realpath(__file__))
+        fn = QFileDialog.getOpenFileName(self, 'Load Graph', path)
+        if fn:
+            self.scene.load(fn)
+
+    def save(self):
+        path = os.path.dirname(os.path.realpath(__file__))
+        fn = QFileDialog.getSaveFileName(self, 'Save Graph', path)
+        if fn:
+            self.scene.save(fn)
 
 if __name__ == "__main__":
 
