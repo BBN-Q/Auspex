@@ -298,8 +298,8 @@ class Wire(QGraphicsPathItem):
 
     def dict_repr(self):
         dat = {}
-        dat['start'] = {'node': self.start_obj.parent.name, 'connector_name': self.start_obj.name}
-        dat['end'] = {'node': self.end_obj.parent.name, 'connector_name': self.end_obj.name}
+        dat['start'] = {'node': self.start_obj.parent.label.toPlainText(), 'connector_name': self.start_obj.name}
+        dat['end'] = {'node': self.end_obj.parent.label.toPlainText(), 'connector_name': self.end_obj.name}
         return dat
 
 class Parameter(QGraphicsEllipseItem):
@@ -397,11 +397,6 @@ class NodeScene(QGraphicsScene):
         self.menu = QMenu()
         self.sub_menus = {}
         self.generate_menus()
-        
-        self.menu.addSeparator()
-        capture = QAction('Export Experiment', self)
-        capture.triggered.connect(self.export_experiment)
-        self.menu.addAction(capture)
 
         self.menu.addSeparator()
         clear_wires = QAction('Clear Wires', self)
@@ -473,32 +468,68 @@ class NodeScene(QGraphicsScene):
         for nf in node_files:
             parse_node_file(nf)
 
-    def export_experiment(self):
-        wires = [i for i in self.items() if isinstance(i, Wire)]
-        print(wires)
-
     def load(self, filename):
         with open(filename, 'r') as df:
+
+            # Clear scene
+            nodes = [i for i in self.items() if isinstance(i, Node)]
+            wires = [i for i in self.items() if isinstance(i, Wire)]
+            for o in nodes+wires:
+                self.removeItem(o)
+
             data = json.load(df)
             nodes = data['nodes']
             wires = data['wires']
 
-            new_node_labels = []
+            new_nodes = {} # Keep track of nodes we create
 
             for n in nodes:
                 create_node_func_name = "create_"+("".join(n['name'].split()))
                 if hasattr(self, create_node_func_name):
-                    if n['label'] not in new_node_labels:
+                    if n['label'] not in new_nodes.keys():
                         new_node = getattr(self, create_node_func_name)()
                         new_node.setPos(float(n['pos'][0]), float(n['pos'][1]))
                         for k, v in n['params'].items():
                             new_node.parameters[k].set_value(v)
                         new_node.label.setPlainText(n['label'])
-                        new_node_labels.append(n['label'])
+                        new_nodes[n['label']] = new_node
                     else:
                         print("Node cannot be named {}, label already in use".format(n['label']))
                 else:
                     print("Could not load node of type {}, please check nodes directory.".format(n['name']))
+
+            for w in wires:
+                # Instantiate a little later
+                new_wire = None
+
+                start_node_name = w['start']['node']
+                end_node_name   = w['end']['node']
+                start_conn_name = w['start']['connector_name']
+                end_conn_name   = w['end']['connector_name']
+
+                start_node = new_nodes[start_node_name]
+                end_node   = new_nodes[end_node_name]
+
+                # Find our beginning connector
+                if start_conn_name in start_node.outputs.keys():
+                    new_wire = Wire(start_node.outputs[start_conn_name])
+                    self.addItem(new_wire)
+                    new_wire.set_start(start_node.outputs[start_conn_name].scenePos())
+                    start_node.outputs[start_conn_name].wires_out.append(new_wire)
+                    
+                    # Find our end connector
+                    if end_conn_name in end_node.inputs.keys():
+                        new_wire.end_obj = end_node.inputs[end_conn_name]
+                        new_wire.set_end(end_node.inputs[end_conn_name].scenePos())
+                        end_node.inputs[end_conn_name].wires_in.append(new_wire)
+                    elif end_conn_name in end_node.parameters.keys():
+                        new_wire.end_obj = end_node.parameters[end_conn_name]
+                        new_wire.set_end(end_node.parameters[end_conn_name].scenePos())
+                        end_node.parameters[end_conn_name].wires_in.append(new_wire)
+                    else:
+                        print("Could not find input {} on node {}.".format(end_conn_name, end_node_name))
+                else:
+                    print("Could not find output {} on node {}.".format(start_conn_name, start_node_name))
 
     def save(self, filename):
         with open(filename, 'w') as df:
