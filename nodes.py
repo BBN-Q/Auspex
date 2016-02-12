@@ -1,7 +1,8 @@
 # coding: utf-8
 
-from PyQt4.QtGui import *
-from PyQt4.QtCore import *
+from PyQt5.QtGui import *
+from PyQt5.QtWidgets import *
+from PyQt5.QtCore import *
 from functools import partial
 import json
 import sys
@@ -101,6 +102,9 @@ class Node(QGraphicsRectItem):
             for k, v in self.inputs.items():
                 for w in v.wires_in:
                     w.set_end(v.pos()+value)
+            for k, v in self.parameters.items():
+                for w in v.wires_in:
+                    w.set_end(v.pos()+value)
         return QGraphicsRectItem.itemChange(self, change, value)
 
     def itemResize(self, delta):
@@ -138,8 +142,6 @@ class Node(QGraphicsRectItem):
         # Resize the parameters
         for k, v in self.parameters.items():
             v.set_box_width(self.rect().width())
-            for w in v.wires_in:
-                w.set_end(v.pos()+conn_delta)
 
         return actual_delta
 
@@ -249,7 +251,7 @@ class Wire(QGraphicsPathItem):
 
     def decide_drop(self, event):
         self.setVisible(False)
-        drop_site = self.scene().itemAt(event.scenePos())
+        drop_site = self.scene().itemAt(event.scenePos(), QTransform())
         if isinstance(drop_site, Connector):
             if drop_site.connector_type == 'input':
                 print("Connecting to data-flow connector")
@@ -548,7 +550,7 @@ class NodeView(QGraphicsView):
         self.current_scale = 1.0
 
     def wheelEvent(self, event):
-        change = 0.001*event.delta()
+        change = 0.001*event.angleDelta().y()/2.0
         self.scale(1+change, 1+change)
         self.current_scale *= 1+change
 
@@ -623,13 +625,13 @@ class NodeWindow(QMainWindow):
         path = os.path.dirname(os.path.realpath(__file__))
         fn = QFileDialog.getOpenFileName(self, 'Load Graph', path)
         if fn:
-            self.scene.load(fn)
+            self.scene.load(fn[0])
 
     def save(self):
         path = os.path.dirname(os.path.realpath(__file__))
         fn = QFileDialog.getSaveFileName(self, 'Save Graph', path)
         if fn:
-            self.scene.save(fn)
+            self.scene.save(fn[0])
 
     def cleanup(self):
         # Have to manually close proxy widgets
