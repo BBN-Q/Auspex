@@ -162,9 +162,12 @@ class Node(QGraphicsRectItem):
 
     def dict_repr(self):
         dat = {}
-        dat['name'] = self.label.toPlainText()
+        dat['label'] = self.label.toPlainText()
+        dat['name'] = self.name
+        params = {}
         for k, v in self.parameters.items():
-            dat[k] = v.value()
+            params[k] = v.value()
+        dat['params'] = params
         dat['pos'] = [self.scenePos().x(), self.scenePos().y()]
         return dat
 
@@ -337,6 +340,9 @@ class Parameter(QGraphicsEllipseItem):
     def value(self):
         return self.spin_box.value()
 
+    def set_value(self, value):
+        self.spin_box.setValue(float(value))
+
 class Connector(QGraphicsEllipseItem):
     """docstring for Connector"""
     def __init__(self, name, connector_type, parent=None):
@@ -472,7 +478,27 @@ class NodeScene(QGraphicsScene):
         print(wires)
 
     def load(self, filename):
-        print("Loading"+filename)
+        with open(filename, 'r') as df:
+            data = json.load(df)
+            nodes = data['nodes']
+            wires = data['wires']
+
+            new_node_labels = []
+
+            for n in nodes:
+                create_node_func_name = "create_"+("".join(n['name'].split()))
+                if hasattr(self, create_node_func_name):
+                    if n['label'] not in new_node_labels:
+                        new_node = getattr(self, create_node_func_name)()
+                        new_node.setPos(float(n['pos'][0]), float(n['pos'][1]))
+                        for k, v in n['params'].items():
+                            new_node.parameters[k].set_value(v)
+                        new_node.label.setPlainText(n['label'])
+                        new_node_labels.append(n['label'])
+                    else:
+                        print("Node cannot be named {}, label already in use".format(n['label']))
+                else:
+                    print("Could not load node of type {}, please check nodes directory.".format(n['name']))
 
     def save(self, filename):
         with open(filename, 'w') as df:
@@ -482,7 +508,6 @@ class NodeScene(QGraphicsScene):
             data = {}
             data['nodes'] = [n.dict_repr() for n in nodes]
             data['wires'] = [n.dict_repr() for n in wires]
-            print(data)
             json.dump(data, df)
 
 
