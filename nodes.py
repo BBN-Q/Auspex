@@ -539,7 +539,7 @@ class NodeScene(QGraphicsScene):
             data = {}
             data['nodes'] = [n.dict_repr() for n in nodes]
             data['wires'] = [n.dict_repr() for n in wires]
-            json.dump(data, df)
+            json.dump(data, df, sort_keys=True, indent=4, separators=(',', ': '))
 
 
 class NodeView(QGraphicsView):
