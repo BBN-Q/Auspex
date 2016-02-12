@@ -8,10 +8,10 @@ import numpy as np
 import scipy as sp
 import pandas as pd
 
-from instruments.instrument import Instrument, Command
-from instruments.picosecond import Picosecond10070A
-from sweep import Sweep
-from procedure import FloatParameter, Quantity, Procedure
+from pycontrol.instruments.instrument import Instrument, Command
+from pycontrol.instruments.picosecond import Picosecond10070A
+from pycontrol.sweep import Sweep
+from pycontrol.procedure import FloatParameter, Quantity, Procedure
 
 class Magnet(Instrument):
     field = Command("field", get_string=":field?", set_string=":field %g Oe;")
@@ -49,17 +49,17 @@ class TestProcedure(Procedure):
 if __name__ == '__main__':
 
     # Create an instance of the procedure
-    proc = TestProcedure()    
-  
+    proc = TestProcedure()
+
     # Define a sweep over prarameters
     sweep1 = Sweep(proc)
     field_x = sweep1.add_parameter(proc.field_y, np.arange(-100, 101, 5))
     field_y = sweep1.add_parameter(proc.field_x, np.arange(-100, 101, 5))
-    
+
     plot1 = sweep1.add_plotter("ResistanceL Vs Field", proc.field_x, proc.resistance_long, color="firebrick", line_width=2)
-    plot2 = sweep1.add_multiplotter("Resistances Vs Field", [proc.field_x, proc.field_x], [proc.resistance_trans, proc.resistance_long], 
+    plot2 = sweep1.add_multiplotter("Resistances Vs Field", [proc.field_x, proc.field_x], [proc.resistance_trans, proc.resistance_long],
                                     line_color=["firebrick","navy"], line_width=2)
-    
+
     # Have to pass sweep parmaters here in order that the plotter knows the x,y grid
     plot3 = sweep1.add_plotter2d("A Whole New Dimension", field_x, field_y, proc.resistance_trans, palette="Spectral11")
 
@@ -72,4 +72,3 @@ if __name__ == '__main__':
     proc.field_y.add_pre_push_hook(partial(plot2.update, force=True))
 
     sweep1.run()
-
