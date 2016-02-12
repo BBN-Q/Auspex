@@ -330,10 +330,6 @@ class Parameter(QGraphicsEllipseItem):
         self.proxy_widget.setWidget(self.spin_box)
         self.proxy_widget.setGeometry(QRectF(4,7,92,16))
 
-    def __del__(self):
-        # These don't die on their own...
-        self.proxy_widget.close()
-
     def set_box_width(self, width):
         self.proxy_widget.setGeometry(QRectF(4,7,width-6,16))
 
@@ -589,7 +585,7 @@ class NodeWindow(QMainWindow):
         exitAction = QAction(QIcon('exit.png'), '&Exit', self)        
         exitAction.setShortcut('Ctrl+Q')
         exitAction.setStatusTip('Exit application')
-        exitAction.triggered.connect(qApp.quit)
+        exitAction.triggered.connect(QApplication.instance().quit)
 
         saveAction = QAction(QIcon('save.png'), '&Save', self)        
         saveAction.setShortcut('Ctrl+S')
@@ -600,6 +596,7 @@ class NodeWindow(QMainWindow):
         openAction.setShortcut('Ctrl+O')
         openAction.setStatusTip('Open')
         openAction.triggered.connect(self.load)
+
 
         fileMenu = self.menuBar().addMenu('&File')
         helpMenu = self.menuBar().addMenu('&Help')
@@ -634,10 +631,18 @@ class NodeWindow(QMainWindow):
         if fn:
             self.scene.save(fn)
 
+    def cleanup(self):
+        # Have to manually close proxy widgets
+        nodes = [i for i in self.scene.items() if isinstance(i, Node)]
+        for n in nodes:
+            for k, v in n.parameters.items():
+                v.proxy_widget.close()
+
 if __name__ == "__main__":
 
     app = QApplication([])
     window = NodeWindow()
+    app.aboutToQuit.connect(window.cleanup)
     window.show()
 
     sys.exit(app.exec_())
