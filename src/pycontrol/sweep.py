@@ -192,15 +192,12 @@ class Sweep(object):
         if len(self._plotters) > 0:
             t = BokehServerThread()
             t.start()
-            #On some systems there is a possibility the `output_server` line is executed before the
-            #the server on the BokehServerThread has started.  Possible solutions tried:
-            # * We can't send an event from plotting thread because the `bokeh.server.run()` is blocking.
-            # *I can't catch the error here because it gets caught somewhere in Bokeh
-            # So reluctantly just go with a hacky pause for now
-            time.sleep(0.05)
-            output_server("Pycontrol Bokeh Server")
+            #On some systems there is a possibility we try to `push_session` before the
+            #the server on the BokehServerThread has started.
+            time.sleep(1)
             q = hplot(*[p.figure for p in self._plotters])
-            show(q)
+            session = push_session(curdoc())
+            session.show()
 
         def shutdown():
             if len(self._plotters) > 0:
