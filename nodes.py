@@ -324,23 +324,82 @@ class Parameter(QGraphicsEllipseItem):
         self.label.setDefaultTextColor(Qt.black)
         self.label.setPos(5,-10)
 
-        # Proxy widget for editing
-        self.spin_box = QDoubleSpinBox()
-        self.spin_box.setStyleSheet("background-color:transparent;")
-        self.proxy_widget = QGraphicsProxyWidget(self)
-        self.proxy_widget.setFocusPolicy(Qt.StrongFocus)
-        self.proxy_widget.setWidget(self.spin_box)
-        self.proxy_widget.setGeometry(QRectF(4,7,92,16))
+        # SliderBox
+        self.spin_box = SliderBox(parent=self)
 
     def set_box_width(self, width):
-        self.proxy_widget.setGeometry(QRectF(4,7,width-6,16))
+        self.spin_box.set_box_width(width)
 
     def value(self):
         return self.spin_box.value()
 
     def set_value(self, value):
-        self.spin_box.setValue(float(value))
+        self.spin_box.set_value(float(value))
 
+class SliderBox(QGraphicsRectItem):
+    """docstring for SliderBox"""
+    def __init__(self, parent):
+        super(SliderBox, self).__init__(parent=parent)
+        self.parent = parent
+        self.dragging = False
+
+        self._value = 5.0
+        self.min_value = 0.0
+        self.max_value = 10.0
+        self.increment = 0.5
+
+        self.height = 14
+        self.rect_radius = 7.0
+        self.control_distance = 0.55228*self.rect_radius
+        self.setRect(3,15,94,self.height)
+
+        self.label = QGraphicsTextItem(str(self._value), parent=self)
+        label_width = self.label.boundingRect().topRight().x()
+        self.label.setPos(3+0.5*self.rect().width()-0.5*label_width,15-5)
+
+    def paint(self, painter, options, widget):
+        # Background object is a rounded rectangle
+        painter.RenderHint(QPainter.Antialiasing)
+        painter.setBrush(QBrush(QColor(220,220,220)))
+        painter.setPen(QPen(QColor(200,200,200), 0.75))
+        painter.drawRoundedRect(self.rect(), self.rect_radius, self.rect_radius)
+
+        # Draw the bar using a round capped line
+        painter.setPen(QPen(QColor(160,200,220), self.height, cap=Qt.RoundCap))
+        path = QPainterPath()
+        path.moveTo(3+self.rect_radius, 15 + 0.5*self.height)
+        fill_size = (self.rect().width()-2*self.rect_radius)*(self._value-self.min_value)/self.max_value
+        path.lineTo(3+self.rect_radius+fill_size, 7.5 + 0.5+self.height)
+        painter.drawPath(path)
+
+    def set_value(self, value):
+        if value <= self.max_value and value >= self.min_value:
+            self._value = value
+            self.label.setPlainText(str(value))
+            self.update()
+
+    def value(self):
+        return self._value
+
+    def set_box_width(self, width):
+        self.setRect(3,15, width-6, self.height)
+        label_width = self.label.boundingRect().topRight().x()
+        self.label.setPos(3+0.5*self.rect().width()-0.5*label_width,15-5)
+
+    def mousePressEvent(self, event):
+        self.dragging = True
+        self.original_value = self._value
+        self.drag_start = event.scenePos()
+
+    def mouseMoveEvent(self, event):
+        if self.dragging:
+            delta = event.scenePos() - self.drag_start
+            value_change = self.increment*int(delta.x()/10.0)
+            self.set_value(self.original_value + value_change)
+
+    def mouseReleaseEvent(self, event):
+        self.dragging = False
+    
 class Connector(QGraphicsEllipseItem):
     """docstring for Connector"""
     def __init__(self, name, connector_type, parent=None):
@@ -638,7 +697,8 @@ class NodeWindow(QMainWindow):
         nodes = [i for i in self.scene.items() if isinstance(i, Node)]
         for n in nodes:
             for k, v in n.parameters.items():
-                v.proxy_widget.close()
+                # v.proxy_widget.close()
+                pass
 
 if __name__ == "__main__":
 
