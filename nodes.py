@@ -336,12 +336,63 @@ class Parameter(QGraphicsEllipseItem):
     def set_value(self, value):
         self.spin_box.set_value(float(value))
 
+class SliderBoxText(QGraphicsTextItem):
+    """docstring for SliderBoxText"""
+    def __init__(self, string, parent=None):
+        super(SliderBoxText, self).__init__(string, parent=parent)
+        self.setTextInteractionFlags(Qt.NoTextInteraction)
+        self.ItemIsFocusable = True
+        self.parent = parent
+        self.full_text = string
+        self.clip_text()
+
+    def set_text_interaction(self, value):
+        if value and (self.textInteractionFlags() == Qt.NoTextInteraction):
+            self.setTextInteractionFlags(Qt.TextEditorInteraction)
+            self.setPlainText(self.full_text)
+            self.setFocus(Qt.MouseFocusReason)
+            # self.scene().setFocus(self, Qt.MouseFocusReason)
+            self.setSelected(True)
+            c = self.textCursor()
+            c.select(QTextCursor.Document)
+            self.setTextCursor(c)
+        elif not value and (self.textInteractionFlags() == Qt.TextEditorInteraction):
+            self.setTextInteractionFlags(Qt.NoTextInteraction)
+            c = self.textCursor()
+            c.clearSelection()
+            self.setTextCursor(c)
+            self.clearFocus()
+
+    def clip_text(self):
+        print("{},{}".format(self.parent.rect().width(),self.boundingRect().topRight().x()))
+        if self.parent.rect().width() < self.boundingRect().topRight().x():
+            clipped = self.full_text[:int(self.parent.rect().width()/6)-3]
+            if int(self.parent.rect().width()/6)-3 == len(self.full_text)-1:
+                self.setPlainText(clipped)
+            else:
+                self.setPlainText(clipped+"...")
+
+    def focusOutEvent(self, event):
+        self.set_text_interaction(False)
+        self.full_text = self.toPlainText()
+        self.clip_text()
+        self.parent.refresh_label()
+        return super(SliderBoxText, self).focusOutEvent(event)
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key_Return or event.key() == Qt.Key_Enter:
+            self.set_text_interaction(False)
+        else:
+            return super(SliderBoxText, self).keyPressEvent(event)
+
+
 class SliderBox(QGraphicsRectItem):
     """docstring for SliderBox"""
     def __init__(self, parent):
         super(SliderBox, self).__init__(parent=parent)
         self.parent = parent
         self.dragging = False
+        self.value_changed = False
 
         self._value = 5.0
         self.min_value = 0.0
@@ -353,7 +404,7 @@ class SliderBox(QGraphicsRectItem):
         self.control_distance = 0.55228*self.rect_radius
         self.setRect(3,15,94,self.height)
 
-        self.label = QGraphicsTextItem(str(self._value), parent=self)
+        self.label = SliderBoxText(str(self._value), parent=self)
         label_width = self.label.boundingRect().topRight().x()
         self.label.setPos(3+0.5*self.rect().width()-0.5*label_width,15-5)
 
@@ -372,11 +423,23 @@ class SliderBox(QGraphicsRectItem):
         path.lineTo(3+self.rect_radius+fill_size, 7.5 + 0.5+self.height)
         painter.drawPath(path)
 
+    def valueFromText(self, text):
+        return float(str(text))
+
+    def textFromValue(self, value):
+        # return "%.*g" % (self.decimals(), value)
+        return "%.4g" % (value)
+
     def set_value(self, value):
         if value <= self.max_value and value >= self.min_value:
             self._value = value
             self.label.setPlainText(str(value))
             self.update()
+
+    def refresh_label(self):
+        label_width = self.label.boundingRect().topRight().x()
+        self.label.setPos(3+0.5*self.rect().width()-0.5*label_width,15-5)
+        self.update()
 
     def value(self):
         return self._value
@@ -384,6 +447,7 @@ class SliderBox(QGraphicsRectItem):
     def set_box_width(self, width):
         self.setRect(3,15, width-6, self.height)
         label_width = self.label.boundingRect().topRight().x()
+        self.label.clip_text()
         self.label.setPos(3+0.5*self.rect().width()-0.5*label_width,15-5)
 
     def mousePressEvent(self, event):
@@ -395,10 +459,16 @@ class SliderBox(QGraphicsRectItem):
         if self.dragging:
             delta = event.scenePos() - self.drag_start
             value_change = self.increment*int(delta.x()/10.0)
+            if value_change != 0.0:
+                self.value_changed = True
             self.set_value(self.original_value + value_change)
 
     def mouseReleaseEvent(self, event):
         self.dragging = False
+        if not self.value_changed:
+            self.label.setPos(3+5,15-5)
+            self.label.set_text_interaction(True)
+        self.value_changed = False
     
 class Connector(QGraphicsEllipseItem):
     """docstring for Connector"""
