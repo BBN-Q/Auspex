@@ -491,6 +491,7 @@ class StringBox(QGraphicsRectItem):
         self._value = value
         self.label.full_text = value
         self.label.setPlainText(value)
+        self.label.clip_text()
         self.refresh_label()
         self.update()
 
@@ -504,6 +505,7 @@ class StringBox(QGraphicsRectItem):
 
     def set_box_width(self, width):
         self.setRect(3,15, width-6, self.height)
+        self.label.clip_text()
         self.refresh_label()
 
     def mousePressEvent(self, event):
@@ -519,7 +521,24 @@ class FilenameBox(StringBox):
     """docstring for FilenameBox"""
     def __init__(self, parent=None):
         super(FilenameBox, self).__init__(parent=parent)
-        self.browse_button = QGraphicsRectItem(self.rect().width()-15, 2, 15, 8)
+        self.browse_button = QGraphicsRectItem(self.rect().width()-28, -3, 30, 12, parent=self)
+        self.browse_button.setBrush(QBrush(QColor(220,220,220)))
+        self.browse_button.mousePressEvent = lambda e: self.save_file()
+        # self.browse_button.mouseReleaseEvent = lambda e: self.save_file()
+
+    def save_file(self):
+        path = os.path.dirname(os.path.realpath(__file__))
+        fn = QFileDialog.getSaveFileName(None, 'Save Results As', path)
+        self.set_value(fn[0])
+        self.label.clip_text()
+        self.refresh_label()
+
+    def refresh_label(self):
+        label_width = self.label.boundingRect().topRight().x()
+        self.label.setPos(3+0.5*self.rect().width()-0.5*label_width,15-5)
+        self.browse_button.setRect(self.rect().width()-28, -3, 30, 12)
+        self.update()
+
 
 class ValueBoxText(QGraphicsTextItem):
     """docstring for ValueBoxText"""
@@ -549,7 +568,7 @@ class ValueBoxText(QGraphicsTextItem):
 
     def clip_text(self):
         if self.parent.rect().width() < self.boundingRect().topRight().x():
-            clipped = self.full_text[:int(self.parent.rect().width()/6)-3]
+            clipped = self.full_text[:int(self.parent.rect().width()/7)-3]
             if int(self.parent.rect().width()/6)-3 == len(self.full_text)-1:
                 self.setPlainText(clipped)
             else:
@@ -558,7 +577,7 @@ class ValueBoxText(QGraphicsTextItem):
     def focusOutEvent(self, event):
         self.set_text_interaction(False)
         self.parent.set_value(self.toPlainText())
-        self.full_text = self.toPlainText()
+        # self.full_text = self.toPlainText()
         self.clip_text()
         self.parent.refresh_label()
         return super(ValueBoxText, self).focusOutEvent(event)
