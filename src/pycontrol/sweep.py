@@ -9,7 +9,8 @@ import itertools
 import time
 import h5py
 
-from bokeh.plotting import show, output_server, hplot, cursession
+from bokeh.client import push_session
+from bokeh.plotting import curdoc, hplot
 from .plotting import BokehServerThread, Plotter, Plotter2D, MultiPlotter
 from .procedure import Procedure, Parameter, Quantity
 
