@@ -363,9 +363,6 @@ class FilenameParameter(StringParameter):
         # SliderBox
         self.value_box = FilenameBox(parent=self)
 
-    def set_value(self, value):
-        self.value_box.set_value(value)
-
 class SliderBox(QGraphicsRectItem):
     """docstring for SliderBox"""
     def __init__(self, datatype, min_value, max_value, increment, snap, parent=None):
@@ -423,12 +420,15 @@ class SliderBox(QGraphicsRectItem):
             return ("{:.4g}".format(value))
 
     def set_value(self, val):
+        val = self.valueFromText(val)
         if val >= self.min_value and val <= self.max_value:
             if self.snap:
                 val = (val/self.snap)*self.snap
-            self._value = val
-            self.label.setPlainText(self.textFromValue(val))
-            self.update()
+            self._value = self.datatype(val)
+            
+        self.label.setPlainText(self.textFromValue(self._value))
+        self.refresh_label()
+        self.update()
 
     def refresh_label(self):
         label_width = self.label.boundingRect().topRight().x()
@@ -489,7 +489,9 @@ class StringBox(QGraphicsRectItem):
 
     def set_value(self, value):
         self._value = value
+        self.label.full_text = value
         self.label.setPlainText(value)
+        self.refresh_label()
         self.update()
 
     def refresh_label(self):
@@ -502,13 +504,16 @@ class StringBox(QGraphicsRectItem):
 
     def set_box_width(self, width):
         self.setRect(3,15, width-6, self.height)
-        label_width = self.label.boundingRect().topRight().x()
-        self.label.clip_text()
-        self.label.setPos(3+0.5*self.rect().width()-0.5*label_width,15-5)
+        self.refresh_label()
 
-    def mouseClickEvent(self, event):
-        self.label.setPos(3+5,15-5)
-        self.label.set_text_interaction(True)
+    def mousePressEvent(self, event):
+        self.clicked = True
+
+    def mouseReleaseEvent(self, event):
+        if self.clicked:
+            self.label.setPos(3+5,15-5)
+            self.label.set_text_interaction(True)
+        self.clicked = False
 
 class FilenameBox(StringBox):
     """docstring for FilenameBox"""
@@ -552,6 +557,7 @@ class ValueBoxText(QGraphicsTextItem):
 
     def focusOutEvent(self, event):
         self.set_text_interaction(False)
+        self.parent.set_value(self.toPlainText())
         self.full_text = self.toPlainText()
         self.clip_text()
         self.parent.refresh_label()
@@ -560,6 +566,10 @@ class ValueBoxText(QGraphicsTextItem):
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Return or event.key() == Qt.Key_Enter:
             self.set_text_interaction(False)
+            self.parent.set_value(self.toPlainText())
+            self.full_text = self.toPlainText()
+            self.clip_text()
+            self.parent.refresh_label()
         else:
             return super(ValueBoxText, self).keyPressEvent(event)
 
@@ -662,9 +672,9 @@ class NodeScene(QGraphicsScene):
                         elif p['type'] == 'filename':
                             pp = FilenameParameter(p['name'])
                         elif p['type'] == 'float':
-                            pp = NumericalParameter(p['name'], p['type'], p['low'], p['high'], p['increment'], p['snap'])
+                            pp = NumericalParameter(p['name'], float, p['low'], p['high'], p['increment'], p['snap'])
                         elif p['type'] == 'int':
-                            pp = NumericalParameter(p['name'], p['type'], p['low'], p['high'], p['increment'], p['snap'])
+                            pp = NumericalParameter(p['name'], int, p['low'], p['high'], p['increment'], p['snap'])
                         elif p['type'] == 'combo':
                             pp = StringParameter(p['name'])
                         node.add_parameter(pp)
