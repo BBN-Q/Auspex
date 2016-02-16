@@ -25,6 +25,7 @@ class DataStream(object):
         return self.points_taken >= self.num_points()
 
     async def push(self, data):
+        self.points_taken += len(data)
         await self.queue.put(data)
 
 class DataStreamDescriptor(object):
@@ -60,7 +61,12 @@ class DataTaker(object):
     def add_output_stream(self, stream):
         self.output_streams.append(stream)
 
+    def update_descriptors(self):
+        for os in self.output_streams:
+            os.descriptor = self.descriptor
+
     async def run(self):
+        print("Data taker running")
         while True:
             #Produce fake data every 0.02 seconds until we have 1000 points
             if False not in [os.done() for os in self.output_streams]:
@@ -68,34 +74,38 @@ class DataTaker(object):
                 break
             await asyncio.sleep(0.02)
             new_data = np.random.rand(50)
+            print("Data taker pushing data")
             for os in self.output_streams:
                 await os.push(new_data)
-                os.points_taken += 50
 
-class DataCruncher(object):
-    """docstring for DataCruncher"""
+class ProcessingNode(object):
+    """Any node on the graph that takes input streams with optional output streams"""
     def __init__(self):
-        super(DataCruncher, self).__init__()
-        self.input_stream   = None
+        super(ProcessingNode, self).__init__()
+        self.input_streams  = []
         self.output_streams = []
-        self.descriptor     = None
 
     def add_input_stream(self, stream):
-        if self.input_stream is None:
-            self.input_stream = stream
-            self.data = np.empty(self.input_stream.num_points())
-            self.descriptor = self.input_stream.descriptor
-        else:
-            raise Exception("DataCruncher takes only one input")
+        self.input_streams.append(stream)
 
     def add_output_stream(self, stream):
         self.output_streams.append(stream)
 
+    def update_descriptors(self):
+        for os in self.output_streams:
+            os.descriptor = self.input_streams[0].descriptor
+
+class DataCruncher(ProcessingNode):
+    """docstring for DataCruncher"""
+    def __init__(self):
+        super(DataCruncher, self).__init__()
+
     async def run(self):
         idx = 0
+        self.data = np.empty(self.input_streams[0].num_points())
         while True:
-            if self.input_stream.done():
-                # We'ce stopped receiving new input, make sure we've flushed the output streams
+            if self.input_streams[0].done():
+                # We've stopped receiving new input, make sure we've flushed the output streams
                 if len(self.output_streams) > 0:
                     if False not in [os.done() for os in self.output_streams]:
                         print("Cruncher finished crunching (clearing outputs).")
@@ -104,31 +114,18 @@ class DataCruncher(object):
                     print("Cruncher finished crunching.")
                     break
 
-            new_data = await self.input_stream.queue.get()
+            new_data = await self.input_streams[0].queue.get()
 
             self.data[idx:idx+len(new_data)] = new_data
             for output_stream in self.output_streams:
                 await output_stream.push(new_data)
-                output_stream.points_taken += len(new_data)
             idx += len(new_data)
 
-class Combiner(object):
+class Combiner(ProcessingNode):
     """docstring for Combiner"""
     def __init__(self):
         super(Combiner, self).__init__()
-        self.input_streams = []
-        self.output_streams = []
         self.data_containers = []
-        self.descriptor = None       
-        
-    def add_input_stream(self, stream):
-        self.input_streams.append(stream)
-        self.data_containers.append(np.empty(stream.num_points()))
-        if len(self.input_streams) == 0:
-            self.descriptor = stream.descriptor
-
-    def add_output_stream(self, stream):
-        self.output_streams.append(stream)
 
     async def run(self):
         print("Combiner running")
@@ -136,34 +133,36 @@ class Combiner(object):
         # So keep track of what's been pushed.
         last_push_idx = 0
         idxs = [0]*len(self.input_streams)
+        for ins in self.input_streams:
+            self.data_containers.append(np.empty(ins.num_points()))
 
         while True:
-            if False not in [ins.done() for ins in self.input_streams]:
+            if all([ins.done() for ins in self.input_streams]):
                 if len(self.output_streams) > 0:
-                    if False not in [os.done() for os in self.output_streams]:
+                    if all([os.done() for os in self.output_streams]):
                         print("Combiner finished combining (clearing outputs).")
                         break
                 else:
                     print("Combiner finished combining.")
                     break
-            
+
             # Accumulate new data from all the queues
             # print(str(self.input_streams))
             for i, (container, input_stream) in enumerate(zip(self.data_containers, self.input_streams)):
-                print("COmbiner waiting on stream")
+                print("Combiner waiting on stream")
                 new_data = await input_stream.queue.get()
                 print("Combiner: new data {:s} on stream {:s}".format(str(new_data), str(input_stream)))
                 # print("Last push: {:d}, Idxs: {:s}".format(last_push_idx, str(idxs)))
                 container[idxs[i]:idxs[i]+len(new_data)] = new_data
                 idxs[i] += len(new_data)
-            
+
             # Once all of the queues have surpassed the last push point, write to the stream
             # print("Last push: {:d}, Idxs: {:s}".format(last_push_idx, str(idxs)))
 
             if np.min(idxs) > last_push_idx:
                 new_data_length = np.min(idxs) - last_push_idx
                 print("Adding {:d} points".format(new_data_length))
-                
+
                 #Let's just sum everything by default:
                 new_data = np.zeros(new_data_length)
                 for dc in self.data_containers:
@@ -172,7 +171,6 @@ class Combiner(object):
 
                 for output_stream in self.output_streams:
                     await output_stream.push(new_data)
-                    output_stream.points_taken += len(new_data)
                 last_push_idx += new_data_length
 
 def create_graph(edges):
@@ -193,11 +191,12 @@ def create_graph(edges):
                 src    = edge[0]
                 dest   = edge[1]
                 stream = dag[src][dest]['object']
-                stream.set_descriptor(src.descriptor)
                 print(stream)
-                dest.add_input_stream(stream) 
                 src.add_output_stream(stream)
+                dest.add_input_stream(stream)
                 processed_edges.append(edge)
+                if "update_descriptors" in dir(src):
+                    src.update_descriptors()
 
     tasks = [n.run() for n in dag.nodes()]
     return dag, tasks
@@ -228,8 +227,3 @@ if __name__ == '__main__':
 
     nx.draw(dag, with_labels=True)
     plt.show()
-
-
-
-
-
