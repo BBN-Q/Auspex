@@ -52,11 +52,15 @@ class DataAxis(object):
 
 class DataTaker(object):
     """docstring for DataTaker"""
-    def __init__(self, descriptor):
+    def __init__(self, label, descriptor):
         super(DataTaker, self).__init__()
+        self.label = label
+        self.descriptor = descriptor
         self.input_streams  = None
         self.output_streams = []
-        self.descriptor = descriptor
+
+    def __str__(self):
+        return str(self.label)
 
     def add_output_stream(self, stream):
         self.output_streams.append(stream)
@@ -80,10 +84,14 @@ class DataTaker(object):
 
 class ProcessingNode(object):
     """Any node on the graph that takes input streams with optional output streams"""
-    def __init__(self):
+    def __init__(self, label):
         super(ProcessingNode, self).__init__()
+        self.label = label
         self.input_streams  = []
         self.output_streams = []
+
+    def __str__(self):
+        return str(self.label)
 
     def add_input_stream(self, stream):
         self.input_streams.append(stream)
@@ -97,8 +105,8 @@ class ProcessingNode(object):
 
 class DataCruncher(ProcessingNode):
     """docstring for DataCruncher"""
-    def __init__(self):
-        super(DataCruncher, self).__init__()
+    def __init__(self, *args):
+        super(DataCruncher, self).__init__(*args)
 
     async def run(self):
         idx = 0
@@ -123,8 +131,8 @@ class DataCruncher(ProcessingNode):
 
 class Combiner(ProcessingNode):
     """docstring for Combiner"""
-    def __init__(self):
-        super(Combiner, self).__init__()
+    def __init__(self, *args):
+        super(Combiner, self).__init__(*args)
         self.data_containers = []
 
     async def run(self):
@@ -206,11 +214,11 @@ if __name__ == '__main__':
     descrip = DataStreamDescriptor()
     descrip.add_axis(DataAxis("time", 1e-9*np.arange(1000)))
 
-    ADC        = DataTaker(descrip)
-    cruncher1  = DataCruncher()
-    cruncher2  = DataCruncher()
-    cruncher3  = DataCruncher()
-    combiner   = Combiner()
+    ADC        = DataTaker("Fake ADC", descrip)
+    cruncher1  = DataCruncher("Cruncher1")
+    cruncher2  = DataCruncher("Cruncher2")
+    cruncher3  = DataCruncher("Cruncher3")
+    combiner   = Combiner("Combiner")
 
     edges = [
         (ADC, cruncher1),
