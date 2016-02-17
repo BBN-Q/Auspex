@@ -1,10 +1,18 @@
 import asyncio
+
 import numpy as np
+from numpy import pi
 import networkx as nx
 import matplotlib.pyplot as plt
 import logging
+import time
+from bokeh.plotting import figure
+from bokeh.client import push_session
+from bokeh.plotting import curdoc
+from bokeh.driving import cosine
 
-logging.basicConfig(level=logging.DEBUG)
+from pycontrol.plotting import BokehServerThread
+
 class DataStream(object):
     """A stream of data"""
     def __init__(self):
@@ -71,13 +79,17 @@ class DataTaker(object):
 
     async def run(self):
         print("Data taker running")
+        start_time = 0
+        step = 20e-6
         while True:
-            #Produce fake data every 0.02 seconds until we have 1000 points
+            #Produce fake noisy sinusoid data every 0.02 seconds until we have 1000 points
             if False not in [os.done() for os in self.output_streams]:
                 print("Data taker finished.")
                 break
-            await asyncio.sleep(0.02)
-            new_data = np.random.rand(50)
+            await asyncio.sleep(0.5)
+            timepts = np.arange(start_time, start_time+49.5*20e-6, 20e-6)
+            new_data = np.sin(2*pi*1e3*timepts) + 0.1*np.random.rand(50)
+            start_time += 50*step
             print("Data taker pushing data")
             for os in self.output_streams:
                 await os.push(new_data)
@@ -123,6 +135,7 @@ class DataCruncher(ProcessingNode):
                     break
 
             new_data = await self.input_streams[0].queue.get()
+            print("{} got data".format(self.label))
 
             self.data[idx:idx+len(new_data)] = new_data
             for output_stream in self.output_streams:
@@ -159,7 +172,7 @@ class Combiner(ProcessingNode):
             for i, (container, input_stream) in enumerate(zip(self.data_containers, self.input_streams)):
                 print("Combiner waiting on stream")
                 new_data = await input_stream.queue.get()
-                print("Combiner: new data {:s} on stream {:s}".format(str(new_data), str(input_stream)))
+                print("Combiner: new data on stream {:s}".format(str(input_stream)))
                 # print("Last push: {:d}, Idxs: {:s}".format(last_push_idx, str(idxs)))
                 container[idxs[i]:idxs[i]+len(new_data)] = new_data
                 idxs[i] += len(new_data)
@@ -175,7 +188,7 @@ class Combiner(ProcessingNode):
                 new_data = np.zeros(new_data_length)
                 for dc in self.data_containers:
                     new_data = new_data + dc[last_push_idx:last_push_idx+new_data_length]
-                print("Combined fake new data into {:s}!".format(str(new_data)))
+                # print("Combined fake new data into {:s}!".format(str(new_data)))
 
                 for output_stream in self.output_streams:
                     await output_stream.push(new_data)
@@ -210,6 +223,37 @@ def create_graph(edges):
     return dag, tasks
 
 
+
+class Plotter(ProcessingNode):
+    """docstring for Plotter"""
+    def __init__(self, *args):
+        super(Plotter, self).__init__(*args)
+
+    def init(self):
+        ins = self.input_streams[0]
+        self.x_data = ins.descriptor.axes[0].points
+        self.y_data = np.full(ins.num_points(), np.nan)
+
+        #Create the initial plot
+        self.figure = figure(plot_width=400, plot_height=400, x_range=(self.x_data[0], self.x_data[-1]))
+        self.plot = self.figure.line(self.x_data, self.y_data, color="navy", line_width=2)
+
+    async def run(self):
+        idx = 0
+
+        while True:
+            if all([ins.done() for ins in self.input_streams]):
+                print("No more data for plotter")
+                break
+            new_data = await self.input_streams[0].queue.get()
+            print("Plotter got {} points".format(len(new_data)))
+            self.y_data[idx:idx+len(new_data)] = new_data
+            idx += len(new_data)
+            #have to copy data to get new pointer to trigger update
+            #TODO: investigate streaming
+            self.plot.data_source.data["y"] = np.copy(self.y_data)
+
+
 if __name__ == '__main__':
     descrip = DataStreamDescriptor()
     descrip.add_axis(DataAxis("time", 1e-9*np.arange(1000)))
@@ -219,19 +263,42 @@ if __name__ == '__main__':
     cruncher2  = DataCruncher("Cruncher2")
     cruncher3  = DataCruncher("Cruncher3")
     combiner   = Combiner("Combiner")
+    plotter    = Plotter("plotter")
 
     edges = [
         (ADC, cruncher1),
         (ADC, cruncher2),
+        (ADC, plotter),
         (cruncher2, cruncher3),
         (cruncher2, combiner),
         (cruncher1, combiner)
     ]
 
     dag, tasks = create_graph(edges)
+    #initialize nodes and check for plot
+    have_plots = False
+    for n in dag.nodes():
+        if isinstance(n, Plotter):
+            have_plots = True
+        if "init" in dir(n):
+            n.init()
+
+    if have_plots:
+        t = BokehServerThread()
+        t.start()
+        #On some systems there is a possibility we try to `push_session` before the
+        #the server on the BokehServerThread has started.
+        time.sleep(1)
+        session = push_session(curdoc())
+        print(session.document)
+        session.show()
 
     loop = asyncio.get_event_loop()
     loop.run_until_complete(asyncio.wait(tasks))
+
+    if have_plots:
+        print("Joining bokeh server thread")
+        t.join()
 
     nx.draw(dag, with_labels=True)
     plt.show()
