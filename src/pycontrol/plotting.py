@@ -2,6 +2,7 @@ import logging
 import threading
 import subprocess
 import time
+import os
 
 import numpy as np
 
@@ -17,12 +18,15 @@ class BokehServerThread(threading.Thread):
         super(BokehServerThread, self).__init__()
         self.daemon = True
 
+    def __del__(self):
+        self.join()
+
     def run(self):
-        self.p = subprocess.Popen(["bokeh serve"], shell=True)
+        self.p = subprocess.Popen(["bokeh", "serve"], env=os.environ.copy())
 
     def join(self, timeout=None):
-        print("Trying to kill server thread")
-        self.p.terminate()
+        print("Trying to kill server thread {}".format(self.p.pid))
+        self.p.kill()
         super(BokehServerThread, self).join(timeout=timeout)
 
 class MultiPlotter(object):
