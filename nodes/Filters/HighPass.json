@@ -2,5 +2,8 @@
 "name": "High Pass",
 "outputs": ["Filtered"],
 "inputs": ["Data"],
-"parameters": ["Cutoff", "Slope"]
+"parameters": [
+	{"name": "Cutoff", "type": "float", "increment": 1e9, "snap": true, "low": 0, "high": 100e9, "tip": "Hz"},
+	{"name": "Slope",  "type": "float", "increment": 1, "snap": true, "low": 0, "high": 20, "tip": "dB/octave."}
+	]
 }
