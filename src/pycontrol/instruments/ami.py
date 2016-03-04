@@ -1,5 +1,6 @@
 from .instrument import Instrument, Command, FloatCommand, IntCommand
 
+import time
 
 class AMI430(Instrument):
     """AMI430 Power Supply Programmer"""
@@ -19,9 +20,10 @@ class AMI430(Instrument):
     supply_type = Command("Supply type", get_string="SUPPly:TYPE?",
         value_map={v:str(ct) for ct,v in enumerate(SUPPLY_TYPES)})
     voltage_min    = FloatCommand("Minimum supply voltage", get_string="SUPPly:VOLTage:MINimum?")
-    voltage_max    = FloatCommand("Maximum supply voltage", get_string="SUPPly:VOLTage:MAXimum")
+    voltage_max    = FloatCommand("Maximum supply voltage", get_string="SUPPly:VOLTage:MAXimum?")
+
     current_min    = FloatCommand("Minimum supply current", get_string="SUPPly:CURRent:MINimum?")
-    current_max    = FloatCommand("Maximum supply current", get_string="SUPPly:CURRent:MAXimum")
+    current_max    = FloatCommand("Maximum supply current", get_string="SUPPly:CURRent:MAXimum?")
     current_limit  = FloatCommand("Maximum magnitude of current (A)", set_string="CONFigure:CURRent:LIMit {:f}", get_string="CURRent:LIMit?")
     current_rating = FloatCommand("Magnet current rating (A)", set_string="CONFigure:CURRent:RATING {f}", get_string="CURRent:RATING?")
     stability      = FloatCommand("Stability setting in percent", set_string="CONFigure:STABility {:f}", get_string="STABility?", value_range=(0,100))
