@@ -1,14 +1,15 @@
 import logging
 import threading
+import subprocess
 import time
 
 import numpy as np
 
 # Bokeh
 import h5py
-import bokeh.server
-import bokeh.server.start
-from bokeh.plotting import figure, cursession
+
+from bokeh.plotting import figure
+
 from bokeh.models.renderers import GlyphRenderer
 
 class BokehServerThread(threading.Thread):
@@ -17,14 +18,11 @@ class BokehServerThread(threading.Thread):
         self.daemon = True
 
     def run(self):
-        try:
-            bokeh.server.run()
-        except:
-            logging.info("Server could not be launched, may already be running.")
-            raise Exception("Couldn't start server.")
+        self.p = subprocess.Popen(["bokeh serve"], shell=True)
 
     def join(self, timeout=None):
-        bokeh.server.start.stop()
+        print("Trying to kill server thread")
+        self.p.terminate()
         super(BokehServerThread, self).join(timeout=timeout)
 
 class MultiPlotter(object):
@@ -64,7 +62,6 @@ class MultiPlotter(object):
             # for i, (x,y) in enumerate(zip(self.x_data, self.y_data)):
             self.data_source.data["xs"] = self.x_data
             self.data_source.data["ys"] = self.y_data
-            cursession().store_objects(self.data_source)
             self.last_update = time.time()
 
     def clear(self):
@@ -108,7 +105,6 @@ class Plotter(object):
         if (time.time() - self.last_update >= self.update_interval) or force:
             self.data_source.data["x"] = self.x_data
             self.data_source.data["y"] = self.y_data
-            cursession().store_objects(self.data_source)
             self.last_update = time.time()
 
     def clear(self):
@@ -156,7 +152,6 @@ class Plotter2D(object):
         self.z_data[new_data_loc] = self.z.value
         if (time.time() - self.last_update >= self.update_interval) or force:
             self.data_source.data["image"] = [self.z_data]
-            cursession().store_objects(self.data_source)
             self.last_update = time.time()
 
     def clear(self):
