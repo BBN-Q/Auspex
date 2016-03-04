@@ -110,3 +110,12 @@ class AMI430(Instrument):
         AT ZERO status becomes active.
         """
         self.interface.write("ZERO")
+
+    def set_field(self, val):
+        """
+        Blocking field setter
+        """
+        self.field_target = val
+        self.ramp()
+        while self.ramping_state != "HOLDING at the target field/current":
+            time.sleep(0.1)
