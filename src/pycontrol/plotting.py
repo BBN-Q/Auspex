@@ -1,6 +1,7 @@
 import logging
 import threading
 import subprocess
+import psutil
 import time
 import os
 
@@ -25,9 +26,14 @@ class BokehServerThread(threading.Thread):
         self.p = subprocess.Popen(["bokeh", "serve"], env=os.environ.copy())
 
     def join(self, timeout=None):
-        print("Trying to kill server thread {}".format(self.p.pid))
-        self.p.kill()
-        super(BokehServerThread, self).join(timeout=timeout)
+        if self.p:
+            print("Killing bokeh server thread {}".format(self.p.pid))
+            for child_proc in psutil.Process(self.p.pid).children():
+                print("Killing child process {}".format(child_proc.pid))
+                child_proc.kill()
+            self.p.kill()
+            self.p = None
+            super(BokehServerThread, self).join(timeout=timeout)
 
 class MultiPlotter(object):
     """Attach a plotter to the sweep."""
