@@ -54,9 +54,6 @@ class MultiPlotter(object):
         renderers = self.plot.select(dict(name=title))
         self.renderer = [r for r in renderers if isinstance(r, GlyphRenderer)][0]
         self.data_source = self.renderer.data_source
-        # import ipdb
-        # ipdb.set_trace()
-        # logging.warning(self.data_source)
 
     def update(self, force=False):
         for x, y, xd, yd in zip(self.xs, self.ys, self.x_data, self.y_data):
@@ -64,8 +61,8 @@ class MultiPlotter(object):
             yd.append(y.value)
         if (time.time() - self.last_update >= self.update_interval) or force:
             # for i, (x,y) in enumerate(zip(self.x_data, self.y_data)):
-            self.data_source.data["xs"] = self.x_data
-            self.data_source.data["ys"] = self.y_data
+            self.data_source.data["xs"] = np.copy(self.x_data)
+            self.data_source.data["ys"] = np.copy(self.y_data)
             self.last_update = time.time()
 
     def clear(self):
@@ -107,8 +104,8 @@ class Plotter(object):
         self.x_data.append(self.x.value)
         self.y_data.append(self.y.value)
         if (time.time() - self.last_update >= self.update_interval) or force:
-            self.data_source.data["x"] = self.x_data
-            self.data_source.data["y"] = self.y_data
+            self.data_source.data["x"] = np.copy(self.x_data)
+            self.data_source.data["y"] = np.copy(self.y_data)
             self.last_update = time.time()
 
     def clear(self):
