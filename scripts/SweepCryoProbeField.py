@@ -17,7 +17,7 @@ class RampCurrent(Procedure):
     resistance = Quantity("Resistance", unit="Ohm")
 
     mag = AMI430("This is a magnet", "192.168.5.109")
-    keith = Keithley2400("This is a keithley", "GPIB0::24::INSTR")
+    keith = Keithley2400("This is a keithley", "GPIB0::25::INSTR")
 
     def init_instruments(self):
         self.keith.triad()
