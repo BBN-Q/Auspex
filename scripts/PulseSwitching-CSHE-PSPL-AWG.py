@@ -29,7 +29,7 @@ if __name__ == '__main__':
     keith = Keithley2400("This is a keithley", "GPIB0::25::INSTR")
     lock  = SR865("Lockin Amplifier", "USB0::0xB506::0x2000::002638::INSTR")
 
-    APtoP = True
+    APtoP = False
     polarity = 1 if APtoP else -1
 
     keith.triad()
@@ -76,8 +76,8 @@ if __name__ == '__main__':
     nidaq_trig_segment_id = arb.define_waveform(len(nidaq_trig_wf))
     arb.upload_waveform(nidaq_trig_wf, nidaq_trig_segment_id)
 
-    reps = 1 << 22
-    settle_delay = 60e-6
+    reps = 1 << 10
+    settle_delay = 40e-6
     settle_pts = int(640*np.ceil(settle_delay * 12e9 / 640))
 
     scenario = Scenario()
@@ -99,7 +99,8 @@ if __name__ == '__main__':
 
     # Setup picosecond
     pspl.duration  = 5e-9
-    pspl.amplitude = polarity*7.5*np.power(10, -8/20)
+    pspl_attenuation = 6
+    pspl.amplitude = polarity*7.5*np.power(10, -pspl_attenuation/20)
     pspl.trigger_source = "EXT"
     pspl.output = True
     #TODO: pspl.trigger_level = 0.1
@@ -117,19 +118,23 @@ if __name__ == '__main__':
 
     # DAQmx Configure Code
     analog_input.CreateAIVoltageChan("Dev1/ai1", "", DAQmx_Val_RSE, 0, 1.0, DAQmx_Val_Volts, None)
-    analog_input.CfgSampClkTiming("/Dev1/PFI0", 20000.0, DAQmx_Val_Rising, DAQmx_Val_ContSamps, 2*reps)
+    analog_input.CfgSampClkTiming("", 1e6, DAQmx_Val_Rising, DAQmx_Val_FiniteSamps , 10)
+    analog_input.CfgInputBuffer(10 * 2*reps)
+    analog_input.CfgDigEdgeStartTrig("/Dev1/PFI0", DAQmx_Val_Rising)
+    analog_input.SetStartTrigRetriggerable(1)
 
     # DAQmx Start Code
     analog_input.StartTask()
 
     arb.scenario_start_index = 0
     arb.run()
-    # attens = np.arange(-7.5,-6,0.01)
-    attens    = np.arange(-8.01,-6.00,1.0)
-    durations = np.array([5.0e-9])
-    # durations = 1e-9*np.arange(0.1, 5.01, 0.1)
+    attens = np.arange(-16.01, -6, 0.1)
+    #attens    = np.arange(-9.01,-6.00,0.5)
+    # durations = np.array([5.0e-9])
+    durations = 1e-9*np.arange(0.1, 5.01, 0.1)
 
-    buffers = np.empty((len(attens)*len(durations), 2*reps))
+    volts = 7.5*np.power(10, (-pspl_attenuation+attens)/20)
+    buffers = np.empty((len(attens)*len(durations), 2*10*reps))
     idx = 0
     # lock.ao3 = attenuator_lookup(attens[0])
 
@@ -142,12 +147,16 @@ if __name__ == '__main__':
 
             arb.advance()
             arb.trigger()
-            analog_input.ReadAnalogF64(2*reps, -1, DAQmx_Val_GroupByChannel, buffers[idx], 2*reps, byref(read), None)
+            analog_input.ReadAnalogF64(2*10*reps, -1, DAQmx_Val_GroupByChannel, buffers[idx], 2*10*reps, byref(read), None)
 
             idx += 1
 
-    analog_input.StopTask()
+    try:
+        analog_input.StopTask()
+    except Exception as e:
+        print("Warning failed to stop task.")
+        pass
     arb.stop()
     keith.current = 0.0
-    # mag.zero()
+    mag.zero()
     pspl.output = False

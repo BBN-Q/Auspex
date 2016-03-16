@@ -63,13 +63,6 @@ def switching_plots(buffers, axis1, num_clusters=2):
     ci95_PtoAP = np.array([beta.interval(0.95, 1+c[0,1], 1+c[0,0]) for c in counts])
     ci95_APtoP = np.array([beta.interval(0.95, 1+c[1,0], 1+c[1,1]) for c in counts])
 
-    # import h5py
-    # FID = h5py.File("data/CSHE-Switching-BER-APtoP.h5", "w")
-    # FID.create_dataset("/buffer", data=buffers, compression="lzf")
-    # FID.create_dataset("/durations", data=durations, compression="lzf")
-    # FID.create_dataset("/attens", data=attens, compression="lzf")
-    # FID.close()
-
     plt.figure()
     # volts = 7.5*np.power(10, (-5+attens)/20)
     current_palette = sns.color_palette()
@@ -117,7 +110,7 @@ def switching_plot_ber(buffers, attens, num_clusters=2):
     print("Total initial state distribution:")
     init_state = state[::2]
     for ct in range(num_clusters):
-        print("\tState {}: {:.2f}%".format(ct, 100*np.sum(init_state == ct)/len(init_state)))
+        print("\tState {}: {:.2f}%".format(ct, 100.0*np.sum(init_state == ct)/len(init_state)))
 
     #Approximate SNR from centre distance and variance
     std0 = np.std(all_vals[state == 0])
@@ -163,7 +156,7 @@ def switching_plot_ber(buffers, attens, num_clusters=2):
     ci95_APtoP = np.array([beta.interval(0.95, 1+c[1,0], 1+c[1,1]) for c in counts])
 
     plt.figure()
-    volts = 7.5*np.power(10, (-9+attens)/20)
+    volts = 7.5*np.power(10, (-8+attens)/20)
     plt.semilogy(volts, 1-mean_PtoAP)
     plt.semilogy(volts, 1-limit_PtoAP, color=current_palette[0], linestyle="--")
     plt.semilogy(volts, 1-mean_APtoP)
@@ -172,6 +165,10 @@ def switching_plot_ber(buffers, attens, num_clusters=2):
     plt.xlabel("Pulse Voltage (V)")
 
     plt.show()
+
+
+def average_buffers(buffers, avg_points):
+    return [np.mean(b.reshape(avg_points, -1, order="F"), axis=0) for b in buffers]
 
 def switching_phase_diagram(buffers, durations, attens, num_clusters=2):
     #Get an idea of SNR
