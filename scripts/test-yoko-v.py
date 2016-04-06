@@ -10,18 +10,18 @@ from pycontrol.sweep import Sweep
 from pycontrol.procedure import FloatParameter, Quantity, Procedure
 
 class RampCurrent(Procedure):
-    current = FloatParameter("Current", unit="A")
-    voltage = Quantity("Voltage", unit="V")
+    voltage = FloatParameter("Voltage", unit="V")
+    current = Quantity("Current", unit="A")
 
     yoko = YokogawaGS200("Current source", "GPIB0::30::INSTR")
 
     def init_instruments(self):
-        self.yoko.function = "current"
+        self.yoko.function = "voltage"
         self.yoko.level = 0.0
         self.yoko.output = True
 
-        self.current.assign_method(self.yoko.set_level)
-        self.voltage.assign_method(self.yoko.get_sense_value)
+        self.voltage.assign_method(self.yoko.set_level)
+        self.current.assign_method(self.yoko.get_sense_value)
 
         for param in self._parameters:
             self._parameters[param].push()
@@ -45,7 +45,7 @@ if __name__ == '__main__':
     # Define a sweep over prarameters
     sw = Sweep(proc)
 
-    sw.add_parameter(proc.current, np.linspace(0, 10e-6, 100))
+    sw.add_parameter(proc.voltage, np.linspace(0, 20, 100))
 
     # Define a writer
     # sw.add_writer('data/C4R2-FieldSweep.h5', 'CSHE-C4R2', 'Neg-4K', proc.resistance)
