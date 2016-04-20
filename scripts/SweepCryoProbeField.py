@@ -13,7 +13,7 @@ from pycontrol.sweep import Sweep
 from pycontrol.procedure import FloatParameter, Quantity, Procedure
 
 class RampCurrent(Procedure):
-    field  = FloatParameter("Field", unit="G")
+    field  = FloatParameter("Field", unit="T")
     resistance = Quantity("Resistance", unit="Ohm")
 
     mag = AMI430("This is a magnet", "192.168.5.109")
@@ -23,7 +23,7 @@ class RampCurrent(Procedure):
         self.keith.triad()
         self.keith.conf_meas_res(res_range=1e5)
         self.keith.conf_src_curr(comp_voltage=0.5, curr_range=1.0e-5)
-        self.keith.current = 5e-6
+        self.keith.current = 3e-6
         self.mag.ramp()
 
         self.field.assign_method(self.mag.set_field)
@@ -44,6 +44,17 @@ class RampCurrent(Procedure):
         self.keith.current = 0.0e-5
         self.mag.zero()
 
+def loop_from_zero(high, low, res):
+    first  = np.arange(0, high, res)
+    second = np.arange(high, low, -res)
+    third = np.arange(low, 0+res, res)
+    return np.r_[first, second, third]
+
+def loop_from_low(high, low, res):
+    first  = np.arange(low, high, res)
+    second = np.arange(high, low, -res)
+    return np.r_[first, second]
+
 if __name__ == '__main__':
 
     proc = RampCurrent()
@@ -51,13 +62,13 @@ if __name__ == '__main__':
     # Define a sweep over prarameters
     sw = Sweep(proc)
     # values = np.append(np.arange(0, 0.05, 0.001), np.arange(0.049, 0, -0.001)).tolist()
-    values = np.append(np.arange(0, 0.02, 0.001), np.arange(0.019, 0, -0.001)).tolist()
-    sw.add_parameter(proc.field, values)
+    # values = np.append(values, np.arange(0, -0.02, 0.001), np.arange(0.019, 0, -0.001)).tolist()
+    sw.add_parameter(proc.field, loop_from_zero(0.07, -0.02, 0.001))
 
     # Define a writer
-    sw.add_writer('data/HPD-FieldSweepTest.h5', 'CSHE-C6R4', 'MinorLoopNeg-4K', proc.resistance)
+    sw.add_writer('data/CSHE-2-C1R2-FieldSweeps.h5', 'CSHE-2-C1R2', 'TestLoop-4K', proc.resistance)
 
     # Define a plotter
-    # sw.add_plotter("Resistance Vs Field", proc.field, proc.resistance, color="firebrick", line_width=2)
+    sw.add_plotter("Resistance Vs Field", proc.field, proc.resistance, color="firebrick", line_width=2)
 
     sw.run()

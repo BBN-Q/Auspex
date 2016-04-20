@@ -38,9 +38,9 @@ class AMI430(Instrument):
     #Ramp commands
     voltage_limit = FloatCommand("Ramping voltage limit (V)", set_string="CONFigure:VOLTage:LIMit {:f}", get_string="VOLTage:LIMit?")
     current_target = FloatCommand("Target current (A)", set_string="CONFigure:CURRent:TARGet {:f}",
-        get_string="CURRent:TARGet?", value_range=(0,44.2))
+        get_string="CURRent:TARGet?", value_range=(-44.2,44.2))
     field_target = FloatCommand("Field target (kG/T)", set_string="CONFigure:FIELD:TARGet {:f}",
-        get_string="FIELD:TARGet?", value_range=(0,44.2))
+        get_string="FIELD:TARGet?", value_range=(-0.4,0.4))
     ramp_num_segments = IntCommand("Number of segments for ramp", set_string="CONFigure:RAMP:RATE:SEGments {:d}",
         get_string="RAMP:RATE:SEGments?", value_range=(1,10))
     ramp_rate_units = Command("Ramp rate time unit (seconds/minutes)", set_string="CONFigure:RAMP:RATE:UNITS {}",

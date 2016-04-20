@@ -12,6 +12,13 @@ from tqdm import tqdm
 from scipy.interpolate import interp1d
 import pandas as pd
 
+# Experimental Topology
+# lockin AO 2 -> Analog Attenuator Vdd
+# lockin AO 3 -> Analog Attenuator Vc (Control Voltages)
+# Keithley Output -> Voltage divider with 1 MOhm, DAQmx AI1
+# AWG Sync Marker Out -> DAQmx PFI0
+# AWG Samp. Marker Out -> PSPL Trigger
+
 def arb_pulse(amplitude, duration, sample_rate=12e9):
     pulse_points = int(duration*sample_rate)
 
@@ -33,7 +40,7 @@ if __name__ == '__main__':
     polarity = 1 if APtoP else -1
 
     keith.triad()
-    keith.conf_meas_res(res_range=1e5)
+    keith.conf_meas_res(res_range=1e6)
     keith.conf_src_curr(comp_voltage=0.5, curr_range=1.0e-5)
     keith.current = 5e-6
     mag.ramp()
