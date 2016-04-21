@@ -42,29 +42,29 @@ class ProcedureTestCase(unittest.TestCase):
 	"""
 
 	def setUp(self):
-		self.procedure = TestProcedure()
+		pass
 
 	def test_parameters(self):
 		"""Check that parameters have been appropriately gathered"""
-		self.assertTrue(hasattr(self.procedure, "_parameters")) # should have parsed these parameters from class dir
-		self.assertTrue(len(self.procedure._parameters) == 2 ) # should have parsed these parameters from class dir
-		self.assertTrue(self.procedure._parameters['freq_1'] == self.procedure.freq_1) # should contain this parameter
-		self.assertTrue(self.procedure._parameters['freq_2'] == self.procedure.freq_2) # should contain this parameter
+		self.assertTrue(hasattr(TestProcedure, "_parameters")) # should have parsed these parameters from class dir
+		self.assertTrue(len(TestProcedure._parameters) == 2 ) # should have parsed these parameters from class dir
+		self.assertTrue(TestProcedure._parameters['freq_1'] == TestProcedure.freq_1) # should contain this parameter
+		self.assertTrue(TestProcedure._parameters['freq_2'] == TestProcedure.freq_2) # should contain this parameter
 
 	def test_quantities(self):
 		"""Check that quantities have been appropriately gathered"""
-		self.assertTrue(hasattr(self.procedure, "_quantities")) # should have parsed these quantities from class dir
-		self.assertTrue(len(self.procedure._quantities) == 2 ) # should have parsed these quantities from class dir
-		self.assertTrue(self.procedure._quantities['power'] == self.procedure.power) # should contain this quantity
-		self.assertTrue(self.procedure._quantities['clout'] == self.procedure.clout) # should contain this quantity
+		self.assertTrue(hasattr(TestProcedure, "_quantities")) # should have parsed these quantities from class dir
+		self.assertTrue(len(TestProcedure._quantities) == 2 ) # should have parsed these quantities from class dir
+		self.assertTrue(TestProcedure._quantities['power'] == TestProcedure.power) # should contain this quantity
+		self.assertTrue(TestProcedure._quantities['clout'] == TestProcedure.clout) # should contain this quantity
 
 	def test_instruments(self):
 		"""Check that instruments have been appropriately gathered"""
-		self.assertTrue(hasattr(self.procedure, "_instruments")) # should have parsed these instruments from class dir
-		self.assertTrue(len(self.procedure._instruments) == 3 ) # should have parsed these instruments from class dir
-		self.assertTrue(self.procedure._instruments['fake_instr_1'] == self.procedure.fake_instr_1) # should contain this instrument
-		self.assertTrue(self.procedure._instruments['fake_instr_2'] == self.procedure.fake_instr_2) # should contain this instrument
-		self.assertTrue(self.procedure._instruments['fake_instr_3'] == self.procedure.fake_instr_3) # should contain this instrument
+		self.assertTrue(hasattr(TestProcedure, "_instruments")) # should have parsed these instruments from class dir
+		self.assertTrue(len(TestProcedure._instruments) == 3 ) # should have parsed these instruments from class dir
+		self.assertTrue(TestProcedure._instruments['fake_instr_1'] == TestProcedure.fake_instr_1) # should contain this instrument
+		self.assertTrue(TestProcedure._instruments['fake_instr_2'] == TestProcedure.fake_instr_2) # should contain this instrument
+		self.assertTrue(TestProcedure._instruments['fake_instr_3'] == TestProcedure.fake_instr_3) # should contain this instrument
 
 if __name__ == '__main__':
 	unittest.main()
