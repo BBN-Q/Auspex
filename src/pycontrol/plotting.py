@@ -10,20 +10,24 @@ import numpy as np
 # Bokeh
 import h5py
 
-from bokeh.plotting import figure
+from bokeh.plotting import figure, Figure
 
 from bokeh.models.renderers import GlyphRenderer
 
 class BokehServerThread(threading.Thread):
-    def __init__(self):
+    def __init__(self, notebook=False):
         super(BokehServerThread, self).__init__()
         self.daemon = True
+        self.run_in_notebook = notebook
 
     def __del__(self):
         self.join()
 
     def run(self):
-        self.p = subprocess.Popen(["bokeh", "serve"], env=os.environ.copy())
+        args = ["bokeh", "serve"]
+        if self.run_in_notebook:
+            args.append("--allow-websocket-origin=localhost:8888")
+        self.p = subprocess.Popen(args, env=os.environ.copy())
 
     def join(self, timeout=None):
         if self.p:
@@ -55,7 +59,7 @@ class MultiPlotter(object):
         self.y_data = [[] for y in self.ys]
 
         # Figure
-        self.figure = figure(plot_width=400, plot_height=400)
+        self.figure = Figure(plot_width=400, plot_height=400)
         self.plot = self.figure.multi_line(self.x_data, self.y_data, name=self.title, **plot_args)
         renderers = self.plot.select(dict(name=title))
         self.renderer = [r for r in renderers if isinstance(r, GlyphRenderer)][0]
@@ -99,7 +103,7 @@ class Plotter(object):
         # Figure
         self.xlabel = self.x.name + (" ("+self.x.unit+")" if self.x.unit is not None else '')
         self.ylabel = self.y.name + (" ("+self.y.unit+")" if self.y.unit is not None else '')
-        self.figure = figure(plot_width=400, plot_height=400, title=self.title,
+        self.figure = Figure(plot_width=400, plot_height=400, title=self.title,
                              x_axis_label=self.xlabel, y_axis_label=self.ylabel, **self.fig_args)
         self.plot = self.figure.line([],[], name=title, **plot_args)
         renderers = self.plot.select(dict(name=title))
@@ -145,7 +149,7 @@ class Plotter2D(object):
         # Construct the plot
         self.xlabel = self.x.name + (" ("+self.x.unit+")" if self.x.unit is not None else '')
         self.ylabel = self.y.name + (" ("+self.y.unit+")" if self.y.unit is not None else '')
-        self.figure = figure(x_range=[xmin, xmax], y_range=[ymin, ymax], plot_width=400, plot_height=400,
+        self.figure = Figure(x_range=[xmin, xmax], y_range=[ymin, ymax], plot_width=400, plot_height=400,
                              x_axis_label=self.xlabel, y_axis_label=self.ylabel, title=self.title)
         self.plot = self.figure.image(image=[self.z_data], x=[xmin], y=[ymin],
                                       dw=[xmax-xmin], dh=[ymax-ymin], name=self.title, **plot_args)

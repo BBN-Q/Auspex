@@ -10,7 +10,11 @@ import time
 import h5py
 
 from bokeh.client import push_session
-from bokeh.plotting import curdoc, hplot
+from bokeh.plotting import hplot
+from bokeh.io import curdoc, curstate
+from bokeh.util.session_id import generate_session_id
+from bokeh.document import Document
+
 from .plotting import BokehServerThread, Plotter, Plotter2D, MultiPlotter
 from .procedure import Procedure, Parameter, Quantity
 
@@ -187,18 +191,43 @@ class Sweep(object):
         self._sweep_generator = itertools.product(*[sp.values for sp in self._swept_parameters])
         self._index_generator = itertools.product(*[sp.indices for sp in self._swept_parameters])
 
-    def run(self):
+    def run(self, notebook=False):
         self._procedure.init_instruments()
 
         if len(self._plotters) > 0:
-            t = BokehServerThread()
+            t = BokehServerThread(notebook=notebook)
             t.start()
             #On some systems there is a possibility we try to `push_session` before the
             #the server on the BokehServerThread has started.
             time.sleep(1)
-            q = hplot(*[p.figure for p in self._plotters])
-            session = push_session(curdoc())
-            session.show()
+            h = hplot(*[p.figure for p in self._plotters])
+            curdoc().clear()
+            sid = generate_session_id()
+            doc = Document()
+            doc.add_root(h)
+            session = push_session(doc, session_id=sid)
+            
+            if notebook:
+                from bokeh.embed import autoload_server, components
+                from bokeh.io import output_notebook
+                from IPython.display import display, HTML
+
+                output_notebook()
+                script = autoload_server(model=None, session_id=sid)
+                html = \
+                        """
+                        <html>
+                        <head></head>
+                        <body>
+                        <h2>Here's your stupid plot</h2>
+                        %s
+                        </body>
+                        </html>
+                        """ % script
+                display(HTML(html))
+                # session.loop_until_closed()
+            else:
+                session.show(doc)
 
         def shutdown():
             if len(self._plotters) > 0:
