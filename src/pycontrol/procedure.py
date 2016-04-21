@@ -8,6 +8,8 @@ import h5py
 import inspect
 import time
 
+from .instruments.instrument import Instrument
+
 class Quantity(object):
     """Physical quantity to be measured."""
     def __init__(self, name, unit=None):
@@ -150,11 +152,13 @@ class Procedure(object):
     """The measurement loop to be run for each set of sweep parameters."""
     def __init__(self):
         super(Procedure, self).__init__()
-        self._parameters = {}
-        self._quantities = {}
+        self._parameters  = {}
+        self._quantities  = {}
+        self._instruments = {}
 
         self._gather_parameters()
         self._gather_quantities()
+        self._gather_instruments()
 
     def _gather_parameters(self):
         """ Collects all the Parameter objects for this procedure and stores\
@@ -173,6 +177,15 @@ class Procedure(object):
             quantity = getattr(self, item)
             if isinstance(quantity, Quantity):
                 self._quantities[item] = quantity
+
+    def _gather_instruments(self):
+        """ Collects all the Quantity objects for this procedure and stores\
+        them in a dictionary.
+        """
+        for item in dir(self):
+            inst = getattr(self, item)
+            if isinstance(inst, Instrument):
+                self._instruments[item] = inst
 
     def init_instruments(self):
         """Gets run before a sweep starts"""
