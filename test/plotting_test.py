@@ -53,8 +53,8 @@ if __name__ == '__main__':
 
     # Define a sweep over prarameters
     sweep1 = Sweep(proc)
-    field_x = sweep1.add_parameter(proc.field_y, np.arange(-100, 101, 5))
-    field_y = sweep1.add_parameter(proc.field_x, np.arange(-100, 101, 5))
+    field_x = sweep1.add_parameter(proc.field_y, np.arange(-100, 101, 10))
+    field_y = sweep1.add_parameter(proc.field_x, np.arange(-100, 101, 10))
 
     plot1 = sweep1.add_plotter("ResistanceL Vs Field", proc.field_x, proc.resistance_long, color="firebrick", line_width=2)
     plot2 = sweep1.add_multiplotter("Resistances Vs Field", [proc.field_x, proc.field_x], [proc.resistance_trans, proc.resistance_long],

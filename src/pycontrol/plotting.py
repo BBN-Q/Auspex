@@ -4,14 +4,14 @@ import subprocess
 import psutil
 import time
 import os
+import sys
 
 import numpy as np
 
 # Bokeh
 import h5py
 
-from bokeh.plotting import figure, Figure
-
+from bokeh.plotting import Figure
 from bokeh.models.renderers import GlyphRenderer
 
 class BokehServerThread(threading.Thread):
@@ -24,7 +24,12 @@ class BokehServerThread(threading.Thread):
         self.join()
 
     def run(self):
-        args = ["bokeh", "serve"]
+        args = []
+        if 'win' in sys.platform:
+            args.append("bokeh.bat")
+        else:
+            args.append("bokeh")
+        args.append("serve")
         if self.run_in_notebook:
             args.append("--allow-websocket-origin=localhost:8888")
         self.p = subprocess.Popen(args, env=os.environ.copy())
