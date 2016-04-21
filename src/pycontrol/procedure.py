@@ -152,10 +152,6 @@ class Procedure(object):
     """The measurement loop to be run for each set of sweep parameters."""
     def __init__(self):
         super(Procedure, self).__init__()
-        self._parameters  = {}
-        self._quantities  = {}
-        self._instruments = {}
-
         self._gather_parameters()
         self._gather_quantities()
         self._gather_instruments()
@@ -164,6 +160,7 @@ class Procedure(object):
         """ Collects all the Parameter objects for this procedure and stores\
         them in a dictionary.
         """
+        self._parameters  = {}
         for item in dir(self):
             parameter = getattr(self, item)
             if isinstance(parameter, Parameter):
@@ -173,6 +170,7 @@ class Procedure(object):
         """ Collects all the Quantity objects for this procedure and stores\
         them in a dictionary.
         """
+        self._quantities  = {}
         for item in dir(self):
             quantity = getattr(self, item)
             if isinstance(quantity, Quantity):
@@ -182,6 +180,7 @@ class Procedure(object):
         """ Collects all the Quantity objects for this procedure and stores\
         them in a dictionary.
         """
+        self._instruments = {}
         for item in dir(self):
             inst = getattr(self, item)
             if isinstance(inst, Instrument):
