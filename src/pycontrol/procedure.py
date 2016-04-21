@@ -148,43 +148,33 @@ class IntParameter(Parameter):
         result = super(IntParameter, self).__repr__()
         return result.replace("<Parameter", "<IntParameter", 1)
 
-class Procedure(object):
+class MetaProcedure(type):
+    """Meta class to bake the instrument objects into a class description
+    """
+    logging.basicConfig(format='%(levelname)s:\t%(message)s', level=logging.DEBUG)
+
+    def __init__(self, name, bases, dct):
+        type.__init__(self, name, bases, dct)
+        logging.debug("Adding controls to %s", name)
+        self._parameters  = {}
+        self._quantities  = {}
+        self._instruments  = {}
+
+        for k,v in dct.items():
+            if isinstance(v, Instrument):
+                logging.debug("Found '%s' instrument", k)
+                self._instruments[k] = v
+            elif isinstance(v, Parameter):
+                logging.debug("Found '%s' parameter", k)
+                self._parameters[k] = v
+            elif isinstance(v, Quantity):
+                logging.debug("Found '%s' quantity", k)
+                self._quantities[k] = v
+
+class Procedure(metaclass=MetaProcedure):
     """The measurement loop to be run for each set of sweep parameters."""
     def __init__(self):
         super(Procedure, self).__init__()
-        self._gather_parameters()
-        self._gather_quantities()
-        self._gather_instruments()
-
-    def _gather_parameters(self):
-        """ Collects all the Parameter objects for this procedure and stores\
-        them in a dictionary.
-        """
-        self._parameters  = {}
-        for item in dir(self):
-            parameter = getattr(self, item)
-            if isinstance(parameter, Parameter):
-                self._parameters[item] = parameter
-
-    def _gather_quantities(self):
-        """ Collects all the Quantity objects for this procedure and stores\
-        them in a dictionary.
-        """
-        self._quantities  = {}
-        for item in dir(self):
-            quantity = getattr(self, item)
-            if isinstance(quantity, Quantity):
-                self._quantities[item] = quantity
-
-    def _gather_instruments(self):
-        """ Collects all the Quantity objects for this procedure and stores\
-        them in a dictionary.
-        """
-        self._instruments = {}
-        for item in dir(self):
-            inst = getattr(self, item)
-            if isinstance(inst, Instrument):
-                self._instruments[item] = inst
 
     def init_instruments(self):
         """Gets run before a sweep starts"""
