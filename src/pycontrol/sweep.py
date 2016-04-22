@@ -176,7 +176,18 @@ class Sweep(object):
         return self._plotters[-1]
 
     def add_plotter2d(self, title, x, y, z, **kwargs):
-        self._plotters.append(Plotter2D(title, x, y, z, **kwargs))
+        swept_param_dict = {sp.name: sp for sp in self._swept_parameters}
+        if not x.name in swept_param_dict:
+            print("Could not find parameter {} in the list of sweeps!".format(xs.name))
+            raise Exception("Cannot plot over a non-swept parameter.")
+        else:
+            s_x = swept_param_dict[x.name]
+        if not y.name in swept_param_dict:
+            print("Could not find parameter {} in the list of sweeps!".format(xs.name))
+            raise Exception("Cannot plot over a non-swept parameter.")
+        else:
+            s_y = swept_param_dict[y.name]
+        self._plotters.append(Plotter2D(title, s_x, s_y, z, **kwargs))
         return self._plotters[-1]
 
     def add_multiplotter(self, title, xs, ys, **kwargs):
