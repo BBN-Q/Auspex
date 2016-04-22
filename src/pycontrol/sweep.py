@@ -230,13 +230,11 @@ class Sweep(object):
                         <html>
                         <head></head>
                         <body>
-                        <h2>Here's your stupid plot</h2>
                         %s
                         </body>
                         </html>
                         """ % script
                 display(HTML(html))
-                # session.loop_until_closed()
             else:
                 session.show(doc)
 

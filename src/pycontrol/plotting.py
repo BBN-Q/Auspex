@@ -59,12 +59,17 @@ class MultiPlotter(object):
         self.xs = xs
         self.ys = ys
 
+        # Grab the types
+        self.xlabel = self.xs[0].name + (" ("+self.xs[0].unit+")" if self.xs[0].unit is not None else '')
+        self.ylabel = self.ys[0].name + (" ("+self.ys[0].unit+")" if self.ys[0].unit is not None else '')
+
         # Data containers
         self.x_data = [[] for x in self.xs]
         self.y_data = [[] for y in self.ys]
 
         # Figure
-        self.figure = Figure(plot_width=400, plot_height=400)
+        self.figure = Figure(plot_width=400, plot_height=400, title=self.title,
+                             x_axis_label=self.xlabel, y_axis_label=self.ylabel,)
         self.plot = self.figure.multi_line(self.x_data, self.y_data, name=self.title, **plot_args)
         renderers = self.plot.select(dict(name=title))
         self.renderer = [r for r in renderers if isinstance(r, GlyphRenderer)][0]
