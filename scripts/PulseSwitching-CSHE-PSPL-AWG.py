@@ -124,9 +124,10 @@ if __name__ == '__main__':
     read = int32()
 
     # DAQmx Configure Code
+    samps_per_trig = 10
     analog_input.CreateAIVoltageChan("Dev1/ai1", "", DAQmx_Val_RSE, 0, 1.0, DAQmx_Val_Volts, None)
     analog_input.CfgSampClkTiming("", 1e6, DAQmx_Val_Rising, DAQmx_Val_FiniteSamps , 10)
-    analog_input.CfgInputBuffer(10 * 2*reps)
+    analog_input.CfgInputBuffer(samps_per_trig * 2* reps)
     analog_input.CfgDigEdgeStartTrig("/Dev1/PFI0", DAQmx_Val_Rising)
     analog_input.SetStartTrigRetriggerable(1)
 
@@ -135,26 +136,27 @@ if __name__ == '__main__':
 
     arb.scenario_start_index = 0
     arb.run()
-    attens = np.arange(-16.01, -6, 0.1)
+    attens = np.arange(-16.01, -8, 0.1)
     #attens    = np.arange(-9.01,-6.00,0.5)
-    # durations = np.array([5.0e-9])
-    durations = 1e-9*np.arange(0.1, 5.01, 0.1)
+    durations = np.array([5.0e-9])
+    # durations = 1e-9*np.arange(0.1, 5.01, 0.1)
 
     volts = 7.5*np.power(10, (-pspl_attenuation+attens)/20)
-    buffers = np.empty((len(attens)*len(durations), 2*10*reps))
+    buffers = np.empty((len(attens)*len(durations), 2*samps_per_trig*reps))
     idx = 0
     # lock.ao3 = attenuator_lookup(attens[0])
 
-    for dur in tqdm(durations):
+    for dur in tqdm(durations, leave=True):
         pspl.duration = dur
         time.sleep(0.1) # Allow the PSPL to settle
-        for atten in attens:
+        for atten in tqdm(attens, nested=True, leave=False):
             lock.ao3 = attenuator_lookup(atten)
             time.sleep(0.02) # Make sure attenuation is set
 
             arb.advance()
             arb.trigger()
-            analog_input.ReadAnalogF64(2*10*reps, -1, DAQmx_Val_GroupByChannel, buffers[idx], 2*10*reps, byref(read), None)
+            analog_input.ReadAnalogF64(2*samps_per_trig*reps, -1, DAQmx_Val_GroupByChannel,
+                                       buffers[idx], 2*samps_per_trig*reps, byref(read), None)
 
             idx += 1
 
