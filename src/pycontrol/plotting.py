@@ -25,7 +25,7 @@ class BokehServerThread(threading.Thread):
 
     def run(self):
         args = []
-        if 'win' in sys.platform:
+        if 'win32' in sys.platform:
             args.append("bokeh.bat")
         else:
             args.append("bokeh")
