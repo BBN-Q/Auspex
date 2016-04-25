@@ -177,7 +177,7 @@ class M8190A(Instrument):
                          value_map={False:"0", True:"1"}, additional_args=['channel'])
     output_complement = StringCommand(scpi_string=":OUTP{channel:d}:COMP",
                          value_map={False:"0", True:"1"}, additional_args=['channel'])
-    output_route      = StringCommand(scpi_string=":OUTP{channel:d}:ROUT", allowed_values=["DAC","AC","DC"], 
+    output_route      = StringCommand(scpi_string=":OUTP{channel:d}:ROUT", allowed_values=["DAC","AC","DC"],
                          additional_args=["channel"])
 
     voltage_amplitude = FloatCommand(scpi_string=":VOLT:AMPL")
@@ -199,8 +199,10 @@ class M8190A(Instrument):
         self.interface._resource.read_termination = u"\n"
 
         #Aliases for run/stop
+        self._unfreeze()
         self.run = self.initiate
         self.stop = self.abort
+        self._freeze()
 
     def abort(self, channel=None):
         """Abort/stop signal generation on a channel"""
