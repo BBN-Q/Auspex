@@ -18,6 +18,10 @@ from bokeh.document import Document
 from .plotting import BokehServerThread, Plotter, Plotter2D, MultiPlotter
 from .procedure import Procedure, Parameter, Quantity
 
+logger = logging.getLogger('pycontrol')
+logging.basicConfig(format='%(name)s - %(levelname)s: \t%(asctime)s: \t%(message)s')
+logger.setLevel(logging.DEBUG)
+
 class Writer(object):
     """Data structure for the written quantities"""
     def __init__(self, dataset, quantities):
@@ -139,7 +143,7 @@ class Sweep(object):
 
         # Determine the dataset dimensions
         sweep_dims = [ p.length for p in self._swept_parameters ]
-        logging.debug("Sweep dims are %s for the list of swept parameters in the writer %s, %s." % (str(sweep_dims), filename, dataset_name) )
+        logger.debug("Sweep dims are %s for the list of swept parameters in the writer %s, %s." % (str(sweep_dims), filename, dataset_name) )
 
         data_dims = [len(quants)+len(self._swept_parameters)]
         dataset_dimensions = tuple(sweep_dims + data_dims)
@@ -159,11 +163,11 @@ class Sweep(object):
         for w in self._writers:
             current_p_values = [p.parameter.value for p in self._swept_parameters]
 
-            logging.debug("Current indicies are: %s" % str(indices) )
+            logger.debug("Current indicies are: %s" % str(indices) )
 
             for i, p in enumerate(self._swept_parameters):
                 coords = tuple( indices + [i] )
-                logging.debug("Coords: %s" % str(coords) )
+                logger.debug("Coords: %s" % str(coords) )
                 w.dataset[coords] = p.parameter.value
             for i, q in enumerate(w.quantities):
                 coords = tuple( indices + [len(self._swept_parameters) + i] )
@@ -245,7 +249,7 @@ class Sweep(object):
             self._procedure.shutdown_instruments()
 
         def catch_ctrl_c(signum, frame):
-            logging.info("Caught SIGINT.  Shutting down.")
+            logger.info("Caught SIGINT.  Shutting down.")
             shutdown()
             sys.exit(0)
 
@@ -262,9 +266,9 @@ class Sweep(object):
                 if last_param_values is None or param_values[i] != last_param_values[i]:
                     sp.value = param_values[i]
                     sp.push()
-                    logging.debug("Updated {:s} to {:g} since the value changed.".format(sp.parameter.name, sp.value))
+                    logger.debug("Updated {:s} to {:g} since the value changed.".format(sp.parameter.name, sp.value))
                 else:
-                    logging.debug("Didn't update {:s} since the value didn't change.".format(sp.parameter.name))
+                    logger.debug("Didn't update {:s} since the value didn't change.".format(sp.parameter.name))
 
             # update previous values
             last_param_values = param_values

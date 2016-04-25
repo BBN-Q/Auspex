@@ -9,6 +9,10 @@ import visa
 import os
 import time
 
+logger = logging.getLogger('pycontrol')
+logging.basicConfig(format='%(name)s - %(levelname)s: \t%(asctime)s: \t%(message)s')
+logger.setLevel(logging.DEBUG)
+
 class StringCommand(object):
     """Wraps a particular device command set based on getter and setter strings. The optional
     value_map keyword argument allows specification of a dictionary map between python values
@@ -57,7 +61,7 @@ class StringCommand(object):
             else:
                 self.allowed_values=list(self.python_to_instr.keys())
 
-            logging.debug("Constructed map and inverse map for command values:\n--- %s\n--- %s'" % (self.python_to_instr, self.instr_to_python))
+            logger.debug("Constructed map and inverse map for command values:\n--- %s\n--- %s'" % (self.python_to_instr, self.instr_to_python))
 
         # We neeed to do something or other
         if self.set_string is None and self.get_string is None:
@@ -110,14 +114,14 @@ class Interface(object):
     def __init__(self):
         super(Interface, self).__init__()
     def write(self, value):
-        logging.debug("Writing '%s'" % value)
+        logger.debug("Writing '%s'" % value)
     def query(self, value):
-        logging.debug("Querying '%s'" % value)
+        logger.debug("Querying '%s'" % value)
         if value == ":output?;":
             return "on"
         return np.random.random()
     def values(self, query):
-        logging.debug("Returning values %s" % query)
+        logger.debug("Returning values %s" % query)
         return np.random.random()
 
 class VisaInterface(Interface):
@@ -208,8 +212,8 @@ def add_command(instr, name, cmd):
         else:
             # Go straight to the desired value
             set_value = cmd.convert_set(val)
-            # logging.debug("Formatting '%s' with string '%s'" % (cmd.set_string, set_value))
-            # logging.debug("The result of the formatting is %s" % cmd.set_string.format(set_value, **{k: str(v) for k,v in kwargs.items()}))
+            # logger.debug("Formatting '%s' with string '%s'" % (cmd.set_string, set_value))
+            # logger.debug("The result of the formatting is %s" % cmd.set_string.format(set_value, **{k: str(v) for k,v in kwargs.items()}))
             self.interface.write(cmd.set_string.format(set_value, **kwargs))
 
     # Add getter and setter methods for passing around
@@ -230,14 +234,14 @@ class MetaInstrument(type):
     """
     def __init__(self, name, bases, dct):
         type.__init__(self, name, bases, dct)
-        logging.debug("Adding controls to %s", name)
+        logger.debug("Adding controls to %s", name)
         for k,v in dct.items():
             if isinstance(v, StringCommand):
-                logging.debug("Adding '%s' command", k)
+                logger.debug("Adding '%s' command", k)
                 add_command(self, k, v)
                 if v.aliases is not None:
                     for a in v.aliases:
-                        logging.debug("------> Adding alias '%s'" % a)
+                        logger.debug("------> Adding alias '%s'" % a)
                         add_command(self, a, v)
 
 class Instrument(metaclass=MetaInstrument):

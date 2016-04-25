@@ -2,7 +2,10 @@ from __future__ import print_function, division
 import logging
 import time
 from functools import partial
-logging.basicConfig(format='%(levelname)s: \t%(asctime)s: \t%(message)s', level=logging.WARNING)
+
+logger = logging.getLogger('pycontrol')
+logging.basicConfig(format='%(name)s - %(levelname)s: \t%(asctime)s: \t%(message)s')
+logger.setLevel(logging.DEBUG)
 
 import numpy as np
 import scipy as sp
@@ -44,6 +47,7 @@ class TestProcedure(Procedure):
     def run(self):
         for quant in self._quantities:
             self._quantities[quant].measure()
+        logger.info("R_t = {}".format(self.resistance_trans.value))
 
 
 if __name__ == '__main__':

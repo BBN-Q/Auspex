@@ -10,6 +10,10 @@ import time
 
 from .instruments.instrument import Instrument
 
+logger = logging.getLogger('pycontrol')
+logging.basicConfig(format='%(name)s - %(levelname)s: \t%(asctime)s: \t%(message)s')
+logger.setLevel(logging.DEBUG)
+
 class Quantity(object):
     """Physical quantity to be measured."""
     def __init__(self, name=None, unit=None):
@@ -30,11 +34,11 @@ class Quantity(object):
         self._value = value
 
     def assign_method(self, method):
-        logging.debug("Setting method of Quantity %s to %s" % (self.name, str(method)) )
+        logger.debug("Setting method of Quantity %s to %s" % (self.name, str(method)) )
         self.method = method
 
     def measure(self):
-        logging.debug("%s Being asked to measure" % self.name)
+        logger.debug("%s Being asked to measure" % self.name)
         if self.delay_before is not None:
             time.sleep(self.delay_before)
 
@@ -105,7 +109,7 @@ class Parameter(object):
         return result + ")>"
 
     def assign_method(self, method):
-        logging.debug("Setting method of Parameter %s to %s" % (self.name, str(method)) )
+        logger.debug("Setting method of Parameter %s to %s" % (self.name, str(method)) )
         self.method = method
 
     def push(self):
@@ -151,26 +155,25 @@ class IntParameter(Parameter):
 class MetaProcedure(type):
     """Meta class to bake the instrument objects into a class description
     """
-    logging.basicConfig(format='%(levelname)s:\t%(message)s', level=logging.DEBUG)
 
     def __init__(self, name, bases, dct):
         type.__init__(self, name, bases, dct)
-        logging.debug("Adding controls to %s", name)
+        logger.debug("Adding controls to %s", name)
         self._parameters  = {}
         self._quantities  = {}
         self._instruments  = {}
 
         for k,v in dct.items():
             if isinstance(v, Instrument):
-                logging.debug("Found '%s' instrument", k)
+                logger.debug("Found '%s' instrument", k)
                 self._instruments[k] = v
             elif isinstance(v, Parameter):
-                logging.debug("Found '%s' parameter", k)
+                logger.debug("Found '%s' parameter", k)
                 if v.name is None:
                     v.name = k
                 self._parameters[k] = v
             elif isinstance(v, Quantity):
-                logging.debug("Found '%s' quantity", k)
+                logger.debug("Found '%s' quantity", k)
                 if v.name is None:
                     v.name = k
                 self._quantities[k] = v
