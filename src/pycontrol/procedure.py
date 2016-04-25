@@ -64,7 +64,7 @@ class Quantity(object):
 class Parameter(object):
     """ Encapsulates the information for an experiment parameter"""
 
-    def __init__(self, name, unit=None, default=None, abstract=False):
+    def __init__(self, name=None, unit=None, default=None, abstract=False):
         self.name     = name
         self._value   = default
         self.unit     = unit
