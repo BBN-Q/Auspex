@@ -12,7 +12,7 @@ from .instruments.instrument import Instrument
 
 logger = logging.getLogger('pycontrol')
 logging.basicConfig(format='%(name)s - %(levelname)s: \t%(asctime)s: \t%(message)s')
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 
 class Quantity(object):
     """Physical quantity to be measured."""

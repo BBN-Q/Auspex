@@ -11,7 +11,7 @@ import time
 
 logger = logging.getLogger('pycontrol')
 logging.basicConfig(format='%(name)s - %(levelname)s: \t%(asctime)s: \t%(message)s')
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 
 class StringCommand(object):
     """Wraps a particular device command set based on getter and setter strings. The optional
