@@ -154,6 +154,28 @@ class VisaInterface(Interface):
         return self._resource.query_binary_values(query_string, container=container, datatype=datatype,
                 is_big_endian=is_big_endian)
 
+    # IEEE Mandated SCPI commands
+    def CLS(self):
+        self._resource.write("*CLS") # Clear Status Command
+    def ESE(self):
+        return self._resource.query("*ESE?") # Standard Event Status Enable Query
+    def ESR(self):
+        return self._resource.write("*ESR?") # Standard Event Status Register Query
+    def IDN(self):
+        return self._resource.query("*IDN?") # Identification Query
+    def OPC(self):
+        return self._resource.query("*OPC?") # Operation Complete Command
+    def RST(self):
+        self._resource.write("*RST") # Reset Command
+    def SRE(self):
+        return self._resource.query("*SRE?") # Service Request Enable Query
+    def STB(self):
+        return self._resource.query("*STB?") # Read Status Byte Query
+    def TST(self):
+        return self._resource.query("*TST?") # Self-Test Query
+    def WAI(self):
+        self._resource.write("*WAI") # Wait-to-Continue Command
+
 def add_command(instr, name, cmd):
     """Helper function for parsing Instrument attributes and turning them into
     setters and getters."""
