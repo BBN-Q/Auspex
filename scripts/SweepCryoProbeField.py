@@ -50,7 +50,7 @@ def loop_from_zero(high, low, res):
     third = np.arange(low, 0+res, res)
     return np.r_[first, second, third]
 
-def loop_from_low(high, low, res):
+def loop_from_low(low, high, res):
     first  = np.arange(low, high, res)
     second = np.arange(high, low, -res)
     return np.r_[first, second]
