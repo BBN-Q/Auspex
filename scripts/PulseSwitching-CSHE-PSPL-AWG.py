@@ -39,6 +39,9 @@ if __name__ == '__main__':
     APtoP = False
     polarity = 1 if APtoP else -1
 
+    reset_amplitude = 0.19
+    reset_duration  = 5.0e-9
+
     keith.triad()
     keith.conf_meas_res(res_range=1e6)
     keith.conf_src_curr(comp_voltage=0.5, curr_range=1.0e-5)
@@ -63,7 +66,7 @@ if __name__ == '__main__':
     arb.continuous_mode = False
     arb.gate_mode = False
 
-    reset_wf    = arb_pulse(-polarity*0.32, 5.0e-9)
+    reset_wf    = arb_pulse(-polarity*reset_amplitude, reset_duration)
     wf_data     = M8190A.create_binary_wf_data(reset_wf)
     rst_segment_id  = arb.define_waveform(len(wf_data))
     arb.upload_waveform(wf_data, rst_segment_id)
@@ -84,7 +87,7 @@ if __name__ == '__main__':
     arb.upload_waveform(nidaq_trig_wf, nidaq_trig_segment_id)
 
     reps = 1 << 10
-    settle_delay = 40e-6
+    settle_delay = 50e-6
     settle_pts = int(640*np.ceil(settle_delay * 12e9 / 640))
 
     scenario = Scenario()
@@ -106,14 +109,14 @@ if __name__ == '__main__':
 
     # Setup picosecond
     pspl.duration  = 5e-9
-    pspl_attenuation = 6
+    pspl_attenuation = 12
     pspl.amplitude = polarity*7.5*np.power(10, -pspl_attenuation/20)
     pspl.trigger_source = "EXT"
     pspl.output = True
     #TODO: pspl.trigger_level = 0.1
 
     # Ramp to the switching field
-    mag.set_field(85e-4) # 85G
+    mag.set_field(-0.015) # 85G
 
     # Variable attenuator
     df = pd.read_csv("calibration/RFSA2113SB.tsv", sep="\t")
@@ -136,10 +139,10 @@ if __name__ == '__main__':
 
     arb.scenario_start_index = 0
     arb.run()
-    attens = np.arange(-16.01, -8, 0.1)
+    attens = np.arange(-12.01, -6, 0.2)
     #attens    = np.arange(-9.01,-6.00,0.5)
-    durations = np.array([5.0e-9])
-    # durations = 1e-9*np.arange(0.1, 5.01, 0.1)
+    # durations = np.array([5.0e-9])
+    durations = 1e-9*np.arange(0.1, 5.01, 0.2)
 
     volts = 7.5*np.power(10, (-pspl_attenuation+attens)/20)
     buffers = np.empty((len(attens)*len(durations), 2*samps_per_trig*reps))
