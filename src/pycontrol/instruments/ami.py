@@ -17,8 +17,8 @@ class AMI430(Instrument):
     "Quench detected", "At ZERO current", "Heating persistent switch", "Cooling persistent switch"]
 
     #Configure commands
-    supply_type = Command(get_string="SUPPly:TYPE?",
-        value_map={v:str(ct) for ct,v in enumerate(SUPPLY_TYPES)}) # Supply type", 
+    supply_type = StringCommand(get_string="SUPPly:TYPE?",
+        value_map={v:str(ct) for ct,v in enumerate(SUPPLY_TYPES)}) # Supply type",
 
     voltage_min    = FloatCommand(get_string="SUPPly:VOLTage:MINimum?")
     voltage_max    = FloatCommand(get_string="SUPPly:VOLTage:MAXimum?")
@@ -29,13 +29,13 @@ class AMI430(Instrument):
     current_rating = FloatCommand(set_string="CONFigure:CURRent:RATING {f}", get_string="CURRent:RATING?") # Magnet current rating (A)
     stability      = FloatCommand(set_string="CONFigure:STABility {:f}", get_string="STABility?", value_range=(0,100)) # Stability setting in percent
     coil_const     = FloatCommand(set_string="CONFigure:COILconst {:f}",get_string="COILconst?") # Field-to-current ratio (kG/A or T/A)
-    
-    persistent_switch = StringCommand(set_string="CONFigure:PSwitch {}", 
+
+    persistent_switch = StringCommand(set_string="CONFigure:PSwitch {}",
                          get_string="PSwitch:INSTalled?", value_map={False:"0", True:"1"}) # Persistent switch installed (bool)
     absorber          = StringCommand(set_string="CONFigure:ABsorber {}", get_string="ABsorber?",
                          value_map={False:"0", True:"1"})  # Absorber installed (bool)
-    field_units       = StringCommand(set_string="CONFigure:FIELD:UNITS {}", 
-                         get_string="FIELD:UNITS?", value_map={"kG":"0", "T":"1"}) 
+    field_units       = StringCommand(set_string="CONFigure:FIELD:UNITS {}",
+                         get_string="FIELD:UNITS?", value_map={"kG":"0", "T":"1"})
 
     #Ramp commands
     voltage_limit     = FloatCommand(set_string="CONFigure:VOLTage:LIMit {:f}", get_string="VOLTage:LIMit?") # Ramping voltage limit (V)
