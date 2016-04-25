@@ -1,4 +1,4 @@
-from .instrument import Instrument, Command, FloatCommand, IntCommand
+from .instrument import Instrument, StringCommand, FloatCommand, IntCommand
 from .binutils import BitField, BitFieldUnion
 
 import logging
@@ -156,42 +156,46 @@ class Scenario(object):
 class M8190A(Instrument):
     """M8190A arbitrary waveform generator"""
 
-    ref_source         = Command("reference source", scpi_string=":ROSC:SOUR",
-        allowed_values=("EXTERNAL", "AXI", "INTERNAL"))
-    ref_source_freq    = FloatCommand("reference source frequency", scpi_string=":ROSC:FREQ", value_range=(1e6, 200e6))
-    sample_freq        = FloatCommand("internal sample frequency", scpi_string=":FREQ:RAST")
-    sample_freq_ext    = FloatCommand("external sample frequency", scpi_string=":FREQ:RAST:EXT")
-    sample_freq_source = Command("sample frequency source", scpi_string=":FREQ:RAST:SOUR",
-        allowed_values=("INTERNAL", "EXTERNAL"))
+    ref_source         = StringCommand(scpi_string=":ROSC:SOUR",
+                          allowed_values=("EXTERNAL", "AXI", "INTERNAL"))
+    ref_source_freq    = FloatCommand(scpi_string=":ROSC:FREQ", value_range=(1e6, 200e6))
+    sample_freq        = FloatCommand(scpi_string=":FREQ:RAST")       # internal sample frequency
+    sample_freq_ext    = FloatCommand(scpi_string=":FREQ:RAST:EXT")   # external sample frequency
+    sample_freq_source = StringCommand(scpi_string=":FREQ:RAST:SOUR", # sample frequency source
+                          allowed_values=("INTERNAL", "EXTERNAL"))
 
-    waveform_output_mode = Command("waveform output mode", scpi_string=":TRAC:DWID",
-        allowed_values=("WSPEED", "WPRECISION", "INTX3", "INTX12", "INTX24", "INT48"))
-    sequence_mode = Command("sequence mode", scpi_string=":FUNC:MODE",
-        value_map={"ARBITRARY":"ARB", "SEQUENCE":"STS", "SCENARIO":"STSC"})
-    scenario_loop_ct = IntCommand("Scenario loop count", scpi_string=":STAB:SCEN:COUN")
-    scenario_advance_mode = Command("scenario advance mode", scpi_string=":STAB:SCEN:ADV",
-        value_map={"AUTOMATIC":"AUTO", "CONDITIONAL":"COND", "REPEAT":"REP", "SINGLE":"SING"})
-    scenario_start_index = IntCommand("scenario start index", scpi_string=":STAB:SCEN:SEL")
+    waveform_output_mode  = StringCommand(scpi_string=":TRAC:DWID",
+                             allowed_values=("WSPEED", "WPRECISION", "INTX3", "INTX12", "INTX24", "INT48"))
+    sequence_mode         = StringCommand(scpi_string=":FUNC:MODE",
+                             value_map={"ARBITRARY":"ARB", "SEQUENCE":"STS", "SCENARIO":"STSC"})
+    scenario_loop_ct      = IntCommand(scpi_string=":STAB:SCEN:COUN")
+    scenario_advance_mode = StringCommand(scpi_string=":STAB:SCEN:ADV",
+                             value_map={"AUTOMATIC":"AUTO", "CONDITIONAL":"COND", "REPEAT":"REP", "SINGLE":"SING"})
+    scenario_start_index  = IntCommand(scpi_string=":STAB:SCEN:SEL")
 
-    output = Command("Channel output", scpi_string=":OUTP{channel:d}:NORM",
-        value_map={False:"0", True:"1"}, additional_args=['channel'])
-    output_complement = Command("Channel output", scpi_string=":OUTP{channel:d}:COMP",
-        value_map={False:"0", True:"1"}, additional_args=['channel'])
-    output_route = Command("Channel output route", scpi_string=":OUTP{channel:d}:ROUT", allowed_values=["DAC","AC","DC"], additional_args=["channel"])
+    output            = StringCommand(scpi_string=":OUTP{channel:d}:NORM",
+                         value_map={False:"0", True:"1"}, additional_args=['channel'])
+    output_complement = StringCommand(scpi_string=":OUTP{channel:d}:COMP",
+                         value_map={False:"0", True:"1"}, additional_args=['channel'])
+    output_route      = StringCommand(scpi_string=":OUTP{channel:d}:ROUT", allowed_values=["DAC","AC","DC"], 
+                         additional_args=["channel"])
 
-    voltage_amplitude = FloatCommand("output voltage amplitude", scpi_string=":VOLT:AMPL")
+    voltage_amplitude = FloatCommand(scpi_string=":VOLT:AMPL")
     #TODO: voltage_amplitude for the different output routes
-    voltage_offset = FloatCommand("output voltage amplitude", scpi_string=":VOLT:OFFS")
+    voltage_offset    = FloatCommand(scpi_string=":VOLT:OFFS")
 
-    marker_level_low = FloatCommand("marker (sync/samp) low", scpi_string=":MARK{channel:d}:{marker_type:s}:VOLT:LOW", additional_args=["channel", "marker_type"])
-    marker_level_high = FloatCommand("marker (sync/samp) high", scpi_string=":MARK{channel:d}:{marker_type:s}:VOLT:HIGH", additional_args=["channel", "marker_type"])
+    marker_level_low  = FloatCommand(scpi_string=":MARK{channel:d}:{marker_type:s}:VOLT:LOW",
+                         additional_args=["channel", "marker_type"]) # marker (sync/samp) low
+    marker_level_high = FloatCommand(scpi_string=":MARK{channel:d}:{marker_type:s}:VOLT:HIGH",
+                         additional_args=["channel", "marker_type"]) # marker (sync/samp) high
 
-    continuous_mode = Command("continuous mode", scpi_string=":INIT:CONT:STAT", value_map={True:"1", False:"0"})
-    gate_mode = Command("gate mode", scpi_string=":INIT:GATE:STAT", value_map={True:"1", False:"0"})
+    continuous_mode = StringCommand(scpi_string=":INIT:CONT:STAT", value_map={True:"1", False:"0"})
+    gate_mode       = StringCommand(scpi_string=":INIT:GATE:STAT", value_map={True:"1", False:"0"})
 
-    def __init__(self, name, resource_name, *args, **kwargs):
+    def __init__(self, resource_name, *args, **kwargs):
         resource_name += "::inst0::INSTR" #user guide recommends HiSLIP protocol
-        super(M8190A, self).__init__(name, resource_name, *args, **kwargs)
+        super(M8190A, self).__init__(resource_name, *args, **kwargs)
+        self.name = "M8190A AWG"
         self.interface._resource.read_termination = u"\n"
 
         #Aliases for run/stop

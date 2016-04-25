@@ -17,12 +17,12 @@ from pycontrol.procedure import FloatParameter, Quantity, Procedure
 # import ipdb
 
 class MeasureLockinVoltage(Procedure):
-    set_field = FloatParameter("Set Field", unit="G")
-    field     = Quantity("Field", unit="G")
-    voltage   = Quantity("Magnitude", unit="V")
+    set_field = FloatParameter(name="Set Field", unit="G")
+    field     = Quantity(name="Field", unit="G")
+    voltage   = Quantity(name="Magnitude", unit="V")
 
-    bop       = BOP2020M("Kepco Power Supply", "GPIB0::1::INSTR")
-    lock      = SR830("Lockin Amplifier", "GPIB0::9::INSTR")
+    bop       = BOP2020M("GPIB0::1::INSTR")
+    lock      = SR830("GPIB0::9::INSTR")
     hp        = HallProbe("calibration/HallProbe.cal", lock.set_ao1, lock.get_ai1)
     mag       = Electromagnet('calibration/GMW.cal', hp.get_field, bop.set_current, bop.get_current)
 

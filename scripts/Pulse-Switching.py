@@ -42,11 +42,11 @@ class SwitchingAWG(Procedure):
     pulse_duration = FloatParameter("Pulse Duration", unit="s")
 
     # Instrument resources
-    bop  = BOP2020M("Kepco Power Supply", "GPIB0::1::INSTR")
-    lock = SR865("Lockin Amplifier", "USB0::0xB506::0x2000::002638::INSTR"))
+    bop  = BOP2020M("GPIB0::1::INSTR")
+    lock = SR865("USB0::0xB506::0x2000::002638::INSTR")
     hp   = HallProbe("calibration/HallProbe.cal", lock.set_ao1, lock.get_ai1)
     mag  = Electromagnet('calibration/GMW.cal', hp.get_field, bop.set_current, bop.get_current)
-    pspl = Picosecond10070A("Pulse Generator", "GPIB0::24::INSTR")
+    pspl = Picosecond10070A("GPIB0::24::INSTR")
 
     # Quantities
     field = Quantity("Field", unit="G")

@@ -1,13 +1,14 @@
-from .instrument import Instrument, Command, FloatCommand, IntCommand
+from .instrument import Instrument, StringCommand, FloatCommand, IntCommand
 
 class Keithley2400(Instrument):
     """Keithley2400 Sourcemeter"""
 
-    current = FloatCommand("Source Current",  get_string=":sour:curr?",  set_string="sour:curr:lev {:g};")
-    resistance = FloatCommand("Resistance Value", get_string=":read?")
+    current    = FloatCommand(get_string=":sour:curr?",  set_string="sour:curr:lev {:g};")
+    resistance = FloatCommand(get_string=":read?")
 
-    def __init__(self, name, resource_name, *args, **kwargs):
-        super(Keithley2400, self).__init__(name, resource_name, *args, **kwargs)
+    def __init__(self, resource_name, *args, **kwargs):
+        super(Keithley2400, self).__init__(resource_name, *args, **kwargs)
+        self.name = "Keithley 2400 Sourcemeter"
         self.interface.write("format:data ascii")
         self.interface._resource.read_termination = "\n"
 

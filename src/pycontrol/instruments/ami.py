@@ -1,4 +1,4 @@
-from .instrument import Instrument, Command, FloatCommand, IntCommand
+from .instrument import Instrument, StringCommand, FloatCommand, IntCommand
 
 import time
 
@@ -17,46 +17,49 @@ class AMI430(Instrument):
     "Quench detected", "At ZERO current", "Heating persistent switch", "Cooling persistent switch"]
 
     #Configure commands
-    supply_type = Command("Supply type", get_string="SUPPly:TYPE?",
-        value_map={v:str(ct) for ct,v in enumerate(SUPPLY_TYPES)})
-    voltage_min    = FloatCommand("Minimum supply voltage", get_string="SUPPly:VOLTage:MINimum?")
-    voltage_max    = FloatCommand("Maximum supply voltage", get_string="SUPPly:VOLTage:MAXimum?")
+    supply_type = Command(get_string="SUPPly:TYPE?",
+        value_map={v:str(ct) for ct,v in enumerate(SUPPLY_TYPES)}) # Supply type", 
 
-    current_min    = FloatCommand("Minimum supply current", get_string="SUPPly:CURRent:MINimum?")
-    current_max    = FloatCommand("Maximum supply current", get_string="SUPPly:CURRent:MAXimum?")
-    current_limit  = FloatCommand("Maximum magnitude of current (A)", set_string="CONFigure:CURRent:LIMit {:f}", get_string="CURRent:LIMit?")
-    current_rating = FloatCommand("Magnet current rating (A)", set_string="CONFigure:CURRent:RATING {f}", get_string="CURRent:RATING?")
-    stability      = FloatCommand("Stability setting in percent", set_string="CONFigure:STABility {:f}", get_string="STABility?", value_range=(0,100))
-    coil_const     = FloatCommand("Field-to-current ratio (kG/A or T/A)", set_string="CONFigure:COILconst {:f}",get_string="COILconst?")
-    persistent_switch = Command("Persistent switch installed (bool)", set_string="CONFigure:PSwitch {}",
-        get_string="PSwitch:INSTalled?", value_map={False:"0", True:"1"})
-    absorber = Command("Absorber installed (bool)", set_string="CONFigure:ABsorber {}", get_string="ABsorber?",
-        value_map={False:"0", True:"1"})
-    field_units = Command("Preferred field units (kG/T)", set_string="CONFigure:FIELD:UNITS {}",
-        get_string="FIELD:UNITS?", value_map={"kG":"0", "T":"1"})
+    voltage_min    = FloatCommand(get_string="SUPPly:VOLTage:MINimum?")
+    voltage_max    = FloatCommand(get_string="SUPPly:VOLTage:MAXimum?")
+
+    current_min    = FloatCommand(get_string="SUPPly:CURRent:MINimum?") # Minimum supply current
+    current_max    = FloatCommand(get_string="SUPPly:CURRent:MAXimum?") # Maximum supply current
+    current_limit  = FloatCommand(set_string="CONFigure:CURRent:LIMit {:f}", get_string="CURRent:LIMit?") # Maximum magnitude of current (A)
+    current_rating = FloatCommand(set_string="CONFigure:CURRent:RATING {f}", get_string="CURRent:RATING?") # Magnet current rating (A)
+    stability      = FloatCommand(set_string="CONFigure:STABility {:f}", get_string="STABility?", value_range=(0,100)) # Stability setting in percent
+    coil_const     = FloatCommand(set_string="CONFigure:COILconst {:f}",get_string="COILconst?") # Field-to-current ratio (kG/A or T/A)
+    
+    persistent_switch = StringCommand(set_string="CONFigure:PSwitch {}", 
+                         get_string="PSwitch:INSTalled?", value_map={False:"0", True:"1"}) # Persistent switch installed (bool)
+    absorber          = StringCommand(set_string="CONFigure:ABsorber {}", get_string="ABsorber?",
+                         value_map={False:"0", True:"1"})  # Absorber installed (bool)
+    field_units       = StringCommand(set_string="CONFigure:FIELD:UNITS {}", 
+                         get_string="FIELD:UNITS?", value_map={"kG":"0", "T":"1"}) 
 
     #Ramp commands
-    voltage_limit = FloatCommand("Ramping voltage limit (V)", set_string="CONFigure:VOLTage:LIMit {:f}", get_string="VOLTage:LIMit?")
-    current_target = FloatCommand("Target current (A)", set_string="CONFigure:CURRent:TARGet {:f}",
-        get_string="CURRent:TARGet?", value_range=(-44.2,44.2))
-    field_target = FloatCommand("Field target (kG/T)", set_string="CONFigure:FIELD:TARGet {:f}",
-        get_string="FIELD:TARGet?", value_range=(-0.4,0.4))
-    ramp_num_segments = IntCommand("Number of segments for ramp", set_string="CONFigure:RAMP:RATE:SEGments {:d}",
-        get_string="RAMP:RATE:SEGments?", value_range=(1,10))
-    ramp_rate_units = Command("Ramp rate time unit (seconds/minutes)", set_string="CONFigure:RAMP:RATE:UNITS {}",
-    get_string="RAMP:RATE:UNITS?", value_map={"seconds":"0", "minutes":"1"})
+    voltage_limit     = FloatCommand(set_string="CONFigure:VOLTage:LIMit {:f}", get_string="VOLTage:LIMit?") # Ramping voltage limit (V)
+    current_target    = FloatCommand(set_string="CONFigure:CURRent:TARGet {:f}",
+                         get_string = "CURRent:TARGet?", value_range=(-44.2,44.2))
+    field_target      = FloatCommand(set_string="CONFigure:FIELD:TARGet {:f}",
+                         get_string = "FIELD:TARGet?", value_range=(-0.4,0.4))
+    ramp_num_segments = IntCommand(set_string="CONFigure:RAMP:RATE:SEGments {:d}",
+                         get_string = "RAMP:RATE:SEGments?", value_range=(1,10))
+    ramp_rate_units   = StringCommand(set_string="CONFigure:RAMP:RATE:UNITS {}",
+                         get_string = "RAMP:RATE:UNITS?", value_map={"seconds":"0", "minutes":"1"})
 
     #Current operating conditions
-    voltage = FloatCommand("Voltage at supply (V)", get_string="VOLTage:SUPPly?")
-    current_magnet = FloatCommand("Current at magnet", get_string="CURRent:MAGnet?")
-    current_supply = FloatCommand("Current at supply", get_string="CURRent:SUPPly?")
-    field = FloatCommand("Calculated magnet field", get_string="FIELD:MAGnet?")
-    inductance = FloatCommand("Measured inductance (H)", get_string="INDuctance?")
-    ramping_state = Command("Current ramping state", get_string="STATE?", value_map={v:str(ct+1) for ct,v in enumerate(RAMPING_STATES)})
+    voltage        = FloatCommand(get_string="VOLTage:SUPPly?") # Voltage at supply (V)
+    current_magnet = FloatCommand(get_string="CURRent:MAGnet?") # Current at magnet
+    current_supply = FloatCommand(get_string="CURRent:SUPPly?") # Current at supply
+    field          = FloatCommand(get_string="FIELD:MAGnet?") # Calculated magnet field
+    inductance     = FloatCommand(get_string="INDuctance?") # Measured inductance (H)
+    ramping_state  = StringCommand(get_string="STATE?", value_map={v:str(ct+1) for ct,v in enumerate(RAMPING_STATES)}) # Current ramping state
 
-    def __init__(self, name, resource_name, *args, **kwargs):
+    def __init__(self, resource_name, *args, **kwargs):
         resource_name += "::7180::SOCKET"
-        super(AMI430, self).__init__(name, resource_name, *args, **kwargs)
+        super(AMI430, self).__init__(resource_name, *args, **kwargs)
+        self.name = "American Magnetics Model 430"
         self.interface._resource.read_termination = u"\r\n"
         #device responds with 'American Magnetics Model 430 IP Interface\r\nHello\r\n' on connect
         connect_response = self.interface.read()

@@ -5,8 +5,8 @@ import time
 from instruments.kepco import BOP2020M
 from instruments.stanford import SR830
 
-bop       = BOP2020M("Kepco Power Supply", "GPIB1::1::INSTR")
-lock      = SR830("Lockin Amplifier", "GPIB1::9::INSTR")
+bop       = BOP2020M("GPIB1::1::INSTR")
+lock      = SR830("GPIB1::9::INSTR")
 
 currents = np.arange(-20, 20.1, 2)
 voltages = []

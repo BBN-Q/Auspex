@@ -16,15 +16,15 @@ from procedure import FloatParameter, Quantity, Procedure
 
 
 class CurrentLoop(Procedure):
-    field        = FloatParameter("Magnetic Field Setpoint", unit="G")
-    dc_bias      = FloatParameter("DC Bias", unit="V")
+    field        = FloatParameter(name="Magnetic Field Setpoint", unit="G")
+    dc_bias      = FloatParameter(name="DC Bias", unit="V")
 
-    actual_field = Quantity("Magnitude Field", unit="G")
-    voltage      = Quantity("Magnitude", unit="V")
+    actual_field = Quantity(name="Magnitude Field", unit="G")
+    voltage      = Quantity(name="Magnitude", unit="V")
 
-    bop       = BOP2020M("Kepco Power Supply", "GPIB1::1::INSTR")
-    lock      = SR830("Lockin Amplifier", "GPIB1::9::INSTR")
-    fast_lock = SR865("Lockin Amplifier", "USB0::0xB506::0x2000::002638::INSTR")
+    bop       = BOP2020M("GPIB1::1::INSTR")
+    lock      = SR830("GPIB1::9::INSTR")
+    fast_lock = SR865("USB0::0xB506::0x2000::002638::INSTR")
     hp        = HallProbe("calibration/HallProbe.cal", lock.set_ao1, lock.get_ai1)
     mag       = Electromagnet('calibration/GMW.cal', hp.get_field, bop.set_current, bop.get_current)
 

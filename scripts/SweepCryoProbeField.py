@@ -13,11 +13,11 @@ from pycontrol.sweep import Sweep
 from pycontrol.procedure import FloatParameter, Quantity, Procedure
 
 class RampCurrent(Procedure):
-    field  = FloatParameter("Field", unit="T")
-    resistance = Quantity("Resistance", unit="Ohm")
+    field  = FloatParameter(unit="T")
+    resistance = Quantity(unit="Ohm")
 
-    mag = AMI430("This is a magnet", "192.168.5.109")
-    keith = Keithley2400("This is a keithley", "GPIB0::25::INSTR")
+    mag = AMI430("192.168.5.109")
+    keith = Keithley2400("GPIB0::25::INSTR")
 
     def init_instruments(self):
         self.keith.triad()

@@ -1,4 +1,4 @@
-from .instrument import Instrument, Command, FloatCommand, IntCommand
+from .instrument import Instrument, StringCommand, FloatCommand, IntCommand
 import socket
 import time
 import numpy as np
@@ -15,21 +15,22 @@ def is_valid_ipv4(ipv4_address):
 class E8363C(Instrument):
     """Agilent E8363C VNA"""
 
-    power              = FloatCommand("Output Power", get_string=":SOURce:POWer:LEVel:IMMediate:AMPLitude?", set_string=":SOURce:POWer:LEVel:IMMediate:AMPLitude {:g}", value_range=(-27, 20))
-    frequency_center   = FloatCommand("Sweep Center Frequency", get_string=":SENSe:FREQuency:CENTer?", set_string=":SENSe:FREQuency:CENTer {:g}")
-    frequency_span     = FloatCommand("Sweep Frequency Span", get_string=":SENSe:FREQuency:SPAN?", set_string=":SENSe:FREQuency:SPAN {:g}")
-    frequency_start    = FloatCommand("Sweep Frequency Start", get_string=":SENSe:FREQuency:STARt?", set_string=":SENSe:FREQuency:STARt {:g}")
-    frequency_stop     = FloatCommand("Sweep Frequency Start", get_string=":SENSe:FREQuency:STOP?", set_string=":SENSe:FREQuency:STOP {:g}")
-    sweep_num_points   = IntCommand("Sweep Number of Points", get_string=":SENSe:SWEep:POINts?", set_string=":SENSe:SWEep:POINts {:d}")
-    averaging_factor   = IntCommand("Number of Averages", get_string=":SENSe1:AVERage:COUNt?", set_string=":SENSe1:AVERage:COUNt {:d}")
-    averaging_enable   = Command("Averaging On/Off", get_string=":SENSe1:AVERage:STATe?", set_string=":SENSe1:AVERage:STATe {:c}", value_map={False:"0", True:"1"})
-    averaging_complete = Command("Averaging finished", get_string=":STATus:OPERation:AVERaging1:CONDition?", value_map={False:"+0", True:"+2"})
+    power              = FloatCommand(scpi_string=":SOURce:POWer:LEVel:IMMediate:AMPLitude", value_range=(-27, 20))
+    frequency_center   = FloatCommand(scpi_string=":SENSe:FREQuency:CENTer")
+    frequency_span     = FloatCommand(scpi_string=":SENSe:FREQuency:SPAN")
+    frequency_start    = FloatCommand(scpi_string=":SENSe:FREQuency:STARt")
+    frequency_stop     = FloatCommand(scpi_string=":SENSe:FREQuency:STOP")
+    sweep_num_points   = IntCommand(scpi_string=":SENSe:SWEep:POINts")
+    averaging_factor   = IntCommand(scpi_string=":SENSe1:AVERage:COUNt")
+    averaging_enable   = StringCommand(get_string=":SENSe1:AVERage:STATe?", set_string=":SENSe1:AVERage:STATe {:c}", value_map={False:"0", True:"1"})
+    averaging_complete = StringCommand(get_string=":STATus:OPERation:AVERaging1:CONDition?", value_map={False:"+0", True:"+2"})
 
     def __init__(self, name, resource_name, *args, **kwargs):
         #If we only have an IP address then tack on the raw socket port to the VISA resource string
         if is_valid_ipv4(resource_name):
             resource_name += "::5025::SOCKET"
         super(E8363C, self).__init__(name, resource_name, *args, **kwargs)
+        self.name = "Agilent E8363C VNA"
         self.interface._resource.read_termination = u"\n"
         self.interface._resource.write_termination = u"\n"
         self.interface._resource.timeout = 3000 #seem to have trouble timing out on first query sometimes

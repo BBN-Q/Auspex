@@ -8,32 +8,32 @@ import numpy as np
 import scipy as sp
 import pandas as pd
 
-from pycontrol.instruments.instrument import Instrument, Command
+from pycontrol.instruments.instrument import Instrument, StringCommand
 from pycontrol.instruments.picosecond import Picosecond10070A
 from pycontrol.sweep import Sweep
 from pycontrol.procedure import FloatParameter, Quantity, Procedure
 
 class Magnet(Instrument):
-    field = Command("field", get_string=":field?", set_string=":field %g Oe;")
+    field = StringCommand(get_string=":field?", set_string=":field %g Oe;")
 
 class Keithley(Instrument):
-    resistance = Command("resistance", get_string=":res?", set_string=":res %g Oe;")
-    testing = Command("testing", get_string=":test?", set_string=":test %g Oe;")
+    resistance = StringCommand(get_string=":res?", set_string=":res %g Oe;")
+    testing = StringCommand(get_string=":test?", set_string=":test %g Oe;")
 
 class TestProcedure(Procedure):
 
     # Create instances of instruments
-    mag = Magnet("GMW", "FAKE::RESOURE::NAME")
-    keith1 = Keithley("Keithley Transverse", "FAKE::RESOURE::NAME")
-    keith2 = Keithley("Keithley Longitudinal", "FAKE::RESOURE::NAME")
+    mag    = Magnet("FAKE::RESOURCE::NAME")
+    keith1 = Keithley("FAKE::RESOURCE::NAME")
+    keith2 = Keithley("FAKE::RESOURCE::NAME")
 
     # Parameters
-    field_x = FloatParameter("Field X", unit="G")
-    field_y = FloatParameter("Field Y", unit="G")
+    field_x = FloatParameter(name="Field X", unit="G")
+    field_y = FloatParameter(name="Field Y", unit="G")
 
     # Quantities
-    resistance_trans = Quantity("Transverse Resistance", unit="Ohm")
-    resistance_long = Quantity("Longitudinal Resistance", unit="Ohm")
+    resistance_trans = Quantity(name="Transverse Resistance", unit="Ohm")
+    resistance_long = Quantity(name="Longitudinal Resistance", unit="Ohm")
 
     def init_instruments(self):
         self.field_x.assign_method(lambda x: time.sleep(0.01))

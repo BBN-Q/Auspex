@@ -6,6 +6,7 @@ class Electromagnet(object):
     """Wrapper for electromagnet """
     def __init__(self, calibration_file, field_getter, current_setter, current_getter, field_averages=5):
         super(Electromagnet, self).__init__()
+        self.name = "Composite Magnet Instrument"
         with open(calibration_file) as cf:
             lines = [l for l in cf.readlines() if l[0] != '#']
             if len(lines) != 1:
@@ -47,3 +48,7 @@ class Electromagnet(object):
     # hackathon continues
     def get_field(self):
         return self.field
+
+    def __repr__(self):
+        name = "Mystery Instrument" if self.name == "" else self.name
+        return "{} @ {}".format(name, self.resource_name)

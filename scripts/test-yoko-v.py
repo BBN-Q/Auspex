@@ -10,10 +10,10 @@ from pycontrol.sweep import Sweep
 from pycontrol.procedure import FloatParameter, Quantity, Procedure
 
 class RampCurrent(Procedure):
-    voltage = FloatParameter("Voltage", unit="V")
-    current = Quantity("Current", unit="A")
+    voltage = FloatParameter(unit="V")
+    current = Quantity(unit="A")
 
-    yoko = YokogawaGS200("Current source", "GPIB0::30::INSTR")
+    yoko = YokogawaGS200("GPIB0::30::INSTR")
 
     def init_instruments(self):
         self.yoko.function = "voltage"

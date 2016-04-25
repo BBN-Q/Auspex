@@ -1,11 +1,11 @@
 import unittest
 
-from pycontrol.instruments.instrument import Instrument, Command, FloatCommand, IntCommand
+from pycontrol.instruments.instrument import Instrument, StringCommand, FloatCommand, IntCommand
 
 class TestInstrument(Instrument):
-	frequency = FloatCommand("frequency", get_string="frequency?", set_string="frequency {:g}", value_range=(0.1, 10))
-	serial_number = IntCommand("serial number", get_string="serial?")
-	mode = Command("enumerated mode", scpi_string=":mode", allowed_values=["A", "B", "C"])
+	frequency = FloatCommand(get_string="frequency?", set_string="frequency {:g}", value_range=(0.1, 10))
+	serial_number = IntCommand(get_string="serial?")
+	mode = StringCommand(name="enumerated mode", scpi_string=":mode", allowed_values=["A", "B", "C"])
 
 
 class InstrumentTestCase(unittest.TestCase):

@@ -9,20 +9,19 @@ import visa
 import os
 import time
 
-class Command(object):
+class StringCommand(object):
     """Wraps a particular device command set based on getter and setter strings. The optional
     value_map keyword argument allows specification of a dictionary map between python values
     such as True and False and the strange 'on' and 'off' type of values frequently used
     by instruments. Translation occurs via the provided 'convert_set' and 'convert_get' methods."""
     formatter = '{}'
 
-    def __init__(self, name, set_string=None, get_string=None, scpi_string=None, value_map=None, value_range=None,
+    def __init__(self, name=None, set_string=None, get_string=None, scpi_string=None, value_map=None, value_range=None,
                  allowed_values=None, aliases=None, delay=None, additional_args=None):
         """Initialize the class with optional set and get string corresponding to instrument
         commands. Also a map containing pairs of e.g. {python_value1: instr_value1, python_value2: instr_value2, ...}."""
 
-        super(Command, self).__init__()
-        self.name = name
+        super(StringCommand, self).__init__()
         self.aliases = aliases
 
         if scpi_string:
@@ -79,7 +78,7 @@ class Command(object):
         else:
             return self.instr_to_python[get_value_instrument]
 
-class FloatCommand(Command):
+class FloatCommand(StringCommand):
     formatter = '{:E}'
     def convert_get(self, get_value_instrument):
         """Convert the instrument's returned values to something conveniently accessed
@@ -89,7 +88,7 @@ class FloatCommand(Command):
         else:
             return float(self.instr_to_python[get_value_instrument])
 
-class IntCommand(Command):
+class IntCommand(StringCommand):
     formatter = '{:d}'
     def convert_get(self, get_value_instrument):
         """Convert the instrument's returned values to something conveniently accessed
@@ -101,9 +100,8 @@ class IntCommand(Command):
 
 class RampCommand(FloatCommand):
     """For quantities that are to be ramped from present to desired value. These will always be floats..."""
-    def __init__(self, name, increment, pause=0.0, **kwargs):
-        super(RampCommand, self).__init__(name, **kwargs)
-        self.name = name
+    def __init__(self, increment, pause=0.0, **kwargs):
+        super(RampCommand, self).__init__(**kwargs)
         self.increment = increment
         self.pause = pause
 
@@ -212,7 +210,7 @@ class MetaInstrument(type):
         type.__init__(self, name, bases, dct)
         logging.debug("Adding controls to %s", name)
         for k,v in dct.items():
-            if isinstance(v, Command):
+            if isinstance(v, StringCommand):
                 logging.debug("Adding '%s' command", k)
                 add_command(self, k, v)
                 if v.aliases is not None:
@@ -227,7 +225,7 @@ class Instrument(metaclass=MetaInstrument):
     objects such as to provide convenient get_xx and set_xx setter/getter methods as well
     as python @properties therof."""
 
-    def __init__(self, name, resource_name, interface_type=None, check_errors_on_get=False, check_errors_on_set=False):
+    def __init__(self, resource_name, name=None, interface_type=None, check_errors_on_get=False, check_errors_on_set=False):
         super(Instrument, self).__init__()
         self.name = name
         self.resource_name = resource_name
@@ -254,6 +252,10 @@ class Instrument(metaclass=MetaInstrument):
         #close the VISA resource
         if hasattr(self.interface, "_resource"):
             self.interface._resource.close()
+
+    def __repr__(self):
+        name = "Mystery Instrument" if self.name == "" else self.name
+        return "{} @ {}".format(name, self.resource_name)
 
     def check_errors(self):
         pass

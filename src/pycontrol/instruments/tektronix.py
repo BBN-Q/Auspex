@@ -1,28 +1,28 @@
-from .instrument import Instrument, Command, FloatCommand, IntCommand
+from .instrument import Instrument, StringCommand, FloatCommand, IntCommand
 import numpy as np
 
 class DPO72004C(Instrument):
     """Tektronix DPO72004C Oscilloscope"""
-    encoding = Command("Data Encoding", get_string="DAT:ENC;", set_string="DAT:ENC {:s};",
+    encoding   = StringCommand(get_string="DAT:ENC;", set_string="DAT:ENC {:s};",
                         allowed_values=["ASCI","RIB","RPB","FPB","SRI","SRP","SFP"])
-    byte_depth = IntCommand("Bit Depth", get_string="WFMOutpre:BYT_Nr?;",
+    byte_depth = IntCommand(get_string="WFMOutpre:BYT_Nr?;",
                             set_string="WFMOutpre:BYT_Nr {:d};", allowed_values=[1,2,4,8])
-    data_start = IntCommand("Data Start", get_string="DAT:STAR?;", set_string="DAT:STAR {:d};")
-    data_stop  = IntCommand("Data Stop", get_string="DAT:STOP?;", set_string="DAT:STOP {:d};")
+    data_start = IntCommand(get_string="DAT:STAR?;", set_string="DAT:STAR {:d};")
+    data_stop  = IntCommand(get_string="DAT:STOP?;", set_string="DAT:STOP {:d};")
 
-    # Fast Frames
-    fast_frame = Command("Fast Frame State", get_string="HORizontal:FASTframe:STATE?;", set_string="HORizontal:FASTframe:STATE {:s};",
-                         value_map={True: '1', False: '0'})
-    num_fast_frames = IntCommand("Number of fast frames", get_string="HOR:FAST:COUN?;", set_string="HOR:FAST:COUN {:d};")
+    fast_frame      = StringCommand(get_string="HORizontal:FASTframe:STATE?;", set_string="HORizontal:FASTframe:STATE {:s};",
+                       value_map       = {True: '1', False: '0'})
+    num_fast_frames = IntCommand(get_string="HOR:FAST:COUN?;", set_string="HOR:FAST:COUN {:d};")
 
-    preamble   = Command("Curve preamble ", get_string="WFMOutpre?;")
+    preamble = StringCommand(get_string="WFMOutpre?;") # Curve preamble
 
-    record_length   = IntCommand("Record Length", get_string="HOR:ACQLENGTH?;")
-    record_duration = FloatCommand("Record Length", get_string="HOR:ACQDURATION?;")
+    record_length   = IntCommand(get_string="HOR:ACQLENGTH?;")
+    record_duration = FloatCommand(get_string="HOR:ACQDURATION?;")
 
-    def __init__(self, name, resource_name, *args, **kwargs):
+    def __init__(self, resource_name, *args, **kwargs):
         resource_name += "::4000::SOCKET" #user guide recommends HiSLIP protocol
-        super(DPO72004C, self).__init__(name, resource_name, *args, **kwargs)
+        super(DPO72004C, self).__init__(resource_name, *args, **kwargs)
+        self.name = "Tektronix DPO72004C Oscilloscope"
         self.interface._resource.read_termination = u"\n"
 
     def clear(self):

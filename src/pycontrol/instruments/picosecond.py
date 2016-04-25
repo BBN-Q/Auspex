@@ -1,18 +1,19 @@
-from .instrument import Instrument, Command, FloatCommand
+from .instrument import Instrument, StringCommand, FloatCommand
 
 class Picosecond10070A(Instrument):
     """Picosecond 10070A Pulser"""
-    amplitude = FloatCommand("amplitude", get_string="amplitude?", set_string="amplitude {:g}")
-    delay     = FloatCommand("delay", get_string="delay?", set_string="delay {:g}")
-    duration  = FloatCommand("duration", get_string="duration?", set_string="duration {:g}")
-    level     = FloatCommand("level", get_string="level?", set_string="level {:g}")
-    period    = FloatCommand("period", get_string="period?", set_string="period {:g}")
-    frequency = FloatCommand("frequency", get_string="frequency?", set_string="frequency {:g}")
-    offset    = FloatCommand("offset", get_string="offset?", set_string="offset {:g}")
-    trigger_source = Command("trigger source", scpi_string="trigger", allowed_values=["INT", "EXT", "GPIB"])
+    amplitude      = FloatCommand(scpi_string="amplitude?")
+    delay          = FloatCommand(scpi_string="delay?")
+    duration       = FloatCommand(scpi_string="duration?")
+    level          = FloatCommand(scpi_string="level?")
+    period         = FloatCommand(scpi_string="period?")
+    frequency      = FloatCommand(scpi_string="frequency?")
+    offset         = FloatCommand(scpi_string="offset?")
+    trigger_source = StringCommand(scpi_string="trigger", allowed_values=["INT", "EXT", "GPIB"])
 
-    def __init__(self, name, resource_name, *args, **kwargs):
-        super(Picosecond10070A, self).__init__(name, resource_name, *args, **kwargs)
+    def __init__(self, resource_name, *args, **kwargs):
+        super(Picosecond10070A, self).__init__(resource_name, *args, **kwargs)
+        self.name = "Picosecond 10070A Pulser"
         self.interface.write("header off")
         self.interface.write("trigger GPIB")
         self.interface._resource.read_termination = u"\n"

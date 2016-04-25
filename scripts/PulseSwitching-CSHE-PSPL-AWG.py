@@ -30,11 +30,11 @@ def arb_pulse(amplitude, duration, sample_rate=12e9):
     return wf
 
 if __name__ == '__main__':
-    arb   = M8190A("Test Arb", "192.168.5.108")
-    pspl  = Picosecond10070A("Pulse Generator", "GPIB0::24::INSTR")
-    mag   = AMI430("This is a magnet", "192.168.5.109")
-    keith = Keithley2400("This is a keithley", "GPIB0::25::INSTR")
-    lock  = SR865("Lockin Amplifier", "USB0::0xB506::0x2000::002638::INSTR")
+    arb   = M8190A("192.168.5.108")
+    pspl  = Picosecond10070A("GPIB0::24::INSTR")
+    mag   = AMI430("192.168.5.109")
+    keith = Keithley2400("GPIB0::25::INSTR")
+    lock  = SR865("USB0::0xB506::0x2000::002638::INSTR")
 
     APtoP = False
     polarity = 1 if APtoP else -1
