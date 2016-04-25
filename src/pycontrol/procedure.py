@@ -12,7 +12,7 @@ from .instruments.instrument import Instrument
 
 class Quantity(object):
     """Physical quantity to be measured."""
-    def __init__(self, name, unit=None):
+    def __init__(self, name=None, unit=None):
         super(Quantity, self).__init__()
         self.name   = name
         self.unit   = unit
@@ -166,9 +166,13 @@ class MetaProcedure(type):
                 self._instruments[k] = v
             elif isinstance(v, Parameter):
                 logging.debug("Found '%s' parameter", k)
+                if v.name is None:
+                    v.name = k
                 self._parameters[k] = v
             elif isinstance(v, Quantity):
                 logging.debug("Found '%s' quantity", k)
+                if v.name is None:
+                    v.name = k
                 self._quantities[k] = v
 
 class Procedure(metaclass=MetaProcedure):
