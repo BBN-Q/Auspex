@@ -251,6 +251,8 @@ class Instrument(metaclass=MetaInstrument):
     objects such as to provide convenient get_xx and set_xx setter/getter methods as well
     as python @properties therof."""
 
+    __isfrozen = False
+
     def __init__(self, resource_name, name=None, interface_type=None, check_errors_on_get=False, check_errors_on_set=False):
         super(Instrument, self).__init__()
         self.name = name
@@ -273,6 +275,19 @@ class Instrument(metaclass=MetaInstrument):
             self.interface = VisaInterface(resource_name)
         else:
             raise ValueError("That interface type is not yet recognized.")
+
+        self._freeze()
+
+    # We want to lock the class dictionary
+    # This solution from http://stackoverflow.com/questions/3603502/prevent-creating-new-attributes-outside-init
+
+    def __setattr__(self, key, value):
+        if self.__isfrozen and not hasattr(self, key):
+            raise TypeError( "{} has a frozen class. Cannot access attribute {}".format(self, key) )
+        object.__setattr__(self, key, value)
+
+    def _freeze(self):
+        self.__isfrozen = True
 
     def __del__(self):
         #close the VISA resource

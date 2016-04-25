@@ -7,7 +7,6 @@ class TestInstrument(Instrument):
 	serial_number = IntCommand(get_string="serial?")
 	mode = StringCommand(name="enumerated mode", scpi_string=":mode", allowed_values=["A", "B", "C"])
 
-
 class InstrumentTestCase(unittest.TestCase):
 	"""
 	Tests instrument commands
@@ -38,5 +37,10 @@ class InstrumentTestCase(unittest.TestCase):
 		"""Check that setting value outside range raises error."""
 		with self.assertRaises(ValueError):
 			self.instrument.frequency = 11
+
+	def test_locked_class(self):
+		with self.assertRaises(TypeError):
+			self.instrument.nonexistent_property = 16
+
 if __name__ == '__main__':
 	unittest.main()
