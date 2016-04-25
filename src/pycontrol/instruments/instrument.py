@@ -289,6 +289,9 @@ class Instrument(metaclass=MetaInstrument):
     def _freeze(self):
         self.__isfrozen = True
 
+    def _unfreeze(self):
+        self.__isfrozen = False
+
     def __del__(self):
         #close the VISA resource
         if hasattr(self.interface, "_resource"):
