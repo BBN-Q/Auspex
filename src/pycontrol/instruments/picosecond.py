@@ -2,13 +2,13 @@ from .instrument import Instrument, StringCommand, FloatCommand
 
 class Picosecond10070A(Instrument):
     """Picosecond 10070A Pulser"""
-    amplitude      = FloatCommand(scpi_string="amplitude?")
-    delay          = FloatCommand(scpi_string="delay?")
-    duration       = FloatCommand(scpi_string="duration?")
-    level          = FloatCommand(scpi_string="level?")
-    period         = FloatCommand(scpi_string="period?")
-    frequency      = FloatCommand(scpi_string="frequency?")
-    offset         = FloatCommand(scpi_string="offset?")
+    amplitude      = FloatCommand(scpi_string="amplitude")
+    delay          = FloatCommand(scpi_string="delay")
+    duration       = FloatCommand(scpi_string="duration")
+    level          = FloatCommand(scpi_string="level")
+    period         = FloatCommand(scpi_string="period")
+    frequency      = FloatCommand(scpi_string="frequency")
+    offset         = FloatCommand(scpi_string="offset")
     trigger_source = StringCommand(scpi_string="trigger", allowed_values=["INT", "EXT", "GPIB"])
 
     def __init__(self, resource_name, *args, **kwargs):
