@@ -5,7 +5,7 @@ class Picosecond10070A(Instrument):
     amplitude      = FloatCommand(scpi_string="amplitude")
     delay          = FloatCommand(scpi_string="delay")
     duration       = FloatCommand(scpi_string="duration")
-    level          = FloatCommand(scpi_string="level")
+    trigger_level  = FloatCommand(scpi_string="level")
     period         = FloatCommand(scpi_string="period")
     frequency      = FloatCommand(scpi_string="frequency")
     offset         = FloatCommand(scpi_string="offset")

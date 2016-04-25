@@ -113,7 +113,7 @@ if __name__ == '__main__':
     pspl.amplitude = polarity*7.5*np.power(10, -pspl_attenuation/20)
     pspl.trigger_source = "EXT"
     pspl.output = True
-    #TODO: pspl.trigger_level = 0.1
+    pspl.trigger_level = 0.1
 
     # Ramp to the switching field
     mag.set_field(-0.015) # 85G
