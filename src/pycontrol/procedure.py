@@ -65,6 +65,19 @@ class Quantity(object):
             result += ",unit='%s'" % self.unit
         return result + ")>"
 
+class Trace(Quantity):
+    """Holds a data array rather than a singe point."""
+    def __init__(self, *args, **kwargs):
+        super(Trace, self).__init__(*args, **kwargs)
+        self._value = []
+    def __repr__(self):
+        result = "<Trace(name='%s'" % self.name
+        result += ",value=%s" % repr(self._value)
+        result += ",length=%i" % len(self._value)
+        if self.unit:
+            result += ",unit='%s'" % self.unit
+        return result + ")>"
+
 class Parameter(object):
     """ Encapsulates the information for an experiment parameter"""
 
@@ -161,7 +174,8 @@ class MetaProcedure(type):
         logger.debug("Adding controls to %s", name)
         self._parameters  = {}
         self._quantities  = {}
-        self._instruments  = {}
+        self._instruments = {}
+        self._traces      = {}
 
         for k,v in dct.items():
             if isinstance(v, Instrument):
@@ -177,6 +191,11 @@ class MetaProcedure(type):
                 if v.name is None:
                     v.name = k
                 self._quantities[k] = v
+            elif isinstance(v, Trace):
+                logger.debug("Found '%s' trace", k)
+                if v.name is None:
+                    v.name = k
+                self._traces[k] = v
 
 class Procedure(metaclass=MetaProcedure):
     """The measurement loop to be run for each set of sweep parameters."""
