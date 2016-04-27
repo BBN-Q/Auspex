@@ -118,7 +118,7 @@ class Plotter(object):
         self.xlabel = self.x.name + (" ("+self.x.unit+")" if self.x.unit is not None else '')
         self.ylabel = self.y.name + (" ("+self.y.unit+")" if self.y.unit is not None else '')
         self.figure = Figure(plot_width=400, plot_height=400, title=self.title,
-                             x_axis_label=self.xlabel, y_axis_label=self.ylabel, **self.fig_args)
+                             x_axis_label=self.xlabel, y_axis_label=self.ylabel, **self.fig_args, webgl=True)
         self.plot = self.figure.line([],[], name=title, **plot_args)
         renderers = self.plot.select(dict(name=title))
         self.renderer = [r for r in renderers if isinstance(r, GlyphRenderer)][0]
@@ -164,7 +164,7 @@ class Plotter2D(object):
         self.xlabel = self.x.name + (" ("+self.x.unit+")" if self.x.unit is not None else '')
         self.ylabel = self.y.name + (" ("+self.y.unit+")" if self.y.unit is not None else '')
         self.figure = Figure(x_range=[xmin, xmax], y_range=[ymin, ymax], plot_width=400, plot_height=400,
-                             x_axis_label=self.xlabel, y_axis_label=self.ylabel, title=self.title)
+                             x_axis_label=self.xlabel, y_axis_label=self.ylabel, title=self.title, webgl=True)
         self.plot = self.figure.image(image=[self.z_data], x=[xmin], y=[ymin],
                                       dw=[xmax-xmin], dh=[ymax-ymin], name=self.title, **plot_args)
         renderers = self.plot.select(dict(name=title))
@@ -176,7 +176,7 @@ class Plotter2D(object):
         new_data_loc = np.where(  np.logical_and(self.x_mesh == self.x.value, self.y_mesh == self.y.value)  )
         self.z_data[new_data_loc] = self.z.value
         if (time.time() - self.last_update >= self.update_interval) or force:
-            self.data_source.data["image"] = [self.z_data]
+            self.data_source.data["image"] = [np.copy(self.z_data)]
             self.last_update = time.time()
 
     def clear(self):
