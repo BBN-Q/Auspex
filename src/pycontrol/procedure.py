@@ -1,12 +1,12 @@
 import logging
+import asyncio
+import inspect
+import time
 
 import numpy as np
 import scipy as sp
 import pandas as pd
 import h5py
-
-import inspect
-import time
 
 from .instruments.instrument import Instrument
 
@@ -64,6 +64,64 @@ class Quantity(object):
         if self.unit:
             result += ",unit='%s'" % self.unit
         return result + ")>"
+
+class DataAxis(object):
+    """An axes in a data stream"""
+    def __init__(self, label, points, unit=None):
+        super(DataAxis, self).__init__()
+        self.label  = label
+        self.points = points
+        self.unit   = unit
+    def __repr__(self):
+        return "<DataAxis(label={}, points={}, unit={})>".format(
+            self.label, self.points, self.unit)
+
+class DataStreamDescriptor(object):
+    """Axis information"""
+    def __init__(self):
+        super(DataStreamDescriptor, self).__init__()
+        self.axes = []
+
+    def add_axis(self, axis):
+        self.axes.append(axis)
+
+    def num_dims(self):
+        return len(self.axes)
+
+    def num_points(self):
+        return sum([len(a.points) for a in self.axes])
+
+    def __repr__(self):
+        return "<DataStreamDescriptor(num_dims={}, num_points={})>".format(
+            self.num_dims(), self.num_points())
+
+class DataStream(object):
+    """A stream of data"""
+    def __init__(self):
+        super(DataStream, self).__init__()
+        self.queue = asyncio.Queue()
+        self.points_taken = 0
+        self.descriptor = None
+
+    def set_descriptor(self, descriptor):
+        self.descriptor = descriptor
+
+    def num_points(self):
+        return self.descriptor.num_points()
+
+    def percent_complete(self):
+        return 100.0*self.points_taken/self.num_points()
+
+    def done(self):
+        return self.points_taken >= self.num_points()
+
+    def __repr__(self):
+        return "<DataStream(completion={}%, descriptor={})>".format(
+            self.percent_complete(), self.descriptor)
+
+    async def push(self, data):
+        self.points_taken += len(data)
+        await self.queue.put(data)
 
 class Trace(Quantity):
     """Holds a data array rather than a singe point."""

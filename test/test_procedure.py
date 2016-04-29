@@ -1,7 +1,7 @@
 import unittest
 
 from pycontrol.instruments.instrument import Instrument, StringCommand, FloatCommand, IntCommand
-from pycontrol.procedure import Procedure, FloatParameter, Quantity
+from pycontrol.procedure import Procedure, FloatParameter, Quantity, DataStream
 
 class TestInstrument1(Instrument):
 	frequency = FloatCommand(get_string="frequency?", set_string="frequency {:g}", value_range=(0.1, 10))
@@ -18,7 +18,7 @@ class TestInstrument3(Instrument):
 	serial_number = IntCommand(get_string="serial?")
 	mode = StringCommand(scpi_string=":mode", allowed_values=["A", "B", "C"])
 
-class TestProcedure(Procedure):
+class TestProcedure(Procedure, DataTaker):
 
     # Create instances of instruments
     fake_instr_1 = TestInstrument1("FAKE::RESOURE::NAME")
@@ -32,6 +32,10 @@ class TestProcedure(Procedure):
     # Quantities
     power = Quantity(unit="Watts")
     clout = Quantity(unit="Trumps")
+
+    # DataStreams
+    S12 = DataStream()
+    S11 = DataStream()
 
     def run(self):
         pass
