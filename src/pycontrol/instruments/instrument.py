@@ -21,12 +21,14 @@ class StringCommand(object):
     formatter = '{}'
 
     def __init__(self, name=None, set_string=None, get_string=None, scpi_string=None, value_map=None, value_range=None,
-                 allowed_values=None, aliases=None, delay=None, additional_args=None):
+                 allowed_values=None, aliases=None, set_delay=0.0, get_delay=0.0, additional_args=None):
         """Initialize the class with optional set and get string corresponding to instrument
         commands. Also a map containing pairs of e.g. {python_value1: instr_value1, python_value2: instr_value2, ...}."""
 
         super(StringCommand, self).__init__()
         self.aliases = aliases
+        self.set_delay = set_delay
+        self.get_delay = get_delay
 
         if scpi_string:
             # Construct get and set strings using this base scpi_string
@@ -185,6 +187,7 @@ def add_command(instr, name, cmd):
     setters and getters."""
     def fget(self, **kwargs):
         val = self.interface.query( cmd.get_string.format( **kwargs ) )
+        time.sleep(cmd.get_delay)
         return cmd.convert_get(val)
 
     def fset(self, val, **kwargs):
@@ -215,7 +218,7 @@ def add_command(instr, name, cmd):
             # logger.debug("Formatting '%s' with string '%s'" % (cmd.set_string, set_value))
             # logger.debug("The result of the formatting is %s" % cmd.set_string.format(set_value, **{k: str(v) for k,v in kwargs.items()}))
             self.interface.write(cmd.set_string.format(set_value, **kwargs))
-
+            time.sleep(cmd.set_delay)
     # Add getter and setter methods for passing around
     if cmd.additional_args is None:
         # We add properties in this case since not additional arguments are required
