@@ -2,6 +2,7 @@ import logging
 import asyncio
 import inspect
 import time
+from functools import reduce
 
 import numpy as np
 import scipy as sp
@@ -89,7 +90,7 @@ class DataStreamDescriptor(object):
         return len(self.axes)
 
     def num_points(self):
-        return sum([len(a.points) for a in self.axes])
+        return reduce(lambda x,y: x*y, [len(a.points) for a in self.axes])
 
     def __repr__(self):
         return "<DataStreamDescriptor(num_dims={}, num_points={})>".format(
