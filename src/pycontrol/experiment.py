@@ -1,8 +1,6 @@
 import logging
-import asyncio
 import inspect
 import time
-from functools import reduce
 
 import numpy as np
 import scipy as sp
@@ -10,6 +8,7 @@ import pandas as pd
 import h5py
 
 from .instruments.instrument import Instrument
+from .streams.stream import DataStream, DataAxis, DataStreamDescriptor
 
 logger = logging.getLogger('pycontrol')
 logging.basicConfig(format='%(name)s - %(levelname)s: \t%(asctime)s: \t%(message)s')
@@ -62,77 +61,6 @@ class Quantity(object):
     def __repr__(self):
         result = "<Quantity(name='%s'" % self.name
         result += ",value=%s" % repr(self._value)
-        if self.unit:
-            result += ",unit='%s'" % self.unit
-        return result + ")>"
-
-class DataAxis(object):
-    """An axes in a data stream"""
-    def __init__(self, label, points, unit=None):
-        super(DataAxis, self).__init__()
-        self.label  = label
-        self.points = points
-        self.unit   = unit
-    def __repr__(self):
-        return "<DataAxis(label={}, points={}, unit={})>".format(
-            self.label, self.points, self.unit)
-
-class DataStreamDescriptor(object):
-    """Axis information"""
-    def __init__(self):
-        super(DataStreamDescriptor, self).__init__()
-        self.axes = []
-
-    def add_axis(self, axis):
-        self.axes.append(axis)
-
-    def num_dims(self):
-        return len(self.axes)
-
-    def num_points(self):
-        return reduce(lambda x,y: x*y, [len(a.points) for a in self.axes])
-
-    def __repr__(self):
-        return "<DataStreamDescriptor(num_dims={}, num_points={})>".format(
-            self.num_dims(), self.num_points())
-
-class DataStream(object):
-    """A stream of data"""
-    def __init__(self):
-        super(DataStream, self).__init__()
-        self.queue = asyncio.Queue()
-        self.points_taken = 0
-        self.descriptor = None
-
-    def set_descriptor(self, descriptor):
-        self.descriptor = descriptor
-
-    def num_points(self):
-        return self.descriptor.num_points()
-
-    def percent_complete(self):
-        return 100.0*self.points_taken/self.num_points()
-
-    def done(self):
-        return self.points_taken >= self.num_points()
-
-    def __repr__(self):
-        return "<DataStream(completion={}%, descriptor={})>".format(
-            self.percent_complete(), self.descriptor)
-
-    async def push(self, data):
-        self.points_taken += len(data)
-        await self.queue.put(data)
-
-class Trace(Quantity):
-    """Holds a data array rather than a singe point."""
-    def __init__(self, *args, **kwargs):
-        super(Trace, self).__init__(*args, **kwargs)
-        self._value = []
-    def __repr__(self):
-        result = "<Trace(name='%s'" % self.name
-        result += ",value=%s" % repr(self._value)
-        result += ",length=%i" % len(self._value)
         if self.unit:
             result += ",unit='%s'" % self.unit
         return result + ")>"
@@ -224,17 +152,35 @@ class IntParameter(Parameter):
         result = super(IntParameter, self).__repr__()
         return result.replace("<Parameter", "<IntParameter", 1)
 
-class MetaProcedure(type):
+class SweptParameter(object):
+    """Data structure for a swept Parameters, contains the Parameter
+    object rather than subclassing it since we just need to keep track
+    of some values"""
+    def __init__(self, parameter, values):
+        self.parameter = parameter
+        self.values = values
+        self.length = len(values)
+        self.indices = range(self.length)
+
+    @property
+    def value(self):
+        return self.parameter.value
+    @value.setter
+    def value(self, value):
+        self.parameter.value = value
+
+class MetaExperiment(type):
     """Meta class to bake the instrument objects into a class description
     """
 
     def __init__(self, name, bases, dct):
         type.__init__(self, name, bases, dct)
         logger.debug("Adding controls to %s", name)
-        self._parameters  = {}
-        self._quantities  = {}
-        self._instruments = {}
-        self._traces      = {}
+        self._parameters     = {}
+        self._quantities     = {}
+        self._instruments    = {}
+        self._traces         = {}
+        self._output_streams = {}
 
         for k,v in dct.items():
             if isinstance(v, Instrument):
@@ -255,11 +201,22 @@ class MetaProcedure(type):
                 if v.name is None:
                     v.name = k
                 self._traces[k] = v
+            elif isinstance(v, DataStream):
+                logger.debug("Found '%s' DataStream", k)
+                if v.name is None:
+                    v.name = k
+                self._output_streams[k] = v
 
-class Procedure(metaclass=MetaProcedure):
+class Experiment(metaclass=MetaExperiment):
     """The measurement loop to be run for each set of sweep parameters."""
     def __init__(self):
-        super(Procedure, self).__init__()
+        super(Experiment, self).__init__()
+
+        # Iterable that yields sweep values
+        self._sweep_generator = None
+
+        # Container for patameters that will be swept
+        self._swept_parameters = []
 
     def init_instruments(self):
         """Gets run before a sweep starts"""
@@ -269,6 +226,29 @@ class Procedure(metaclass=MetaProcedure):
         """Gets run after a sweep ends, or when the program is terminated."""
         pass
 
+    # The method below is for custom control
+    # Use cases: branching control, feeback loops
+
     def run(self):
-        """The actual measurement that gets run for each set of values in a sweep."""
+        """A completely arbitrary specification of sweeping/data taking"""
         pass
+
+    # The methods below are for "automatic" sweeping and running
+    # Use cases: nested loops sweeping isntrument parameters
+
+    def run_sweeps(self):
+        """A run method that is restricted to pre-defined sweeps."""
+        pass
+
+    def add_sweep(self, param, sweep_list):
+        p = SweptParameter(param, sweep_list)
+        self._swept_parameters.append(p)
+        self.generate_sweep()
+        axis = DataAxis(param.name, sweep_list)
+        for k, ds in self._data_streams.items():
+            ds.descriptor.add_axis(axis)
+
+    def generate_sweep(self):
+        self._sweep_generator = itertools.product(*[sp.values for sp in self._swept_parameters])
+        self._index_generator = itertools.product(*[sp.indices for sp in self._swept_parameters])
+

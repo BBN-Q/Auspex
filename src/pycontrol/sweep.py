@@ -16,7 +16,7 @@ from bokeh.util.session_id import generate_session_id
 from bokeh.document import Document
 
 from .plotting import BokehServerThread, Plotter, Plotter2D, MultiPlotter
-from .procedure import Procedure, Parameter, Quantity
+from .experiment import Experiment, Parameter, Quantity
 
 logger = logging.getLogger('pycontrol')
 logging.basicConfig(format='%(name)s - %(levelname)s: \t%(asctime)s: \t%(message)s')
@@ -62,13 +62,13 @@ class Sweep(object):
     quantity varies the slowest, the final quantity the quickest.
 
     """
-    def __init__(self, procedure):
+    def __init__(self, experiment):
         super(Sweep, self).__init__()
 
-        if isinstance(procedure, Procedure):
-            self._procedure = procedure
+        if isinstance(experiment, Experiment):
+            self._procedure = experiment
         else:
-            raise TypeError("Must pass a Procedure subclass.")
+            raise TypeError("Must pass a Experiment subclass.")
 
         # Container for SweptParmeters
         self._swept_parameters =  []
