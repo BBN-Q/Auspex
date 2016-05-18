@@ -44,13 +44,19 @@ class DataStream(object):
         self.descriptor = descriptor
 
     def num_points(self):
-        return self.descriptor.num_points()
+        if self.descriptor is not None:
+            return self.descriptor.num_points()
+        else:
+            return 0
 
     def percent_complete(self):
-        return 100.0*self.points_taken/self.num_points()
+        if self.descriptor is not None:
+            return 100.0*self.points_taken/self.num_points()
+        else:
+            return 0.0
 
     def done(self):
-        return self.points_taken >= self.num_points() - 1
+        return (self.points_taken >= self.num_points() - 1) and (self.num_points() > 0)
 
     def __repr__(self):
         return "<DataStream(completion={}%, descriptor={})>".format(

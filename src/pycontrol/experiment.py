@@ -196,11 +196,6 @@ class MetaExperiment(type):
                 if v.name is None:
                     v.name = k
                 self._quantities[k] = v
-            elif isinstance(v, Trace):
-                logger.debug("Found '%s' trace", k)
-                if v.name is None:
-                    v.name = k
-                self._traces[k] = v
             elif isinstance(v, DataStream):
                 logger.debug("Found '%s' DataStream", k)
                 if v.name is None:

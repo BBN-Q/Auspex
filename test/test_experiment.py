@@ -6,6 +6,7 @@ from pycontrol.instruments.instrument import Instrument, StringCommand, FloatCom
 from pycontrol.experiment import Experiment, FloatParameter, Quantity
 from pycontrol.streams.stream import DataStream, DataAxis, DataStreamDescriptor
 from pycontrol.streams.io import Printer
+from pycontrol.streams.process import Averager
 
 class TestInstrument1(Instrument):
     frequency = FloatCommand(get_string="frequency?", set_string="frequency {:g}", value_range=(0.1, 10))
@@ -84,10 +85,6 @@ class ExperimentTestCase(unittest.TestCase):
     Tests procedure class
     """
 
-    def setUp(self):
-        self.exp     = TestExperiment() 
-        self.printer = Printer() # Example node
-
     def test_parameters(self):
         """Check that parameters have been appropriately gathered"""
         self.assertTrue(hasattr(TestExperiment, "_parameters")) # should have parsed these parameters from class dir
@@ -110,29 +107,64 @@ class ExperimentTestCase(unittest.TestCase):
         self.assertTrue(TestExperiment._instruments['fake_instr_2'] == TestExperiment.fake_instr_2) # should contain this instrument
         self.assertTrue(TestExperiment._instruments['fake_instr_3'] == TestExperiment.fake_instr_3) # should contain this instrument
 
-    def test_axes(self):
-        self.exp.init_instruments()
+    def test_streams_printing(self):
+        exp     = TestExperiment()
+        printer = Printer() # Example node
+
+        exp.init_instruments()
         self.assertTrue(TestExperiment._output_streams['chan1'] == TestExperiment.chan1) # should contain this instrument
         self.assertTrue(TestExperiment._output_streams['chan2'] == TestExperiment.chan2) # should contain this instrument
-        self.assertTrue(len(self.exp.chan1.descriptor.axes) == 2)
-        self.assertTrue(len(self.exp.chan2.descriptor.axes) == 2)
-        self.assertTrue(self.exp.chan1.descriptor.num_points() == self.exp.samples*self.exp.num_trials)
+        self.assertTrue(len(exp.chan1.descriptor.axes) == 2)
+        self.assertTrue(len(exp.chan2.descriptor.axes) == 2)
+        self.assertTrue(exp.chan1.descriptor.num_points() == exp.samples*exp.num_trials)
 
-        repeats = 2
-        self.exp.chan1.descriptor.add_axis(DataAxis("repeats", range(repeats)))
-        self.assertTrue(len(self.exp.chan1.descriptor.axes) == 3)
+        repeats = 4
+        exp.chan1.descriptor.add_axis(DataAxis("repeats", range(repeats)))
+        self.assertTrue(len(exp.chan1.descriptor.axes) == 3)
 
-        self.printer.add_input_stream(self.exp.chan1)
-        self.assertTrue(self.printer.input_streams[0].descriptor == self.exp.chan1.descriptor)
-        self.assertTrue(len(self.printer.input_streams) == 1)
+        printer.add_input_stream(exp.chan1)
+        self.assertTrue(printer.input_streams[0].descriptor == exp.chan1.descriptor)
+        self.assertTrue(len(printer.input_streams) == 1)
 
         with self.assertRaises(ValueError):
-            self.printer.add_input_stream(self.exp.chan2)
+            printer.add_input_stream(exp.chan2)
 
         loop = asyncio.get_event_loop()
-        tasks = [self.exp.run(), self.printer.run()]
+        tasks = [exp.run(), printer.run()]
         loop.run_until_complete(asyncio.wait(tasks))
+
+        self.assertTrue(exp.chan1.points_taken == repeats*exp.num_trials*exp.samples)
         
+    def test_streams_averaging(self):
+        exp     = TestExperiment()
+        printer = Printer() # Example node
+        avgr    = Averager()
+        strm    = DataStream()
+
+        exp.init_instruments()
+
+        repeats = 4
+        exp.chan1.descriptor.add_axis(DataAxis("repeats", range(repeats)))
+        self.assertTrue(len(exp.chan1.descriptor.axes) == 3)
+
+        avgr.add_input_stream(exp.chan1)
+        avgr.add_output_stream(strm)
+        printer.add_input_stream(strm)
+
+        avgr.axis = 2 # repeats
+        avgr.update_descriptors()
+        self.assertTrue(len(exp.chan1.descriptor.axes) == len(avgr.output_streams[0].descriptor.axes) + 1 )
+        self.assertTrue(avgr.output_streams[0].descriptor.num_points() == exp.num_trials * exp.samples)
+
+        avgr.axis = "trials"
+        avgr.update_descriptors()
+        self.assertTrue(len(exp.chan1.descriptor.axes) == len(avgr.output_streams[0].descriptor.axes) + 1 )
+        self.assertTrue(avgr.output_streams[0].descriptor.num_points() == exp.samples * repeats)
+
+        avgr.axis = "samples"
+        avgr.update_descriptors()
+        self.assertTrue(len(exp.chan1.descriptor.axes) == len(avgr.output_streams[0].descriptor.axes) + 1 )
+        self.assertTrue(avgr.output_streams[0].descriptor.num_points() == exp.num_trials * repeats)
 
 if __name__ == '__main__':
     unittest.main()
