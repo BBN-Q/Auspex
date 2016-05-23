@@ -13,10 +13,13 @@ class Average(Filter):
     def __init__(self, axis=0, **kwargs):
         super(Average, self).__init__(**kwargs)
         self.axis = axis # Can be string on numerical index
-        self.points_before_averaging = None
+        self.points_before_final_average   = None
+        self.points_before_partial_average = None
+        self.sum_so_far = None
+        self.num_averages = None
 
     def update_descriptors(self):
-        descriptor_in = self.input_streams[0].descriptor
+        descriptor_in = self.data.input_streams[0].descriptor
 
         # Convert named axes to an index
         if isinstance(self.axis, str):
@@ -26,61 +29,117 @@ class Average(Filter):
             self.axis = names.index(self.axis)
 
         new_axes = descriptor_in.axes[:]
-        new_axes.pop(self.axis)
+        self.num_averages = new_axes.pop(self.axis).num_points()
         descriptor_out = DataStreamDescriptor()
         descriptor_out.axes = new_axes
 
-        self.points_before_averaging = descriptor_in.num_points_through_axis(self.axis)
-        print("Average thinks it needs {} points before averaging a chunk.".format(self.points_before_averaging))
+        if self.axis == 0:
+            print("Averaging over inner loop. Partial averages will be the same as final average")
+            self.points_before_partial_average = descriptor_in.num_points_through_axis(0)
+        else:
+            self.points_before_partial_average = descriptor_in.num_points_through_axis(self.axis-1)
+        self.points_before_final_average   = descriptor_in.num_points_through_axis(self.axis)
+
+        print("Average needs {} points before final average.".format(self.points_before_final_average))
+        print("Average needs {} points before partial average.".format(self.points_before_partial_average))
         print("Average has axes in {}.".format(descriptor_in.axes))
         print("Average has axes out {}.".format(descriptor_out.axes))
-        self.data_dims = descriptor_in.data_dims(fortran=True)
-        self.chunk_dims = list(reversed(self.data_dims[0:self.axis]))
+        print("The number of averages is {}".format(self.num_averages))
+        self.data_dims = descriptor_in.data_dims(fortran=True) # Minding that we define axes in fortan ordering
+        self.avg_dims = list(reversed(self.data_dims[0:self.axis])) # Back to C ordering for numpy
+        self.sum_so_far = np.zeros(self.avg_dims)
+        print("Dimensions of averaged data: {}".format(self.avg_dims))
 
-        for os in self.output_streams:
+        for os in self.partial_average.output_streams:
+            os.descriptor = descriptor_in
+        for os in self.final_average.output_streams:
             os.descriptor = descriptor_out
-            # print("** in loop **: {}".format(os.descriptor))
 
     async def run(self):
-        if self.points_before_averaging is None:
+        if self.points_before_final_average is None:
             raise Exception("Average has not been initialized. Run 'update_descriptors'")
 
         idx = 0
+        completed_averages = 0
 
         # We only need to accumulate up to the averaging axis
         # BUT we may get something longer at any given time!
-        self.data = np.empty(self.input_streams[0].descriptor.num_points())
+        temp = np.empty(self.data.input_streams[0].num_points())
+
         while True:
-            if self.input_streams[0].done():
+            if self.data.input_streams[0].done():
+                print("Input streams have stopped")
                 # We've stopped receiving new input, make sure we've flushed the output streams
-                if len(self.output_streams) > 0:
-                    if False not in [os.done() for os in self.output_streams]:
-                        print("Cruncher finished crunching (clearing outputs).")
+                if len(self.partial_average.output_streams + self.final_average.output_streams) > 0:
+                    if False not in [os.done() for os in self.partial_average.output_streams + self.final_average.output_streams]:
+                        print("Averager finished averaging (clearing outputs).")
                         break
+                    else:
+                        print("Average not finished (outputs still need output).")
                 else:
-                    print("Cruncher finished crunching.")
+                    print("Averager finished averaging.")
                     break
 
-            new_data = await self.input_streams[0].queue.get()
+            new_data = await self.data.input_streams[0].queue.get()
             print("{} got data {}".format(self.label, new_data))
-
-            if len(new_data.shape) > 1:  # We are getting unflattened data
+            
+            # todo: handle unflattened data separately
+            if len(new_data.shape) > 1:
                 new_data = new_data.flatten()
-            self.data[idx:idx+len(new_data)] = new_data
+
+            temp[idx:idx+len(new_data)] = new_data
             idx += len(new_data)
 
+            # Grab all of the partial data
+            num_partials = int(idx/self.points_before_partial_average)
+            if completed_averages + num_partials > self.num_averages:
+                num_partials = self.num_averages - completed_averages
+
+            for i in range(num_partials):
+                print("Adding to sum")
+                b = i*self.points_before_partial_average
+                e = b + self.points_before_partial_average
+                self.sum_so_far += temp[b:e]
+                print("Sum is now {}".format(self.sum_so_far))
+
+            completed_averages += num_partials
+            print("Have completed {} averages".format(completed_averages))
+
+            # Shift any extra data back to the beginnig of the array
+            extra = idx - num_partials*self.points_before_partial_average
+            temp[0:extra] = temp[num_partials*self.points_before_partial_average:num_partials*self.points_before_partial_average + extra]
+            idx = extra
+            # for ii in range()
+            #     averages += 1
+            #     partial_update = True
+            #     self.sum_so_far += temp[0:self.points_before_final_average].reshape(self.avg_dims)
+
+            if num_partials > 0:
+                for output_stream in self.partial_average.output_streams:
+                    await output_stream.push(self.sum_so_far/completed_averages)
+
+            if completed_averages == self.num_averages:
+                print("We have arrived at a final average")
+                for output_stream in self.final_average.output_streams:
+                    await output_stream.push(self.sum_so_far/self.num_averages)
+                self.sum_so_far = np.zeros(self.avg_dims)
+                completed_averages = 0
+
+
+             # new_data.size > self.points
+
             # Have we amassed enough data to average?
-            while idx >= self.points_before_averaging:
+            # while idx >= self.points_before_final_average:
 
-                # import ipdb; ipdb.set_trace()
-                chunk_to_avg = self.data[0:self.points_before_averaging].reshape(self.chunk_dims)
-                print("About to average {}".format(chunk_to_avg))
-                avg = np.mean(chunk_to_avg, axis=0)
-                print("Average {}".format(avg))
-                # Shift remaining data back
-                self.data[0:idx] = self.data[self.points_before_averaging:idx+self.points_before_averaging]
-                idx -= self.points_before_averaging
+            #     # import ipdb; ipdb.set_trace()
+            #     chunk_to_avg = temp[0:self.points_before_final_average].reshape(self.chunk_dims)
+            #     print("About to average {}".format(chunk_to_avg))
+            #     avg = np.mean(chunk_to_avg, axis=0)
+            #     print("Average {}".format(avg))
+            #     # Shift remaining data back
+            #     temp[0:idx] = temp[self.points_before_final_average:idx+self.points_before_final_average]
+            #     idx -= self.points_before_final_average
 
-                for output_stream in self.output_streams:
-                    await output_stream.push(avg)
+            #     for output_stream in self.output_streams:
+            #         await output_stream.push(avg)
             
