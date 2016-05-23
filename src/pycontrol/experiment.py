@@ -8,7 +8,7 @@ import pandas as pd
 import h5py
 
 from .instruments.instrument import Instrument
-from .streams.stream import DataStream, DataAxis, DataStreamDescriptor
+from .stream import DataStream, DataAxis, DataStreamDescriptor
 
 logger = logging.getLogger('pycontrol')
 logging.basicConfig(format='%(name)s - %(levelname)s: \t%(asctime)s: \t%(message)s')
