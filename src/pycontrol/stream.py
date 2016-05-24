@@ -3,14 +3,16 @@ from functools import reduce
 
 class DataAxis(object):
     """An axes in a data stream"""
-    def __init__(self, label, points, unit=None):
+    def __init__(self, name, points, unit=None):
         super(DataAxis, self).__init__()
-        self.label  = label
+        self.name  = name
         self.points = points
         self.unit   = unit
+    def num_points(self):
+        return len(self.points)
     def __repr__(self):
-        return "<DataAxis(label={}, points={}, unit={})>".format(
-            self.label, self.points, self.unit)
+        return "<DataAxis(name={}, points={}, unit={})>".format(
+            self.name, self.points, self.unit)
 
 class DataStreamDescriptor(object):
     """Axis information"""
@@ -24,8 +26,17 @@ class DataStreamDescriptor(object):
     def num_dims(self):
         return len(self.axes)
 
+    def data_dims(self, fortran=True):
+        if fortran:
+            return [len(a.points) for a in self.axes]
+        else:
+            return [len(a.points) for a in reversed(self.axes)]
+
     def num_points(self):
         return reduce(lambda x,y: x*y, [len(a.points) for a in self.axes])
+
+    def num_points_through_axis(self, axis):
+        return reduce(lambda x,y: x*y, [len(a.points) for a in self.axes[:axis+1]])
 
     def __repr__(self):
         return "<DataStreamDescriptor(num_dims={}, num_points={})>".format(
@@ -33,7 +44,7 @@ class DataStreamDescriptor(object):
 
 class DataStream(object):
     """A stream of data"""
-    def __init__(self, name=None):
+    def __init__(self, name=""):
         super(DataStream, self).__init__()
         self.queue = asyncio.Queue()
         self.points_taken = 0
@@ -58,9 +69,12 @@ class DataStream(object):
     def done(self):
         return (self.points_taken >= self.num_points() - 1) and (self.num_points() > 0)
 
+    def reset(self):
+        self.points_taken = 0 
+
     def __repr__(self):
-        return "<DataStream(completion={}%, descriptor={})>".format(
-            self.percent_complete(), self.descriptor)
+        return "<DataStream(name={}, completion={}%, descriptor={})>".format(
+            self.name, self.percent_complete(), self.descriptor)
 
     async def push(self, data):
         if hasattr(data, 'size'):
@@ -68,30 +82,3 @@ class DataStream(object):
         else:
             self.points_taken += len(data)
         await self.queue.put(data)
-
-class ProcessingNode(object):
-    """Any node on the graph that takes input streams with optional output streams"""
-    def __init__(self, label=None):
-        super(ProcessingNode, self).__init__()
-        self.label = label
-        self.input_streams     = []
-        self.output_streams    = []
-        self.max_input_streams = 1
-        self.num_input_streams = 0
-
-    def __str__(self):
-        return str(self.label)
-
-    def add_input_stream(self, stream):
-        if self.num_input_streams < self.max_input_streams:
-            self.input_streams.append(stream)
-            self.num_input_streams += 1
-        else:
-            raise ValueError("Could not add another input stream to the node {}.".format(self.label))
-
-    def add_output_stream(self, stream):
-        self.output_streams.append(stream)
-
-    def update_descriptors(self):
-        for os in self.output_streams:
-            os.descriptor = self.input_streams[0].descriptor

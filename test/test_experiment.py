@@ -56,6 +56,9 @@ class TestExperiment(Experiment):
         self.chan2.set_descriptor(descrip)
 
     async def run(self):
+        for s in self._output_streams.values():
+            s.reset()
+
         print("Data taker running")
         time_val = 0
         time_step = 0.1
@@ -68,16 +71,10 @@ class TestExperiment(Experiment):
             await asyncio.sleep(0.01)
             
             print("Stream has filled {} of {} points".format(self._output_streams['chan1'].points_taken, self._output_streams['chan1'].num_points() ))
-            print("Stream reports: {}".format(self._output_streams['chan1'].done()))
             data_row = np.sin(2*np.pi*1e3*time_val) + 0.1*np.random.random(self.samples)       
-
-            # data = np.repeat(data_row, self.samples).reshape(-1, self.samples)
-            # print(data.shape)
-            # data += 0.1*np.random.random((self.num_trials, self.samples))          
-            
             time_val += time_step
-            print("Data taker pushing data")
             await self.chan1.push(data_row)
+            await self.chan2.push(-data_row*2)
 
 class ExperimentTestCase(unittest.TestCase):
     """
@@ -109,7 +106,7 @@ class ExperimentTestCase(unittest.TestCase):
     def test_streams_printing(self):
         exp     = TestExperiment()
         printer2 = Print() # Example node
-        print(printer2)
+
         exp.init_instruments()
         self.assertTrue(TestExperiment._output_streams['chan1'] == TestExperiment.chan1) # should contain this instrument
         self.assertTrue(TestExperiment._output_streams['chan2'] == TestExperiment.chan2) # should contain this instrument
@@ -136,9 +133,9 @@ class ExperimentTestCase(unittest.TestCase):
         
     def test_streams_averaging(self):
         exp             = TestExperiment()
-        printer_partial = Print(label="Partial") # Example node
-        printer_final   = Print(label="Final") # Example node
-        avgr            = Average(label="TestAverager")
+        printer_partial = Print(name="Partial") # Example node
+        printer_final   = Print(name="Final") # Example node
+        avgr            = Average(name="TestAverager")
         strm_partial    = DataStream(name="Partial")
         strm_final      = DataStream(name="Final")
 

@@ -54,15 +54,22 @@ class MetaFilter(type):
 
 class Filter(metaclass=MetaFilter):
     """Any node on the graph that takes input streams with optional output streams"""
-    def __init__(self, label=None):
-        self.label = label
+    def __init__(self, name=None):
+        self.name = name
+        self.input_connectors = {}
+        self.output_connectors = {}
+
         for ic in self._input_connectors:
-            setattr(self, ic, InputConnector(name=ic))
+            a = InputConnector(name=ic)
+            self.input_connectors[ic] = a
+            setattr(self, ic, a)
         for oc in self._output_connectors:
-            setattr(self, oc, OutputConnector(name=oc))
+            a = OutputConnector(name=oc)
+            self.output_connectors[ic] = a
+            setattr(self, oc, a)
 
     def __repr__(self):
-        return "<Filter(name={})>".format(self.label)
+        return "<Filter(name={})>".format(self.name)
 
     # This default update method be not work for a particular filter
     def update_descriptors(self):
@@ -70,3 +77,7 @@ class Filter(metaclass=MetaFilter):
             for os in oc.output_streams:
                 if len(self.input_streams) > 0:
                     os.descriptor = list(oc.values())[0].descriptor
+                    os.reset()
+        for ic in self.input_connectors:
+            for iss in ic.input_streams:
+                iss.reset()
