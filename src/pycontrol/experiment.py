@@ -1,6 +1,7 @@
 import logging
 import inspect
 import time
+import itertools
 
 import numpy as np
 import scipy as sp
@@ -213,6 +214,13 @@ class Experiment(metaclass=MetaExperiment):
         # Container for patameters that will be swept
         self._swept_parameters = []
 
+        # Run the stream init
+        self.init_streams()
+
+    def init_streams(self):
+        """Establish the base descriptors for any internal data streams."""
+        pass
+
     def init_instruments(self):
         """Gets run before a sweep starts"""
         pass
@@ -225,25 +233,31 @@ class Experiment(metaclass=MetaExperiment):
     # Use cases: branching control, feeback loops
 
     def run(self):
-        """A completely arbitrary specification of sweeping/data taking"""
+        """This is the inner measurement loop, which is the smallest unit that
+        is repeated across various sweep variables. For more complicated run control
+        than can be provided by the automatic sweeping, the full experimental 
+        operation should be defined here"""
         pass
 
-    # The methods below are for "automatic" sweeping and running
-    # Use cases: nested loops sweeping isntrument parameters
-
     def run_sweeps(self):
-        """A run method that is restricted to pre-defined sweeps."""
+        """Execute any user-defined software sweeps."""
         pass
 
     def add_sweep(self, param, sweep_list):
+        """Add a good-old-fasioned one-variable sweep."""
         p = SweptParameter(param, sweep_list)
         self._swept_parameters.append(p)
         self.generate_sweep()
         axis = DataAxis(param.name, sweep_list)
-        for k, ds in self._data_streams.items():
+        for k, ds in self._output_streams.items():
             ds.descriptor.add_axis(axis)
 
     def generate_sweep(self):
         self._sweep_generator = itertools.product(*[sp.values for sp in self._swept_parameters])
         self._index_generator = itertools.product(*[sp.indices for sp in self._swept_parameters])
+
+    def add_adaptive_sweep(self, parameters, values):
+        """Add an adaptive sweep over the tuple of M parameters,
+        where values defines the M values over N runs"""
+        pass
 

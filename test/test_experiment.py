@@ -46,7 +46,7 @@ class TestExperiment(Experiment):
     samples    = 5
     num_trials = 10
 
-    def init_instruments(self):
+    def init_streams(self):
         # Add a "base" data axis
         # Say we are averaging 10 samples per trigger
         descrip = DataStreamDescriptor()

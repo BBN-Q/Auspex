@@ -44,12 +44,13 @@ class DataStreamDescriptor(object):
 
 class DataStream(object):
     """A stream of data"""
-    def __init__(self, name=""):
+    def __init__(self, name="", unit=None):
         super(DataStream, self).__init__()
         self.queue = asyncio.Queue()
         self.points_taken = 0
         self.descriptor = None
         self.name = name
+        self.unit = unit
 
     def set_descriptor(self, descriptor):
         self.descriptor = descriptor
