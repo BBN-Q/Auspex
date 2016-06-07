@@ -59,7 +59,14 @@ class SweepTestCase(unittest.TestCase):
 
     def test_add_sweep(self):
         exp = TestExperiment()
+        self.assertTrue(len(exp.voltage.descriptor.axes) == 1)
         exp.add_sweep(exp.field, np.linspace(0,100.0,11))
+        self.assertTrue(len(exp.voltage.descriptor.axes) == 2)
+        exp.add_sweep(exp.freq, np.linspace(0,10.0,3))
+        self.assertTrue(len(exp.voltage.descriptor.axes) == 3)
+        sweep_coords = (list(exp._sweep_generator))
+        self.assertTrue(len(sweep_coords) == 3*11)
+        self.assertTrue(len(sweep_coords[0]) == 2)
 
 if __name__ == '__main__':
     unittest.main()
