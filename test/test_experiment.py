@@ -68,7 +68,7 @@ class TestExperiment(Experiment):
             if self._output_streams['chan1'].done():
                 print("Data taker finished.")
                 break
-            await asyncio.sleep(0.01)
+            await asyncio.sleep(0.001)
             
             print("Stream has filled {} of {} points".format(self._output_streams['chan1'].points_taken, self._output_streams['chan1'].num_points() ))
             data_row = np.sin(2*np.pi*1e3*time_val) + 0.1*np.random.random(self.samples)       

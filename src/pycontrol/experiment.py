@@ -114,8 +114,14 @@ class Parameter(object):
         self.method = method
 
     def push(self):
+        if self.method is None:
+            raise Exception("No method for this parameter is defined...")
         if not self.abstract:
-            self.method(self._value)
+            for pph in self.pre_push_hooks:
+                pph()
+                self.method(self._value)
+            for pph in self.post_push_hooks:
+                pph()
 
 class FloatParameter(Parameter):
 
@@ -162,6 +168,7 @@ class SweptParameter(object):
         self.values = values
         self.length = len(values)
         self.indices = range(self.length)
+        self.push = self.parameter.push
 
     @property
     def value(self):
@@ -229,19 +236,33 @@ class Experiment(metaclass=MetaExperiment):
         """Gets run after a sweep ends, or when the program is terminated."""
         pass
 
-    # The method below is for custom control
-    # Use cases: branching control, feeback loops
-
-    def run(self):
+    async def run(self):
         """This is the inner measurement loop, which is the smallest unit that
         is repeated across various sweep variables. For more complicated run control
         than can be provided by the automatic sweeping, the full experimental 
         operation should be defined here"""
         pass
 
-    def run_sweeps(self):
+    async def run_sweeps(self):
         """Execute any user-defined software sweeps."""
-        pass
+        
+        # Keep track of the previous values
+        last_param_values = None
+
+        for param_values in self._sweep_generator:
+
+            # Update the parameter values. Unles set and push if there has been a change
+            # in the value from the previous iteration.
+            for i, sp in enumerate(self._swept_parameters):
+                if last_param_values is None or param_values[i] != last_param_values[i]:
+                    sp.value = param_values[i]
+                    sp.push()
+
+            # update previous values
+            last_param_values = param_values
+
+            # Run the procedure
+            await self.run()
 
     def add_sweep(self, param, sweep_list):
         """Add a good-old-fasioned one-variable sweep."""
@@ -251,6 +272,7 @@ class Experiment(metaclass=MetaExperiment):
         axis = DataAxis(param.name, sweep_list)
         for k, ds in self._output_streams.items():
             ds.descriptor.add_axis(axis)
+        self.generate_sweep()
 
     def generate_sweep(self):
         self._sweep_generator = itertools.product(*[sp.values for sp in self._swept_parameters])
