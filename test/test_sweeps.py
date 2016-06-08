@@ -26,6 +26,10 @@ class TestExperiment(Experiment):
     # Constants
     samples    = 5
 
+    def init_instruments(self):
+        self.field.assign_method(lambda x: x)
+        self.freq.assign_method(lambda x: x)
+
     def init_streams(self):
         # Add a "base" data axis: say we are averaging 5 samples per trigger
         descrip = DataStreamDescriptor()
@@ -67,6 +71,15 @@ class SweepTestCase(unittest.TestCase):
         sweep_coords = (list(exp._sweep_generator))
         self.assertTrue(len(sweep_coords) == 3*11)
         self.assertTrue(len(sweep_coords[0]) == 2)
+        self.assertTrue(exp.voltage.num_points() == 5*len(sweep_coords))
+
+    def test_run(self):
+        exp = TestExperiment()
+        exp.init_instruments()
+        exp.add_sweep(exp.field, np.linspace(0,100.0,11))
+        exp.add_sweep(exp.freq, np.linspace(0,10.0,3))
+        exp.run_sweeps()
+        # printer_final = Print(name="Final") # Example node
 
 if __name__ == '__main__':
     unittest.main()
