@@ -23,6 +23,7 @@ class InputConnector(object):
 
     def connect_to(self, output_connector):
         stream = DataStream()
+        stream.name = output_connector.name
         self.add_input_stream(stream)
         output_connector.add_output_stream(stream)
         return stream
@@ -42,6 +43,7 @@ class OutputConnector(object):
 
     def connect_to(self, input_connector):
         stream = DataStream()
+        stream.name = self.name
         self.add_output_stream(stream)
         input_connector.add_input_stream(stream)
         return stream

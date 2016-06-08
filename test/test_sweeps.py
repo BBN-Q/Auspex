@@ -1,11 +1,13 @@
 import unittest
 import asyncio
+import os
 import numpy as np
 
 from pycontrol.instruments.instrument import Instrument, StringCommand, FloatCommand, IntCommand
 from pycontrol.experiment import Experiment, FloatParameter, Quantity
 from pycontrol.stream import DataStream, DataAxis, DataStreamDescriptor
 from pycontrol.filters.debug import Print
+from pycontrol.filters.io import WriteToHDF5
 
 class TestInstrument1(Instrument):
     frequency = FloatCommand(get_string="frequency?", set_string="frequency {:g}", value_range=(0.1, 10))
@@ -81,6 +83,28 @@ class SweepTestCase(unittest.TestCase):
         loop = asyncio.get_event_loop()
         tasks = [exp.run_sweeps(), pr.run()]
         loop.run_until_complete(asyncio.wait(tasks))
+        self.assertTrue(pr.data.input_streams[0].points_taken == exp.voltage.num_points())
+
+    def test_writehdf5(self):
+        exp = TestExperiment()
+        pr = Print()
+        wr = WriteToHDF5("test_write.h5")
+        self.assertTrue(os.path.exists("0000-test_write.h5"))
+
+        pr.data.add_input_stream(exp.voltage)
+        wr.data.add_input_stream(exp.voltage)
+        print("name is: "+exp.voltage.name)
+        self.assertTrue(exp.voltage.name == "voltage")
+
+        exp.init_instruments()
+        exp.add_sweep(exp.field, np.linspace(0,100.0,11))
+        exp.add_sweep(exp.freq, np.linspace(0,10.0,3))
+        
+        loop = asyncio.get_event_loop()
+        tasks = [exp.run_sweeps(), pr.run(), wr.run()]
+        loop.run_until_complete(asyncio.wait(tasks))
+        self.assertTrue(pr.data.input_streams[0].points_taken == exp.voltage.num_points())
+        os.remove("0000-test_write.h5")
 
 if __name__ == '__main__':
     unittest.main()

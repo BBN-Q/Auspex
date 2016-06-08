@@ -10,7 +10,7 @@ import scipy as sp
 from pycontrol.instruments.ami import AMI430
 from pycontrol.instruments.keithley import Keithley2400
 from pycontrol.sweep import Sweep
-from pycontrol.procedure import FloatParameter, Quantity, Procedure
+from pycontrol.experiment import FloatParameter, Quantity, Procedure
 
 class RampCurrent(Procedure):
     field  = FloatParameter(unit="T")

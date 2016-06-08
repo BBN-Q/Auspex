@@ -10,6 +10,7 @@ import h5py
 
 from .instruments.instrument import Instrument
 from .stream import DataStream, DataAxis, DataStreamDescriptor
+from .filters.filter import OutputConnector
 
 logger = logging.getLogger('pycontrol')
 logging.basicConfig(format='%(name)s - %(levelname)s: \t%(asctime)s: \t%(message)s')
@@ -184,11 +185,11 @@ class MetaExperiment(type):
     def __init__(self, name, bases, dct):
         type.__init__(self, name, bases, dct)
         logger.debug("Adding controls to %s", name)
-        self._parameters     = {}
-        self._quantities     = {}
-        self._instruments    = {}
-        self._traces         = {}
-        self._output_streams = {}
+        self._parameters        = {}
+        self._quantities        = {}
+        self._instruments       = {}
+        self._traces            = {}
+        self._output_connectors = {}
 
         for k,v in dct.items():
             if isinstance(v, Instrument):
@@ -204,11 +205,11 @@ class MetaExperiment(type):
                 if v.name is None:
                     v.name = k
                 self._quantities[k] = v
-            elif isinstance(v, DataStream):
-                logger.debug("Found '%s' DataStream", k)
+            elif isinstance(v, OutputConnector):
+                logger.debug("Found '%s' OutputConnector", k)
                 if v.name is None:
                     v.name = k
-                self._output_streams[k] = v
+                self._output_connectors[k] = v
 
 class Experiment(metaclass=MetaExperiment):
     """The measurement loop to be run for each set of sweep parameters."""
@@ -223,6 +224,9 @@ class Experiment(metaclass=MetaExperiment):
 
         # Run the stream init
         self.init_streams()
+
+        # Keep track of stream axes
+        self._axes = []
 
     def init_streams(self):
         """Establish the base descriptors for any internal data streams."""
@@ -245,7 +249,11 @@ class Experiment(metaclass=MetaExperiment):
 
     async def run_sweeps(self):
         """Execute any user-defined software sweeps."""
-        
+        for k, oc in self._output_connectors.items():
+            for stream in oc.output_streams:
+                for axis in self._axes:
+                    stream.descriptor.add_axis(axis)
+
         # Keep track of the previous values
         last_param_values = None
 
@@ -269,9 +277,7 @@ class Experiment(metaclass=MetaExperiment):
         p = SweptParameter(param, sweep_list)
         self._swept_parameters.append(p)
         self.generate_sweep()
-        axis = DataAxis(param.name, sweep_list)
-        for k, ds in self._output_streams.items():
-            ds.descriptor.add_axis(axis)
+        self.axes.append(DataAxis(param.name, sweep_list))
         self.generate_sweep()
 
     def generate_sweep(self):

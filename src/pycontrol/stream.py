@@ -44,7 +44,7 @@ class DataStreamDescriptor(object):
 
 class DataStream(object):
     """A stream of data"""
-    def __init__(self, name="", unit=None):
+    def __init__(self, name=None, unit=None):
         super(DataStream, self).__init__()
         self.queue = asyncio.Queue()
         self.points_taken = 0

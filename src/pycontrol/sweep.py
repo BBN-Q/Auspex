@@ -50,11 +50,12 @@ class SweptParameter(object):
         self.parameter.value = value
 
     def push(self):
-        for pph in self.parameter.pre_push_hooks:
-            pph()
-        self.parameter.push()
-        for pph in self.parameter.post_push_hooks:
-            pph()
+        if self.method is not None:
+            for pph in self.parameter.pre_push_hooks:
+                pph()
+            self.parameter.push()
+            for pph in self.parameter.post_push_hooks:
+                pph()
 
 class Sweep(object):
     """For controlling sweeps over arbitrary number of arbitrary parameters. The order of sweeps\

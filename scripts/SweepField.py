@@ -12,7 +12,7 @@ from pycontrol.instruments.stanford import SR830
 from pycontrol.instruments.magnet import Electromagnet
 from pycontrol.instruments.hall_probe import HallProbe
 from pycontrol.sweep import Sweep
-from pycontrol.procedure import FloatParameter, Quantity, Procedure
+from pycontrol.experiment import FloatParameter, Quantity, Procedure
 
 # import ipdb
 

@@ -14,7 +14,7 @@ import pandas as pd
 from pycontrol.instruments.instrument import Instrument, StringCommand
 from pycontrol.instruments.picosecond import Picosecond10070A
 from pycontrol.sweep import Sweep
-from pycontrol.procedure import FloatParameter, Quantity, Procedure
+from pycontrol.experiment import FloatParameter, Quantity, Experiment
 
 class Magnet(Instrument):
     field = StringCommand(get_string=":field?", set_string=":field %g Oe;")
@@ -23,7 +23,7 @@ class Keithley(Instrument):
     resistance = StringCommand(get_string=":res?", set_string=":res %g Oe;")
     testing = StringCommand(get_string=":test?", set_string=":test %g Oe;")
 
-class TestProcedure(Procedure):
+class TestExperiment(Experiment):
 
     # Create instances of instruments
     mag    = Magnet("FAKE::RESOURCE::NAME")
@@ -53,7 +53,7 @@ class TestProcedure(Procedure):
 if __name__ == '__main__':
 
     # Create an instance of the procedure
-    proc = TestProcedure()
+    proc = TestExperiment()
 
     # Define a sweep over prarameters
     sweep1 = Sweep(proc)

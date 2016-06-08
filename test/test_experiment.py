@@ -39,8 +39,8 @@ class TestExperiment(Experiment):
     clout = Quantity(unit="Trumps")
 
     # DataStreams
-    chan1 = DataStream()
-    chan2 = DataStream()
+    chan1 = OutputConnector()
+    chan2 = OutputConnector()
 
     # Constants
     samples    = 5

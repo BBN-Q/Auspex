@@ -5,7 +5,7 @@ from pycontrol.instruments.keithley import Keithley2400
 from pycontrol.instruments.ami import AMI430
 from pycontrol.instruments.rfmd import Attenuator
 
-from pycontrol.procedure import FloatParameter, IntParameter, Quantity, Trace, Procedure
+from pycontrol.experiment import FloatParameter, IntParameter, Quantity, Trace, Procedure
 
 from PyDAQmx import *
 

@@ -7,7 +7,7 @@ import numpy as np
 
 from pycontrol.instruments.yokogawa import YokogawaGS200
 from pycontrol.sweep import Sweep
-from pycontrol.procedure import FloatParameter, Quantity, Procedure
+from pycontrol.experiment import FloatParameter, Quantity, Procedure
 
 class RampCurrent(Procedure):
     current = FloatParameter(unit="A")

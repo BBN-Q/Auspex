@@ -19,7 +19,7 @@ from pycontrol.instruments.picosecond import Picosecond10070A
 from pycontrol.instruments.keysight import *
 
 from pycontrol.sweep import Sweep
-from pycontrol.procedure import FloatParameter, IntParameter, Quantity, Procedure
+from pycontrol.experiment import FloatParameter, IntParameter, Quantity, Procedure
 
 class Trace(object):
     """Object for storing trace data"""

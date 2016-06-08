@@ -6,9 +6,8 @@ import networkx as nx
 import matplotlib.pyplot as plt
 import logging
 import time
-from bokeh.plotting import figure
+from bokeh.plotting import figure, curdoc
 from bokeh.client import push_session
-from bokeh.plotting import curdoc
 from bokeh.driving import cosine
 
 from pycontrol.plotting import BokehServerThread
