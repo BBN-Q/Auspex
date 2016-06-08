@@ -137,7 +137,7 @@ class ExperimentTestCase(unittest.TestCase):
         printer_final   = Print(name="Final") # Example node
         avgr            = Average(name="TestAverager")
         strm_partial    = DataStream(name="Partial")
-        strm_final      = DataStream(name="Final")
+        # strm_final      = DataStream(name="Final")
 
         exp.init_instruments()
 
@@ -146,10 +146,14 @@ class ExperimentTestCase(unittest.TestCase):
         self.assertTrue(len(exp.chan1.descriptor.axes) == 3)
 
         avgr.data.add_input_stream(exp.chan1)
+
+        # Testing directly adding streams
         avgr.partial_average.add_output_stream(strm_partial)
-        avgr.final_average.add_output_stream(strm_final)
         printer_partial.data.add_input_stream(strm_partial)
-        printer_final.data.add_input_stream(strm_final)
+
+        # Test convenience functions for doing so
+        strm = avgr.final_average.connect_to(printer_final.data)
+        self.assertTrue(isinstance(strm, DataStream))
 
         avgr.axis = 2 # repeats
         avgr.update_descriptors()

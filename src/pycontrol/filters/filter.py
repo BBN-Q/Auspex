@@ -1,3 +1,5 @@
+from pycontrol.stream import DataStream
+
 import logging
 logger = logging.getLogger('pycontrol')
 logging.basicConfig(format='%(name)s - %(levelname)s: \t%(asctime)s: \t%(message)s')
@@ -19,6 +21,12 @@ class InputConnector(object):
         else:
             raise ValueError("Could not add another input stream to the connector.")
 
+    def connect_to(self, output_connector):
+        stream = DataStream()
+        self.add_input_stream(stream)
+        output_connector.add_output_stream(stream)
+        return stream
+
     def __repr__(self):
         return "<InputConnector(name={})>".format(self.name)
 
@@ -31,6 +39,12 @@ class OutputConnector(object):
     def add_output_stream(self, stream):
         logger.debug("Adding output stream '%s' to output connector %s.", stream, self)
         self.output_streams.append(stream)
+
+    def connect_to(self, input_connector):
+        stream = DataStream()
+        self.add_output_stream(stream)
+        input_connector.add_input_stream(stream)
+        return stream
 
     def __repr__(self):
         return "<OutputConnector(name={})>".format(self.name)
