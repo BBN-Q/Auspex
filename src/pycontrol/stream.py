@@ -1,5 +1,10 @@
 import asyncio
+import logging
 from functools import reduce
+
+logger = logging.getLogger('pycontrol')
+logging.basicConfig(format='%(name)s - %(levelname)s: \t%(asctime)s: \t%(message)s')
+logger.setLevel(logging.INFO)
 
 class DataAxis(object):
     """An axes in a data stream"""
@@ -19,9 +24,12 @@ class DataStreamDescriptor(object):
     def __init__(self):
         super(DataStreamDescriptor, self).__init__()
         self.axes = []
+        self.parent = None
 
     def add_axis(self, axis):
         self.axes.append(axis)
+        if self.parent is not None:
+            self.parent.update_descriptors()
 
     def num_dims(self):
         return len(self.axes)
@@ -89,13 +97,14 @@ class DataStream(object):
 # These connectors are where we attached the DataStreams
 
 class InputConnector(object):
-    def __init__(self, name="", datatype=None, max_input_streams=1):
+    def __init__(self, name="", parent=None, datatype=None, max_input_streams=1):
         self.name = name
         self.stream = None
         self.max_input_streams = max_input_streams
         self.num_input_streams = 0
         self.input_streams = []
         self.descriptor = None
+        self.parent = parent
 
     def add_input_stream(self, stream):
         logger.debug("Adding input stream '%s' to input connector %s.", stream, self)
@@ -107,6 +116,10 @@ class InputConnector(object):
                 self.descriptor = stream.descriptor
         else:
             raise ValueError("Could not add another input stream to the connector.")
+
+    def reset(self):
+        for stream in self.input_streams:
+            stream.reset()
 
     def connect_to(self, output_connector):
         stream = DataStream()
@@ -122,16 +135,20 @@ class InputConnector(object):
         return "<InputConnector(name={})>".format(self.name)
 
 class OutputConnector(object):
-    def __init__(self, name="", datatype=None):
+    def __init__(self, name="", parent=None, datatype=None):
         self.name = name
         self.stream = None
         self.output_streams = []
         self.descriptor = None
+        self.points_taken = 0
+        self.parent = parent
 
     # We allow the connectors itself to posess
     # a descriptor, that it may pass 
     def set_descriptor(self, descriptor):
         self.descriptor = descriptor
+        for stream in self.output_streams:
+            stream.set_descriptor(self.descriptor)
 
     def add_output_stream(self, stream):
         if self.descriptor is not None:
@@ -146,9 +163,32 @@ class OutputConnector(object):
         stream.name = self.name
         stream.start_connector = self
         stream.end_connector = input_connector
+        stream.set_descriptor(self.descriptor)
         self.add_output_stream(stream)
         input_connector.add_input_stream(stream)
         return stream
+
+    def update_descriptors(self):
+        for stream in self.output_streams:
+            stream.set_descriptor(self.descriptor)
+
+    def reset(self):
+        for stream in self.output_streams:
+            stream.reset()
+
+    def num_points(self):
+        return self.descriptor.num_points()
+
+    def done(self):
+        return (self.points_taken >= self.descriptor.num_points() - 1) and (self.descriptor.num_points() > 0)
+
+    async def push(self, data):
+        if hasattr(data, 'size'):
+            self.points_taken += data.size
+        else:
+            self.points_taken += len(data)
+        for stream in self.output_streams:
+            await stream.push(data)
 
     def __repr__(self):
         return "<OutputConnector(name={})>".format(self.name)

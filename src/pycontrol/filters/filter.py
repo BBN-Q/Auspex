@@ -30,11 +30,11 @@ class Filter(metaclass=MetaFilter):
         self.output_connectors = {}
 
         for ic in self._input_connectors:
-            a = InputConnector(name=ic)
+            a = InputConnector(name=ic, parent=self)
             self.input_connectors[ic] = a
             setattr(self, ic, a)
         for oc in self._output_connectors:
-            a = OutputConnector(name=oc)
+            a = OutputConnector(name=oc, parent=self)
             self.output_connectors[ic] = a
             setattr(self, oc, a)
 
@@ -44,10 +44,9 @@ class Filter(metaclass=MetaFilter):
     # This default update method be not work for a particular filter
     def update_descriptors(self):
         for oc in self.output_connectors.values():
-            for os in oc.output_streams:
-                if len(self.input_streams) > 0:
-                    os.descriptor = list(oc.values())[0].descriptor
-                    os.reset()
-        for ic in self.input_connectors:
-            for iss in ic.input_streams:
-                iss.reset()
+            oc.reset()
+            if len(self.input_connectors) > 0:
+                oc.set_descriptor(list(self._input_connectors.values())[0].descriptor)
+                oc.reset()
+        for ic in self.input_connectors.values():
+            ic.input_streams.reset()

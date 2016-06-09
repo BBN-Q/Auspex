@@ -18,8 +18,17 @@ class Average(Filter):
         self.sum_so_far = None
         self.num_averages = None
 
+    @property
+    def axis(self):
+        return self._axis
+    @axis.setter
+    def axis(self, value):
+        self._axis = value
+        if self.data.descriptor is not None:
+            self.update_descriptors() 
+
     def update_descriptors(self):
-        descriptor_in = self.data.input_streams[0].descriptor
+        descriptor_in = self.data.descriptor
 
         # Convert named axes to an index
         if isinstance(self.axis, str):
@@ -34,7 +43,6 @@ class Average(Filter):
         descriptor_out.axes = new_axes
 
         if self.axis == 0:
-            print("Averaging over inner loop. Partial averages will be the same as final average")
             self.points_before_partial_average = descriptor_in.num_points_through_axis(0)
         else:
             self.points_before_partial_average = descriptor_in.num_points_through_axis(self.axis-1)
@@ -43,21 +51,18 @@ class Average(Filter):
         # print("Average needs {} points before final average.".format(self.points_before_final_average))
         # print("Average needs {} points before partial average.".format(self.points_before_partial_average))
         # print("Average has axes in {}.".format(descriptor_in.axes))
-        # print("Average has axes out {}.".format(descriptor_out.axes))
+        print("Average has axes out {} with {} points.".format(descriptor_out.axes, descriptor_out.num_points()))
         # print("The number of averages is {}".format(self.num_averages))
         self.data_dims = descriptor_in.data_dims(fortran=True) # Minding that we define axes in fortan ordering
         self.avg_dims = list(reversed(self.data_dims[0:self.axis])) # Back to C ordering for numpy
         self.sum_so_far = np.zeros(self.avg_dims)
         # print("Dimensions of averaged data: {}".format(self.avg_dims))
 
-        for os in self.partial_average.output_streams:
-            os.descriptor = descriptor_in
-            os.reset()
-        for os in self.final_average.output_streams:
-            os.descriptor = descriptor_out
-            os.reset()
-        for iss in self.data.input_streams:
-            iss.reset()
+        self.partial_average.set_descriptor(descriptor_in)
+        self.final_average.set_descriptor(descriptor_out)
+        self.partial_average.reset()
+        self.final_average.reset()
+        self.data.reset()
 
     async def run(self):
         if self.points_before_final_average is None:

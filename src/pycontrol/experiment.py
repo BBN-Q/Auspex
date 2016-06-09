@@ -9,7 +9,7 @@ import pandas as pd
 import h5py
 
 from .instruments.instrument import Instrument
-from .stream import DataStream, DataAxis, DataStreamDescriptor
+from .stream import DataStream, DataAxis, DataStreamDescriptor, InputConnector, OutputConnector
 
 logger = logging.getLogger('pycontrol')
 logging.basicConfig(format='%(name)s - %(levelname)s: \t%(asctime)s: \t%(message)s')
@@ -208,6 +208,7 @@ class MetaExperiment(type):
                 logger.debug("Found '%s' OutputConnector", k)
                 if v.name is None:
                     v.name = k
+                v.parent = self
                 self._output_connectors[k] = v
 
 class Experiment(metaclass=MetaExperiment):
