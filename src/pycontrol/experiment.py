@@ -228,7 +228,7 @@ class Experiment(metaclass=MetaExperiment):
         self._axes = []
 
     def init_streams(self):
-        """Establish the base descriptors for any internal data streams."""
+        """Establish the base descriptors for any internal data streams and connectors."""
         pass
 
     def init_instruments(self):

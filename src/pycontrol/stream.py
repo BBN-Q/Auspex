@@ -51,6 +51,8 @@ class DataStream(object):
         self.descriptor = None
         self.name = name
         self.unit = unit
+        self.start_connector = None
+        self.end_connector = None
 
     def set_descriptor(self, descriptor):
         self.descriptor = descriptor
@@ -93,20 +95,27 @@ class InputConnector(object):
         self.max_input_streams = max_input_streams
         self.num_input_streams = 0
         self.input_streams = []
+        self.descriptor = None
 
     def add_input_stream(self, stream):
         logger.debug("Adding input stream '%s' to input connector %s.", stream, self)
         if self.num_input_streams < self.max_input_streams:
             self.input_streams.append(stream)
             self.num_input_streams += 1
+            stream.end_connector = self
+            if stream.descriptor is not None:
+                self.descriptor = stream.descriptor
         else:
             raise ValueError("Could not add another input stream to the connector.")
 
     def connect_to(self, output_connector):
         stream = DataStream()
         stream.name = output_connector.name
+        stream.end_connector = self
         self.add_input_stream(stream)
-        output_connector.add_output_stream(stream)
+        output_connector.add_output_stream(stream) # This should set the descriptor and start_connector
+        if stream.descriptor is not None:
+            self.descriptor = stream.descriptor
         return stream
 
     def __repr__(self):
@@ -117,14 +126,26 @@ class OutputConnector(object):
         self.name = name
         self.stream = None
         self.output_streams = []
+        self.descriptor = None
+
+    # We allow the connectors itself to posess
+    # a descriptor, that it may pass 
+    def set_descriptor(self, descriptor):
+        self.descriptor = descriptor
 
     def add_output_stream(self, stream):
+        if self.descriptor is not None:
+            stream.set_descriptor(self.descriptor)
+            logger.debug("Imposing output connector descriptor on stream '%s'", stream)
         logger.debug("Adding output stream '%s' to output connector %s.", stream, self)
         self.output_streams.append(stream)
+        stream.start_connector = self
 
     def connect_to(self, input_connector):
         stream = DataStream()
         stream.name = self.name
+        stream.start_connector = self
+        stream.end_connector = input_connector
         self.add_output_stream(stream)
         input_connector.add_input_stream(stream)
         return stream
