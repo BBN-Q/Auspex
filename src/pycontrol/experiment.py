@@ -10,7 +10,6 @@ import h5py
 
 from .instruments.instrument import Instrument
 from .stream import DataStream, DataAxis, DataStreamDescriptor
-from .filters.filter import OutputConnector
 
 logger = logging.getLogger('pycontrol')
 logging.basicConfig(format='%(name)s - %(levelname)s: \t%(asctime)s: \t%(message)s')
