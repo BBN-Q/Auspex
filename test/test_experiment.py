@@ -6,7 +6,7 @@ import numpy as np
 from pycontrol.instruments.instrument import Instrument, StringCommand, FloatCommand, IntCommand
 from pycontrol.experiment import Experiment, FloatParameter, Quantity
 from pycontrol.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector
-from pycontrol.filters.debug import Print
+from pycontrol.filters.debug import Print, Passthrough
 from pycontrol.filters.average import Average
 
 import logging
@@ -111,8 +111,8 @@ class ExperimentTestCase(unittest.TestCase):
 
     def test_create_graph(self):
         exp             = TestExperiment()
-        printer_partial = Print(name="Partial") # Example node
-        printer_final   = Print(name="Final") # Example node
+        printer_partial = Print(name="Partial")
+        printer_final   = Print(name="Final")
         avgr            = Average(name="TestAverager")
 
         edges = [(exp.chan1, avgr.data),
@@ -130,8 +130,8 @@ class ExperimentTestCase(unittest.TestCase):
 
     def test_graph_parenting(self):
         exp             = TestExperiment()
-        printer_partial = Print(name="Partial") # Example node
-        printer_final   = Print(name="Final") # Example node
+        printer_partial = Print(name="Partial")
+        printer_final   = Print(name="Final")
         avgr            = Average(name="TestAverager")
 
         edges = [(exp.chan1, avgr.data),
@@ -147,8 +147,8 @@ class ExperimentTestCase(unittest.TestCase):
         
     def test_update_descriptors(self):
         exp             = TestExperiment()
-        printer_partial = Print(name="Partial") # Example node
-        printer_final   = Print(name="Final") # Example node
+        printer_partial = Print(name="Partial")
+        printer_final   = Print(name="Final")
         avgr            = Average(name="TestAverager")
 
         edges = [(exp.chan1, avgr.data),
@@ -156,26 +156,40 @@ class ExperimentTestCase(unittest.TestCase):
                  (avgr.final_average, printer_final.data)]
 
         exp.set_graph(edges)
-        exp.update_descriptors()
 
         self.assertFalse(avgr.data.descriptor is None)
         self.assertFalse(printer_partial.data.descriptor is None)
         self.assertTrue(exp.chan1.descriptor == avgr.data.descriptor)
         self.assertTrue(avgr.partial_average.descriptor == printer_partial.data.descriptor)
 
+    def test_run_simple_graph(self):
+        exp     = TestExperiment()
+        printer = Print()
 
-    # def test_run_graph(self):
-    #     exp             = TestExperiment()
-    #     printer_partial = Print(name="Partial") # Example node
-    #     printer_final   = Print(name="Final") # Example node
-    #     avgr            = Average(name="TestAverager")
+        edges = [(exp.chan1, printer.data)]
 
-    #     edges = [(exp.chan1, avgr.data),
-    #              (avgr.partial_average, printer_partial.data),
-    #              (avgr.final_average, printer_final.data)]
+        exp.set_graph(edges)
+        exp.run_loop()
 
-    #     exp.set_graph(edges)
-        # exp.run_loop()
+    def test_run_simple_graph_branchout(self):
+        exp      = TestExperiment()
+        printer1 = Print(name="One")
+        printer2 = Print(name="Two")
+
+        edges = [(exp.chan1, printer1.data), (exp.chan1, printer2.data)]
+
+        exp.set_graph(edges)
+        exp.run_loop()
+
+    def test_depth(self):
+        exp         = TestExperiment()
+        passthrough = Passthrough(name="Passthrough")
+        printer     = Print(name="Printer")
+
+        edges = [(exp.chan1, passthrough.data_in), (passthrough.data_out, printer.data)]
+
+        exp.set_graph(edges)
+        exp.run_loop()
 
     # def test_reset(self):
     #     exp = TestExperiment()
@@ -222,8 +236,8 @@ class ExperimentTestCase(unittest.TestCase):
     #     logger.info("Running stream averaging test")
 
     #     exp             = TestExperiment()
-    #     printer_partial = Print(name="Partial") # Example node
-    #     printer_final   = Print(name="Final") # Example node
+    #     printer_partial = Print(name="Partial")
+    #     printer_final   = Print(name="Final")
     #     avgr            = Average(name="TestAverager")
 
     #     repeats = 4
