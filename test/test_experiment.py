@@ -1,12 +1,18 @@
 import unittest
 import asyncio
+import time
 import numpy as np
 
 from pycontrol.instruments.instrument import Instrument, StringCommand, FloatCommand, IntCommand
 from pycontrol.experiment import Experiment, FloatParameter, Quantity
-from pycontrol.stream import DataStream, DataAxis, DataStreamDescriptor
+from pycontrol.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector
 from pycontrol.filters.debug import Print
 from pycontrol.filters.average import Average
+
+import logging
+logger = logging.getLogger('pycontrol')
+logging.basicConfig(format='%(name)s-%(levelname)s: \t%(message)s')
+logger.setLevel(logging.DEBUG)
 
 class TestInstrument1(Instrument):
     frequency = FloatCommand(get_string="frequency?", set_string="frequency {:g}", value_range=(0.1, 10))
@@ -43,21 +49,21 @@ class TestExperiment(Experiment):
     chan2 = OutputConnector()
 
     # Constants
-    samples    = 5
-    num_trials = 10
+    samples    = 3
+    num_trials = 5
 
     def init_streams(self):
-        # Add a "base" data axis
-        # Say we are averaging 10 samples per trigger
+        # Add "base" data axes
         descrip = DataStreamDescriptor()
-        descrip.add_axis(DataAxis("samples", range(self.samples)))
-        descrip.add_axis(DataAxis("trials", range(self.num_trials)))
+        descrip.add_axis(DataAxis("samples", list(range(self.samples))))
+        descrip.add_axis(DataAxis("trials", list(range(self.num_trials))))
         self.chan1.set_descriptor(descrip)
         self.chan2.set_descriptor(descrip)
 
     async def run(self):
-        for s in self._output_streams.values():
-            s.reset()
+        for c in self._output_connectors.values():
+            for s in c.output_streams:
+                s.reset()
 
         print("Data taker running")
         time_val = 0
@@ -65,12 +71,12 @@ class TestExperiment(Experiment):
         
         while True:
             #Produce fake noisy sinusoid data every 0.02 seconds until we have 1000 points
-            if self._output_streams['chan1'].done():
+            if self.chan1.done():
                 print("Data taker finished.")
                 break
             await asyncio.sleep(0.001)
             
-            print("Stream has filled {} of {} points".format(self._output_streams['chan1'].points_taken, self._output_streams['chan1'].num_points() ))
+            print("Stream has filled {} of {} points".format(self.chan1.points_taken, self.chan1.num_points() ))
             data_row = np.sin(2*np.pi*1e3*time_val) + 0.1*np.random.random(self.samples)       
             time_val += time_step
             await self.chan1.push(data_row)
@@ -103,77 +109,113 @@ class ExperimentTestCase(unittest.TestCase):
         self.assertTrue(TestExperiment._instruments['fake_instr_2'] == TestExperiment.fake_instr_2) # should contain this instrument
         self.assertTrue(TestExperiment._instruments['fake_instr_3'] == TestExperiment.fake_instr_3) # should contain this instrument
 
-    def test_streams_printing(self):
-        exp     = TestExperiment()
-        printer2 = Print() # Example node
-
-        exp.init_instruments()
-        self.assertTrue(TestExperiment._output_streams['chan1'] == TestExperiment.chan1) # should contain this instrument
-        self.assertTrue(TestExperiment._output_streams['chan2'] == TestExperiment.chan2) # should contain this instrument
-        self.assertTrue(len(exp.chan1.descriptor.axes) == 2)
-        self.assertTrue(len(exp.chan2.descriptor.axes) == 2)
-        self.assertTrue(exp.chan1.descriptor.num_points() == exp.samples*exp.num_trials)
-
-        repeats = 4
-        exp.chan1.descriptor.add_axis(DataAxis("repeats", range(repeats)))
-        self.assertTrue(len(exp.chan1.descriptor.axes) == 3)
-
-        printer2.data.add_input_stream(exp.chan1)
-        self.assertTrue(printer2.data.input_streams[0].descriptor == exp.chan1.descriptor)
-        self.assertTrue(len(printer2.data.input_streams) == 1)
-
-        with self.assertRaises(ValueError):
-            printer2.data.add_input_stream(exp.chan2)
-
-        loop = asyncio.get_event_loop()
-        tasks = [exp.run(), printer2.run()]
-        loop.run_until_complete(asyncio.wait(tasks))
-
-        self.assertTrue(exp.chan1.points_taken == repeats*exp.num_trials*exp.samples)
-        
-    def test_streams_averaging(self):
+    def test_create_graph(self):
         exp             = TestExperiment()
         printer_partial = Print(name="Partial") # Example node
         printer_final   = Print(name="Final") # Example node
         avgr            = Average(name="TestAverager")
-        strm_partial    = DataStream(name="Partial")
-        # strm_final      = DataStream(name="Final")
 
-        exp.init_instruments()
+        edges = [(exp.chan1, avgr.data),
+                 (avgr.partial_average, printer_partial.data),
+                 (avgr.final_average, printer_final.data)]
 
-        repeats = 4
-        exp.chan1.descriptor.add_axis(DataAxis("repeats", range(repeats)))
-        self.assertTrue(len(exp.chan1.descriptor.axes) == 3)
+        exp.set_graph(edges)
+        self.assertTrue(exp.chan1.output_streams[0] == avgr.data.input_streams[0])
+        self.assertTrue(avgr.partial_average.output_streams[0] == printer_partial.data.input_streams[0])
+        self.assertTrue(avgr.final_average.output_streams[0] == printer_final.data.input_streams[0])
+        self.assertTrue(len(exp.nodes) == 4)
+        self.assertTrue(exp in exp.nodes)
+        self.assertTrue(avgr in exp.nodes)
 
-        avgr.data.add_input_stream(exp.chan1)
 
-        # Testing directly adding streams
-        avgr.partial_average.add_output_stream(strm_partial)
-        printer_partial.data.add_input_stream(strm_partial)
+    # def test_run_graph(self):
+    #     exp             = TestExperiment()
+    #     printer_partial = Print(name="Partial") # Example node
+    #     printer_final   = Print(name="Final") # Example node
+    #     avgr            = Average(name="TestAverager")
 
-        # Test convenience functions for doing so
-        strm = avgr.final_average.connect_to(printer_final.data)
-        self.assertTrue(isinstance(strm, DataStream))
+    #     edges = [(exp.chan1, avgr.data),
+    #              (avgr.partial_average, printer_partial.data),
+    #              (avgr.final_average, printer_final.data)]
 
-        avgr.axis = 2 # repeats
-        avgr.update_descriptors()
-        self.assertTrue(len(exp.chan1.descriptor.axes) == len(avgr.partial_average.output_streams[0].descriptor.axes) )
-        self.assertTrue(len(exp.chan1.descriptor.axes) == len(avgr.final_average.output_streams[0].descriptor.axes) + 1)
-        self.assertTrue(avgr.final_average.output_streams[0].descriptor.num_points() == exp.num_trials * exp.samples)
+    #     exp.set_graph(edges)
+    #     exp.run_loop()
 
-        avgr.axis = "trials"
-        avgr.update_descriptors()
-        self.assertTrue(len(exp.chan1.descriptor.axes) == len(avgr.partial_average.output_streams[0].descriptor.axes) )
-        self.assertTrue(avgr.final_average.output_streams[0].descriptor.num_points() == exp.samples * repeats)
+    # def test_reset(self):
+    #     exp = TestExperiment()
+    #     loop = asyncio.get_event_loop()
+    #     tasks = [exp.run()]
+    #     loop.run_until_complete(asyncio.wait(tasks))
 
-        loop = asyncio.get_event_loop()
-        tasks = [exp.run(), avgr.run(), printer_partial.run(), printer_final.run()]
-        loop.run_until_complete(asyncio.wait(tasks))
+    #     exp.reset()
+    #     loop = asyncio.get_event_loop()
+    #     tasks = [exp.run()]
+    #     loop.run_until_complete(asyncio.wait(tasks))
 
-        avgr.axis = "samples"
-        avgr.update_descriptors()
-        self.assertTrue(len(exp.chan1.descriptor.axes) == len(avgr.partial_average.output_streams[0].descriptor.axes)  )
-        self.assertTrue(avgr.final_average.output_streams[0].descriptor.num_points() == exp.num_trials * repeats)
+
+    # def test_streams_printing(self):
+        # logger.info("Running stream printing test")
+        # exp = TestExperiment()
+        # pri = Print(name="TestPrint") 
+
+        # self.assertTrue(TestExperiment._output_connectors['chan1'] == TestExperiment.chan1) # should contain this instrument
+        # self.assertTrue(TestExperiment._output_connectors['chan2'] == TestExperiment.chan2) # should contain this instrument
+        # self.assertTrue(len(exp.chan1.descriptor.axes) == 2)
+        # self.assertTrue(len(exp.chan2.descriptor.axes) == 2)
+        # self.assertTrue(exp.chan1.descriptor.num_points() == exp.samples*exp.num_trials)
+
+        # repeats = 2
+        # exp.chan1.descriptor.add_axis(DataAxis("repeats", list(range(repeats))))
+        # self.assertTrue(len(exp.chan1.descriptor.axes) == 3)
+
+        # exp.chan1.connect_to(pri.data)
+        # self.assertTrue(not exp.chan1.output_streams[0].done())
+        # self.assertTrue(pri.data.input_streams[0].descriptor == exp.chan1.descriptor)
+        # self.assertTrue(len(pri.data.input_streams) == 1)
+
+        # with self.assertRaises(ValueError):
+        #     pri.data.connect_to(exp.chan2)
+
+        # loop = asyncio.get_event_loop()
+        # tasks = [exp.run(), pri.run()]
+        # loop.run_until_complete(asyncio.wait(tasks))
+        # self.assertTrue(exp.chan1.points_taken == repeats*exp.num_trials*exp.samples)
+    #     # self.assertTrue(exp.chan1.output_streams[0].done())
+
+    # def test_streams_averaging(self):
+    #     logger.info("Running stream averaging test")
+
+    #     exp             = TestExperiment()
+    #     printer_partial = Print(name="Partial") # Example node
+    #     printer_final   = Print(name="Final") # Example node
+    #     avgr            = Average(name="TestAverager")
+
+    #     repeats = 4
+    #     exp.chan1.descriptor.add_axis(DataAxis("repeats", list(range(repeats))))
+    #     self.assertTrue(len(exp.chan1.descriptor.axes) == 3)
+
+    #     exp.chan1.connect_to(avgr.data)
+    #     avgr.partial_average.connect_to(printer_partial.data)
+    #     strm = avgr.final_average.connect_to(printer_final.data)
+    #     self.assertTrue(isinstance(strm, DataStream))
+    #     self.assertTrue(exp.chan1.output_streams[0].done() == False)
+
+    #     avgr.axis = 2 # repeats
+    #     self.assertTrue(len(exp.chan1.descriptor.axes) == len(avgr.partial_average.descriptor.axes) )
+    #     self.assertTrue(len(exp.chan1.descriptor.axes) == len(avgr.final_average.descriptor.axes) + 1)
+    #     self.assertTrue(avgr.final_average.descriptor.num_points() == exp.num_trials * exp.samples)
+
+    #     avgr.axis = "trials"
+    #     self.assertTrue(len(exp.chan1.descriptor.axes) == len(avgr.partial_average.descriptor.axes) )
+    #     self.assertTrue(avgr.final_average.descriptor.num_points() == exp.samples * repeats)
+
+    #     loop = asyncio.get_event_loop()
+    #     tasks = [exp.run(), avgr.run(), printer_partial.run(), printer_final.run()]
+    #     loop.run_until_complete(asyncio.wait(tasks))
+
+    #     avgr.axis = "samples"
+    #     self.assertTrue(len(exp.chan1.descriptor.axes) == len(avgr.partial_average.descriptor.axes)  )
+    #     self.assertTrue(avgr.final_average.descriptor.num_points() == exp.num_trials * repeats)
 
 if __name__ == '__main__':
     unittest.main()

@@ -2,17 +2,19 @@ import logging
 import inspect
 import time
 import itertools
+import asyncio
 
 import numpy as np
 import scipy as sp
 import pandas as pd
+import networkx as nx
 import h5py
 
 from .instruments.instrument import Instrument
 from .stream import DataStream, DataAxis, DataStreamDescriptor, InputConnector, OutputConnector
 
 logger = logging.getLogger('pycontrol')
-logging.basicConfig(format='%(name)s - %(levelname)s: \t%(asctime)s: \t%(message)s')
+logging.basicConfig(format='%(name)s-%(levelname)s: \t%(message)s')
 logger.setLevel(logging.INFO)
 
 class Quantity(object):
@@ -177,6 +179,46 @@ class SweptParameter(object):
     def value(self, value):
         self.parameter.value = value
 
+class ExperimentGraph(object):
+    def __init__(self, edges, loop):
+        self.dag = None
+        self.edges = []
+        self.loop = loop
+        self.create_graph(edges)
+
+    def dfs_edges(self):
+        # Edge depth-first traversal of the graph
+
+        # Find the input nodes
+        input_nodes = [n for n in self.dag.nodes() if self.dag.in_degree(n) == 0]
+        logger.debug("Input nodes for DFS are '%s'", input_nodes)
+
+        dfs_edge_iters  = [nx.edge_dfs(self.dag, input_node) for input_node in input_nodes]
+        processed_edges = [] # Keep track of what we've initialized
+
+        for ei in dfs_edge_iters:
+            for edge in ei:
+                if edge not in processed_edges:
+                    processed_edges.append(edge)
+                    yield edge
+
+    def create_graph(self, edges):
+        dag = nx.DiGraph()
+        self.edges = []
+        for edge in edges:
+            obj = DataStream(name="{}_TO_{}".format(edge[0].name, edge[1].name),
+                             loop=self.loop)
+            edge[0].add_output_stream(obj)
+            edge[1].add_input_stream(obj)
+            self.edges.append(obj)
+            dag.add_edge(edge[0].parent, edge[1].parent, object=obj)
+
+        self.dag = dag
+
+        for src, dest in self.dfs_edges():
+            if "update_descriptors" in dir(src):
+                self.dag[src][dest]['object'].start_connector.update_descriptors()
+
 class MetaExperiment(type):
     """Meta class to bake the instrument objects into a class description
     """
@@ -206,9 +248,8 @@ class MetaExperiment(type):
                 self._quantities[k] = v
             elif isinstance(v, OutputConnector):
                 logger.debug("Found '%s' OutputConnector", k)
-                if v.name is None:
+                if v.name is None or v.name is '':
                     v.name = k
-                v.parent = self
                 self._output_connectors[k] = v
 
 class Experiment(metaclass=MetaExperiment):
@@ -227,6 +268,29 @@ class Experiment(metaclass=MetaExperiment):
 
         # Keep track of stream axes
         self._axes = []
+
+        # This holds the experiment graph
+        self.graph = None
+
+        # Stuff we can't metaclass
+        for oc in self._output_connectors.values():
+            oc.parent = self
+
+        # Create the asyncio measurement loop
+        # asyncio.set_event_loop(None)
+        self.loop = asyncio.get_event_loop()
+        self.loop.set_debug(True)
+        asyncio.set_event_loop(self.loop)
+
+    def set_graph(self, edges):
+        unique_nodes = []
+        for eb, ee in edges:
+            if eb.parent not in unique_nodes:
+                unique_nodes.append(eb.parent)
+            if ee.parent not in unique_nodes:
+                unique_nodes.append(ee.parent)
+        self.nodes = unique_nodes
+        self.graph = ExperimentGraph(edges, self.loop)
 
     def init_streams(self):
         """Establish the base descriptors for any internal data streams and connectors."""
@@ -247,30 +311,48 @@ class Experiment(metaclass=MetaExperiment):
         operation should be defined here"""
         pass
 
-    async def run_sweeps(self):
-        """Execute any user-defined software sweeps."""
-        for k, oc in self._output_connectors.items():
-            for stream in oc.output_streams:
-                for axis in self._axes:
-                    stream.descriptor.add_axis(axis)
+    def run_loop(self):
+        """This runs the asyncio main loop."""
+        tasks = [n.run() for n in self.nodes]
+        self.loop.run_until_complete(asyncio.wait(tasks))
 
-        # Keep track of the previous values
-        last_param_values = None
+    def reset(self):
+        for edge in self.graph.edges:
+            edge.reset()
 
-        for param_values in self._sweep_generator:
+    def update_descriptors(self):
+        for oc in self._output_connectors.values():
+            oc.update_descriptors()
 
-            # Update the parameter values. Unles set and push if there has been a change
-            # in the value from the previous iteration.
-            for i, sp in enumerate(self._swept_parameters):
-                if last_param_values is None or param_values[i] != last_param_values[i]:
-                    sp.value = param_values[i]
-                    sp.push()
 
-            # update previous values
-            last_param_values = param_values
 
-            # Run the procedure
-            await self.run()
+        # Just reconstruct the graph...
+        # self.graph.create_graph(self.graph.edges)
+
+    # async def run_sweeps(self):
+    #     """Execute any user-defined software sweeps."""
+    #     for k, oc in self._output_connectors.items():
+    #         for stream in oc.output_streams:
+    #             for axis in self._axes:
+    #                 stream.descriptor.add_axis(axis)
+
+    #     # Keep track of the previous values
+    #     last_param_values = None
+
+    #     for param_values in self._sweep_generator:
+
+    #         # Update the parameter values. Unles set and push if there has been a change
+    #         # in the value from the previous iteration.
+    #         for i, sp in enumerate(self._swept_parameters):
+    #             if last_param_values is None or param_values[i] != last_param_values[i]:
+    #                 sp.value = param_values[i]
+    #                 sp.push()
+
+    #         # update previous values
+    #         last_param_values = param_values
+
+    #         # Run the procedure
+    #         await self.run()
 
     def add_sweep(self, param, sweep_list):
         """Add a good-old-fasioned one-variable sweep."""
@@ -278,7 +360,6 @@ class Experiment(metaclass=MetaExperiment):
         self._swept_parameters.append(p)
         self.generate_sweep()
         self.axes.append(DataAxis(param.name, sweep_list))
-        self.generate_sweep()
 
     def generate_sweep(self):
         self._sweep_generator = itertools.product(*[sp.values for sp in self._swept_parameters])
