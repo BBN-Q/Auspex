@@ -3,7 +3,7 @@ import logging
 from functools import reduce
 
 logger = logging.getLogger('pycontrol')
-logging.basicConfig(format='%(name)s - %(levelname)s: \t%(asctime)s: \t%(message)s')
+logging.basicConfig(format='%(name)s-%(levelname)s: \t%(message)s')
 logger.setLevel(logging.INFO)
 
 class DataAxis(object):
@@ -52,17 +52,19 @@ class DataStreamDescriptor(object):
 
 class DataStream(object):
     """A stream of data"""
-    def __init__(self, name=None, unit=None):
+    def __init__(self, name=None, unit=None, loop=None):
         super(DataStream, self).__init__()
-        self.queue = asyncio.Queue()
+        self.queue = asyncio.Queue(loop=loop)
         self.points_taken = 0
         self.descriptor = None
         self.name = name
         self.unit = unit
         self.start_connector = None
         self.end_connector = None
+        self.loop = loop
 
     def set_descriptor(self, descriptor):
+        logger.debug("Setting descriptor on stream '%s' to '%s'", self.name, descriptor)
         self.descriptor = descriptor
 
     def num_points(self):
@@ -112,24 +114,30 @@ class InputConnector(object):
             self.input_streams.append(stream)
             self.num_input_streams += 1
             stream.end_connector = self
-            if stream.descriptor is not None:
-                self.descriptor = stream.descriptor
         else:
             raise ValueError("Could not add another input stream to the connector.")
 
-    def reset(self):
-        for stream in self.input_streams:
-            stream.reset()
+    def num_points(self):
+        if len(self.input_streams) > 0:
+            return self.input_streams[0].num_points()
+        else:
+            raise ValueError("Cannot get num_points since no input streams are present on this connector.")
 
-    def connect_to(self, output_connector):
-        stream = DataStream()
-        stream.name = output_connector.name
-        stream.end_connector = self
-        self.add_input_stream(stream)
-        output_connector.add_output_stream(stream) # This should set the descriptor and start_connector
-        if stream.descriptor is not None:
-            self.descriptor = stream.descriptor
-        return stream
+    def update_descriptors(self):
+        logger.debug("Starting descriptor update in input connector %s.", self.name)
+        self.descriptor = self.input_streams[0].descriptor
+        self.parent.update_descriptors()
+
+    # def reset(self):
+    #     for stream in self.input_streams:
+    #         stream.reset()
+
+    # def connect_to(self, output_connector):
+    #     stream = DataStream()
+    #     stream.name = output_connector.name
+    #     self.add_input_stream(stream)
+    #     output_connector.add_output_stream(stream) # This should set the descriptor and start_connector
+    #     return stream
 
     def __repr__(self):
         return "<InputConnector(name={})>".format(self.name)
@@ -147,34 +155,38 @@ class OutputConnector(object):
     # a descriptor, that it may pass 
     def set_descriptor(self, descriptor):
         self.descriptor = descriptor
-        for stream in self.output_streams:
-            stream.set_descriptor(self.descriptor)
+        # for stream in self.output_streams:
+        #     stream.set_descriptor(self.descriptor)
+        #     stream.end_connector.parent.update_descriptors()
 
     def add_output_stream(self, stream):
-        if self.descriptor is not None:
-            stream.set_descriptor(self.descriptor)
-            logger.debug("Imposing output connector descriptor on stream '%s'", stream)
+        # if self.descriptor is not None:
+        #     stream.set_descriptor(self.descriptor)
+        #     logger.debug("Imposing output connector descriptor on stream '%s'", stream)
         logger.debug("Adding output stream '%s' to output connector %s.", stream, self)
         self.output_streams.append(stream)
         stream.start_connector = self
 
-    def connect_to(self, input_connector):
-        stream = DataStream()
-        stream.name = self.name
-        stream.start_connector = self
-        stream.end_connector = input_connector
-        stream.set_descriptor(self.descriptor)
-        self.add_output_stream(stream)
-        input_connector.add_input_stream(stream)
-        return stream
+    # def connect_to(self, input_connector):
+    #     stream = DataStream()
+    #     stream.name = self.name
+    #     stream.end_connector = input_connector
+    #     self.add_output_stream(stream)
+    #     input_connector.add_input_stream(stream)
+    #     return stream
 
     def update_descriptors(self):
+        logger.debug("Starting descriptor update in output connector %s, where the descriptor is %s", 
+                        self.name, self.descriptor)
         for stream in self.output_streams:
+            logger.debug("\tnow setting stream %s to %s", stream, self.descriptor)
             stream.set_descriptor(self.descriptor)
+            logger.debug("\tnow setting stream end connector %s to %s", stream.end_connector, self.descriptor)
+            stream.end_connector.update_descriptors()
 
-    def reset(self):
-        for stream in self.output_streams:
-            stream.reset()
+    # def reset(self):
+    #     for stream in self.output_streams:
+    #         stream.reset()
 
     def num_points(self):
         return self.descriptor.num_points()

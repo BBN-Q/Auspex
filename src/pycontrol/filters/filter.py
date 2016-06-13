@@ -2,7 +2,7 @@ from pycontrol.stream import DataStream, InputConnector, OutputConnector
 
 import logging
 logger = logging.getLogger('pycontrol')
-logging.basicConfig(format='%(name)s - %(levelname)s: \t%(asctime)s: \t%(message)s')
+logging.basicConfig(format='%(name)s-%(levelname)s: \t%(message)s')
 logger.setLevel(logging.INFO)
 
 class MetaFilter(type):
@@ -35,18 +35,13 @@ class Filter(metaclass=MetaFilter):
             setattr(self, ic, a)
         for oc in self._output_connectors:
             a = OutputConnector(name=oc, parent=self)
-            self.output_connectors[ic] = a
+            self.output_connectors[oc] = a
             setattr(self, oc, a)
 
     def __repr__(self):
         return "<Filter(name={})>".format(self.name)
 
-    # This default update method be not work for a particular filter
     def update_descriptors(self):
         for oc in self.output_connectors.values():
-            oc.reset()
             if len(self.input_connectors) > 0:
                 oc.set_descriptor(list(self._input_connectors.values())[0].descriptor)
-                oc.reset()
-        for ic in self.input_connectors.values():
-            ic.input_streams.reset()

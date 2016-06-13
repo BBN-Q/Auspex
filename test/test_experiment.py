@@ -61,7 +61,7 @@ class TestExperiment(Experiment):
         self.chan2.set_descriptor(descrip)
 
     async def run(self):
-        for c in self._output_connectors.values():
+        for c in self.output_connectors.values():
             for s in c.output_streams:
                 s.reset()
 
@@ -120,12 +120,48 @@ class ExperimentTestCase(unittest.TestCase):
                  (avgr.final_average, printer_final.data)]
 
         exp.set_graph(edges)
+
         self.assertTrue(exp.chan1.output_streams[0] == avgr.data.input_streams[0])
         self.assertTrue(avgr.partial_average.output_streams[0] == printer_partial.data.input_streams[0])
         self.assertTrue(avgr.final_average.output_streams[0] == printer_final.data.input_streams[0])
         self.assertTrue(len(exp.nodes) == 4)
         self.assertTrue(exp in exp.nodes)
         self.assertTrue(avgr in exp.nodes)
+
+    def test_graph_parenting(self):
+        exp             = TestExperiment()
+        printer_partial = Print(name="Partial") # Example node
+        printer_final   = Print(name="Final") # Example node
+        avgr            = Average(name="TestAverager")
+
+        edges = [(exp.chan1, avgr.data),
+                 (avgr.partial_average, printer_partial.data),
+                 (avgr.final_average, printer_final.data)]
+
+        exp.set_graph(edges)
+
+        self.assertTrue(avgr.partial_average.parent == avgr)
+        self.assertTrue(avgr.final_average.parent == avgr)
+        self.assertTrue(exp.chan1.output_streams[0].end_connector.parent == avgr)
+        self.assertTrue(avgr.partial_average.output_streams[0].end_connector.parent == printer_partial)
+        
+    def test_update_descriptors(self):
+        exp             = TestExperiment()
+        printer_partial = Print(name="Partial") # Example node
+        printer_final   = Print(name="Final") # Example node
+        avgr            = Average(name="TestAverager")
+
+        edges = [(exp.chan1, avgr.data),
+                 (avgr.partial_average, printer_partial.data),
+                 (avgr.final_average, printer_final.data)]
+
+        exp.set_graph(edges)
+        exp.update_descriptors()
+
+        self.assertFalse(avgr.data.descriptor is None)
+        self.assertFalse(printer_partial.data.descriptor is None)
+        self.assertTrue(exp.chan1.descriptor == avgr.data.descriptor)
+        self.assertTrue(avgr.partial_average.descriptor == printer_partial.data.descriptor)
 
 
     # def test_run_graph(self):
@@ -139,7 +175,7 @@ class ExperimentTestCase(unittest.TestCase):
     #              (avgr.final_average, printer_final.data)]
 
     #     exp.set_graph(edges)
-    #     exp.run_loop()
+        # exp.run_loop()
 
     # def test_reset(self):
     #     exp = TestExperiment()

@@ -215,9 +215,9 @@ class ExperimentGraph(object):
 
         self.dag = dag
 
-        for src, dest in self.dfs_edges():
-            if "update_descriptors" in dir(src):
-                self.dag[src][dest]['object'].start_connector.update_descriptors()
+        # for src, dest in self.dfs_edges():
+        #     if "update_descriptors" in dir(src):
+        #         self.dag[src][dest]['object'].start_connector.update_descriptors()
 
 class MetaExperiment(type):
     """Meta class to bake the instrument objects into a class description
@@ -230,7 +230,9 @@ class MetaExperiment(type):
         self._quantities        = {}
         self._instruments       = {}
         self._traces            = {}
-        self._output_connectors = {}
+
+        # Beware, passing objects won't work at parse time
+        self._output_connectors = []
 
         for k,v in dct.items():
             if isinstance(v, Instrument):
@@ -247,10 +249,13 @@ class MetaExperiment(type):
                     v.name = k
                 self._quantities[k] = v
             elif isinstance(v, OutputConnector):
-                logger.debug("Found '%s' OutputConnector", k)
-                if v.name is None or v.name is '':
-                    v.name = k
-                self._output_connectors[k] = v
+                logger.debug("Found '%s' output connector.", k)
+                self._output_connectors.append(k)
+            # elif isinstance(v, OutputConnector):
+            #     logger.debug("Found '%s' OutputConnector", k)
+            #     if v.name is None or v.name is '':
+            #         v.name = k
+            #     self._output_connectors[k] = v
 
 class Experiment(metaclass=MetaExperiment):
     """The measurement loop to be run for each set of sweep parameters."""
@@ -263,24 +268,28 @@ class Experiment(metaclass=MetaExperiment):
         # Container for patameters that will be swept
         self._swept_parameters = []
 
-        # Run the stream init
-        self.init_streams()
-
         # Keep track of stream axes
         self._axes = []
 
         # This holds the experiment graph
         self.graph = None
 
-        # Stuff we can't metaclass
-        for oc in self._output_connectors.values():
-            oc.parent = self
+        # Things we can't metaclass
+        self.output_connectors = {}
+        for oc in self._output_connectors:
+            a = OutputConnector(name=oc, parent=self)
+            a.parent = self
+            self.output_connectors[oc] = a
+            setattr(self, oc, a)
 
         # Create the asyncio measurement loop
         # asyncio.set_event_loop(None)
         self.loop = asyncio.get_event_loop()
-        self.loop.set_debug(True)
-        asyncio.set_event_loop(self.loop)
+        # self.loop.set_debug(True)
+        # asyncio.set_event_loop(self.loop)
+
+        # Run the stream init
+        self.init_streams()
 
     def set_graph(self, edges):
         unique_nodes = []
@@ -291,6 +300,7 @@ class Experiment(metaclass=MetaExperiment):
                 unique_nodes.append(ee.parent)
         self.nodes = unique_nodes
         self.graph = ExperimentGraph(edges, self.loop)
+        # self.update_descriptors()
 
     def init_streams(self):
         """Establish the base descriptors for any internal data streams and connectors."""
@@ -321,9 +331,9 @@ class Experiment(metaclass=MetaExperiment):
             edge.reset()
 
     def update_descriptors(self):
-        for oc in self._output_connectors.values():
+        logger.debug("Starting descriptor update in experiment.")
+        for oc in self.output_connectors.values():
             oc.update_descriptors()
-
 
 
         # Just reconstruct the graph...

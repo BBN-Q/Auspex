@@ -3,6 +3,11 @@ import numpy as np
 from pycontrol.stream import DataStreamDescriptor
 from .filter import Filter, InputConnector, OutputConnector
 
+import logging
+logger = logging.getLogger('pycontrol')
+logging.basicConfig(format='%(name)s-%(levelname)s: \t%(message)s')
+logger.setLevel(logging.INFO)
+
 class Average(Filter):
     """Takes data and collapses along the specified axis."""
 
@@ -28,6 +33,7 @@ class Average(Filter):
             self.update_descriptors() 
 
     def update_descriptors(self):
+        logger.debug("Updating averager descriptors based on input descriptor: %s.", self.data.descriptor)
         descriptor_in = self.data.descriptor
 
         # Convert named axes to an index
@@ -48,23 +54,30 @@ class Average(Filter):
             self.points_before_partial_average = descriptor_in.num_points_through_axis(self.axis-1)
         self.points_before_final_average   = descriptor_in.num_points_through_axis(self.axis)
 
-        # print("Average needs {} points before final average.".format(self.points_before_final_average))
-        # print("Average needs {} points before partial average.".format(self.points_before_partial_average))
-        # print("Average has axes in {}.".format(descriptor_in.axes))
-        print("Average has axes out {} with {} points.".format(descriptor_out.axes, descriptor_out.num_points()))
-        # print("The number of averages is {}".format(self.num_averages))
         self.data_dims = descriptor_in.data_dims(fortran=True) # Minding that we define axes in fortan ordering
         self.avg_dims = list(reversed(self.data_dims[0:self.axis])) # Back to C ordering for numpy
         self.sum_so_far = np.zeros(self.avg_dims)
-        # print("Dimensions of averaged data: {}".format(self.avg_dims))
 
         self.partial_average.set_descriptor(descriptor_in)
         self.final_average.set_descriptor(descriptor_out)
-        self.partial_average.reset()
-        self.final_average.reset()
-        self.data.reset()
+
+        for stream in self.partial_average.output_streams:
+            logger.debug("\tnow setting stream %s to %s", stream, descriptor_in)
+            stream.set_descriptor(descriptor_in)
+            logger.debug("\tnow setting stream end connector %s to %s", stream.end_connector, descriptor_in)
+            stream.end_connector.update_descriptors()
+
+        for stream in self.final_average.output_streams:
+            logger.debug("\tnow setting stream %s to %s", stream, descriptor_out)
+            stream.set_descriptor(descriptor_out)
+            logger.debug("\tnow setting stream end connector %s to %s", stream.end_connector, descriptor_out)
+            stream.end_connector.update_descriptors()
 
     async def run(self):
+        logger.debug("Running averager async loop")
+        logger.debug("Points before final average: %s.", self.points_before_final_average)
+        import ipdb; ipdb.set_trace()
+
         if self.points_before_final_average is None:
             raise Exception("Average has not been initialized. Run 'update_descriptors'")
 
