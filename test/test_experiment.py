@@ -74,18 +74,16 @@ class TestExperiment(Experiment):
             if self.chan1.done():
                 print("Data taker finished.")
                 break
-            await asyncio.sleep(0.001)
+            await asyncio.sleep(0.005)
             
-            print("Stream has filled {} of {} points".format(self.chan1.points_taken, self.chan1.num_points() ))
             data_row = np.sin(2*np.pi*1e3*time_val) + 0.1*np.random.random(self.samples)       
             time_val += time_step
             await self.chan1.push(data_row)
             await self.chan2.push(-data_row*2)
+            print("Stream has filled {} of {} points".format(self.chan1.points_taken, self.chan1.num_points() ))
+           
 
 class ExperimentTestCase(unittest.TestCase):
-    """
-    Tests procedure class
-    """
 
     def test_parameters(self):
         """Check that parameters have been appropriately gathered"""
@@ -191,6 +189,35 @@ class ExperimentTestCase(unittest.TestCase):
         exp.set_graph(edges)
         exp.run_loop()
 
+    def test_averager(self):
+        exp             = TestExperiment()
+        printer_partial = Print(name="Partial")
+        printer_final   = Print(name="Final")
+        avgr            = Average(name="TestAverager")
+
+        edges = [(exp.chan1, avgr.data),
+                 (avgr.partial_average, printer_partial.data),
+                 (avgr.final_average, printer_final.data)]
+
+        exp.set_graph(edges)
+        # exp.run_loop()
+
+    def test_add_axis_to_averager(self):
+        exp             = TestExperiment()
+        printer_partial = Print(name="Partial")
+        printer_final   = Print(name="Final")
+        avgr            = Average(name="TestAverager")
+
+        edges = [(exp.chan1, avgr.data),
+                 (avgr.partial_average, printer_partial.data),
+                 (avgr.final_average, printer_final.data)]
+
+        exp.set_graph(edges)
+        repeats = 2
+        exp.chan1.descriptor.add_axis(DataAxis("repeats", list(range(repeats))))
+        exp.update_descriptors()
+        self.assertTrue(len(exp.chan1.descriptor.axes) == 3)
+        exp.run_loop()
     # def test_reset(self):
     #     exp = TestExperiment()
     #     loop = asyncio.get_event_loop()
