@@ -234,16 +234,28 @@ class ExperimentTestCase(unittest.TestCase):
         exp.update_descriptors()
         exp.run_loop()
 
-    # def test_reset(self):
-    #     exp = TestExperiment()
-    #     loop = asyncio.get_event_loop()
-    #     tasks = [exp.run()]
-    #     loop.run_until_complete(asyncio.wait(tasks))
+    def test_reset(self):
+        exp             = TestExperiment()
+        printer_partial = Print(name="Partial")
+        printer_final   = Print(name="Final")
+        avgr            = Average(name="TestAverager")
 
-    #     exp.reset()
-    #     loop = asyncio.get_event_loop()
-    #     tasks = [exp.run()]
-    #     loop.run_until_complete(asyncio.wait(tasks))
+        edges = [(exp.chan1, avgr.data),
+                 (avgr.partial_average, printer_partial.data),
+                 (avgr.final_average, printer_final.data)]
+
+        exp.set_graph(edges)
+        logger.debug("Running reset test: 1st loop.")
+        exp.run_loop()
+        exp.reset()
+
+        self.assertTrue(exp.chan1.output_streams[0].points_taken == 0)
+        self.assertTrue(avgr.partial_average.output_streams[0].points_taken == 0)
+        self.assertTrue(avgr.final_average.output_streams[0].points_taken == 0)
+
+        logger.debug("Running reset test: 2nd loop.")
+        time.sleep(0.1)
+        exp.run_loop()
 
 
     # def test_streams_printing(self):

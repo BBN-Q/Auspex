@@ -83,6 +83,8 @@ class DataStream(object):
 
     def reset(self):
         self.points_taken = 0 
+        if self.start_connector is not None:
+            self.start_connector.points_taken = 0
 
     def __repr__(self):
         return "<DataStream(name={}, completion={}%, descriptor={})>".format(
