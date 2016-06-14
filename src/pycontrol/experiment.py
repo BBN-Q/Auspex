@@ -300,7 +300,7 @@ class Experiment(metaclass=MetaExperiment):
                 unique_nodes.append(ee.parent)
         self.nodes = unique_nodes
         self.graph = ExperimentGraph(edges, self.loop)
-        # self.update_descriptors()
+        self.update_descriptors()
 
     def init_streams(self):
         """Establish the base descriptors for any internal data streams and connectors."""
