@@ -218,6 +218,22 @@ class ExperimentTestCase(unittest.TestCase):
         exp.update_descriptors()
         self.assertTrue(len(exp.chan1.descriptor.axes) == 3)
         exp.run_loop()
+
+    def test_scalar_averager(self):
+        exp             = TestExperiment()
+        printer_partial = Print(name="Partial")
+        printer_final   = Print(name="Final")
+        avgr            = Average(name="TestAverager")
+
+        edges = [(exp.chan1, avgr.data),
+                 (avgr.partial_average, printer_partial.data),
+                 (avgr.final_average, printer_final.data)]
+
+        avgr.axis = "samples"
+        exp.set_graph(edges)
+        exp.update_descriptors()
+        exp.run_loop()
+
     # def test_reset(self):
     #     exp = TestExperiment()
     #     loop = asyncio.get_event_loop()

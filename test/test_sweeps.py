@@ -54,12 +54,13 @@ class TestExperiment(Experiment):
             if self.voltage.done():
                 print("Data taker finished.")
                 break
-            await asyncio.sleep(0.005)
+            await asyncio.sleep(0.002)
             
-            print("Stream has filled {} of {} points".format(self.voltage.points_taken, self.voltage.num_points() ))
-            data_row = np.sin(2*np.pi*1e3*time_val) + 0.1*np.random.random(self.samples)       
+            data_row = np.sin(2*np.pi*time_val)*np.ones(5)
             time_val += time_step
             await self.voltage.push(data_row)
+            print("Stream has filled {} of {} points".format(self.voltage.points_taken, self.voltage.num_points() ))
+
 
 class SweepTestCase(unittest.TestCase):
     """
@@ -83,13 +84,15 @@ class SweepTestCase(unittest.TestCase):
         pri = Print()
 
         edges = [(exp.voltage, pri.data)]
-
         exp.set_graph(edges)
         
         exp.init_instruments()
         exp.add_sweep(exp.field, np.linspace(0,100.0,11))
         exp.add_sweep(exp.freq, np.linspace(0,10.0,3))
         exp.run_loop()
+
+        logger.debug("Run test: printer ended up with %d points.", pri.data.input_streams[0].points_taken)
+        logger.debug("Run test: voltage ended up with %d points.", exp.voltage.output_streams[0].points_taken)
 
         self.assertTrue(pri.data.input_streams[0].points_taken == exp.voltage.num_points())
 
@@ -99,19 +102,15 @@ class SweepTestCase(unittest.TestCase):
         wr = WriteToHDF5("test_write.h5")
         self.assertTrue(os.path.exists("0000-test_write.h5"))
 
-        pr.data.add_input_stream(exp.voltage)
-        wr.data.add_input_stream(exp.voltage)
-        print("name is: "+exp.voltage.name)
+        edges = [(exp.voltage, pr.data), (exp.voltage, wr.data)]
+        exp.set_graph(edges)
+
         self.assertTrue(exp.voltage.name == "voltage")
 
         exp.init_instruments()
-        exp.add_sweep(exp.field, np.linspace(0,100.0,11))
+        exp.add_sweep(exp.field, np.linspace(0,100.0,4))
         exp.add_sweep(exp.freq, np.linspace(0,10.0,3))
         
-        loop = asyncio.get_event_loop()
-        tasks = [exp.run_sweeps(), pr.run(), wr.run()]
-        loop.run_until_complete(asyncio.wait(tasks))
-        self.assertTrue(pr.data.input_streams[0].points_taken == exp.voltage.num_points())
         os.remove("0000-test_write.h5")
 
 if __name__ == '__main__':
