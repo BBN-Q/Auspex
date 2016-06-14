@@ -27,11 +27,7 @@ class DataStreamDescriptor(object):
         self.parent = None
 
     def add_axis(self, axis):
-        # Do this in C ordering, innermost (fast) loops are
-        # at the last index.
         self.axes.insert(0, axis)
-        # if self.parent is not None:
-        #     self.parent.update_descriptors()
 
     def num_dims(self):
         return len(self.axes)
@@ -136,17 +132,6 @@ class InputConnector(object):
         self.descriptor = self.input_streams[0].descriptor
         self.parent.update_descriptors()
 
-    # def reset(self):
-    #     for stream in self.input_streams:
-    #         stream.reset()
-
-    # def connect_to(self, output_connector):
-    #     stream = DataStream()
-    #     stream.name = output_connector.name
-    #     self.add_input_stream(stream)
-    #     output_connector.add_output_stream(stream) # This should set the descriptor and start_connector
-    #     return stream
-
     def __repr__(self):
         return "<InputConnector(name={})>".format(self.name)
 
@@ -163,25 +148,11 @@ class OutputConnector(object):
     # a descriptor, that it may pass 
     def set_descriptor(self, descriptor):
         self.descriptor = descriptor
-        # for stream in self.output_streams:
-        #     stream.set_descriptor(self.descriptor)
-        #     stream.end_connector.parent.update_descriptors()
 
     def add_output_stream(self, stream):
-        # if self.descriptor is not None:
-        #     stream.set_descriptor(self.descriptor)
-        #     logger.debug("Imposing output connector descriptor on stream '%s'", stream)
         logger.debug("Adding output stream '%s' to output connector %s.", stream, self)
         self.output_streams.append(stream)
         stream.start_connector = self
-
-    # def connect_to(self, input_connector):
-    #     stream = DataStream()
-    #     stream.name = self.name
-    #     stream.end_connector = input_connector
-    #     self.add_output_stream(stream)
-    #     input_connector.add_input_stream(stream)
-    #     return stream
 
     def update_descriptors(self):
         logger.debug("Starting descriptor update in output connector %s, where the descriptor is %s", 
@@ -191,10 +162,6 @@ class OutputConnector(object):
             stream.set_descriptor(self.descriptor)
             logger.debug("\tnow setting stream end connector %s to %s", stream.end_connector, self.descriptor)
             stream.end_connector.update_descriptors()
-
-    # def reset(self):
-    #     for stream in self.output_streams:
-    #         stream.reset()
 
     def num_points(self):
         return self.descriptor.num_points()
