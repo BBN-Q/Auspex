@@ -19,7 +19,7 @@ from .plotting import BokehServerThread, Plotter, Plotter2D, MultiPlotter
 from .experiment import Experiment, Parameter, Quantity
 
 logger = logging.getLogger('pycontrol')
-logging.basicConfig(format='%(name)s - %(levelname)s: \t%(asctime)s: \t%(message)s')
+logging.basicConfig(format='%(name)s-%(levelname)s: \t%(message)s')
 logger.setLevel(logging.INFO)
 
 class Writer(object):

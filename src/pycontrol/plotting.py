@@ -15,7 +15,7 @@ from bokeh.plotting import Figure
 from bokeh.models.renderers import GlyphRenderer
 
 logger = logging.getLogger('pycontrol')
-logging.basicConfig(format='%(name)s - %(levelname)s: \t%(asctime)s: \t%(message)s')
+logging.basicConfig(format='%(name)s-%(levelname)s: \t%(message)s')
 logger.setLevel(logging.INFO)
 
 class BokehServerThread(threading.Thread):
