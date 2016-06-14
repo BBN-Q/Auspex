@@ -370,6 +370,7 @@ class Experiment(metaclass=MetaExperiment):
         self._swept_parameters.append(p)
         self.generate_sweep()
         self.axes.append(DataAxis(param.name, sweep_list))
+        self.update_descriptors()
 
     def generate_sweep(self):
         self._sweep_generator = itertools.product(*[sp.values for sp in self._swept_parameters])
