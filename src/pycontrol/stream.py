@@ -27,24 +27,23 @@ class DataStreamDescriptor(object):
         self.parent = None
 
     def add_axis(self, axis):
-        self.axes.append(axis)
+        # Do this in C ordering, innermost (fast) loops are
+        # at the last index.
+        self.axes.insert(0, axis)
         if self.parent is not None:
             self.parent.update_descriptors()
 
     def num_dims(self):
         return len(self.axes)
 
-    def data_dims(self, fortran=True):
-        if fortran:
-            return [len(a.points) for a in self.axes]
-        else:
-            return [len(a.points) for a in reversed(self.axes)]
+    def data_dims(self):
+        return [len(a.points) for a in self.axes]
 
     def num_points(self):
         return reduce(lambda x,y: x*y, [len(a.points) for a in self.axes])
 
     def num_points_through_axis(self, axis):
-        return reduce(lambda x,y: x*y, [len(a.points) for a in self.axes[:axis+1]])
+        return reduce(lambda x,y: x*y, [len(a.points) for a in self.axes[axis:]])
 
     def __repr__(self):
         return "<DataStreamDescriptor(num_dims={}, num_points={})>".format(
@@ -93,7 +92,14 @@ class DataStream(object):
         if hasattr(data, 'size'):
             self.points_taken += data.size
         else:
-            self.points_taken += len(data)
+            try:
+                self.points_taken += len(data)
+            except:
+                try:
+                    junk = data + 1.0
+                    self.points_taken += 1
+                except:
+                    raise ValueError("Got data {} that is neither an array nor a float".format(data))
         await self.queue.put(data)
 
 # These connectors are where we attached the DataStreams
