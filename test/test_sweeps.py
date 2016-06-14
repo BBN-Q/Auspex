@@ -5,9 +5,14 @@ import numpy as np
 
 from pycontrol.instruments.instrument import Instrument, StringCommand, FloatCommand, IntCommand
 from pycontrol.experiment import Experiment, FloatParameter, Quantity
-from pycontrol.stream import DataStream, DataAxis, DataStreamDescriptor
+from pycontrol.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector
 from pycontrol.filters.debug import Print
 from pycontrol.filters.io import WriteToHDF5
+
+import logging
+logger = logging.getLogger('pycontrol')
+logging.basicConfig(format='%(name)s-%(levelname)s: \t%(message)s')
+logger.setLevel(logging.DEBUG)
 
 class TestInstrument1(Instrument):
     frequency = FloatCommand(get_string="frequency?", set_string="frequency {:g}", value_range=(0.1, 10))
@@ -24,7 +29,7 @@ class TestExperiment(Experiment):
     freq  = FloatParameter(unit="Hz")
 
     # DataStreams
-    voltage = DataStream(unit="V")
+    voltage = OutputConnector()
 
     # Constants
     samples = 5
@@ -32,8 +37,6 @@ class TestExperiment(Experiment):
     def init_instruments(self):
         self.field.assign_method(lambda x: x)
         self.freq.assign_method(lambda x: x)
-        for s in self._output_streams.values():
-            s.reset()
 
     def init_streams(self):
         # Add a "base" data axis: say we are averaging 5 samples per trigger
@@ -45,13 +48,18 @@ class TestExperiment(Experiment):
         print("Data taker running")
         time_val = 0
         time_step = 0.1
-    
-        await asyncio.sleep(0.001)
         
-        print("Stream has filled {} of {} points".format(self._output_streams['voltage'].points_taken, self._output_streams['voltage'].num_points() ))
-        data_row = np.sin(2*np.pi*1e3*time_val) + 0.1*np.random.random(self.samples)       
-        time_val += time_step
-        await self.voltage.push(data_row)
+        while True:
+            #Produce fake noisy sinusoid data every 0.02 seconds until we have 1000 points
+            if self.voltage.done():
+                print("Data taker finished.")
+                break
+            await asyncio.sleep(0.005)
+            
+            print("Stream has filled {} of {} points".format(self.voltage.points_taken, self.voltage.num_points() ))
+            data_row = np.sin(2*np.pi*1e3*time_val) + 0.1*np.random.random(self.samples)       
+            time_val += time_step
+            await self.voltage.push(data_row)
 
 class SweepTestCase(unittest.TestCase):
     """
@@ -72,18 +80,18 @@ class SweepTestCase(unittest.TestCase):
 
     def test_run(self):
         exp = TestExperiment()
-        pr = Print()
+        pri = Print()
 
-        pr.data.add_input_stream(exp.voltage)
+        edges = [(exp.voltage, pri.data)]
 
+        exp.set_graph(edges)
+        
         exp.init_instruments()
         exp.add_sweep(exp.field, np.linspace(0,100.0,11))
         exp.add_sweep(exp.freq, np.linspace(0,10.0,3))
-        
-        loop = asyncio.get_event_loop()
-        tasks = [exp.run_sweeps(), pr.run()]
-        loop.run_until_complete(asyncio.wait(tasks))
-        self.assertTrue(pr.data.input_streams[0].points_taken == exp.voltage.num_points())
+        exp.run_loop()
+
+        self.assertTrue(pri.data.input_streams[0].points_taken == exp.voltage.num_points())
 
     def test_writehdf5(self):
         exp = TestExperiment()

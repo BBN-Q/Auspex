@@ -30,8 +30,8 @@ class DataStreamDescriptor(object):
         # Do this in C ordering, innermost (fast) loops are
         # at the last index.
         self.axes.insert(0, axis)
-        if self.parent is not None:
-            self.parent.update_descriptors()
+        # if self.parent is not None:
+        #     self.parent.update_descriptors()
 
     def num_dims(self):
         return len(self.axes)

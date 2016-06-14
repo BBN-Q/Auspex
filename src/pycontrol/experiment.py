@@ -269,7 +269,7 @@ class Experiment(metaclass=MetaExperiment):
         self._swept_parameters = []
 
         # Keep track of stream axes
-        self._axes = []
+        # self._axes = []
 
         # This holds the experiment graph
         self.graph = None
@@ -343,7 +343,7 @@ class Experiment(metaclass=MetaExperiment):
     #     """Execute any user-defined software sweeps."""
     #     for k, oc in self._output_connectors.items():
     #         for stream in oc.output_streams:
-    #             for axis in self._axes:
+                # for axis in self._axes:
     #                 stream.descriptor.add_axis(axis)
 
     #     # Keep track of the previous values
@@ -369,7 +369,10 @@ class Experiment(metaclass=MetaExperiment):
         p = SweptParameter(param, sweep_list)
         self._swept_parameters.append(p)
         self.generate_sweep()
-        self.axes.append(DataAxis(param.name, sweep_list))
+        for oc in self.output_connectors.values():
+            ax = DataAxis(param.name, sweep_list)
+            logger.debug("Adding sweep axis %s to connector %s.", ax, oc.name)
+            oc.descriptor.add_axis(ax)
         self.update_descriptors()
 
     def generate_sweep(self):
