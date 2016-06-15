@@ -2,6 +2,7 @@ import unittest
 import asyncio
 import os
 import numpy as np
+import h5py
 
 from pycontrol.instruments.instrument import Instrument, StringCommand, FloatCommand, IntCommand
 from pycontrol.experiment import Experiment, FloatParameter, Quantity
@@ -110,7 +111,16 @@ class SweepTestCase(unittest.TestCase):
         exp.init_instruments()
         exp.add_sweep(exp.field, np.linspace(0,100.0,4))
         exp.add_sweep(exp.freq, np.linspace(0,10.0,3))
-        
+        exp.run_loop()
+
+        with h5py.File("0000-test_write.h5", 'r') as f:
+            self.assertTrue([d.label for d in f['data'].dims] == ['freq', 'field', 'samples'])
+            self.assertTrue([d.keys()[0] for d in f['data'].dims] == ['freq', 'field', 'samples'])
+            self.assertTrue(np.sum(f['data'].dims[0][0].value - np.linspace(0,10.0,3)) == 0.0)
+            self.assertTrue(np.sum(f['data'].dims[1]['field'].value - np.linspace(0,100.0,4)) == 0.0)
+            self.assertTrue(np.sum(f['data'].dims[2]['samples'].value - np.arange(0,5)) == 0.0)
+            print(f['data'][:])
+
         os.remove("0000-test_write.h5")
 
 if __name__ == '__main__':
