@@ -56,10 +56,8 @@ class Average(Filter):
         self.points_before_final_average   = descriptor_in.num_points_through_axis(self.axis)
         logger.debug("Points before partial average: %s.", self.points_before_partial_average)
         logger.debug("Points before final average: %s.", self.points_before_final_average)
-        
         logger.debug("Data dimensions are %s", self.data_dims)
         logger.debug("Averaging dimensions are %s", self.avg_dims)
-
 
         new_axes = descriptor_in.axes[:]
         self.num_averages = new_axes.pop(self.axis).num_points()
@@ -141,6 +139,6 @@ class Average(Filter):
             if completed_averages == self.num_averages:
                 for output_stream in self.final_average.output_streams:
                     await output_stream.push(self.sum_so_far/self.num_averages)
-                self.sum_so_far = np.zeros(self.avg_dims)
+                self.sum_so_far = 0.0
                 completed_averages = 0
             
