@@ -169,7 +169,6 @@ class SweptParameter(object):
         self.parameter = parameter
         self.values = values
         self.length = len(values)
-        self.indices = range(self.length)
         self.push = self.parameter.push
 
     @property
@@ -178,6 +177,29 @@ class SweptParameter(object):
     @value.setter
     def value(self, value):
         self.parameter.value = value
+
+class SweptParameterGroup(object):
+    """For unstructured (meshed) coordinate tuples. The actual values 
+    are stored locally as _values, and we acces each tuples by indexing
+    into that array."""
+    def __init__(self, parameters, values):
+        self.parameters = parameters
+        self._values = values
+        self.length = len(values)
+        self.values = list(range(self.length)) # Dummy index list for sweeper
+        
+    def push(self, index):
+        # Values here will just be the index
+        for i, p in enumerate(self.parameters):
+            p.push(self._values[index, i])
+
+    @property
+    def value(self):
+        return [p.value for p in self.parameters]
+    @value.setter
+    def value(self, value):
+        for i, p in enumerate(self.parameters):
+            p.value = self._values[index, i]
 
 class ExperimentGraph(object):
     def __init__(self, edges, loop):
@@ -366,9 +388,18 @@ class Experiment(metaclass=MetaExperiment):
             oc.descriptor.add_axis(ax)
         self.update_descriptors()
 
+    def add_unstructured_sweep(self, parameters, coords):
+        self._swept_parameters.append(SweptParameterGroup(parameters, coords))
+        self.generate_sweep()
+        for oc in self.output_connectors.values():
+            ax = DataAxis("Unstructured", coords, unstructured=True, coord_names=[p.name for p in parameters])
+            logger.debug("Adding unstructred sweep axis %s to connector %s.", ax, oc.name)
+            oc.descriptor.add_axis(ax)
+        self.update_descriptors()
+
     def generate_sweep(self):
         self._sweep_generator = itertools.product(*[sp.values for sp in self._swept_parameters])
-        self._index_generator = itertools.product(*[sp.indices for sp in self._swept_parameters])
+        # self._index_generator = itertools.product(*[sp.indices for sp in self._swept_parameters])
 
     def add_adaptive_sweep(self, parameters, values):
         """Add an adaptive sweep over the tuple of M parameters,

@@ -97,6 +97,60 @@ class SweepTestCase(unittest.TestCase):
 
         self.assertTrue(pri.data.input_streams[0].points_taken == exp.voltage.num_points())
 
+    def test_unstructured_sweep(self):
+        exp = TestExperiment()
+        pri = Print()
+
+        edges = [(exp.voltage, pri.data)]
+        exp.set_graph(edges)
+        
+        exp.init_instruments()
+
+        coords = [[ 0, 0.1],
+                  [10, 4.0],
+                  [15, 2.5],
+                  [40, 4.4],
+                  [50, 2.5],
+                  [60, 1.4],
+                  [65, 3.6],
+                  [66, 3.5],
+                  [67, 3.6],
+                  [68, 1.2]]
+        exp.add_unstructured_sweep([exp.field, exp.freq], coords)
+        exp.run_loop()
+        self.assertTrue(pri.data.input_streams[0].points_taken == exp.voltage.num_points())
+
+    def test_write_unstructured_sweep(self):
+        exp = TestExperiment()
+        pri = Print()
+        wr  = WriteToHDF5("test_write_unstructured.h5")
+        self.assertTrue(os.path.exists("0000-test_write_unstructured.h5"))
+
+        edges = [(exp.voltage, pri.data), (exp.voltage, wr.data)]
+        exp.set_graph(edges)
+        
+        exp.init_instruments()
+
+        coords = np.array([[ 0, 0.1],
+                  [10, 4.0],
+                  [15, 2.5],
+                  [40, 4.4],
+                  [50, 2.5],
+                  [60, 1.4],
+                  [65, 3.6],
+                  [66, 3.5],
+                  [67, 3.6],
+                  [68, 1.2]])
+        exp.add_unstructured_sweep([exp.field, exp.freq], coords)
+        exp.run_loop()
+        self.assertTrue(pri.data.input_streams[0].points_taken == exp.voltage.num_points())
+        with h5py.File("0000-test_write_unstructured.h5", 'r') as f:
+            self.assertTrue([d.label for d in f['data'].dims] == ['Unstructured', 'samples'])
+            self.assertTrue([d.keys() for d in f['data'].dims] == [['field', 'freq'], ['samples']])
+            self.assertTrue(np.sum(f['data'].dims[0]['freq'].value - coords[:,1]) == 0.0)
+            self.assertTrue(np.sum(f['data'].dims[0]['field'].value - coords[:,0]) == 0.0)
+        os.remove("0000-test_write_unstructured.h5")
+
     def test_writehdf5(self):
         exp = TestExperiment()
         pr = Print()

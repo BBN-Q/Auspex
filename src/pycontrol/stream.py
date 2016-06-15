@@ -21,8 +21,8 @@ class DataAxis(object):
     def num_points(self):
         return len(self.points)
     def __repr__(self):
-        return "<DataAxis(name={}, points={}, unit={})>".format(
-            self.name, self.points, self.unit)
+        return "<DataAxis(name={}, points={}, unit={}, unstructured={})>".format(
+            self.name, self.points, self.unit, self.unstructured)
 
 class DataStreamDescriptor(object):
     """Axis information"""
