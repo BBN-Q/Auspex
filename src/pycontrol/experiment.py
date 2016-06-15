@@ -121,7 +121,8 @@ class Parameter(object):
         if not self.abstract:
             for pph in self.pre_push_hooks:
                 pph()
-                self.method(self._value)
+            logger.debug("Calling method of Parameter %s with value %s" % (self.name, self._value) )
+            self.method(self._value)
             for pph in self.post_push_hooks:
                 pph()
 
@@ -178,6 +179,9 @@ class SweptParameter(object):
     def value(self, value):
         self.parameter.value = value
 
+    def __repr__(self):
+        return "<SweptParameter: {}>".format(self.parameter.name)
+
 class SweptParameterGroup(object):
     """For unstructured (meshed) coordinate tuples. The actual values 
     are stored locally as _values, and we acces each tuples by indexing
@@ -188,18 +192,21 @@ class SweptParameterGroup(object):
         self.length = len(values)
         self.values = list(range(self.length)) # Dummy index list for sweeper
         
-    def push(self, index):
+    def push(self):
         # Values here will just be the index
-        for i, p in enumerate(self.parameters):
-            p.push(self._values[index, i])
+        for p in self.parameters:
+            p.push()
 
     @property
     def value(self):
         return [p.value for p in self.parameters]
     @value.setter
-    def value(self, value):
+    def value(self, index):
         for i, p in enumerate(self.parameters):
             p.value = self._values[index, i]
+
+    def __repr__(self):
+        return "<SweptParameter: {}>".format([p.name for p in self.parameters])
 
 class ExperimentGraph(object):
     def __init__(self, edges, loop):
@@ -352,31 +359,35 @@ class Experiment(metaclass=MetaExperiment):
         # Just reconstruct the graph...
         # self.graph.create_graph(self.graph.edges)
 
-    # async def run_sweeps(self):
-    #     """Execute any user-defined software sweeps."""
-    #     for k, oc in self._output_connectors.items():
-    #         for stream in oc.output_streams:
-                # for axis in self._axes:
-    #                 stream.descriptor.add_axis(axis)
+    async def sweep(self):
+        # Keep track of the previous values
+        last_param_values = None
 
-    #     # Keep track of the previous values
-    #     last_param_values = None
+        for param_values in self._sweep_generator:
 
-    #     for param_values in self._sweep_generator:
+            # Update the parameter values. Unles set and push if there has been a change
+            # in the value from the previous iteration.
+            for i, sp in enumerate(self._swept_parameters):
+                if last_param_values is None or param_values[i] != last_param_values[i]:
+                    logger.debug("Pushing value %s to parameter %s.", param_values[i], sp)
+                    sp.value = param_values[i]
+                    sp.push()
 
-    #         # Update the parameter values. Unles set and push if there has been a change
-    #         # in the value from the previous iteration.
-    #         for i, sp in enumerate(self._swept_parameters):
-    #             if last_param_values is None or param_values[i] != last_param_values[i]:
-    #                 sp.value = param_values[i]
-    #                 sp.push()
+            # update previous values
+            last_param_values = param_values
 
-    #         # update previous values
-    #         last_param_values = param_values
+            # Run the procedure
+            await self.run()
 
-    #         # Run the procedure
-    #         await self.run()
-
+    def run_sweeps(self):
+        # We don't want to wait for the run method explicitly
+        # import ipdb; ipdb.set_trace()
+        other_nodes = self.nodes[:]
+        other_nodes.remove(self)
+        tasks = [n.run() for n in other_nodes]
+        tasks.append(self.sweep())
+        self.loop.run_until_complete(asyncio.wait(tasks))
+        
     def add_sweep(self, param, sweep_list):
         """Add a good-old-fasioned one-variable sweep."""
         p = SweptParameter(param, sweep_list)
