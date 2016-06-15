@@ -215,10 +215,6 @@ class ExperimentGraph(object):
 
         self.dag = dag
 
-        # for src, dest in self.dfs_edges():
-        #     if "update_descriptors" in dir(src):
-        #         self.dag[src][dest]['object'].start_connector.update_descriptors()
-
 class MetaExperiment(type):
     """Meta class to bake the instrument objects into a class description
     """
@@ -251,11 +247,6 @@ class MetaExperiment(type):
             elif isinstance(v, OutputConnector):
                 logger.debug("Found '%s' output connector.", k)
                 self._output_connectors.append(k)
-            # elif isinstance(v, OutputConnector):
-            #     logger.debug("Found '%s' OutputConnector", k)
-            #     if v.name is None or v.name is '':
-            #         v.name = k
-            #     self._output_connectors[k] = v
 
 class Experiment(metaclass=MetaExperiment):
     """The measurement loop to be run for each set of sweep parameters."""
