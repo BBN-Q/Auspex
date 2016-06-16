@@ -5,12 +5,17 @@ from pycontrol.instruments.keithley import Keithley2400
 from pycontrol.instruments.ami import AMI430
 from pycontrol.instruments.rfmd import Attenuator
 
-from pycontrol.experiment import FloatParameter, IntParameter, Quantity, Trace, Procedure
+from pycontrol.experiment import FloatParameter, IntParameter, Experiment
+from pycontrol.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector
+from pycontrol.filters.debug import Print
+from pycontrol.filters.io import WriteToHDF5
 
 from PyDAQmx import *
 
 import numpy as np
+import asyncio
 import time, sys
+import adapt
 
 # Experimental Topology
 # lockin AO 2 -> Analog Attenuator Vdd
@@ -19,12 +24,12 @@ import time, sys
 # AWG Sync Marker Out -> DAQmx PFI0
 # AWG Samp. Marker Out -> PSPL Trigger
 
-class Switching(Procedure):
+class SwitchingExperiment(Experiment):
 
     # Parameters
-    field          = FloatParameter(default=0.0, unit="G")
+    field          = FloatParameter(default=0.0, unit="T")
     pulse_duration = FloatParameter(default=5.0e-9, unit="s")
-    attenuation    = FloatParameter(default=-12.0, unit="dB")
+    pulse_voltage  = FloatParameter(default=0.1, unit="V")
 
     # Constants (set with attribute access if you want to change these!)
     attempts        = 1024
@@ -33,7 +38,7 @@ class Switching(Procedure):
     samps_per_trig  = 10
 
     polarity        = 1
-    pspl_base_attenuation = 12
+    pspl_atten      = 12
 
     min_daq_voltage = 0.0
     max_daq_voltage = 0.4
@@ -42,8 +47,7 @@ class Switching(Procedure):
     reset_duration  = 5.0e-9
 
     # Things coming back
-    daq_buffer     = Trace(unit="V")
-    pulse_voltage  = Quantity(unit="V")
+    daq_buffer     = OutputConnector()
 
     # Instrument resources
     mag   = AMI430("192.168.5.109")
@@ -152,39 +156,46 @@ class Switching(Procedure):
         #   Setup the PSPL
         # ===================
 
-        self.pspl.amplitude = self.polarity*7.5*np.power(10, -self.pspl_base_attenuation/20.0)
+        self.pspl.amplitude = self.polarity*7.5*np.power(10, -self.pspl_atten/20.0)
         self.pspl.trigger_source = "EXT"
         self.pspl.trigger_level = 0.1
         self.pspl.output = True
 
         # Define the inner measurements loop
-        def take_data():
-            self.arb.advance()
-            self.arb.trigger()
-            buf = np.empty(self.buf_points)
-            self.analog_input.ReadAnalogF64(self.buf_points, -1, DAQmx_Val_GroupByChannel,
-                                            buf, self.buf_points, byref(self.read), None)
-            return buf
+        # def take_data():
+
+        def set_voltage(voltage):
+            # Calculate the voltage controller attenuator setting
+            vc_atten = abs(20.0 * np.log10(abs(voltage)/7.5)) - self.pspl_atten
+            if vc_atten <= 6.0:
+                raise ValueError("Voltage controlled attenuation under range (6dB).")
+            self.atten.set_attenuation(vc_atten)
+            time.sleep(0.02)
 
         # Assign methods
         self.field.assign_method(self.mag.set_field)
-        self.attenuation.assign_method(self.atten.set_attenuation)
         self.pulse_duration.assign_method(self.pspl.set_duration)
-        self.pulse_voltage.assign_method(lambda: 7.5*np.power(10, (-self.pspl_base_attenuation + self.attenuation.value)/20))
+        self.pulse_voltage.assign_method(set_voltage)
         self.daq_buffer.assign_method(take_data)
 
         # Create hooks for relevant delays
         self.pulse_duration.add_post_push_hook(lambda: time.sleep(0.1))
-        self.attenuation.add_post_push_hook(lambda: time.sleep(0.02))
 
-    def run(self):
+    def init_streams(self):
+        # Baked in data axes
+        descrip = DataStreamDescriptor()
+        descrip.add_axis(DataAxis("samples", range(self.samps_per_trig)))
+        descrip.add_axis(DataAxis("attempts", range(self.attempts)))
+        self.voltage.set_descriptor(descrip)
+
+    async def run(self):
         """This is run for each step in a sweep."""
-        for k, v in self._parameters.items():
-            v.push()
-        for k, v in self._quantities.items():
-            v.measure()
-        for k, v in self._traces.items():
-            v.measure()
+        self.arb.advance()
+        self.arb.trigger()
+        buf = np.empty(self.buf_points)
+        self.analog_input.ReadAnalogF64(self.buf_points, -1, DAQmx_Val_GroupByChannel,
+                                        buf, self.buf_points, byref(self.read), None)
+        await self.daq_buffer.push(buf)
             
     def shutdown_instruments(self):
         self.keith.current = 0.0e-5
@@ -196,3 +207,34 @@ class Switching(Procedure):
         except Exception as e:
             print("Warning: failed to stop task (this normally happens with no consequences when taking multiple samples per trigger).")
             pass
+
+if __name__ == '__main__':
+    exp = SwitchingExperiment()
+    pr = Print()
+    wr = WriteToHDF5("CSHE2-Testing.h5")
+    edges = [(exp.voltage, pri.data), (exp.voltage, wr.data)]
+    exp.set_graph(edges)
+    exp.init_instruments()
+
+    NUM_COARSE_T = 15
+    NUM_COARSE_V = 15
+    coarse_ts = list(np.linspace(xs[0], xs[-1], NUM_COARSE_T))
+    coarse_vs = list(np.linspace(ys[0], ys[-1], NUM_COARSE_V))
+    points    = [coarse_ts, coarse_vs]
+    points    = list(itertools.product(*points))
+
+    main_sweep = exp.add_unstructured_sweep([exp.pulse_duration, exp.pulse_voltage], coords)
+    exp.run_loop()
+
+    ITERATION = 5
+    for i in range(ITERATION):
+
+        new_points = refine_scalar_field(points, values, all_points=False,
+                                    criterion="difference", threshold = "one_sigma")
+        if new_points is None:
+            print("No more points can be added.")
+            break
+
+        main_sweep.update_values(new_points)
+        exp.reset()
+        exp.run_loop()
