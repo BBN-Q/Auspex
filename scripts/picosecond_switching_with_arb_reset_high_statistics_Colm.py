@@ -24,9 +24,9 @@ def arb_pulse(amplitude, duration, sample_rate=12e9):
     return wf
 
 if __name__ == '__main__':
-    arb  = M8190A("Test Arb", "192.168.5.108")
-    lock = SR865("Lockin Amplifier", "USB0::0xB506::0x2000::002638::INSTR")
-    bop  = BOP2020M("Kepco Power Supply", "GPIB0::1::INSTR")
+    arb  = M8190A("192.168.5.108")
+    lock = SR865("USB0::0xB506::0x2000::002638::INSTR")
+    bop  = BOP2020M("GPIB0::1::INSTR")
     hp   = HallProbe("calibration/HallProbe.cal", lock.set_ao1, lock.get_ai1)
     mag  = Electromagnet('calibration/GMW.cal', hp.get_field, bop.set_current, bop.get_current)
     pspl = Picosecond10070A("Pulse Generator", "GPIB0::24::INSTR")

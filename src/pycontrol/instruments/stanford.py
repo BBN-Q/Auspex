@@ -1,4 +1,4 @@
-from .instrument import Instrument, Command, FloatCommand, IntCommand
+from .instrument import Instrument, StringCommand, FloatCommand, IntCommand
 import numpy as np
 import time
 
@@ -35,40 +35,40 @@ class SR830(Instrument):
     CHANNEL1_MAP = indexed_map_chan(CHANNEL1_VALUES)
     CHANNEL2_MAP = indexed_map_chan(CHANNEL2_VALUES)
 
-    amplitude = FloatCommand("amplitude", scpi_string="SLVL")
-    frequency = FloatCommand("frequency", scpi_string="FREQ", aliases=['freq'])
-    phase = FloatCommand("phase", scpi_string="PHAS")
+    amplitude = FloatCommand(scpi_string="SLVL")
+    frequency = FloatCommand(scpi_string="FREQ", aliases=['freq'])
+    phase = FloatCommand(scpi_string="PHAS")
 
-    x = FloatCommand("x", get_string="OUTP?1;")
-    y = FloatCommand("y", get_string="OUTP?2;")
-    channel_1 = FloatCommand("Channel 1", get_string="OUTR?1;", aliases=["ch1"])
-    channel_2 = FloatCommand("Channel 2", get_string="OUTR?2;", aliases=["ch2"])
+    x = FloatCommand(get_string="OUTP?1;")
+    y = FloatCommand(get_string="OUTP?2;")
+    channel_1 = FloatCommand(get_string="OUTR?1;", aliases=["ch1"])
+    channel_2 = FloatCommand(get_string="OUTR?2;", aliases=["ch2"])
 
-    magnitude = FloatCommand("magnitude", get_string="OUTP?3;", aliases=['r', 'mag'])
-    theta = FloatCommand("theta", get_string="OUTP?4;")
+    magnitude = FloatCommand(get_string="OUTP?3;", aliases=['r', 'mag'])
+    theta = FloatCommand(get_string="OUTP?4;")
 
-    aux_in_1 = FloatCommand("Auxiliary Input 1", get_string="OAUX?1;", aliases=["ai1"])
-    aux_in_2 = FloatCommand("Auxiliary Input 2", get_string="OAUX?2;", aliases=["ai2"])
-    aux_in_3 = FloatCommand("Auxiliary Input 3", get_string="OAUX?3;", aliases=["ai3"])
-    aux_in_4 = FloatCommand("Auxiliary Input 4", get_string="OAUX?4;", aliases=["ai4"])
+    aux_in_1 = FloatCommand(get_string="OAUX?1;", aliases=["ai1"])
+    aux_in_2 = FloatCommand(get_string="OAUX?2;", aliases=["ai2"])
+    aux_in_3 = FloatCommand(get_string="OAUX?3;", aliases=["ai3"])
+    aux_in_4 = FloatCommand(get_string="OAUX?4;", aliases=["ai4"])
 
-    aux_out_1 = FloatCommand("Auxiliary Output 1", get_string="AUXV?1;", set_string="AUXV1,{:f}", aliases=["ao1"])
-    aux_out_2 = FloatCommand("Auxiliary Output 2", get_string="AUXV?2;", set_string="AUXV2,{:f}", aliases=["ao2"])
-    aux_out_3 = FloatCommand("Auxiliary Output 3", get_string="AUXV?3;", set_string="AUXV3,{:f}", aliases=["ao3"])
-    aux_out_4 = FloatCommand("Auxiliary Output 4", get_string="AUXV?4;", set_string="AUXV4,{:f}", aliases=["ao4"])
+    aux_out_1 = FloatCommand(get_string="AUXV?1;", set_string="AUXV1,{:f}", aliases=["ao1"])
+    aux_out_2 = FloatCommand(get_string="AUXV?2;", set_string="AUXV2,{:f}", aliases=["ao2"])
+    aux_out_3 = FloatCommand(get_string="AUXV?3;", set_string="AUXV3,{:f}", aliases=["ao3"])
+    aux_out_4 = FloatCommand(get_string="AUXV?4;", set_string="AUXV4,{:f}", aliases=["ao4"])
 
-    channel_1_type = Command("Channel 1", get_string="DDEF?1;", set_string="DDEF1,{:s}", value_map=CHANNEL1_MAP)
-    channel_2_type = Command("Channel 2", get_string="DDEF?2;", set_string="DDEF2,{:s}", value_map=CHANNEL2_MAP)
-    sensitivity    = Command("Sensitivity", get_string="SENS?;", set_string="SENS{:s}", value_map=SENSITIVITY_MAP)
-    time_constant  = Command("Time Constant", get_string="OFLT?;", set_string="OFLT{:s}", value_map=TIME_CONSTANT_MAP, aliases=['tc', 'TC'])
-    filter_slope   = Command("Filter Slope", get_string="OFSL?;", set_string="OFSL{:s}", value_map=FILTER_SLOPE_MAP)
-    reserve_mode   = Command("Reserve Mode", get_string="RMOD?;", set_string="RMOD{:s}", value_map=RESERVE_MAP)
+    channel_1_type = StringCommand(get_string="DDEF?1;", set_string="DDEF1,{:s}", value_map=CHANNEL1_MAP)
+    channel_2_type = StringCommand(get_string="DDEF?2;", set_string="DDEF2,{:s}", value_map=CHANNEL2_MAP)
+    sensitivity    = StringCommand(get_string="SENS?;", set_string="SENS{:s}", value_map=SENSITIVITY_MAP)
+    time_constant  = StringCommand(get_string="OFLT?;", set_string="OFLT{:s}", value_map=TIME_CONSTANT_MAP, aliases=['tc', 'TC'])
+    filter_slope   = StringCommand(get_string="OFSL?;", set_string="OFSL{:s}", value_map=FILTER_SLOPE_MAP)
+    reserve_mode   = StringCommand(get_string="RMOD?;", set_string="RMOD{:s}", value_map=RESERVE_MAP)
 
-    sample_rate    = Command("Sample Rate", get_string="SRAT?;", set_string="SRAT{:s}", value_map=SAMPLE_RATE_MAP)
-    buffer_mode    = Command("Buffer Mode", get_string="SEND?;", set_string="SEND{:s}", value_map={"SHOT": "0", "LOOP": "1"})
-    buffer_trigger_mode = Command("Buffer Trigger Mode", get_string="TSTR?;", set_string="TSTR{:s}",
+    sample_rate    = StringCommand(get_string="SRAT?;", set_string="SRAT{:s}", value_map=SAMPLE_RATE_MAP)
+    buffer_mode    = StringCommand(get_string="SEND?;", set_string="SEND{:s}", value_map={"SHOT": "0", "LOOP": "1"})
+    buffer_trigger_mode = StringCommand(get_string="TSTR?;", set_string="TSTR{:s}",
                                   value_map={True: "1", False: "0"})
-    buffer_points  = IntCommand("Buffer Points", get_string="SPTS?;")
+    buffer_points  = IntCommand(get_string="SPTS?;")
 
     def get_buffer(self, channel):
         stored_points = self.buffer_points
@@ -88,8 +88,9 @@ class SR830(Instrument):
     def trigger(self):
         self.interface.write("TRIG;")
 
-    def __init__(self, name, resource_name, mode='current', **kwargs):
-        super(SR830, self).__init__(name, resource_name, **kwargs)
+    def __init__(self, resource_name, mode='current', **kwargs):
+        super(SR830, self).__init__(resource_name, **kwargs)
+        self.name = "SR830 Lockin Amplifier"
         self.interface._resource.read_termination = u"\n"
 
     def measure_delay(self):
@@ -125,39 +126,39 @@ class SR865(Instrument):
     CHANNEL1_MAP = indexed_map_chan(CHANNEL1_VALUES)
     CHANNEL2_MAP = indexed_map_chan(CHANNEL2_VALUES)
 
-    amplitude = FloatCommand("amplitude", get_string="SLVL?", set_string="SLVL {:f}")
-    frequency = FloatCommand("frequency", get_string="FREQ?", set_string="FREQ {:f}", aliases=['freq'])
-    phase = FloatCommand("phase", get_string="PHAS?", set_string="PHAS {:g}")
-    offset = FloatCommand("DC offset", get_string="SOFF?", set_string="SOFF {:f}", aliases=['dc', 'DC'])
+    amplitude = FloatCommand(get_string="SLVL?", set_string="SLVL {:f}")
+    frequency = FloatCommand(get_string="FREQ?", set_string="FREQ {:f}", aliases=['freq'])
+    phase = FloatCommand(get_string="PHAS?", set_string="PHAS {:g}")
+    offset = FloatCommand(get_string="SOFF?", set_string="SOFF {:f}", aliases=['dc', 'DC'])
 
-    x = FloatCommand("x", get_string="OUTP? 0;", aliases=["ch1"])
-    y = FloatCommand("y", get_string="OUTP? 1;", aliases=["ch2"])
-    magnitude = FloatCommand("magnitude", get_string="OUTP? 2;", aliases=['r', 'mag'])
-    theta = FloatCommand("theta", get_string="OUTP? 3;")
+    x = FloatCommand(get_string="OUTP? 0;", aliases=["ch1"])
+    y = FloatCommand(get_string="OUTP? 1;", aliases=["ch2"])
+    magnitude = FloatCommand(get_string="OUTP? 2;", aliases=['r', 'mag'])
+    theta = FloatCommand(get_string="OUTP? 3;")
 
-    channel_1_type = Command("Channel 1", get_string="DDEF?1;", set_string="DDEF1,{:s}", value_map=CHANNEL1_MAP)
-    channel_2_type = Command("Channel 2", get_string="DDEF?2;", set_string="DDEF2,{:s}", value_map=CHANNEL2_MAP)
-    # sample_frequency = Command("Sample Frequency", get_string="SRAT?;", set_string="SRAT{:s}", value_map=SAMPLE_RATE_MAP)
-    sensitivity = Command("Sensitivity", get_string="SCAL?;", set_string="SCAL {:s}", value_map=SENSITIVITY_MAP)
-    time_constant = Command("Time Constant", get_string="OFLT?;", set_string="OFLT{:s}", value_map=TIME_CONSTANT_MAP, aliases=['tc', 'TC'])
-    filter_slope = Command("Filter Slope", get_string="OFSL?;", set_string="OFSL{:s}", value_map=FILTER_SLOPE_MAP)
+    channel_1_type = StringCommand(get_string="DDEF?1;", set_string="DDEF1,{:s}", value_map=CHANNEL1_MAP)
+    channel_2_type = StringCommand(get_string="DDEF?2;", set_string="DDEF2,{:s}", value_map=CHANNEL2_MAP)
+    sensitivity = StringCommand(get_string="SCAL?;", set_string="SCAL {:s}", value_map=SENSITIVITY_MAP)
+    time_constant = StringCommand(get_string="OFLT?;", set_string="OFLT{:s}", value_map=TIME_CONSTANT_MAP, aliases=['tc', 'TC'])
+    filter_slope = StringCommand(get_string="OFSL?;", set_string="OFSL{:s}", value_map=FILTER_SLOPE_MAP)
 
-    capture_quants = Command("Buffer quantities", scpi_string="CAPTURECFG", value_map={"X": "0", "XY": "1", "RT": "2", "XYRT": "3"})
-    max_capture_rate = Command("Maximum capture rate", get_string="CAPTURERATEMAX?")
-    capture_rate = IntCommand("Capture rate", scpi_string="CAPTURERATE")
+    capture_quants = StringCommand(scpi_string="CAPTURECFG", value_map={"X": "0", "XY": "1", "RT": "2", "XYRT": "3"})
+    max_capture_rate = StringCommand(get_string="CAPTURERATEMAX?")
+    capture_rate = IntCommand(scpi_string="CAPTURERATE")
 
-    ao1 = FloatCommand("Analog output 1", set_string="AUXV 0, {:g};", get_string="AUXV? 0;")
-    ao2 = FloatCommand("Analog output 2", set_string="AUXV 1, {:g};", get_string="AUXV? 1;")
-    ao3 = FloatCommand("Analog output 3", set_string="AUXV 2, {:g};", get_string="AUXV? 2;")
-    ao4 = FloatCommand("Analog output 4", set_string="AUXV 3, {:g};", get_string="AUXV? 3;")
+    ao1 = FloatCommand(set_string="AUXV 0, {:g};", get_string="AUXV? 0;")
+    ao2 = FloatCommand(set_string="AUXV 1, {:g};", get_string="AUXV? 1;")
+    ao3 = FloatCommand(set_string="AUXV 2, {:g};", get_string="AUXV? 2;")
+    ao4 = FloatCommand(set_string="AUXV 3, {:g};", get_string="AUXV? 3;")
 
-    ai1 = FloatCommand("Analog output 1", get_string="OAUX? 0;")
-    ai2 = FloatCommand("Analog output 2", get_string="OAUX? 1;")
-    ai3 = FloatCommand("Analog output 3", get_string="OAUX? 2;")
-    ai4 = FloatCommand("Analog output 4", get_string="OAUX? 3;")
+    ai1 = FloatCommand(get_string="OAUX? 0;")
+    ai2 = FloatCommand(get_string="OAUX? 1;")
+    ai3 = FloatCommand(get_string="OAUX? 2;")
+    ai4 = FloatCommand(get_string="OAUX? 3;")
 
-    def __init__(self, name, resource_name, mode='current', **kwargs):
-        super(SR865, self).__init__(name, resource_name, **kwargs)
+    def __init__(self, resource_name, mode='current', **kwargs):
+        super(SR865, self).__init__(resource_name, **kwargs)
+        self.name = "SR865 Lockin Amplifier"
         self.interface._resource.read_termination = u"\n"
 
     @property

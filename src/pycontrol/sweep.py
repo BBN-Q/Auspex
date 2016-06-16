@@ -10,9 +10,17 @@ import time
 import h5py
 
 from bokeh.client import push_session
-from bokeh.plotting import curdoc, hplot
+from bokeh.plotting import hplot
+from bokeh.io import curdoc, curstate
+from bokeh.util.session_id import generate_session_id
+from bokeh.document import Document
+
 from .plotting import BokehServerThread, Plotter, Plotter2D, MultiPlotter
-from .procedure import Procedure, Parameter, Quantity
+from .experiment import Experiment, Parameter, Quantity
+
+logger = logging.getLogger('pycontrol')
+logging.basicConfig(format='%(name)s-%(levelname)s: \t%(message)s')
+logger.setLevel(logging.INFO)
 
 class Writer(object):
     """Data structure for the written quantities"""
@@ -42,11 +50,12 @@ class SweptParameter(object):
         self.parameter.value = value
 
     def push(self):
-        for pph in self.parameter.pre_push_hooks:
-            pph()
-        self.parameter.push()
-        for pph in self.parameter.post_push_hooks:
-            pph()
+        if self.method is not None:
+            for pph in self.parameter.pre_push_hooks:
+                pph()
+            self.parameter.push()
+            for pph in self.parameter.post_push_hooks:
+                pph()
 
 class Sweep(object):
     """For controlling sweeps over arbitrary number of arbitrary parameters. The order of sweeps\
@@ -54,13 +63,13 @@ class Sweep(object):
     quantity varies the slowest, the final quantity the quickest.
 
     """
-    def __init__(self, procedure):
+    def __init__(self, experiment):
         super(Sweep, self).__init__()
 
-        if isinstance(procedure, Procedure):
-            self._procedure = procedure
+        if isinstance(experiment, Experiment):
+            self._procedure = experiment
         else:
-            raise TypeError("Must pass a Procedure subclass.")
+            raise TypeError("Must pass a Experiment subclass.")
 
         # Container for SweptParmeters
         self._swept_parameters =  []
@@ -135,7 +144,7 @@ class Sweep(object):
 
         # Determine the dataset dimensions
         sweep_dims = [ p.length for p in self._swept_parameters ]
-        logging.debug("Sweep dims are %s for the list of swept parameters in the writer %s, %s." % (str(sweep_dims), filename, dataset_name) )
+        logger.debug("Sweep dims are %s for the list of swept parameters in the writer %s, %s." % (str(sweep_dims), filename, dataset_name) )
 
         data_dims = [len(quants)+len(self._swept_parameters)]
         dataset_dimensions = tuple(sweep_dims + data_dims)
@@ -155,11 +164,11 @@ class Sweep(object):
         for w in self._writers:
             current_p_values = [p.parameter.value for p in self._swept_parameters]
 
-            logging.debug("Current indicies are: %s" % str(indices) )
+            logger.debug("Current indicies are: %s" % str(indices) )
 
             for i, p in enumerate(self._swept_parameters):
                 coords = tuple( indices + [i] )
-                logging.debug("Coords: %s" % str(coords) )
+                logger.debug("Coords: %s" % str(coords) )
                 w.dataset[coords] = p.parameter.value
             for i, q in enumerate(w.quantities):
                 coords = tuple( indices + [len(self._swept_parameters) + i] )
@@ -172,7 +181,18 @@ class Sweep(object):
         return self._plotters[-1]
 
     def add_plotter2d(self, title, x, y, z, **kwargs):
-        self._plotters.append(Plotter2D(title, x, y, z, **kwargs))
+        swept_param_dict = {sp.name: sp for sp in self._swept_parameters}
+        if not x.name in swept_param_dict:
+            print("Could not find parameter {} in the list of sweeps!".format(xs.name))
+            raise Exception("Cannot plot over a non-swept parameter.")
+        else:
+            s_x = swept_param_dict[x.name]
+        if not y.name in swept_param_dict:
+            print("Could not find parameter {} in the list of sweeps!".format(xs.name))
+            raise Exception("Cannot plot over a non-swept parameter.")
+        else:
+            s_y = swept_param_dict[y.name]
+        self._plotters.append(Plotter2D(title, s_x, s_y, z, **kwargs))
         return self._plotters[-1]
 
     def add_multiplotter(self, title, xs, ys, **kwargs):
@@ -187,18 +207,41 @@ class Sweep(object):
         self._sweep_generator = itertools.product(*[sp.values for sp in self._swept_parameters])
         self._index_generator = itertools.product(*[sp.indices for sp in self._swept_parameters])
 
-    def run(self):
+    def run(self, notebook=False):
         self._procedure.init_instruments()
 
         if len(self._plotters) > 0:
-            t = BokehServerThread()
+            t = BokehServerThread(notebook=notebook)
             t.start()
             #On some systems there is a possibility we try to `push_session` before the
             #the server on the BokehServerThread has started.
             time.sleep(1)
-            q = hplot(*[p.figure for p in self._plotters])
-            session = push_session(curdoc())
-            session.show()
+            h = hplot(*[p.figure for p in self._plotters])
+            curdoc().clear()
+            sid = generate_session_id()
+            doc = Document()
+            doc.add_root(h)
+            session = push_session(doc, session_id=sid)
+
+            if notebook:
+                from bokeh.embed import autoload_server, components
+                from bokeh.io import output_notebook
+                from IPython.display import display, HTML
+
+                output_notebook()
+                script = autoload_server(model=None, session_id=sid)
+                html = \
+                        """
+                        <html>
+                        <head></head>
+                        <body>
+                        %s
+                        </body>
+                        </html>
+                        """ % script
+                display(HTML(html))
+            else:
+                session.show(doc)
 
         def shutdown():
             if len(self._plotters) > 0:
@@ -207,7 +250,7 @@ class Sweep(object):
             self._procedure.shutdown_instruments()
 
         def catch_ctrl_c(signum, frame):
-            logging.info("Caught SIGINT.  Shutting down.")
+            logger.info("Caught SIGINT.  Shutting down.")
             shutdown()
             sys.exit(0)
 
@@ -224,9 +267,9 @@ class Sweep(object):
                 if last_param_values is None or param_values[i] != last_param_values[i]:
                     sp.value = param_values[i]
                     sp.push()
-                    logging.debug("Updated {:s} to {:g} since the value changed.".format(sp.parameter.name, sp.value))
+                    logger.debug("Updated {:s} to {:g} since the value changed.".format(sp.parameter.name, sp.value))
                 else:
-                    logging.debug("Didn't update {:s} since the value didn't change.".format(sp.parameter.name))
+                    logger.debug("Didn't update {:s} since the value didn't change.".format(sp.parameter.name))
 
             # update previous values
             last_param_values = param_values

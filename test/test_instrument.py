@@ -1,12 +1,11 @@
 import unittest
 
-from pycontrol.instruments.instrument import Instrument, Command, FloatCommand, IntCommand
+from pycontrol.instruments.instrument import Instrument, StringCommand, FloatCommand, IntCommand
 
 class TestInstrument(Instrument):
-	frequency = FloatCommand("frequency", get_string="frequency?", set_string="frequency {:g}", value_range=(0.1, 10))
-	serial_number = IntCommand("serial number", get_string="serial?")
-	mode = Command("enumerated mode", scpi_string=":mode", allowed_values=["A", "B", "C"])
-
+	frequency = FloatCommand(get_string="frequency?", set_string="frequency {:g}", value_range=(0.1, 10))
+	serial_number = IntCommand(get_string="serial?")
+	mode = StringCommand(name="enumerated mode", scpi_string=":mode", allowed_values=["A", "B", "C"])
 
 class InstrumentTestCase(unittest.TestCase):
 	"""
@@ -38,5 +37,10 @@ class InstrumentTestCase(unittest.TestCase):
 		"""Check that setting value outside range raises error."""
 		with self.assertRaises(ValueError):
 			self.instrument.frequency = 11
+
+	def test_locked_class(self):
+		with self.assertRaises(TypeError):
+			self.instrument.nonexistent_property = 16
+
 if __name__ == '__main__':
 	unittest.main()

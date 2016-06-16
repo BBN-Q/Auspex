@@ -15,8 +15,8 @@ currents = []
 times    = []
 
 # Define Instruments
-bop         = BOP2020M("Kepco Power Supply", "GPIB1::1::INSTR")
-lock        = SR830("Lockin Amplifier", "GPIB1::9::INSTR")
+bop         = BOP2020M("GPIB1::1::INSTR")
+lock        = SR830("GPIB1::9::INSTR")
 hp          = HallProbe("calibration/HallProbe.cal", lock.set_ao1, lock.get_ai1)
 mag         = Electromagnet('calibration/GMW.cal', hp.get_field, bop.set_current, bop.get_current)
 

@@ -14,10 +14,10 @@ from procedure import FloatParameter, Quantity, Procedure
 
 
 class FieldTest(Procedure):
-    frequency = FloatParameter("Lockin Frequency", unit="Hz")
-    noise = Quantity("Noise", unit="V/Hz^1/2")
+    frequency = FloatParameter(name="Lockin Frequency", unit="Hz")
+    noise = Quantity(name="Noise", unit="V/Hz^1/2")
 
-    lock = SR830("Lockin Amplifier", "GPIB1::9::INSTR")
+    lock = SR830("GPIB1::9::INSTR")
 
     def instruments_init(self):
         self.tc_delay = 9*self.lock.tc

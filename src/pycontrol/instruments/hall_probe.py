@@ -5,6 +5,7 @@ class HallProbe(object):
     actual fields values."""
     def __init__(self, calibration_file, supply_voltage_method, readout_voltage_method):
         super(HallProbe, self).__init__()
+        self.name = "Lakeshore Hall Probe"
         with open(calibration_file) as cf:
             lines = [l for l in cf.readlines() if l[0] != '#']
             if len(lines) != 2:
@@ -29,3 +30,7 @@ class HallProbe(object):
 
     def get_field(self):
         return self.field_vs_voltage( self.getter() )
+
+    def __repr__(self):
+        name = "Mystery Instrument" if self.name == "" else self.name
+        return "{} @ {}".format(name, self.resource_name)

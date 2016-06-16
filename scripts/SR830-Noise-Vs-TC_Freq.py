@@ -14,11 +14,11 @@ from procedure import FloatParameter, Quantity, Procedure
 
 
 class NoiseTest(Procedure):
-    frequency = FloatParameter("Lockin Frequency", unit="Hz")
-    time_constant = FloatParameter("Time Constant", unit="s")
-    noise = Quantity("Noise", unit="V/Hz^1/2")
+    frequency = FloatParameter(name="Lockin Frequency", unit="Hz")
+    time_constant = FloatParameter(name="Time Constant", unit="s")
+    noise = Quantity(name="Noise", unit="V/Hz^1/2")
 
-    lock = SR830("Lockin Amplifier", "GPIB1::9::INSTR")
+    lock = SR830("GPIB1::9::INSTR")
 
     def init_instruments(self):
         self.averages = 1

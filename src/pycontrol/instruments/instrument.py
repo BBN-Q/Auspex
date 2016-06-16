@@ -9,21 +9,26 @@ import visa
 import os
 import time
 
-class Command(object):
+logger = logging.getLogger('pycontrol')
+logging.basicConfig(format='%(name)s-%(levelname)s: \t%(message)s')
+logger.setLevel(logging.INFO)
+
+class StringCommand(object):
     """Wraps a particular device command set based on getter and setter strings. The optional
     value_map keyword argument allows specification of a dictionary map between python values
     such as True and False and the strange 'on' and 'off' type of values frequently used
     by instruments. Translation occurs via the provided 'convert_set' and 'convert_get' methods."""
     formatter = '{}'
 
-    def __init__(self, name, set_string=None, get_string=None, scpi_string=None, value_map=None, value_range=None,
-                 allowed_values=None, aliases=None, delay=None, additional_args=None):
+    def __init__(self, name=None, set_string=None, get_string=None, scpi_string=None, value_map=None, value_range=None,
+                 allowed_values=None, aliases=None, set_delay=0.0, get_delay=0.0, additional_args=None):
         """Initialize the class with optional set and get string corresponding to instrument
         commands. Also a map containing pairs of e.g. {python_value1: instr_value1, python_value2: instr_value2, ...}."""
 
-        super(Command, self).__init__()
-        self.name = name
+        super(StringCommand, self).__init__()
         self.aliases = aliases
+        self.set_delay = set_delay
+        self.get_delay = get_delay
 
         if scpi_string:
             # Construct get and set strings using this base scpi_string
@@ -58,7 +63,7 @@ class Command(object):
             else:
                 self.allowed_values=list(self.python_to_instr.keys())
 
-            logging.debug("Constructed map and inverse map for command values:\n--- %s\n--- %s'" % (self.python_to_instr, self.instr_to_python))
+            logger.debug("Constructed map and inverse map for command values:\n--- %s\n--- %s'" % (self.python_to_instr, self.instr_to_python))
 
         # We neeed to do something or other
         if self.set_string is None and self.get_string is None:
@@ -79,7 +84,7 @@ class Command(object):
         else:
             return self.instr_to_python[get_value_instrument]
 
-class FloatCommand(Command):
+class FloatCommand(StringCommand):
     formatter = '{:E}'
     def convert_get(self, get_value_instrument):
         """Convert the instrument's returned values to something conveniently accessed
@@ -89,7 +94,7 @@ class FloatCommand(Command):
         else:
             return float(self.instr_to_python[get_value_instrument])
 
-class IntCommand(Command):
+class IntCommand(StringCommand):
     formatter = '{:d}'
     def convert_get(self, get_value_instrument):
         """Convert the instrument's returned values to something conveniently accessed
@@ -101,9 +106,8 @@ class IntCommand(Command):
 
 class RampCommand(FloatCommand):
     """For quantities that are to be ramped from present to desired value. These will always be floats..."""
-    def __init__(self, name, increment, pause=0.0, **kwargs):
-        super(RampCommand, self).__init__(name, **kwargs)
-        self.name = name
+    def __init__(self, increment, pause=0.0, **kwargs):
+        super(RampCommand, self).__init__(**kwargs)
         self.increment = increment
         self.pause = pause
 
@@ -112,14 +116,14 @@ class Interface(object):
     def __init__(self):
         super(Interface, self).__init__()
     def write(self, value):
-        logging.debug("Writing '%s'" % value)
+        logger.debug("Writing '%s'" % value)
     def query(self, value):
-        logging.debug("Querying '%s'" % value)
+        logger.debug("Querying '%s'" % value)
         if value == ":output?;":
             return "on"
         return np.random.random()
     def values(self, query):
-        logging.debug("Returning values %s" % query)
+        logger.debug("Returning values %s" % query)
         return np.random.random()
 
 class VisaInterface(Interface):
@@ -156,11 +160,34 @@ class VisaInterface(Interface):
         return self._resource.query_binary_values(query_string, container=container, datatype=datatype,
                 is_big_endian=is_big_endian)
 
+    # IEEE Mandated SCPI commands
+    def CLS(self):
+        self._resource.write("*CLS") # Clear Status Command
+    def ESE(self):
+        return self._resource.query("*ESE?") # Standard Event Status Enable Query
+    def ESR(self):
+        return self._resource.write("*ESR?") # Standard Event Status Register Query
+    def IDN(self):
+        return self._resource.query("*IDN?") # Identification Query
+    def OPC(self):
+        return self._resource.query("*OPC?") # Operation Complete Command
+    def RST(self):
+        self._resource.write("*RST") # Reset Command
+    def SRE(self):
+        return self._resource.query("*SRE?") # Service Request Enable Query
+    def STB(self):
+        return self._resource.query("*STB?") # Read Status Byte Query
+    def TST(self):
+        return self._resource.query("*TST?") # Self-Test Query
+    def WAI(self):
+        self._resource.write("*WAI") # Wait-to-Continue Command
+
 def add_command(instr, name, cmd):
     """Helper function for parsing Instrument attributes and turning them into
     setters and getters."""
     def fget(self, **kwargs):
         val = self.interface.query( cmd.get_string.format( **kwargs ) )
+        time.sleep(cmd.get_delay)
         return cmd.convert_get(val)
 
     def fset(self, val, **kwargs):
@@ -188,10 +215,10 @@ def add_command(instr, name, cmd):
         else:
             # Go straight to the desired value
             set_value = cmd.convert_set(val)
-            # logging.debug("Formatting '%s' with string '%s'" % (cmd.set_string, set_value))
-            # logging.debug("The result of the formatting is %s" % cmd.set_string.format(set_value, **{k: str(v) for k,v in kwargs.items()}))
+            # logger.debug("Formatting '%s' with string '%s'" % (cmd.set_string, set_value))
+            # logger.debug("The result of the formatting is %s" % cmd.set_string.format(set_value, **{k: str(v) for k,v in kwargs.items()}))
             self.interface.write(cmd.set_string.format(set_value, **kwargs))
-
+            time.sleep(cmd.set_delay)
     # Add getter and setter methods for passing around
     if cmd.additional_args is None:
         # We add properties in this case since not additional arguments are required
@@ -210,14 +237,14 @@ class MetaInstrument(type):
     """
     def __init__(self, name, bases, dct):
         type.__init__(self, name, bases, dct)
-        logging.debug("Adding controls to %s", name)
+        logger.debug("Adding controls to %s", name)
         for k,v in dct.items():
-            if isinstance(v, Command):
-                logging.debug("Adding '%s' command", k)
+            if isinstance(v, StringCommand):
+                logger.debug("Adding '%s' command", k)
                 add_command(self, k, v)
                 if v.aliases is not None:
                     for a in v.aliases:
-                        logging.debug("------> Adding alias '%s'" % a)
+                        logger.debug("------> Adding alias '%s'" % a)
                         add_command(self, a, v)
 
 class Instrument(metaclass=MetaInstrument):
@@ -227,7 +254,9 @@ class Instrument(metaclass=MetaInstrument):
     objects such as to provide convenient get_xx and set_xx setter/getter methods as well
     as python @properties therof."""
 
-    def __init__(self, name, resource_name, interface_type=None, check_errors_on_get=False, check_errors_on_set=False):
+    __isfrozen = False
+
+    def __init__(self, resource_name, name=None, interface_type=None, check_errors_on_get=False, check_errors_on_set=False):
         super(Instrument, self).__init__()
         self.name = name
         self.resource_name = resource_name
@@ -250,10 +279,30 @@ class Instrument(metaclass=MetaInstrument):
         else:
             raise ValueError("That interface type is not yet recognized.")
 
+        self._freeze()
+
+    # We want to lock the class dictionary
+    # This solution from http://stackoverflow.com/questions/3603502/prevent-creating-new-attributes-outside-init
+
+    def __setattr__(self, key, value):
+        if self.__isfrozen and not hasattr(self, key):
+            raise TypeError( "{} has a frozen class. Cannot access attribute {}".format(self, key) )
+        object.__setattr__(self, key, value)
+
+    def _freeze(self):
+        self.__isfrozen = True
+
+    def _unfreeze(self):
+        self.__isfrozen = False
+
     def __del__(self):
         #close the VISA resource
         if hasattr(self.interface, "_resource"):
             self.interface._resource.close()
+
+    def __repr__(self):
+        name = "Mystery Instrument" if self.name == "" else self.name
+        return "{} @ {}".format(name, self.resource_name)
 
     def check_errors(self):
         pass

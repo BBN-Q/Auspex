@@ -6,9 +6,8 @@ import networkx as nx
 import matplotlib.pyplot as plt
 import logging
 import time
-from bokeh.plotting import figure
+from bokeh.plotting import figure, curdoc
 from bokeh.client import push_session
-from bokeh.plotting import curdoc
 from bokeh.driving import cosine
 
 from pycontrol.plotting import BokehServerThread
@@ -136,6 +135,8 @@ class DataCruncher(ProcessingNode):
 
             new_data = await self.input_streams[0].queue.get()
             print("{} got data".format(self.label))
+
+            new_data = 2*new_data
 
             self.data[idx:idx+len(new_data)] = new_data
             for output_stream in self.output_streams:
@@ -268,7 +269,7 @@ if __name__ == '__main__':
     edges = [
         (ADC, cruncher1),
         (ADC, cruncher2),
-        (ADC, plotter),
+        (cruncher3, plotter),
         (cruncher2, cruncher3),
         (cruncher2, combiner),
         (cruncher1, combiner)

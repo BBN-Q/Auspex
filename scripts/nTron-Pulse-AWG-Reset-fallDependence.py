@@ -14,9 +14,9 @@ from sklearn.cluster import KMeans
 from tqdm import tqdm
 from scipy.stats import beta
 
-def ntron_pulse(amplitude=1.0, rise_time=80e-12, fall_time=1.0e-9, sample_rate=12e9):
+def ntron_pulse(amplitude=1.0, rise_time=80e-12, hold_time=320e-12, fall_time=1.0e-9, sample_rate=12e9):
     delay    = 2.0e-9 # Wait a few TCs for the rising edge
-    duration = delay + 6.0*fall_time # Wait 6 TCs for the slow decay
+    duration = delay + hold_time + 6.0*fall_time # Wait 6 TCs for the slow decay
     pulse_points = int(duration*sample_rate)
 
     if pulse_points < 320:
@@ -28,10 +28,13 @@ def ntron_pulse(amplitude=1.0, rise_time=80e-12, fall_time=1.0e-9, sample_rate=1
         times = np.arange(0, duration, 1/sample_rate)
 
     rise_mask = np.less(times, delay)
-    fall_mask = np.greater_equal(times, delay)
+    hold_mask = np.less(times, delay + hold_time)*np.greater_equal(times, delay)
+    fall_mask = np.greater_equal(times, delay + hold_time)
 
     wf  = rise_mask*np.exp((times-delay)/rise_time)
-    wf += fall_mask*np.exp(-(times-delay)/fall_time)
+    wf += hold_mask
+    wf += fall_mask*np.exp(-(times-delay-hold_time)/fall_time)
+
     return amplitude*wf
 
 def arb_pulse(amplitude, duration, sample_rate=12e9):
@@ -45,9 +48,9 @@ def arb_pulse(amplitude, duration, sample_rate=12e9):
     return wf
 
 if __name__ == '__main__':
-    arb  = M8190A("Test Arb", "192.168.5.108")
-    lock = SR865("Lockin Amplifier", "USB0::0xB506::0x2000::002638::INSTR")
-    bop  = BOP2020M("Kepco Power Supply", "GPIB0::1::INSTR")
+    arb  = M8190A("192.168.5.108")
+    lock = SR865("USB0::0xB506::0x2000::002638::INSTR")
+    bop  = BOP2020M("GPIB0::1::INSTR")
     hp   = HallProbe("calibration/HallProbe.cal", lock.set_ao1, lock.get_ai1)
     mag  = Electromagnet('calibration/GMW.cal', hp.get_field, bop.set_current, bop.get_current)
 
@@ -74,8 +77,8 @@ if __name__ == '__main__':
     arb.gate_mode = False
 
     segment_ids = []
-    amplitude = 0.88
-    fall_times = np.arange(0.25e-9, 1.50e-9, 0.5*1/12e9)
+    amplitude = 0.85
+    fall_times = np.arange(1e-9, 3.50e-9, 0.25e-9)
     for fall_time in fall_times:
         waveform   = ntron_pulse(amplitude=amplitude, fall_time=fall_time)
         wf_data    = M8190A.create_binary_wf_data(waveform)
@@ -98,8 +101,8 @@ if __name__ == '__main__':
 
     rate = 1.25e6/(2**8)
 
-    reps = 1 << 12
-    lockin_settle_delay = 35e-6
+    reps = 1 << 11
+    lockin_settle_delay = 50e-6
     lockin_settle_pts = int(640*np.ceil(lockin_settle_delay * 12e9 / 640))
 
     for si in segment_ids:
@@ -128,6 +131,7 @@ if __name__ == '__main__':
     arb.scenario_advance_mode = "SINGLE"
 
     mag.field = -364
+    # mag.field = -250
     time.sleep(2)
 
     analog_input = Task()
