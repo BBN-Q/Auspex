@@ -170,7 +170,7 @@ def switching_plot_ber(buffers, attens, num_clusters=2):
 def average_buffers(buffers, avg_points):
     return [np.mean(b.reshape(avg_points, -1, order="F"), axis=0) for b in buffers]
 
-def switching_phase_diagram(buffers, durations, attens, num_clusters=2):
+def switching_phase_diagram(buffers, durations, volts, num_clusters=2):
     #Get an idea of SNR
     #Cluster all the data into three based with starting point based on edges
     all_vals = buffers.flatten()
@@ -233,22 +233,22 @@ def switching_phase_diagram(buffers, durations, attens, num_clusters=2):
     # FID = h5py.File("data/CSHE-Switching-PhaseDiagramPtoAP.h5", "w")
     # FID.create_dataset("/buffer", data=buffers, compression="lzf")
     # FID.create_dataset("/durations", data=durations, compression="lzf")
-    # FID.create_dataset("/attens", data=attens, compression="lzf")
+    # FID.create_dataset("/volts", data=volts, compression="lzf")
     # FID.close()
 
     plt.figure()
-    plt.title("P to AP")
-    plt.xlabel("Pulse Duration (ns)")
-    plt.ylabel("Pulse Amplitude (V)")
-    means_diagram_PtoAP = mean_PtoAP.reshape(len(attens), len(durations), order='F')
-    volts = 7.5*np.power(10, (-9+attens)/20)
+    plt.title("Phase Diagram - P to AP", size=16)
+    plt.xlabel("Pulse Duration (ns)", size=14)
+    plt.ylabel("Pulse Amplitude (V)", size=14)
+    means_diagram_PtoAP = mean_PtoAP.reshape(len(volts), len(durations), order='F')
+
     plt.pcolormesh(durations*1e9, volts, means_diagram_PtoAP, cmap="RdGy")
     plt.colorbar()
     plt.figure()
-    plt.title("AP to P")
-    plt.xlabel("Pulse Duration (ns)")
-    plt.ylabel("Pulse Amplitude (V)")
-    means_diagram_APtoP = mean_APtoP.reshape(len(attens), len(durations), order='F')
+    plt.title("Phase Diagram - AP to P", size=16)
+    plt.xlabel("Pulse Duration (ns)", size=14)
+    plt.ylabel("Pulse Amplitude (V)", size=14)
+    means_diagram_APtoP = mean_APtoP.reshape(len(volts), len(durations), order='F')
     plt.pcolormesh(durations*1e9, volts, means_diagram_APtoP, cmap="RdGy")
     plt.colorbar()
     print("Reached end")
