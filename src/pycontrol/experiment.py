@@ -168,9 +168,15 @@ class SweptParameter(object):
     of some values"""
     def __init__(self, parameter, values):
         self.parameter = parameter
+        self.associated_axes = []
+        self.update_values(values)
+        self.push = self.parameter.push
+        
+    def update_values(self, values):
         self.values = values
         self.length = len(values)
-        self.push = self.parameter.push
+        for axis in self.associated_axes:
+            axis.points = self.values
 
     @property
     def value(self):
@@ -188,14 +194,20 @@ class SweptParameterGroup(object):
     into that array."""
     def __init__(self, parameters, values):
         self.parameters = parameters
-        self._values = values
-        self.length = len(values)
-        self.values = list(range(self.length)) # Dummy index list for sweeper
-        
+        self.associated_axes = []
+        self.update_values(values)
+
     def push(self):
         # Values here will just be the index
         for p in self.parameters:
             p.push()
+
+    def update_values(self, values):
+        self._values = values
+        self.length = len(values)
+        self.values = list(range(self.length)) # Dummy index list for sweeper
+        for axis in self.associated_axes:
+            axis.points = self._values
 
     @property
     def value(self):
@@ -288,9 +300,6 @@ class Experiment(metaclass=MetaExperiment):
         # Container for patameters that will be swept
         self._swept_parameters = []
 
-        # Keep track of stream axes
-        # self._axes = []
-
         # This holds the experiment graph
         self.graph = None
 
@@ -303,10 +312,7 @@ class Experiment(metaclass=MetaExperiment):
             setattr(self, oc, a)
 
         # Create the asyncio measurement loop
-        # asyncio.set_event_loop(None)
         self.loop = asyncio.get_event_loop()
-        # self.loop.set_debug(True)
-        # asyncio.set_event_loop(self.loop)
 
         # Run the stream init
         self.init_streams()
@@ -349,20 +355,18 @@ class Experiment(metaclass=MetaExperiment):
     def reset(self):
         for edge in self.graph.edges:
             edge.reset()
+        self.update_descriptors()
+        self.generate_sweep()
 
     def update_descriptors(self):
         logger.debug("Starting descriptor update in experiment.")
         for oc in self.output_connectors.values():
             oc.update_descriptors()
 
-
-        # Just reconstruct the graph...
-        # self.graph.create_graph(self.graph.edges)
-
     async def sweep(self):
         # Keep track of the previous values
         last_param_values = None
-
+        logger.debug("Starting experiment sweep.")
         for param_values in self._sweep_generator:
 
             # Update the parameter values. Unles set and push if there has been a change
@@ -381,7 +385,6 @@ class Experiment(metaclass=MetaExperiment):
 
     def run_sweeps(self):
         # We don't want to wait for the run method explicitly
-        # import ipdb; ipdb.set_trace()
         other_nodes = self.nodes[:]
         other_nodes.remove(self)
         tasks = [n.run() for n in other_nodes]
@@ -397,23 +400,22 @@ class Experiment(metaclass=MetaExperiment):
             ax = DataAxis(param.name, sweep_list)
             logger.debug("Adding sweep axis %s to connector %s.", ax, oc.name)
             oc.descriptor.add_axis(ax)
+            p.associated_axes.append(ax)
         self.update_descriptors()
+        return p
 
     def add_unstructured_sweep(self, parameters, coords):
-        self._swept_parameters.append(SweptParameterGroup(parameters, coords))
+        p = SweptParameterGroup(parameters, coords)
+        self._swept_parameters.append(p)
         self.generate_sweep()
         for oc in self.output_connectors.values():
             ax = DataAxis("Unstructured", coords, unstructured=True, coord_names=[p.name for p in parameters])
             logger.debug("Adding unstructred sweep axis %s to connector %s.", ax, oc.name)
             oc.descriptor.add_axis(ax)
+            p.associated_axes.append(ax)
         self.update_descriptors()
+        return p
 
     def generate_sweep(self):
         self._sweep_generator = itertools.product(*[sp.values for sp in self._swept_parameters])
-        # self._index_generator = itertools.product(*[sp.indices for sp in self._swept_parameters])
-
-    def add_adaptive_sweep(self, parameters, values):
-        """Add an adaptive sweep over the tuple of M parameters,
-        where values defines the M values over N runs"""
-        pass
 

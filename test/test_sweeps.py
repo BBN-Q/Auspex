@@ -37,8 +37,8 @@ class UnsweptTestExperiment(Experiment):
     samples = 5
 
     def init_instruments(self):
-        self.field.assign_method(lambda x: print("Field got value" + str(x)))
-        self.freq.assign_method(lambda x: print("Freq got value" + str(x)))
+        self.field.assign_method(lambda x: logger.debug("Field got value" + str(x)))
+        self.freq.assign_method(lambda x: logger.debug("Freq got value" + str(x)))
 
     def init_streams(self):
         # Add a "base" data axis: say we are averaging 5 samples per trigger
@@ -50,21 +50,21 @@ class UnsweptTestExperiment(Experiment):
         return "<TestExperiment>"
 
     async def run(self):
-        print("Data taker running")
+        logger.debug("Data taker running")
         time_val = 0
         time_step = 0.1
         
         while True:
             #Produce fake noisy sinusoid data every 0.02 seconds until we have 1000 points
             if self.voltage.done():
-                print("Data taker finished.")
+                logger.debug("Data taker finished.")
                 break
             await asyncio.sleep(0.002)
             
             data_row = np.sin(2*np.pi*time_val)*np.ones(5) + 0.1*np.random.random(5)
             time_val += time_step
             await self.voltage.push(data_row)
-            print("Stream has filled {} of {} points".format(self.voltage.points_taken, self.voltage.num_points() ))
+            logger.debug("Stream has filled {} of {} points".format(self.voltage.points_taken, self.voltage.num_points() ))
 
 class SweptTestExperiment(Experiment):
     """Here the run loop merely spews data until it fills up the stream. """
@@ -84,8 +84,8 @@ class SweptTestExperiment(Experiment):
     time_val = 0
 
     def init_instruments(self):
-        self.field.assign_method(lambda x: print("Field got value" + str(x)))
-        self.freq.assign_method(lambda x: print("Freq got value" + str(x)))
+        self.field.assign_method(lambda x: logger.debug("Field got value" + str(x)))
+        self.freq.assign_method(lambda x: logger.debug("Freq got value" + str(x)))
 
     def init_streams(self):
         # Add a "base" data axis: say we are averaging 5 samples per trigger
@@ -97,13 +97,13 @@ class SweptTestExperiment(Experiment):
         return "<SweptTestExperiment>"
 
     async def run(self):
-        print("Data taker running (inner loop)")
+        logger.debug("Data taker running (inner loop)")
         time_step = 0.1
         await asyncio.sleep(0.002)
         data_row = np.sin(2*np.pi*self.time_val)*np.ones(5) + 0.1*np.random.random(5)
         self.time_val += time_step
         await self.voltage.push(data_row)
-        print("Stream has filled {} of {} points".format(self.voltage.points_taken, self.voltage.num_points() ))
+        logger.debug("Stream has filled {} of {} points".format(self.voltage.points_taken, self.voltage.num_points() ))
             
 class SweepTestCase(unittest.TestCase):
     """
@@ -134,7 +134,7 @@ class SweepTestCase(unittest.TestCase):
         exp.add_sweep(exp.freq, np.linspace(0,10.0,3))
         exp.run_loop()
 
-        logger.debug("Run test: printer ended up with %d points.", pri.data.input_streams[0].points_taken)
+        logger.debug("Run test: logger.debuger ended up with %d points.", pri.data.input_streams[0].points_taken)
         logger.debug("Run test: voltage ended up with %d points.", exp.voltage.output_streams[0].points_taken)
 
         self.assertTrue(pri.data.input_streams[0].points_taken == exp.voltage.num_points())
@@ -204,15 +204,17 @@ class SweepTestCase(unittest.TestCase):
         exp.run_loop()
         self.assertTrue(pri.data.input_streams[0].points_taken == exp.voltage.num_points())
         with h5py.File("0000-test_write_unstructured.h5", 'r') as f:
-            self.assertTrue([d.label for d in f['data'].dims] == ['Unstructured', 'samples'])
-            self.assertTrue([d.keys() for d in f['data'].dims] == [['field', 'freq'], ['samples']])
-            self.assertTrue(np.sum(f['data'].dims[0]['freq'].value - coords[:,1]) == 0.0)
-            self.assertTrue(np.sum(f['data'].dims[0]['field'].value - coords[:,0]) == 0.0)
+            self.assertTrue([d.label for d in f['data-0000'].dims] == ['Unstructured', 'samples'])
+            self.assertTrue([d.keys() for d in f['data-0000'].dims] == [['field', 'freq'], ['samples']])
+            self.assertTrue(np.sum(f['data-0000'].dims[0]['freq'].value - coords[:,1]) == 0.0)
+            self.assertTrue(np.sum(f['data-0000'].dims[0]['field'].value - coords[:,0]) == 0.0)
         os.remove("0000-test_write_unstructured.h5")
 
     def test_run_write_unstructured_sweep(self):
         exp = SweptTestExperiment()
         pri = Print()
+        if os.path.exists("0000-test_run_write_unstructured.h5"):
+            os.remove("0000-test_run_write_unstructured.h5")
         wr  = WriteToHDF5("test_run_write_unstructured.h5")
         self.assertTrue(os.path.exists("0000-test_run_write_unstructured.h5"))
 
@@ -231,15 +233,36 @@ class SweepTestCase(unittest.TestCase):
                   [66, 3.5],
                   [67, 3.6],
                   [68, 1.2]])
-        exp.add_unstructured_sweep([exp.field, exp.freq], coords)
+        sweep = exp.add_unstructured_sweep([exp.field, exp.freq], coords)
         exp.run_sweeps()
 
         self.assertTrue(pri.data.input_streams[0].points_taken == exp.voltage.num_points())
+
+        
+        coords2 = np.array([[ 1, 0.1],
+                           [11, 4.0],
+                           [11, 2.5],
+                           [41, 4.4],
+                           [51, 2.5],
+                           [61, 1.4]])
+        sweep.update_values(coords2)
+        exp.reset()
+        self.assertTrue(pri.data.input_streams[0].num_points() == len(coords2)*exp.samples)
+        self.assertFalse(pri.data.input_streams[0].done())
+        self.assertFalse(wr.data.input_streams[0].done())
+        self.assertFalse(exp.voltage.output_streams[0].done())
+        exp.run_sweeps()
+
         with h5py.File("0000-test_run_write_unstructured.h5", 'r') as f:
-            self.assertTrue([d.label for d in f['data'].dims] == ['Unstructured', 'samples'])
-            self.assertTrue([d.keys() for d in f['data'].dims] == [['field', 'freq'], ['samples']])
-            self.assertTrue(np.sum(f['data'].dims[0]['freq'].value - coords[:,1]) == 0.0)
-            self.assertTrue(np.sum(f['data'].dims[0]['field'].value - coords[:,0]) == 0.0)
+            self.assertTrue([d.label for d in f['data-0000'].dims] == ['Unstructured', 'samples'])
+            self.assertTrue([d.keys() for d in f['data-0000'].dims] == [['field', 'freq'], ['samples']])
+            self.assertTrue(np.sum(f['data-0000'].dims[0]['freq'].value - coords[:,1]) == 0.0)
+            self.assertTrue(np.sum(f['data-0000'].dims[0]['field'].value - coords[:,0]) == 0.0)
+            self.assertTrue([d.label for d in f['data-0001'].dims] == ['Unstructured', 'samples'])
+            self.assertTrue([d.keys() for d in f['data-0001'].dims] == [['field', 'freq'], ['samples']])
+            self.assertTrue(np.sum(f['data-0001'].dims[0]['freq'].value - coords2[:,1]) == 0.0)
+            self.assertTrue(np.sum(f['data-0001'].dims[0]['field'].value - coords2[:,0]) == 0.0)
+        
         os.remove("0000-test_run_write_unstructured.h5")
 
     def test_writehdf5(self):
@@ -259,12 +282,12 @@ class SweepTestCase(unittest.TestCase):
         exp.run_loop()
 
         with h5py.File("0000-test_write.h5", 'r') as f:
-            self.assertTrue([d.label for d in f['data'].dims] == ['freq', 'field', 'samples'])
-            self.assertTrue([d.keys()[0] for d in f['data'].dims] == ['freq', 'field', 'samples'])
-            self.assertTrue(np.sum(f['data'].dims[0][0].value - np.linspace(0,10.0,3)) == 0.0)
-            self.assertTrue(np.sum(f['data'].dims[1]['field'].value - np.linspace(0,100.0,4)) == 0.0)
-            self.assertTrue(np.sum(f['data'].dims[2]['samples'].value - np.arange(0,5)) == 0.0)
-            print(f['data'][:])
+            self.assertTrue([d.label for d in f['data-0000'].dims] == ['freq', 'field', 'samples'])
+            self.assertTrue([d.keys()[0] for d in f['data-0000'].dims] == ['freq', 'field', 'samples'])
+            self.assertTrue(np.sum(f['data-0000'].dims[0][0].value - np.linspace(0,10.0,3)) == 0.0)
+            self.assertTrue(np.sum(f['data-0000'].dims[1]['field'].value - np.linspace(0,100.0,4)) == 0.0)
+            self.assertTrue(np.sum(f['data-0000'].dims[2]['samples'].value - np.arange(0,5)) == 0.0)
+            print(f['data-0000'][:])
 
         os.remove("0000-test_write.h5")
 
