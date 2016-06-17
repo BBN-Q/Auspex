@@ -1,6 +1,7 @@
 import numpy as np
 from sklearn.cluster import KMeans
 from scipy.stats import beta
+import matplotlib.pyplot as plt
 
 def cluster(data, num_clusters=2):
     all_vals = data.flatten()
@@ -14,19 +15,19 @@ def cluster(data, num_clusters=2):
 def average_data(data, avg_points):
     return np.array([np.mean(d.reshape(avg_points, -1, order="F"), axis=0) for d in data])
 
-def switching_phase_diagram(data):
+def switching_phase(data):
     num_clusters = 2
-    data = average_data()
     clusterer = cluster(data)
     state = clusterer.fit_predict(all_vals)
 
     init_state  = state[::2]
-
     initial_state_fractions = [np.sum(init_state == ct)/len(init_state) for ct in range(num_clusters)]
     starting_state = np.argmax(initial_state_fractions)
-    switched_state = 1 - init_state
+    switched_state = 1 - starting_state
     print("Most frequenctly occuring initial state: {} (with {}% probability)".format(starting_state,
                                                             initial_state_fractions[starting_state]))
+
+    count =[]
     for buf in buffers:
         state = clusterer.predict(buf.reshape((len(buf),1)))
         init_state = state[::2]
@@ -45,4 +46,17 @@ def switching_phase_diagram(data):
     mean = np.array([beta.mean(1+c[starting_state,switched_state],
                                1+c[starting_state,starting_state]) for c in counts])
 
-def render_phase_diagram(x_values, y_values, x_title="", y_title=""):
+    return mean
+
+def render_phase_diagram(x_vals, y_vals, data,
+                            title="Phase diagram",
+                            x_title="Pulse Duration (ns)",
+                            y_title="Pulse Amplitude (V)"):
+    fig = plt.figure()
+    plt.title(title, size=16)
+    plt.xlabel(x_title, size=16)
+    plt.ylabel(y_title, size=16)
+    data = data.reshape(len(x_vals), len(y_vals), order='F')
+    plt.pcolormesh(x_vals*1e9, y_vals, data, cmap="RdGy")
+    plt.colorbar()
+    return fig
