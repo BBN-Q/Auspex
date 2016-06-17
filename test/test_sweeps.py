@@ -53,14 +53,14 @@ class UnsweptTestExperiment(Experiment):
         logger.debug("Data taker running")
         time_val = 0
         time_step = 0.1
-        
+
         while True:
             #Produce fake noisy sinusoid data every 0.02 seconds until we have 1000 points
             if self.voltage.done():
                 logger.debug("Data taker finished.")
                 break
             await asyncio.sleep(0.002)
-            
+
             data_row = np.sin(2*np.pi*time_val)*np.ones(5) + 0.1*np.random.random(5)
             time_val += time_step
             await self.voltage.push(data_row)
@@ -104,7 +104,7 @@ class SweptTestExperiment(Experiment):
         self.time_val += time_step
         await self.voltage.push(data_row)
         logger.debug("Stream has filled {} of {} points".format(self.voltage.points_taken, self.voltage.num_points() ))
-            
+
 class SweepTestCase(unittest.TestCase):
     """
     Tests sweeping
@@ -128,7 +128,7 @@ class SweepTestCase(unittest.TestCase):
 
         edges = [(exp.voltage, pri.data)]
         exp.set_graph(edges)
-        
+
         exp.init_instruments()
         exp.add_sweep(exp.field, np.linspace(0,100.0,11))
         exp.add_sweep(exp.freq, np.linspace(0,10.0,3))
@@ -145,7 +145,7 @@ class SweepTestCase(unittest.TestCase):
 
         edges = [(exp.voltage, pri.data)]
         exp.set_graph(edges)
-        
+
         exp.init_instruments()
         exp.add_sweep(exp.field, np.linspace(0,100.0,11))
         exp.add_sweep(exp.freq, np.linspace(0,10.0,3))
@@ -162,7 +162,7 @@ class SweepTestCase(unittest.TestCase):
 
         edges = [(exp.voltage, pri.data)]
         exp.set_graph(edges)
-        
+
         exp.init_instruments()
 
         coords = [[ 0, 0.1],
@@ -182,12 +182,13 @@ class SweepTestCase(unittest.TestCase):
     def test_write_unstructured_sweep(self):
         exp = UnsweptTestExperiment()
         pri = Print()
+        if os.path.exists("0000-test_write_unstructured.h5"):
+            os.remove("0000-test_write_unstructured.h5")
         wr  = WriteToHDF5("test_write_unstructured.h5")
-        self.assertTrue(os.path.exists("0000-test_write_unstructured.h5"))
 
         edges = [(exp.voltage, pri.data), (exp.voltage, wr.data)]
         exp.set_graph(edges)
-        
+
         exp.init_instruments()
 
         coords = np.array([[ 0, 0.1],
@@ -203,6 +204,7 @@ class SweepTestCase(unittest.TestCase):
         exp.add_unstructured_sweep([exp.field, exp.freq], coords)
         exp.run_loop()
         self.assertTrue(pri.data.input_streams[0].points_taken == exp.voltage.num_points())
+        self.assertTrue(os.path.exists("0000-test_write_unstructured.h5"))
         with h5py.File("0000-test_write_unstructured.h5", 'r') as f:
             self.assertTrue([d.label for d in f['data-0000'].dims] == ['Unstructured', 'samples'])
             self.assertTrue([d.keys() for d in f['data-0000'].dims] == [['field', 'freq'], ['samples']])
@@ -216,11 +218,11 @@ class SweepTestCase(unittest.TestCase):
         if os.path.exists("0000-test_run_write_unstructured.h5"):
             os.remove("0000-test_run_write_unstructured.h5")
         wr  = WriteToHDF5("test_run_write_unstructured.h5")
-        self.assertTrue(os.path.exists("0000-test_run_write_unstructured.h5"))
+
 
         edges = [(exp.voltage, pri.data), (exp.voltage, wr.data)]
         exp.set_graph(edges)
-        
+
         exp.init_instruments()
 
         coords = np.array([[ 0, 0.1],
@@ -238,7 +240,7 @@ class SweepTestCase(unittest.TestCase):
 
         self.assertTrue(pri.data.input_streams[0].points_taken == exp.voltage.num_points())
 
-        
+
         coords2 = np.array([[ 1, 0.1],
                            [11, 4.0],
                            [11, 2.5],
@@ -252,7 +254,7 @@ class SweepTestCase(unittest.TestCase):
         self.assertFalse(wr.data.input_streams[0].done())
         self.assertFalse(exp.voltage.output_streams[0].done())
         exp.run_sweeps()
-
+        self.assertTrue(os.path.exists("0000-test_run_write_unstructured.h5"))
         with h5py.File("0000-test_run_write_unstructured.h5", 'r') as f:
             self.assertTrue([d.label for d in f['data-0000'].dims] == ['Unstructured', 'samples'])
             self.assertTrue([d.keys() for d in f['data-0000'].dims] == [['field', 'freq'], ['samples']])
@@ -262,14 +264,15 @@ class SweepTestCase(unittest.TestCase):
             self.assertTrue([d.keys() for d in f['data-0001'].dims] == [['field', 'freq'], ['samples']])
             self.assertTrue(np.sum(f['data-0001'].dims[0]['freq'].value - coords2[:,1]) == 0.0)
             self.assertTrue(np.sum(f['data-0001'].dims[0]['field'].value - coords2[:,0]) == 0.0)
-        
+
         os.remove("0000-test_run_write_unstructured.h5")
 
     def test_writehdf5(self):
         exp = UnsweptTestExperiment()
         pr = Print()
         wr = WriteToHDF5("test_write.h5")
-        self.assertTrue(os.path.exists("0000-test_write.h5"))
+        if os.path.exists("0000-test_write.h5"):
+            os.remove("0000-test_write.h5")
 
         edges = [(exp.voltage, pr.data), (exp.voltage, wr.data)]
         exp.set_graph(edges)
@@ -280,7 +283,7 @@ class SweepTestCase(unittest.TestCase):
         exp.add_sweep(exp.field, np.linspace(0,100.0,4))
         exp.add_sweep(exp.freq, np.linspace(0,10.0,3))
         exp.run_loop()
-
+        self.assertTrue(os.path.exists("0000-test_write.h5"))
         with h5py.File("0000-test_write.h5", 'r') as f:
             self.assertTrue([d.label for d in f['data-0000'].dims] == ['freq', 'field', 'samples'])
             self.assertTrue([d.keys()[0] for d in f['data-0000'].dims] == ['freq', 'field', 'samples'])

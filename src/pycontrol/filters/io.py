@@ -29,7 +29,7 @@ class WriteToHDF5(Filter):
 
     async def run(self):
 
-        self.file = h5py.File(self.filename, 'w')
+        self.file = h5py.File(self.filename, 'a')
 
         stream     = self.data.input_streams[0]
         axes       = stream.descriptor.axes
