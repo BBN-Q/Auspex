@@ -20,7 +20,7 @@ class Print(Filter):
         if self.name is None:
             self.name = ""
 
-        self.points_taken = 0 
+        self.points_taken = 0
         while True:
             if self.data.input_streams[0].done():
                 logger.debug("Printer %s finished logger.debuging.", self.name)
@@ -32,21 +32,20 @@ class Print(Filter):
             logger.debug("Printer %s got new data of size %s: %s", self.name, np.shape(new_data), new_data)
             logger.debug("Printer %s now has %s of %s points.", self.name, self.points_taken, self.data.num_points())
 
-        logger.debug("Out of the fracking while loop.")
         return True
-            
+
 class Passthrough(Filter):
     data_in  = InputConnector()
     data_out = OutputConnector()
 
     def __init__(self, *args, **kwargs):
         super(Passthrough, self).__init__(*args, **kwargs)
-        
+
     async def run(self):
         if self.name is None:
             self.name = ""
 
-        self.points_taken = 0 
+        self.points_taken = 0
         while True:
             if self.data_in.input_streams[0].done():
                 logger.debug("Passthrough %s finished.", self.name)
