@@ -83,6 +83,7 @@ class WriteToHDF5(Filter):
             logger.debug("HDF5 awaiting data")
             new_data = np.array(await stream.queue.get()).flatten()
             while stream.queue.qsize() > 0:
+                new_data = np.append(new_data, np.array(stream.queue.get_nowait()).flatten())
 
             logger.debug("HDF5 stream has %d points", stream.points_taken)
             logger.debug("HDF5: %s got data %s of length %d", stream.name, new_data, new_data.size)
