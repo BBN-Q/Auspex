@@ -1,6 +1,7 @@
 import numpy as np
 from sklearn.cluster import KMeans
 from scipy.stats import beta
+from scipy.spatial import Delaunay
 import matplotlib.pyplot as plt
 
 def cluster(data, num_clusters=2):
@@ -18,6 +19,8 @@ def average_data(data, avg_points):
 def switching_phase(data):
     num_clusters = 2
     clusterer = cluster(data)
+    all_vals = data.flatten()
+    all_vals.resize((all_vals.size,1))
     state = clusterer.fit_predict(all_vals)
 
     init_state  = state[::2]
@@ -27,9 +30,9 @@ def switching_phase(data):
     print("Most frequenctly occuring initial state: {} (with {}% probability)".format(starting_state,
                                                             initial_state_fractions[starting_state]))
 
-    count =[]
-    for buf in buffers:
-        state = clusterer.predict(buf.reshape((len(buf),1)))
+    counts =[]
+    for buf in data:
+        state = clusterer.predict(buf.reshape((buf.size,1)))
         init_state = state[::2]
         final_state = state[1::2]
         switched = np.logical_xor(init_state, final_state)
@@ -45,18 +48,29 @@ def switching_phase(data):
 
     mean = np.array([beta.mean(1+c[starting_state,switched_state],
                                1+c[starting_state,starting_state]) for c in counts])
-
     return mean
 
-def render_phase_diagram(x_vals, y_vals, data,
+def phase_diagram_grid(x_vals, y_vals, data,
                             title="Phase diagram",
-                            x_title="Pulse Duration (ns)",
-                            y_title="Pulse Amplitude (V)"):
+                            xlabel="Pulse Duration (ns)",
+                            ylabel="Pulse Amplitude (V)"):
     fig = plt.figure()
-    plt.title(title, size=16)
-    plt.xlabel(x_title, size=16)
-    plt.ylabel(y_title, size=16)
-    data = data.reshape(len(x_vals), len(y_vals), order='F')
-    plt.pcolormesh(x_vals*1e9, y_vals, data, cmap="RdGy")
+    data = data.reshape(len(y_vals), len(x_vals), order='F')
+    plt.pcolormesh(x_vals, y_vals, data, cmap="RdGy")
     plt.colorbar()
+    plt.title(title, size=16)
+    plt.xlabel(xlabel, size=16)
+    plt.ylabel(ylabel, size=16)
+    return fig
+
+def phase_diagram_mesh(points, values,
+                                title="Phase diagram",
+                                xlabel="Pulse Duration (ns)",
+                                ylabel="Pulse Amplitude (V)",**kwargs):
+    mesh = Delaunay(points)
+    fig = plt.figure()
+    fig.tripcolor(mesh.points[:,0],mesh.points[:,1],mesh.simplices.copy(),values,**kwargs)
+    plt.title(title, size=16)
+    plt.xlabel(xlabel, size=16)
+    plt.ylabel(ylabel, size=16)
     return fig

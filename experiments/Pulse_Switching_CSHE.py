@@ -16,7 +16,10 @@ import itertools
 import numpy as np
 import asyncio
 import time, sys
-import adapt
+import adapt.refine as rf
+import h5py
+
+import analysis.switching as sw
 
 import logging
 logger = logging.getLogger('pycontrol')
@@ -38,7 +41,7 @@ class SwitchingExperiment(Experiment):
     pulse_voltage  = FloatParameter(default=0.1, unit="V")
 
     # Constants (set with attribute access if you want to change these!)
-    attempts        = 1024
+    attempts        = 512
     settle_delay    = 200e-6
     measure_current = 3.0e-6
     samps_per_trig  = 5
@@ -223,23 +226,28 @@ if __name__ == '__main__':
     exp.set_graph(edges)
     exp.init_instruments()
 
-    coarse_ts = 1e-9*np.linspace(0.1, 5.01, 3) # List of durations
-    coarse_vs = np.linspace(0.35, 0.75, 3) # Between -28 and -6
+    coarse_ts = 1e-9*np.linspace(0.1, 5.01, 5) # List of durations
+    coarse_vs = np.linspace(0.35, 0.75, 5) # Between -28 and -6
     points    = [coarse_ts, coarse_vs]
     points    = list(itertools.product(*points))
 
     main_sweep = exp.add_unstructured_sweep([exp.pulse_duration, exp.pulse_voltage], points)
     exp.run_sweeps()
-    #
-    # ITERATION = 1
-    # for i in range(ITERATION):
-    #
-    #     new_points = refine_scalar_field(points, values, all_points=False,
-    #                                 criterion="difference", threshold = "one_sigma")
-    #     if new_points is None:
-    #         print("No more points can be added.")
-    #         break
-    #
-    #     main_sweep.update_values(new_points)
-    #     exp.reset()
-    #     exp.run_loop()
+    ITERATION = 2
+    for i in range(ITERATION):
+        with h5py.File(wr.filename, 'r') as f:
+            dsets = np.array([f[k].value for k in f.keys() if "data" in k])
+            data = np.concatenate(dsets, axis=0)
+        data_mean = np.mean(data, axis=-1)
+        mean = sw.switching_phase(data_mean)
+        new_points = rf.refine_scalar_field(points, mean, all_points=False,
+                                    criterion="difference", threshold = "one_sigma")
+        if new_points is None:
+            print("No more points can be added.")
+            break
+        #
+        print(new_points)
+        points = np.append(points, new_points, axis=0)
+        main_sweep.update_values(new_points)
+        exp.reset()
+        exp.run_sweeps()
