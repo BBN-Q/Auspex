@@ -12,10 +12,16 @@ from pycontrol.filters.io import WriteToHDF5
 
 from PyDAQmx import *
 
+import itertools
 import numpy as np
 import asyncio
 import time, sys
 import adapt
+
+import logging
+logger = logging.getLogger('pycontrol')
+logging.basicConfig(format='%(name)s-%(levelname)s: \t%(message)s')
+logger.setLevel(logging.DEBUG)
 
 # Experimental Topology
 # lockin AO 2 -> Analog Attenuator Vdd
@@ -33,18 +39,18 @@ class SwitchingExperiment(Experiment):
 
     # Constants (set with attribute access if you want to change these!)
     attempts        = 1024
-    settle_delay    = 50e-6
+    settle_delay    = 200e-6
     measure_current = 3.0e-6
-    samps_per_trig  = 10
+    samps_per_trig  = 5
 
-    polarity        = 1
+    polarity        = -1
     pspl_atten      = 12
 
     min_daq_voltage = 0.0
     max_daq_voltage = 0.4
 
-    reset_amplitude = 0.2
-    reset_duration  = 5.0e-9
+    reset_amplitude = 0.12
+    reset_duration  = 10.0e-9
 
     # Things coming back
     daq_buffer     = OutputConnector()
@@ -125,11 +131,11 @@ class SwitchingExperiment(Experiment):
         seq.add_waveform(rst_segment_id)
         seq.add_idle(settle_pts, 0.0)
         seq.add_waveform(nidaq_trig_segment_id)
-        seq.add_idle(1 << 14, 0.0) # bonus non-contiguous memory delay
+        seq.add_idle(1 << 16, 0.0) # bonus non-contiguous memory delay
         seq.add_waveform(pspl_trig_segment_id)
         seq.add_idle(settle_pts, 0.0)
         seq.add_waveform(nidaq_trig_segment_id)
-        seq.add_idle(1 << 14, 0.0) # bonus non-contiguous memory delay
+        seq.add_idle(1 << 16, 0.0) # bonus non-contiguous memory delay
         scenario.sequences.append(seq)
         self.arb.upload_scenario(scenario, start_idx=0)
         self.arb.sequence_mode = "SCENARIO"
@@ -161,11 +167,9 @@ class SwitchingExperiment(Experiment):
         self.pspl.trigger_level = 0.1
         self.pspl.output = True
 
-        # Define the inner measurements loop
-        # def take_data():
-
         def set_voltage(voltage):
             # Calculate the voltage controller attenuator setting
+            # import ipdb; ipdb.set_trace()
             vc_atten = abs(20.0 * np.log10(abs(voltage)/7.5)) - self.pspl_atten
             if vc_atten <= 6.0:
                 raise ValueError("Voltage controlled attenuation under range (6dB).")
@@ -176,7 +180,6 @@ class SwitchingExperiment(Experiment):
         self.field.assign_method(self.mag.set_field)
         self.pulse_duration.assign_method(self.pspl.set_duration)
         self.pulse_voltage.assign_method(set_voltage)
-        self.daq_buffer.assign_method(take_data)
 
         # Create hooks for relevant delays
         self.pulse_duration.add_post_push_hook(lambda: time.sleep(0.1))
@@ -185,18 +188,21 @@ class SwitchingExperiment(Experiment):
         # Baked in data axes
         descrip = DataStreamDescriptor()
         descrip.add_axis(DataAxis("samples", range(self.samps_per_trig)))
-        descrip.add_axis(DataAxis("attempts", range(self.attempts)))
-        self.voltage.set_descriptor(descrip)
+        descrip.add_axis(DataAxis("attempts", range(2*self.attempts)))
+        self.daq_buffer.set_descriptor(descrip)
 
     async def run(self):
         """This is run for each step in a sweep."""
+        logger.debug("In the run loop ******************")
         self.arb.advance()
         self.arb.trigger()
         buf = np.empty(self.buf_points)
         self.analog_input.ReadAnalogF64(self.buf_points, -1, DAQmx_Val_GroupByChannel,
                                         buf, self.buf_points, byref(self.read), None)
         await self.daq_buffer.push(buf)
-            
+        logger.info("Awaited push NIDAQ")
+        logger.debug("Stream has filled {} of {} points".format(self.daq_buffer.points_taken, self.daq_buffer.num_points() ))
+
     def shutdown_instruments(self):
         self.keith.current = 0.0e-5
         self.mag.zero()
@@ -210,31 +216,29 @@ class SwitchingExperiment(Experiment):
 
 if __name__ == '__main__':
     exp = SwitchingExperiment()
-    pr = Print()
     wr = WriteToHDF5("CSHE2-Testing.h5")
-    edges = [(exp.voltage, pri.data), (exp.voltage, wr.data)]
+    pr = Print()
+    edges = [(exp.daq_buffer, wr.data)]
     exp.set_graph(edges)
     exp.init_instruments()
 
-    NUM_COARSE_T = 15
-    NUM_COARSE_V = 15
-    coarse_ts = list(np.linspace(xs[0], xs[-1], NUM_COARSE_T))
-    coarse_vs = list(np.linspace(ys[0], ys[-1], NUM_COARSE_V))
+    coarse_ts = 1e-9*np.linspace(0.1, 5.01, 3) # List of durations
+    coarse_vs = np.linspace(0.35, 0.75, 3) # Between -28 and -6
     points    = [coarse_ts, coarse_vs]
     points    = list(itertools.product(*points))
 
-    main_sweep = exp.add_unstructured_sweep([exp.pulse_duration, exp.pulse_voltage], coords)
-    exp.run_loop()
-
-    ITERATION = 5
-    for i in range(ITERATION):
-
-        new_points = refine_scalar_field(points, values, all_points=False,
-                                    criterion="difference", threshold = "one_sigma")
-        if new_points is None:
-            print("No more points can be added.")
-            break
-
-        main_sweep.update_values(new_points)
-        exp.reset()
-        exp.run_loop()
+    main_sweep = exp.add_unstructured_sweep([exp.pulse_duration, exp.pulse_voltage], points)
+    exp.run_sweeps()
+    #
+    # ITERATION = 1
+    # for i in range(ITERATION):
+    #
+    #     new_points = refine_scalar_field(points, values, all_points=False,
+    #                                 criterion="difference", threshold = "one_sigma")
+    #     if new_points is None:
+    #         print("No more points can be added.")
+    #         break
+    #
+    #     main_sweep.update_values(new_points)
+    #     exp.reset()
+    #     exp.run_loop()

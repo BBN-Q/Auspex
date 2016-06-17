@@ -17,18 +17,19 @@ logger.setLevel(logging.INFO)
 class WriteToHDF5(Filter):
     """Writes data to file."""
 
-    data = InputConnector() 
+    data = InputConnector()
     def __init__(self, filename, **kwargs):
         super(WriteToHDF5, self).__init__(**kwargs)
-       
+
         # Increment the filename until we find one we want.
         i = 0
         while os.path.exists("{:04d}-{}".format(i,filename)):
             i += 1
         self.filename = "{:04d}-{}".format(i,filename)
-        self.file = h5py.File(self.filename, 'w')
 
     async def run(self):
+
+        self.file = h5py.File(self.filename, 'w')
 
         stream     = self.data.input_streams[0]
         axes       = stream.descriptor.axes
@@ -81,13 +82,14 @@ class WriteToHDF5(Filter):
 
             logger.debug("HDF5 awaiting data")
             new_data = np.array(await stream.queue.get()).flatten()
-            logger.debug("HDF5: %s got data %s", stream.name, new_data)
-            
+            logger.debug("HDF5 stream has %d points", stream.points_taken)
+            logger.debug("HDF5: %s got data %s of length %d", stream.name, new_data, new_data.size)
+
             temp[r_idx:r_idx+new_data.size] = new_data
             r_idx += new_data.size
 
             num_chunks = int(new_data.size/chunk_size)
-            logger.debug("HDF5: got enough points for %d rows.", num_chunks) 
+            logger.debug("HDF5: got enough points for %d rows.", num_chunks)
 
             for i in range(num_chunks):
                 coord = list(np.unravel_index(w_idx, data_dims))
@@ -101,5 +103,4 @@ class WriteToHDF5(Filter):
 
             logger.debug("HDF5: %s has written %d points", stream.name, w_idx)
 
-
-                    
+        self.file.close()
