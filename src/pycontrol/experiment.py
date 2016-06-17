@@ -119,10 +119,12 @@ class Parameter(object):
         if self.method is None:
             raise Exception("No method for this parameter is defined...")
         if not self.abstract:
+            # logger.debug("Calling pre_push_hooks of Parameter %s with value %s" % (self.name, self._value) )
             for pph in self.pre_push_hooks:
                 pph()
-            logger.debug("Calling method of Parameter %s with value %s" % (self.name, self._value) )
+            # logger.debug("Calling method of Parameter %s with value %s" % (self.name, self._value) )
             self.method(self._value)
+            # logger.debug("Calling post_push_hooks of Parameter %s with value %s" % (self.name, self._value) )
             for pph in self.post_push_hooks:
                 pph()
 
@@ -171,7 +173,7 @@ class SweptParameter(object):
         self.associated_axes = []
         self.update_values(values)
         self.push = self.parameter.push
-        
+
     def update_values(self, values):
         self.values = values
         self.length = len(values)
@@ -189,7 +191,7 @@ class SweptParameter(object):
         return "<SweptParameter: {}>".format(self.parameter.name)
 
 class SweptParameterGroup(object):
-    """For unstructured (meshed) coordinate tuples. The actual values 
+    """For unstructured (meshed) coordinate tuples. The actual values
     are stored locally as _values, and we acces each tuples by indexing
     into that array."""
     def __init__(self, parameters, values):
@@ -215,7 +217,7 @@ class SweptParameterGroup(object):
     @value.setter
     def value(self, index):
         for i, p in enumerate(self.parameters):
-            p.value = self._values[index, i]
+            p.value = self._values[index][i]
 
     def __repr__(self):
         return "<SweptParameter: {}>".format([p.name for p in self.parameters])
@@ -313,6 +315,7 @@ class Experiment(metaclass=MetaExperiment):
 
         # Create the asyncio measurement loop
         self.loop = asyncio.get_event_loop()
+        self.loop.set_debug(True)
 
         # Run the stream init
         self.init_streams()
@@ -343,7 +346,7 @@ class Experiment(metaclass=MetaExperiment):
     async def run(self):
         """This is the inner measurement loop, which is the smallest unit that
         is repeated across various sweep variables. For more complicated run control
-        than can be provided by the automatic sweeping, the full experimental 
+        than can be provided by the automatic sweeping, the full experimental
         operation should be defined here"""
         pass
 
@@ -365,6 +368,8 @@ class Experiment(metaclass=MetaExperiment):
 
     async def sweep(self):
         # Keep track of the previous values
+        logger.debug("Waiting for filters.")
+        await asyncio.sleep(1.0)
         last_param_values = None
         logger.debug("Starting experiment sweep.")
         for param_values in self._sweep_generator:
@@ -373,7 +378,6 @@ class Experiment(metaclass=MetaExperiment):
             # in the value from the previous iteration.
             for i, sp in enumerate(self._swept_parameters):
                 if last_param_values is None or param_values[i] != last_param_values[i]:
-                    logger.debug("Pushing value %s to parameter %s.", param_values[i], sp)
                     sp.value = param_values[i]
                     sp.push()
 
@@ -390,7 +394,7 @@ class Experiment(metaclass=MetaExperiment):
         tasks = [n.run() for n in other_nodes]
         tasks.append(self.sweep())
         self.loop.run_until_complete(asyncio.wait(tasks))
-        
+
     def add_sweep(self, param, sweep_list):
         """Add a good-old-fasioned one-variable sweep."""
         p = SweptParameter(param, sweep_list)
@@ -418,4 +422,3 @@ class Experiment(metaclass=MetaExperiment):
 
     def generate_sweep(self):
         self._sweep_generator = itertools.product(*[sp.values for sp in self._swept_parameters])
-
