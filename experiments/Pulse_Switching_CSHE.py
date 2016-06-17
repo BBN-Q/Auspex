@@ -188,19 +188,20 @@ class SwitchingExperiment(Experiment):
         # Baked in data axes
         descrip = DataStreamDescriptor()
         descrip.add_axis(DataAxis("samples", range(self.samps_per_trig)))
-        descrip.add_axis(DataAxis("attempts", range(2*self.attempts)))
+        descrip.add_axis(DataAxis("state", range(2)))
+        descrip.add_axis(DataAxis("attempts", range(self.attempts)))
         self.daq_buffer.set_descriptor(descrip)
 
     async def run(self):
         """This is run for each step in a sweep."""
-        logger.debug("In the run loop ******************")
         self.arb.advance()
         self.arb.trigger()
         buf = np.empty(self.buf_points)
         self.analog_input.ReadAnalogF64(self.buf_points, -1, DAQmx_Val_GroupByChannel,
                                         buf, self.buf_points, byref(self.read), None)
         await self.daq_buffer.push(buf)
-        logger.info("Awaited push NIDAQ")
+        # Seemingly we need to give the filters some time to catch up here...
+        await asyncio.sleep(0.002)
         logger.debug("Stream has filled {} of {} points".format(self.daq_buffer.points_taken, self.daq_buffer.num_points() ))
 
     def shutdown_instruments(self):
