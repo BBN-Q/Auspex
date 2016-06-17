@@ -2,6 +2,11 @@ import numpy as np
 import pandas as pd
 from scipy.interpolate import interp1d
 
+import logging
+logger = logging.getLogger('pycontrol')
+logging.basicConfig(format='%(name)s-%(levelname)s: \t%(message)s')
+logger.setLevel(logging.DEBUG)
+
 class Attenuator(object):
     """Simple wrapper for using the RFMD voltage controller attenuator.
     Remember that the calibration values for attenuation will be referenced
@@ -17,6 +22,7 @@ class Attenuator(object):
 
     # Add a property setter only
     def set_attenuation(self, value):
+        value = -abs(value)
         self.voltage_control_method(self.attenuator_lookup(value))
 
     attenuation = property(None, set_attenuation)
