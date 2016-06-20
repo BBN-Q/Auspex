@@ -16,10 +16,11 @@ import itertools
 import numpy as np
 import asyncio
 import time, sys
-import adapt.refine as rf
 import h5py
+import matplotlib.pyplot as plt
 
 import analysis.switching as sw
+from adapt import refine
 
 import logging
 logger = logging.getLogger('pycontrol')
@@ -41,12 +42,12 @@ class SwitchingExperiment(Experiment):
     pulse_voltage  = FloatParameter(default=0.1, unit="V")
 
     # Constants (set with attribute access if you want to change these!)
-    attempts        = 512
+    attempts        = 1024
     settle_delay    = 200e-6
     measure_current = 3.0e-6
     samps_per_trig  = 5
 
-    polarity        = -1
+    polarity        = 1 # P to AP: 1; AP to P: -1
     pspl_atten      = 12
 
     min_daq_voltage = 0.0
@@ -205,7 +206,7 @@ class SwitchingExperiment(Experiment):
         await self.daq_buffer.push(buf)
         # Seemingly we need to give the filters some time to catch up here...
         await asyncio.sleep(0.002)
-        logger.debug("Stream has filled {} of {} points".format(self.daq_buffer.points_taken, self.daq_buffer.num_points() ))
+        # logger.debug("Stream has filled {} of {} points".format(self.daq_buffer.points_taken, self.daq_buffer.num_points() ))
 
     def shutdown_instruments(self):
         self.keith.current = 0.0e-5
@@ -220,11 +221,13 @@ class SwitchingExperiment(Experiment):
 
 if __name__ == '__main__':
     exp = SwitchingExperiment()
-    wr = WriteToHDF5("CSHE2-Testing.h5")
+    wr = WriteToHDF5("data\CSHE-Switching\CSHE-Die2-C4R1\CSHE2-C4R1-P2AP_2016-06-20_int.h5")
     pr = Print()
     edges = [(exp.daq_buffer, wr.data)]
     exp.set_graph(edges)
     exp.init_instruments()
+
+    exp.field.value = -0.013
 
     coarse_ts = 1e-9*np.linspace(0.1, 5.01, 5) # List of durations
     coarse_vs = np.linspace(0.35, 0.75, 5) # Between -28 and -6
@@ -232,22 +235,20 @@ if __name__ == '__main__':
     points    = list(itertools.product(*points))
 
     main_sweep = exp.add_unstructured_sweep([exp.pulse_duration, exp.pulse_voltage], points)
-    exp.run_sweeps()
-    ITERATION = 2
+    figs = []
+    ITERATION = 15
     for i in range(ITERATION):
-        with h5py.File(wr.filename, 'r') as f:
-            dsets = np.array([f[k].value for k in f.keys() if "data" in k])
-            data = np.concatenate(dsets, axis=0)
-        data_mean = np.mean(data, axis=-1)
-        mean = sw.switching_phase(data_mean)
-        new_points = rf.refine_scalar_field(points, mean, all_points=False,
-                                    criterion="difference", threshold = "one_sigma")
+        exp.run_sweeps()
+        points, mean = sw.load_switching_data(wr.filename)
+        figs.append(sw.phase_diagram_mesh(points, mean, title="Iteration={}".format(i)))
+        new_points = refine.refine_scalar_field(points, mean, all_points=False,
+                                    criterion="integral", threshold = "one_sigma")
         if new_points is None:
             print("No more points can be added.")
             break
         #
-        print(new_points)
-        points = np.append(points, new_points, axis=0)
+        print("Added {} new points.".format(len(new_points)))
         main_sweep.update_values(new_points)
         exp.reset()
-        exp.run_sweeps()
+
+    # plt.show()
