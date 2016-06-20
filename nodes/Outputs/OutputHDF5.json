@@ -1,8 +1,0 @@
-{"name":"Output to HDF5",
-	 "outputs": [],
-	 "inputs": ["Data"],
-	 "parameters": [
-	 	{"name": "Filename", "type": "filename", "tip": "Save to this filename."},
-	 	{"name": "Compression", "type": "combo", "values": ["zip", "lzw"], "tip": "Save to this filename."}
-	 	]
-}
