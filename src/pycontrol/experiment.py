@@ -3,6 +3,7 @@ import inspect
 import time
 import itertools
 import asyncio
+import signal
 
 import numpy as np
 import scipy as sp
@@ -17,57 +18,6 @@ from .filters.plot import Plotter
 logger = logging.getLogger('pycontrol')
 logging.basicConfig(format='%(name)s-%(levelname)s: \t%(message)s')
 logger.setLevel(logging.INFO)
-
-# class Quantity(object):
-#     """Physical quantity to be measured."""
-#     def __init__(self, name=None, unit=None):
-#         super(Quantity, self).__init__()
-#         self.name   = name
-#         self.unit   = unit
-#         self.method = None
-#         self._value = None
-#         self.delay_before = 0
-#         self.delay_after = 0
-
-#     @property
-#     def value(self):
-#         return self._value
-
-#     @value.setter
-#     def value(self, value):
-#         self._value = value
-
-#     def assign_method(self, method):
-#         logger.debug("Setting method of Quantity %s to %s" % (self.name, str(method)) )
-#         self.method = method
-
-#     def measure(self):
-#         logger.debug("%s Being asked to measure" % self.name)
-#         if self.delay_before is not None:
-#             time.sleep(self.delay_before)
-
-#         try:
-#             self._value = self.method()
-#         except:
-#             self._value = None
-#             print("Unable to measure %s." % self.name)
-
-#         if self.delay_after is not None:
-#             time.sleep(self.delay_after)
-
-#     def __str__(self):
-#         result = ""
-#         result += "%s" % str(self._value)
-#         if self.unit:
-#             result += " %s" % self.unit
-#         return result
-
-#     def __repr__(self):
-#         result = "<Quantity(name='%s'" % self.name
-#         result += ",value=%s" % repr(self._value)
-#         if self.unit:
-#             result += ",unit='%s'" % self.unit
-#         return result + ")>"
 
 class Parameter(object):
     """ Encapsulates the information for an experiment parameter"""
@@ -267,7 +217,6 @@ class MetaExperiment(type):
         type.__init__(self, name, bases, dct)
         logger.debug("Adding controls to %s", name)
         self._parameters        = {}
-        self._quantities        = {}
         self._instruments       = {}
         self._traces            = {}
 
@@ -283,11 +232,6 @@ class MetaExperiment(type):
                 if v.name is None:
                     v.name = k
                 self._parameters[k] = v
-            elif isinstance(v, Quantity):
-                logger.debug("Found '%s' quantity", k)
-                if v.name is None:
-                    v.name = k
-                self._quantities[k] = v
             elif isinstance(v, OutputConnector):
                 logger.debug("Found '%s' output connector.", k)
                 self._output_connectors.append(k)

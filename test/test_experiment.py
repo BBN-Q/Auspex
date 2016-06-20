@@ -4,7 +4,7 @@ import time
 import numpy as np
 
 from pycontrol.instruments.instrument import Instrument, StringCommand, FloatCommand, IntCommand
-from pycontrol.experiment import Experiment, FloatParameter, Quantity
+from pycontrol.experiment import Experiment, FloatParameter
 from pycontrol.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector
 from pycontrol.filters.debug import Print, Passthrough
 from pycontrol.filters.average import Average
@@ -39,10 +39,6 @@ class TestExperiment(Experiment):
     # Parameters
     freq_1 = FloatParameter(unit="Hz")
     freq_2 = FloatParameter(unit="Hz")
-
-    # Quantities
-    power = Quantity(unit="Watts")
-    clout = Quantity(unit="Trumps")
 
     # DataStreams
     chan1 = OutputConnector()
@@ -91,13 +87,6 @@ class ExperimentTestCase(unittest.TestCase):
         self.assertTrue(len(TestExperiment._parameters) == 2 ) # should have parsed these parameters from class dir
         self.assertTrue(TestExperiment._parameters['freq_1'] == TestExperiment.freq_1) # should contain this parameter
         self.assertTrue(TestExperiment._parameters['freq_2'] == TestExperiment.freq_2) # should contain this parameter
-
-    def test_quantities(self):
-        """Check that quantities have been appropriately gathered"""
-        self.assertTrue(hasattr(TestExperiment, "_quantities")) # should have parsed these quantities from class dir
-        self.assertTrue(len(TestExperiment._quantities) == 2 ) # should have parsed these quantities from class dir
-        self.assertTrue(TestExperiment._quantities['power'] == TestExperiment.power) # should contain this quantity
-        self.assertTrue(TestExperiment._quantities['clout'] == TestExperiment.clout) # should contain this quantity
 
     def test_instruments(self):
         """Check that instruments have been appropriately gathered"""
@@ -256,71 +245,6 @@ class ExperimentTestCase(unittest.TestCase):
         logger.debug("Running reset test: 2nd loop.")
         time.sleep(0.1)
         exp.run_loop()
-
-
-    # def test_streams_printing(self):
-        # logger.info("Running stream printing test")
-        # exp = TestExperiment()
-        # pri = Print(name="TestPrint") 
-
-        # self.assertTrue(TestExperiment._output_connectors['chan1'] == TestExperiment.chan1) # should contain this instrument
-        # self.assertTrue(TestExperiment._output_connectors['chan2'] == TestExperiment.chan2) # should contain this instrument
-        # self.assertTrue(len(exp.chan1.descriptor.axes) == 2)
-        # self.assertTrue(len(exp.chan2.descriptor.axes) == 2)
-        # self.assertTrue(exp.chan1.descriptor.num_points() == exp.samples*exp.num_trials)
-
-        # repeats = 2
-        # exp.chan1.descriptor.add_axis(DataAxis("repeats", list(range(repeats))))
-        # self.assertTrue(len(exp.chan1.descriptor.axes) == 3)
-
-        # exp.chan1.connect_to(pri.data)
-        # self.assertTrue(not exp.chan1.output_streams[0].done())
-        # self.assertTrue(pri.data.input_streams[0].descriptor == exp.chan1.descriptor)
-        # self.assertTrue(len(pri.data.input_streams) == 1)
-
-        # with self.assertRaises(ValueError):
-        #     pri.data.connect_to(exp.chan2)
-
-        # loop = asyncio.get_event_loop()
-        # tasks = [exp.run(), pri.run()]
-        # loop.run_until_complete(asyncio.wait(tasks))
-        # self.assertTrue(exp.chan1.points_taken == repeats*exp.num_trials*exp.samples)
-    #     # self.assertTrue(exp.chan1.output_streams[0].done())
-
-    # def test_streams_averaging(self):
-    #     logger.info("Running stream averaging test")
-
-    #     exp             = TestExperiment()
-    #     printer_partial = Print(name="Partial")
-    #     printer_final   = Print(name="Final")
-    #     avgr            = Average(name="TestAverager")
-
-    #     repeats = 4
-    #     exp.chan1.descriptor.add_axis(DataAxis("repeats", list(range(repeats))))
-    #     self.assertTrue(len(exp.chan1.descriptor.axes) == 3)
-
-    #     exp.chan1.connect_to(avgr.data)
-    #     avgr.partial_average.connect_to(printer_partial.data)
-    #     strm = avgr.final_average.connect_to(printer_final.data)
-    #     self.assertTrue(isinstance(strm, DataStream))
-    #     self.assertTrue(exp.chan1.output_streams[0].done() == False)
-
-    #     avgr.axis = 2 # repeats
-    #     self.assertTrue(len(exp.chan1.descriptor.axes) == len(avgr.partial_average.descriptor.axes) )
-    #     self.assertTrue(len(exp.chan1.descriptor.axes) == len(avgr.final_average.descriptor.axes) + 1)
-    #     self.assertTrue(avgr.final_average.descriptor.num_points() == exp.num_trials * exp.samples)
-
-    #     avgr.axis = "trials"
-    #     self.assertTrue(len(exp.chan1.descriptor.axes) == len(avgr.partial_average.descriptor.axes) )
-    #     self.assertTrue(avgr.final_average.descriptor.num_points() == exp.samples * repeats)
-
-    #     loop = asyncio.get_event_loop()
-    #     tasks = [exp.run(), avgr.run(), printer_partial.run(), printer_final.run()]
-    #     loop.run_until_complete(asyncio.wait(tasks))
-
-    #     avgr.axis = "samples"
-    #     self.assertTrue(len(exp.chan1.descriptor.axes) == len(avgr.partial_average.descriptor.axes)  )
-    #     self.assertTrue(avgr.final_average.descriptor.num_points() == exp.num_trials * repeats)
 
 if __name__ == '__main__':
     unittest.main()
