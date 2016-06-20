@@ -12,61 +12,62 @@ import h5py
 
 from .instruments.instrument import Instrument
 from .stream import DataStream, DataAxis, DataStreamDescriptor, InputConnector, OutputConnector
+from .filters.plot import Plotter
 
 logger = logging.getLogger('pycontrol')
 logging.basicConfig(format='%(name)s-%(levelname)s: \t%(message)s')
 logger.setLevel(logging.INFO)
 
-class Quantity(object):
-    """Physical quantity to be measured."""
-    def __init__(self, name=None, unit=None):
-        super(Quantity, self).__init__()
-        self.name   = name
-        self.unit   = unit
-        self.method = None
-        self._value = None
-        self.delay_before = 0
-        self.delay_after = 0
+# class Quantity(object):
+#     """Physical quantity to be measured."""
+#     def __init__(self, name=None, unit=None):
+#         super(Quantity, self).__init__()
+#         self.name   = name
+#         self.unit   = unit
+#         self.method = None
+#         self._value = None
+#         self.delay_before = 0
+#         self.delay_after = 0
 
-    @property
-    def value(self):
-        return self._value
+#     @property
+#     def value(self):
+#         return self._value
 
-    @value.setter
-    def value(self, value):
-        self._value = value
+#     @value.setter
+#     def value(self, value):
+#         self._value = value
 
-    def assign_method(self, method):
-        logger.debug("Setting method of Quantity %s to %s" % (self.name, str(method)) )
-        self.method = method
+#     def assign_method(self, method):
+#         logger.debug("Setting method of Quantity %s to %s" % (self.name, str(method)) )
+#         self.method = method
 
-    def measure(self):
-        logger.debug("%s Being asked to measure" % self.name)
-        if self.delay_before is not None:
-            time.sleep(self.delay_before)
+#     def measure(self):
+#         logger.debug("%s Being asked to measure" % self.name)
+#         if self.delay_before is not None:
+#             time.sleep(self.delay_before)
 
-        try:
-            self._value = self.method()
-        except:
-            self._value = None
-            print("Unable to measure %s." % self.name)
+#         try:
+#             self._value = self.method()
+#         except:
+#             self._value = None
+#             print("Unable to measure %s." % self.name)
 
-        if self.delay_after is not None:
-            time.sleep(self.delay_after)
+#         if self.delay_after is not None:
+#             time.sleep(self.delay_after)
 
-    def __str__(self):
-        result = ""
-        result += "%s" % str(self._value)
-        if self.unit:
-            result += " %s" % self.unit
-        return result
+#     def __str__(self):
+#         result = ""
+#         result += "%s" % str(self._value)
+#         if self.unit:
+#             result += " %s" % self.unit
+#         return result
 
-    def __repr__(self):
-        result = "<Quantity(name='%s'" % self.name
-        result += ",value=%s" % repr(self._value)
-        if self.unit:
-            result += ",unit='%s'" % self.unit
-        return result + ")>"
+#     def __repr__(self):
+#         result = "<Quantity(name='%s'" % self.name
+#         result += ",value=%s" % repr(self._value)
+#         if self.unit:
+#             result += ",unit='%s'" % self.unit
+#         return result + ")>"
 
 class Parameter(object):
     """ Encapsulates the information for an experiment parameter"""
@@ -305,6 +306,13 @@ class Experiment(metaclass=MetaExperiment):
         # This holds the experiment graph
         self.graph = None
 
+        # This holds a reference to a bokeh-server instance
+        # for plotting, if there is one.
+        self.bokeh_server = None
+
+        # Also keep references to all of the plot filters
+        self.plotters = []
+
         # Things we can't metaclass
         self.output_connectors = {}
         for oc in self._output_connectors:
@@ -365,6 +373,8 @@ class Experiment(metaclass=MetaExperiment):
         logger.debug("Starting descriptor update in experiment.")
         for oc in self.output_connectors.values():
             oc.update_descriptors()
+        # TODO: have this push any changes to JSON file
+        # if we're using Quince to define connections.
 
     async def sweep(self):
         # Keep track of the previous values
@@ -388,7 +398,75 @@ class Experiment(metaclass=MetaExperiment):
             await self.run()
 
     def run_sweeps(self):
-        # We don't want to wait for the run method explicitly
+        # Go and find any plotters and keep track of them.
+        # Launch the bokeh-server if necessary.
+        self.plotters = [n for n in self.nodes if isinstance(n, Plotter)]
+
+        if len(self.plotters) > 0:
+            
+            from .plotting import BokehServerThread
+            from bokeh.client import push_session
+            from bokeh.plotting import hplot
+            from bokeh.io import curdoc, curstate
+            from bokeh.util.session_id import generate_session_id
+            from bokeh.document import Document
+            from bokeh.models.widgets import Panel, Tabs
+
+            bokeh_thread = BokehServerThread(notebook=notebook)
+            bokeh_thread.start()
+            
+            #On some systems there is a possibility we try to `push_session` before the
+            #the server on the BokehServerThread has started. Wait a second, here.
+            time.sleep(1)
+            
+            tabs = True # Tabs seem a bit sluggish in jupyter notebooks...
+            if tabs:
+                h = Tabs(tabs=[Panel(child=p, title=p.name) for p in self.plotters])
+            else:
+                h = hplot(*[p.figure for p in self.plotters])
+            
+            curdoc().clear()
+            sid = generate_session_id()
+            doc = Document()
+            doc.add_root(h)
+            session = push_session(doc, session_id=sid)
+
+            if notebook:
+                from bokeh.embed import autoload_server, components
+                from bokeh.io import output_notebook
+                from IPython.display import display, HTML
+
+                output_notebook()
+                script = autoload_server(model=None, session_id=sid)
+                html = \
+                        """
+                        <html>
+                        <head></head>
+                        <body>
+                        {}
+                        </body>
+                        </html>
+                        """.format(script)
+                display(HTML(html))
+            else:
+                session.show(doc)
+
+        def shutdown():
+            if len(self._plotters) > 0:
+                time.sleep(0.5)
+                bokeh_thread.join()
+            self.shutdown_instruments()
+
+        def catch_ctrl_c(signum, frame):
+            logger.info("Caught SIGINT. Shutting down.")
+            shutdown()
+            sys.exit(0)
+
+        signal.signal(signal.SIGINT, catch_ctrl_c)
+
+        # We want to wait for the sweeo method above, 
+        # not the experiment's run method, so replace this
+        # in the list of tasks.
         other_nodes = self.nodes[:]
         other_nodes.remove(self)
         tasks = [n.run() for n in other_nodes]
