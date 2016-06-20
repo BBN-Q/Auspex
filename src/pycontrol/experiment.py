@@ -321,6 +321,10 @@ class Experiment(metaclass=MetaExperiment):
         # if we're using Quince to define connections.
 
     async def sweep(self):
+        # Set any static parameters
+        for p in self._parameters.values():
+            p.push()
+
         # Keep track of the previous values
         logger.debug("Waiting for filters.")
         await asyncio.sleep(1.0)
@@ -428,6 +432,7 @@ class Experiment(metaclass=MetaExperiment):
             oc.descriptor.add_axis(ax)
             p.associated_axes.append(ax)
         self.update_descriptors()
+        param.value = sweep_list[0]
         return p
 
     def add_unstructured_sweep(self, parameters, coords):
@@ -440,6 +445,8 @@ class Experiment(metaclass=MetaExperiment):
             oc.descriptor.add_axis(ax)
             p.associated_axes.append(ax)
         self.update_descriptors()
+        for pp, c in zip(parameters, coords[0]):
+            pp.value = c
         return p
 
     def generate_sweep(self):
