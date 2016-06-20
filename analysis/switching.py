@@ -3,6 +3,7 @@ from sklearn.cluster import KMeans
 from scipy.stats import beta
 from scipy.spatial import Delaunay
 import matplotlib.pyplot as plt
+import h5py
 
 def cluster(data, num_clusters=2):
     all_vals = data.flatten()
@@ -52,7 +53,7 @@ def switching_phase(data):
 
 def phase_diagram_grid(x_vals, y_vals, data,
                             title="Phase diagram",
-                            xlabel="Pulse Duration (ns)",
+                            xlabel="Pulse Duration (s)",
                             ylabel="Pulse Amplitude (V)"):
     fig = plt.figure()
     data = data.reshape(len(y_vals), len(x_vals), order='F')
@@ -63,14 +64,51 @@ def phase_diagram_grid(x_vals, y_vals, data,
     plt.ylabel(ylabel, size=16)
     return fig
 
+def scaled_Delaunay(points):
+    """ Return a scaled Delaunay mesh and scale factors """
+    scale_factors = []
+    points = np.array(points)
+    for i in range(points.shape[1]):
+    	scale_factors.append(1.0/np.mean(points[:,i]))
+    	points[:,i] = points[:,i]*scale_factors[-1]
+    mesh = Delaunay(points)
+    return mesh, scale_factors
+
 def phase_diagram_mesh(points, values,
                                 title="Phase diagram",
-                                xlabel="Pulse Duration (ns)",
+                                xlabel="Pulse Duration (s)",
                                 ylabel="Pulse Amplitude (V)",**kwargs):
-    mesh = Delaunay(points)
+    mesh, scale_factors = scaled_Delaunay(points)
+    xs = mesh.points[:,0]/scale_factors[0]
+    ys = mesh.points[:,1]/scale_factors[1]
     fig = plt.figure()
-    fig.tripcolor(mesh.points[:,0],mesh.points[:,1],mesh.simplices.copy(),values,**kwargs)
+    plt.tripcolor(xs,ys,mesh.simplices.copy(),values,cmap="RdGy",shading="flat",**kwargs)
     plt.title(title, size=16)
     plt.xlabel(xlabel, size=16)
     plt.ylabel(ylabel, size=16)
+    plt.colorbar()
     return fig
+
+def crossover_pairs(points, values, threshold):
+    """ Find all pairs of points whose values are on the two sides of threshold """
+    mesh, scale_factors = scaled_Delaunay(points)
+    nb_indices, indptr = mesh.vertex_neighbor_vertices
+    pairs = []
+    for k, value in enumerate(values):
+        nbs = indptr[nb_indices[k]:nb_indices[k+1]]
+        for nb in nbs:
+            if (value-threshold)*(values[nb]-threshold) < 0:
+                pairs.append([k,nb])
+    return np.array(pairs)
+
+def load_switching_data(filename):
+     with h5py.File(filename, 'r') as f:
+         durations = np.array([f['axes'][k].value for k in f['axes'].keys() if "pulse_duration-data" in k])
+         voltages = np.array([f['axes'][k].value for k in f['axes'].keys() if "pulse_voltage-data" in k])
+         dsets = np.array([f[k].value for k in f.keys() if "data" in k])
+         data = np.concatenate(dsets, axis=0)
+         voltages = np.concatenate(voltages, axis=0)
+         durations = np.concatenate(durations, axis=0)
+     data_mean = np.mean(data, axis=-1)
+     points = np.array([durations, voltages]).transpose()
+     return points, switching_phase(data_mean)
