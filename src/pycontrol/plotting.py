@@ -18,40 +18,6 @@ logger = logging.getLogger('pycontrol')
 logging.basicConfig(format='%(name)s-%(levelname)s: \t%(message)s')
 logger.setLevel(logging.INFO)
 
-class BokehServerThread(threading.Thread):
-    def __init__(self, notebook=False):
-        super(BokehServerThread, self).__init__()
-        self.daemon = True
-        self.run_in_notebook = notebook
-
-    def __del__(self):
-        self.join()
-
-    def __del__(self):
-        self.join()
-
-    def run(self):
-        args = []
-        if 'win32' in sys.platform:
-            args.append("bokeh.bat")
-        else:
-            args.append("bokeh")
-        args.append("serve")
-        if self.run_in_notebook:
-            args.append("--allow-websocket-origin=localhost:8888")
-        self.p = subprocess.Popen(args, env=os.environ.copy())
-
-    def join(self, timeout=None):
-        if self.p:
-            print("Killing bokeh server thread {}".format(self.p.pid))
-            for child_proc in psutil.Process(self.p.pid).children():
-                print("Killing child process {}".format(child_proc.pid))
-                child_proc.kill()
-            self.p.kill()
-            self.p = None
-            super(BokehServerThread, self).join(timeout=timeout)
-
-
 class MultiPlotter(object):
     """Attach a plotter to the sweep."""
     def __init__(self, title, xs, ys, **plot_args):
