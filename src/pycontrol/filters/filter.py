@@ -6,14 +6,13 @@ logging.basicConfig(format='%(name)s-%(levelname)s: \t%(message)s')
 logger.setLevel(logging.INFO)
 
 class MetaFilter(type):
-    """Meta class to bake the instrument objects into a class description
+    """Meta class to bake the input/output connectors into a Filter class description
     """
     def __init__(self, name, bases, dct):
         type.__init__(self, name, bases, dct)
-        logger.debug("Adding controls to %s", name)
+        logger.debug("Adding connectors to %s", name)
         self._input_connectors  = []
         self._output_connectors = []
-
         for k,v in dct.items():
             if isinstance(v, InputConnector):
                 logger.debug("Found '%s' input connector.", k)
@@ -45,7 +44,7 @@ class Filter(metaclass=MetaFilter):
 
     def update_descriptors(self):
         self.descriptor = list(self.input_connectors.values())[0].descriptor
-        logger.debug("Starting descriptor update in filter %s, where the descriptor is %s", 
+        logger.debug("Starting descriptor update in filter %s, where the descriptor is %s",
                 self.name, self.descriptor)
         for oc in self.output_connectors.values():
             oc.descriptor = self.descriptor
