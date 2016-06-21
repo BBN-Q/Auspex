@@ -1,9 +1,9 @@
-import logging
 import inspect
 import time
 import itertools
 import asyncio
 import signal
+import sys
 
 import numpy as np
 import scipy as sp
@@ -11,13 +11,10 @@ import pandas as pd
 import networkx as nx
 import h5py
 
-from .instruments.instrument import Instrument
-from .stream import DataStream, DataAxis, DataStreamDescriptor, InputConnector, OutputConnector
-from .filters.plot import Plotter
-
-logger = logging.getLogger('pycontrol')
-logging.basicConfig(format='%(name)s-%(levelname)s: \t%(message)s')
-logger.setLevel(logging.INFO)
+from pycontrol.instruments.instrument import Instrument
+from pycontrol.stream import DataStream, DataAxis, DataStreamDescriptor, InputConnector, OutputConnector
+from pycontrol.filters.plot import Plotter
+from pycontrol.logging import logger
 
 class Parameter(object):
     """ Encapsulates the information for an experiment parameter"""
@@ -400,7 +397,7 @@ class Experiment(metaclass=MetaExperiment):
                 session.show(doc)
 
         def shutdown():
-            if len(self._plotters) > 0:
+            if len(self.plotters) > 0:
                 time.sleep(0.5)
                 bokeh_thread.join()
             self.shutdown_instruments()

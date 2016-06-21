@@ -1,9 +1,5 @@
 from pycontrol.stream import DataStream, InputConnector, OutputConnector
-
-import logging
-logger = logging.getLogger('pycontrol')
-logging.basicConfig(format='%(name)s-%(levelname)s: \t%(message)s')
-logger.setLevel(logging.INFO)
+from pycontrol.logging import logger
 
 class MetaFilter(type):
     """Meta class to bake the input/output connectors into a Filter class description

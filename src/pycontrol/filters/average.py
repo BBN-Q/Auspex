@@ -1,12 +1,8 @@
 import asyncio
 import numpy as np
 from pycontrol.stream import DataStreamDescriptor
-from .filter import Filter, InputConnector, OutputConnector
-
-import logging
-logger = logging.getLogger('pycontrol')
-logging.basicConfig(format='%(name)s-%(levelname)s: \t%(message)s')
-logger.setLevel(logging.INFO)
+from pycontrol.filters.filter import Filter, InputConnector, OutputConnector
+from pycontrol.logging import logger
 
 class Average(Filter):
     """Takes data and collapses along the specified axis."""

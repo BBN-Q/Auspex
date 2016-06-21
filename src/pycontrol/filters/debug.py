@@ -1,12 +1,8 @@
 import asyncio
 import numpy as np
-from .filter import Filter
+from pycontrol.filters.filter import Filter
 from pycontrol.stream import InputConnector, OutputConnector
-
-import logging
-logger = logging.getLogger('pycontrol')
-logging.basicConfig(format='%(name)s-%(levelname)s: \t%(message)s')
-logger.setLevel(logging.INFO)
+from pycontrol.logging import logger
 
 class Print(Filter):
     """docstring for Plotter"""

@@ -9,10 +9,9 @@ from pycontrol.experiment import Experiment, FloatParameter
 from pycontrol.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector
 from pycontrol.filters.debug import Print
 from pycontrol.filters.io import WriteToHDF5
+from pycontrol.logging import logger
 
 import logging
-logger = logging.getLogger('pycontrol')
-logging.basicConfig(format='%(name)s-%(levelname)s: \t%(message)s')
 logger.setLevel(logging.DEBUG)
 
 class TestInstrument1(Instrument):

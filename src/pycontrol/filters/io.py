@@ -7,12 +7,8 @@ import os.path
 import glob
 
 from pycontrol.stream import DataStreamDescriptor
-from .filter import Filter, InputConnector, OutputConnector
-
-import logging
-logger = logging.getLogger('pycontrol')
-logging.basicConfig(format='%(name)s-%(levelname)s: \t%(message)s')
-logger.setLevel(logging.INFO)
+from pycontrol.logging import logger
+from pycontrol.filters.filter import Filter, InputConnector, OutputConnector
 
 class WriteToHDF5(Filter):
     """Writes data to file."""

@@ -1,4 +1,3 @@
-import logging
 
 import numpy as np
 import scipy as sp
@@ -9,9 +8,7 @@ import visa
 import os
 import time
 
-logger = logging.getLogger('pycontrol')
-logging.basicConfig(format='%(name)s-%(levelname)s: \t%(message)s')
-logger.setLevel(logging.INFO)
+from pycontrol.logging import logger
 
 class StringCommand(object):
     """Wraps a particular device command set based on getter and setter strings. The optional
