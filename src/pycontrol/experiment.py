@@ -305,6 +305,9 @@ class Experiment(metaclass=MetaExperiment):
 
     def run_loop(self):
         """This runs the asyncio main loop."""
+        # Set any static parameters
+        for p in self._parameters.values():
+            p.push()
         tasks = [n.run() for n in self.nodes]
         self.loop.run_until_complete(asyncio.wait(tasks))
 
@@ -352,7 +355,7 @@ class Experiment(metaclass=MetaExperiment):
         self.plotters = [n for n in self.nodes if isinstance(n, Plotter)]
 
         if len(self.plotters) > 0:
-            
+
             from .plotting import BokehServerThread
             from bokeh.client import push_session
             from bokeh.plotting import hplot
@@ -363,17 +366,17 @@ class Experiment(metaclass=MetaExperiment):
 
             bokeh_thread = BokehServerThread(notebook=notebook)
             bokeh_thread.start()
-            
+
             #On some systems there is a possibility we try to `push_session` before the
             #the server on the BokehServerThread has started. Wait a second, here.
             time.sleep(1)
-            
+
             tabs = True # Tabs seem a bit sluggish in jupyter notebooks...
             if tabs:
                 h = Tabs(tabs=[Panel(child=p, title=p.name) for p in self.plotters])
             else:
                 h = hplot(*[p.figure for p in self.plotters])
-            
+
             curdoc().clear()
             sid = generate_session_id()
             doc = Document()
@@ -413,7 +416,6 @@ class Experiment(metaclass=MetaExperiment):
 
         signal.signal(signal.SIGINT, catch_ctrl_c)
 
-        # We want to wait for the sweeo method above, 
         # not the experiment's run method, so replace this
         # in the list of tasks.
         other_nodes = self.nodes[:]
