@@ -84,6 +84,9 @@ class ExperimentTestCase(unittest.TestCase):
         self.assertTrue(TestExperiment._parameters['freq_1'] == TestExperiment.freq_1) # should contain this parameter
         self.assertTrue(TestExperiment._parameters['freq_2'] == TestExperiment.freq_2) # should contain this parameter
 
+        self.assertTrue(TestExperiment._constants['samples'] == 3)
+        self.assertTrue(TestExperiment._constants['num_trials'] == 5)
+
     def test_instruments(self):
         """Check that instruments have been appropriately gathered"""
         self.assertTrue(hasattr(TestExperiment, "_instruments")) # should have parsed these instruments from class dir

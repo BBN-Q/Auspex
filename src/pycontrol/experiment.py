@@ -4,6 +4,7 @@ import itertools
 import asyncio
 import signal
 import sys
+import numbers
 
 import numpy as np
 import scipy as sp
@@ -215,7 +216,7 @@ class MetaExperiment(type):
         logger.debug("Adding controls to %s", name)
         self._parameters        = {}
         self._instruments       = {}
-        self._traces            = {}
+        self._constants         = {}
 
         # Beware, passing objects won't work at parse time
         self._output_connectors = []
@@ -232,6 +233,9 @@ class MetaExperiment(type):
             elif isinstance(v, OutputConnector):
                 logger.debug("Found '%s' output connector.", k)
                 self._output_connectors.append(k)
+            elif isinstance(v, numbers.Number):
+                self._constants[k] = v
+                # Keep track of numerical parameters
 
 class Experiment(metaclass=MetaExperiment):
     """The measurement loop to be run for each set of sweep parameters."""
