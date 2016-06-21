@@ -47,7 +47,7 @@ class SwitchingExperiment(Experiment):
     measure_current = 3.0e-6
     samps_per_trig  = 5
 
-    polarity        = 1 # P to AP: 1; AP to P: -1
+    polarity        = -1 # P to AP: 1; AP to P: -1
     pspl_atten      = 12
 
     min_daq_voltage = 0.0
@@ -221,7 +221,7 @@ class SwitchingExperiment(Experiment):
 
 if __name__ == '__main__':
     exp = SwitchingExperiment()
-    wr = WriteToHDF5("data\CSHE-Switching\CSHE-Die2-C4R1\CSHE2-C4R1-P2AP_2016-06-20_int.h5")
+    wr = WriteToHDF5("data\CSHE-Switching\CSHE-Die2-C4R1\CSHE2-C4R1-AP2P_2016-06-20_int.h5")
     pr = Print()
     edges = [(exp.daq_buffer, wr.data)]
     exp.set_graph(edges)
@@ -250,5 +250,11 @@ if __name__ == '__main__':
         print("Added {} new points.".format(len(new_points)))
         main_sweep.update_values(new_points)
         exp.reset()
+
+    # For evaluation of adaptive method, plot the mesh
+    mesh, scale_factors = sw.scaled_Delaunay(points)
+    fig_mesh = sw.phase_diagram_mesh(points, mean)
+    plt.triplot(mesh.points[:,0]/scale_factors[0],
+                mesh.points[:,1]/scale_factors[1], mesh.simplices.copy());
 
     # plt.show()
