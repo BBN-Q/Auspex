@@ -181,8 +181,8 @@ class SweepTestCase(unittest.TestCase):
     def test_write_unstructured_sweep(self):
         exp = UnsweptTestExperiment()
         pri = Print()
-        if os.path.exists("0000-test_write_unstructured.h5"):
-            os.remove("0000-test_write_unstructured.h5")
+        if os.path.exists("test_write_unstructured-0000.h5"):
+            os.remove("test_write_unstructured-0000.h5")
         wr  = WriteToHDF5("test_write_unstructured.h5")
 
         edges = [(exp.voltage, pri.data), (exp.voltage, wr.data)]
@@ -203,19 +203,19 @@ class SweepTestCase(unittest.TestCase):
         exp.add_unstructured_sweep([exp.field, exp.freq], coords)
         exp.run_loop()
         self.assertTrue(pri.data.input_streams[0].points_taken == exp.voltage.num_points())
-        self.assertTrue(os.path.exists("0000-test_write_unstructured.h5"))
-        with h5py.File("0000-test_write_unstructured.h5", 'r') as f:
+        self.assertTrue(os.path.exists("test_write_unstructured-0000.h5"))
+        with h5py.File("test_write_unstructured-0000.h5", 'r') as f:
             self.assertTrue([d.label for d in f['data-0000'].dims] == ['Unstructured', 'samples'])
             self.assertTrue([d.keys() for d in f['data-0000'].dims] == [['field', 'freq'], ['samples']])
             self.assertTrue(np.sum(f['data-0000'].dims[0]['freq'].value - coords[:,1]) == 0.0)
             self.assertTrue(np.sum(f['data-0000'].dims[0]['field'].value - coords[:,0]) == 0.0)
-        os.remove("0000-test_write_unstructured.h5")
+        os.remove("test_write_unstructured-0000.h5")
 
     def test_run_write_unstructured_sweep(self):
         exp = SweptTestExperiment()
         pri = Print()
-        if os.path.exists("0000-test_run_write_unstructured.h5"):
-            os.remove("0000-test_run_write_unstructured.h5")
+        if os.path.exists("test_run_write_unstructured-0000.h5"):
+            os.remove("test_run_write_unstructured-0000.h5")
         wr  = WriteToHDF5("test_run_write_unstructured.h5")
 
 
@@ -253,8 +253,8 @@ class SweepTestCase(unittest.TestCase):
         self.assertFalse(wr.data.input_streams[0].done())
         self.assertFalse(exp.voltage.output_streams[0].done())
         exp.run_sweeps()
-        self.assertTrue(os.path.exists("0000-test_run_write_unstructured.h5"))
-        with h5py.File("0000-test_run_write_unstructured.h5", 'r') as f:
+        self.assertTrue(os.path.exists("test_run_write_unstructured-0000.h5"))
+        with h5py.File("test_run_write_unstructured-0000.h5", 'r') as f:
             self.assertTrue([d.label for d in f['data-0000'].dims] == ['Unstructured', 'samples'])
             self.assertTrue([d.keys() for d in f['data-0000'].dims] == [['field', 'freq'], ['samples']])
             self.assertTrue(np.sum(f['data-0000'].dims[0]['freq'].value - coords[:,1]) == 0.0)
@@ -264,14 +264,14 @@ class SweepTestCase(unittest.TestCase):
             self.assertTrue(np.sum(f['data-0001'].dims[0]['freq'].value - coords2[:,1]) == 0.0)
             self.assertTrue(np.sum(f['data-0001'].dims[0]['field'].value - coords2[:,0]) == 0.0)
 
-        os.remove("0000-test_run_write_unstructured.h5")
+        os.remove("test_run_write_unstructured-0000.h5")
 
     def test_writehdf5(self):
         exp = UnsweptTestExperiment()
         pr = Print()
         wr = WriteToHDF5("test_write.h5")
-        if os.path.exists("0000-test_write.h5"):
-            os.remove("0000-test_write.h5")
+        if os.path.exists("test_write-0000.h5"):
+            os.remove("test_write-0000.h5")
 
         edges = [(exp.voltage, pr.data), (exp.voltage, wr.data)]
         exp.set_graph(edges)
@@ -282,8 +282,8 @@ class SweepTestCase(unittest.TestCase):
         exp.add_sweep(exp.field, np.linspace(0,100.0,4))
         exp.add_sweep(exp.freq, np.linspace(0,10.0,3))
         exp.run_loop()
-        self.assertTrue(os.path.exists("0000-test_write.h5"))
-        with h5py.File("0000-test_write.h5", 'r') as f:
+        self.assertTrue(os.path.exists("test_write-0000.h5"))
+        with h5py.File("test_write-0000.h5", 'r') as f:
             self.assertTrue([d.label for d in f['data-0000'].dims] == ['freq', 'field', 'samples'])
             self.assertTrue([d.keys()[0] for d in f['data-0000'].dims] == ['freq', 'field', 'samples'])
             self.assertTrue(np.sum(f['data-0000'].dims[0][0].value - np.linspace(0,10.0,3)) == 0.0)
@@ -291,7 +291,7 @@ class SweepTestCase(unittest.TestCase):
             self.assertTrue(np.sum(f['data-0000'].dims[2]['samples'].value - np.arange(0,5)) == 0.0)
             print(f['data-0000'][:])
 
-        os.remove("0000-test_write.h5")
+        os.remove("test_write-0000.h5")
 
 if __name__ == '__main__':
     unittest.main()
