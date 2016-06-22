@@ -1,4 +1,3 @@
-import logging
 import threading
 import subprocess
 import psutil
@@ -7,16 +6,11 @@ import os
 import sys
 
 import numpy as np
-
-# Bokeh
 import h5py
-
 from bokeh.plotting import Figure
 from bokeh.models.renderers import GlyphRenderer
 
-logger = logging.getLogger('pycontrol')
-logging.basicConfig(format='%(name)s-%(levelname)s: \t%(message)s')
-logger.setLevel(logging.INFO)
+from pycontrol.logging import logger
 
 class MultiPlotter(object):
     """Attach a plotter to the sweep."""

@@ -8,11 +8,7 @@ from pycontrol.experiment import Experiment, FloatParameter
 from pycontrol.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector
 from pycontrol.filters.debug import Print, Passthrough
 from pycontrol.filters.average import Average
-
-import logging
-logger = logging.getLogger('pycontrol')
-logging.basicConfig(format='%(name)s-%(levelname)s: \t%(message)s')
-logger.setLevel(logging.DEBUG)
+from pycontrol.logging import logger
 
 class TestInstrument1(Instrument):
     frequency = FloatCommand(get_string="frequency?", set_string="frequency {:g}", value_range=(0.1, 10))
@@ -87,6 +83,9 @@ class ExperimentTestCase(unittest.TestCase):
         self.assertTrue(len(TestExperiment._parameters) == 2 ) # should have parsed these parameters from class dir
         self.assertTrue(TestExperiment._parameters['freq_1'] == TestExperiment.freq_1) # should contain this parameter
         self.assertTrue(TestExperiment._parameters['freq_2'] == TestExperiment.freq_2) # should contain this parameter
+
+        self.assertTrue(TestExperiment._constants['samples'] == 3)
+        self.assertTrue(TestExperiment._constants['num_trials'] == 5)
 
     def test_instruments(self):
         """Check that instruments have been appropriately gathered"""

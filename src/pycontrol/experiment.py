@@ -1,9 +1,10 @@
-import logging
 import inspect
 import time
 import itertools
 import asyncio
 import signal
+import sys
+import numbers
 
 import numpy as np
 import scipy as sp
@@ -11,13 +12,10 @@ import pandas as pd
 import networkx as nx
 import h5py
 
-from .instruments.instrument import Instrument
-from .stream import DataStream, DataAxis, DataStreamDescriptor, InputConnector, OutputConnector
-from .filters.plot import Plotter
-
-logger = logging.getLogger('pycontrol')
-logging.basicConfig(format='%(name)s-%(levelname)s: \t%(message)s')
-logger.setLevel(logging.INFO)
+from pycontrol.instruments.instrument import Instrument
+from pycontrol.stream import DataStream, DataAxis, DataStreamDescriptor, InputConnector, OutputConnector
+from pycontrol.filters.plot import Plotter
+from pycontrol.logging import logger
 
 class Parameter(object):
     """ Encapsulates the information for an experiment parameter"""
@@ -218,7 +216,7 @@ class MetaExperiment(type):
         logger.debug("Adding controls to %s", name)
         self._parameters        = {}
         self._instruments       = {}
-        self._traces            = {}
+        self._constants         = {}
 
         # Beware, passing objects won't work at parse time
         self._output_connectors = []
@@ -235,6 +233,9 @@ class MetaExperiment(type):
             elif isinstance(v, OutputConnector):
                 logger.debug("Found '%s' output connector.", k)
                 self._output_connectors.append(k)
+            elif isinstance(v, numbers.Number):
+                self._constants[k] = v
+                # Keep track of numerical parameters
 
 class Experiment(metaclass=MetaExperiment):
     """The measurement loop to be run for each set of sweep parameters."""
@@ -400,7 +401,7 @@ class Experiment(metaclass=MetaExperiment):
                 session.show(doc)
 
         def shutdown():
-            if len(self._plotters) > 0:
+            if len(self.plotters) > 0:
                 time.sleep(0.5)
                 bokeh_thread.join()
             self.shutdown_instruments()

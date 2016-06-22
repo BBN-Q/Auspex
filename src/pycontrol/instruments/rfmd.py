@@ -1,11 +1,7 @@
 import numpy as np
 import pandas as pd
 from scipy.interpolate import interp1d
-
-import logging
-logger = logging.getLogger('pycontrol')
-logging.basicConfig(format='%(name)s-%(levelname)s: \t%(message)s')
-logger.setLevel(logging.DEBUG)
+from pycontrol.logging import logger
 
 class Attenuator(object):
     """Simple wrapper for using the RFMD voltage controller attenuator.

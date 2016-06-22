@@ -1,4 +1,4 @@
-image: cryan/pycontrol
+image: caryan/pycontrol
 
 before_script:
   - export PYTHONPATH=$PWD/src/

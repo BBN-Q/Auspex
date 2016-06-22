@@ -8,7 +8,8 @@ import threading
 import subprocess
 import psutil
 
-from .filter import Filter, InputConnector
+from pycontrol.logging import logger
+from pycontrol.filters.filter import Filter, InputConnector
 
 class BokehServerThread(threading.Thread):
     def __init__(self, notebook=False):

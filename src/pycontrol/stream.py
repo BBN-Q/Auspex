@@ -1,10 +1,7 @@
 import asyncio
 import logging
 from functools import reduce
-
-logger = logging.getLogger('pycontrol')
-logging.basicConfig(format='%(name)s-%(levelname)s: \t%(message)s')
-logger.setLevel(logging.INFO)
+from pycontrol.logging import logger
 
 class DataAxis(object):
     """An axes in a data stream"""
