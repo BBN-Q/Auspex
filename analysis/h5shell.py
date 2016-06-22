@@ -4,9 +4,9 @@
 import h5py
 
 class h5shell(h5py.File):
-	def __init__(self, filename, mode=None, driver=None, 
+	def __init__(self, filename, mode=None, driver=None,
                  libver=None, userblock_size=None, swmr=False, **kwds):
-		super(h5shell, self).__init__(filename, mode=None, driver=None, 
+		super(h5shell, self).__init__(filename, mode=None, driver=None,
                  libver=None, userblock_size=None, swmr=False, **kwds)
 		self._HEAD = self
 
@@ -20,14 +20,14 @@ class h5shell(h5py.File):
 		if grp is None:
 			grp = self._HEAD
 		if isinstance(grp, str): grp = self.get_group(grp)
-		
+
 		ops = options(flag)
 		if ops['r']:
 			subgrps = []
 			grp.visit(lambda x: subgrps.append(x))
 		else:
 			subgrps = [key for key in grp.keys()]
-		
+
 		if ops['p']:
 			display(subgrps, tree=ops['t'])
 		return subgrps
@@ -64,6 +64,16 @@ class h5shell(h5py.File):
 			dname = dset_name[mark+1:]
 		dset = grp.create_dataset(dname,**kwargs)
 		return dset
+
+	def grep(item, *args):
+		""" Search for item in group names """
+		target, flags = filter_args(*args)
+		if target is None:
+			target = self._HEAD
+		if isinstance(target,str):
+			target = self.get_group(target)
+		grps = self.ls(target, flags)
+		return [grp.name for grp in grps if grp.name.find(item)>-1]
 
 	def get_group(self, grp_name):
 		""" Return a group instance from a string """
