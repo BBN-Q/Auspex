@@ -72,7 +72,7 @@ class FakeDataTaker(object):
             if self.stream.done():
                 break
             await asyncio.sleep(0.1)
-            print("Data recevied!")
+            print("Data recieved!")
             await self.stream.push_queues(np.random.rand(50))
             self.stream.points_taken += 50
 
