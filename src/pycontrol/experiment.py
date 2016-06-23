@@ -416,6 +416,7 @@ class Experiment(metaclass=MetaExperiment):
 
         signal.signal(signal.SIGINT, catch_ctrl_c)
 
+        # We want to wait for the sweep method above,
         # not the experiment's run method, so replace this
         # in the list of tasks.
         other_nodes = self.nodes[:]

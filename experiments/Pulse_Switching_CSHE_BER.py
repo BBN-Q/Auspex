@@ -228,19 +228,19 @@ class SwitchingExperiment(Experiment):
 
 if __name__ == '__main__':
     exp = SwitchingExperiment()
-    wr = WriteToHDF5("data\CSHE-Switching\CSHE-Die2-C4R1\CSHE2-C4R1-AP2P_2016-06-21_BER_2ns.h5")
+    wr = WriteToHDF5("data\CSHE-Switching\CSHE-Die2-C4R1\CSHE2-C4R1-AP2P_2016-06-22_BER_5ns.h5")
     pr = Print()
     edges = [(exp.daq_buffer, wr.data)]
     exp.set_graph(edges)
     exp.field.value = -0.013
-    exp.pulse_duration.value = 2e-9 # Fixed at 2 ns
+    exp.pulse_duration.value = 5e-9 # Fixed
 
-    # attempts_list = [1 << int(x) for x in np.linspace(22,22,2)]
-    attempts_list = [int(6e+6), int(6e+6)]
-    voltages_list = np.linspace(0.70,0.75,2)
+    # attempts_list = [1 << int(x) for x in np.linspace(10,15,6)]
+    attempts_list = [int(6e6), int(6e6)]
+    voltages_list = np.linspace(0.65,0.70,2)
     # attempts_list = [1 << int(x) for x in np.linspace(11, 13, 3)]
     # voltages_list = np.linspace(0.3,0.4,3)
-    t1 = []
+    t1 = [] # Keep track of time
     t2 = []
     for att, vol in zip(attempts_list, voltages_list):
         logger.info("Now at ({},{}).".format(att,vol))
