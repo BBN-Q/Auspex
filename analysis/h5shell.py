@@ -48,7 +48,7 @@ class h5shell(h5py.File):
 		grp, flag = _filter_args(*args)
 		if grp is None:
 			grp = self._HEAD
-		if isinstance(grp, str): grp = self._get_group(grp)
+		if isinstance(grp, str): grp = self._get_item(grp)
 
 		ops = _options(flag)
 		if ops['r']: # recursive
@@ -74,7 +74,7 @@ class h5shell(h5py.File):
 
 		"""
 		if grp is None: grp = self
-		if isinstance(grp, str): grp = self._get_group(grp)
+		if isinstance(grp, str): grp = self._get_item(grp)
 		self._HEAD = grp
 		return grp
 
@@ -100,7 +100,7 @@ class h5shell(h5py.File):
 		f.rm('G1') --> remove the subgroup 'G1' in the current group
 		f.rm(grp1) --> remove the group object grp1
 		"""
-		grp = self._get_group(grp)
+		grp = self._get_item(grp)
 		del self[grp.name]
 
 	def touch(self, dset_name, **kwargs):
@@ -113,7 +113,7 @@ class h5shell(h5py.File):
 			dname = dset_name
 		else:
 			path = dset_name[:mark]
-			grp = self._get_group(path)
+			grp = self._get_item(path)
 			dname = dset_name[mark+1:]
 		dset = grp.create_dataset(dname,**kwargs)
 		return dset
@@ -153,14 +153,17 @@ class h5shell(h5py.File):
 			des_name = dest.name + '/'
 			srcs = source.name.split('/')
 			des_name = des_name + srcs[-1]
+			# Avoid overwrite existing object
+			while des_name in self:
+				des_name += '-copy'
 			self.copy(source, des_name, **kwargs)
 
 		if isinstance(src,str):
-			src_obj = self._get_group(src)
+			src_obj = self._get_item(src)
 		else:
 			src_obj = src
 		if isinstance(des,str):
-			des_obj = self._get_group(des)
+			des_obj = self._get_item(des)
 		else:
 			des_obj = des
 
@@ -173,12 +176,51 @@ class h5shell(h5py.File):
 					print("Cannot copy {}. Ignored.".format(item))
 
 		elif isinstance(des,str) and des[-1]!='/':
+			if des[0]!='/':
+				des = self._HEAD.name + '/' + des
+			while des in self:
+				des += '-copy'
 			self.copy(src_obj, des, **kwargs)
 		else:
 			copy_in(src_obj, des_obj, **kwargs)
 
-	def _get_group(self, grp_name):
-		""" Return a group instance from a string """
+	def cat(self,*args):
+		""" View details about an object
+		"""
+		target, flags = _filter_args(*args)
+		if target is None:
+			target = self._HEAD
+		if isinstance(target,str):
+			target = self._get_item(target)
+
+		items = {}
+		items['Type'] = _get_type(target)
+		if items['Type']=='Group':
+			groups = []
+			dsets = []
+			unknowns  =[]
+			for item in target.values():
+				if _get_type(item)=="Dataset":
+					dsets.append(item.name)
+				elif _get_type(item)=="Group":
+					groups.append(item.name)
+				else:
+					unknowns.append([item.name,_get_type(item)])
+			if len(groups)>0: items['Groups'] = groups
+			if len(dsets)>0: items['Datasets'] = dsets
+			if len(unknowns)>0: items['Unknowns'] = unknowns
+		elif items['Type']=='Dataset':
+			items['Shape'] = str(target.shape)
+			items['Type'] = str(target.dtype)
+		attrs = {}
+		for k,v in target.attrs.items():
+			attrs[k] = v
+		items['Attributes'] = attrs
+		#TODO: Add print functionality
+		return items
+
+	def _get_item(self, grp_name):
+		""" Return an object from a string """
 		if grp_name[0]=='/':
 			grp_cur = self
 			grp_name = grp_name[1:]
@@ -193,10 +235,6 @@ class h5shell(h5py.File):
 				grp_cur = grp_cur.parent
 			elif seg in grp_cur:
 				grp_cur = grp_cur[seg]
-			elif seg=='':
-				pass
-			else:
-				print("Group '{}' not found. Ignored.".format(seg))
 		return grp_cur
 
 	def __repr__(self):
@@ -251,3 +289,11 @@ def _display(items, tree=False, info=False):
 			disp = disp + '|__ ' + compos[-1]
 			# if disp[1]=='|': disp = disp[1:]
 			print("{}  {}".format(i,disp))
+
+def _get_type(item):
+	if type(item)==h5py._hl.dataset.Dataset:
+		return "Dataset"
+	elif type(item)==h5py._hl.group.Group:
+		return "Group"
+	else:
+		return str(type(item))
