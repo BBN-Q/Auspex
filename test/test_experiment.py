@@ -52,10 +52,6 @@ class TestExperiment(Experiment):
         descrip = DataStreamDescriptor()
         descrip.add_axis(DataAxis("samples", list(range(self.samples))))
         descrip.add_axis(DataAxis("trials", list(range(self.num_trials))))
-        for k,v in self._parameters.items():
-            descrip.add_param(k, v.value)
-        for k,v in self._constants.items():
-            descrip.add_param(k, v)
         self.chan1.set_descriptor(descrip)
         self.chan2.set_descriptor(descrip)
 

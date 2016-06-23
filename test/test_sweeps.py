@@ -36,17 +36,13 @@ class UnsweptTestExperiment(Experiment):
     samples = 5
 
     def init_instruments(self):
-        self.field.assign_method(lambda x: logger.debug("Field got value" + str(x)))
-        self.freq.assign_method(lambda x: logger.debug("Freq got value" + str(x)))
+        self.field.assign_method(lambda x: logger.debug("Field got value " + str(x)))
+        self.freq.assign_method(lambda x: logger.debug("Freq got value " + str(x)))
 
     def init_streams(self):
         # Add a "base" data axis: say we are averaging 5 samples per trigger
         descrip = DataStreamDescriptor()
         descrip.add_axis(DataAxis("samples", range(self.samples)))
-        for k,v in self._parameters.items():
-            descrip.add_param(k, v.value)
-        for k,v in self._constants.items():
-            descrip.add_param(k, v)
         self.voltage.set_descriptor(descrip)
 
     def __repr__(self):
@@ -78,6 +74,7 @@ class SweptTestExperiment(Experiment):
     # Parameters
     field = FloatParameter(unit="Oe")
     freq  = FloatParameter(unit="Hz")
+    dur   = FloatParameter(default=5,unit="ns")
 
     # DataStreams
     voltage = OutputConnector()
@@ -87,17 +84,14 @@ class SweptTestExperiment(Experiment):
     time_val = 0
 
     def init_instruments(self):
-        self.field.assign_method(lambda x: logger.debug("Field got value" + str(x)))
-        self.freq.assign_method(lambda x: logger.debug("Freq got value" + str(x)))
+        self.field.assign_method(lambda x: logger.debug("Field got value " + str(x)))
+        self.freq.assign_method(lambda x: logger.debug("Freq got value " + str(x)))
+        self.dur.assign_method(lambda x: logger.debug("Duration got value " + str(x)))
 
     def init_streams(self):
         # Add a "base" data axis: say we are averaging 5 samples per trigger
         descrip = DataStreamDescriptor()
         descrip.add_axis(DataAxis("samples", range(self.samples)))
-        for k,v in self._parameters.items():
-            descrip.add_param(k, v.value)
-        for k,v in self._constants.items():
-            descrip.add_param(k, v)
         self.voltage.set_descriptor(descrip)
 
     def __repr__(self):
@@ -255,6 +249,7 @@ class SweepTestCase(unittest.TestCase):
                            [51, 2.5],
                            [61, 1.4]])
         sweep.update_values(coords2)
+        exp.dur.value = 2
         exp.reset()
         self.assertTrue(pri.data.input_streams[0].num_points() == len(coords2)*exp.samples)
         self.assertFalse(pri.data.input_streams[0].done())
