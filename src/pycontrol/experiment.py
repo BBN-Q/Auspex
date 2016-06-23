@@ -20,13 +20,12 @@ from pycontrol.logging import logger
 class Parameter(object):
     """ Encapsulates the information for an experiment parameter"""
 
-    def __init__(self, name=None, unit=None, default=None, abstract=False):
+    def __init__(self, name=None, unit=None, default=None):
         self.name     = name
         self._value   = default
         self.unit     = unit
         self.default  = default
         self.method   = None
-        self.abstract = abstract # Is this something we can actually push?
 
         # Hooks to be called before or after updating a sweep parameter
         self.pre_push_hooks = []
@@ -65,9 +64,7 @@ class Parameter(object):
         self.method = method
 
     def push(self):
-        if self.method is None:
-            raise Exception("No method for this parameter is defined...")
-        if not self.abstract:
+        if self.method is not None:
             # logger.debug("Calling pre_push_hooks of Parameter %s with value %s" % (self.name, self._value) )
             for pph in self.pre_push_hooks:
                 pph()
