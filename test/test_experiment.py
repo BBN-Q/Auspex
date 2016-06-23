@@ -44,11 +44,18 @@ class TestExperiment(Experiment):
     samples    = 3
     num_trials = 5
 
+    freq_1.assign_method(lambda x: print("Set: {}".format(x)))
+    freq_2.assign_method(lambda x: print("Set: {}".format(x)))
+
     def init_streams(self):
         # Add "base" data axes
         descrip = DataStreamDescriptor()
         descrip.add_axis(DataAxis("samples", list(range(self.samples))))
         descrip.add_axis(DataAxis("trials", list(range(self.num_trials))))
+        for k,v in self._parameters.items():
+            descrip.add_param(k, v.value)
+        for k,v in self._constants.items():
+            descrip.add_param(k, v)
         self.chan1.set_descriptor(descrip)
         self.chan2.set_descriptor(descrip)
 

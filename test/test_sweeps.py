@@ -43,6 +43,10 @@ class UnsweptTestExperiment(Experiment):
         # Add a "base" data axis: say we are averaging 5 samples per trigger
         descrip = DataStreamDescriptor()
         descrip.add_axis(DataAxis("samples", range(self.samples)))
+        for k,v in self._parameters.items():
+            descrip.add_param(k, v.value)
+        for k,v in self._constants.items():
+            descrip.add_param(k, v)
         self.voltage.set_descriptor(descrip)
 
     def __repr__(self):
@@ -90,6 +94,10 @@ class SweptTestExperiment(Experiment):
         # Add a "base" data axis: say we are averaging 5 samples per trigger
         descrip = DataStreamDescriptor()
         descrip.add_axis(DataAxis("samples", range(self.samples)))
+        for k,v in self._parameters.items():
+            descrip.add_param(k, v.value)
+        for k,v in self._constants.items():
+            descrip.add_param(k, v)
         self.voltage.set_descriptor(descrip)
 
     def __repr__(self):
@@ -269,9 +277,9 @@ class SweepTestCase(unittest.TestCase):
     def test_writehdf5(self):
         exp = UnsweptTestExperiment()
         pr = Print()
-        wr = WriteToHDF5("test_write.h5")
         if os.path.exists("test_write-0000.h5"):
             os.remove("test_write-0000.h5")
+        wr = WriteToHDF5("test_write.h5")
 
         edges = [(exp.voltage, pr.data), (exp.voltage, wr.data)]
         exp.set_graph(edges)
