@@ -3,4 +3,5 @@
 *.png
 *.xml
 *.html
+*.h5
 data/*

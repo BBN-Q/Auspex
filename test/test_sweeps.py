@@ -36,8 +36,8 @@ class UnsweptTestExperiment(Experiment):
     samples = 5
 
     def init_instruments(self):
-        self.field.assign_method(lambda x: logger.debug("Field got value" + str(x)))
-        self.freq.assign_method(lambda x: logger.debug("Freq got value" + str(x)))
+        self.field.assign_method(lambda x: logger.debug("Field got value " + str(x)))
+        self.freq.assign_method(lambda x: logger.debug("Freq got value " + str(x)))
 
     def init_streams(self):
         # Add a "base" data axis: say we are averaging 5 samples per trigger
@@ -74,6 +74,7 @@ class SweptTestExperiment(Experiment):
     # Parameters
     field = FloatParameter(unit="Oe")
     freq  = FloatParameter(unit="Hz")
+    dur   = FloatParameter(default=5,unit="ns")
 
     # DataStreams
     voltage = OutputConnector()
@@ -83,8 +84,9 @@ class SweptTestExperiment(Experiment):
     time_val = 0
 
     def init_instruments(self):
-        self.field.assign_method(lambda x: logger.debug("Field got value" + str(x)))
-        self.freq.assign_method(lambda x: logger.debug("Freq got value" + str(x)))
+        self.field.assign_method(lambda x: logger.debug("Field got value " + str(x)))
+        self.freq.assign_method(lambda x: logger.debug("Freq got value " + str(x)))
+        self.dur.assign_method(lambda x: logger.debug("Duration got value " + str(x)))
 
     def init_streams(self):
         # Add a "base" data axis: say we are averaging 5 samples per trigger
@@ -247,6 +249,7 @@ class SweepTestCase(unittest.TestCase):
                            [51, 2.5],
                            [61, 1.4]])
         sweep.update_values(coords2)
+        exp.dur.value = 2
         exp.reset()
         self.assertTrue(pri.data.input_streams[0].num_points() == len(coords2)*exp.samples)
         self.assertFalse(pri.data.input_streams[0].done())
@@ -269,9 +272,9 @@ class SweepTestCase(unittest.TestCase):
     def test_writehdf5(self):
         exp = UnsweptTestExperiment()
         pr = Print()
-        wr = WriteToHDF5("test_write.h5")
         if os.path.exists("test_write-0000.h5"):
             os.remove("test_write-0000.h5")
+        wr = WriteToHDF5("test_write.h5")
 
         edges = [(exp.voltage, pr.data), (exp.voltage, wr.data)]
         exp.set_graph(edges)

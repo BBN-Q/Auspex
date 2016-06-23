@@ -20,13 +20,12 @@ from pycontrol.logging import logger
 class Parameter(object):
     """ Encapsulates the information for an experiment parameter"""
 
-    def __init__(self, name=None, unit=None, default=None, abstract=False):
+    def __init__(self, name=None, unit=None, default=None):
         self.name     = name
         self._value   = default
         self.unit     = unit
         self.default  = default
         self.method   = None
-        self.abstract = abstract # Is this something we can actually push?
 
         # Hooks to be called before or after updating a sweep parameter
         self.pre_push_hooks = []
@@ -65,9 +64,7 @@ class Parameter(object):
         self.method = method
 
     def push(self):
-        if self.method is None:
-            raise Exception("No method for this parameter is defined...")
-        if not self.abstract:
+        if self.method is not None:
             # logger.debug("Calling pre_push_hooks of Parameter %s with value %s" % (self.name, self._value) )
             for pph in self.pre_push_hooks:
                 pph()
@@ -272,6 +269,7 @@ class Experiment(metaclass=MetaExperiment):
 
         # Run the stream init
         self.init_streams()
+        self.update_descriptors()
 
     def set_graph(self, edges):
         unique_nodes = []
@@ -320,6 +318,10 @@ class Experiment(metaclass=MetaExperiment):
     def update_descriptors(self):
         logger.debug("Starting descriptor update in experiment.")
         for oc in self.output_connectors.values():
+            for k,v in self._parameters.items():
+                oc.descriptor.add_param(k, v.value)
+            for k,v in self._constants.items():
+                oc.descriptor.add_param(k, v)
             oc.update_descriptors()
         # TODO: have this push any changes to JSON file
         # if we're using Quince to define connections.

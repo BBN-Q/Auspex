@@ -19,9 +19,6 @@ class WriteToHDF5(Filter):
 
         # Increment the filename until we find one we want.
         i = 0
-        # while os.path.exists("{:04d}-{}".format(i,filename)):
-        #     i += 1
-        # self.filename = "{:04d}-{}".format(i,filename)
         ext = filename.find('.h5')
         if ext > -1:
             filename = filename[:ext]
@@ -35,6 +32,7 @@ class WriteToHDF5(Filter):
 
         stream     = self.data.input_streams[0]
         axes       = stream.descriptor.axes
+        params     = stream.descriptor.params
         data_dims  = stream.descriptor.data_dims()
         num_axes   = len(axes)
         chunk_size = axes[-1].num_points()
@@ -49,7 +47,10 @@ class WriteToHDF5(Filter):
             self.file.create_group('axes')
         self.file.create_dataset(dataset_name, data_dims, dtype='f', compression="gzip")
         data = self.file[dataset_name]
-        # import ipdb; ipdb.set_trace()
+
+        # Write params into attrs
+        for k,v in params.items():
+            data.attrs[k] = v
 
         # Go through and create axis dimensions
         for i, axis in enumerate(axes):

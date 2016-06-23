@@ -26,10 +26,14 @@ class DataStreamDescriptor(object):
     def __init__(self):
         super(DataStreamDescriptor, self).__init__()
         self.axes = []
+        self.params = {} # Parameters associated with each dataset
         self.parent = None
 
     def add_axis(self, axis):
         self.axes.insert(0, axis)
+
+    def add_param(self, key, value):
+        self.params[key] = value
 
     def num_dims(self):
         return len(self.axes)

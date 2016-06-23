@@ -44,6 +44,9 @@ class TestExperiment(Experiment):
     samples    = 3
     num_trials = 5
 
+    freq_1.assign_method(lambda x: print("Set: {}".format(x)))
+    freq_2.assign_method(lambda x: print("Set: {}".format(x)))
+
     def init_streams(self):
         # Add "base" data axes
         descrip = DataStreamDescriptor()
