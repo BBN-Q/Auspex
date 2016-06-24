@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import numbers
 from functools import reduce
 from pycontrol.logging import logger
 
@@ -84,7 +85,7 @@ class DataStream(object):
         return (self.points_taken >= self.num_points() - 1) and (self.num_points() > 0)
 
     def reset(self):
-        self.points_taken = 0 
+        self.points_taken = 0
         if self.start_connector is not None:
             self.start_connector.points_taken = 0
 
@@ -151,7 +152,7 @@ class OutputConnector(object):
         self.parent = parent
 
     # We allow the connectors itself to posess
-    # a descriptor, that it may pass 
+    # a descriptor, that it may pass
     def set_descriptor(self, descriptor):
         self.descriptor = descriptor
 
@@ -161,7 +162,7 @@ class OutputConnector(object):
         stream.start_connector = self
 
     def update_descriptors(self):
-        logger.debug("Starting descriptor update in output connector %s, where the descriptor is %s", 
+        logger.debug("Starting descriptor update in output connector %s, where the descriptor is %s",
                         self.name, self.descriptor)
         for stream in self.output_streams:
             logger.debug("\tnow setting stream %s to %s", stream, self.descriptor)
@@ -178,6 +179,8 @@ class OutputConnector(object):
     async def push(self, data):
         if hasattr(data, 'size'):
             self.points_taken += data.size
+        elif isinstance(data, numbers.Number):
+            self.points_taken += 1
         else:
             self.points_taken += len(data)
         for stream in self.output_streams:
