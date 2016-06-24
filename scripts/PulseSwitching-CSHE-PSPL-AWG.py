@@ -8,9 +8,11 @@ from PyDAQmx import *
 
 import numpy as np
 import time
+import os
 from tqdm import tqdm
 from scipy.interpolate import interp1d
 import pandas as pd
+from switching_plots import *
 
 # Experimental Topology
 # lockin AO 2 -> Analog Attenuator Vdd
@@ -18,6 +20,37 @@ import pandas as pd
 # Keithley Output -> Voltage divider with 1 MOhm, DAQmx AI1
 # AWG Sync Marker Out -> DAQmx PFI0
 # AWG Samp. Marker Out -> PSPL Trigger
+
+# PARAMETERS: Confirm these before running
+SET_FIELD = -0.013 # Tesla
+MEASURE_CURRENT = 3.0e-6 # Ampere, should not be zero!
+BASE_ATTENUATION = 14
+RESET_AMPLITUDE = 0.12
+RESET_DURATION = 10.0e-9
+
+DURATIONS = 1e-9*np.arange(0.1, 5.01, 0.1) # List of durations
+ATTENUATIONS = np.arange(-12.01, -6, 0.1) # Between -28 and -6
+
+AP_TO_P = True
+SETTLE_DELAY = 200e-6
+REPS = 1 << 8 # Number of attemps
+SAMPLES_PER_TRIGGER = 5 # Samples per trigger
+
+# File to save
+FOLDER = "data\\CSHE-Switching\\CSHE-Die2-C4R1"
+FILENAME = "CSHE-2-C4R1_Phase_Diagram" # No extension
+DATASET = "CSHE-2-C4R1/2016-06-16/Phase_Diagram_AP2P"
+
+def mk_dataset(f, dsetname, data):
+    """ Make new dataset in the HDF5 file handle f """
+    dset_list = []
+    f.visit(lambda x: dset_list.append(x))
+    dname = dsetname
+    while dname in dset_list:
+        print("Found an existing dataset. Increase name by 1.")
+        dname = dname[:-1] + chr(ord(dname[-1])+1)
+    print("Make new dataset: %s" %dname)
+    return f.create_dataset(dname, data=data)
 
 def arb_pulse(amplitude, duration, sample_rate=12e9):
     pulse_points = int(duration*sample_rate)
@@ -36,16 +69,16 @@ if __name__ == '__main__':
     keith = Keithley2400("GPIB0::25::INSTR")
     lock  = SR865("USB0::0xB506::0x2000::002638::INSTR")
 
-    APtoP = False
-    polarity = 1 if APtoP else -1
+    APtoP = AP_TO_P
+    polarity = -1 if APtoP else 1
 
-    reset_amplitude = 0.19
-    reset_duration  = 5.0e-9
+    reset_amplitude = RESET_AMPLITUDE
+    reset_duration  = RESET_DURATION
 
     keith.triad()
     keith.conf_meas_res(res_range=1e6)
     keith.conf_src_curr(comp_voltage=0.5, curr_range=1.0e-5)
-    keith.current = 5e-6
+    keith.current = 3e-6
     mag.ramp()
 
     arb.set_output(True, channel=1)
@@ -86,8 +119,8 @@ if __name__ == '__main__':
     nidaq_trig_segment_id = arb.define_waveform(len(nidaq_trig_wf))
     arb.upload_waveform(nidaq_trig_wf, nidaq_trig_segment_id)
 
-    reps = 1 << 10
-    settle_delay = 50e-6
+    reps = REPS
+    settle_delay = SETTLE_DELAY
     settle_pts = int(640*np.ceil(settle_delay * 12e9 / 640))
 
     scenario = Scenario()
@@ -96,11 +129,11 @@ if __name__ == '__main__':
     seq.add_waveform(rst_segment_id)
     seq.add_idle(settle_pts, 0.0)
     seq.add_waveform(nidaq_trig_segment_id)
-    seq.add_idle(1 << 14, 0.0) # bonus non-contiguous memory delay
+    seq.add_idle(1 << 16, 0.0) # bonus non-contiguous memory delay
     seq.add_waveform(pspl_trig_segment_id)
     seq.add_idle(settle_pts, 0.0)
     seq.add_waveform(nidaq_trig_segment_id)
-    seq.add_idle(1 << 14, 0.0) # bonus non-contiguous memory delay
+    seq.add_idle(1 << 16, 0.0) # bonus non-contiguous memory delay
     scenario.sequences.append(seq)
     arb.upload_scenario(scenario, start_idx=0)
 
@@ -109,14 +142,14 @@ if __name__ == '__main__':
 
     # Setup picosecond
     pspl.duration  = 5e-9
-    pspl_attenuation = 12
+    pspl_attenuation = BASE_ATTENUATION
     pspl.amplitude = polarity*7.5*np.power(10, -pspl_attenuation/20)
     pspl.trigger_source = "EXT"
     pspl.output = True
     pspl.trigger_level = 0.1
 
     # Ramp to the switching field
-    mag.set_field(-0.015) # 85G
+    mag.set_field(SET_FIELD) # -130 G
 
     # Variable attenuator
     df = pd.read_csv("calibration/RFSA2113SB.tsv", sep="\t")
@@ -127,9 +160,9 @@ if __name__ == '__main__':
     read = int32()
 
     # DAQmx Configure Code
-    samps_per_trig = 10
+    samps_per_trig = SAMPLES_PER_TRIGGER
     analog_input.CreateAIVoltageChan("Dev1/ai1", "", DAQmx_Val_RSE, 0, 1.0, DAQmx_Val_Volts, None)
-    analog_input.CfgSampClkTiming("", 1e6, DAQmx_Val_Rising, DAQmx_Val_FiniteSamps , 10)
+    analog_input.CfgSampClkTiming("", 1e6, DAQmx_Val_Rising, DAQmx_Val_FiniteSamps , samps_per_trig)
     analog_input.CfgInputBuffer(samps_per_trig * 2* reps)
     analog_input.CfgDigEdgeStartTrig("/Dev1/PFI0", DAQmx_Val_Rising)
     analog_input.SetStartTrigRetriggerable(1)
@@ -139,15 +172,12 @@ if __name__ == '__main__':
 
     arb.scenario_start_index = 0
     arb.run()
-    attens = np.arange(-12.01, -6, 0.2)
-    #attens    = np.arange(-9.01,-6.00,0.5)
-    # durations = np.array([5.0e-9])
-    durations = 1e-9*np.arange(0.1, 5.01, 0.2)
 
+    attens = ATTENUATIONS
+    durations = DURATIONS
     volts = 7.5*np.power(10, (-pspl_attenuation+attens)/20)
     buffers = np.empty((len(attens)*len(durations), 2*samps_per_trig*reps))
     idx = 0
-    # lock.ao3 = attenuator_lookup(attens[0])
 
     for dur in tqdm(durations, leave=True):
         pspl.duration = dur
@@ -163,6 +193,7 @@ if __name__ == '__main__':
 
             idx += 1
 
+    # Shutting down
     try:
         analog_input.StopTask()
     except Exception as e:
@@ -170,5 +201,18 @@ if __name__ == '__main__':
         pass
     arb.stop()
     keith.current = 0.0
-    mag.zero()
+    # mag.zero()
     pspl.output = False
+
+    # Save the data
+    buffer_avg = np.array(average_buffers(buffers, samps_per_trig))
+    fname = os.path.join(FOLDER, FILENAME+'.h5')
+    with h5py.File(fname,'a') as f:
+        data1 = volts
+        data2 = durations
+        data3 = buffer_avg
+        dset1 = mk_dataset(f, DATASET+'_VOLTS_A', data1)
+        dset2 = mk_dataset(f, DATASET+'_DURATIONS_A', data2)
+        dset3 = mk_dataset(f, DATASET+'_OUT_A', data2)
+    # Plot
+    switching_phase_diagram(buffer_avg, durations, volts)
