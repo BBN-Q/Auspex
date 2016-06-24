@@ -48,10 +48,7 @@ class WriteToHDF5(Filter):
         self.file.create_dataset(dataset_name, data_dims, dtype='f', compression="gzip")
         data = self.file[dataset_name]
 
-        # Write params into attrs
-        for k,v in params.items():
-            data.attrs[k] = v
-
+        axis_names = []
         # Go through and create axis dimensions
         for i, axis in enumerate(axes):
 
@@ -67,12 +64,19 @@ class WriteToHDF5(Filter):
                     data.dims.create_scale(self.file['axes'][new_axis_name], cn)
                     data.dims[i].attach_scale(self.file['axes'][new_axis_name])
                     logger.debug("HDF5: adding axis %s to dim %d", axis.name, i)
+                    axis_names.append(cn)
             else:
                 logger.debug("HDF5: adding axis %s to dim %d", axis.name, i)
                 new_axis_name =  axis.name + '-' + dataset_name
                 self.file['axes'][new_axis_name] = points
                 data.dims.create_scale(self.file['axes'][new_axis_name], axis.name)
                 data.dims[i].attach_scale(self.file['axes'][new_axis_name])
+                axis_names.append(axis.name)
+
+        # Write params into attrs
+        for k,v in params.items():
+            if k not in axis_names:
+                data.attrs[k] = v
 
         r_idx = 0
         w_idx = 0

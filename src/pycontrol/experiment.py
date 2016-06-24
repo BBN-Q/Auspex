@@ -230,7 +230,7 @@ class MetaExperiment(type):
             elif isinstance(v, OutputConnector):
                 logger.debug("Found '%s' output connector.", k)
                 self._output_connectors.append(k)
-            elif isinstance(v, numbers.Number):
+            elif isinstance(v, numbers.Number) or isinstance(v, str):
                 self._constants[k] = v
                 # Keep track of numerical parameters
 
