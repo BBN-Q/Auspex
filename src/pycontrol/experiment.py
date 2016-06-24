@@ -318,13 +318,13 @@ class Experiment(metaclass=MetaExperiment):
     def update_descriptors(self):
         logger.debug("Starting descriptor update in experiment.")
         for oc in self.output_connectors.values():
-            for k in dir(self):
-                v = getattr(self,k)
-                if isinstance(v, Parameter):
-                    oc.descriptor.add_param(k, v.value)
-                    if v.unit is not None:
-                        oc.descriptor.add_param('unit_'+k, v.unit)
-                if isinstance(v, numbers.Number) or isinstance(v, str):
+            for k,v in self._parameters.items():
+                oc.descriptor.add_param(k, v.value)
+                if v.unit is not None:
+                    oc.descriptor.add_param('unit_'+k, v.unit)
+            for k in self._constants.keys():
+                if hasattr(self,k):
+                    v = getattr(self,k)
                     oc.descriptor.add_param(k, v)
             oc.update_descriptors()
         # TODO: have this push any changes to JSON file
