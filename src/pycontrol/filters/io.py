@@ -84,7 +84,7 @@ class WriteToHDF5(Filter):
         temp = np.empty(stream.num_points())
 
         while True:
-            if stream.done():
+            if stream.done() and w_idx == stream.num_points():
                 break
 
             logger.debug("HDF5 awaiting data")
@@ -96,9 +96,11 @@ class WriteToHDF5(Filter):
             logger.debug("HDF5: %s got data %s of length %d", stream.name, new_data, new_data.size)
 
             temp[r_idx:r_idx+new_data.size] = new_data
+            logger.debug("HDF5: Data buffer is %s", temp)
             r_idx += new_data.size
+            logger.debug("HDF5: Read index at %d", r_idx)
 
-            num_chunks = int(new_data.size/chunk_size)
+            num_chunks = int(r_idx/chunk_size)
             logger.debug("HDF5: got enough points for %d rows.", num_chunks)
 
             for i in range(num_chunks):
@@ -107,9 +109,15 @@ class WriteToHDF5(Filter):
                 data[tuple(coord)] = temp[i*chunk_size:(i+1)*chunk_size]
                 w_idx += chunk_size
 
-            extra = r_idx - num_chunks*chunk_size
-            temp[0:extra] = temp[num_chunks*chunk_size:num_chunks*chunk_size + extra]
-            r_idx = extra
+            logger.debug("HDF5: Write index at %d", w_idx)
+
+            # import ipdb; ipdb.set_trace()
+            if num_chunks > 0:
+                extra = r_idx - num_chunks*chunk_size
+                temp[0:extra] = temp[num_chunks*chunk_size:num_chunks*chunk_size + extra]
+                r_idx = extra
+
+
 
             logger.debug("HDF5: %s has written %d points", stream.name, w_idx)
 

@@ -180,7 +180,7 @@ class OutputConnector(object):
         return self.descriptor.num_points()
 
     def done(self):
-        return (self.points_taken >= self.descriptor.num_points() - 1) and (self.descriptor.num_points() > 0)
+        return (self.points_taken > self.descriptor.num_points() - 1) and (self.descriptor.num_points() > 0)
 
     async def push(self, data):
         if hasattr(data, 'size'):

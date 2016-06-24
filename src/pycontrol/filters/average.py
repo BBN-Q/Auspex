@@ -26,7 +26,7 @@ class Average(Filter):
     def axis(self, value):
         self._axis = value
         if self.data.descriptor is not None:
-            self.update_descriptors() 
+            self.update_descriptors()
 
     def update_descriptors(self):
         logger.debug("Updating averager descriptors based on input descriptor: %s.", self.data.descriptor)
@@ -38,10 +38,10 @@ class Average(Filter):
             if self.axis not in names:
                 raise ValueError("Could not find axis {} within the DataStreamDescriptor {}".format(self.axis, self.descriptor_in))
             self.axis = names.index(self.axis)
-            
+
         logger.debug("Averaging over axis #%d: %s", self.axis, names[self.axis])
 
-        self.data_dims = descriptor_in.data_dims() 
+        self.data_dims = descriptor_in.data_dims()
         if self.axis == len(descriptor_in.axes) - 1:
             logger.debug("Performing scalar average!")
             self.points_before_partial_average = 1
@@ -101,7 +101,7 @@ class Average(Filter):
             new_data = await self.data.input_streams[0].queue.get()
             logger.debug("%s got data %s", self.name, new_data)
             logger.debug("Now has %d of %d points.", self.data.input_streams[0].points_taken, self.data.input_streams[0].num_points())
-            
+
             # todo: handle unflattened data separately
             if len(new_data.shape) > 1:
                 new_data = new_data.flatten()
@@ -110,7 +110,7 @@ class Average(Filter):
             idx += len(new_data)
 
             # Grab all of the partial data
-            num_partials = int(idx/self.points_before_partial_average)
+            num_partials = int((idx+1)/self.points_before_partial_average)
             if completed_averages + num_partials > self.num_averages:
                 num_partials = self.num_averages - completed_averages
 
@@ -120,21 +120,21 @@ class Average(Filter):
                 b = i*self.points_before_partial_average
                 e = b + self.points_before_partial_average
                 self.sum_so_far += np.reshape(temp[b:e], self.avg_dims)
-                completed_averages += 1 
+                completed_averages += 1
                 for output_stream in self.partial_average.output_streams:
                     await output_stream.push(self.sum_so_far/completed_averages)
 
             logger.debug("Now has %d of %d averages.", completed_averages, self.num_averages)
-            
+
 
             # Shift any extra data back to the beginnig of the array
-            extra = idx - num_partials*self.points_before_partial_average
-            temp[0:extra] = temp[num_partials*self.points_before_partial_average:num_partials*self.points_before_partial_average + extra]
-            idx = extra
+            if num_partials > 0:
+                extra = idx + 1 - num_partials*self.points_before_partial_average
+                temp[0:extra] = temp[num_partials*self.points_before_partial_average:num_partials*self.points_before_partial_average + extra]
+                idx = extra
 
             if completed_averages == self.num_averages:
                 for output_stream in self.final_average.output_streams:
                     await output_stream.push(self.sum_so_far/self.num_averages)
                 self.sum_so_far = 0.0
                 completed_averages = 0
-            
