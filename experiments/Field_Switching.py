@@ -31,7 +31,7 @@ class FieldSwitchingExperiment(Experiment):
 
     # Description
     sample = "CSHE2-C4R1"
-    comment = " "
+    comment = "Field Switching"
 
     # Parameters
     field          = FloatParameter(default=0.0, unit="T")
@@ -72,9 +72,10 @@ class FieldSwitchingExperiment(Experiment):
         res = self.keith.resistance
         await self.resistance.push(res)
         # Seemingly we need to give the filters some time to catch up here...
-        await asyncio.sleep(0.02)
         logger.debug("Stream has filled {} of {} points".format(self.resistance.points_taken,
                                                             self.resistance.num_points() ))
+        # Seemingly we need to give the filters some time to catch up here...
+        await asyncio.sleep(0.02)
 
     def shutdown_instruments(self):
         self.keith.current = 0.0e-5
@@ -83,19 +84,21 @@ class FieldSwitchingExperiment(Experiment):
 def extract_data(fname):
     f = h5shell(fname, 'r')
     axes = f['axes']
-    fields = axes[axes.grep('field')[0]].value
+    fields = axes[f.grep('field','axes')[0]].value
     resistances = f[f.grep('data')[0]].value
     f.close()
     return fields, resistances
 
 if __name__ == '__main__':
     exp = FieldSwitchingExperiment()
-    wr = WriteToHDF5("data\CSHE-Switching\CSHE-Die2-C4R1\CSHE2-C4R1-FieldSwitch_2016-06-24.h5")
-    # pr = Print()
+    exp.sample = "CSHE-2 C4R7"
+    exp.comment = "Field Sweep"
+    wr = WriteToHDF5("data\CSHE-Switching\CSHE-Die2-C4R7\CSHE2-C4R7-FieldSwitch_2016-06-24.h5")
     edges = [(exp.resistance, wr.data)]
     exp.set_graph(edges)
     exp.init_instruments()
-    fields = np.linspace(-0.01,0.01,10)
+
+    fields = np.linspace(0,-0.02,20)
     fields = np.append(fields, np.flipud(fields))
     main_sweep = exp.add_sweep(exp.field,fields)
     exp.run_sweeps()

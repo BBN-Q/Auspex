@@ -88,9 +88,6 @@ class SwitchingExperiment(Experiment):
         self.arb.set_output(False, channel=2)
         self.arb.sample_freq = 12.0e9
         self.arb.waveform_output_mode = "WSPEED"
-        self.arb.abort()
-        self.arb.delete_all_waveforms()
-        self.arb.reset_sequence_table()
         self.arb.set_output_route("DC", channel=1)
         self.arb.voltage_amplitude = 1.0
         self.arb.set_marker_level_low(0.0, channel=1, marker_type="sync")
@@ -98,6 +95,36 @@ class SwitchingExperiment(Experiment):
         self.arb.continuous_mode = False
         self.arb.gate_mode = False
 
+        self.update_attempts()
+
+        # ===================
+        #   Setup the PSPL
+        # ===================
+
+        self.pspl.amplitude = self.polarity*7.5*np.power(10, -self.pspl_atten/20.0)
+        self.pspl.trigger_source = "EXT"
+        self.pspl.trigger_level = 0.1
+        self.pspl.output = True
+
+        def set_voltage(voltage):
+            # Calculate the voltage controller attenuator setting
+            # import ipdb; ipdb.set_trace()
+            vc_atten = abs(20.0 * np.log10(abs(voltage)/7.5)) - self.pspl_atten
+            if vc_atten <= 6.0:
+                raise ValueError("Voltage controlled attenuation under range (6dB).")
+            self.atten.set_attenuation(vc_atten)
+            time.sleep(0.02)
+
+        # Assign methods
+        self.field.assign_method(self.mag.set_field)
+        self.pulse_duration.assign_method(self.pspl.set_duration)
+        self.pulse_voltage.assign_method(set_voltage)
+        self.attempts.assign_method(lambda x: x)
+
+        # Create hooks for relevant delays
+        self.pulse_duration.add_post_push_hook(lambda: time.sleep(0.1))
+
+    def update_attempts(self):
         def arb_pulse(amplitude, duration, sample_rate=12e9):
             pulse_points = int(duration*sample_rate)
 
@@ -107,6 +134,10 @@ class SwitchingExperiment(Experiment):
                 wf = np.zeros(64*np.ceil(pulse_points/64.0))
             wf[:pulse_points] = amplitude
             return wf
+
+        self.arb.abort()
+        self.arb.delete_all_waveforms()
+        self.arb.reset_sequence_table()
 
         reset_wf    = arb_pulse(-self.polarity*self.reset_amplitude, self.reset_duration)
         wf_data     = M8190A.create_binary_wf_data(reset_wf)
@@ -163,33 +194,6 @@ class SwitchingExperiment(Experiment):
         self.analog_input.SetStartTrigRetriggerable(1)
         self.analog_input.StartTask()
 
-        # ===================
-        #   Setup the PSPL
-        # ===================
-
-        self.pspl.amplitude = self.polarity*7.5*np.power(10, -self.pspl_atten/20.0)
-        self.pspl.trigger_source = "EXT"
-        self.pspl.trigger_level = 0.1
-        self.pspl.output = True
-
-        def set_voltage(voltage):
-            # Calculate the voltage controller attenuator setting
-            # import ipdb; ipdb.set_trace()
-            vc_atten = abs(20.0 * np.log10(abs(voltage)/7.5)) - self.pspl_atten
-            if vc_atten <= 6.0:
-                raise ValueError("Voltage controlled attenuation under range (6dB).")
-            self.atten.set_attenuation(vc_atten)
-            time.sleep(0.02)
-
-        # Assign methods
-        self.field.assign_method(self.mag.set_field)
-        self.pulse_duration.assign_method(self.pspl.set_duration)
-        self.pulse_voltage.assign_method(set_voltage)
-        self.attempts.assign_method(lambda x: x)
-
-        # Create hooks for relevant delays
-        self.pulse_duration.add_post_push_hook(lambda: time.sleep(0.1))
-
     def init_streams(self):
         # Baked in data axes
         descrip = DataStreamDescriptor()
@@ -244,10 +248,10 @@ if __name__ == '__main__':
     t2 = []
     for att, vol in zip(attempts_list, voltages_list):
         logger.info("Now at ({},{}).".format(att,vol))
+        t1.append(time.time())
         exp.attempts.value = att
         exp.pulse_voltage.value = vol
-        t1.append(time.time())
-        exp.init_instruments()
+        exp.update_attempts()
         exp.init_streams()
         exp.reset()
         exp.run_loop()
