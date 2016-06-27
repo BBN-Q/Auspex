@@ -63,12 +63,17 @@ class ProgressBarExperiment(Experiment):
         print("Shutted down.")
 
 class ProgressBar(Filter):
-    " Display progress bar(s) on the terminal. "
+    """ Display progress bar(s) on the terminal.
+
+    n: number of progress bars to be display, \
+    corresponding to the number of axes (counting from outer most)
+    """
     data = InputConnector()
     def __init__(self, num=1):
         super(ProgressBar,self).__init__()
         self.num    = num
         self.bars   = []
+        self.w_id   = 0
 
     async def run(self):
         self.stream = self.data.input_streams[0]
@@ -77,36 +82,38 @@ class ProgressBar(Filter):
         totals = [self.stream.descriptor.num_points_through_axis(axis) for axis in range(num_axes)]
         chunk_sizes = [max(1,self.stream.descriptor.num_points_through_axis(axis+1)) for axis in range(num_axes)]
         self.num = min(self.num, num_axes)
+
         for i in range(self.num):
-            self.bars.append(tqdm(total=totals[i]/chunk_sizes[i], leave=True))
+            self.bars.append(tqdm(total=totals[i]/chunk_sizes[i]))
 
         while True:
+            if self.stream.done() and self.w_id==self.stream.num_points():
+                break
+
             new_data = np.array(await self.stream.queue.get()).flatten()
             while self.stream.queue.qsize() > 0:
                 new_data = np.append(new_data, np.array(self.stream.queue.get_nowait()).flatten())
+            self.w_id += new_data.size
             num_data = self.stream.points_taken
             for i in range(self.num):
                 # Somehow position cannot be zero, to avoid some odd calculation
-                pos = max(0.1,int(num_data / chunk_sizes[i]))
-                self.bars[i].n = pos
-                # Reset the progress bar with a new one
+                pos = max(0.001*self.bars[i].total, int(10*num_data / chunk_sizes[i])/10.0)
                 if num_data == 0:
-                    self.bars[i] = tqdm(total=totals[i]/chunk_sizes[i], leave=True)
-                self.bars[i].update(0)
+                    # Reset the progress bar with a new one
+                    self.bars[i].close()
+                    self.bars[i] = tqdm(total=totals[i]/chunk_sizes[i], initial=pos)
+                self.bars[i].update(pos - self.bars[i].n)
                 num_data = num_data % chunk_sizes[i]
-            if self.stream.done():
-                print("Got enough data.")
-                for bar in self.bars:
-                    bar.close()
-                break
+            
 
 if __name__ == '__main__':
     exp = ProgressBarExperiment()
     exp.sample = "Test ProgressBar"
     exp.comment = "Test"
-    wr = WriteToHDF5("test_data.h5")
+    # wr = WriteToHDF5("test_data.h5")
     progbar = ProgressBar(num=3)
-    edges = [(exp.resistance, wr.data),(exp.resistance,progbar.data)]
+    # edges = [(exp.resistance, wr.data),(exp.resistance,progbar.data)]
+    edges = [(exp.resistance,progbar.data)]
     exp.set_graph(edges)
     exp.init_instruments()
     main_sweep = exp.add_sweep(exp.field,np.linspace(0,-0.02,6))
