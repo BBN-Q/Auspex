@@ -302,6 +302,10 @@ class Experiment(metaclass=MetaExperiment):
 
     def run_loop(self):
         """This runs the asyncio main loop."""
+        for n in self.nodes:
+            if hasattr(n, 'final_init'):
+                n.final_init()
+
         # Set any static parameters
         for p in self._parameters.values():
             p.push()
