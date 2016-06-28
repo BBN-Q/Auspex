@@ -11,9 +11,9 @@ class Average(Filter):
     partial_average = OutputConnector()
     final_average = OutputConnector()
 
-    def __init__(self, axis=0, **kwargs):
+    def __init__(self, axis=None, **kwargs):
         super(Average, self).__init__(**kwargs)
-        self.axis = axis # Can be string on numerical index
+        self._axis = axis 
         self.points_before_final_average   = None
         self.points_before_partial_average = None
         self.sum_so_far = None
@@ -24,9 +24,12 @@ class Average(Filter):
         return self._axis
     @axis.setter
     def axis(self, value):
-        self._axis = value
-        if self.data.descriptor is not None:
-            self.update_descriptors() 
+        if isinstance(value, str):
+            self._axis = value
+            if self.data.descriptor is not None:
+                self.update_descriptors() 
+        else:
+            raise ValueError("Must specify averaging axis as string.")
 
     def update_descriptors(self):
         logger.debug("Updating averager descriptors based on input descriptor: %s.", self.data.descriptor)
@@ -34,29 +37,33 @@ class Average(Filter):
         names = [a.name for a in descriptor_in.axes]
 
         # Convert named axes to an index
-        if isinstance(self.axis, str):
-            if self.axis not in names:
-                raise ValueError("Could not find axis {} within the DataStreamDescriptor {}".format(self.axis, self.descriptor_in))
-            self.axis = names.index(self.axis)
-            
-        logger.debug("Averaging over axis #%d: %s", self.axis, names[self.axis])
+        # import ipdb; ipdb.set_trace()
+        if self._axis is None:
+            self.axis_num = -1
+        else:
+            if self._axis not in names:
+                raise ValueError("Could not find axis {} within the DataStreamDescriptor {}".format(self._axis, self.descriptor_in))
+            self.axis_num = names.index(self._axis)
+            logger.debug("Axis %s corresponds to numerical axis %d", self._axis, self.axis_num)
+
+        logger.debug("Averaging over axis #%d: %s", self.axis_num, self._axis)
 
         self.data_dims = descriptor_in.data_dims() 
-        if self.axis == len(descriptor_in.axes) - 1:
+        if self.axis_num == len(descriptor_in.axes) - 1:
             logger.debug("Performing scalar average!")
             self.points_before_partial_average = 1
             self.avg_dims = [1]
         else:
-            self.points_before_partial_average = descriptor_in.num_points_through_axis(self.axis+1)
-            self.avg_dims = self.data_dims[self.axis+1:]
-        self.points_before_final_average   = descriptor_in.num_points_through_axis(self.axis)
+            self.points_before_partial_average = descriptor_in.num_points_through_axis(self.axis_num+1)
+            self.avg_dims = self.data_dims[self.axis_num+1:]
+        self.points_before_final_average   = descriptor_in.num_points_through_axis(self.axis_num)
         logger.debug("Points before partial average: %s.", self.points_before_partial_average)
         logger.debug("Points before final average: %s.", self.points_before_final_average)
         logger.debug("Data dimensions are %s", self.data_dims)
         logger.debug("Averaging dimensions are %s", self.avg_dims)
 
         new_axes = descriptor_in.axes[:]
-        self.num_averages = new_axes.pop(self.axis).num_points()
+        self.num_averages = new_axes.pop(self.axis_num).num_points()
         logger.debug("Number of partial averages is %d", self.num_averages)
         descriptor_out = DataStreamDescriptor()
         descriptor_out.axes = new_axes

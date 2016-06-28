@@ -349,6 +349,11 @@ class Experiment(metaclass=MetaExperiment):
     def run_sweeps(self):
         # Go and find any plotters and keep track of them.
         # Launch the bokeh-server if necessary.
+
+        for n in self.nodes:
+            if hasattr(n, 'final_init'):
+                n.final_init()
+
         self.plotters = [n for n in self.nodes if isinstance(n, Plotter)]
 
         if len(self.plotters) > 0:
