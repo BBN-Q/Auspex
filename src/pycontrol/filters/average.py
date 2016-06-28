@@ -11,7 +11,7 @@ class Average(Filter):
     partial_average = OutputConnector()
     final_average = OutputConnector()
 
-    def __init__(self, axis=None, **kwargs):
+    def __init__(self, axis, **kwargs):
         super(Average, self).__init__(**kwargs)
         self._axis = axis 
         self.points_before_final_average   = None
@@ -38,13 +38,11 @@ class Average(Filter):
 
         # Convert named axes to an index
         # import ipdb; ipdb.set_trace()
-        if self._axis is None:
-            self.axis_num = -1
-        else:
-            if self._axis not in names:
-                raise ValueError("Could not find axis {} within the DataStreamDescriptor {}".format(self._axis, self.descriptor_in))
-            self.axis_num = names.index(self._axis)
-            logger.debug("Axis %s corresponds to numerical axis %d", self._axis, self.axis_num)
+
+        if self._axis not in names:
+            raise ValueError("Could not find axis {} within the DataStreamDescriptor {}".format(self._axis, self.descriptor_in))
+        self.axis_num = names.index(self._axis)
+        logger.debug("Axis %s corresponds to numerical axis %d", self._axis, self.axis_num)
 
         logger.debug("Averaging over axis #%d: %s", self.axis_num, self._axis)
 
