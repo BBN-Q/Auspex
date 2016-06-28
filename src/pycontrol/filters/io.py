@@ -129,9 +129,17 @@ class ProgressBar(Filter):
 
     n: number of progress bars to be display, \
     corresponding to the number of axes (counting from outer most)
+
+        For running in Jupyter Notebook:
+    Needs to open '_tqdm_notebook.py',\
+    search for 'n = int(s[:npos])'\
+    then replace it with 'n = float(s[:npos])'
+
+    search for "self.sp(bar_style='success')",\
+    then insert 'self.sp(close=True)' below it
     """
     data = InputConnector()
-    def __init__(self, num=1):
+    def __init__(self, num=0, notebook=False):
         super(ProgressBar,self).__init__()
         self.num    = num
         self.bars   = []
@@ -146,7 +154,10 @@ class ProgressBar(Filter):
         self.num = min(self.num, num_axes)
 
         for i in range(self.num):
-            self.bars.append(tqdm(total=totals[i]/chunk_sizes[i]))
+            if notebook:
+                self.bars.append(tqdm_notebook(total=totals[i]/chunk_sizes[i]))
+            else:
+                self.bars.append(tqdm(total=totals[i]/chunk_sizes[i]))
 
         while True:
             if self.stream.done() and self.w_id==self.stream.num_points():
@@ -159,9 +170,15 @@ class ProgressBar(Filter):
             num_data = self.stream.points_taken
             for i in range(self.num):
                 if num_data == 0:
-                    # Reset the progress bar with a new one
-                    self.bars[i].close()
-                    self.bars[i] = tqdm(total=totals[i]/chunk_sizes[i])
+                    if notebook:
+                        self.bars[i].n = self.bars[i].total # Mark as complete
+                        self.bars[i].close()
+                        # Reset the progress bar with a new one
+                        self.bars[i] = tqdm_notebook(total=totals[i]/chunk_sizes[i])
+                    else:
+                        # Reset the progress bar with a new one
+                        self.bars[i].close()
+                        self.bars[i] = tqdm(total=totals[i]/chunk_sizes[i])
                 pos = int(10*num_data / chunk_sizes[i])/10.0 # One decimal is good enough
                 if pos > self.bars[i].n:
                     self.bars[i].update(pos - self.bars[i].n)
