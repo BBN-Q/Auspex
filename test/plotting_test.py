@@ -1,6 +1,7 @@
 import asyncio
 import os
 import numpy as np
+import sys
 
 from pycontrol.instruments.instrument import Instrument, StringCommand, FloatCommand, IntCommand
 from pycontrol.experiment import Experiment, FloatParameter
@@ -50,28 +51,38 @@ class TestExperiment(Experiment):
         return "<SweptTestExperiment>"
 
     async def run(self):
-        data_row = np.sin(2*np.pi*self.freq.value*self.time_val)*np.ones(self.samples) 
+        data_row = np.sin(2*np.pi*self.time_val)*np.ones(self.samples) 
         
         self.time_val += self.time_step
         for i in range(self.num_trials):
-            await asyncio.sleep(0.26)
-
-            await self.voltage.push(data_row + 0.1*np.random.random(self.samples) )
+            await asyncio.sleep(0.05)
+            await self.voltage.push(data_row + 0.05*np.random.random(self.samples) )
         
         logger.debug("Stream has filled {} of {} points".format(self.voltage.points_taken, self.voltage.num_points() ))
 
 if __name__ == '__main__':
 
     exp = TestExperiment()
-    # avg = Average(name="Collapse Sample")
-    pl1 = Plotter(name="Scope")
+    avg1 = Average(name="Collapse Samples")
+    avg2 = Average(name="Collapse Trials")
+    # pl1 = Plotter(name="Scope")
     # pl2 = Plotter(name="Accumulate")
+    pl3 = Plotter(name="Sinusoid")
     # pri = Print("wtf")
 
-    # avg.axis = 'samples'
+    avg1.axis = 'samples'
+    avg2.axis = 'trials'
+
+    # sys.exit()
     # pl1.axes = []
 
-    edges = [(exp.voltage, pl1.data)]
+    edges = [
+             # (exp.voltage, pl1.data),
+             (exp.voltage, avg1.data),
+             # (avg1.partial_average, pl2.data),
+             (avg1.final_average, avg2.data),
+             (avg2.final_average, pl3.data)
+             ]
 
     # edges = [(exp.voltage, avg.data),
              # (avg.partial_average, pri.data)]
@@ -82,7 +93,7 @@ if __name__ == '__main__':
 
     exp.init_instruments()
     # exp.add_sweep(exp.field, np.linspace(0,100.0,11))
-    exp.add_sweep(exp.freq, np.linspace(0,2,5))
+    exp.add_sweep(exp.freq, np.linspace(0,2,30))
     exp.run_sweeps()
 
     # # Create an instance of the procedure

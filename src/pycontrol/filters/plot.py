@@ -46,16 +46,7 @@ class Plotter(Filter):
         logger.info("Starting descriptor update in filter %s, where the descriptor is %s", 
                 self.name, self.descriptor)
 
-        # Check the descriptor axes
-        num_axes = len(self.descriptor.axes)
-        if self.plot_dims > num_axes:
-            raise Exception("Cannot plot in more dimensions than there are data axes.")
-
-        if self.plot_dims == 1:
-            self.points_before_clear = self.descriptor.axes[-1].num_points()
-        else:
-            self.points_before_clear = self.descriptor.axes[-1].num_points() * self.descriptor.axes[-2].num_points()
-        logger.info("Plot will clear after every %d points.", self.points_before_clear)
+        
         # By default, the x axis is assumed to be the innermost axis.
         # If plot_dims is 2, then we take the y axis to be the next innermost
         # axis, and will draw a 2D plot.
@@ -78,9 +69,9 @@ class Plotter(Filter):
         #     self.x_axis = names.index(self.x_axis)
 
         # remaining_axes -= 1
-        self.x_values = self.descriptor.axes[-1].points
-        self.xmax = max(self.x_values)
-        self.xmin = min(self.x_values)
+        # self.x_values = self.descriptor.axes[-1].points
+        # self.xmax = max(self.x_values)
+        # self.xmin = min(self.x_values)
 
         # if self.y_axis is not None:
         #     # Convert named axes to an index
@@ -103,22 +94,47 @@ class Plotter(Filter):
         # self.plot_dims = num_axes - remaining_axes
 
         # # Establish the proper plot variety
-        if self.plot_dims == 1:
-            self.figure = Figure(plot_width=400, plot_height=400, webgl=True)
-            self.plot = self.figure.line([],[], name=self.name)
+        # if self.plot_dims == 1:
+        #     self.figure = Figure(plot_width=400, plot_height=400, webgl=True)
+        #     self.plot = self.figure.line([],[], name=self.name)
         # else: # 2D
         #     self.figure = Figure(x_range=[xmin, xmax], y_range=[ymin, ymax], plot_width=400, plot_height=400, webgl=True)
         #     self.plot = self.figure.image(image=[self.z_data], x=[xmin], y=[ymin],
         #                                   dw=[xmax-xmin], dh=[ymax-ymin], name=self.title, **plot_args)
 
-        renderers = self.plot.select(dict(name=self.name))
-        self.renderer = [r for r in renderers if isinstance(r, GlyphRenderer)][0]
-        self.data_source = self.renderer.data_source
+        # renderers = self.plot.select(dict(name=self.name))
+        # self.renderer = [r for r in renderers if isinstance(r, GlyphRenderer)][0]
+        # self.data_source = self.renderer.data_source
 
         # self.x_data = stream.descriptor.axes[0].points
         # self.y_data = np.full(stream.num_points(), np.nan)
         # self.figure = figure(plot_width=400, plot_height=400, x_range=(self.x_data[0], self.x_data[-1]))
+    
+
+    def final_init(self):
         
+        # Check the descriptor axes
+        num_axes = len(self.descriptor.axes)
+        if self.plot_dims > num_axes:
+            raise Exception("Cannot plot in more dimensions than there are data axes.")
+
+        if self.plot_dims == 1:
+            self.points_before_clear = self.descriptor.axes[-1].num_points()
+        else:
+            self.points_before_clear = self.descriptor.axes[-1].num_points() * self.descriptor.axes[-2].num_points()
+        logger.info("Plot will clear after every %d points.", self.points_before_clear)
+
+        self.x_values = self.descriptor.axes[-1].points
+        self.xmax = max(self.x_values)
+        self.xmin = min(self.x_values)
+
+        if self.plot_dims == 1:
+            self.figure = Figure(plot_width=400, plot_height=400, webgl=True)
+            self.plot = self.figure.line([],[], name=self.name)
+
+        renderers = self.plot.select(dict(name=self.name))
+        self.renderer = [r for r in renderers if isinstance(r, GlyphRenderer)][0]
+        self.data_source = self.renderer.data_source
 
     async def run(self):
         idx = 0
@@ -152,6 +168,7 @@ class Plotter(Filter):
                 if (time.time() - self.last_update >= self.update_interval) or self.stream.done():
                     self.data_source.data["x"] = np.copy(self.x_values[0:idx])
                     self.data_source.data["y"] = np.copy(temp[0:idx])
+                    self.last_update = time.time()
 
                 # for i in range(num_traces):
 
@@ -169,7 +186,7 @@ class Plotter(Filter):
                 pass
 
 
-            self.last_update = time.time()
+            
             # 
             #have to copy data to get new pointer to trigger update
             #TODO: investigate streaming
