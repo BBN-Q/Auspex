@@ -158,11 +158,11 @@ class ProgressBar(Filter):
             self.w_id += new_data.size
             num_data = self.stream.points_taken
             for i in range(self.num):
-                # Somehow position cannot be zero, to avoid some odd calculation
-                pos = max(0.001*self.bars[i].total, int(10*num_data / chunk_sizes[i])/10.0)
                 if num_data == 0:
                     # Reset the progress bar with a new one
                     self.bars[i].close()
-                    self.bars[i] = tqdm(total=totals[i]/chunk_sizes[i], initial=pos)
-                self.bars[i].update(pos - self.bars[i].n)
+                    self.bars[i] = tqdm(total=totals[i]/chunk_sizes[i])
+                pos = int(10*num_data / chunk_sizes[i])/10.0 # One decimal is good enough
+                if pos > self.bars[i].n:
+                    self.bars[i].update(pos - self.bars[i].n)
                 num_data = num_data % chunk_sizes[i]
