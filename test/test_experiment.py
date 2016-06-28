@@ -8,7 +8,8 @@ from pycontrol.experiment import Experiment, FloatParameter
 from pycontrol.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector
 from pycontrol.filters.debug import Print, Passthrough
 from pycontrol.filters.average import Average
-from pycontrol.logging import logger
+from pycontrol.logging import logger, logging
+logger.setLevel(logging.DEBUG)
 
 class TestInstrument1(Instrument):
     frequency = FloatCommand(get_string="frequency?", set_string="frequency {:g}", value_range=(0.1, 10))
@@ -99,7 +100,7 @@ class ExperimentTestCase(unittest.TestCase):
         exp             = TestExperiment()
         printer_partial = Print(name="Partial")
         printer_final   = Print(name="Final")
-        avgr            = Average(name="TestAverager")
+        avgr            = Average('samples', name="TestAverager")
 
         edges = [(exp.chan1, avgr.data),
                  (avgr.partial_average, printer_partial.data),
@@ -118,7 +119,7 @@ class ExperimentTestCase(unittest.TestCase):
         exp             = TestExperiment()
         printer_partial = Print(name="Partial")
         printer_final   = Print(name="Final")
-        avgr            = Average(name="TestAverager")
+        avgr            = Average('samples', name="TestAverager")
 
         edges = [(exp.chan1, avgr.data),
                  (avgr.partial_average, printer_partial.data),
@@ -135,7 +136,7 @@ class ExperimentTestCase(unittest.TestCase):
         exp             = TestExperiment()
         printer_partial = Print(name="Partial")
         printer_final   = Print(name="Final")
-        avgr            = Average(name="TestAverager")
+        avgr            = Average('samples', name="TestAverager")
 
         edges = [(exp.chan1, avgr.data),
                  (avgr.partial_average, printer_partial.data),
@@ -181,20 +182,20 @@ class ExperimentTestCase(unittest.TestCase):
         exp             = TestExperiment()
         printer_partial = Print(name="Partial")
         printer_final   = Print(name="Final")
-        avgr            = Average(name="TestAverager")
+        avgr            = Average('trials', name="TestAverager")
 
         edges = [(exp.chan1, avgr.data),
                  (avgr.partial_average, printer_partial.data),
                  (avgr.final_average, printer_final.data)]
 
         exp.set_graph(edges)
-        # exp.run_loop()
+        exp.run_loop()
 
     def test_add_axis_to_averager(self):
         exp             = TestExperiment()
         printer_partial = Print(name="Partial")
         printer_final   = Print(name="Final")
-        avgr            = Average(name="TestAverager")
+        avgr            = Average('samples', name="TestAverager")
 
         edges = [(exp.chan1, avgr.data),
                  (avgr.partial_average, printer_partial.data),
@@ -211,13 +212,12 @@ class ExperimentTestCase(unittest.TestCase):
         exp             = TestExperiment()
         printer_partial = Print(name="Partial")
         printer_final   = Print(name="Final")
-        avgr            = Average(name="TestAverager")
+        avgr            = Average('samples', name="TestAverager")
 
         edges = [(exp.chan1, avgr.data),
                  (avgr.partial_average, printer_partial.data),
                  (avgr.final_average, printer_final.data)]
 
-        avgr.axis = "samples"
         exp.set_graph(edges)
         exp.update_descriptors()
         exp.run_loop()
@@ -226,7 +226,7 @@ class ExperimentTestCase(unittest.TestCase):
         exp             = TestExperiment()
         printer_partial = Print(name="Partial")
         printer_final   = Print(name="Final")
-        avgr            = Average(name="TestAverager")
+        avgr            = Average('samples', name="TestAverager")
 
         edges = [(exp.chan1, avgr.data),
                  (avgr.partial_average, printer_partial.data),
