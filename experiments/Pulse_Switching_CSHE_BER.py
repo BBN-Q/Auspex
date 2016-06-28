@@ -20,7 +20,6 @@ import h5py
 import matplotlib.pyplot as plt
 
 import analysis.switching as sw
-from adapt import refine
 
 import logging
 logger = logging.getLogger('pycontrol')
@@ -34,28 +33,30 @@ logger.setLevel(logging.INFO)
 # AWG Sync Marker Out -> DAQmx PFI0
 # AWG Samp. Marker Out -> PSPL Trigger
 
-class SwitchingExperiment(Experiment):
+class BERExperiment(Experiment):
+
+    # Sample information
+    sample         = "CSHE2-C4R6"
+    comment        = "Bit Error Rate"
 
     # Parameters
     field          = FloatParameter(default=0.0, unit="T")
     pulse_duration = FloatParameter(default=10.0e-9, unit="s")
     pulse_voltage  = FloatParameter(default=0.1, unit="V")
-    attempts       = IntParameter(default=1<<10)
+    attempts       = IntParameter(default = 1 << 10)
 
-    # Constants (set with attribute access if you want to change these!)
-    # attempts        = 1 << 10
-    settle_delay    = 200e-6
+    settle_delay    = 50e-6
     measure_current = 3.0e-6
     samps_per_trig  = 5
 
-    polarity        = -1 # P to AP: 1; AP to P: -1
-    pspl_atten      = 12
+    polarity        = -1
+    pspl_atten      = 0
 
     min_daq_voltage = 0.0
     max_daq_voltage = 0.4
 
-    reset_amplitude = 0.12
-    reset_duration  = 10.0e-9
+    reset_amplitude = 0.65
+    reset_duration  = 6.0e-9
 
     # Things coming back
     daq_buffer     = OutputConnector()
@@ -95,8 +96,6 @@ class SwitchingExperiment(Experiment):
         self.arb.continuous_mode = False
         self.arb.gate_mode = False
 
-        self.update_attempts()
-
         # ===================
         #   Setup the PSPL
         # ===================
@@ -106,10 +105,12 @@ class SwitchingExperiment(Experiment):
         self.pspl.trigger_level = 0.1
         self.pspl.output = True
 
+        self.setup_daq(self.attempts.value)
+
         def set_voltage(voltage):
             # Calculate the voltage controller attenuator setting
             # import ipdb; ipdb.set_trace()
-            vc_atten = abs(20.0 * np.log10(abs(voltage)/7.5)) - self.pspl_atten
+            vc_atten = abs(20.0 * np.log10(abs(voltage)/7.5)) - self.pspl_atten - 10
             if vc_atten <= 6.0:
                 raise ValueError("Voltage controlled attenuation under range (6dB).")
             self.atten.set_attenuation(vc_atten)
@@ -119,12 +120,12 @@ class SwitchingExperiment(Experiment):
         self.field.assign_method(self.mag.set_field)
         self.pulse_duration.assign_method(self.pspl.set_duration)
         self.pulse_voltage.assign_method(set_voltage)
-        self.attempts.assign_method(lambda x: x)
+        self.attempts.assign_method(self.setup_daq)
 
         # Create hooks for relevant delays
         self.pulse_duration.add_post_push_hook(lambda: time.sleep(0.1))
 
-    def update_attempts(self):
+    def setup_daq(self, attempt):
         def arb_pulse(amplitude, duration, sample_rate=12e9):
             pulse_points = int(duration*sample_rate)
 
@@ -162,7 +163,7 @@ class SwitchingExperiment(Experiment):
         settle_pts = int(640*np.ceil(self.settle_delay * 12e9 / 640))
 
         scenario = Scenario()
-        seq = Sequence(sequence_loop_ct=int(self.attempts.value))
+        seq = Sequence(sequence_loop_ct=int(attempt))
         #First try with reset flipping pulse
         seq.add_waveform(rst_segment_id)
         seq.add_idle(settle_pts, 0.0)
@@ -185,7 +186,7 @@ class SwitchingExperiment(Experiment):
 
         self.analog_input = Task()
         self.read = int32()
-        self.buf_points = 2*self.samps_per_trig*self.attempts.value
+        self.buf_points = 2*self.samps_per_trig*attempt
         self.analog_input.CreateAIVoltageChan("Dev1/ai1", "", DAQmx_Val_Diff,
             self.min_daq_voltage, self.max_daq_voltage, DAQmx_Val_Volts, None)
         self.analog_input.CfgSampClkTiming("", 1e6, DAQmx_Val_Rising, DAQmx_Val_FiniteSamps , self.samps_per_trig)
@@ -221,7 +222,7 @@ class SwitchingExperiment(Experiment):
 
     def shutdown_instruments(self):
         self.keith.current = 0.0e-5
-        self.mag.zero()
+        # self.mag.zero()
         self.arb.stop()
         self.pspl.output = False
         try:
@@ -231,17 +232,22 @@ class SwitchingExperiment(Experiment):
             pass
 
 if __name__ == '__main__':
-    exp = SwitchingExperiment()
-    wr = WriteToHDF5("data\CSHE-Switching\CSHE-Die2-C4R1\CSHE2-C4R1-AP2P_2016-06-22_BER_5ns.h5")
-    pr = Print()
+    exp = BERExperiment()
+    exp.sample = "CSHE2 - C5R7"
+    exp.comment = "Bit Error Rate - AP to P - 5ns"
+    exp.polarity = -1 # -1: AP to P; 1: P to AP
+    exp.field.value = -0.017
+    exp.pulse_duration.value = 5e-9 # Fixed
+    exp.init_instruments()
+
+    wr = WriteToHDF5("data\CSHE-Switching\CSHE-Die2-C5R7\CSHE2-C5R7-AP2P_2016-06-28_BER_5ns.h5")
+    # pr = Print()
     edges = [(exp.daq_buffer, wr.data)]
     exp.set_graph(edges)
-    exp.field.value = -0.013
-    exp.pulse_duration.value = 5e-9 # Fixed
 
-    # attempts_list = [1 << int(x) for x in np.linspace(10,15,6)]
-    attempts_list = [int(6e6), int(6e6)]
-    voltages_list = np.linspace(0.65,0.70,2)
+    attempts_list = [1 << int(x) for x in [21,22,21]]
+    # attempts_list = [int(6e6), int(6e6)]
+    voltages_list = np.linspace(1.05,1.15,3)
     # attempts_list = [1 << int(x) for x in np.linspace(11, 13, 3)]
     # voltages_list = np.linspace(0.3,0.4,3)
     t1 = [] # Keep track of time
@@ -249,9 +255,8 @@ if __name__ == '__main__':
     for att, vol in zip(attempts_list, voltages_list):
         logger.info("Now at ({},{}).".format(att,vol))
         t1.append(time.time())
-        exp.attempts.value = att
         exp.pulse_voltage.value = vol
-        exp.update_attempts()
+        exp.attempts.value = att
         exp.init_streams()
         exp.reset()
         exp.run_loop()
