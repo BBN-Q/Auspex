@@ -108,9 +108,11 @@ if __name__ == '__main__':
     pl2 = Plotter(name="Accumulate")
 
     avg.axis = 'samples'
-    pl1.
+    pl1.axes = []
 
-    edges = [(exp.voltage, avg.data)]
+    edges = [(exp.voltage, avg.data),
+             (avg.partial_average, pl1.data),
+             (avg.final_average, pl2.data)]
     exp.set_graph(edges)
 
     exp.init_instruments()

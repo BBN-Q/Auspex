@@ -44,7 +44,6 @@ class BokehServerThread(threading.Thread):
             self.p.kill()
             self.p = None
             super(BokehServerThread, self).join(timeout=timeout)
-        
 
 class MultiPlotter(object):
     """Attach a plotter to the sweep."""
