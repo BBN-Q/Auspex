@@ -21,18 +21,18 @@ import h5py
 # AWG Sync Marker Out -> DAQmx PFI0
 
 # PARAMETERS: Confirm these before running
-RST_DURATION = 10.0e-9 # Reset duration, second
-RST_AMPS = np.arange(-0.15, 0.15, 0.01) # Reset amplitudes
-MEASURE_CURRENT = 2.0e-6
-SET_FIELD = -0.013 # Tesla
-REPS = 1 << 8 # Number of repeats per sequence
+RST_DURATION = 6.0e-9 # Reset duration, second
+RST_AMPS = np.arange(-0.7, 0.71, 0.05) # Reset amplitudes
+MEASURE_CURRENT = 3.0e-6
+SET_FIELD = -0.017 # Tesla
+REPS = 1 << 10 # Number of repeats per sequence
 REPS_OVER = 5 # Number of repeats of scenario
-SAMPS_PER_TRIG = 10 # Samples per trigger
+SAMPS_PER_TRIG = 5 # Samples per trigger
 
 # File to save
-FOLDER = "data\\CSHE-Switching\\CSHE-Die2-C4R1"
-FILENAME = "CSHE-2-C4R1_Search_Reset" # No extension
-DATASET = "CSHE-2-C4R1/2016-06-15/Search_Reset"
+FOLDER = "data\\CSHE-Switching\\CSHE-Die2-C5R7"
+FILENAME = "CSHE-2-C5R7_Search_Reset" # No extension
+DATASET = "CSHE-2-C5R7/2016-06-27/Search_Reset"
 
 def arb_pulse(amplitude, duration, sample_rate=12e9):
     pulse_points = int(duration*sample_rate)
@@ -70,7 +70,7 @@ def mk_dataset(f, dsetname, data):
     f.visit(lambda x: dset_list.append(x))
     dname = dsetname
     while dname in dset_list:
-        print("Found an existing dataset. Increase name by 1.")
+        # print("Found an existing dataset. Increase name by 1.")
         dname = dname[:-1] + chr(ord(dname[-1])+1)
     print("Make new dataset: %s" %dname)
     return f.create_dataset(dname, data=data)
@@ -202,7 +202,7 @@ if __name__ == '__main__':
         dset2 = mk_dataset(f, DATASET+'_VOLTS_A', data2)
 
     # Plot the result
-    plt.figure(0)
+    fig = plt.figure(0)
     NUM = len(amps)
     for i in range(NUM):
         buff = buffers[:,i,:].flatten()

@@ -24,19 +24,19 @@ import h5py
 # AWG Samp. Marker Out -> PSPL Trigger
 
 # PARAMETERS: Confirm these before running
-SET_FIELD = -0.013 # Tesla
-MEASURE_CURRENT = 2e-6 # Ampere, should not be zero!
-BASE_ATTENUATION = 16
-DURATIONS = 1e-9*np.array([1.0, 2.0, 3.0]) # List of durations
-ATTENUATIONS = np.arange(-20.0,-6.0,0.5) # Between -28 and -6
+SET_FIELD = -0.017 # Tesla
+MEASURE_CURRENT = 3e-6 # Ampere, should not be zero!
+BASE_ATTENUATION = 4
+DURATIONS = 1e-9*np.array([3.0, 6.0]) # List of durations
+ATTENUATIONS = np.arange(-20.0,-6.0,1) # Between -28 and -6
 
-REPS = 1 << 4 # Number of attemps
-SAMPLES_PER_TRIGGER = 10 # Samples per trigger
+REPS = 1 << 10 # Number of attemps
+SAMPLES_PER_TRIGGER = 5 # Samples per trigger
 
 # File to save
-FOLDER = "data\\CSHE-Switching\\CSHE-Die2-C4R1"
-FILENAME = "CSHE-2-C4R1_Search_Switch" # No extension
-DATASET = "CSHE-2-C4R1/2016-06-15/Search_Switch"
+FOLDER = "data\\CSHE-Switching\\CSHE-Die2-C5R7"
+FILENAME = "CSHE-2-C5R7_Search_Switch" # No extension
+DATASET = "CSHE-2-C5R7/2016-06-27/Search_Switch"
 
 def arb_pulse(amplitude, duration, sample_rate=12e9):
     pulse_points = int(duration*sample_rate)
@@ -74,7 +74,7 @@ def mk_dataset(f, dsetname, data):
     f.visit(lambda x: dset_list.append(x))
     dname = dsetname
     while dname in dset_list:
-        print("Found an existing dataset. Increase name by 1.")
+        # print("Found an existing dataset. Increase name by 1.")
         dname = dname[:-1] + chr(ord(dname[-1])+1)
     print("Make new dataset: %s" %dname)
     return f.create_dataset(dname, data=data)
@@ -131,7 +131,7 @@ if __name__ == '__main__':
     nidaq_trig_segment_id = arb.define_waveform(len(nidaq_trig_wf))
     arb.upload_waveform(nidaq_trig_wf, nidaq_trig_segment_id)
 
-    settle_delay = 50e-6
+    settle_delay = 200e-6
     settle_pts = int(640*np.ceil(settle_delay * 12e9 / 640))
 
     reps = REPS
@@ -197,7 +197,7 @@ if __name__ == '__main__':
         if direction==-1: # amplitude large to small
             attenss = np.flipud(attens)
 
-        volts = 7.5*np.power(10, (-pspl_attenuation+attenss)/20)
+        volts = 7.5*np.power(10, (-pspl_attenuation+attenss-10)/20)
         buffers = np.zeros((len(durations), len(attens), samps_per_trig*reps))
         for dur in tqdm(durations, leave=True):
             id_atten = 0
