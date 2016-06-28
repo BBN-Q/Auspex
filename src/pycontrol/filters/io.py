@@ -122,3 +122,47 @@ class WriteToHDF5(Filter):
             logger.debug("HDF5: %s has written %d points", stream.name, w_idx)
 
         self.file.close()
+
+
+class ProgressBar(Filter):
+    """ Display progress bar(s) on the terminal.
+
+    n: number of progress bars to be display, \
+    corresponding to the number of axes (counting from outer most)
+    """
+    data = InputConnector()
+    def __init__(self, num=1):
+        super(ProgressBar,self).__init__()
+        self.num    = num
+        self.bars   = []
+        self.w_id   = 0
+
+    async def run(self):
+        self.stream = self.data.input_streams[0]
+        axes = self.stream.descriptor.axes
+        num_axes = len(axes)
+        totals = [self.stream.descriptor.num_points_through_axis(axis) for axis in range(num_axes)]
+        chunk_sizes = [max(1,self.stream.descriptor.num_points_through_axis(axis+1)) for axis in range(num_axes)]
+        self.num = min(self.num, num_axes)
+
+        for i in range(self.num):
+            self.bars.append(tqdm(total=totals[i]/chunk_sizes[i]))
+
+        while True:
+            if self.stream.done() and self.w_id==self.stream.num_points():
+                break
+
+            new_data = np.array(await self.stream.queue.get()).flatten()
+            while self.stream.queue.qsize() > 0:
+                new_data = np.append(new_data, np.array(self.stream.queue.get_nowait()).flatten())
+            self.w_id += new_data.size
+            num_data = self.stream.points_taken
+            for i in range(self.num):
+                if num_data == 0:
+                    # Reset the progress bar with a new one
+                    self.bars[i].close()
+                    self.bars[i] = tqdm(total=totals[i]/chunk_sizes[i])
+                pos = int(10*num_data / chunk_sizes[i])/10.0 # One decimal is good enough
+                if pos > self.bars[i].n:
+                    self.bars[i].update(pos - self.bars[i].n)
+                num_data = num_data % chunk_sizes[i]
