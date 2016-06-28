@@ -20,13 +20,12 @@ from pycontrol.logging import logger
 class Parameter(object):
     """ Encapsulates the information for an experiment parameter"""
 
-    def __init__(self, name=None, unit=None, default=None, abstract=False):
+    def __init__(self, name=None, unit=None, default=None):
         self.name     = name
         self._value   = default
         self.unit     = unit
         self.default  = default
         self.method   = None
-        self.abstract = abstract # Is this something we can actually push?
 
         # Hooks to be called before or after updating a sweep parameter
         self.pre_push_hooks = []
@@ -65,9 +64,7 @@ class Parameter(object):
         self.method = method
 
     def push(self):
-        if self.method is None:
-            raise Exception("No method for this parameter is defined...")
-        if not self.abstract:
+        if self.method is not None:
             # logger.debug("Calling pre_push_hooks of Parameter %s with value %s" % (self.name, self._value) )
             for pph in self.pre_push_hooks:
                 pph()
@@ -355,8 +352,9 @@ class Experiment(metaclass=MetaExperiment):
         self.plotters = [n for n in self.nodes if isinstance(n, Plotter)]
 
         if len(self.plotters) > 0:
+            logger.debug("Found %d plotters", len(self.plotters))
 
-            from .plotting import BokehServerThread
+            from .plotting import BokehServerThread, in_notebook
             from bokeh.client import push_session
             from bokeh.plotting import hplot
             from bokeh.io import curdoc, curstate
@@ -364,7 +362,7 @@ class Experiment(metaclass=MetaExperiment):
             from bokeh.document import Document
             from bokeh.models.widgets import Panel, Tabs
 
-            bokeh_thread = BokehServerThread(notebook=notebook)
+            bokeh_thread = BokehServerThread()
             bokeh_thread.start()
 
             #On some systems there is a possibility we try to `push_session` before the
@@ -373,7 +371,7 @@ class Experiment(metaclass=MetaExperiment):
 
             tabs = True # Tabs seem a bit sluggish in jupyter notebooks...
             if tabs:
-                h = Tabs(tabs=[Panel(child=p, title=p.name) for p in self.plotters])
+                h = Tabs(tabs=[Panel(child=p.figure, title=p.name) for p in self.plotters])
             else:
                 h = hplot(*[p.figure for p in self.plotters])
 
@@ -383,7 +381,8 @@ class Experiment(metaclass=MetaExperiment):
             doc.add_root(h)
             session = push_session(doc, session_id=sid)
 
-            if notebook:
+            if in_notebook():
+                logging.info("Displaying in iPython notebook")
                 from bokeh.embed import autoload_server, components
                 from bokeh.io import output_notebook
                 from IPython.display import display, HTML
