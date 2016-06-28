@@ -110,9 +110,7 @@ if __name__ == '__main__':
     exp = ProgressBarExperiment()
     exp.sample = "Test ProgressBar"
     exp.comment = "Test"
-    # wr = WriteToHDF5("test_data.h5")
     progbar = ProgressBar(num=3)
-    # edges = [(exp.resistance, wr.data),(exp.resistance,progbar.data)]
     edges = [(exp.resistance,progbar.data)]
     exp.set_graph(edges)
     exp.init_instruments()
@@ -120,5 +118,4 @@ if __name__ == '__main__':
     exp.add_sweep(exp.measure_current,np.linspace(0,6,5))
     exp.add_sweep(exp.voltage,np.linspace(1,5,3))
     exp.run_sweeps()
-    progbar.run()
     exp.shutdown_instruments()
