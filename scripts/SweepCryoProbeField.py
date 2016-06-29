@@ -22,8 +22,8 @@ class RampCurrent(Procedure):
     def init_instruments(self):
         self.keith.triad()
         self.keith.conf_meas_res(res_range=1e5)
-        self.keith.conf_src_curr(comp_voltage=0.5, curr_range=1.0e-5)
-        self.keith.current = 3e-6
+        self.keith.conf_src_curr(comp_voltage=0.4, curr_range=1.0e-5)
+        self.keith.current = 2e-6
         self.mag.ramp()
 
         self.field.assign_method(self.mag.set_field)
@@ -38,7 +38,7 @@ class RampCurrent(Procedure):
             self._parameters[param].push()
         for quant in self._quantities:
             self._quantities[quant].measure()
-        logging.info("Field, Lockin Magnitude: {:f}, {:g}".format(self.field.value, self.resistance.value) )
+        logging.info("Field, Resistance: {:f}, {:g}".format(self.field.value, self.resistance.value) )
 
     def shutdown_instruments(self):
         self.keith.current = 0.0e-5

@@ -25,7 +25,7 @@ from adapt import refine
 import logging
 logger = logging.getLogger('pycontrol')
 logging.basicConfig(format='%(name)s-%(levelname)s: \t%(message)s')
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 
 # Experimental Topology
 # lockin AO 2 -> Analog Attenuator Vdd
@@ -36,25 +36,29 @@ logger.setLevel(logging.DEBUG)
 
 class SwitchingExperiment(Experiment):
 
+    # Sample information
+    sample         = "CSHE2-C5R7"
+    comment        = "Phase Diagram"
     # Parameters
     field          = FloatParameter(default=0.0, unit="T")
     pulse_duration = FloatParameter(default=5.0e-9, unit="s")
     pulse_voltage  = FloatParameter(default=0.1, unit="V")
 
     # Constants (set with attribute access if you want to change these!)
-    attempts        = 1024
-    settle_delay    = 200e-6
+    iteration       = 8
+    attempts        = 1 << 10
+    settle_delay    = 50e-6
     measure_current = 3.0e-6
     samps_per_trig  = 5
 
-    polarity        = -1 # P to AP: 1; AP to P: -1
-    pspl_atten      = 12
+    polarity        = 1
+    pspl_atten      = 0
 
     min_daq_voltage = 0.0
     max_daq_voltage = 0.4
 
-    reset_amplitude = 0.12
-    reset_duration  = 10.0e-9
+    reset_amplitude = 0.6
+    reset_duration  = 6.0e-9
 
     # Things coming back
     daq_buffer     = OutputConnector()
@@ -166,15 +170,14 @@ class SwitchingExperiment(Experiment):
         #   Setup the PSPL
         # ===================
 
-        self.pspl.amplitude = self.polarity*7.5*np.power(10, -self.pspl_atten/20.0)
+        self.pspl.amplitude = self.polarity*7.5*np.power(10, (-self.pspl_atten)/20.0)
         self.pspl.trigger_source = "EXT"
         self.pspl.trigger_level = 0.1
         self.pspl.output = True
 
         def set_voltage(voltage):
             # Calculate the voltage controller attenuator setting
-            # import ipdb; ipdb.set_trace()
-            vc_atten = abs(20.0 * np.log10(abs(voltage)/7.5)) - self.pspl_atten
+            vc_atten = abs(20.0 * np.log10(abs(voltage)/7.5)) - self.pspl_atten - 10
             if vc_atten <= 6.0:
                 raise ValueError("Voltage controlled attenuation under range (6dB).")
             self.atten.set_attenuation(vc_atten)
@@ -205,12 +208,12 @@ class SwitchingExperiment(Experiment):
                                         buf, self.buf_points, byref(self.read), None)
         await self.daq_buffer.push(buf)
         # Seemingly we need to give the filters some time to catch up here...
-        await asyncio.sleep(0.002)
-        # logger.debug("Stream has filled {} of {} points".format(self.daq_buffer.points_taken, self.daq_buffer.num_points() ))
+        await asyncio.sleep(0.02)
+        logger.debug("Stream has filled {} of {} points".format(self.daq_buffer.points_taken, self.daq_buffer.num_points() ))
 
     def shutdown_instruments(self):
         self.keith.current = 0.0e-5
-        self.mag.zero()
+        # self.mag.zero()
         self.arb.stop()
         self.pspl.output = False
         try:
@@ -221,23 +224,27 @@ class SwitchingExperiment(Experiment):
 
 if __name__ == '__main__':
     exp = SwitchingExperiment()
-    wr = WriteToHDF5("data\CSHE-Switching\CSHE-Die2-C4R1\CSHE2-C4R1-AP2P_2016-06-20_int.h5")
-    pr = Print()
+    exp.sample = "CSHE2-C5R7"
+    exp.comment = "Phase Diagram -  P to AP - Interations = 12"
+    exp.polarity = 1 # -1: AP to P; 1: P to AP
+    exp.iteration = 12
+    exp.field.value = -0.017
+    wr = WriteToHDF5("data\CSHE-Switching\CSHE-Die2-C5R7\CSHE2-C5R7-P2AP_2016-06-27.h5")
+    # pr = Print()
     edges = [(exp.daq_buffer, wr.data)]
     exp.set_graph(edges)
     exp.init_instruments()
 
-    exp.field.value = -0.013
-
-    coarse_ts = 1e-9*np.linspace(0.1, 5.01, 5) # List of durations
-    coarse_vs = np.linspace(0.35, 0.75, 5) # Between -28 and -6
+    coarse_ts = 1e-9*np.linspace(0.1, 5, 10) # List of durations
+    coarse_vs = np.linspace(0.55, 1.15, 10)
     points    = [coarse_ts, coarse_vs]
     points    = list(itertools.product(*points))
 
     main_sweep = exp.add_unstructured_sweep([exp.pulse_duration, exp.pulse_voltage], points)
     figs = []
-    ITERATION = 15
-    for i in range(ITERATION):
+    t1 = time.time()
+    for i in range(exp.iteration):
+        exp.reset()
         exp.run_sweeps()
         points, mean = sw.load_switching_data(wr.filename)
         figs.append(sw.phase_diagram_mesh(points, mean, title="Iteration={}".format(i)))
@@ -249,11 +256,13 @@ if __name__ == '__main__':
         #
         print("Added {} new points.".format(len(new_points)))
         main_sweep.update_values(new_points)
-        exp.reset()
 
+    t2 = time.time()
+    # Shut down
+    exp.shutdown_instruments()
     # For evaluation of adaptive method, plot the mesh
     mesh, scale_factors = sw.scaled_Delaunay(points)
-    fig_mesh = sw.phase_diagram_mesh(points, mean)
+    fig_mesh = sw.phase_diagram_mesh(points, mean, shading='gouraud')
     plt.triplot(mesh.points[:,0]/scale_factors[0],
                 mesh.points[:,1]/scale_factors[1], mesh.simplices.copy());
 

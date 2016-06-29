@@ -18,7 +18,7 @@ def cluster(data, num_clusters=2):
 def average_data(data, avg_points):
     return np.array([np.mean(d.reshape(avg_points, -1, order="F"), axis=0) for d in data])
 
-def switching_phase(data):
+def switching_phase(data, start_state=None):
     num_clusters = 2
     clusterer = cluster(data)
     all_vals = data.flatten()
@@ -27,10 +27,13 @@ def switching_phase(data):
 
     init_state  = state[::2]
     initial_state_fractions = [np.sum(init_state == ct)/len(init_state) for ct in range(num_clusters)]
-    start_stt = np.argmax(initial_state_fractions)
+    if start_state is not None and start_state in range(num_clusters):
+        start_stt = start_state
+    else:
+        start_stt = np.argmax(initial_state_fractions)
     switched_stt = 1 - start_stt
-    print("Most frequenctly occuring initial state: {} (with {}% probability)".format(start_stt,
-                                                            initial_state_fractions[start_stt]))
+    # print("Most frequenctly occuring initial state: {} (with {}% probability)".format(start_stt,
+    #                                                         initial_state_fractions[start_stt]))
 
     counts =[]
     for buf in data:
@@ -52,21 +55,23 @@ def switching_phase(data):
                                1+c[start_stt,start_stt]) for c in counts])
     return mean
 
-def switching_BER(data):
+def switching_BER(data, start_state=None):
     """ Process data for BER experiment. """
     num_clusters = 2
-    clusterer = cluster(data)
+    clusterer = cluster(data.flatten())
     all_vals = data.flatten()
     all_vals.resize((all_vals.size,1))
     state = clusterer.fit_predict(all_vals)
 
     init_state  = state[::2]
+    final_state = state[1::2]
     initial_state_fractions = [np.sum(init_state == ct)/len(init_state) for ct in range(num_clusters)]
-    start_stt = np.argmax(initial_state_fractions)
+    if start_state is not None and start_state in range(num_clusters):
+        start_stt = start_state
+    else:
+        start_stt = np.argmax(initial_state_fractions)
     switched_stt = 1 - start_stt
     state = clusterer.predict(data.reshape((data.size,1)))
-    init_state = state[::2]
-    final_state = state[1::2]
     switched = np.logical_xor(init_state, final_state)
 
     count_mat = np.zeros((2,2), dtype=np.int)
@@ -81,8 +86,8 @@ def switching_BER(data):
     ci95 = beta.interval(0.95, 1+count_mat[start_stt,switched_stt],1+count_mat[start_stt,start_stt])
     return mean, limit, ci68, ci95
 
-def plot_BER(volts, multidata):
-    ber_dat = [switching_BER(data) for data in multidata]
+def plot_BER(volts, multidata, start_state=None):
+    ber_dat = [switching_BER(data, start_state=start_state) for data in multidata]
     mean = []; limit = []; ci68 = []; ci95 = []
     for datum in ber_dat:
         mean.append(datum[0])
@@ -165,7 +170,7 @@ def crossover_pairs(points, values, threshold):
                 pairs.append([k,nb])
     return np.array(pairs)
 
-def load_switching_data(filename):
+def load_switching_data(filename, start_state=None):
     with h5py.File(filename, 'r') as f:
         durations = np.array([f['axes'][k].value for k in f['axes'].keys() if "pulse_duration-data" in k])
         voltages = np.array([f['axes'][k].value for k in f['axes'].keys() if "pulse_voltage-data" in k])
@@ -175,7 +180,7 @@ def load_switching_data(filename):
         durations = np.concatenate(durations, axis=0)
     data_mean = np.mean(data, axis=-1)
     points = np.array([durations, voltages]).transpose()
-    return points, switching_phase(data_mean)
+    return points, switching_phase(data_mean,start_state=start_state)
 
 def load_BER_data(filename):
     with h5py.File(filename, 'r') as f:

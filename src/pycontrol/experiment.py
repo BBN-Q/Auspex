@@ -230,7 +230,7 @@ class MetaExperiment(type):
             elif isinstance(v, OutputConnector):
                 logger.debug("Found '%s' output connector.", k)
                 self._output_connectors.append(k)
-            elif isinstance(v, numbers.Number):
+            elif isinstance(v, numbers.Number) or isinstance(v, str):
                 self._constants[k] = v
                 # Keep track of numerical parameters
 
@@ -269,6 +269,7 @@ class Experiment(metaclass=MetaExperiment):
 
         # Run the stream init
         self.init_streams()
+        self.update_descriptors()
 
     def set_graph(self, edges):
         unique_nodes = []
@@ -321,6 +322,14 @@ class Experiment(metaclass=MetaExperiment):
     def update_descriptors(self):
         logger.debug("Starting descriptor update in experiment.")
         for oc in self.output_connectors.values():
+            for k,v in self._parameters.items():
+                oc.descriptor.add_param(k, v.value)
+                if v.unit is not None:
+                    oc.descriptor.add_param('unit_'+k, v.unit)
+            for k in self._constants.keys():
+                if hasattr(self,k):
+                    v = getattr(self,k)
+                    oc.descriptor.add_param(k, v)
             oc.update_descriptors()
         # TODO: have this push any changes to JSON file
         # if we're using Quince to define connections.
@@ -424,6 +433,7 @@ class Experiment(metaclass=MetaExperiment):
 
         signal.signal(signal.SIGINT, catch_ctrl_c)
 
+        # We want to wait for the sweep method above,
         # not the experiment's run method, so replace this
         # in the list of tasks.
         other_nodes = self.nodes[:]
