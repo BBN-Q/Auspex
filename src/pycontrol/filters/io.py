@@ -19,9 +19,6 @@ class WriteToHDF5(Filter):
 
         # Increment the filename until we find one we want.
         i = 0
-        # while os.path.exists("{:04d}-{}".format(i,filename)):
-        #     i += 1
-        # self.filename = "{:04d}-{}".format(i,filename)
         ext = filename.find('.h5')
         if ext > -1:
             filename = filename[:ext]

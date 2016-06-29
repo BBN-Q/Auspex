@@ -17,8 +17,6 @@ class Plotter(Filter):
         super(Plotter, self).__init__(*args, name=name)
         self.plot_dims = plot_dims
         self.plot_args = plot_args
-        # self.x_axis = None # Can be string on numerical index
-        # self.y_axis = None
         self.update_interval = 0.25
         self.last_update = time.time()
 
