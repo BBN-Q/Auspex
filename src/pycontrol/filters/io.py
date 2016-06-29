@@ -134,9 +134,6 @@ class ProgressBar(Filter):
     Needs to open '_tqdm_notebook.py',\
     search for 'n = int(s[:npos])'\
     then replace it with 'n = float(s[:npos])'
-
-    search for "self.sp(bar_style='success')",\
-    then insert 'self.sp(close=True)' below it
     """
     data = InputConnector()
     def __init__(self, num=0, notebook=False):
@@ -171,8 +168,7 @@ class ProgressBar(Filter):
             for i in range(self.num):
                 if num_data == 0:
                     if notebook:
-                        self.bars[i].n = self.bars[i].total # Mark as complete
-                        self.bars[i].close()
+                        self.bars[i].sp(close=True)
                         # Reset the progress bar with a new one
                         self.bars[i] = tqdm_notebook(total=totals[i]/chunk_sizes[i])
                     else:
