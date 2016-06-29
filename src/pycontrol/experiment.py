@@ -303,6 +303,10 @@ class Experiment(metaclass=MetaExperiment):
 
     def run_loop(self):
         """This runs the asyncio main loop."""
+        for n in self.nodes:
+            if hasattr(n, 'final_init'):
+                n.final_init()
+
         # Set any static parameters
         for p in self._parameters.values():
             p.push()
@@ -358,11 +362,17 @@ class Experiment(metaclass=MetaExperiment):
     def run_sweeps(self):
         # Go and find any plotters and keep track of them.
         # Launch the bokeh-server if necessary.
+
+        for n in self.nodes:
+            if hasattr(n, 'final_init'):
+                n.final_init()
+
         self.plotters = [n for n in self.nodes if isinstance(n, Plotter)]
 
         if len(self.plotters) > 0:
+            logger.debug("Found %d plotters", len(self.plotters))
 
-            from .plotting import BokehServerThread
+            from .plotting import BokehServerThread, in_notebook
             from bokeh.client import push_session
             from bokeh.plotting import hplot
             from bokeh.io import curdoc, curstate
@@ -370,7 +380,7 @@ class Experiment(metaclass=MetaExperiment):
             from bokeh.document import Document
             from bokeh.models.widgets import Panel, Tabs
 
-            bokeh_thread = BokehServerThread(notebook=notebook)
+            bokeh_thread = BokehServerThread()
             bokeh_thread.start()
 
             #On some systems there is a possibility we try to `push_session` before the
@@ -379,7 +389,7 @@ class Experiment(metaclass=MetaExperiment):
 
             tabs = True # Tabs seem a bit sluggish in jupyter notebooks...
             if tabs:
-                h = Tabs(tabs=[Panel(child=p, title=p.name) for p in self.plotters])
+                h = Tabs(tabs=[Panel(child=p.figure, title=p.name) for p in self.plotters])
             else:
                 h = hplot(*[p.figure for p in self.plotters])
 
@@ -389,7 +399,8 @@ class Experiment(metaclass=MetaExperiment):
             doc.add_root(h)
             session = push_session(doc, session_id=sid)
 
-            if notebook:
+            if in_notebook():
+                logging.info("Displaying in iPython notebook")
                 from bokeh.embed import autoload_server, components
                 from bokeh.io import output_notebook
                 from IPython.display import display, HTML

@@ -49,10 +49,10 @@ class DataStreamDescriptor(object):
             return 0
 
     def num_points_through_axis(self, axis):
-        if len(self.axes[axis:])>0:
-            return reduce(lambda x,y: x*y, [len(a.points) for a in self.axes[axis:]])
+        if len(self.axes) == 1:
+            return self.axes[0].num_points()
         else:
-            return 0
+            return reduce(lambda x,y: x*y, [len(a.points) for a in self.axes[axis:]])
 
     def __repr__(self):
         return "<DataStreamDescriptor(num_dims={}, num_points={})>".format(
