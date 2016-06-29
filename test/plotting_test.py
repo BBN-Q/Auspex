@@ -66,15 +66,16 @@ if __name__ == '__main__':
     exp = TestExperiment()
     avg1 = Average('samples', name="Collapse Samples")
     avg2 = Average('trials', name="Collapse Trials")
-    pl1 = Plotter(name="Scope")
-    pl2 = Plotter(name="Sinusoid Accum.")
-    pl3 = Plotter(name="Sinusoid Final")
-
+    pl1 = Plotter(name="Scope", color="firebrick", line_width=2)
+    pl2 = Plotter(name="Sinusoid Accum.", color="navy", line_width=2)
+    pl3 = Plotter(name="Sinusoid Final", color="firebrick", line_width=2)
+    pl4 = Plotter(name="2D", plot_dims=2, palette="Spectral11")
 
     edges = [
              (exp.voltage, avg1.data),
              (exp.voltage, pl1.data),
              (avg1.final_average, avg2.data),
+             (avg1.partial_average, pl4.data),
              (avg2.partial_average, pl2.data),
              (avg2.final_average, pl3.data)
              ]
