@@ -55,10 +55,6 @@ class TestExperiment(Experiment):
             data_row = np.sin(2*np.pi*self.freq.value*tv)*np.ones(self.samples) 
             await self.voltage.push(data_row + 0.05*np.random.random(self.samples) )
         
-        # for i in range(self.num_trials):
-        #     await asyncio.sleep(0.05)
-        #     await self.voltage.push(data_row + 0.05*np.random.random(self.samples) )
-        
         logger.debug("Stream has filled {} of {} points".format(self.voltage.points_taken, self.voltage.num_points() ))
 
 if __name__ == '__main__':
