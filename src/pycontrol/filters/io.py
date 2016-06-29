@@ -78,11 +78,12 @@ class WriteToHDF5(Filter):
             if k not in axis_names:
                 data.attrs[k] = v
 
+        # Flush the buffers into disk
+        self.file.flush()
+
         r_idx = 0
         w_idx = 0
-
         temp = np.empty(stream.num_points())
-
         while True:
             if stream.done() and w_idx == stream.num_points():
                 break
@@ -117,8 +118,8 @@ class WriteToHDF5(Filter):
                 temp[0:extra] = temp[num_chunks*chunk_size:num_chunks*chunk_size + extra]
                 r_idx = extra
 
-
-
+            # Force flush data into disk
+            self.file.flush()
             logger.debug("HDF5: %s has written %d points", stream.name, w_idx)
 
         self.file.close()
