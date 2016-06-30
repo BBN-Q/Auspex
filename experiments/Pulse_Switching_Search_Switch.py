@@ -3,23 +3,22 @@ from pycontrol.instruments.picosecond import Picosecond10070A
 from pycontrol.instruments.stanford import SR865
 from pycontrol.instruments.keithley import Keithley2400
 from pycontrol.instruments.ami import AMI430
+from pycontrol.instruments.rfmd import Attenuator
 
 from pycontrol.experiment import FloatParameter, IntParameter, Experiment
 from pycontrol.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector
 from pycontrol.filters.debug import Print
-from pycontrol.filters.io import WriteToHDF5
+from pycontrol.filters.io import WriteToHDF5, ProgressBar
 
 from PyDAQmx import *
 
+import asyncio
 import numpy as np
 import time
 import matplotlib.pyplot as plt
-from tqdm import tqdm
-from scipy.interpolate import interp1d
-import pandas as pd
-from sklearn.cluster import KMeans
-import os.path
-import h5py
+from analysis.h5shell import h5shell
+
+from pycontrol.logging import logger
 
 # Experimental Topology
 # lockin AO 2 -> Analog Attenuator Vdd
@@ -28,17 +27,22 @@ import h5py
 # AWG Sync Marker Out -> DAQmx PFI0
 # AWG Samp. Marker Out -> PSPL Trigger
 
-class SwitchSearchExperiment(Experiment)
+class SwitchSearchExperiment(Experiment):
+    daq_buffer = OutputConnector()
+
+    sample = "CSHE2"
+    comment = "Search PSPL Switch Voltage"
     # PARAMETERS: Confirm these before running
-    field          = FloatParameter(default=0.0, unit="T")
+    field = FloatParameter(default=0.0, unit="T")
+    pulse_voltage  = FloatParameter(default=0, unit="V")
     pulse_duration = FloatParameter(default=5.0e-9, unit="s")
-    pulse_attenuation  = FloatParameter(default=0.1, unit="V")
-    measure_current = FloatParameter(default=2e-6, unit="A") # Ampere, should not be zero!
+    measure_current = 3e-6
 
-    base_attenuation = 4
+    base_attenuation = 0
+    settle_delay = 50e-6
 
-    repetitions = 1 << 8 # Number of attemps
-    samples_per_trigger = 5 # Samples per trigger
+    attempts = 1 << 10 # Number of attemps
+    samps_per_trig = 5 # Samples per trigger
 
     # Instruments
     arb   = M8190A("192.168.5.108")
@@ -46,235 +50,175 @@ class SwitchSearchExperiment(Experiment)
     mag   = AMI430("192.168.5.109")
     keith = Keithley2400("GPIB0::25::INSTR")
     lock  = SR865("USB0::0xB506::0x2000::002638::INSTR")
+    atten = Attenuator("calibration/RFSA2113SB.tsv", lock.set_ao2, lock.set_ao3)
 
-    def arb_pulse(amplitude, duration, sample_rate=12e9):
-        pulse_points = int(duration*sample_rate)
-
-        if pulse_points < 320:
-            wf = np.zeros(320)
-        else:
-            wf = np.zeros(64*np.ceil(pulse_points/64.0))
-        wf[:pulse_points] = amplitude
-        return wf
-
-    def cluster_loop(buffers, num_clusters=2):
-        """ Split 'buffers' into 'num_clusters' clusters """
-        #Get an idea of SNR
-        #Cluster all the data into three based with starting point based on edges
-        all_vals = buffers.flatten()
-        all_vals.resize((all_vals.size,1))
-        init_guess = np.linspace(np.min(all_vals), np.max(all_vals), num_clusters)
-        init_guess[[1,-1]] = init_guess[[-1,1]]
-        init_guess.resize((num_clusters,1))
-        clusterer = KMeans(init=init_guess, n_clusters=num_clusters)
-        state = clusterer.fit_predict(all_vals)
-
-        #Approximate SNR from centre distance and variance
-        std0 = np.std(all_vals[state == 0])
-        std1 = np.std(all_vals[state == 1])
-        mean_std = 0.5*(std0 + std1)
-        centre0 = clusterer.cluster_centers_[0,0]
-        centre1 = clusterer.cluster_centers_[1,0]
-        return (state, centre0, centre1, std0, std1)
-
-    def mk_dataset(f, dsetname, data):
-        """ Make new dataset in the HDF5 file handle f """
-        dset_list = []
-        f.visit(lambda x: dset_list.append(x))
-        dname = dsetname
-        while dname in dset_list:
-            print("Found an existing dataset. Increase name by 1.")
-            dname = dname[:-1] + chr(ord(dname[-1])+1)
-        print("Make new dataset: %s" %dname)
-        return f.create_dataset(dname, data=data)
+    min_daq_voltage = 0.0
+    max_daq_voltage = 0.4
 
     def init_instruments(self):
-        APtoP = False
-        polarity = 1 if APtoP else -1
+        # ===================
+        #    Setup the Keithley
+        # ===================
 
-        # configure the Keithley
-        keith.triad()
-        keith.conf_meas_res(res_range=1e6)
-        keith.conf_src_curr(comp_voltage=0.5, curr_range=1.0e-5)
-        keith.current = MEASURE_CURRENT
-        mag.ramp()
+        self.keith.triad()
+        self.keith.conf_meas_res(res_range=1e5)
+        self.keith.conf_src_curr(comp_voltage=0.5, curr_range=1.0e-5)
+        self.keith.current = self.measure_current
+        self.mag.ramp()
 
-        # configure the AWG
-        arb.set_output(True, channel=1)
-        arb.set_output(False, channel=2)
-        arb.sample_freq = 12.0e9
-        arb.waveform_output_mode = "WSPEED"
+        # ===================
+        #    Setup the AWG
+        # ===================
 
-        arb.abort()
-        arb.delete_all_waveforms()
-        arb.reset_sequence_table()
+        self.arb.set_output(True, channel=1)
+        self.arb.set_output(False, channel=2)
+        self.arb.sample_freq = 12.0e9
+        self.arb.waveform_output_mode = "WSPEED"
+        self.arb.set_output_route("DC", channel=1)
+        self.arb.voltage_amplitude = 1.0
+        self.arb.set_marker_level_low(0.0, channel=1, marker_type="sync")
+        self.arb.set_marker_level_high(1.5, channel=1, marker_type="sync")
+        self.arb.continuous_mode = False
+        self.arb.gate_mode = False
 
-        arb.set_output_route("DC", channel=1)
-        arb.voltage_amplitude = 1.0
+        # ===================
+        #   Setup the PSPL
+        # ===================
 
-        arb.set_marker_level_low(0.0, channel=1, marker_type="sync")
-        arb.set_marker_level_high(1.5, channel=1, marker_type="sync")
+        self.pspl.amplitude = 7.5*np.power(10, -self.base_attenuation/20.0)
+        self.pspl.trigger_source = "EXT"
+        self.pspl.trigger_level = 0.1
+        self.pspl.output = True
 
-        arb.continuous_mode = False
-        arb.gate_mode = False
+        self.setup_daq()
 
-        # define waveform
-        no_reset_wf = arb_pulse(0.0, 3.0/12e9)
-        wf_data     = M8190A.create_binary_wf_data(no_reset_wf)
-        no_rst_segment_id  = arb.define_waveform(len(wf_data))
-        arb.upload_waveform(wf_data, no_rst_segment_id)
+        def set_voltage(voltage):
+            # Calculate the voltage controller attenuator setting
+            self.pspl.amplitude = np.sign(voltage)*7.5*np.power(10, -self.base_attenuation/20.0)
+            vc_atten = abs(20.0 * np.log10(abs(voltage)/7.5)) - self.base_attenuation - 10
+            if vc_atten <= 6.0:
+                logger.error("Voltage controlled attenuation under range (6dB).")
+                raise ValueError("Voltage controlled attenuation under range (6dB).")
+            self.atten.set_attenuation(vc_atten)
+            time.sleep(0.02)
+
+        # Assign methods
+        self.field.assign_method(self.mag.set_field)
+        self.pulse_duration.assign_method(self.pspl.set_duration)
+        self.pulse_voltage.assign_method(set_voltage)
+
+        # Create hooks for relevant delays
+        self.pulse_duration.add_post_push_hook(lambda: time.sleep(0.1))
+
+    def setup_daq(self):
+        self.arb.abort()
+        self.arb.delete_all_waveforms()
+        self.arb.reset_sequence_table()
 
         # Picosecond trigger waveform
         pspl_trig_wf = M8190A.create_binary_wf_data(np.zeros(3200), samp_mkr=1)
-        pspl_trig_segment_id = arb.define_waveform(len(pspl_trig_wf))
-        arb.upload_waveform(pspl_trig_wf, pspl_trig_segment_id)
+        pspl_trig_segment_id = self.arb.define_waveform(len(pspl_trig_wf))
+        self.arb.upload_waveform(pspl_trig_wf, pspl_trig_segment_id)
 
         # NIDAQ trigger waveform
         nidaq_trig_wf = M8190A.create_binary_wf_data(np.zeros(3200), sync_mkr=1)
-        nidaq_trig_segment_id = arb.define_waveform(len(nidaq_trig_wf))
-        arb.upload_waveform(nidaq_trig_wf, nidaq_trig_segment_id)
+        nidaq_trig_segment_id = self.arb.define_waveform(len(nidaq_trig_wf))
+        self.arb.upload_waveform(nidaq_trig_wf, nidaq_trig_segment_id)
 
-        settle_delay = 50e-6
-        settle_pts = int(640*np.ceil(settle_delay * 12e9 / 640))
-
-        reps = REPS
-        # define Scenario
+        settle_pts = int(640*np.ceil(self.settle_delay * 12e9 / 640))
         scenario = Scenario()
-        seq = Sequence(sequence_loop_ct=reps)
+        seq = Sequence(sequence_loop_ct=int(self.attempts))
         seq.add_waveform(pspl_trig_segment_id)
         seq.add_idle(settle_pts, 0.0)
         seq.add_waveform(nidaq_trig_segment_id)
-        seq.add_idle(1 << 14, 0.0) # bonus non-contiguous memory delay
+        seq.add_idle(1 << 16, 0.0) # bonus non-contiguous memory delay
         scenario.sequences.append(seq)
-        arb.upload_scenario(scenario, start_idx=0)
+        self.arb.upload_scenario(scenario, start_idx=0)
+        self.arb.sequence_mode = "SCENARIO"
+        self.arb.scenario_advance_mode = "REPEAT"
+        self.arb.scenario_start_index = 0
+        self.arb.run()
 
-        arb.sequence_mode = "SCENARIO"
-        arb.scenario_advance_mode = "SINGLE"
+        # ===================
+        #   Setup the NIDAQ
+        # ===================
+        self.analog_input = Task()
+        self.read = int32()
+        self.buf_points = self.samps_per_trig*self.attempts
+        self.analog_input.CreateAIVoltageChan("Dev1/ai1", "", DAQmx_Val_Diff,
+            self.min_daq_voltage, self.max_daq_voltage, DAQmx_Val_Volts, None)
+        self.analog_input.CfgSampClkTiming("", 1e6, DAQmx_Val_Rising, DAQmx_Val_FiniteSamps , self.samps_per_trig)
+        self.analog_input.CfgInputBuffer(self.buf_points)
+        self.analog_input.CfgDigEdgeStartTrig("/Dev1/PFI0", DAQmx_Val_Rising)
+        self.analog_input.SetStartTrigRetriggerable(1)
+        self.analog_input.StartTask()
 
-        # Setup picosecond
-        pspl.duration  = 5e-9
-        pspl_attenuation = BASE_ATTENUATION
-        pspl.amplitude = polarity*7.5*np.power(10, -pspl_attenuation/20.0)
-        pspl.trigger_source = "EXT"
-        pspl.output = True
-        pspl.trigger_level = 0.1
+    def init_streams(self):
+        # Baked in data axes
+        descrip = DataStreamDescriptor()
+        descrip.add_axis(DataAxis("samples", range(self.samps_per_trig)))
+        descrip.add_axis(DataAxis("attempts", range(self.attempts)))
+        self.daq_buffer.set_descriptor(descrip)
 
-        # Ramp to the switching field
-        mag.set_field(SET_FIELD)
-
-        # Variable attenuator
-        df = pd.read_csv("calibration/RFSA2113SB.tsv", sep="\t")
-        attenuator_interp = interp1d(df["Attenuation"], df["Control Voltage"])
-        attenuator_lookup = lambda x : float(attenuator_interp(x))
-
-        analog_input = Task()
-        read = int32()
-
-        # DAQmx Configure Code
-        samps_per_trig = SAMPLES_PER_TRIGGER
-        analog_input.CreateAIVoltageChan("Dev1/ai1", "", DAQmx_Val_RSE, 0, 1.0, DAQmx_Val_Volts, None)
-        analog_input.CfgSampClkTiming("", 1e6, DAQmx_Val_Rising, DAQmx_Val_FiniteSamps , samps_per_trig)
-        analog_input.CfgInputBuffer(samps_per_trig*reps)
-        analog_input.CfgDigEdgeStartTrig("/Dev1/PFI0", DAQmx_Val_Rising)
-        analog_input.SetStartTrigRetriggerable(1)
-
-        # DAQmx Start Code
-        analog_input.StartTask()
-
-        arb.scenario_start_index = 0
-        arb.run()
-
-        durations = DURATIONS
-        attens = ATTENUATIONS
-
-    async def run(pol=polarity, direction=1):
-        """ Carry out the measurement
-
-        polarity: polarity of PSPL amplitude \
-        direction: 1 - magnitude small --> large \
-                  -1 - magnitude large --> small
-        """
-        id_dur = 0
-        pspl.amplitude = pol*7.5*np.power(10, -pspl_attenuation/20)
-        attenss = attens
-        if direction==-1: # amplitude large to small
-            attenss = np.flipud(attens)
-
-        volts = 7.5*np.power(10, (-pspl_attenuation+attenss)/20)
-        buffers = np.zeros((len(durations), len(attens), samps_per_trig*reps))
-        for dur in tqdm(durations, leave=True):
-            id_atten = 0
-            pspl.duration = dur
-            time.sleep(0.1) # Allow the PSPL to settle
-            for atten in tqdm(attenss, nested=True, leave=False):
-                lock.ao3 = attenuator_lookup(atten)
-                time.sleep(0.02) # Make sure attenuation is set
-                # trigger out
-                arb.advance()
-                arb.trigger()
-                analog_input.ReadAnalogF64(samps_per_trig*reps, -1, DAQmx_Val_GroupByChannel,
-                                           buffers[id_dur, id_atten], samps_per_trig*reps, byref(read), None)
-                id_atten += 1
-            id_dur += 1
-        return pol*volts, buffers
-
-        # Execute
-        volts1, buffers1 = execute(-1,-1)
-        volts2, buffers2 = execute(1, 1)
-        volts3, buffers3 = execute(1,-1)
-        volts4, buffers4 = execute(-1,1)
+    async def run(self):
+        self.arb.advance()
+        self.arb.trigger()
+        buf = np.empty(self.buf_points)
+        self.analog_input.ReadAnalogF64(self.buf_points, -1, DAQmx_Val_GroupByChannel,
+                                        buf, self.buf_points, byref(self.read), None)
+        logger.debug("Read a buffer of {} points".format(buf.size))
+        await self.daq_buffer.push(buf)
+        # Seemingly we need to give the filters some time to catch up here...
+        await asyncio.sleep(0.02)
+        logger.debug("Stream has filled {} of {} points".format(self.daq_buffer.points_taken, self.daq_buffer.num_points()))
 
     def shutdown_instruments(self):
         try:
-            analog_input.StopTask()
+            self.analog_input.StopTask()
         except Exception as e:
-            print("Warning failed to stop task, which is quite normal (!)")
-            pass
-        arb.stop()
-        keith.current = 0.0
-        # mag.zero()
-        pspl.output = False
+            logger.warning("Warning failed to stop task, which is quite typical (!)")
+
+        self.arb.stop()
+        self.keith.current = 0.0
+        # self.mag.zero()
+        self.pspl.output = False
 
 if __name__=='__main__':
     exp = SwitchSearchExperiment()
-    wr = WriteToHDF5("data\CSHE-Switching\CSHE-Die2-C4R1\CSHE2-C4R1-AP2P_2016-06-20_int.h5")
+    exp.sample = "CSHE2-C4R2"
+    exp.field.value = 0.0133
+    exp.measure_current = 3e-6
+    exp.init_streams()
+    volts = np.arange(-0.7, -0.1, 0.1)
+    volts = np.append(volts, -1*np.flipud(volts))
+    volts = np.append(-volts, np.flipud(volts))
+    durs = 1e-9*np.array([3,5])
+    exp.add_sweep(exp.pulse_voltage, volts)
+    exp.add_sweep(exp.pulse_duration, durs)
+
+    # Set up measurement network
+    wr = WriteToHDF5("data\CSHE-Switching\CSHE-Die2-C4R2\CSHE2-C4R2-Search_Switch_2016-06-30.h5")
+    # pbar = ProgressBar(num=2)
+    # edges = [(exp.daq_buffer, wr.data), (exp.daq_buffer, pbar.data)]
     edges = [(exp.daq_buffer, wr.data)]
     exp.set_graph(edges)
     exp.init_instruments()
 
-    exp.field.value = -0.013
-
-    main_sweep = exp.add_unstructured_sweep([exp.pulse_duration, exp.pulse_voltage], points)
-
-    # Do some polishment
-    volts_tot = np.concatenate((volts1, volts2, volts3, volts4), axis=0)
-    buffers_tot = np.concatenate((buffers1, buffers2, buffers3, buffers4), axis=1)
-    buffers_mean = np.mean(buffers_tot, axis=2) # Average over samps_per_trig
-
-    # Save the data
-    fname = os.path.join(FOLDER, FILENAME+'.h5')
-    with h5py.File(fname,'a') as f:
-        data1 = volts_tot
-        data2 = buffers_tot
-        dset1 = mk_dataset(f, DATASET+'_AMPS_A', data1)
-        dset2 = mk_dataset(f, DATASET+'_VOLTS_A', data2)
-
-    # Plot
-    NUM = len(volts_tot)
-    V1 = np.zeros(NUM)
-    V2 = np.zeros(NUM)
-    dV1 = np.zeros(NUM)
-    dV2 = np.zeros(NUM)
-    for i, dur in enumerate(durations):
-        # Plot the original data
-        plt.figure(i)
-        for j in range(NUM):
-            buff = buffers_tot[i,j,:].flatten()
-            plt.plot(volts_tot[j]*np.ones(buff.size), 1e-3*buff/max(MEASURE_CURRENT,1e-7),
-                        '.', color='blue')
-        plt.plot(volts_tot, 1e-3*buffers_mean[i]/max(MEASURE_CURRENT, 1e-7), '-', color='red')
-        plt.xlabel("Output V", size=14)
-        plt.ylabel("Resitance (kOhm)", size=14)
-        plt.title("Duration = {0} ns".format(dur*1e+9))
-    plt.show()
-    print("Finished.")
+    exp.run_sweeps()
+    exp.shutdown_instruments()
+    # Get data
+    f = h5shell(wr.filename,'r')
+    dset= f[f.grep('data')[-1]]
+    buffers = dset.value
+    f.close()
+    # Plot the result
+    buff_mean = np.mean(buffers, axis=(2,3))
+    figs = []
+    for res, dur in zip(buff_mean, durs):
+        figs.append(plt.figure())
+        plt.plot(volts, 1e-3*res/max(exp.measure_current,1e-7),'-o')
+        plt.xlabel("AWG amplitude (V)", size=14);
+        plt.ylabel("Resistance (kOhm)", size=14);
+        plt.title("PSPL Switch Volt Search (dur={})".format(dur))
+    logger.info("Finished experiment.")
+    # plt.show()
