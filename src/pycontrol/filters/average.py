@@ -99,8 +99,9 @@ class Average(Filter):
         while True:
             if self.data.input_streams[0].done():
                 # We've stopped receiving new input, make sure we've flushed the output streams
-                if len(self.partial_average.output_streams + self.final_average.output_streams) > 0:
-                    if False not in [os.done() for os in self.partial_average.output_streams + self.final_average.output_streams]:
+                if len(self.final_average.output_streams) > 0:
+                    if all([os.done() for os in self.final_average.output_streams]):
+                        logger.debug("Averager %s done", self.name)
                         break
 
             new_data = await self.data.input_streams[0].queue.get()
