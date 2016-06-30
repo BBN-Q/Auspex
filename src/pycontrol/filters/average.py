@@ -70,7 +70,7 @@ class Average(Filter):
 
         for stream in self.partial_average.output_streams:
             logger.debug("\tnow setting stream %s to %s", stream, descriptor_in)
-            stream.set_descriptor(descriptor_in)
+            stream.set_descriptor(descriptor_out)
             logger.debug("\tnow setting stream end connector %s to %s", stream.end_connector, descriptor_in)
             stream.end_connector.update_descriptors()
 
