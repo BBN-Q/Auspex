@@ -88,7 +88,7 @@ class DataStream(object):
             return 0.0
 
     def done(self):
-        return (self.points_taken >= self.num_points() - 1) and (self.num_points() > 0)
+        return (self.points_taken >= self.num_points()) and (self.num_points() > 0)
 
     def reset(self):
         self.points_taken = 0
