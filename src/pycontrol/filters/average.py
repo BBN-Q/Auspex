@@ -13,7 +13,7 @@ class Average(Filter):
 
     def __init__(self, axis, **kwargs):
         super(Average, self).__init__(**kwargs)
-        self._axis = axis 
+        self._axis = axis
         self.points_before_final_average   = None
         self.points_before_partial_average = None
         self.sum_so_far = None
@@ -27,12 +27,12 @@ class Average(Filter):
         if isinstance(value, str):
             self._axis = value
             if self.data.descriptor is not None:
-                self.update_descriptors() 
+                self.update_descriptors()
         else:
             raise ValueError("Must specify averaging axis as string.")
 
     def update_descriptors(self):
-        logger.debug("Updating averager descriptors based on input descriptor: %s.", self.data.descriptor)
+        logger.debug('Updating averager "%s" descriptors based on input descriptor: %s.', self.name, self.data.descriptor)
         descriptor_in = self.data.descriptor
         names = [a.name for a in descriptor_in.axes]
 
@@ -44,7 +44,7 @@ class Average(Filter):
 
         logger.debug("Averaging over axis #%d: %s", self.axis_num, self._axis)
 
-        self.data_dims = descriptor_in.data_dims() 
+        self.data_dims = descriptor_in.data_dims()
         if self.axis_num == len(descriptor_in.axes) - 1:
             logger.debug("Performing scalar average!")
             self.points_before_partial_average = 1
@@ -65,7 +65,7 @@ class Average(Filter):
         descriptor_out.axes = new_axes
 
         self.sum_so_far = np.zeros(self.avg_dims)
-        self.partial_average.descriptor = descriptor_in
+        self.partial_average.descriptor = descriptor_out
         self.final_average.descriptor = descriptor_out
 
         for stream in self.partial_average.output_streams:

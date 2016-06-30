@@ -10,7 +10,7 @@ from pycontrol.logging import logger
 from pycontrol.filters.filter import Filter, InputConnector
 
 class Plotter(Filter):
-    data = InputConnector() 
+    data = InputConnector()
 
     def __init__(self, *args, name="", plot_dims=1, **plot_args):
 
@@ -24,11 +24,11 @@ class Plotter(Filter):
         self.stream = self.data.input_streams[0]
         self.descriptor = self.data.descriptor
 
-        logger.info("Starting descriptor update in filter %s, where the descriptor is %s", 
+        logger.info("Starting descriptor update in filter %s, where the descriptor is %s",
                 self.name, self.descriptor)
 
     def final_init(self):
-        
+
         # Check the descriptor axes
         num_axes = len(self.descriptor.axes)
         if self.plot_dims > num_axes:
@@ -70,8 +70,8 @@ class Plotter(Filter):
             new_data = np.array(await self.stream.queue.get()).flatten()
             temp[idx:idx+new_data.size] = new_data
             idx += new_data.size
-            logger.debug("Plotter received %d points.", new_data.size)
-            
+            logger.debug('Plotter "%s" received %d points.', self.name, new_data.size)
+
             # Clear the plots after accumulating a certain number of points
             num_traces  = int(idx/self.points_before_clear)
             extra       = idx - num_traces*self.points_before_clear
@@ -79,12 +79,12 @@ class Plotter(Filter):
             if self.plot_dims == 1:
                 if extra == 0:
                     # Plot the last full trace
-                    temp[0:self.points_before_clear] = temp[(num_traces-1)*self.points_before_clear:num_traces*self.points_before_clear] 
+                    temp[0:self.points_before_clear] = temp[(num_traces-1)*self.points_before_clear:num_traces*self.points_before_clear]
                     idx = self.points_before_clear
                 else:
                     temp[0:extra] = temp[num_traces*self.points_before_clear:num_traces*self.points_before_clear + extra]
                     idx = extra
-                      
+
                 if (time.time() - self.last_update >= self.update_interval) or self.stream.done():
                     self.data_source.data["x"] = np.copy(self.x_values[0:idx])
                     self.data_source.data["y"] = np.copy(temp[0:idx])
@@ -92,13 +92,13 @@ class Plotter(Filter):
 
             else:
                 if extra == 0:
-                    temp[0:self.points_before_clear] = temp[(num_traces-1)*self.points_before_clear:num_traces*self.points_before_clear] 
+                    temp[0:self.points_before_clear] = temp[(num_traces-1)*self.points_before_clear:num_traces*self.points_before_clear]
                     idx = self.points_before_clear
                 else:
                     temp[0:extra] = temp[num_traces*self.points_before_clear:num_traces*self.points_before_clear + extra]
                     temp[extra:] = 0.0
                     idx = extra
-                
+
                 if (time.time() - self.last_update >= self.update_interval) or self.stream.done():
                     self.data_source.data["image"] = [np.reshape(temp[:self.points_before_clear], self.z_data.shape)]
                     self.last_update = time.time()
@@ -106,4 +106,3 @@ class Plotter(Filter):
             if self.stream.done():
                 print("No more data for plotter")
                 break
-
