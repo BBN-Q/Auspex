@@ -51,6 +51,8 @@ class DataStreamDescriptor(object):
     def num_points_through_axis(self, axis):
         if len(self.axes) == 1:
             return self.axes[0].num_points()
+        elif axis>=len(self.axes):
+            return 0
         else:
             return reduce(lambda x,y: x*y, [len(a.points) for a in self.axes[axis:]])
 
@@ -82,13 +84,13 @@ class DataStream(object):
             return 0
 
     def percent_complete(self):
-        if self.descriptor is not None:
+        if (self.descriptor is not None) and self.num_points()>0:
             return 100.0*self.points_taken/self.num_points()
         else:
             return 0.0
 
     def done(self):
-        return (self.points_taken >= self.num_points() - 1) and (self.num_points() > 0)
+        return (self.points_taken >= self.num_points()) and (self.num_points() > 0)
 
     def reset(self):
         self.points_taken = 0

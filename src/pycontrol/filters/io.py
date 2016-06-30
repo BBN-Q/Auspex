@@ -9,6 +9,7 @@ import glob
 from pycontrol.stream import DataStreamDescriptor
 from pycontrol.logging import logger
 from pycontrol.filters.filter import Filter, InputConnector, OutputConnector
+from tqdm import tqdm, tqdm_notebook
 
 class WriteToHDF5(Filter):
     """Writes data to file."""
@@ -140,6 +141,7 @@ class ProgressBar(Filter):
     def __init__(self, num=0, notebook=False):
         super(ProgressBar,self).__init__()
         self.num    = num
+        self.notebook = notebook
         self.bars   = []
         self.w_id   = 0
 
@@ -151,12 +153,13 @@ class ProgressBar(Filter):
         chunk_sizes = [max(1,self.stream.descriptor.num_points_through_axis(axis+1)) for axis in range(num_axes)]
         self.num = min(self.num, num_axes)
 
+        self.bars   = []
         for i in range(self.num):
-            if notebook:
+            if self.notebook:
                 self.bars.append(tqdm_notebook(total=totals[i]/chunk_sizes[i]))
             else:
                 self.bars.append(tqdm(total=totals[i]/chunk_sizes[i]))
-
+        self.w_id   = 0
         while True:
             if self.stream.done() and self.w_id==self.stream.num_points():
                 break
@@ -168,7 +171,7 @@ class ProgressBar(Filter):
             num_data = self.stream.points_taken
             for i in range(self.num):
                 if num_data == 0:
-                    if notebook:
+                    if self.notebook:
                         self.bars[i].sp(close=True)
                         # Reset the progress bar with a new one
                         self.bars[i] = tqdm_notebook(total=totals[i]/chunk_sizes[i])
