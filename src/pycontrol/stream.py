@@ -49,10 +49,10 @@ class DataStreamDescriptor(object):
             return 0
 
     def num_points_through_axis(self, axis):
-        if len(self.axes) == 1:
-            return self.axes[0].num_points()
-        elif axis>=len(self.axes):
+        if axis>=len(self.axes):
             return 0
+        elif len(self.axes) == 1:
+            return self.axes[0].num_points()
         else:
             return reduce(lambda x,y: x*y, [len(a.points) for a in self.axes[axis:]])
 
