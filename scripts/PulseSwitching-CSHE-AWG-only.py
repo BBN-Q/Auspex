@@ -21,18 +21,18 @@ import h5py
 # AWG Sync Marker Out -> DAQmx PFI0
 
 # PARAMETERS: Confirm these before running
-RST_DURATION = 6.0e-9 # Reset duration, second
+RST_DURATION = 5.0e-9 # Reset duration, second
 RST_AMPS = np.arange(-0.7, 0.71, 0.05) # Reset amplitudes
 MEASURE_CURRENT = 3.0e-6
-SET_FIELD = -0.017 # Tesla
+SET_FIELD = 0.0133 # Tesla
 REPS = 1 << 10 # Number of repeats per sequence
 REPS_OVER = 5 # Number of repeats of scenario
 SAMPS_PER_TRIG = 5 # Samples per trigger
 
 # File to save
-FOLDER = "data\\CSHE-Switching\\CSHE-Die2-C5R7"
-FILENAME = "CSHE-2-C5R7_Search_Reset" # No extension
-DATASET = "CSHE-2-C5R7/2016-06-27/Search_Reset"
+FOLDER = "data\\CSHE-Switching\\CSHE-Die2-C4R2"
+FILENAME = "CSHE-2-C4R2_Search_Reset" # No extension
+DATASET = "CSHE-2-C4R2/2016-06-30/Search_Reset"
 
 def arb_pulse(amplitude, duration, sample_rate=12e9):
     pulse_points = int(duration*sample_rate)

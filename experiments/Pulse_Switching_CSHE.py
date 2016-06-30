@@ -22,10 +22,7 @@ import matplotlib.pyplot as plt
 import analysis.switching as sw
 from adapt import refine
 
-import logging
-logger = logging.getLogger('pycontrol')
-logging.basicConfig(format='%(name)s-%(levelname)s: \t%(message)s')
-logger.setLevel(logging.INFO)
+from pycontrol.logging import logger
 
 # Experimental Topology
 # lockin AO 2 -> Analog Attenuator Vdd
@@ -37,7 +34,7 @@ logger.setLevel(logging.INFO)
 class SwitchingExperiment(Experiment):
 
     # Sample information
-    sample         = "CSHE2-C5R7"
+    sample         = "CSHE2-C3R6"
     comment        = "Phase Diagram"
     # Parameters
     field          = FloatParameter(default=0.0, unit="T")
@@ -57,8 +54,8 @@ class SwitchingExperiment(Experiment):
     min_daq_voltage = 0.0
     max_daq_voltage = 0.4
 
-    reset_amplitude = 0.6
-    reset_duration  = 6.0e-9
+    reset_amplitude = 0.7
+    reset_duration  = 5.0e-9
 
     # Things coming back
     daq_buffer     = OutputConnector()
@@ -224,19 +221,20 @@ class SwitchingExperiment(Experiment):
 
 if __name__ == '__main__':
     exp = SwitchingExperiment()
-    exp.sample = "CSHE2-C5R7"
-    exp.comment = "Phase Diagram -  P to AP - Interations = 12"
-    exp.polarity = 1 # -1: AP to P; 1: P to AP
+    exp.sample = "CSHE2-C3R6"
+    exp.comment = "Phase Diagram -  AP to P - Interations = 12"
+    exp.polarity = 1 # 1: AP to P; -1: P to AP
     exp.iteration = 12
-    exp.field.value = -0.017
-    wr = WriteToHDF5("data\CSHE-Switching\CSHE-Die2-C5R7\CSHE2-C5R7-P2AP_2016-06-27.h5")
+    exp.field.value = 0.0126
+    exp.measure_current = 3e-6
+    wr = WriteToHDF5("data\CSHE-Switching\CSHE-Die2-C3R6\CSHE2-C3R6-AP2P_2016-06-29.h5")
     # pr = Print()
     edges = [(exp.daq_buffer, wr.data)]
     exp.set_graph(edges)
     exp.init_instruments()
 
     coarse_ts = 1e-9*np.linspace(0.1, 5, 10) # List of durations
-    coarse_vs = np.linspace(0.55, 1.15, 10)
+    coarse_vs = np.linspace(0.5, 1.15, 10)
     points    = [coarse_ts, coarse_vs]
     points    = list(itertools.product(*points))
 
@@ -255,6 +253,8 @@ if __name__ == '__main__':
             break
         #
         print("Added {} new points.".format(len(new_points)))
+        print("Elapsed time: {}".format((time.time()-t1)/60))
+        time.sleep(3)
         main_sweep.update_values(new_points)
 
     t2 = time.time()

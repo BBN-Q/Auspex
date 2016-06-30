@@ -21,11 +21,7 @@ import matplotlib.pyplot as plt
 
 import analysis.switching as sw
 
-import logging
-logger = logging.getLogger('pycontrol')
-logging.basicConfig(format='%(name)s-%(levelname)s: \t%(message)s')
-logger.setLevel(logging.INFO)
-
+from pycontrol.logging import logger
 # Experimental Topology
 # lockin AO 2 -> Analog Attenuator Vdd
 # lockin AO 3 -> Analog Attenuator Vc (Control Voltages)
@@ -55,8 +51,8 @@ class BERExperiment(Experiment):
     min_daq_voltage = 0.0
     max_daq_voltage = 0.4
 
-    reset_amplitude = 0.65
-    reset_duration  = 6.0e-9
+    reset_amplitude = 0.7
+    reset_duration  = 5.0e-9
 
     # Things coming back
     daq_buffer     = OutputConnector()
@@ -233,27 +229,28 @@ class BERExperiment(Experiment):
 
 if __name__ == '__main__':
     exp = BERExperiment()
-    exp.sample = "CSHE2 - C5R7"
+    exp.sample = "CSHE2 - C3R6"
     exp.comment = "Bit Error Rate - AP to P - 5ns"
-    exp.polarity = -1 # -1: AP to P; 1: P to AP
-    exp.field.value = -0.017
+    exp.polarity = 1 # 1: AP to P; -1: P to AP
+    exp.field.value = 0.0126
     exp.pulse_duration.value = 5e-9 # Fixed
     exp.init_instruments()
 
-    wr = WriteToHDF5("data\CSHE-Switching\CSHE-Die2-C5R7\CSHE2-C5R7-AP2P_2016-06-28_BER_5ns.h5")
+    wr = WriteToHDF5("data\CSHE-Switching\CSHE-Die2-C3R6\CSHE2-C3R6-AP2P_2016-06-29_BER_5ns.h5")
     # pr = Print()
     edges = [(exp.daq_buffer, wr.data)]
     exp.set_graph(edges)
 
-    attempts_list = [1 << int(x) for x in [21,22,21]]
+    attempts_list = [1 << int(x) for x in np.linspace(22,22,2)]
     # attempts_list = [int(6e6), int(6e6)]
-    voltages_list = np.linspace(1.05,1.15,3)
+    voltages_list = np.linspace(0.7,0.75,2)
     # attempts_list = [1 << int(x) for x in np.linspace(11, 13, 3)]
     # voltages_list = np.linspace(0.3,0.4,3)
     t1 = [] # Keep track of time
     t2 = []
     for att, vol in zip(attempts_list, voltages_list):
-        logger.info("Now at ({},{}).".format(att,vol))
+        print("=========================")
+        print("Now at ({},{}).".format(att,vol))
         t1.append(time.time())
         exp.pulse_voltage.value = vol
         exp.attempts.value = att
@@ -261,3 +258,9 @@ if __name__ == '__main__':
         exp.reset()
         exp.run_loop()
         t2.append(time.time())
+        print("Elapsed time: {}".format((t2[-1]-t1[-1])/60))
+        time.sleep(5)
+
+    # Plot data
+    data_mean = sw.load_BER_data(wr.filename)
+    fig = sw.plot_BER(voltages_list, data_mean, start_state=1)

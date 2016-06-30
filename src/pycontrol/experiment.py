@@ -348,15 +348,15 @@ class Experiment(metaclass=MetaExperiment):
 
             # Update the parameter values. Unles set and push if there has been a change
             # in the value from the previous iteration.
+            logger.debug("Update new values to swept parameters.")
             for i, sp in enumerate(self._swept_parameters):
                 if last_param_values is None or param_values[i] != last_param_values[i]:
                     sp.value = param_values[i]
                     sp.push()
-
             # update previous values
             last_param_values = param_values
-
             # Run the procedure
+            logger.debug("Starting a new run.")
             await self.run()
 
     def run_sweeps(self):
