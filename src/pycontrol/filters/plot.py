@@ -17,7 +17,7 @@ class Plotter(Filter):
         super(Plotter, self).__init__(*args, name=name)
         self.plot_dims = plot_dims
         self.plot_args = plot_args
-        self.update_interval = 0.25
+        self.update_interval = 0.5
         self.last_update = time.time()
 
     def update_descriptors(self):
@@ -46,7 +46,7 @@ class Plotter(Filter):
 
         if self.plot_dims == 1:
             self.figure = Figure(x_range=[xmin, xmax], plot_width=600, plot_height=600, webgl=True)
-            self.plot = self.figure.line([],[], name=self.name, **self.plot_args)
+            self.plot = self.figure.line(np.copy(self.x_values), np.nan*np.ones(self.points_before_clear), name=self.name, **self.plot_args)
         else:
             self.y_values = self.descriptor.axes[-2].points
             self.x_mesh, self.y_mesh = np.meshgrid(self.x_values, self.y_values)
@@ -63,44 +63,31 @@ class Plotter(Filter):
 
     async def run(self):
         idx = 0
-        temp = np.empty(self.stream.num_points())
+        plot_buffer = np.nan*np.ones(self.points_before_clear)
 
         while True:
 
             new_data = np.array(await self.stream.queue.get()).flatten()
-            temp[idx:idx+new_data.size] = new_data
-            idx += new_data.size
             logger.debug('Plotter "%s" received %d points.', self.name, new_data.size)
+            #if we're going to clear then reset idx
+            if idx + new_data.size > self.points_before_clear:
+                logger.debug("Clearing previous plot and restarting")
+                plot_buffer[:] = np.nan
+                num_prev_buffer_pts = self.points_before_clear - idx
+                new_data = new_data[num_prev_buffer_pts:]
+                idx = 0
 
-            # Clear the plots after accumulating a certain number of points
-            num_traces  = int(idx/self.points_before_clear)
-            extra       = idx - num_traces*self.points_before_clear
+            plot_buffer[idx:idx+new_data.size] = new_data
+            idx += new_data.size
 
             if self.plot_dims == 1:
-                if extra == 0:
-                    # Plot the last full trace
-                    temp[0:self.points_before_clear] = temp[(num_traces-1)*self.points_before_clear:num_traces*self.points_before_clear]
-                    idx = self.points_before_clear
-                else:
-                    temp[0:extra] = temp[num_traces*self.points_before_clear:num_traces*self.points_before_clear + extra]
-                    idx = extra
-
                 if (time.time() - self.last_update >= self.update_interval) or self.stream.done():
-                    self.data_source.data["x"] = np.copy(self.x_values[0:idx])
-                    self.data_source.data["y"] = np.copy(temp[0:idx])
+                    self.data_source.data["y"] = np.copy(plot_buffer)
                     self.last_update = time.time()
 
             else:
-                if extra == 0:
-                    temp[0:self.points_before_clear] = temp[(num_traces-1)*self.points_before_clear:num_traces*self.points_before_clear]
-                    idx = self.points_before_clear
-                else:
-                    temp[0:extra] = temp[num_traces*self.points_before_clear:num_traces*self.points_before_clear + extra]
-                    temp[extra:] = 0.0
-                    idx = extra
-
                 if (time.time() - self.last_update >= self.update_interval) or self.stream.done():
-                    self.data_source.data["image"] = [np.reshape(temp[:self.points_before_clear], self.z_data.shape)]
+                    self.data_source.data["image"] = [np.reshape(plot_buffer, self.z_data.shape)]
                     self.last_update = time.time()
 
             if self.stream.done():
