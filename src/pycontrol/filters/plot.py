@@ -92,4 +92,5 @@ class Plotter(Filter):
 
             if self.stream.done():
                 print("No more data for plotter")
+                await asyncio.sleep(1) # wait a second for plot server to do final update
                 break
