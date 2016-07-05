@@ -64,20 +64,20 @@ class TestExperiment(Experiment):
         print("Data taker running")
         time_val = 0
         time_step = 0.1
-        
+
         while True:
             #Produce fake noisy sinusoid data every 0.02 seconds until we have 1000 points
             if self.chan1.done():
                 print("Data taker finished.")
                 break
             await asyncio.sleep(0.005)
-            
-            data_row = np.sin(2*np.pi*1e3*time_val) + 0.1*np.random.random(self.samples)       
+
+            data_row = np.sin(2*np.pi*1e3*time_val) + 0.1*np.random.random(self.samples)
             time_val += time_step
             await self.chan1.push(data_row)
             await self.chan2.push(-data_row*2)
             print("Stream has filled {} of {} points".format(self.chan1.points_taken, self.chan1.num_points() ))
-           
+
 
 class ExperimentTestCase(unittest.TestCase):
 
@@ -134,7 +134,7 @@ class ExperimentTestCase(unittest.TestCase):
         self.assertTrue(avgr.final_average.parent == avgr)
         self.assertTrue(exp.chan1.output_streams[0].end_connector.parent == avgr)
         self.assertTrue(avgr.partial_average.output_streams[0].end_connector.parent == printer_partial)
-        
+
     def test_update_descriptors(self):
         exp             = TestExperiment()
         printer_partial = Print(name="Partial")
@@ -183,12 +183,10 @@ class ExperimentTestCase(unittest.TestCase):
 
     def test_averager(self):
         exp             = TestExperiment()
-        printer_partial = Print(name="Partial")
         printer_final   = Print(name="Final")
         avgr            = Average('trials', name="TestAverager")
 
         edges = [(exp.chan1, avgr.data),
-                 (avgr.partial_average, printer_partial.data),
                  (avgr.final_average, printer_final.data)]
 
         exp.set_graph(edges)
@@ -196,12 +194,10 @@ class ExperimentTestCase(unittest.TestCase):
 
     def test_add_axis_to_averager(self):
         exp             = TestExperiment()
-        printer_partial = Print(name="Partial")
         printer_final   = Print(name="Final")
         avgr            = Average('samples', name="TestAverager")
 
         edges = [(exp.chan1, avgr.data),
-                 (avgr.partial_average, printer_partial.data),
                  (avgr.final_average, printer_final.data)]
 
         exp.set_graph(edges)
@@ -213,12 +209,10 @@ class ExperimentTestCase(unittest.TestCase):
 
     def test_scalar_averager(self):
         exp             = TestExperiment()
-        printer_partial = Print(name="Partial")
         printer_final   = Print(name="Final")
         avgr            = Average('samples', name="TestAverager")
 
         edges = [(exp.chan1, avgr.data),
-                 (avgr.partial_average, printer_partial.data),
                  (avgr.final_average, printer_final.data)]
 
         exp.set_graph(edges)
@@ -227,12 +221,10 @@ class ExperimentTestCase(unittest.TestCase):
 
     def test_reset(self):
         exp             = TestExperiment()
-        printer_partial = Print(name="Partial")
         printer_final   = Print(name="Final")
         avgr            = Average('samples', name="TestAverager")
 
         edges = [(exp.chan1, avgr.data),
-                 (avgr.partial_average, printer_partial.data),
                  (avgr.final_average, printer_final.data)]
 
         exp.set_graph(edges)
@@ -241,7 +233,6 @@ class ExperimentTestCase(unittest.TestCase):
         exp.reset()
 
         self.assertTrue(exp.chan1.output_streams[0].points_taken == 0)
-        self.assertTrue(avgr.partial_average.output_streams[0].points_taken == 0)
         self.assertTrue(avgr.final_average.output_streams[0].points_taken == 0)
 
         logger.debug("Running reset test: 2nd loop.")
