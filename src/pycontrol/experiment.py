@@ -418,7 +418,7 @@ class Experiment(metaclass=MetaExperiment):
                         """.format(script)
                 display(HTML(html))
             else:
-                session.show(doc)
+                session.show()
 
         def shutdown():
             if len(self.plotters) > 0:

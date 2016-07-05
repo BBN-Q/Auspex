@@ -13,7 +13,7 @@ class Average(Filter):
 
     def __init__(self, axis, **kwargs):
         super(Average, self).__init__(**kwargs)
-        self._axis = axis 
+        self._axis = axis
         self.points_before_final_average   = None
         self.points_before_partial_average = None
         self.sum_so_far = None
@@ -27,12 +27,12 @@ class Average(Filter):
         if isinstance(value, str):
             self._axis = value
             if self.data.descriptor is not None:
-                self.update_descriptors() 
+                self.update_descriptors()
         else:
             raise ValueError("Must specify averaging axis as string.")
 
     def update_descriptors(self):
-        logger.debug("Updating averager descriptors based on input descriptor: %s.", self.data.descriptor)
+        logger.debug('Updating averager "%s" descriptors based on input descriptor: %s.', self.name, self.data.descriptor)
         descriptor_in = self.data.descriptor
         names = [a.name for a in descriptor_in.axes]
 
@@ -44,7 +44,7 @@ class Average(Filter):
 
         logger.debug("Averaging over axis #%d: %s", self.axis_num, self._axis)
 
-        self.data_dims = descriptor_in.data_dims() 
+        self.data_dims = descriptor_in.data_dims()
         if self.axis_num == len(descriptor_in.axes) - 1:
             logger.debug("Performing scalar average!")
             self.points_before_partial_average = 1
@@ -65,12 +65,12 @@ class Average(Filter):
         descriptor_out.axes = new_axes
 
         self.sum_so_far = np.zeros(self.avg_dims)
-        self.partial_average.descriptor = descriptor_in
+        self.partial_average.descriptor = descriptor_out
         self.final_average.descriptor = descriptor_out
 
         for stream in self.partial_average.output_streams:
             logger.debug("\tnow setting stream %s to %s", stream, descriptor_in)
-            stream.set_descriptor(descriptor_in)
+            stream.set_descriptor(descriptor_out)
             logger.debug("\tnow setting stream end connector %s to %s", stream.end_connector, descriptor_in)
             stream.end_connector.update_descriptors()
 
@@ -81,24 +81,27 @@ class Average(Filter):
             stream.end_connector.update_descriptors()
 
     async def run(self):
-        logger.debug("Running averager async loop")
+        logger.debug('Running "%s" averager async loop', self.name)
 
         if self.points_before_final_average is None:
             raise Exception("Average has not been initialized. Run 'update_descriptors'")
 
-        idx = 0
         completed_averages = 0
 
         # We only need to accumulate up to the averaging axis
         # BUT we may get something longer at any given time!
+
         temp = np.empty(self.data.input_streams[0].num_points())
         logger.debug("Established averager buffer of size %d", self.data.input_streams[0].num_points())
+
+        carry = np.zeros(0)
 
         while True:
             if self.data.input_streams[0].done():
                 # We've stopped receiving new input, make sure we've flushed the output streams
-                if len(self.partial_average.output_streams + self.final_average.output_streams) > 0:
-                    if False not in [os.done() for os in self.partial_average.output_streams + self.final_average.output_streams]:
+                if len(self.final_average.output_streams) > 0:
+                    if all([os.done() for os in self.final_average.output_streams]):
+                        logger.debug("Averager %s done", self.name)
                         break
 
             new_data = await self.data.input_streams[0].queue.get()
@@ -109,35 +112,24 @@ class Average(Filter):
             if len(new_data.shape) > 1:
                 new_data = new_data.flatten()
 
-            temp[idx:idx+len(new_data)] = new_data
-            idx += len(new_data)
+            if carry.size > 0:
+                new_data = np.concatenate(1, (carry, new_data))
 
-            # Grab all of the partial data
-            num_partials = int((idx+1)/self.points_before_partial_average)
-            if completed_averages + num_partials > self.num_averages:
-                num_partials = self.num_averages - completed_averages
+            idx = 0
+            while idx < new_data.size:
+                #check whether we have enough data to fill an averaging frame
+                if new_data.size - idx >= self.points_before_partial_average:
+                    #reshape the data to an averaging frame
+                    self.sum_so_far += np.reshape(new_data[idx:idx+self.points_before_partial_average], self.avg_dims)
+                    idx += self.points_before_partial_average
+                    completed_averages += 1
+                #otherwise add it to the carry
+                else:
+                    carry = new_data[idx:]
 
-            logger.debug("Just got enough points for %d partial averages.", num_partials)
-            for i in range(num_partials):
-                # print("Adding to sum")
-                b = i*self.points_before_partial_average
-                e = b + self.points_before_partial_average
-                self.sum_so_far += np.reshape(temp[b:e], self.avg_dims)
-                completed_averages += 1
-                for output_stream in self.partial_average.output_streams:
-                    await output_stream.push(self.sum_so_far/completed_averages)
-
-            logger.debug("Now has %d of %d averages.", completed_averages, self.num_averages)
-
-
-            # Shift any extra data back to the beginnig of the array
-            if num_partials > 0:
-                extra = idx + 1 - num_partials*self.points_before_partial_average
-                temp[0:extra] = temp[num_partials*self.points_before_partial_average:num_partials*self.points_before_partial_average + extra]
-                idx = extra
-
-            if completed_averages == self.num_averages:
-                for output_stream in self.final_average.output_streams:
-                    await output_stream.push(self.sum_so_far/self.num_averages)
-                self.sum_so_far = 0.0
-                completed_averages = 0
+                #if we have finished averaging emit
+                if completed_averages == self.num_averages:
+                    for os in self.final_average.output_streams:
+                        await os.push(self.sum_so_far/self.num_averages)
+                    self.sum_so_far = 0.0
+                    completed_averages = 0
