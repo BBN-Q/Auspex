@@ -440,7 +440,7 @@ class Experiment(metaclass=MetaExperiment):
         other_nodes.remove(self)
         tasks = [n.run() for n in other_nodes]
         tasks.append(self.sweep())
-        self.loop.run_until_complete(asyncio.wait(tasks))
+        self.loop.run_until_complete(asyncio.gather(*tasks))
 
     def add_sweep(self, param, sweep_list):
         """Add a good-old-fasioned one-variable sweep."""
