@@ -168,6 +168,77 @@ class SweptParameterGroup(object):
     def __repr__(self):
         return "<SweptParameter: {}>".format([p.name for p in self.parameters])
 
+class ExpProgressBar(object):
+    """ Display progress bar(s) on the terminal.
+
+    num: number of progress bars to be display, \
+    corresponding to the number of axes (counting from outer most)
+
+        For running in Jupyter Notebook:
+    Needs to open '_tqdm_notebook.py',\
+    search for 'n = int(s[:npos])'\
+    then replace it with 'n = float(s[:npos])'
+    """
+    def __init__(self, stream=None, num=0, notebook=False):
+        super(ExpProgressBar,self).__init__()
+        logger.debug("Initiate the progress bars.")
+        self.stream = stream
+        self.num = num
+        self.notebook = notebook
+        self.reset()
+
+    def reset(self, stream=None):
+        """ Reset the progress bar(s) """
+        logger.debug("Update stream descriptor for progress bars.")
+        if stream is not None:
+            self.stream = stream
+        if self.stream is None:
+            logger.warning("No stream is associated with the progress bars!")
+            self.axes = []
+        else:
+            self.axes = self.stream.descriptor.axes
+        self.num = min(self.num, len(self.axes))
+        self.totals = [self.stream.descriptor.num_points_through_axis(axis) for axis in range(self.num)]
+        self.chunk_sizes = [max(1,self.stream.descriptor.num_points_through_axis(axis+1)) for axis in range(self.num)]
+        logger.debug("Reset the progress bars to initial states.")
+        self.bars   = []
+        for i in range(self.num):
+            if self.notebook:
+                self.bars.append(tqdm_notebook(total=totals[i]/chunk_sizes[i]))
+            else:
+                self.bars.append(tqdm(total=totals[i]/chunk_sizes[i]))
+
+    def close(self):
+        """ Close all progress bar(s) """
+        logger.debug("Close all the progress bars.")
+        for bar in self.bars:
+            if self.notebook:
+                bar.sp(close=True)
+            else:
+                bar.close()
+
+    def update(self):
+        """ Update the status of the progress bar(s) """
+        if self.stream is None:
+            logger.warning("No stream is associated with the progress bars!")
+            num_data = 0
+        else:
+            num_data = self.stream.points_taken
+        logger.debug("Update the progress bars.")
+        for i in range(self.num):
+            if num_data == 0:
+                # Reset the progress bar with a new one
+                if self.notebook:
+                    self.bars[i].sp(close=True)
+                    self.bars[i] = tqdm_notebook(total=totals[i]/chunk_sizes[i])
+                else:
+                    self.bars[i].close()
+                    self.bars[i] = tqdm(total=totals[i]/chunk_sizes[i])
+            pos = int(10*num_data / chunk_sizes[i])/10.0 # One decimal is good enough
+            if pos > self.bars[i].n:
+                self.bars[i].update(pos - self.bars[i].n)
+            num_data = num_data % chunk_sizes[i]
+
 class ExperimentGraph(object):
     def __init__(self, edges, loop):
         self.dag = None
@@ -255,6 +326,9 @@ class Experiment(metaclass=MetaExperiment):
         # Also keep references to all of the plot filters
         self.plotters = []
 
+        # ExpProgressBar object to display progress bars
+        self.progressbar = None
+
         # Things we can't metaclass
         self.output_connectors = {}
         for oc in self._output_connectors:
@@ -293,6 +367,15 @@ class Experiment(metaclass=MetaExperiment):
     def shutdown_instruments(self):
         """Gets run after a sweep ends, or when the program is terminated."""
         pass
+
+    def init_progressbar(self, num=0, notebook=False):
+        """ Initiate the progress bars."""
+        oc = list(self.output_connectors.values())
+        if len(oc)>0:
+            self.progressbar = ExpProgressBar(oc[0].stream, num=num, notebook=notebook)
+        else:
+            logger.warning("No stream is found for progress bars. Create a dummy bar.")
+            self.progressbar = ExpProgressBar(None, num=num, notebook=notebook)
 
     async def run(self):
         """This is the inner measurement loop, which is the smallest unit that
@@ -358,6 +441,10 @@ class Experiment(metaclass=MetaExperiment):
             # Run the procedure
             logger.debug("Starting a new run.")
             await self.run()
+
+            # Update progress bars
+            if self.progressbar is not None:
+                self.progressbar.update()
 
     def run_sweeps(self):
         # Go and find any plotters and keep track of them.
