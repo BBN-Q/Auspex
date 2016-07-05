@@ -55,6 +55,42 @@ def switching_phase(data, start_state=None):
                                1+c[start_stt,start_stt]) for c in counts])
     return mean
 
+def reset_failure(data, start_state=None):
+    num_clusters = 2
+    clusterer = cluster(data)
+    all_vals = data.flatten()
+    all_vals.resize((all_vals.size,1))
+    state = clusterer.fit_predict(all_vals)
+
+    init_state  = state[::2]
+    initial_state_fractions = [np.sum(init_state == ct)/len(init_state) for ct in range(num_clusters)]
+    if start_state is not None and start_state in range(num_clusters):
+        start_stt = start_state
+    else:
+        start_stt = np.argmax(initial_state_fractions)
+    switched_stt = 1 - start_stt
+    # print("Most frequenctly occuring initial state: {} (with {}% probability)".format(start_stt,
+    #                                                         initial_state_fractions[start_stt]))
+
+    counts =[]
+    for buf in data:
+        state = clusterer.predict(buf.reshape((buf.size,1)))
+        init_state = state[::2]
+        final_state = state[1::2]
+        switched = np.logical_xor(init_state, final_state)
+
+        count_mat = np.zeros((2,2), dtype=np.int)
+
+        count_mat[0,0] = np.sum(np.logical_and(init_state == 0, np.logical_not(switched) ))
+        count_mat[0,1] = np.sum(np.logical_and(init_state == 0, switched ))
+        count_mat[1,0] = np.sum(np.logical_and(init_state == 1, switched ))
+        count_mat[1,1] = np.sum(np.logical_and(init_state == 1, np.logical_not(switched) ))
+
+        counts.append(count_mat)
+
+    num_failed = np.array([c[switched_stt,switched_stt] + c[switched_stt, start_stt] for c in counts])
+    return num_failed
+
 def switching_BER(data, start_state=None):
     """ Process data for BER experiment. """
     num_clusters = 2
@@ -170,7 +206,7 @@ def crossover_pairs(points, values, threshold):
                 pairs.append([k,nb])
     return np.array(pairs)
 
-def load_switching_data(filename, start_state=None):
+def load_switching_data(filename, start_state=None, failure=False):
     with h5py.File(filename, 'r') as f:
         durations = np.array([f['axes'][k].value for k in f['axes'].keys() if "pulse_duration-data" in k])
         voltages = np.array([f['axes'][k].value for k in f['axes'].keys() if "pulse_voltage-data" in k])
@@ -180,7 +216,10 @@ def load_switching_data(filename, start_state=None):
         durations = np.concatenate(durations, axis=0)
     data_mean = np.mean(data, axis=-1)
     points = np.array([durations, voltages]).transpose()
-    return points, switching_phase(data_mean,start_state=start_state)
+    if failure:
+        return points, reset_failure(data_mean,start_state=start_state)
+    else:
+        return points, switching_phase(data_mean,start_state=start_state)
 
 def load_BER_data(filename):
     with h5py.File(filename, 'r') as f:
