@@ -1,21 +1,15 @@
 import threading
 import subprocess
 import psutil
-import time
 import os
 import sys
-
-import numpy as np
-import h5py
-from bokeh.plotting import Figure
-from bokeh.models.renderers import GlyphRenderer
 
 from pycontrol.logging import logger
 
 def in_notebook():
     # From http://stackoverflow.com/questions/15411967/how-can-i-check-if-code-is-executed-in-the-ipython-notebook
     try:
-        cfg = get_ipython().config 
+        cfg = get_ipython().config
         if cfg['IPKernelApp']['parent_appname'] == 'ipython-notebook':
             return True
         else:
@@ -55,4 +49,3 @@ class BokehServerThread(threading.Thread):
             self.p.kill()
             self.p = None
             super(BokehServerThread, self).join(timeout=timeout)
-
