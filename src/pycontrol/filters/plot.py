@@ -21,11 +21,9 @@ class Plotter(Filter):
         self.last_update = time.time()
 
     def update_descriptors(self):
+        logger.info("Updating Plotter %s descriptors based on input descriptor %s", self.name, self.data.descriptor)
         self.stream = self.data.input_streams[0]
         self.descriptor = self.data.descriptor
-
-        logger.info("Starting descriptor update in filter %s, where the descriptor is %s",
-                self.name, self.descriptor)
 
     def final_init(self):
 
