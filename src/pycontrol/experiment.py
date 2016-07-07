@@ -11,6 +11,7 @@ import scipy as sp
 import pandas as pd
 import networkx as nx
 import h5py
+from tqdm import tqdm, tqdm_notebook
 
 from pycontrol.instruments.instrument import Instrument
 from pycontrol.stream import DataStream, DataAxis, DataStreamDescriptor, InputConnector, OutputConnector
@@ -185,7 +186,7 @@ class ExpProgressBar(object):
         self.stream = stream
         self.num = num
         self.notebook = notebook
-        self.reset()
+        self.reset(stream=stream)
 
     def reset(self, stream=None):
         """ Reset the progress bar(s) """
@@ -204,9 +205,9 @@ class ExpProgressBar(object):
         self.bars   = []
         for i in range(self.num):
             if self.notebook:
-                self.bars.append(tqdm_notebook(total=totals[i]/chunk_sizes[i]))
+                self.bars.append(tqdm_notebook(total=self.totals[i]/self.chunk_sizes[i]))
             else:
-                self.bars.append(tqdm(total=totals[i]/chunk_sizes[i]))
+                self.bars.append(tqdm(total=self.totals[i]/self.chunk_sizes[i]))
 
     def close(self):
         """ Close all progress bar(s) """
@@ -230,14 +231,14 @@ class ExpProgressBar(object):
                 # Reset the progress bar with a new one
                 if self.notebook:
                     self.bars[i].sp(close=True)
-                    self.bars[i] = tqdm_notebook(total=totals[i]/chunk_sizes[i])
+                    self.bars[i] = tqdm_notebook(total=self.totals[i]/self.chunk_sizes[i])
                 else:
                     self.bars[i].close()
-                    self.bars[i] = tqdm(total=totals[i]/chunk_sizes[i])
-            pos = int(10*num_data / chunk_sizes[i])/10.0 # One decimal is good enough
+                    self.bars[i] = tqdm(total=self.totals[i]/self.chunk_sizes[i])
+            pos = int(10*num_data / self.chunk_sizes[i])/10.0 # One decimal is good enough
             if pos > self.bars[i].n:
                 self.bars[i].update(pos - self.bars[i].n)
-            num_data = num_data % chunk_sizes[i]
+            num_data = num_data % self.chunk_sizes[i]
 
 class ExperimentGraph(object):
     def __init__(self, edges, loop):
@@ -372,7 +373,7 @@ class Experiment(metaclass=MetaExperiment):
         """ Initiate the progress bars."""
         oc = list(self.output_connectors.values())
         if len(oc)>0:
-            self.progressbar = ExpProgressBar(oc[0].stream, num=num, notebook=notebook)
+            self.progressbar = ExpProgressBar(oc[0].output_streams[0], num=num, notebook=notebook)
         else:
             logger.warning("No stream is found for progress bars. Create a dummy bar.")
             self.progressbar = ExpProgressBar(None, num=num, notebook=notebook)
