@@ -4,26 +4,36 @@ from scipy.stats import beta
 from scipy.spatial import Delaunay
 import matplotlib.pyplot as plt
 import matplotlib as mpl
+import seaborn as sns
 import h5py
 
-def cluster(data, num_clusters=2):
+def cluster(data, num_clusters=2, display=False):
     all_vals = data.flatten()
     all_vals.resize((all_vals.size,1))
     init_guess = np.linspace(np.min(all_vals), np.max(all_vals), num_clusters)
     init_guess[[1,-1]] = init_guess[[-1,1]]
     init_guess.resize((num_clusters,1))
     clusterer = KMeans(init=init_guess, n_clusters=num_clusters)
+    if display:
+        state = clusterer.fit_predict(all_vals)
+        plt.figure()
+        for ct in range(num_clusters):
+            sns.distplot(all_vals[state == ct], kde=False, norm_hist=False)
+
     return clusterer
 
 def average_data(data, avg_points):
     return np.array([np.mean(d.reshape(avg_points, -1, order="F"), axis=0) for d in data])
 
-def switching_phase(data, start_state=None):
+def switching_phase(data, start_state=None, threshold=None):
     num_clusters = 2
-    clusterer = cluster(data)
     all_vals = data.flatten()
     all_vals.resize((all_vals.size,1))
-    state = clusterer.fit_predict(all_vals)
+    if threshold is None:
+        clusterer = cluster(data)
+        state = clusterer.fit_predict(all_vals)
+    else:
+        state = [0 if val < threshold else 1 for val in all_vals]
 
     init_state  = state[::2]
     initial_state_fractions = [np.sum(init_state == ct)/len(init_state) for ct in range(num_clusters)]
@@ -37,7 +47,10 @@ def switching_phase(data, start_state=None):
 
     counts =[]
     for buf in data:
-        state = clusterer.predict(buf.reshape((buf.size,1)))
+        if threshold is None:
+            state = clusterer.predict(buf.reshape((buf.size,1)))
+        else:
+            state = [0 if val < threshold else 1 for val in buf.reshape((buf.size,1))]
         init_state = state[::2]
         final_state = state[1::2]
         switched = np.logical_xor(init_state, final_state)
@@ -206,7 +219,7 @@ def crossover_pairs(points, values, threshold):
                 pairs.append([k,nb])
     return np.array(pairs)
 
-def load_switching_data(filename, start_state=None, failure=False):
+def load_switching_data(filename, start_state=None, failure=False, threshold=None):
     with h5py.File(filename, 'r') as f:
         durations = np.array([f['axes'][k].value for k in f['axes'].keys() if "pulse_duration-data" in k])
         voltages = np.array([f['axes'][k].value for k in f['axes'].keys() if "pulse_voltage-data" in k])
@@ -219,7 +232,7 @@ def load_switching_data(filename, start_state=None, failure=False):
     if failure:
         return points, reset_failure(data_mean,start_state=start_state)
     else:
-        return points, switching_phase(data_mean,start_state=start_state)
+        return points, switching_phase(data_mean,start_state=start_state,threshold=threshold)
 
 def load_BER_data(filename):
     with h5py.File(filename, 'r') as f:
