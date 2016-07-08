@@ -38,7 +38,7 @@ class SwitchSearchExperiment(Experiment):
     pulse_duration = FloatParameter(default=5.0e-9, unit="s")
     measure_current = 3e-6
 
-    base_attenuation = 0
+    base_attenuation = 10
     settle_delay = 50e-6
 
     attempts = 1 << 10 # Number of attemps
@@ -50,7 +50,7 @@ class SwitchSearchExperiment(Experiment):
     mag   = AMI430("192.168.5.109")
     keith = Keithley2400("GPIB0::25::INSTR")
     lock  = SR865("USB0::0xB506::0x2000::002638::INSTR")
-    atten = Attenuator("calibration/RFSA2113SB.tsv", lock.set_ao2, lock.set_ao3)
+    atten = Attenuator("calibration/RFSA2113SB_HPD_20160706.csv", lock.set_ao2, lock.set_ao3)
 
     min_daq_voltage = 0.0
     max_daq_voltage = 0.4
@@ -95,7 +95,7 @@ class SwitchSearchExperiment(Experiment):
         def set_voltage(voltage):
             # Calculate the voltage controller attenuator setting
             self.pspl.amplitude = np.sign(voltage)*7.5*np.power(10, -self.base_attenuation/20.0)
-            vc_atten = abs(20.0 * np.log10(abs(voltage)/7.5)) - self.base_attenuation - 10
+            vc_atten = abs(20.0 * np.log10(abs(voltage)/7.5)) - self.base_attenuation - 0
             if vc_atten <= 6.0:
                 logger.error("Voltage controlled attenuation under range (6dB).")
                 raise ValueError("Voltage controlled attenuation under range (6dB).")

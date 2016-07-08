@@ -46,7 +46,7 @@ class BERExperiment(Experiment):
     samps_per_trig  = 5
 
     polarity        = -1
-    pspl_atten      = 0
+    pspl_atten      = 10
 
     min_daq_voltage = 0.0
     max_daq_voltage = 0.4
@@ -61,7 +61,7 @@ class BERExperiment(Experiment):
     mag   = AMI430("192.168.5.109")
     lock  = SR865("USB0::0xB506::0x2000::002638::INSTR")
     pspl  = Picosecond10070A("GPIB0::24::INSTR")
-    atten = Attenuator("calibration/RFSA2113SB.tsv", lock.set_ao2, lock.set_ao3)
+    atten = Attenuator("calibration/RFSA2113SB_HPD_20160706.csv", lock.set_ao2, lock.set_ao3)
     arb   = M8190A("192.168.5.108")
     keith = Keithley2400("GPIB0::25::INSTR")
 
@@ -106,7 +106,7 @@ class BERExperiment(Experiment):
         def set_voltage(voltage):
             # Calculate the voltage controller attenuator setting
             # import ipdb; ipdb.set_trace()
-            vc_atten = abs(20.0 * np.log10(abs(voltage)/7.5)) - self.pspl_atten - 10
+            vc_atten = abs(20.0 * np.log10(abs(voltage)/7.5)) - self.pspl_atten - 0
             if vc_atten <= 6.0:
                 raise ValueError("Voltage controlled attenuation under range (6dB).")
             self.atten.set_attenuation(vc_atten)

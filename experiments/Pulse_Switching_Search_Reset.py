@@ -9,13 +9,16 @@ from PyDAQmx import *
 from pycontrol.experiment import FloatParameter, IntParameter, Experiment
 from pycontrol.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector
 from pycontrol.filters.debug import Print
-from pycontrol.filters.io import WriteToHDF5, ProgressBar
+from pycontrol.filters.io import WriteToHDF5
+from pycontrol.filters.average import Average
+from pycontrol.filters.plot import Plotter
 
 import asyncio
 import numpy as np
 import time
 from scipy.interpolate import interp1d
 import matplotlib.pyplot as plt
+from analysis.h5shell import h5shell
 
 from pycontrol.logging import logger
 
@@ -171,27 +174,28 @@ class ResetSearchExperiment(Experiment):
 
 if __name__ == "__main__":
     exp = ResetSearchExperiment()
-    exp.sample = "CSHE2-C4R2"
-    exp.field.value = 0.0133
-    exp.duration = 10e-9
+    exp.sample = "CSHE5-C1R3"
+    exp.field.value = -0.0074
+    exp.duration = 5e-9
     exp.measure_current = 3e-6
-    amps = np.arange(-0.2, 0.21, 0.05)
+    amps = np.arange(-0.25, 0.26, 0.05)
     amps = np.append(amps, np.flipud(amps))
-    exp.amplitudes = np.copy(amps)
+    exp.amplitudes = amps
     exp.init_streams()
-    exp.add_sweep(exp.reps_over, np.linspace(0,9,3))
+    exp.add_sweep(exp.reps_over, np.linspace(0,9,5))
 
-    # Set up measurement network
-    wr = WriteToHDF5("data\CSHE-Switching\CSHE-Die2-C4R2\CSHE2-C4R2-Search_Reset_2016-06-29.h5")
-    pbar = ProgressBar(num=1)
-    edges = [(exp.daq_buffer, wr.data), (exp.daq_buffer, pbar.data)]
+    wr = WriteToHDF5("data\CSHE-Switching\CSHE-Die5-C1R3\CSHE5-C1R3-Search_Reset_2016-07-07.h5")
+    # Set up averager and plot
+    averager = Average('amplitude')
+    fig = Plotter(name="CSHE5-C1R3 - Search Reset", plot_dims=1)
+    edges = [(exp.daq_buffer, wr.data), (exp.daq_buffer, averager.data), (averager.final_average,fig.data)]
     exp.set_graph(edges)
     exp.init_instruments()
 
+    exp.init_progressbar(num=1)
     exp.run_sweeps()
     exp.shutdown_instruments()
-    # Get data
-    from analysis.h5shell import h5shell
+
     f = h5shell(wr.filename,'r')
     dset= f[f.grep('data')[-1]]
     buffers = dset.value
@@ -200,6 +204,7 @@ if __name__ == "__main__":
     NUM = len(amps)
     buff_mean = np.mean(buffers, axis=(2,3))
     mean_state = np.mean(buff_mean, axis=0)
+
     fig = plt.figure()
     for i in range(NUM):
         plt.plot(amps[i]*np.ones(buff_mean[:,i].size),
