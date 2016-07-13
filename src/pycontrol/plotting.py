@@ -1,14 +1,8 @@
 import threading
 import subprocess
 import psutil
-import time
 import os
 import sys
-
-import numpy as np
-import h5py
-from bokeh.plotting import Figure
-from bokeh.models.renderers import GlyphRenderer
 
 from pycontrol.logging import logger
 
