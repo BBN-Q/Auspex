@@ -103,6 +103,9 @@ class Average(Filter):
                     if all([os.done() for os in self.final_average.output_streams]):
                         logger.debug("Averager %s done", self.name)
                         break
+                else:
+                    logger.debug("Found no output stream. Averager %s done.", self.name)
+                    break
 
             new_data = await self.data.input_streams[0].queue.get()
             logger.debug("%s got data %s", self.name, new_data)
@@ -113,19 +116,16 @@ class Average(Filter):
                 new_data = new_data.flatten()
 
             if carry.size > 0:
-                new_data = np.concatenate(1, (carry, new_data))
+                new_data = np.concatenate((carry, new_data),axis=0)
 
             idx = 0
-            while idx < new_data.size:
-                #check whether we have enough data to fill an averaging frame
-                if new_data.size - idx >= self.points_before_partial_average:
-                    #reshape the data to an averaging frame
-                    self.sum_so_far += np.reshape(new_data[idx:idx+self.points_before_partial_average], self.avg_dims)
-                    idx += self.points_before_partial_average
-                    completed_averages += 1
-                #otherwise add it to the carry
-                else:
-                    carry = new_data[idx:]
+            
+            # fill an averaging frame as long as possible
+            while new_data.size - idx >= self.points_before_partial_average:
+                #reshape the data to an averaging frame
+                self.sum_so_far += np.reshape(new_data[idx:idx+self.points_before_partial_average], self.avg_dims)
+                idx += self.points_before_partial_average
+                completed_averages += 1
 
                 #if we have finished averaging emit
                 if completed_averages == self.num_averages:
@@ -133,3 +133,6 @@ class Average(Filter):
                         await os.push(self.sum_so_far/self.num_averages)
                     self.sum_so_far = 0.0
                     completed_averages = 0
+
+            # add the remnant to the carry
+            carry = new_data[idx:]
