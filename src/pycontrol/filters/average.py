@@ -136,3 +136,137 @@ class Average(Filter):
 
             # add the remnant to the carry
             carry = new_data[idx:]
+
+
+class MultiAverage(Filter):
+    """Takes data and collapses along the specified axes.
+    Current approach: Store all data up to the outer most averaging axis \
+    then collapse using numpy.mean. Not memory efficient.
+
+    Future dev: Store (and accumulate) data of non-averaging axes.
+    """
+
+    data = InputConnector()
+    average = OutputConnector()
+
+    def __init__(self, axes, **kwargs):
+        super(MultiAverage, self).__init__(**kwargs)
+        self._axes = self.get_axes(axes)
+        self.average_points = None
+
+    @property
+    def axes(self):
+        return self._axes
+    @axes.setter
+    def axes(self, value):
+        self._axes = self.get_axes(value)
+        if self.data.descriptor is not None:
+            self.update_descriptors()
+
+    def get_axes(self,value):
+        """ axes must be a string or list of strings """
+        if isinstance(value, str):
+            return [value]
+        value = list(value)
+        if isinstance(value[0],str):
+            return value
+        raise ValueError("Must specify averaging axes as a string (one axis) or a list of strings.")
+
+    def update_descriptors(self):
+        logger.debug('Updating averager "%s" descriptors based on input descriptor: %s.', self.name, self.data.descriptor)
+        descriptor_in = self.data.descriptor
+        names = [a.name for a in descriptor_in.axes]
+
+        # Convert named axes to an index
+        self.axes_num = []
+        for axis in self._axes:
+            if axis not in names:
+                raise ValueError("Could not find axis {} within the DataStreamDescriptor {}".format(axis, self.descriptor_in))
+            self.axes_num.append(names.index(axis))
+            logger.debug("Axis %s corresponds to numerical axis %d", axis, self.axes_num[-1])
+
+        logger.debug("Averaging over axes #%s: %s", self.axes_num, self._axes)
+
+        if len(self.axes_num)==0:
+            logger.debug("Nothing to average. Work as a Passthrough filter.")
+            self.average_points = 1
+            self.avg_dims = [1]
+        else:
+            out_axis = min(self.axes_num)
+            self.average_points = descriptor_in.num_points_through_axis(out_axis)
+            self.data_dims = descriptor_in.data_dims()
+            self.avg_dims = self.data_dims[out_axis:]
+
+        logger.debug("Points before final average: %s.", self.average_points)
+        logger.debug("Data dimensions are %s", self.data_dims)
+
+        new_axes = descriptor_in.axes[:]
+        self.avg_axes = []
+        for axis in sorted(self.axes_num, reverse=True):
+            new_axes.pop(axis)
+            self.avg_axes.append(axis - out_axis)
+        self.avg_axes = tuple(self.avg_axes)
+        # self.num_averages = new_axes.num_points()
+        # logger.debug("Number of partial averages is %d", self.num_averages)
+        descriptor_out = DataStreamDescriptor()
+        descriptor_out.axes = new_axes
+        logger.debug("New axes after averaging: %s" %new_axes)
+
+        self.average.descriptor = descriptor_out
+
+        for stream in self.average.output_streams:
+            logger.debug("\tnow setting stream %s to %s", stream, descriptor_out)
+            stream.set_descriptor(descriptor_out)
+            logger.debug("\tnow setting stream end connector %s to %s", stream.end_connector, descriptor_out)
+            stream.end_connector.update_descriptors()
+
+    async def run(self):
+        logger.debug('Running "%s" averager async loop', self.name)
+
+        if self.average_points is None:
+            raise Exception("Average has not been initialized. Run 'update_descriptors'")
+
+        # completed_averages = 0
+
+        # We only need to accumulate up to the outer most averaging axis
+        # BUT we may get something longer at any given time!
+
+        logger.debug("Established averager buffer of size %d", self.data.input_streams[0].num_points())
+
+        carry = np.zeros(0)
+
+        while True:
+            if self.data.input_streams[0].done():
+                # We've stopped receiving new input, make sure we've flushed the output streams
+                if len(self.average.output_streams) > 0:
+                    if all([os.done() for os in self.average.output_streams]):
+                        logger.debug("Averager %s done", self.name)
+                        break
+                else:
+                    logger.debug("Found no output stream. Averager %s done.", self.name)
+                    break
+
+            new_data = await self.data.input_streams[0].queue.get()
+            logger.debug("%s got data %s", self.name, new_data)
+            logger.debug("Now has %d of %d points.", self.data.input_streams[0].points_taken, self.data.input_streams[0].num_points())
+
+            # todo: handle unflattened data separately
+            if len(new_data.shape) > 1:
+                new_data = new_data.flatten()
+
+            if carry.size > 0:
+                new_data = np.concatenate((carry, new_data),axis=0)
+
+            idx = 0
+            
+            # fill an averaging frame as long as possible
+            while new_data.size - idx >= self.average_points:
+                #reshape the data to an averaging frame
+                data_tmp = np.reshape(new_data[idx:idx+self.average_points], self.avg_dims)
+                idx += self.average_points
+
+                for os in self.average.output_streams:
+                    await os.push(np.mean(data_tmp, axis=self.avg_axes))
+
+            # add the remnant to the carry
+            carry = new_data[idx:]
