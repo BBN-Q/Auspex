@@ -221,8 +221,8 @@ def crossover_pairs(points, values, threshold):
 
 def load_switching_data(filename, start_state=None, failure=False, threshold=None):
     with h5py.File(filename, 'r') as f:
-        durations = np.array([f['axes'][k].value for k in f['axes'].keys() if "pulse_duration-data" in k])
-        voltages = np.array([f['axes'][k].value for k in f['axes'].keys() if "pulse_voltage-data" in k])
+        durations = np.array([f['axes'][k].value for k in f['axes'].keys() if "duration-data" in k])
+        voltages = np.array([f['axes'][k].value for k in f['axes'].keys() if "voltage-data" in k])
         dsets = np.array([f[k].value for k in f.keys() if "data" in k])
         data = np.concatenate(dsets, axis=0)
         voltages = np.concatenate(voltages, axis=0)
