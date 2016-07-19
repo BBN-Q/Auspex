@@ -34,6 +34,7 @@ class WriteToHDF5(Filter):
         axes       = stream.descriptor.axes
         params     = stream.descriptor.params
         data_dims  = stream.descriptor.data_dims()
+        params['exp_src'] = stream.descriptor.exp_src
         num_axes   = len(axes)
         chunk_size = axes[-1].num_points()
 

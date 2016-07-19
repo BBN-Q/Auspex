@@ -29,6 +29,7 @@ class DataStreamDescriptor(object):
         self.axes = []
         self.params = {} # Parameters associated with each dataset
         self.parent = None
+        self.exp_src = None # Actual source code from the underlying experiment
 
     def add_axis(self, axis):
         self.axes.insert(0, axis)

@@ -292,6 +292,7 @@ class SweepTestCase(unittest.TestCase):
             self.assertTrue(np.sum(f['data-0000'].dims[0][0].value - np.linspace(0,10.0,3)) == 0.0)
             self.assertTrue(np.sum(f['data-0000'].dims[1]['field'].value - np.linspace(0,100.0,4)) == 0.0)
             self.assertTrue(np.sum(f['data-0000'].dims[2]['samples'].value - np.arange(0,5)) == 0.0)
+            self.assertTrue("Here the run loop merely spews" in f['data-0000'].attrs['exp_src'])
             print(f['data-0000'][:])
 
         os.remove("test_write-0000.h5")
