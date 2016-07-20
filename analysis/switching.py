@@ -7,44 +7,56 @@ import matplotlib as mpl
 import seaborn as sns
 import h5py
 
+from pycontrol.logging import logger
+
 def cluster(data, num_clusters=2, display=False):
     all_vals = data.flatten()
     all_vals.resize((all_vals.size,1))
+    logger.debug("Clustering data: %s" % data.__repr__())
+    logger.debug("Number of clusters: %d" % num_clusters)
     init_guess = np.linspace(np.min(all_vals), np.max(all_vals), num_clusters)
     init_guess[[1,-1]] = init_guess[[-1,1]]
     init_guess.resize((num_clusters,1))
+    logger.debug("Initial guess: {}".format(init_guess))
     clusterer = KMeans(init=init_guess, n_clusters=num_clusters)
+    state = clusterer.fit_predict(all_vals)
+    # Print mean of each cluster
+    for ct in range(num_clusters):
+        logger.info("Mean of %d-th cluster: %f" %(ct,np.mean(all_vals[state==ct])))
     if display:
-        state = clusterer.fit_predict(all_vals)
         plt.figure()
         for ct in range(num_clusters):
             sns.distplot(all_vals[state == ct], kde=False, norm_hist=False)
-
     return clusterer
 
 def average_data(data, avg_points):
     return np.array([np.mean(d.reshape(avg_points, -1, order="F"), axis=0) for d in data])
 
-def switching_phase(data, start_state=None, threshold=None):
+def switching_phase(data, start_state=None, threshold=None, display=False):
     num_clusters = 2
     all_vals = data.flatten()
     all_vals.resize((all_vals.size,1))
     if threshold is None:
-        clusterer = cluster(data)
+        clusterer = cluster(data, display=display)
         state = clusterer.fit_predict(all_vals)
     else:
+        logger.debug("Cluster data based on threshold = {}".format(threshold))
         state = [0 if val < threshold else 1 for val in all_vals]
 
     init_state  = state[::2]
     initial_state_fractions = [np.sum(init_state == ct)/len(init_state) for ct in range(num_clusters)]
+    for ct, fraction in enumerate(initial_state_fractions):
+        logger.info("Initial fraction of state %d: %f" %(ct, fraction))
     if start_state is not None and start_state in range(num_clusters):
         start_stt = start_state
     else:
         start_stt = np.argmax(initial_state_fractions)
+    logger.info("Start state set to state: %d" %start_stt)
+
     switched_stt = 1 - start_stt
+    logger.info("Switched state is state: %d" %switched_stt)
     # print("Most frequenctly occuring initial state: {} (with {}% probability)".format(start_stt,
     #                                                         initial_state_fractions[start_stt]))
-
     counts =[]
     for buf in data:
         if threshold is None:
@@ -68,20 +80,24 @@ def switching_phase(data, start_state=None, threshold=None):
                                1+c[start_stt,start_stt]) for c in counts])
     return mean
 
-def reset_failure(data, start_state=None):
+def reset_failure(data, start_state=None, display=False):
     num_clusters = 2
-    clusterer = cluster(data)
+    clusterer = cluster(data,display=display)
     all_vals = data.flatten()
     all_vals.resize((all_vals.size,1))
     state = clusterer.fit_predict(all_vals)
 
     init_state  = state[::2]
     initial_state_fractions = [np.sum(init_state == ct)/len(init_state) for ct in range(num_clusters)]
+    for ct, fraction in enumerate(initial_state_fractions):
+        logger.info("Initial fraction of state %d: %f" %(ct, fraction))
     if start_state is not None and start_state in range(num_clusters):
         start_stt = start_state
     else:
         start_stt = np.argmax(initial_state_fractions)
     switched_stt = 1 - start_stt
+    logger.info("Start state set to state: %d" %start_stt)
+    logger.info("Switched state is state: %d" %switched_stt)
     # print("Most frequenctly occuring initial state: {} (with {}% probability)".format(start_stt,
     #                                                         initial_state_fractions[start_stt]))
 
@@ -201,7 +217,9 @@ def phase_diagram_mesh(points, values,
         xs = mesh.points[:,0]/scale_factors[0]
         ys = mesh.points[:,1]/scale_factors[1]
         plt.tripcolor(xs,ys,mesh.simplices.copy(),values, cmap="RdGy",shading=shading,**kwargs)
-    plt.title(title, size=16)
+    plt.xlim(min(xs),max(xs))
+    plt.ylim(min(ys),max(ys))
+    plt.title(title, size=18)
     plt.xlabel(xlabel, size=16)
     plt.ylabel(ylabel, size=16)
     plt.colorbar()
@@ -219,8 +237,9 @@ def crossover_pairs(points, values, threshold):
                 pairs.append([k,nb])
     return np.array(pairs)
 
-def load_switching_data(filename, start_state=None, failure=False, threshold=None):
+def load_switching_data(filename, start_state=None, failure=False, threshold=None, display=False):
     with h5py.File(filename, 'r') as f:
+        logger.debug("Read data from file: %s" % filename)
         durations = np.array([f['axes'][k].value for k in f['axes'].keys() if "duration-data" in k])
         voltages = np.array([f['axes'][k].value for k in f['axes'].keys() if "voltage-data" in k])
         dsets = np.array([f[k].value for k in f.keys() if "data" in k])
@@ -230,9 +249,9 @@ def load_switching_data(filename, start_state=None, failure=False, threshold=Non
     data_mean = np.mean(data, axis=-1)
     points = np.array([durations, voltages]).transpose()
     if failure:
-        return points, reset_failure(data_mean,start_state=start_state)
+        return points, reset_failure(data_mean,start_state=start_state, display=display)
     else:
-        return points, switching_phase(data_mean,start_state=start_state,threshold=threshold)
+        return points, switching_phase(data_mean,start_state=start_state,threshold=threshold, display=display)
 
 def load_BER_data(filename):
     with h5py.File(filename, 'r') as f:
