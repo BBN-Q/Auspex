@@ -33,10 +33,6 @@ from pycontrol.logging import logger
 # AWG Sync Marker Out -> DAQmx PFI0
 # AWG Samp. Marker Out -> PSPL Trigger
 
-def AWG_voltage_lookup(calibration_file="calibration/AWG_HPD_20160714.csv"):
-    df = pd.read_csv(calibration_file, sep=",")
-    return interp1d(df["Sample Voltage"],df["Control Voltage"])
-
 def arb_pulse(amplitude, duration, sample_rate=12e9):
     pulse_points = int(duration*sample_rate)
 
@@ -47,16 +43,16 @@ def arb_pulse(amplitude, duration, sample_rate=12e9):
     wf[:pulse_points] = amplitude
     return wf
 
-def nTron_voltage_lookup(AWG_calib="calibration/AWG_HPD_20160714.csv",
-                        nTron_calib="calibration/nTron_20160715.csv"):
-    df_AWG = pd.read_csv(AWG_calib, sep=",")
+def nTron_voltage_lookup(nTron_calib="calibration/nTron_20160718.csv",
+                        midpoint_calib="calibration/midpoint_20160718.csv"):
+    df_midpoint = pd.read_csv(midpoint_calib, sep=",")
     df_nTron = pd.read_csv(nTron_calib, sep=",")
-    AWG_midpoint_lookup = interp1d(df_AWG["Sample Voltage"],df_AWG["Midpoint Voltage"])
+    midpoint_lookup = interp1d(df_midpoint["Sample Voltage"],df_midpoint["Midpoint Voltage"])
     nTron_control_lookup = interp1d(df_nTron["Midpoint Voltage"],df_nTron["Control Voltage"])
     sample_volts = []
     control_volts = []
-    for volt in df_AWG['Sample Voltage']:
-        mid_volt = AWG_midpoint_lookup(volt)
+    for volt in df_midpoint['Sample Voltage']:
+        mid_volt = midpoint_lookup(volt)
         if (mid_volt > min(df_nTron['Midpoint Voltage'])) and (mid_volt < max(df_nTron['Midpoint Voltage'])):
             sample_volts.append(volt)
             control_volts.append(nTron_control_lookup(mid_volt))
@@ -68,12 +64,14 @@ def ntron_pulse(amplitude=1.0, rise_time=80e-12, hold_time=170e-12, fall_time=1.
     pulse_points = int(duration*sample_rate)
 
     if pulse_points < 320:
-        duration = 320/sample_rate
-        times = np.arange(0, duration, 1/sample_rate)
+        duration = 319/sample_rate
+        # times = np.arange(0, duration, 1/sample_rate)
+        times = np.linspace(0, duration, 320)
     else:
         pulse_points = 64*np.ceil(pulse_points/64.0)
-        duration = pulse_points/sample_rate
-        times = np.arange(0, duration, 1/sample_rate)
+        duration = (pulse_points-1)/sample_rate
+        # times = np.arange(0, duration, 1/sample_rate)
+        times = np.linspace(0, duration, pulse_points)
 
     rise_mask = np.less(times, delay)
     hold_mask = np.less(times, delay + hold_time)*np.greater_equal(times, delay)
@@ -190,7 +188,7 @@ class nTronPhaseDiagramExperiment(Experiment):
         nTron_segment_ids = []
         for dur,vpeak in zip(self.nTron_durations, self.nTron_voltages):
             volt = self.polarity*nTron_control_voltage(vpeak)
-            print("Set nTron pulse: {}V, {}s".format(volt,dur))
+            logger.debug("Set nTron pulse: {}V -> AWG {}V, {}s".format(vpeak,volt,dur))
             ntron_wf    = ntron_pulse(amplitude=volt, fall_time=dur)
             wf_data     = M8190A.create_binary_wf_data(ntron_wf)
             ntron_segment_id  = self.arb.define_waveform(len(wf_data))
@@ -204,7 +202,8 @@ class nTronPhaseDiagramExperiment(Experiment):
 
         settle_pts = int(640*np.ceil(self.settle_delay * 12e9 / 640))
 
-        start_idxs = [0]
+        self.start_idxs = [0]
+        self.start_id = 0
         for si in nTron_segment_ids:
             scenario = Scenario()
             seq = Sequence(sequence_loop_ct=int(self.attempts))
@@ -218,15 +217,15 @@ class nTronPhaseDiagramExperiment(Experiment):
             seq.add_waveform(nidaq_trig_segment_id)
             seq.add_idle(1 << 16, 0.0) # bonus non-contiguous memory delay
             scenario.sequences.append(seq)
-            self.arb.upload_scenario(scenario, start_idx=start_idxs[-1])
-            start_idxs.append(start_idxs[-1] + len(scenario.scpi_strings()))
+            self.arb.upload_scenario(scenario, start_idx=self.start_idxs[-1])
+            self.start_idxs.append(self.start_idxs[-1] + len(scenario.scpi_strings()))
 
         # The last entry is eroneous
-        start_idxs = start_idxs[:-1]
+        self.start_idxs = self.start_idxs[:-1]
         self.arb.sequence_mode = "SCENARIO"
-        self.arb.scenario_advance_mode = "REPEAT"
+        self.arb.scenario_advance_mode = "SINGLE"
         self.arb.scenario_start_index = 0
-        self.arb.run()
+        # self.arb.run()
 
     def init_streams(self):
         # Baked in data axes
@@ -238,6 +237,10 @@ class nTronPhaseDiagramExperiment(Experiment):
 
     async def run(self):
         """This is run for each step in a sweep."""
+        self.arb.stop()
+        self.arb.scenario_start_index = self.start_idxs[self.start_id]
+        logger.debug("Now run step #{}.".format(self.start_id+1))
+        self.arb.run()
         self.arb.advance()
         self.arb.trigger()
         buf = np.empty(self.buf_points)
@@ -247,6 +250,10 @@ class nTronPhaseDiagramExperiment(Experiment):
         # Seemingly we need to give the filters some time to catch up here...
         await asyncio.sleep(0.02)
         logger.debug("Stream has filled {} of {} points".format(self.daq_buffer.points_taken, self.daq_buffer.num_points() ))
+        self.start_id += 1
+        if self.start_id == len(self.start_idxs):
+            self.start_id = 0
+            logger.warning("Sweep completed. Return to beginning.")
 
     def shutdown_instruments(self):
         self.keith.current = 0.0e-5
@@ -265,8 +272,8 @@ if __name__ == '__main__':
     exp.comment = "nTrong Phase Diagram -  P to AP - Interations = 2"
     exp.polarity = 1 # -1: AP to P; 1: P to AP
     exp.iteration = 2
-    exp.reset_amplitude = 0.3
-    exp.reset_duration = 6e-9
+    exp.reset_amplitude = 0.2
+    exp.reset_duration = 5e-9
     coarse_ts = np.linspace(1,2,3)*1e-9
     coarse_vs = np.linspace(0.4,0.6,3)
     points    = [coarse_ts, coarse_vs]
