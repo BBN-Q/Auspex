@@ -7,7 +7,12 @@ import matplotlib as mpl
 import seaborn as sns
 import h5py
 
-from pycontrol.logging import logger
+# from pycontrol.logging import logger
+import logging
+
+logger = logging.getLogger('pycontrol')
+logging.basicConfig(format='%(name)s-%(levelname)s: %(message)s')
+logger.setLevel(logging.INFO)
 
 def cluster(data, num_clusters=2, display=False):
     all_vals = data.flatten()
@@ -255,6 +260,7 @@ def load_switching_data(filename, start_state=None, failure=False, threshold=Non
 
 def load_BER_data(filename):
     with h5py.File(filename, 'r') as f:
-        dsets = [f[k].value for k in f.keys() if "data" in k]
-    data_mean = [np.mean(data, axis=-1) for data in dsets]
-    return data_mean
+        dsets = [f[k] for k in f.keys() if "data" in k]
+        data_mean = [np.mean(dset.value, axis=-1) for dset in dsets]
+        volts = [float(dset.attrs['pulse_voltage']) for dset in dsets]
+    return volts, data_mean
