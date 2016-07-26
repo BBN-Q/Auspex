@@ -35,6 +35,8 @@ class h5shell(h5py.File):
 
 		Flags:
 		-r : Recursive, list all its subgroups and datasets
+		-g : List subgroups only
+		-d : List datasets only
 		-p : Print return values to screen
 		-t : If print is enabled, print as a tree
 
@@ -56,6 +58,11 @@ class h5shell(h5py.File):
 			grp.visit(lambda x: subgrps.append(x))
 		else:
 			subgrps = [key for key in grp.keys()]
+
+		if ops['g']: # Filter subgroups
+			subgrps = [name if _get_type(grp[name]=="Group") for name in subgrps]
+		if ops['d']: # Filter datasets
+			subgrps = [name if _get_type(grp[name]=="Dataset") for name in subgrps]
 
 		if ops['p']: # print out
 			_display(subgrps, tree=ops['t'])
@@ -251,7 +258,9 @@ def _options(flg_str):
 	opts = {'r':False,	# Recursive
 			'p':False,	# Print
 			't':False,	# Tree
-			'a':False	# All
+			'a':False,	# All
+			'g':False,	# Groups
+			'd':False 	# Datasets
 			}
 	for k in opts.keys():
 		if flg_str.find(k) > -1: opts[k] = True
