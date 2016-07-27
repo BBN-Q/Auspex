@@ -18,8 +18,11 @@ import asyncio
 import time, sys
 import h5py
 import matplotlib.pyplot as plt
+import pandas as pd
+from scipy.interpolate import interp1d
 
 import analysis.switching as sw
+from analysis.h5shell import h5shell
 
 from pycontrol.logging import logger
 # Experimental Topology
@@ -29,10 +32,26 @@ from pycontrol.logging import logger
 # AWG Sync Marker Out -> DAQmx PFI0
 # AWG Samp. Marker Out -> PSPL Trigger
 
+def arb_voltage_lookup(arb_calib="calibration/AWG_20160718.csv",
+                        midpoint_calib="calibration/midpoint_20160718.csv"):
+    df_midpoint = pd.read_csv(midpoint_calib, sep=",")
+    df_arb = pd.read_csv(arb_calib, sep=",")
+    midpoint_lookup = interp1d(df_midpoint["Sample Voltage"],df_midpoint["Midpoint Voltage"])
+    arb_control_lookup = interp1d(df_arb["Midpoint Voltage"],df_arb["Control Voltage"])
+    sample_volts = []
+    control_volts = []
+    for volt in df_midpoint['Sample Voltage']:
+        mid_volt = midpoint_lookup(volt)
+        if (mid_volt > min(df_arb['Midpoint Voltage'])) and (mid_volt < max(df_arb['Midpoint Voltage'])):
+            sample_volts.append(volt)
+            control_volts.append(arb_control_lookup(mid_volt))
+    return interp1d(sample_volts, control_volts)
+
 class BERExperiment(Experiment):
+    """ Switching Bit Error Rate measurement """
 
     # Sample information
-    sample         = "CSHE2-C4R6"
+    sample         = "CSHE"
     comment        = "Bit Error Rate"
 
     # Parameters
@@ -51,7 +70,7 @@ class BERExperiment(Experiment):
     min_daq_voltage = 0.0
     max_daq_voltage = 0.4
 
-    reset_amplitude = 0.7
+    reset_amplitude = 0.1
     reset_duration  = 5.0e-9
 
     # Things coming back
@@ -105,7 +124,6 @@ class BERExperiment(Experiment):
 
         def set_voltage(voltage):
             # Calculate the voltage controller attenuator setting
-            # import ipdb; ipdb.set_trace()
             vc_atten = abs(20.0 * np.log10(abs(voltage)/7.5)) - self.pspl_atten - 0
             if vc_atten <= 6.0:
                 raise ValueError("Voltage controlled attenuation under range (6dB).")
@@ -123,13 +141,13 @@ class BERExperiment(Experiment):
 
     def setup_daq(self, attempt):
         def arb_pulse(amplitude, duration, sample_rate=12e9):
+            arb_voltage = arb_voltage_lookup()
             pulse_points = int(duration*sample_rate)
-
             if pulse_points < 320:
                 wf = np.zeros(320)
             else:
                 wf = np.zeros(64*np.ceil(pulse_points/64.0))
-            wf[:pulse_points] = amplitude
+            wf[:pulse_points] = np.sign(amplitude)*arb_voltage(abs(amplitude))
             return wf
 
         self.arb.abort()
@@ -141,10 +159,10 @@ class BERExperiment(Experiment):
         rst_segment_id  = self.arb.define_waveform(len(wf_data))
         self.arb.upload_waveform(wf_data, rst_segment_id)
 
-        no_reset_wf = arb_pulse(0.0, 3.0/12e9)
-        wf_data     = M8190A.create_binary_wf_data(no_reset_wf)
-        no_rst_segment_id  = self.arb.define_waveform(len(wf_data))
-        self.arb.upload_waveform(wf_data, no_rst_segment_id)
+        # no_reset_wf = arb_pulse(0.0, 3.0/12e9)
+        # wf_data     = M8190A.create_binary_wf_data(no_reset_wf)
+        # no_rst_segment_id  = self.arb.define_waveform(len(wf_data))
+        # self.arb.upload_waveform(wf_data, no_rst_segment_id)
 
         # Picosecond trigger waveform
         pspl_trig_wf = M8190A.create_binary_wf_data(np.zeros(3200), samp_mkr=1)
@@ -227,40 +245,107 @@ class BERExperiment(Experiment):
             print("Warning: failed to stop task (this normally happens with no consequences when taking multiple samples per trigger).")
             pass
 
+def data_at_volt(fname, volt):
+    """ Extract datasets in file fname that have pulse_voltage == volt """
+    with h5shell(fname, 'r') as f:
+        dsets = [f[k] for k in f.ls('-d')]
+        dsets = [dset for dset in dsets if abs(float(dset.attrs['pulse_voltage'])-volt)/volt<0.01]
+        data_mean = [np.mean(dset.value, axis=-1) for dset in dsets]
+    return np.concatenate(data_mean,axis=0)
+
+def stop_measure(data):
+    """ Determine whether we should stop the measurement at a given pulse voltage """
+    results = sw.switching_BER(data)
+    limit = results[1]
+    ci95 = results[3]
+    return limit > max(ci95)
+
+def load_BER_data(fname):
+    with h5shell(fname, 'r') as f:
+        dsets = [f[k] for k in f.ls('-d')]
+        volts = [float(dset.attrs['pulse_voltage']) for dset in dsets]
+
+    unique_volts = []
+    for v in sorted(volts):
+        if len(unique_volts) == 0:
+            unique_volts.append(v)
+        else:
+            check = [abs((uv-v)/v)<0.01 for uv in unique_volts]
+            if not np.any(check):
+                unique_volts.append(v)
+    data = [data_at_volt(fname,volt) for volt in unique_volts]
+    return np.array(unique_volts), np.array(data)
+
+def plot_BER(volts, results):
+    mean = []; limit = []; ci68 = []; ci95 = []
+    for datum in results:
+        mean.append(datum[0])
+        limit.append(datum[1])
+        ci68.append(datum[2])
+        ci95.append(datum[3])
+    mean = 1-np.array(mean)
+    limit = 1-np.array(limit)
+    ci68 = 1- np.array(ci68)
+    ci95 = 1-np.array(ci95)
+    fig = plt.figure()
+    plt.semilogy(volts, mean, '-o')
+    plt.semilogy(volts, limit, linestyle="--")
+    plt.fill_between(volts, [ci[0] for ci in ci68], [ci[1] for ci in ci68],  alpha=0.2, edgecolor="none")
+    plt.fill_between(volts, [ci[0] for ci in ci95], [ci[1] for ci in ci95],  alpha=0.2, edgecolor="none")
+    plt.ylabel("Switching Probability", size=14)
+    plt.xlabel("Pulse Voltage (V)", size=14)
+    return fig
+
 if __name__ == '__main__':
     exp = BERExperiment()
-    exp.sample = "CSHE2 - C3R6"
-    exp.comment = "Bit Error Rate - AP to P - 5ns"
+    exp.sample = "CSHE5 - C2R3"
+    exp.comment = "Switching Bit Error Rate - AP to P - 5ns"
     exp.polarity = 1 # 1: AP to P; -1: P to AP
-    exp.field.value = 0.0126
+    exp.field.value = 0.0081
+    exp.attempts.value = 1 << 11
     exp.pulse_duration.value = 5e-9 # Fixed
+    exp.reset_amplitude = 0.7
+    exp.reset_duration = 5e-9
+    exp.pspl_atten = 5
     exp.init_instruments()
 
-    wr = WriteToHDF5("data\CSHE-Switching\CSHE-Die2-C3R6\CSHE2-C3R6-AP2P_2016-06-29_BER_5ns.h5")
-    # pr = Print()
+    wr = WriteToHDF5("data\CSHE-Switching\CSHE-Die5-C2R3\\test\CSHE5-C2R3-AP2P_2016-07-27_BER_5ns.h5")
     edges = [(exp.daq_buffer, wr.data)]
     exp.set_graph(edges)
 
-    attempts_list = [1 << int(x) for x in np.linspace(22,22,2)]
-    # attempts_list = [int(6e6), int(6e6)]
-    voltages_list = np.linspace(0.7,0.75,2)
-    # attempts_list = [1 << int(x) for x in np.linspace(11, 13, 3)]
-    # voltages_list = np.linspace(0.3,0.4,3)
+    V0 = 0.5
+    voltages_list = V0*np.linspace(1.0,1.8,5)
+    voltages_list = voltages_list[voltages_list < 1.1] # For safety
+
     t1 = [] # Keep track of time
     t2 = []
-    for att, vol in zip(attempts_list, voltages_list):
+    max_points = 1<<13
+    finish = False
+    for volt in voltages_list:
+        if finish:
+            break
         print("=========================")
-        print("Now at ({},{}).".format(att,vol))
+        print("Now at: {}.".format(volt))
         t1.append(time.time())
-        exp.pulse_voltage.value = vol
-        exp.attempts.value = att
-        exp.init_streams()
-        exp.reset()
-        exp.run_loop()
+        exp.pulse_voltage.value = volt
+        forward = False
+        count = 0
+        while not forward:
+            count = count + 1
+            print("Measurement count = %d" %count)
+            exp.init_streams()
+            exp.reset()
+            exp.run_loop()
+            time.sleep(1) # Wait for filters
+            data = data_at_volt(wr.filename, volt)
+            finish = data.size >= max_points*2
+            forward = stop_measure(data) or finish
         t2.append(time.time())
-        print("Elapsed time: {}".format((t2[-1]-t1[-1])/60))
-        time.sleep(5)
+        print("Done one series. Elapsed time: {} min".format((t2[-1]-t1[-1])/60))
+        time.sleep(2)
 
+    exp.shutdown_instruments()
     # Plot data
-    data_mean = sw.load_BER_data(wr.filename)
-    fig = sw.plot_BER(voltages_list, data_mean, start_state=1)
+    volts, data = load_BER_data(wr.filename)
+    results = [sw.switching_BER(datum) for datum in data]
+    fig = sw.plot_BER(volts, data)
