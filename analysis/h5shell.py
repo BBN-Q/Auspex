@@ -60,9 +60,9 @@ class h5shell(h5py.File):
 			subgrps = [key for key in grp.keys()]
 
 		if ops['g']: # Filter subgroups
-			subgrps = [name if _get_type(grp[name]=="Group") for name in subgrps]
+			subgrps = [name for name in subgrps if _get_type(grp[name])=="Group"]
 		if ops['d']: # Filter datasets
-			subgrps = [name if _get_type(grp[name]=="Dataset") for name in subgrps]
+			subgrps = [name for name in subgrps if _get_type(grp[name])=="Dataset"]
 
 		if ops['p']: # print out
 			_display(subgrps, tree=ops['t'])
