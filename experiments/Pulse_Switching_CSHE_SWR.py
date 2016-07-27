@@ -13,10 +13,13 @@ from PyDAQmx import *
 
 import itertools
 import numpy as np
+import pandas as pd
 import asyncio
 import time, sys
 import h5py
 import matplotlib.pyplot as plt
+from scipy.interpolate import interp1d
+from scipy.stats import beta
 
 import analysis.switching as sw
 from analysis.h5shell import h5shell
@@ -45,18 +48,18 @@ def arb_voltage_lookup(arb_calib="calibration/AWG_20160718.csv",
     return interp1d(sample_volts, control_volts)
 
 class SWRExperiment(Experiment):
-    """ Experiment class for Switch Rate measurment
+    """ Experiment class for Switching probability measurment
     Determine switching probability for V << V0
     with varying V (and durations?)
     """
 
     # Sample information
-    sample         = "CSHE5-C1R3"
+    sample         = "CSHE"
     comment        = "Switching Rate for V << V0"
 
     # Parameters
     field          = FloatParameter(default=0.0, unit="T")
-    pulse_duration = FloatParameter(default=10.0e-9, unit="s")
+    pulse_duration = FloatParameter(default=1.0e-9, unit="s")
     pulse_voltage  = FloatParameter(default=0.1, unit="V")
 
     attempts       = 1 << 10
@@ -65,12 +68,11 @@ class SWRExperiment(Experiment):
     samps_per_trig  = 5
 
     polarity        = 1
-    # pspl_atten      = 10
 
     min_daq_voltage = 0.0
     max_daq_voltage = 0.4
 
-    reset_amplitude = 0.7
+    reset_amplitude = 0.1
     reset_duration  = 5.0e-9
 
     # Things coming back
@@ -80,7 +82,6 @@ class SWRExperiment(Experiment):
     mag   = AMI430("192.168.5.109")
     lock  = SR865("USB0::0xB506::0x2000::002638::INSTR")
     pspl  = Picosecond10070A("GPIB0::24::INSTR")
-    # atten = Attenuator("calibration/RFSA2113SB_HPD_20160706.csv", lock.set_ao2, lock.set_ao3)
     arb   = M8190A("192.168.5.108")
     keith = Keithley2400("GPIB0::25::INSTR")
 
@@ -110,31 +111,36 @@ class SWRExperiment(Experiment):
         self.arb.set_marker_level_high(1.5, channel=1, marker_type="sync")
         self.arb.continuous_mode = False
         self.arb.gate_mode = False
+        self.setup_arb(self.pulse_voltage.value)
 
         # ===================
-        #   Setup the PSPL
+        #   Setup the NIDAQ
         # ===================
 
-        self.pspl.amplitude = self.polarity*7.5*np.power(10, -self.pspl_atten/20.0)
-        self.pspl.trigger_source = "EXT"
-        self.pspl.trigger_level = 0.1
-        self.pspl.output = True
-
-        # self.setup_arb(self.pulse_voltage.value)
+        self.analog_input = Task()
+        self.read = int32()
+        self.buf_points = 2*self.samps_per_trig*self.attempts
+        self.analog_input.CreateAIVoltageChan("Dev1/ai1", "", DAQmx_Val_Diff,
+            self.min_daq_voltage, self.max_daq_voltage, DAQmx_Val_Volts, None)
+        self.analog_input.CfgSampClkTiming("", 1e6, DAQmx_Val_Rising, DAQmx_Val_FiniteSamps , self.samps_per_trig)
+        self.analog_input.CfgInputBuffer(self.buf_points)
+        self.analog_input.CfgDigEdgeStartTrig("/Dev1/PFI0", DAQmx_Val_Rising)
+        self.analog_input.SetStartTrigRetriggerable(1)
+        self.analog_input.StartTask()
 
         # Assign methods
         self.field.assign_method(self.mag.set_field)
         self.pulse_voltage.assign_method(self.setup_arb)
 
-    def setup_arb(self, volt):
+    def setup_arb(self,volt):
         def arb_pulse(amplitude, duration, sample_rate=12e9):
+            arb_voltage = arb_voltage_lookup()
             pulse_points = int(duration*sample_rate)
-
             if pulse_points < 320:
                 wf = np.zeros(320)
             else:
                 wf = np.zeros(64*np.ceil(pulse_points/64.0))
-            wf[:pulse_points] = amplitude
+            wf[:pulse_points] = np.sign(amplitude)*arb_voltage(abs(amplitude))
             return wf
 
         self.arb.abort()
@@ -148,7 +154,7 @@ class SWRExperiment(Experiment):
         self.arb.upload_waveform(wf_data, rst_segment_id)
 
         # Switching waveform
-        switch_wf    = arb_pulse(self.polarity*arb_voltage_lookup()(volt), self.pulse_duration.value)
+        switch_wf    = arb_pulse(self.polarity*volt, self.pulse_duration.value)
         wf_data     = M8190A.create_binary_wf_data(switch_wf)
         sw_segment_id  = self.arb.define_waveform(len(wf_data))
         self.arb.upload_waveform(wf_data, sw_segment_id)
@@ -178,21 +184,6 @@ class SWRExperiment(Experiment):
         self.arb.scenario_start_index = 0
         self.arb.run()
 
-        # ===================
-        #   Setup the NIDAQ
-        # ===================
-
-        self.analog_input = Task()
-        self.read = int32()
-        self.buf_points = 2*self.samps_per_trig*self.attempts
-        self.analog_input.CreateAIVoltageChan("Dev1/ai1", "", DAQmx_Val_Diff,
-            self.min_daq_voltage, self.max_daq_voltage, DAQmx_Val_Volts, None)
-        self.analog_input.CfgSampClkTiming("", 1e6, DAQmx_Val_Rising, DAQmx_Val_FiniteSamps , self.samps_per_trig)
-        self.analog_input.CfgInputBuffer(self.buf_points)
-        self.analog_input.CfgDigEdgeStartTrig("/Dev1/PFI0", DAQmx_Val_Rising)
-        self.analog_input.SetStartTrigRetriggerable(1)
-        self.analog_input.StartTask()
-
     def init_streams(self):
         # Baked in data axes
         descrip = DataStreamDescriptor()
@@ -203,11 +194,9 @@ class SWRExperiment(Experiment):
 
     async def run(self):
         """We are no longer using the sweeper."""
-
         # Keep track of the previous values
         logger.debug("Waiting for filters.")
         await asyncio.sleep(1.0)
-
         self.arb.advance()
         self.arb.trigger()
         buf = np.empty(self.buf_points)
@@ -216,13 +205,12 @@ class SWRExperiment(Experiment):
         await self.daq_buffer.push(buf)
         # Seemingly we need to give the filters some time to catch up here...
         await asyncio.sleep(0.002)
-        # logger.debug("Stream has filled {} of {} points".format(self.daq_buffer.points_taken, self.daq_buffer.num_points() ))
+        logger.debug("Stream has filled {} of {} points".format(self.daq_buffer.points_taken, self.daq_buffer.num_points() ))
 
     def shutdown_instruments(self):
         self.keith.current = 0.0e-5
         # self.mag.zero()
         self.arb.stop()
-        self.pspl.output = False
         try:
             self.analog_input.StopTask()
         except Exception as e:
@@ -233,19 +221,26 @@ def data_at_volt(fname, volt):
     """ Extract datasets in file fname that have pulse_voltage == volt """
     with h5shell(fname, 'r') as f:
         dsets = [f[k] for k in f.ls('-d')]
-        dsets = [dset if abs(float(dset.attrs['pulse_voltage'])-volt)/volt<0.01 for dset in dsets]
+        dsets = [dset for dset in dsets if abs(float(dset.attrs['pulse_voltage'])-volt)/volt<0.01]
         data_mean = [np.mean(dset.value, axis=-1) for dset in dsets]
     return np.concatenate(data_mean,axis=0)
 
-def stop_measure(data, max_points = 1 << 22):
+# def stop_measure(data, **kwargs):
+#     """ Determine whether we should stop the measurement at a given pulse voltage """
+#     results = sw.switching_BER(data, **kwargs)
+#     limit = results[1]
+#     ci95 = results[3]
+#     return limit > max(ci95)
+
+def stop_measure(data, **kwargs):
     """ Determine whether we should stop the measurement at a given pulse voltage """
-    num_points = int(data.size/2)
-    if num_points >= max_points:
-        return True
-    results = sw.switching_BER(data)
-    mean = results[0]
-    limit = results[1]
-    return limit > mean
+    counts, start_stt = sw.count_matrices(data, multiple=False,**kwargs)
+    count_mat = counts[0]
+    switched_stt = 1 - start_stt
+    # mean_not = beta.mean(1+count_mat[start_stt,start_stt],1+count_mat[start_stt,switched_stt])
+    limit = beta.mean(1+count_mat[start_stt,switched_stt]+count_mat[start_stt,start_stt], 1)
+    ci95 = beta.interval(0.95, 1+count_mat[start_stt,start_stt],1+count_mat[start_stt,switched_stt])
+    return limit > max(ci95)
 
 def load_SWR_data(fname):
     with h5shell(fname, 'r') as f:
@@ -274,52 +269,62 @@ def plot_SWR(volts, results):
     limit = np.array(limit)
     fig = plt.figure()
     plt.semilogy(volts, mean, '-o')
-    plt.semilogy(volts, limit, linestyle="--")
+    plt.semilogy(volts, 1-limit, linestyle="--")
     plt.fill_between(volts, [ci[0] for ci in ci68], [ci[1] for ci in ci68],  alpha=0.2, edgecolor="none")
     plt.fill_between(volts, [ci[0] for ci in ci95], [ci[1] for ci in ci95],  alpha=0.2, edgecolor="none")
-    plt.ylabel("Switching Rate", size=14)
+    plt.ylabel("Switching Probability", size=14)
     plt.xlabel("Pulse Voltage (V)", size=14)
     return fig
 
 if __name__ == '__main__':
     exp = SWRExperiment()
-    exp.sample = "CSHE5 - C1R3"
-    exp.comment = "Switching Rate - AP to P - 5ns"
-    exp.polarity = -1 # -1: AP to P; 1: P to AP
-    exp.field.value = -0.0074
-    exp.attempts = 1 << 15
+    exp.sample = "CSHE5 - C2R3"
+    exp.comment = "Switching Probability - AP to P - 5ns"
+    exp.polarity = 1 # 1: AP to P; -1: P to AP
+    exp.field.value = 0.0081
+    exp.attempts = 1 << 11
     exp.pulse_duration.value = 5e-9 # Fixed
+    exp.reset_amplitude = 0.7
+    exp.reset_duration = 5e-9
     exp.init_instruments()
 
-    wr = WriteToHDF5("data\CSHE-Switching\CSHE-Die5-C1R3\CSHE5-C1R3-AP2P_2016-07-26_SWR_5ns.h5")
+    wr = WriteToHDF5("data\CSHE-Switching\CSHE-Die5-C2R3\\test\CSHE5-C2R3-AP2P_2016-07-27_SWR_5ns.h5")
     edges = [(exp.daq_buffer, wr.data)]
     exp.set_graph(edges)
 
-    
-    voltages_list = np.linspace(0.1,0.2,6)
+    V0 = 0.5
+    voltages_list = V0*np.linspace(1.0,0.2,5)
 
     t1 = [] # Keep track of time
     t2 = []
-    for volt in range(voltages_list):
+    max_points = 1<<13
+    finish = False
+    for volt in voltages_list:
+        if finish:
+            print("Reached maximum points. Exit.")
+            break
         print("=========================")
         print("Now at: {}.".format(volt))
         t1.append(time.time())
         exp.pulse_voltage.value = volt
-        finish = False
+        forward = False
         count = 0
-        while not finish:
+        while not forward:
             count = count + 1
             print("Measurement count = %d" %count)
             exp.init_streams()
             exp.reset()
             exp.run_loop()
+            time.sleep(1) # Wait for filters
             data = data_at_volt(wr.filename, volt)
-            finish = stop_measure(data, 1<<16)
+            finish = data.size >= max_points*2
+            forward = stop_measure(data, start_state=1, threshold=0.36) or finish
         t2.append(time.time())
         print("Done one series. Elapsed time: {} min".format((t2[-1]-t1[-1])/60))
-        time.sleep(3)
+        time.sleep(2)
 
+    exp.shutdown_instruments()
     # Plot data
     volts, data = load_SWR_data(wr.filename)
-    results = [sw.switching_BER(datum) for datum in data]
+    results = [sw.switching_BER(datum, start_state=1, threshold=0.36) for datum in data]
     fig = plot_SWR(volts, results)
