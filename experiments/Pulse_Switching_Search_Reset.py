@@ -19,6 +19,8 @@ import time
 from scipy.interpolate import interp1d
 import matplotlib.pyplot as plt
 from analysis.h5shell import h5shell
+import pandas as pd
+from scipy.interpolate import interp1d
 
 from pycontrol.logging import logger
 
@@ -26,6 +28,21 @@ from pycontrol.logging import logger
 # lockin AO 3 -> Analog Attenuator Vc (Control Voltages)
 # Keithley Output -> Voltage divider with 1 MOhm, DAQmx AI1
 # PSPL Trigger -> DAQmx PFI0
+
+def arb_voltage_lookup(arb_calib="calibration/AWG_20160718.csv",
+                        midpoint_calib="calibration/midpoint_20160718.csv"):
+    df_midpoint = pd.read_csv(midpoint_calib, sep=",")
+    df_arb = pd.read_csv(arb_calib, sep=",")
+    midpoint_lookup = interp1d(df_midpoint["Sample Voltage"],df_midpoint["Midpoint Voltage"])
+    arb_control_lookup = interp1d(df_arb["Midpoint Voltage"],df_arb["Control Voltage"])
+    sample_volts = []
+    control_volts = []
+    for volt in df_midpoint['Sample Voltage']:
+        mid_volt = midpoint_lookup(volt)
+        if (mid_volt > min(df_arb['Midpoint Voltage'])) and (mid_volt < max(df_arb['Midpoint Voltage'])):
+            sample_volts.append(volt)
+            control_volts.append(arb_control_lookup(mid_volt))
+    return interp1d(sample_volts, control_volts)
 
 class ResetSearchExperiment(Experiment):
 
@@ -106,8 +123,9 @@ class ResetSearchExperiment(Experiment):
             return wf
 
         segment_ids = []
+        arb_voltage = arb_voltage_lookup()
         for amp in self.amplitudes:
-            waveform   = arb_pulse(amp, self.duration)
+            waveform   = arb_pulse(np.sign(amp)*arb_voltage(abs(amp)), self.duration)
             wf_data    = M8190A.create_binary_wf_data(waveform)
             segment_id = self.arb.define_waveform(len(wf_data))
             segment_ids.append(segment_id)

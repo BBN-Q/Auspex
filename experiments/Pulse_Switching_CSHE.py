@@ -18,6 +18,8 @@ import asyncio
 import time, sys
 import h5py
 import matplotlib.pyplot as plt
+import pandas as pd
+from scipy.interpolate import interp1d
 
 import analysis.switching as sw
 from adapt import refine
@@ -31,10 +33,25 @@ from pycontrol.logging import logger
 # AWG Sync Marker Out -> DAQmx PFI0
 # AWG Samp. Marker Out -> PSPL Trigger
 
+def arb_voltage_lookup(arb_calib="calibration/AWG_20160718.csv",
+                        midpoint_calib="calibration/midpoint_20160718.csv"):
+    df_midpoint = pd.read_csv(midpoint_calib, sep=",")
+    df_arb = pd.read_csv(arb_calib, sep=",")
+    midpoint_lookup = interp1d(df_midpoint["Sample Voltage"],df_midpoint["Midpoint Voltage"])
+    arb_control_lookup = interp1d(df_arb["Midpoint Voltage"],df_arb["Control Voltage"])
+    sample_volts = []
+    control_volts = []
+    for volt in df_midpoint['Sample Voltage']:
+        mid_volt = midpoint_lookup(volt)
+        if (mid_volt > min(df_arb['Midpoint Voltage'])) and (mid_volt < max(df_arb['Midpoint Voltage'])):
+            sample_volts.append(volt)
+            control_volts.append(arb_control_lookup(mid_volt))
+    return interp1d(sample_volts, control_volts)
+
 class SwitchingExperiment(Experiment):
 
     # Sample information
-    sample         = "CSHE2-C3R6"
+    sample         = "Sample"
     comment        = "Phase Diagram"
     # Parameters
     field          = FloatParameter(default=0.0, unit="T")
@@ -42,19 +59,19 @@ class SwitchingExperiment(Experiment):
     pulse_voltage  = FloatParameter(default=0.1, unit="V")
 
     # Constants (set with attribute access if you want to change these!)
-    iteration       = 8
+    iteration       = 1
     attempts        = 1 << 10
     settle_delay    = 50e-6
     measure_current = 3.0e-6
     samps_per_trig  = 5
 
     polarity        = 1
-    pspl_atten      = 10
+    pspl_atten      = 4
 
     min_daq_voltage = 0.0
     max_daq_voltage = 0.4
 
-    reset_amplitude = 0.7
+    reset_amplitude = 0.2
     reset_duration  = 5.0e-9
 
     # Things coming back
@@ -99,13 +116,13 @@ class SwitchingExperiment(Experiment):
         self.arb.gate_mode = False
 
         def arb_pulse(amplitude, duration, sample_rate=12e9):
+            arb_voltage = arb_voltage_lookup()
             pulse_points = int(duration*sample_rate)
-
             if pulse_points < 320:
                 wf = np.zeros(320)
             else:
                 wf = np.zeros(64*np.ceil(pulse_points/64.0))
-            wf[:pulse_points] = amplitude
+            wf[:pulse_points] = np.sign(amplitude)*arb_voltage(abs(amplitude))
             return wf
 
         reset_wf    = arb_pulse(-self.polarity*self.reset_amplitude, self.reset_duration)
@@ -113,10 +130,10 @@ class SwitchingExperiment(Experiment):
         rst_segment_id  = self.arb.define_waveform(len(wf_data))
         self.arb.upload_waveform(wf_data, rst_segment_id)
 
-        no_reset_wf = arb_pulse(0.0, 3.0/12e9)
-        wf_data     = M8190A.create_binary_wf_data(no_reset_wf)
-        no_rst_segment_id  = self.arb.define_waveform(len(wf_data))
-        self.arb.upload_waveform(wf_data, no_rst_segment_id)
+        # no_reset_wf = arb_pulse(0.0, 3.0/12e9)
+        # wf_data     = M8190A.create_binary_wf_data(no_reset_wf)
+        # no_rst_segment_id  = self.arb.define_waveform(len(wf_data))
+        # self.arb.upload_waveform(wf_data, no_rst_segment_id)
 
         # Picosecond trigger waveform
         pspl_trig_wf = M8190A.create_binary_wf_data(np.zeros(3200), samp_mkr=1)
