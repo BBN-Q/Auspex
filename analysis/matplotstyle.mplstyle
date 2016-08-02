@@ -256,8 +256,8 @@ font.size           : 18.0
 # default fontsizes for ticklabels, and so on.  See
 # http://matplotlib.org/api/axes_api.html#module-matplotlib.axes
 #axes.hold           : True    # whether to clear the axes by default on
-#axes.facecolor      : white   # axes background color
-#axes.edgecolor      : black   # axes edge color
+axes.facecolor      : white   # axes background color
+axes.edgecolor      : black   # axes edge color
 axes.linewidth      : 2.0     # edge linewidth
 axes.grid           : False   # display grid or not
 axes.titlesize      : large   # fontsize of the axes title
@@ -307,7 +307,7 @@ xtick.minor.width    : 1.0    # minor tick width in points
 #xtick.minor.pad      : 4      # distance to the minor tick label in points
 #xtick.color          : k      # color of the tick labels
 xtick.labelsize      : medium # fontsize of the tick labels
-#xtick.direction      : in     # direction: in, out, or inout
+xtick.direction      : in     # direction: in, out, or inout
 
 ytick.major.size     : 6      # major tick size in points
 ytick.minor.size     : 3      # minor tick size in points
@@ -317,7 +317,7 @@ ytick.minor.width    : 1.0    # minor tick width in points
 #ytick.minor.pad      : 4      # distance to the minor tick label in points
 #ytick.color          : k      # color of the tick labels
 ytick.labelsize      : medium # fontsize of the tick labels
-#ytick.direction      : in     # direction: in, out, or inout
+ytick.direction      : in     # direction: in, out, or inout
 
 
 ### GRIDS
