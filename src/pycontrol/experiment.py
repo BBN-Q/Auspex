@@ -75,6 +75,48 @@ class Parameter(object):
             for pph in self.post_push_hooks:
                 pph()
 
+class ParameterGroup(Parameter):
+    """ An array of Parameters """
+    def __init__(self, params, name=None):
+        if name is None:
+            names = '('
+            for param in params:
+                names += param.name
+            self.name = names + ')'
+        else:
+            self.name = name
+
+        self.parameters = params
+        self._value   = [param.value for param in params]
+        self.default  = [param.defaul for param in params]
+        self.method   = [param.method for param in params]
+
+        units = '('
+        for param in params:
+            if param.unit is None:
+                units += 'None'
+            else:
+                units += param.unit
+        self.unit     = units + ')'
+
+    @property
+    def value(self):
+        return self._value
+
+    @value.setter
+    def value(self, values):
+        self._value = values
+        for param, value in zip(self.parameters, values):
+            param.value = value
+
+    def assign_method(self, methods):
+        for param, method in zip(self.parameters,methods):
+            param.assign_method(method)
+
+    def push(self):
+        for param in self.parameters:
+            param.push()
+
 class FloatParameter(Parameter):
 
     @property
@@ -136,6 +178,94 @@ class SweptParameter(object):
 
     def __repr__(self):
         return "<SweptParameter: {}>".format(self.parameter.name)
+
+class SweepAxis(object):
+    """ Structure for swept axis, separate from DataAxis """
+    def __init__(self, parameter, values = [], func=None):
+        self.parameter = parameter
+        self.values    = values
+        self.func      = func
+
+        self.done      = False
+        self.value     = None
+        self.step     = 0
+
+        logger.debug("Create {}".format(self.__repr__()))
+
+    def update(self):
+        """ Update value after each run.
+        If func is None, loop through the list of values.
+        """
+        if not self.done:
+            if self.func is None:
+                if self.step < len(self.values):
+                    self.value = self.values[self.step]
+                    logger.debug("Sweep Axis '{}' at step {} takes value: {}.".format(self.parameter.name,
+                                                                                       self.step,self.value))
+                    self.push()
+                else:
+                    self.done = True
+                    logger.debug("Sweep Axis '{}' already finished. Do nothing.".format(self.parameter.name))
+            else:
+                self.func(self)
+                self.push()
+            self.step += 1
+        else:
+            logger.debug("Sweep Axis '{}' already finished. Do nothing.".format(self.parameter.name))
+
+
+    def push(self):
+        """ Push parameter value """
+        logger.debug("Sweep Axis '{}' pushes value: {}".format(self.parameter.name, self.value))
+        self.parameter.value = self.value
+        self.parameter.push()
+
+    def reset(self):
+        """ Reset to initial value """
+        self.done = False
+        self.step = 0
+        logger.debug("Sweep Axis '{}' reset.".format(self.parameter.name))
+
+    def data_axis(self):
+        """ Return an equivalent data axis """
+        return DataAxis(self.parameter.name, self.values, unit=self.parameter.unit)
+
+    def __repr__(self):
+        return "<SweepAxis '{}'>".format(self.parameter.name)
+
+class Sweeper(object):
+    """ Control center of sweep axes """
+    def __init__(self):
+        self.axes = []
+        logger.debug("Generate Sweeper.")
+
+    def add_sweep(self, axis):
+        self.axes.append(axis)
+        logger.debug("Add sweep axis: {}".format(axis))
+
+    def initiate(self):
+        for axis in self.axes[1:]:
+                axis.update()
+
+    def update(self):
+        """ Update the levels """
+        logger.debug("Sweeper updates values.")
+        done = True
+        for axis in self.axes:
+            if done:
+                axis.update()
+                if self.axes[-1].done:
+                    logger.debug("Sweeper finished.")
+                    return False
+            done = axis.done
+            if done:
+                axis.reset()
+                axis.update() 
+        return True
+
+    def __repr__(self):
+        return "Sweeper"
+
 
 class SweptParameterGroup(object):
     """For unstructured (meshed) coordinate tuples. The actual values
@@ -320,6 +450,9 @@ class Experiment(metaclass=MetaExperiment):
         # Container for patameters that will be swept
         self._swept_parameters = []
 
+        # Sweep control
+        self.sweeper = Sweeper()
+
         # This holds the experiment graph
         self.graph = None
 
@@ -432,17 +565,19 @@ class Experiment(metaclass=MetaExperiment):
         await asyncio.sleep(1.0)
         last_param_values = None
         logger.debug("Starting experiment sweep.")
-        for param_values in self._sweep_generator:
+        # for param_values in self._sweep_generator:
 
-            # Update the parameter values. Unles set and push if there has been a change
-            # in the value from the previous iteration.
-            logger.debug("Update new values to swept parameters.")
-            for i, sp in enumerate(self._swept_parameters):
-                if last_param_values is None or param_values[i] != last_param_values[i]:
-                    sp.value = param_values[i]
-                    sp.push()
-            # update previous values
-            last_param_values = param_values
+        #     # Update the parameter values. Unles set and push if there has been a change
+        #     # in the value from the previous iteration.
+        #     logger.debug("Update new values to swept parameters.")
+        #     for i, sp in enumerate(self._swept_parameters):
+        #         if last_param_values is None or param_values[i] != last_param_values[i]:
+        #             sp.value = param_values[i]
+        #             sp.push()
+        #     # update previous values
+        #     last_param_values = param_values
+        self.sweeper.initiate()
+        while self.sweeper.update():
             # Run the procedure
             logger.debug("Starting a new run.")
             await self.run()
@@ -547,6 +682,15 @@ class Experiment(metaclass=MetaExperiment):
         self.update_descriptors()
         param.value = sweep_list[0]
         return p
+
+    def add_sweep_axis(self, axis):
+        """ Add in SweepAxis instance into the sweeper"""
+        self.sweeper.add_sweep(axis)
+        for oc in self.output_connectors.values():
+            ax = axis.data_axis()
+            logger.debug("Adding sweep axis %s to connector %s.", ax, oc.name)
+            oc.descriptor.add_axis(ax)
+
 
     def add_unstructured_sweep(self, parameters, coords):
         p = SweptParameterGroup(parameters, coords)
