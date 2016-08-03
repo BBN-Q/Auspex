@@ -188,47 +188,38 @@ class SweepAxis(DataAxis):
         self.func      = func
         self.params    = params # Parameters for the user-defined function "func" above
 
-        self.done      = False
         self.value     = None
-        self.step     = 0
+        self.step      = 0
+        self.done      = False
 
         logger.debug("Create {}".format(self.__repr__()))
 
-    def update(self):
+    def __iter__(self):
+        return self
+
+    def next(self):
         """ Update value after each run.
         If func is None, loop through the list of points.
         """
-        if not self.done:
-            if self.step < self.num_points():
-                self.value = self.points[self.step]
-                logger.debug("Sweep Axis '{}' at step {} takes value: {}.".format(self.name,
-                                                                                   self.step,self.value))
-                if self.func is not None:
-                    self.func(self.params)
-                self.push()
-            else:
-                self.done = True
-                logger.debug("Sweep Axis '{}' already finished. Do nothing.".format(self.name))
-            self.step += 1
-        else:
-            logger.debug("Sweep Axis '{}' already finished. Do nothing.".format(self.name))
+        done = self.step==self.num_points()
+        if done:
+            self.step = 0
+            logger.debug("Sweep Axis '{}' finished. Reset.".format(self.name))
 
+        if self.step < self.num_points():
+            self.value = self.points[self.step]
+            logger.debug("Sweep Axis '{}' at step {} takes value: {}.".format(self.name,
+                                                                               self.step,self.value))
+            if self.func is not None:
+                self.func(self.params)
+            self.push()
+            self.step += 1
+        return done
 
     def push(self):
         """ Push parameter value """
-        logger.debug("Sweep Axis '{}' pushes value: {}".format(self.name, self.value))
         self.parameter.value = self.value
         self.parameter.push()
-
-    def reset(self):
-        """ Reset to initial value """
-        self.done = False
-        self.step = 0
-        logger.debug("Reset Sweep Axis '{}'.".format(self.name))
-
-    # def data_axis(self):
-    #     """ Return an equivalent data axis """
-    #     return DataAxis(self.parameter.name, self.points, unit=self.parameter.unit)
 
     def __repr__(self):
         return "<SweepAxis(name={},length={}>".format(self.name,self.num_points())
@@ -243,25 +234,21 @@ class Sweeper(object):
         self.axes.append(axis)
         logger.debug("Add sweep axis: {}".format(axis))
 
-    def initiate(self):
+    def initialize(self):
         for axis in self.axes[1:]:
-                axis.update()
+            axis.next()
 
     def update(self):
         """ Update the levels """
         logger.debug("Sweeper updates values.")
-        done = True
-        for axis in self.axes:
+        num = len(self.axes)
+        i=0
+        done=True
+        while done and i<num:
+            done = self.axes[i].next()
             if done:
-                axis.update()
-                if self.axes[-1].done:
-                    logger.debug("Sweeper finished.")
-                    return False
-            done = axis.done
-            if done:
-                axis.reset()
-                axis.update() 
-        return True
+                i=i+1
+        return i==num
 
     def __repr__(self):
         return "Sweeper"
@@ -312,7 +299,7 @@ class ExpProgressBar(object):
     """
     def __init__(self, stream=None, num=0, notebook=False):
         super(ExpProgressBar,self).__init__()
-        logger.debug("Initiate the progress bars.")
+        logger.debug("initialize the progress bars.")
         self.stream = stream
         self.num = num
         self.notebook = notebook
@@ -506,7 +493,7 @@ class Experiment(metaclass=MetaExperiment):
         pass
 
     def init_progressbar(self, num=0, notebook=False):
-        """ Initiate the progress bars."""
+        """ initialize the progress bars."""
         oc = list(self.output_connectors.values())
         if len(oc)>0:
             self.progressbar = ExpProgressBar(oc[0].output_streams[0], num=num, notebook=notebook)
@@ -576,8 +563,8 @@ class Experiment(metaclass=MetaExperiment):
         #             sp.push()
         #     # update previous values
         #     last_param_values = param_values
-        self.sweeper.initiate()
-        while self.sweeper.update():
+        self.sweeper.initialize()
+        while not self.sweeper.update():
             # Run the procedure
             logger.debug("Starting a new run.")
             await self.run()
