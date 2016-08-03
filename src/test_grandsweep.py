@@ -95,13 +95,11 @@ class SweepExperiment(Experiment):
 if __name__ == '__main__':
     exp = SweepExperiment()
 
-    def increment(sweep):
-        if sweep.step<len(sweep.values):
-            sweep.value = iter_list[sweep.step]
-            sweep.values = 2*np.array(iter_list)
-        else:
-            print("Iteration finished.")
-            sweep.done = True
+    def double(sweep):
+        print("Double the value of points of Axis {}".format(sweep.name))
+        sweep.points = 2*np.array(sweep.points)
+        print("New points of Axis {}: {}".format(sweep.name, sweep.points))
+
 
     exp.sample = "Test ProgressBar"
     exp.comment = "Test"
@@ -109,10 +107,11 @@ if __name__ == '__main__':
     edges = [(exp.resistance,printer.data)]
     exp.set_graph(edges)
     exp.init_instruments()
-    sweep_voltage = SweepAxis(exp.voltage, values=[1,2])
-    sweep_duration = SweepAxis(exp.duration, values=[0.1, 0.2])
-    sweep_iteration = SweepAxis(exp.iteration, values=[1,2], func=increment)
-    sweep_field = SweepAxis(exp.field, values=[100,200])
+    
+    sweep_voltage = SweepAxis(exp.voltage, [1,2])
+    sweep_duration = SweepAxis(exp.duration, [0.1, 0.2])
+    sweep_iteration = SweepAxis(exp.iteration, [1,2], func=double, params=sweep_voltage)
+    sweep_field = SweepAxis(exp.field, [100,200])
 
     exp.add_sweep_axis(sweep_voltage)
     exp.add_sweep_axis(sweep_duration)

@@ -128,9 +128,9 @@ class WriteToHDF5(Filter):
 
 
 class ProgressBar(Filter):
-    """ Display progress bar(s) on the terminal.
+    """ Display progress bar(s) on the terminal/notebook.
 
-    n: number of progress bars to be display, \
+    num: number of progress bars to be display, \
     corresponding to the number of axes (counting from outer most)
 
         For running in Jupyter Notebook:

@@ -73,6 +73,7 @@ class DataStream(object):
         self.start_connector = None
         self.end_connector = None
         self.loop = loop
+        self.done = False
 
     def set_descriptor(self, descriptor):
         logger.debug("Setting descriptor on stream '%s' to '%s'", self.name, descriptor)
@@ -90,11 +91,12 @@ class DataStream(object):
         else:
             return 0.0
 
-    def done(self):
-        return (self.points_taken >= self.num_points()) and (self.num_points() > 0)
+    # def done(self):
+    #     return (self.points_taken >= self.num_points()) and (self.num_points() > 0)
 
     def reset(self):
         self.points_taken = 0
+        self.done = False
         if self.start_connector is not None:
             self.start_connector.points_taken = 0
 
@@ -154,7 +156,7 @@ class InputConnector(object):
 class OutputConnector(object):
     def __init__(self, name="", parent=None, datatype=None):
         self.name = name
-        self.stream = None
+        self.stream = None # Seems unused?
         self.output_streams = []
         self.descriptor = None
         self.points_taken = 0
@@ -183,7 +185,8 @@ class OutputConnector(object):
         return self.descriptor.num_points()
 
     def done(self):
-        return (self.points_taken > self.descriptor.num_points() - 1) and (self.descriptor.num_points() > 0)
+        # return (self.points_taken > self.descriptor.num_points() - 1) and (self.descriptor.num_points() > 0)
+        return np.all([stream.done for stream in self.output_streams])
 
     async def push(self, data):
         if hasattr(data, 'size'):

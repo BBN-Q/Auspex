@@ -179,12 +179,14 @@ class SweptParameter(object):
     def __repr__(self):
         return "<SweptParameter: {}>".format(self.parameter.name)
 
-class SweepAxis(object):
+class SweepAxis(DataAxis):
     """ Structure for swept axis, separate from DataAxis """
-    def __init__(self, parameter, values = [], func=None):
+    def __init__(self, parameter, points = [], func=None, params=None):
+        super(SweepAxis, self).__init__(parameter.name, points)
         self.parameter = parameter
-        self.values    = values
+        # self.points    = points
         self.func      = func
+        self.params    = params # Parameters for the user-defined function "func" above
 
         self.done      = False
         self.value     = None
@@ -194,29 +196,27 @@ class SweepAxis(object):
 
     def update(self):
         """ Update value after each run.
-        If func is None, loop through the list of values.
+        If func is None, loop through the list of points.
         """
         if not self.done:
-            if self.func is None:
-                if self.step < len(self.values):
-                    self.value = self.values[self.step]
-                    logger.debug("Sweep Axis '{}' at step {} takes value: {}.".format(self.parameter.name,
-                                                                                       self.step,self.value))
-                    self.push()
-                else:
-                    self.done = True
-                    logger.debug("Sweep Axis '{}' already finished. Do nothing.".format(self.parameter.name))
-            else:
-                self.func(self)
+            if self.step < self.num_points():
+                self.value = self.points[self.step]
+                logger.debug("Sweep Axis '{}' at step {} takes value: {}.".format(self.name,
+                                                                                   self.step,self.value))
+                if self.func is not None:
+                    self.func(self.params)
                 self.push()
+            else:
+                self.done = True
+                logger.debug("Sweep Axis '{}' already finished. Do nothing.".format(self.name))
             self.step += 1
         else:
-            logger.debug("Sweep Axis '{}' already finished. Do nothing.".format(self.parameter.name))
+            logger.debug("Sweep Axis '{}' already finished. Do nothing.".format(self.name))
 
 
     def push(self):
         """ Push parameter value """
-        logger.debug("Sweep Axis '{}' pushes value: {}".format(self.parameter.name, self.value))
+        logger.debug("Sweep Axis '{}' pushes value: {}".format(self.name, self.value))
         self.parameter.value = self.value
         self.parameter.push()
 
@@ -224,14 +224,14 @@ class SweepAxis(object):
         """ Reset to initial value """
         self.done = False
         self.step = 0
-        logger.debug("Sweep Axis '{}' reset.".format(self.parameter.name))
+        logger.debug("Reset Sweep Axis '{}'.".format(self.name))
 
-    def data_axis(self):
-        """ Return an equivalent data axis """
-        return DataAxis(self.parameter.name, self.values, unit=self.parameter.unit)
+    # def data_axis(self):
+    #     """ Return an equivalent data axis """
+    #     return DataAxis(self.parameter.name, self.points, unit=self.parameter.unit)
 
     def __repr__(self):
-        return "<SweepAxis '{}'>".format(self.parameter.name)
+        return "<SweepAxis(name={},length={}>".format(self.name,self.num_points())
 
 class Sweeper(object):
     """ Control center of sweep axes """
@@ -586,6 +586,11 @@ class Experiment(metaclass=MetaExperiment):
             if self.progressbar is not None:
                 self.progressbar.update()
 
+        # Emit a "done" signal to streams
+        for oc in self.output_connectors.values():
+            for stream in oc.output_streams:
+                stream.done = True
+
     def run_sweeps(self):
         # Go and find any plotters and keep track of them.
         # Launch the bokeh-server if necessary.
@@ -687,9 +692,9 @@ class Experiment(metaclass=MetaExperiment):
         """ Add in SweepAxis instance into the sweeper"""
         self.sweeper.add_sweep(axis)
         for oc in self.output_connectors.values():
-            ax = axis.data_axis()
-            logger.debug("Adding sweep axis %s to connector %s.", ax, oc.name)
-            oc.descriptor.add_axis(ax)
+            # ax = axis.data_axis()
+            logger.debug("Adding sweep axis %s to connector %s.", axis, oc.name)
+            oc.descriptor.add_axis(axis)
 
 
     def add_unstructured_sweep(self, parameters, coords):
