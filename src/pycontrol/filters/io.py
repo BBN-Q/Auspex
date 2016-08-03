@@ -133,6 +133,7 @@ class WriteToHDF5(Filter):
         super(WriteToHDF5, self).__init__(**kwargs)
         self.filename = self.get_filename(filename)
         self.dsplit = dsplit
+        self.points_taken = 0
 
     def final_init(self):
         self.file = h5py.File(self.filename, 'a')
@@ -203,42 +204,31 @@ class WriteToHDF5(Filter):
         r_idx = 0
         w_idx = 0
         dset_id = 0
-        dset_complete = False
+        dset_complete = True
         temp = np.empty(stream.num_points())
         while True:
-            if stream.done and w_idx == stream.num_points():
+            if stream.done or self.points_taken == stream.num_points():
                 break
 
-            if not dset_complete:
+            if dset_complete:
                 data = self.new_dataset(dims_in)
                 axis_names = []
                 # Go through and create axis dimensions
                 for i, axis in enumerate(axes_in):
                     points = np.array(axis.points)
                     data.dims[i].label = axis.name
-                    if axis.unstructured:
-                        # Attach a dimension for each coordinates of the unstructured axis
-                        for j, cn in enumerate(axis.coord_names):
-                            logger.debug("Appending coordinates %s to axis %s", cn, points[:,j])
-                            new_axis_name = cn + '-' + dataset_name
-                            self.file['axes'][new_axis_name] = points[:,j]
-                            data.dims.create_scale(self.file['axes'][new_axis_name], cn)
-                            data.dims[i].attach_scale(self.file['axes'][new_axis_name])
-                            logger.debug("HDF5: adding axis %s to dim %d", axis.name, i)
-                            axis_names.append(cn)
-                    else:
-                        logger.debug("HDF5: adding axis %s to dim %d", axis.name, i)
-                        new_axis_name =  axis.name + '-' + dataset_name
-                        self.file['axes'][new_axis_name] = points
-                        data.dims.create_scale(self.file['axes'][new_axis_name], axis.name)
-                        data.dims[i].attach_scale(self.file['axes'][new_axis_name])
-                        axis_names.append(axis.name)
+                    logger.debug("HDF5: adding axis %s to dim %d", axis.name, i)
+                    new_axis_name =  axis.name + '-' + dataset_name
+                    self.file['axes'][new_axis_name] = points
+                    data.dims.create_scale(self.file['axes'][new_axis_name], axis.name)
+                    data.dims[i].attach_scale(self.file['axes'][new_axis_name])
+                    axis_names.append(axis.name)
                 # Write params into attrs
                 for k,v in params.items():
                     if k not in axis_names:
                         data.attrs[k] = v
                 # Update index table
-                id_table[dset_id] = [] #???
+                # id_table[dset_id] = [] #???
 
                 # Flush the buffers into disk
                 self.file.flush()
@@ -278,7 +268,10 @@ class WriteToHDF5(Filter):
             # Force flush data into disk
             self.file.flush()
             logger.debug("HDF5: %s has written %d points", stream.name, w_idx)
-            dset_complete = w_idx >= dset_numpoints-1
+            if w_idx >= dset_numpoints-1:
+                dset_complete = True
+                self.points_taken += w_idx
+                w_idx = 0
 
         self.file.close()
 

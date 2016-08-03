@@ -248,7 +248,7 @@ class Sweeper(object):
             done = self.axes[i].next()
             if done:
                 i=i+1
-        return i==num
+        return i<num
 
     def __repr__(self):
         return "Sweeper"
@@ -564,7 +564,7 @@ class Experiment(metaclass=MetaExperiment):
         #     # update previous values
         #     last_param_values = param_values
         self.sweeper.initialize()
-        while not self.sweeper.update():
+        while self.sweeper.update():
             # Run the procedure
             logger.debug("Starting a new run.")
             await self.run()
@@ -573,6 +573,7 @@ class Experiment(metaclass=MetaExperiment):
             if self.progressbar is not None:
                 self.progressbar.update()
 
+        logger.debug("Sweeper has finished.")
         # Emit a "done" signal to streams
         for oc in self.output_connectors.values():
             for stream in oc.output_streams:

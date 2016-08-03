@@ -17,13 +17,14 @@ class Print(Filter):
             self.name = ""
 
         self.points_taken = 0
+        stream = self.data.input_streams[0]
         while True:
-            if self.data.input_streams[0].done:
+            if stream.done or self.points_taken==stream.num_points():
                 logger.debug("Printer %s finished logger.debuging.", self.name)
                 break
 
             logger.debug("Printer %s awaiting data", self.name)
-            new_data = await self.data.input_streams[0].queue.get()
+            new_data = await stream.queue.get()
             self.points_taken += np.array(new_data).size
             logger.debug("Printer %s got new data of size %s: %s", self.name, np.shape(new_data), new_data)
             logger.debug("Printer %s now has %s of %s points.", self.name, self.points_taken, self.data.num_points())
@@ -42,13 +43,14 @@ class Passthrough(Filter):
             self.name = ""
 
         self.points_taken = 0
+        stream = self.data.input_streams[0]
         while True:
-            if self.data_in.input_streams[0].done:
+            if stream.done or self.points_taken==stream.num_points():
                 logger.debug("Passthrough %s finished.", self.name)
                 break
 
             logger.debug("Passthrough %s awaiting data", self.name)
-            new_data = await self.data_in.input_streams[0].queue.get()
+            new_data = await stream.queue.get()
             self.points_taken += np.array(new_data).size
             logger.debug("Passthrough %s got new data of size %s: %s", self.name, np.shape(new_data), new_data)
             logger.debug("Passthrough %s now has %s of %s points.", self.name, self.points_taken, self.data_in.num_points())
