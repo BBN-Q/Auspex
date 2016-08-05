@@ -194,9 +194,6 @@ class SweepAxis(DataAxis):
 
         logger.debug("Create {}".format(self.__repr__()))
 
-    def __iter__(self):
-        return self
-
     def update(self):
         """ Update value after each run.
         If func is None, loop through the list of points.
@@ -233,10 +230,6 @@ class Sweeper(object):
     def add_sweep(self, axis):
         self.axes.append(axis)
         logger.debug("Add sweep axis: {}".format(axis))
-
-    def initialize(self):
-        for axis in self.axes[1:]:
-            axis.update()
 
     def update(self):
         """ Update the levels """
