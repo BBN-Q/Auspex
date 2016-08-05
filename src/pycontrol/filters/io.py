@@ -7,6 +7,7 @@ import os.path
 from pycontrol.stream import DataStreamDescriptor
 from pycontrol.logging import logger
 from pycontrol.filters.filter import Filter, InputConnector, OutputConnector
+from h5shell import h5shell
 from tqdm import tqdm, tqdm_notebook
 
 class WriteToHDF5_old(Filter):
@@ -168,8 +169,10 @@ class WriteToHDF5(Filter):
         for d in dirs:
             fulldir = os.path.join(fulldir, d)
             if not os.path.exists(fulldir):
+                logger.debug("Create new directory: {}.".format(fulldir))
                 os.mkdir(fulldir)
-        return h5py.File(filename, 'w')
+        logger.debug("Create new data file: %s." %filename)
+        return h5shell(filename, 'w')
 
     def new_dataset(self, data_dims):
         # Increment the dataset name until we find one we want.
