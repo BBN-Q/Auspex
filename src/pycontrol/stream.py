@@ -85,6 +85,11 @@ class DataStream(object):
         else:
             return 0
 
+    async def finished(self):
+        while not self.done:
+            await asyncio.sleep(10)
+        return True
+
     def percent_complete(self):
         if (self.descriptor is not None) and self.num_points()>0:
             return 100.0*self.points_taken/self.num_points()

@@ -1,4 +1,4 @@
-import asyncio
+import asyncio, concurrent
 import numpy as np
 from pycontrol.filters.filter import Filter
 from pycontrol.stream import InputConnector, OutputConnector
@@ -19,12 +19,21 @@ class Print(Filter):
         self.points_taken = 0
         stream = self.data.input_streams[0]
         while True:
-            if stream.done:
-                logger.debug("Printer %s finished logger.debuging.", self.name)
-                break
+            # if stream.done:
+            #     logger.debug("Printer %s finished logger.debuging.", self.name)
+            #     break
+            
+            done, pending = await asyncio.wait((stream.finished(), stream.queue.get()), return_when=concurrent.futures.FIRST_COMPLETED)
+            new_data = list(done)[0].result()
+            if type(new_data)==bool:
+                if new_data:
+                    logger.debug("Printer %s finished logger.debuging.", self.name)
+                    break
+                else:
+                    logger.debug("Printer %s awaiting data", self.name)
+                    new_data = await stream.queue.get()
 
-            logger.debug("Printer %s awaiting data", self.name)
-            new_data = await stream.queue.get()
+            # new_data = await stream.queue.get()
             self.points_taken += np.array(new_data).size
             logger.debug("Printer %s got new data of size %s: %s", self.name, np.shape(new_data), new_data)
             logger.debug("Printer %s now has %s of %s points.", self.name, self.points_taken, self.data.num_points())

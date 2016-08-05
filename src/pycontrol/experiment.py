@@ -658,6 +658,9 @@ class Experiment(metaclass=MetaExperiment):
         other_nodes = self.nodes[:]
         other_nodes.remove(self)
         tasks = [n.run() for n in other_nodes]
+        for oc in self.output_connectors.values():
+            for stream in oc.output_streams:
+                tasks.append(stream.finished())
         tasks.append(self.sweep())
         self.loop.run_until_complete(asyncio.gather(*tasks))
 
