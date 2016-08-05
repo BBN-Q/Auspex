@@ -197,15 +197,10 @@ class SweepAxis(DataAxis):
     def __iter__(self):
         return self
 
-    def next(self):
+    def update(self):
         """ Update value after each run.
         If func is None, loop through the list of points.
         """
-        done = self.step==self.num_points()
-        if done:
-            self.step = 0
-            logger.debug("Sweep Axis '{}' finished. Reset.".format(self.name))
-
         if self.step < self.num_points():
             self.value = self.points[self.step]
             logger.debug("Sweep Axis '{}' at step {} takes value: {}.".format(self.name,
@@ -214,7 +209,12 @@ class SweepAxis(DataAxis):
                 self.func(self.params)
             self.push()
             self.step += 1
-        return done
+        if self.step==self.num_points():
+            self.step = 0
+            self.done = True
+            logger.debug("Sweep Axis '{}' complete.".format(self.name))
+        else:
+            self.done = False
 
     def push(self):
         """ Push parameter value """
@@ -236,19 +236,19 @@ class Sweeper(object):
 
     def initialize(self):
         for axis in self.axes[1:]:
-            axis.next()
+            axis.update()
 
     def update(self):
         """ Update the levels """
         logger.debug("Sweeper updates values.")
-        num = len(self.axes)
+        imax = len(self.axes)-1
         i=0
-        done=True
-        while done and i<num:
-            done = self.axes[i].next()
-            if done:
-                i=i+1
-        return i<num
+        while i<imax and self.axes[i].step==0:
+            i += 1
+        # Need to update parameters from outer --> inner axis
+        for j in range(i,-1,-1):
+            self.axes[j].update()
+        return np.all([a.done for a in self.axes])
 
     def __repr__(self):
         return "Sweeper"
@@ -563,8 +563,16 @@ class Experiment(metaclass=MetaExperiment):
         #             sp.push()
         #     # update previous values
         #     last_param_values = param_values
-        self.sweeper.initialize()
-        while self.sweeper.update():
+        # self.sweeper.initialize()
+        # done = self.sweeper.update()
+        done = True
+        while True:
+            done = self.sweeper.update()
+            # Emit a "done" signal to streams
+            for oc in self.output_connectors.values():
+                for stream in oc.output_streams:
+                    stream.done = done
+
             # Run the procedure
             logger.debug("Starting a new run.")
             await self.run()
@@ -572,12 +580,10 @@ class Experiment(metaclass=MetaExperiment):
             # Update progress bars
             if self.progressbar is not None:
                 self.progressbar.update()
-
-        logger.debug("Sweeper has finished.")
-        # Emit a "done" signal to streams
-        for oc in self.output_connectors.values():
-            for stream in oc.output_streams:
-                stream.done = True
+           
+            if done:
+                logger.debug("Sweeper has finished.")
+                break
 
     def run_sweeps(self):
         # Go and find any plotters and keep track of them.

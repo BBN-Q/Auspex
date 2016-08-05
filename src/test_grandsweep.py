@@ -51,19 +51,19 @@ class SweepExperiment(Experiment):
 
         def set_voltage(volt):
             print("Set voltage = {}".format(volt))
-            time.sleep(0.2)
+            time.sleep(0.02)
 
         def set_field(field):
             print("Set field = {}".format(field))
-            time.sleep(0.2)
+            time.sleep(0.02)
 
         def set_duration(duration):
             print("Set duration = {}".format(duration))
-            time.sleep(0.2)
+            time.sleep(0.02)
 
         def set_iteration(iteration):
             print("Set iteration = {}".format(iteration))
-            time.sleep(0.2)
+            time.sleep(0.02)
 
         # Assign method
         self.field.assign_method(set_field)
@@ -95,8 +95,8 @@ class SweepExperiment(Experiment):
 if __name__ == '__main__':
     exp = SweepExperiment()
 
-    def double(sweep):
-        print("Double the value of points of Axis {}".format(sweep.name))
+    def extend(sweep):
+        print("Extend the value of points of Axis {}".format(sweep.name))
         sweep.points = 2*np.array(sweep.points)
         print("New points of Axis {}: {}".format(sweep.name, sweep.points))
 
@@ -107,10 +107,10 @@ if __name__ == '__main__':
     edges = [(exp.resistance,printer.data)]
     exp.set_graph(edges)
     exp.init_instruments()
-    
+
     sweep_voltage = SweepAxis(exp.voltage, [1,2])
     sweep_duration = SweepAxis(exp.duration, [0.1, 0.2])
-    sweep_iteration = SweepAxis(exp.iteration, [1,2], func=double, params=sweep_voltage)
+    sweep_iteration = SweepAxis(exp.iteration, [1,2], func=extend, params=sweep_voltage)
     sweep_field = SweepAxis(exp.field, [100,200])
 
     exp.add_sweep_axis(sweep_voltage)

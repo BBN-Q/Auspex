@@ -19,7 +19,7 @@ class Print(Filter):
         self.points_taken = 0
         stream = self.data.input_streams[0]
         while True:
-            if stream.done or self.points_taken==stream.num_points():
+            if stream.done:
                 logger.debug("Printer %s finished logger.debuging.", self.name)
                 break
 
@@ -45,7 +45,7 @@ class Passthrough(Filter):
         self.points_taken = 0
         stream = self.data.input_streams[0]
         while True:
-            if stream.done or self.points_taken==stream.num_points():
+            if stream.done:
                 logger.debug("Passthrough %s finished.", self.name)
                 break
 
