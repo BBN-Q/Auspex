@@ -131,17 +131,18 @@ class WriteToHDF5(Filter):
     data = InputConnector()
     def __init__(self, filename, dsplit=None, **kwargs):
         super(WriteToHDF5, self).__init__(**kwargs)
-        self.filename = self.get_filename(filename)
+        self.filename = filename
         self.dsplit = dsplit
         self.points_taken = 0
+        self.file = None
 
     def final_init(self):
-        self.file = h5py.File(self.filename, 'a')
+        self.file = self.new_file()
 
-    def get_filename(self,filename):
+    def new_filename(self):
         # Increment the filename until we find one we want.
         i = 0
-        ext = filename.find('.h5')
+        ext = self.filename.find('.h5')
         if ext > -1:
             filename = filename[:ext]
         while os.path.exists("{}-{:04d}.h5".format(filename,i)):
@@ -149,9 +150,26 @@ class WriteToHDF5(Filter):
         return "{}-{:04d}.h5".format(filename,i)
 
     def new_file(self):
-        filename = self.filename[:-8]
-        self.filename = self.get_filename(filename)
-        self.final_init()
+        """ Open a new data file to write """
+        # Close the current file, if any
+        if self.file is not None:
+            try:
+                self.file.close()
+            except Exception as e:
+                logger.error("Encounter exception: {}".format(e))
+                logger.error("Cannot close file '{}'. File may be damaged.".format(self.file.filename))
+        # Get new file name
+        filename = self.new_filename()
+        head = os.path.dirname(filename)
+        head = os.path.normpath(head)
+        dirs = head.split(os.sep)
+        # Check if path exists. If not, create new one(s).
+        fulldir = ''
+        for d in dirs:
+            fulldir = os.path.join(fulldir, d)
+            if not os.path.exists(fulldir):
+                os.mkdir(fulldir)
+        return h5py.File(filename, 'w')
 
     def new_dataset(self, data_dims):
         # Increment the dataset name until we find one we want.
