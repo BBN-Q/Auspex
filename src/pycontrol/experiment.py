@@ -14,270 +14,11 @@ import h5py
 from tqdm import tqdm, tqdm_notebook
 
 from pycontrol.instruments.instrument import Instrument
+from pycontrol.parameter import ParameterGroup, FloatParameter, IntParameter, Parameter
+from pycontrol.sweep import SweptParameter, SweptParameterGroup, SweepAxis, Sweeper
 from pycontrol.stream import DataStream, DataAxis, DataStreamDescriptor, InputConnector, OutputConnector
 from pycontrol.filters.plot import Plotter
 from pycontrol.logging import logger
-
-class Parameter(object):
-    """ Encapsulates the information for an experiment parameter"""
-
-    def __init__(self, name=None, unit=None, default=None):
-        self.name     = name
-        self._value   = default
-        self.unit     = unit
-        self.default  = default
-        self.method   = None
-
-        # Hooks to be called before or after updating a sweep parameter
-        self.pre_push_hooks = []
-        self.post_push_hooks = []
-
-    def add_pre_push_hook(self, hook):
-        self.pre_push_hooks.append(hook)
-
-    def add_post_push_hook(self, hook):
-        self.post_push_hooks.append(hook)
-
-    @property
-    def value(self):
-        return self._value
-
-    @value.setter
-    def value(self, value):
-        self._value = value
-
-    def __str__(self):
-        result = ""
-        result += "%s" % str(self.value)
-        if self.unit:
-            result += " %s" % self.unit
-        return result
-
-    def __repr__(self):
-        result = "<Parameter(name='%s'" % self.name
-        result += ",value=%s" % repr(self.value)
-        if self.unit:
-            result += ",unit='%s'" % self.unit
-        return result + ")>"
-
-    def assign_method(self, method):
-        logger.debug("Setting method of Parameter %s to %s" % (self.name, str(method)) )
-        self.method = method
-
-    def push(self):
-        if self.method is not None:
-            # logger.debug("Calling pre_push_hooks of Parameter %s with value %s" % (self.name, self._value) )
-            for pph in self.pre_push_hooks:
-                pph()
-            # logger.debug("Calling method of Parameter %s with value %s" % (self.name, self._value) )
-            self.method(self._value)
-            # logger.debug("Calling post_push_hooks of Parameter %s with value %s" % (self.name, self._value) )
-            for pph in self.post_push_hooks:
-                pph()
-
-class ParameterGroup(Parameter):
-    """ An array of Parameters """
-    def __init__(self, params, name=None):
-        if name is None:
-            names = '('
-            for param in params:
-                names += param.name
-            self.name = names + ')'
-        else:
-            self.name = name
-
-        self.parameters = params
-        self._value   = [param.value for param in params]
-        self.default  = [param.defaul for param in params]
-        self.method   = [param.method for param in params]
-
-        units = '('
-        for param in params:
-            if param.unit is None:
-                units += 'None'
-            else:
-                units += param.unit
-        self.unit     = units + ')'
-
-    @property
-    def value(self):
-        return self._value
-
-    @value.setter
-    def value(self, values):
-        self._value = values
-        for param, value in zip(self.parameters, values):
-            param.value = value
-
-    def assign_method(self, methods):
-        for param, method in zip(self.parameters,methods):
-            param.assign_method(method)
-
-    def push(self):
-        for param in self.parameters:
-            param.push()
-
-class FloatParameter(Parameter):
-
-    @property
-    def value(self):
-        return self._value
-
-    @value.setter
-    def value(self, value):
-        try:
-            self._value = float(value)
-        except ValueError:
-            raise ValueError("FloatParameter given non-float value of "
-                             "type '%s'" % type(value))
-
-    def __repr__(self):
-        result = super(FloatParameter, self).__repr__()
-        return result.replace("<Parameter", "<FloatParameter", 1)
-
-class IntParameter(Parameter):
-
-    @property
-    def value(self):
-        return self._value
-
-    @value.setter
-    def value(self, value):
-        try:
-            self._value = int(value)
-        except ValueError:
-            raise ValueError("IntParameter given non-int value of "
-                             "type '%s'" % type(value))
-
-    def __repr__(self):
-        result = super(IntParameter, self).__repr__()
-        return result.replace("<Parameter", "<IntParameter", 1)
-
-class SweptParameter(object):
-    """Data structure for a swept Parameters, contains the Parameter
-    object rather than subclassing it since we just need to keep track
-    of some values"""
-    def __init__(self, parameter, values):
-        self.parameter = parameter
-        self.associated_axes = []
-        self.update_values(values)
-        self.push = self.parameter.push
-
-    def update_values(self, values):
-        self.values = values
-        self.length = len(values)
-        for axis in self.associated_axes:
-            axis.points = self.values
-
-    @property
-    def value(self):
-        return self.parameter.value
-    @value.setter
-    def value(self, value):
-        self.parameter.value = value
-
-    def __repr__(self):
-        return "<SweptParameter: {}>".format(self.parameter.name)
-
-class SweepAxis(DataAxis):
-    """ Structure for swept axis, separate from DataAxis """
-    def __init__(self, parameter, points = [], func=None, params=None):
-        super(SweepAxis, self).__init__(parameter.name, points)
-        self.parameter = parameter
-        # self.points    = points
-        self.func      = func
-        self.params    = params # Parameters for the user-defined function "func" above
-
-        self.value     = None
-        self.step      = 0
-        self.done      = False
-
-        logger.debug("Create {}".format(self.__repr__()))
-
-    def update(self):
-        """ Update value after each run.
-        If func is None, loop through the list of points.
-        """
-        if self.step < self.num_points():
-            self.value = self.points[self.step]
-            logger.debug("Sweep Axis '{}' at step {} takes value: {}.".format(self.name,
-                                                                               self.step,self.value))
-            if self.func is not None:
-                self.func(self.params)
-            self.push()
-            self.step += 1
-        if self.step==self.num_points():
-            self.step = 0
-            self.done = True
-            logger.debug("Sweep Axis '{}' complete.".format(self.name))
-        else:
-            self.done = False
-
-    def push(self):
-        """ Push parameter value """
-        self.parameter.value = self.value
-        self.parameter.push()
-
-    def __repr__(self):
-        return "<SweepAxis(name={},length={}>".format(self.name,self.num_points())
-
-class Sweeper(object):
-    """ Control center of sweep axes """
-    def __init__(self):
-        self.axes = []
-        logger.debug("Generate Sweeper.")
-
-    def add_sweep(self, axis):
-        self.axes.append(axis)
-        logger.debug("Add sweep axis: {}".format(axis))
-
-    def update(self):
-        """ Update the levels """
-        logger.debug("Sweeper updates values.")
-        imax = len(self.axes)-1
-        i=0
-        while i<imax and self.axes[i].step==0:
-            i += 1
-        # Need to update parameters from outer --> inner axis
-        for j in range(i,-1,-1):
-            self.axes[j].update()
-        return np.all([a.done for a in self.axes])
-
-    def __repr__(self):
-        return "Sweeper"
-
-
-class SweptParameterGroup(object):
-    """For unstructured (meshed) coordinate tuples. The actual values
-    are stored locally as _values, and we acces each tuples by indexing
-    into that array."""
-    def __init__(self, parameters, values):
-        self.parameters = parameters
-        self.associated_axes = []
-        self.update_values(values)
-
-    def push(self):
-        # Values here will just be the index
-        for p in self.parameters:
-            p.push()
-
-    def update_values(self, values):
-        self._values = values
-        self.length = len(values)
-        self.values = list(range(self.length)) # Dummy index list for sweeper
-        for axis in self.associated_axes:
-            axis.points = self._values
-
-    @property
-    def value(self):
-        return [p.value for p in self.parameters]
-    @value.setter
-    def value(self, index):
-        for i, p in enumerate(self.parameters):
-            p.value = self._values[index][i]
-
-    def __repr__(self):
-        return "<SweptParameter: {}>".format([p.name for p in self.parameters])
 
 class ExpProgressBar(object):
     """ Display progress bar(s) on the terminal.
@@ -664,13 +405,14 @@ class Experiment(metaclass=MetaExperiment):
         tasks.append(self.sweep())
         self.loop.run_until_complete(asyncio.gather(*tasks))
 
-    def add_sweep(self, param, sweep_list):
+    def add_sweep(self, param, sweep_list, refine_func=None, refine_args=None):
         """Add a good-old-fasioned one-variable sweep."""
         p = SweptParameter(param, sweep_list)
         self._swept_parameters.append(p)
-        self.generate_sweep()
+        ax = SweepAxis(param, sweep_list, refine_func, refine_args)
+        self.sweeper.add_sweep(ax)
+        # self.generate_sweep()
         for oc in self.output_connectors.values():
-            ax = DataAxis(param.name, sweep_list)
             logger.debug("Adding sweep axis %s to connector %s.", ax, oc.name)
             oc.descriptor.add_axis(ax)
             p.associated_axes.append(ax)
@@ -678,13 +420,13 @@ class Experiment(metaclass=MetaExperiment):
         param.value = sweep_list[0]
         return p
 
-    def add_sweep_axis(self, axis):
-        """ Add in SweepAxis instance into the sweeper"""
-        self.sweeper.add_sweep(axis)
-        for oc in self.output_connectors.values():
-            # ax = axis.data_axis()
-            logger.debug("Adding sweep axis %s to connector %s.", axis, oc.name)
-            oc.descriptor.add_axis(axis)
+    # def add_sweep_axis(self, axis):
+    #     """ Add in SweepAxis instance into the sweeper"""
+    #     self.sweeper.add_sweep(axis)
+    #     for oc in self.output_connectors.values():
+    #         # ax = axis.data_axis()
+    #         logger.debug("Adding sweep axis %s to connector %s.", axis, oc.name)
+    #         oc.descriptor.add_axis(axis)
 
 
     def add_unstructured_sweep(self, parameters, coords):
@@ -701,5 +443,5 @@ class Experiment(metaclass=MetaExperiment):
             pp.value = c
         return p
 
-    def generate_sweep(self):
-        self._sweep_generator = itertools.product(*[sp.values for sp in self._swept_parameters])
+    # def generate_sweep(self):
+    #     self._sweep_generator = itertools.product(*[sp.values for sp in self._swept_parameters])

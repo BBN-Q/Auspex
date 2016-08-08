@@ -23,7 +23,12 @@ class Print(Filter):
             #     logger.debug("Printer %s finished logger.debuging.", self.name)
             #     break
             
-            done, pending = await asyncio.wait((stream.finished(), stream.queue.get()), return_when=concurrent.futures.FIRST_COMPLETED)
+            done, pending = await asyncio.wait((stream.finished(), stream.queue.get()), 
+                                                timeout=2, return_when=concurrent.futures.FIRST_COMPLETED)
+            for axis, d in zip(self.descriptor.axes, self.descriptor.done()):
+                logger.debug("Descriptor %s doneness: %s", axis, d)
+
+            # logger.debug("Descriptor doneness: %s", self.descriptor.done())
             new_data = list(done)[0].result()
             if type(new_data)==bool:
                 if new_data:

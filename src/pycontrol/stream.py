@@ -1,8 +1,12 @@
 import asyncio
 import logging
 import numbers
+import itertools
+
+import numpy as np
 from functools import reduce
 from pycontrol.logging import logger
+# from pycontrol.sweep import SweepAxis
 
 class DataAxis(object):
     """An axes in a data stream"""
@@ -13,6 +17,10 @@ class DataAxis(object):
         self.unit         = unit
         self.unstructured = unstructured
         self.coord_names  = coord_names
+
+        # By definition data axes will be done after every experiment.run() call
+        self.done         = True
+
         if unstructured and len(coord_names) != len(points[0]):
             raise ValueError("Coordinate names list must be as numerous as the coordinates themselves.")
 
@@ -41,13 +49,41 @@ class DataStreamDescriptor(object):
         return len(self.axes)
 
     def data_dims(self):
-        return [len(a.points) for a in self.axes]
+        dims = []
+        for a in self.axes:
+            if isinstance(a, DataAxis):
+                dims.append(len(a.points))
+            elif isinstance(a, SweepAxis):
+                dims.append(1)
+        return dims
+        # return [len(a.points) for a in self.axes]
+
+    def done(self):
+        # The axis is considered done when all of the sub-axes are done
+        # This can happen mulitple times for a single axis
+        doneness = [a.done for a in self.axes]
+        return [reduce(lambda x,y: x and y, doneness[i:]) for i in range(len(doneness))]
 
     def num_points(self):
         if len(self.axes)>0:
             return reduce(lambda x,y: x*y, [len(a.points) for a in self.axes])
         else:
-            return 0
+            return 0 
+
+    def last_data_axis(self):
+        return [i for i, a in enumerate(self.axes) if isinstance(a,DataAxis)][0]
+
+    def tuples(self):
+        vals = []
+        for a in self.axes:
+            if isinstance(a, DataAxis):
+                vals.append(a.points)
+            elif isinstance(a, SweepAxis):
+                vals.append([a.value])
+        return list(itertools.product(*vals))
+
+    def data_axis_points(self):
+        return self.num_points_through_axis(self.last_data_axis())    
 
     def num_points_through_axis(self, axis):
         if axis>=len(self.axes):
@@ -87,7 +123,7 @@ class DataStream(object):
 
     async def finished(self):
         while not self.done:
-            await asyncio.sleep(10)
+            await asyncio.sleep(2)
         return True
 
     def percent_complete(self):
