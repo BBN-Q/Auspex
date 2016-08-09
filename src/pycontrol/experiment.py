@@ -303,9 +303,9 @@ class Experiment(metaclass=MetaExperiment):
         while True:
             done = self.sweeper.update()
             # Emit a "done" signal to streams
-            for oc in self.output_connectors.values():
-                for stream in oc.output_streams:
-                    stream.done = done
+            # for oc in self.output_connectors.values():
+            #     for stream in oc.output_streams:
+            #         stream.done = done
 
             # Run the procedure
             logger.debug("Starting a new run.")

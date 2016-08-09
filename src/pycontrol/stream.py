@@ -58,11 +58,14 @@ class DataStreamDescriptor(object):
         return dims
         # return [len(a.points) for a in self.axes]
 
-    def done(self):
+    def axes_done(self):
         # The axis is considered done when all of the sub-axes are done
         # This can happen mulitple times for a single axis
         doneness = [a.done for a in self.axes]
-        return [reduce(lambda x,y: x and y, doneness[i:]) for i in range(len(doneness))]
+        return [np.all(doneness[i:]) for i in range(len(doneness))]
+
+    def done(self):
+        return np.all([a.done for a in self.axes])
 
     def num_points(self):
         if len(self.axes)>0:
@@ -84,6 +87,10 @@ class DataStreamDescriptor(object):
 
     def data_axis_points(self):
         return self.num_points_through_axis(self.last_data_axis())    
+
+    def reset(self):
+        for a in self.axes:
+            a.done = False
 
     def num_points_through_axis(self, axis):
         if axis>=len(self.axes):
@@ -109,7 +116,6 @@ class DataStream(object):
         self.start_connector = None
         self.end_connector = None
         self.loop = loop
-        self.done = False
 
     def set_descriptor(self, descriptor):
         logger.debug("Setting descriptor on stream '%s' to '%s'", self.name, descriptor)
@@ -122,7 +128,7 @@ class DataStream(object):
             return 0
 
     async def finished(self):
-        while not self.done:
+        while not self.done():
             await asyncio.sleep(2)
         return True
 
@@ -132,12 +138,12 @@ class DataStream(object):
         else:
             return 0.0
 
-    # def done(self):
-    #     return (self.points_taken >= self.num_points()) and (self.num_points() > 0)
+    def done(self):
+        return self.descriptor.done() and self.points_taken == self.num_points() and self.queue.empty()
 
     def reset(self):
+        self.descriptor.reset()
         self.points_taken = 0
-        self.done = False
         if self.start_connector is not None:
             self.start_connector.points_taken = 0
 
@@ -226,7 +232,6 @@ class OutputConnector(object):
         return self.descriptor.num_points()
 
     def done(self):
-        # return (self.points_taken > self.descriptor.num_points() - 1) and (self.descriptor.num_points() > 0)
         return np.all([stream.done for stream in self.output_streams])
 
     async def push(self, data):

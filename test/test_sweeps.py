@@ -105,6 +105,7 @@ class SweptTestExperiment(Experiment):
         data_row = np.sin(2*np.pi*self.time_val)*np.ones(5) + 0.1*np.random.random(5)
         self.time_val += time_step
         await self.voltage.push(data_row)
+        logger.debug("Stream pushed points {}.".format(data_row))
         logger.debug("Stream has filled {} of {} points".format(self.voltage.points_taken, self.voltage.num_points() ))
 
 class SweepTestCase(unittest.TestCase):
@@ -165,17 +166,18 @@ class SweepTestCase(unittest.TestCase):
         edges = [(exp.voltage, pri.data)]
         exp.set_graph(edges)
 
-        def rf(sweep_axis, param):
+        def rf(sweep_axis, num_points):
             logger.debug("Running refinement function.")
-            if sweep_axis.num_points() > 5:
+            if sweep_axis.num_points() >= num_points:
                 return False
             sweep_axis.points.append(sweep_axis.points[-1]*2)
             return True
 
         exp.init_instruments()
         exp.add_sweep(exp.field, np.linspace(0,100.0,11))
-        exp.add_sweep(exp.freq, [1.0, 2.0], refine_func=rf)
+        exp.add_sweep(exp.freq, [1.0, 2.0], refine_func=rf, refine_args=[5])
         exp.run_sweeps()
+        self.assertTrue(pri.points_taken == 5*11*5)
 
         # logger.debug("Run test: printer ended up with %d points.", pri.data.input_streams[0].points_taken)
         # logger.debug("Run test: voltage ended up with %d points.", exp.voltage.output_streams[0].points_taken)

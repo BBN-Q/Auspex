@@ -39,7 +39,7 @@ class SweptParameter(object):
 
 class SweepAxis(DataAxis):
     """ Structure for swept axis, separate from DataAxis """
-    def __init__(self, parameter, points = [], refine_func=None, refine_args=None):
+    def __init__(self, parameter, points = [], refine_func=None, refine_args=[]):
         super(SweepAxis, self).__init__(parameter.name, points)
         self.parameter   = parameter
         self.unit        = parameter.unit
@@ -63,10 +63,10 @@ class SweepAxis(DataAxis):
             self.push()
             self.step += 1
             self.done = False
-        elif self.step==self.num_points():
+        if self.step==self.num_points():
             # Check to see if we need to perform any refinements
             if self.refine_func is not None:
-                if self.refine_func(self, self.refine_args):
+                if self.refine_func(self, *self.refine_args):
                     # Refine_func should return true if we have more refinements...
                     self.value = self.points[self.step]
                     self.push()
@@ -79,7 +79,9 @@ class SweepAxis(DataAxis):
             else:
                 self.step = 0
                 self.done = True
-                logger.debug("Sweep Axis '{}' complete.".format(self.name))
+        else:
+            self.done = False
+            logger.debug("Sweep Axis '{}' complete.".format(self.name))
 
     def push(self):
         """ Push parameter value """
