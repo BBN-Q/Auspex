@@ -1,0 +1,94 @@
+import unittest
+import asyncio
+import os
+import numpy as np
+import h5py
+
+from pycontrol.instruments.instrument import Instrument, StringCommand, FloatCommand, IntCommand
+from pycontrol.experiment import Experiment
+from pycontrol.parameter import FloatParameter
+from pycontrol.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector
+from pycontrol.filters.debug import Print
+from pycontrol.filters.io import WriteToHDF5_New
+from pycontrol.logging import logger
+
+import logging
+logger.setLevel(logging.DEBUG)
+
+class TestInstrument1(Instrument):
+    frequency = FloatCommand(get_string="frequency?", set_string="frequency {:g}", value_range=(0.1, 10))
+    serial_number = IntCommand(get_string="serial?")
+    mode = StringCommand(scpi_string=":mode", allowed_values=["A", "B", "C"])
+
+class SweptTestExperiment(Experiment):
+    """Here the run loop merely spews data until it fills up the stream. """
+
+    # Create instances of instruments
+    fake_instr_1 = TestInstrument1("FAKE::RESOURE::NAME")
+
+    # Parameters
+    field = FloatParameter(unit="Oe")
+    freq  = FloatParameter(unit="Hz")
+    dur   = FloatParameter(default=5,unit="ns")
+
+    # DataStreams
+    voltage = OutputConnector()
+
+    # Constants
+    samples = 5
+    time_val = 0
+
+    def init_instruments(self):
+        self.field.assign_method(lambda x: logger.debug("Field got value " + str(x)))
+        self.freq.assign_method(lambda x: logger.debug("Freq got value " + str(x)))
+        self.dur.assign_method(lambda x: logger.debug("Duration got value " + str(x)))
+
+    def init_streams(self):
+        # Add a "base" data axis: say we are averaging 5 samples per trigger
+        descrip = DataStreamDescriptor()
+        descrip.add_axis(DataAxis("samples", range(self.samples)))
+        self.voltage.set_descriptor(descrip)
+
+    def __repr__(self):
+        return "<SweptTestExperiment>"
+
+    async def run(self):
+        logger.debug("Data taker running (inner loop)")
+        time_step = 0.1
+        await asyncio.sleep(0.002)
+        data_row = np.sin(2*np.pi*self.time_val)*np.ones(5) + 0.1*np.random.random(5)
+        self.time_val += time_step
+        await self.voltage.push(data_row)
+        logger.debug("Stream pushed points {}.".format(data_row))
+        logger.debug("Stream has filled {} of {} points".format(self.voltage.points_taken, self.voltage.num_points() ))
+
+class SweepTestCase(unittest.TestCase):
+
+	def test_writehdf5(self):
+	    exp = SweptTestExperiment()
+	    if os.path.exists("test_write-0000.h5"):
+	        os.remove("test_write-0000.h5")
+	    wr = WriteToHDF5_New("test_write.h5")
+
+	    edges = [(exp.voltage, wr.data)]
+	    exp.set_graph(edges)
+
+	    exp.init_instruments()
+	    exp.add_sweep(exp.field, np.linspace(0,100.0,4))
+	    exp.add_sweep(exp.freq, np.linspace(0,10.0,3))
+	    exp.run_sweeps()
+	    self.assertTrue(os.path.exists("test_write-0000.h5"))
+	    # with h5py.File("test_write-0000.h5", 'r') as f:
+	    #     self.assertTrue([d.label for d in f['data-0000'].dims] == ['freq', 'field', 'samples'])
+	    #     self.assertTrue([d.keys()[0] for d in f['data-0000'].dims] == ['freq', 'field', 'samples'])
+	    #     self.assertTrue(np.sum(f['data-0000'].dims[0][0].value - np.linspace(0,10.0,3)) == 0.0)
+	    #     self.assertTrue(np.sum(f['data-0000'].dims[1]['field'].value - np.linspace(0,100.0,4)) == 0.0)
+	    #     self.assertTrue(np.sum(f['data-0000'].dims[2]['samples'].value - np.arange(0,5)) == 0.0)
+	    #     self.assertTrue("Here the run loop merely spews" in f['data-0000'].attrs['exp_src'])
+	    #     print(f['data-0000'][:])
+
+	    os.remove("test_write-0000.h5")
+
+
+if __name__ == '__main__':
+    unittest.main()

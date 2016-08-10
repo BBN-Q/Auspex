@@ -20,52 +20,6 @@ class TestInstrument1(Instrument):
     serial_number = IntCommand(get_string="serial?")
     mode = StringCommand(scpi_string=":mode", allowed_values=["A", "B", "C"])
 
-# class UnsweptTestExperiment(Experiment):
-#     """Here the run loop merely spews data until it fills up the stream. """
-
-#     # Create instances of instruments
-#     fake_instr_1 = TestInstrument1("FAKE::RESOURE::NAME")
-
-#     # Parameters
-#     field = FloatParameter(unit="Oe")
-#     freq  = FloatParameter(unit="Hz")
-
-#     # DataStreams
-#     voltage = OutputConnector()
-
-#     # Constants
-#     samples = 5
-
-#     def init_instruments(self):
-#         self.field.assign_method(lambda x: logger.debug("Field got value " + str(x)))
-#         self.freq.assign_method(lambda x: logger.debug("Freq got value " + str(x)))
-
-#     def init_streams(self):
-#         # Add a "base" data axis: say we are averaging 5 samples per trigger
-#         descrip = DataStreamDescriptor()
-#         descrip.add_axis(DataAxis("samples", range(self.samples)))
-#         self.voltage.set_descriptor(descrip)
-
-#     def __repr__(self):
-#         return "<TestExperiment>"
-
-#     async def run(self):
-#         logger.debug("Data taker running")
-#         time_val = 0
-#         time_step = 0.1
-
-#         while True:
-#             #Produce fake noisy sinusoid data every 0.02 seconds until we have 1000 points
-#             if self.voltage.done():
-#                 logger.debug("Data taker finished.")
-#                 break
-#             await asyncio.sleep(0.002)
-
-#             data_row = np.sin(2*np.pi*time_val)*np.ones(5) + 0.1*np.random.random(5)
-#             time_val += time_step
-#             await self.voltage.push(data_row)
-#             logger.debug("Stream has filled {} of {} points".format(self.voltage.points_taken, self.voltage.num_points() ))
-
 class SweptTestExperiment(Experiment):
     """Here the run loop merely spews data until it fills up the stream. """
 
@@ -130,22 +84,22 @@ class SweepTestCase(unittest.TestCase):
 
     
 
-    # def test_run(self):
-    #     exp = UnsweptTestExperiment()
-    #     pri = Print()
+    def test_run(self):
+        exp = SweptTestExperiment()
+        pri = Print()
 
-    #     edges = [(exp.voltage, pri.data)]
-    #     exp.set_graph(edges)
+        edges = [(exp.voltage, pri.data)]
+        exp.set_graph(edges)
 
-    #     exp.init_instruments()
-    #     exp.add_sweep(exp.field, np.linspace(0,100.0,11))
-    #     exp.add_sweep(exp.freq, np.linspace(0,10.0,3))
-    #     exp.run_loop()
+        exp.init_instruments()
+        exp.add_sweep(exp.field, np.linspace(0,100.0,11))
+        exp.add_sweep(exp.freq, np.linspace(0,10.0,3))
+        exp.run_sweeps()
 
-    #     logger.debug("Run test: logger.debuger ended up with %d points.", pri.data.input_streams[0].points_taken)
-    #     logger.debug("Run test: voltage ended up with %d points.", exp.voltage.output_streams[0].points_taken)
+        logger.debug("Run test: logger.debuger ended up with %d points.", pri.data.input_streams[0].points_taken)
+        logger.debug("Run test: voltage ended up with %d points.", exp.voltage.output_streams[0].points_taken)
 
-    #     self.assertTrue(pri.data.input_streams[0].points_taken == exp.voltage.num_points())
+        self.assertTrue(pri.data.input_streams[0].points_taken == exp.voltage.num_points())
 
     # def test_run_sweep(self):
     #     exp = SweptTestExperiment()

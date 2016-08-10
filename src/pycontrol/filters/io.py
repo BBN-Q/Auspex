@@ -1,4 +1,4 @@
-import asyncio
+import asyncio, concurrent
 import itertools
 import h5py
 import numpy as np
@@ -124,6 +124,104 @@ class WriteToHDF5_old(Filter):
 
         self.file.close()
 
+
+class WriteToHDF5_New(Filter):
+    """Writes data to file."""
+
+    data = InputConnector()
+    def __init__(self, filename,  **kwargs):
+        super(WriteToHDF5_New, self).__init__(**kwargs)
+        self.filename = filename
+        self.points_taken = 0
+        self.file = None
+
+    def final_init(self):
+        self.file = self.new_file()
+
+    def new_filename(self):
+        # Increment the filename until we find one we want.
+        i = 0
+        ext = self.filename.find('.h5')
+        if ext > -1:
+            filename = self.filename[:ext]
+        while os.path.exists("{}-{:04d}.h5".format(filename,i)):
+            i += 1
+        return "{}-{:04d}.h5".format(filename,i)
+
+    def new_file(self):
+        """ Open a new data file to write """
+        # Close the current file, if any
+        if self.file is not None:
+            try:
+                self.file.close()
+            except Exception as e:
+                logger.error("Encounter exception: {}".format(e))
+                logger.error("Cannot close file '{}'. File may be damaged.".format(self.file.filename))
+        # Get new file name
+        filename = self.new_filename()
+        head = os.path.dirname(filename)
+        head = os.path.normpath(head)
+        dirs = head.split(os.sep)
+        # Check if path exists. If not, create new one(s).
+        fulldir = ''
+        for d in dirs:
+            fulldir = os.path.join(fulldir, d)
+            if not os.path.exists(fulldir):
+                logger.debug("Create new directory: {}.".format(fulldir))
+                os.mkdir(fulldir)
+        logger.debug("Create new data file: %s." %filename)
+        return h5py.File(filename, 'w')
+
+    async def run(self):
+        stream     = self.data.input_streams[0]
+        desc       = stream.descriptor
+        axes       = stream.descriptor.axes
+        params     = stream.descriptor.params
+        data_dims  = stream.descriptor.data_dims()
+
+        params['exp_src'] = stream.descriptor.exp_src
+        num_axes   = len(axes)
+        
+        # All of the combinations for the present values of the sweep parameters only
+        tuples     = stream.descriptor.tuples()
+        logger.debug("Tuples for the current sweep are %s", tuples)
+
+        # Create a 2D dataset with a 1D data column
+        # dtype = [(a.name, 'f') for a in axes]
+        data = self.file.create_dataset('data', (len(tuples), num_axes+1), dtype='f', chunks=True, maxshape=(None, num_axes+1))
+
+        # Write pointer
+        w_idx = 0 
+
+        while True:
+            logger.debug("HDF5 awaiting data")
+            done, pending = await asyncio.wait((stream.finished(), stream.queue.get()), return_when=concurrent.futures.FIRST_COMPLETED)
+            new_data = list(done)[0].result()
+            if type(new_data)==bool:
+                if new_data:
+                    break
+                else:
+                    logger.debug("Printer %s awaiting data", self.name)
+                    new_data = np.array(await stream.queue.get()).flatten()
+
+            logger.debug("HDF5 stream has %d points", stream.points_taken)
+            logger.debug("HDF5: %s got data %s of length %d", stream.name, new_data, new_data.size)
+
+            # Resize if necessary, also get the new set of sweep tuples since the axes must have changed
+            if w_idx + new_data.size > data.len():
+                data.resize((w_idx + new_data.size, num_axes+1))
+                tuples = stream.descriptor.tuples()
+
+            # Write to table
+            data[w_idx:w_idx+new_data.size,:-1] = tuples[w_idx:w_idx+new_data.size]
+            data[w_idx:w_idx+new_data.size,-1]  = new_data
+            self.file.flush()
+            w_idx += new_data.size
+
+            logger.debug("HDF5: Write index at %d", w_idx)
+            logger.debug("HDF5: %s has written %d points", stream.name, w_idx)
+
+        self.file.close()
 
 class WriteToHDF5(Filter):
     """Writes data to file."""
