@@ -210,6 +210,7 @@ class WriteToHDF5_New(Filter):
 
             # Resize if necessary, also get the new set of sweep tuples since the axes must have changed
             if w_idx + new_data.size > data.len():
+                logger.debug("HDF5 stream was resized to %d points", w_idx + new_data.size)
                 data.resize((w_idx + new_data.size,))
                 tuples = np.array(stream.descriptor.tuples())
 
@@ -221,11 +222,16 @@ class WriteToHDF5_New(Filter):
 
             self.file.flush()
             w_idx += new_data.size
+            self.points_taken = w_idx
 
             logger.debug("HDF5: Write index at %d", w_idx)
             logger.debug("HDF5: %s has written %d points", stream.name, w_idx)
 
-        self.file.close()
+        try:
+            self.file.close()
+        except:
+            # This doesn't seem to happen when we don't used named columns
+            logger.debug("Ignoring 'dictionary changed sized during iteration' error.")
 
 class WriteToHDF5(Filter):
     """Writes data to file."""
