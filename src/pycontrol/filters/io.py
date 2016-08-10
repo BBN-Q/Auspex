@@ -177,18 +177,19 @@ class WriteToHDF5_New(Filter):
         desc       = stream.descriptor
         axes       = stream.descriptor.axes
         params     = stream.descriptor.params
-        data_dims  = stream.descriptor.data_dims()
 
         params['exp_src'] = stream.descriptor.exp_src
         num_axes   = len(axes)
         
         # All of the combinations for the present values of the sweep parameters only
-        tuples     = stream.descriptor.tuples()
+        tuples     = np.array(stream.descriptor.tuples())
         logger.debug("Tuples for the current sweep are %s", tuples)
 
         # Create a 2D dataset with a 1D data column
-        # dtype = [(a.name, 'f') for a in axes]
-        data = self.file.create_dataset('data', (len(tuples), num_axes+1), dtype='f', chunks=True, maxshape=(None, num_axes+1))
+        dtype = [(a.name, 'f') for a in axes]
+        dtype.append((stream.start_connector.name, 'f'))
+        data = self.file.create_dataset('data', (len(tuples),), dtype=dtype, 
+                                        chunks=True, maxshape=(None,))
 
         # Write pointer
         w_idx = 0 
@@ -209,12 +210,15 @@ class WriteToHDF5_New(Filter):
 
             # Resize if necessary, also get the new set of sweep tuples since the axes must have changed
             if w_idx + new_data.size > data.len():
-                data.resize((w_idx + new_data.size, num_axes+1))
-                tuples = stream.descriptor.tuples()
+                data.resize((w_idx + new_data.size,))
+                tuples = np.array(stream.descriptor.tuples())
 
             # Write to table
-            data[w_idx:w_idx+new_data.size,:-1] = tuples[w_idx:w_idx+new_data.size]
-            data[w_idx:w_idx+new_data.size,-1]  = new_data
+            for i, axis in enumerate(axes):
+                data[axis.name, w_idx:w_idx+new_data.size] = tuples[w_idx:w_idx+new_data.size, i]
+
+            data[stream.start_connector.name, w_idx:w_idx+new_data.size] = new_data
+
             self.file.flush()
             w_idx += new_data.size
 
