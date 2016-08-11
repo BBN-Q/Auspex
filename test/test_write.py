@@ -78,14 +78,13 @@ class SweepTestCase(unittest.TestCase):
         exp.add_sweep(exp.freq, np.linspace(0,10.0,3))
         exp.run_sweeps()
         self.assertTrue(os.path.exists("test_write-0000.h5"))
-        # with h5py.File("test_write-0000.h5", 'r') as f:
-        #     self.assertTrue([d.label for d in f['data-0000'].dims] == ['freq', 'field', 'samples'])
-        #     self.assertTrue([d.keys()[0] for d in f['data-0000'].dims] == ['freq', 'field', 'samples'])
-        #     self.assertTrue(np.sum(f['data-0000'].dims[0][0].value - np.linspace(0,10.0,3)) == 0.0)
-        #     self.assertTrue(np.sum(f['data-0000'].dims[1]['field'].value - np.linspace(0,100.0,4)) == 0.0)
-        #     self.assertTrue(np.sum(f['data-0000'].dims[2]['samples'].value - np.arange(0,5)) == 0.0)
-        #     self.assertTrue("Here the run loop merely spews" in f['data-0000'].attrs['exp_src'])
-        #     print(f['data-0000'][:])
+        with h5py.File("test_write-0000.h5", 'r') as f:
+            self.assertTrue(0.0 not in f['data']['voltage'])
+            self.assertTrue(np.sum(f['data']['field']) == 5*3*np.sum(np.linspace(0,100.0,4)) )
+            self.assertTrue(np.sum(f['data']['freq']) == 5*4*np.sum(np.linspace(0,10.0,3)) )
+            self.assertTrue(np.sum(f['data']['samples']) == 3*4*np.sum(np.linspace(0,4,5)) )
+            self.assertTrue("Here the run loop merely spews" in f['data'].attrs['exp_src'])
+            print(f['data']['voltage'])
 
         os.remove("test_write-0000.h5")
 
@@ -111,7 +110,7 @@ class SweepTestCase(unittest.TestCase):
         exp.run_sweeps()
         self.assertTrue(os.path.exists("test_write-0000.h5"))
         self.assertTrue(wr.points_taken == 5*11*5)
-        # os.remove("test_write-0000.h5")
+        os.remove("test_write-0000.h5")
 
 
 if __name__ == '__main__':
