@@ -10,25 +10,25 @@ from pycontrol.logging import logger
 
 class DataAxis(object):
     """An axes in a data stream"""
-    def __init__(self, name, points, unstructured=False, coord_names=[], unit=None):
+    def __init__(self, name, points, unit=None):
+        #unstructured=False, coord_names=[],
         super(DataAxis, self).__init__()
         self.name         = name
         self.points       = points
         self.unit         = unit
-        self.unstructured = unstructured
-        self.coord_names  = coord_names
+        # self.unstructured = unstructured
+        # self.coord_names  = coord_names
 
         # By definition data axes will be done after every experiment.run() call
         self.done         = True
 
-        if unstructured and len(coord_names) != len(points[0]):
-            raise ValueError("Coordinate names list must be as numerous as the coordinates themselves.")
-
     def num_points(self):
         return len(self.points)
     def __repr__(self):
-        return "<DataAxis(name={}, points={}, unit={}, unstructured={})>".format(
-            self.name, self.points, self.unit, self.unstructured)
+        # return "<DataAxis(name={}, points={}, unit={}, unstructured={})>".format(
+        #     self.name, self.points, self.unit, self.unstructured)
+        return "<DataAxis(name={}, points={}, unit={})>".format(
+            self.name, self.points, self.unit)
 
 class DataStreamDescriptor(object):
     """Axis information"""

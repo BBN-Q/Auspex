@@ -15,7 +15,7 @@ from tqdm import tqdm, tqdm_notebook
 
 from pycontrol.instruments.instrument import Instrument
 from pycontrol.parameter import ParameterGroup, FloatParameter, IntParameter, Parameter
-from pycontrol.sweep import SweptParameter, SweptParameterGroup, SweepAxis, Sweeper
+from pycontrol.sweep import SweepAxis, Sweeper
 from pycontrol.stream import DataStream, DataAxis, DataStreamDescriptor, InputConnector, OutputConnector
 from pycontrol.filters.plot import Plotter
 from pycontrol.logging import logger
@@ -166,10 +166,10 @@ class Experiment(metaclass=MetaExperiment):
         super(Experiment, self).__init__()
 
         # Iterable that yields sweep values
-        self._sweep_generator = None
+        # self._sweep_generator = None
 
         # Container for patameters that will be swept
-        self._swept_parameters = []
+        # self._swept_parameters = []
 
         # Sweep control
         self.sweeper = Sweeper()
@@ -242,17 +242,17 @@ class Experiment(metaclass=MetaExperiment):
         operation should be defined here"""
         pass
 
-    def run_loop(self):
-        """This runs the asyncio main loop."""
-        for n in self.nodes:
-            if hasattr(n, 'final_init'):
-                n.final_init()
+    # def run_loop(self):
+    #     """This runs the asyncio main loop."""
+    #     for n in self.nodes:
+    #         if hasattr(n, 'final_init'):
+    #             n.final_init()
 
-        # Set any static parameters
-        for p in self._parameters.values():
-            p.push()
-        tasks = [n.run() for n in self.nodes]
-        self.loop.run_until_complete(asyncio.wait(tasks))
+    #     # Set any static parameters
+    #     for p in self._parameters.values():
+    #         p.push()
+    #     tasks = [n.run() for n in self.nodes]
+    #     self.loop.run_until_complete(asyncio.wait(tasks))
 
     def reset(self):
         for edge in self.graph.edges:
@@ -286,26 +286,10 @@ class Experiment(metaclass=MetaExperiment):
         await asyncio.sleep(1.0)
         last_param_values = None
         logger.debug("Starting experiment sweep.")
-        # for param_values in self._sweep_generator:
 
-        #     # Update the parameter values. Unles set and push if there has been a change
-        #     # in the value from the previous iteration.
-        #     logger.debug("Update new values to swept parameters.")
-        #     for i, sp in enumerate(self._swept_parameters):
-        #         if last_param_values is None or param_values[i] != last_param_values[i]:
-        #             sp.value = param_values[i]
-        #             sp.push()
-        #     # update previous values
-        #     last_param_values = param_values
-        # self.sweeper.initialize()
-        # done = self.sweeper.update()
         done = True
         while True:
             done = self.sweeper.update()
-            # Emit a "done" signal to streams
-            # for oc in self.output_connectors.values():
-            #     for stream in oc.output_streams:
-            #         stream.done = done
 
             # Run the procedure
             logger.debug("Starting a new run.")
@@ -405,43 +389,32 @@ class Experiment(metaclass=MetaExperiment):
         tasks.append(self.sweep())
         self.loop.run_until_complete(asyncio.gather(*tasks))
 
-    def add_sweep(self, param, sweep_list, refine_func=None, refine_args=None):
+    def add_sweep(self, parameter, sweep_list, refine_func=None, refine_args=None):
         """Add a good-old-fasioned one-variable sweep."""
-        p = SweptParameter(param, sweep_list)
-        self._swept_parameters.append(p)
-        ax = SweepAxis(param, sweep_list, refine_func, refine_args)
+        # p = SweptParameter(parameter, sweep_list)
+        # self._swept_parameters.append(p)
+        ax = SweepAxis(parameter, sweep_list, refine_func, refine_args)
         self.sweeper.add_sweep(ax)
-        # self.generate_sweep()
         for oc in self.output_connectors.values():
             logger.debug("Adding sweep axis %s to connector %s.", ax, oc.name)
             oc.descriptor.add_axis(ax)
-            p.associated_axes.append(ax)
+            # p.associated_axes.append(ax)
         self.update_descriptors()
-        param.value = sweep_list[0]
-        return p
+        parameter.value = sweep_list[0]
+        return ax
 
-    # def add_sweep_axis(self, axis):
-    #     """ Add in SweepAxis instance into the sweeper"""
-    #     self.sweeper.add_sweep(axis)
-    #     for oc in self.output_connectors.values():
-    #         # ax = axis.data_axis()
-    #         logger.debug("Adding sweep axis %s to connector %s.", axis, oc.name)
-    #         oc.descriptor.add_axis(axis)
-
-
-    def add_unstructured_sweep(self, parameters, coords):
-        p = SweptParameterGroup(parameters, coords)
-        self._swept_parameters.append(p)
-        self.generate_sweep()
+    def add_unstructured_sweep(self, parameters, coords, refine_func=None, refine_args=None):
+        # p = SweptParameterGroup(parameters, coords)
+        # self._swept_parameters.append(p)
+        ax = SweepAxis(parameters, coords, unstructured=True,
+                       refine_func=refine_func, refine_args=refine_args)
+        self.sweeper.add_sweep(ax)
         for oc in self.output_connectors.values():
-            ax = DataAxis("Unstructured", coords, unstructured=True, coord_names=[p.name for p in parameters])
+            # ax = DataAxis("Unstructured", coords, unstructured=True, )
             logger.debug("Adding unstructred sweep axis %s to connector %s.", ax, oc.name)
             oc.descriptor.add_axis(ax)
-            p.associated_axes.append(ax)
+            # p.associated_axes.append(ax)
         self.update_descriptors()
         for pp, c in zip(parameters, coords[0]):
             pp.value = c
-        return p
-
-    # def generate_sweep(self):
-    #     self._sweep_generator = itertools.product(*[sp.values for sp in self._swept_parameters])
+        return ax
