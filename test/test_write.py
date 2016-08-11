@@ -9,7 +9,7 @@ from pycontrol.experiment import Experiment
 from pycontrol.parameter import FloatParameter
 from pycontrol.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector
 from pycontrol.filters.debug import Print
-from pycontrol.filters.io import WriteToHDF5_New
+from pycontrol.filters.io import WriteToHDF5
 from pycontrol.logging import logger
 
 import logging
@@ -68,7 +68,7 @@ class SweepTestCase(unittest.TestCase):
         exp = SweptTestExperiment()
         if os.path.exists("test_write-0000.h5"):
             os.remove("test_write-0000.h5")
-        wr = WriteToHDF5_New("test_write.h5")
+        wr = WriteToHDF5("test_write.h5")
 
         edges = [(exp.voltage, wr.data)]
         exp.set_graph(edges)
@@ -93,7 +93,7 @@ class SweepTestCase(unittest.TestCase):
         exp = SweptTestExperiment()
         if os.path.exists("test_write-0000.h5"):
             os.remove("test_write-0000.h5")
-        wr = WriteToHDF5_New("test_write.h5")
+        wr = WriteToHDF5("test_write.h5")
 
         edges = [(exp.voltage, wr.data)]
         exp.set_graph(edges)
@@ -111,7 +111,7 @@ class SweepTestCase(unittest.TestCase):
         exp.run_sweeps()
         self.assertTrue(os.path.exists("test_write-0000.h5"))
         self.assertTrue(wr.points_taken == 5*11*5)
-        os.remove("test_write-0000.h5")
+        # os.remove("test_write-0000.h5")
 
 
 if __name__ == '__main__':
