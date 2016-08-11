@@ -104,13 +104,13 @@ class WriteToHDF5(Filter):
             logger.debug("HDF5 stream has %d points", stream.points_taken)
             logger.debug("HDF5: %s got data %s of length %d", stream.name, new_data, new_data.size)
 
-            import ipdb; ipdb.set_trace()
+            # import ipdb; ipdb.set_trace()
 
             # Resize if necessary, also get the new set of sweep tuples since the axes must have changed
             if w_idx + new_data.size > data.len():
                 logger.debug("HDF5 stream was resized to %d points", w_idx + new_data.size)
                 data.resize((w_idx + new_data.size,))
-                tuples = np.array(stream.descriptor.tuples())
+                tuples = np.append(tuples, np.array(stream.descriptor.tuples()), axis=0)
 
             # Write to table
             for i, axis_name in enumerate(axis_names):
