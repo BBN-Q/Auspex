@@ -62,16 +62,17 @@ class WriteToHDF5(Filter):
         desc       = stream.descriptor
         axes       = stream.descriptor.axes
         params     = stream.descriptor.params
+        axis_names = desc.axis_names()
 
         params['exp_src'] = stream.descriptor.exp_src
         num_axes   = len(axes)
         
         # All of the combinations for the present values of the sweep parameters only
         tuples     = np.array(stream.descriptor.tuples())
-        logger.debug("Tuples for the current sweep are %s", tuples)
 
         # Create a 2D dataset with a 1D data column
-        dtype = [(a.name, 'f') for a in axes]
+        dtype = [(a, 'f') for a in axis_names]
+        logger.debug("Data type for HDF5: %s", dtype)
         dtype.append((stream.start_connector.name, 'f'))
         if self.compress:
             data = self.file.create_dataset('data', (len(tuples),), dtype=dtype, 
@@ -82,7 +83,6 @@ class WriteToHDF5(Filter):
                                         chunks=True, maxshape=(None,))
 
         # Write params into attrs
-        axis_names = [a.name for a in axes]
         for k,v in params.items():
             if k not in axis_names:
                 data.attrs[k] = v
@@ -104,6 +104,8 @@ class WriteToHDF5(Filter):
             logger.debug("HDF5 stream has %d points", stream.points_taken)
             logger.debug("HDF5: %s got data %s of length %d", stream.name, new_data, new_data.size)
 
+            import ipdb; ipdb.set_trace()
+
             # Resize if necessary, also get the new set of sweep tuples since the axes must have changed
             if w_idx + new_data.size > data.len():
                 logger.debug("HDF5 stream was resized to %d points", w_idx + new_data.size)
@@ -111,8 +113,9 @@ class WriteToHDF5(Filter):
                 tuples = np.array(stream.descriptor.tuples())
 
             # Write to table
-            for i, axis in enumerate(axes):
-                data[axis.name, w_idx:w_idx+new_data.size] = tuples[w_idx:w_idx+new_data.size, i]
+            for i, axis_name in enumerate(axis_names):
+                logger.debug("Setting %s to %s", axis_name, tuples[w_idx:w_idx+new_data.size, i])
+                data[axis_name, w_idx:w_idx+new_data.size] = tuples[w_idx:w_idx+new_data.size, i]
 
             data[stream.start_connector.name, w_idx:w_idx+new_data.size] = new_data
 

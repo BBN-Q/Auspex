@@ -9,7 +9,7 @@ from pycontrol.experiment import Experiment
 from pycontrol.parameter import FloatParameter
 from pycontrol.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector
 from pycontrol.filters.debug import Print
-from pycontrol.filters.io import WriteToHDF5_New
+from pycontrol.filters.io import WriteToHDF5
 from pycontrol.logging import logger
 
 import logging
@@ -63,9 +63,6 @@ class SweptTestExperiment(Experiment):
         logger.debug("Stream has filled {} of {} points".format(self.voltage.points_taken, self.voltage.num_points() ))
 
 class SweepTestCase(unittest.TestCase):
-#     """
-#     Tests sweeping
-#     """
 
     def test_add_sweep(self):
         exp = SweptTestExperiment()
@@ -74,15 +71,7 @@ class SweepTestCase(unittest.TestCase):
         self.assertTrue(len(exp.voltage.descriptor.axes) == 2)
         exp.add_sweep(exp.freq, np.linspace(0,10.0,3))
         self.assertTrue(len(exp.voltage.descriptor.axes) == 3)
-        # sweep_coords = (list(exp._sweep_generator))
-        # self.assertTrue(len(sweep_coords) == 3*11)
-        # self.assertTrue(len(sweep_coords[0]) == 2)
-        # self.assertTrue(exp.voltage.num_points() == 5*len(sweep_coords))
-        # print("Is the axis the same?", exp.voltage.)
-
         print(exp.voltage.descriptor.axes)
-
-    
 
     def test_run(self):
         exp = SweptTestExperiment()
@@ -101,17 +90,17 @@ class SweepTestCase(unittest.TestCase):
 
         self.assertTrue(pri.data.input_streams[0].points_taken == exp.voltage.num_points())
 
-    # def test_run_sweep(self):
-    #     exp = SweptTestExperiment()
-    #     pri = Print(name="Printer")
+    def test_run_sweep(self):
+        exp = SweptTestExperiment()
+        pri = Print(name="Printer")
 
-    #     edges = [(exp.voltage, pri.data)]
-    #     exp.set_graph(edges)
+        edges = [(exp.voltage, pri.data)]
+        exp.set_graph(edges)
 
-    #     exp.init_instruments()
-    #     exp.add_sweep(exp.field, np.linspace(0,100.0,11))
-    #     exp.add_sweep(exp.freq, np.linspace(0,10.0,3))
-    #     exp.run_sweeps()
+        exp.init_instruments()
+        exp.add_sweep(exp.field, np.linspace(0,100.0,11))
+        exp.add_sweep(exp.freq, np.linspace(0,10.0,3))
+        exp.run_sweeps()
 
     def test_run_adaptive_sweep(self):
         exp = SweptTestExperiment()
@@ -133,33 +122,27 @@ class SweepTestCase(unittest.TestCase):
         exp.run_sweeps()
         self.assertTrue(pri.points_taken == 5*11*5)
 
-        # logger.debug("Run test: printer ended up with %d points.", pri.data.input_streams[0].points_taken)
-        # logger.debug("Run test: voltage ended up with %d points.", exp.voltage.output_streams[0].points_taken)
+    def test_unstructured_sweep(self):
+        exp = SweptTestExperiment()
+        pri = Print()
 
+        edges = [(exp.voltage, pri.data)]
+        exp.set_graph(edges)
+        exp.init_instruments()
+
+        coords = [[ 0, 0.1],
+                  [10, 4.0],
+                  [15, 2.5],
+                  [40, 4.4],
+                  [50, 2.5],
+                  [60, 1.4],
+                  [65, 3.6],
+                  [66, 3.5],
+                  [67, 3.6],
+                  [68, 1.2]]
+        exp.add_sweep([exp.field, exp.freq], coords)
+        exp.run_sweeps()
         # self.assertTrue(pri.data.input_streams[0].points_taken == exp.voltage.num_points())
-
-    # def test_unstructured_sweep(self):
-    #     exp = UnsweptTestExperiment()
-    #     pri = Print()
-
-    #     edges = [(exp.voltage, pri.data)]
-    #     exp.set_graph(edges)
-
-    #     exp.init_instruments()
-
-    #     coords = [[ 0, 0.1],
-    #               [10, 4.0],
-    #               [15, 2.5],
-    #               [40, 4.4],
-    #               [50, 2.5],
-    #               [60, 1.4],
-    #               [65, 3.6],
-    #               [66, 3.5],
-    #               [67, 3.6],
-    #               [68, 1.2]]
-    #     exp.add_unstructured_sweep([exp.field, exp.freq], coords)
-    #     exp.run_loop()
-    #     self.assertTrue(pri.data.input_streams[0].points_taken == exp.voltage.num_points())
 
     # def test_write_unstructured_sweep(self):
     #     exp = UnsweptTestExperiment()
@@ -250,34 +233,7 @@ class SweepTestCase(unittest.TestCase):
 
     #     os.remove("test_run_write_unstructured-0000.h5")
 
-    # def test_writehdf5(self):
-    #     exp = SweptTestExperiment()
-    #     # pr = Print()
-    #     if os.path.exists("test_write-0000.h5"):
-    #         os.remove("test_write-0000.h5")
-    #     wr = WriteToHDF5_New("test_write.h5")
 
-    #     # edges = [(exp.voltage, pr.data), (exp.voltage, wr.data)]
-    #     edges = [(exp.voltage, wr.data)]
-    #     exp.set_graph(edges)
-
-    #     self.assertTrue(exp.voltage.name == "voltage")
-
-    #     exp.init_instruments()
-    #     exp.add_sweep(exp.field, np.linspace(0,100.0,4))
-    #     exp.add_sweep(exp.freq, np.linspace(0,10.0,3))
-    #     exp.run_loop()
-    #     self.assertTrue(os.path.exists("test_write-0000.h5"))
-    #     # with h5py.File("test_write-0000.h5", 'r') as f:
-    #     #     self.assertTrue([d.label for d in f['data-0000'].dims] == ['freq', 'field', 'samples'])
-    #     #     self.assertTrue([d.keys()[0] for d in f['data-0000'].dims] == ['freq', 'field', 'samples'])
-    #     #     self.assertTrue(np.sum(f['data-0000'].dims[0][0].value - np.linspace(0,10.0,3)) == 0.0)
-    #     #     self.assertTrue(np.sum(f['data-0000'].dims[1]['field'].value - np.linspace(0,100.0,4)) == 0.0)
-    #     #     self.assertTrue(np.sum(f['data-0000'].dims[2]['samples'].value - np.arange(0,5)) == 0.0)
-    #     #     self.assertTrue("Here the run loop merely spews" in f['data-0000'].attrs['exp_src'])
-    #     #     print(f['data-0000'][:])
-
-    #     os.remove("test_write-0000.h5")
 
 if __name__ == '__main__':
     unittest.main()

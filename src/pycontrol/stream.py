@@ -6,18 +6,14 @@ import itertools
 import numpy as np
 from functools import reduce
 from pycontrol.logging import logger
-# from pycontrol.sweep import SweepAxis
 
 class DataAxis(object):
     """An axes in a data stream"""
     def __init__(self, name, points, unit=None):
-        #unstructured=False, coord_names=[],
         super(DataAxis, self).__init__()
         self.name         = name
         self.points       = points
         self.unit         = unit
-        # self.unstructured = unstructured
-        # self.coord_names  = coord_names
 
         # By definition data axes will be done after every experiment.run() call
         self.done         = True
@@ -25,8 +21,6 @@ class DataAxis(object):
     def num_points(self):
         return len(self.points)
     def __repr__(self):
-        # return "<DataAxis(name={}, points={}, unit={}, unstructured={})>".format(
-        #     self.name, self.points, self.unit, self.unstructured)
         return "<DataAxis(name={}, points={}, unit={})>".format(
             self.name, self.points, self.unit)
 
@@ -56,7 +50,6 @@ class DataStreamDescriptor(object):
             elif isinstance(a, SweepAxis):
                 dims.append(1)
         return dims
-        # return [len(a.points) for a in self.axes]
 
     def axes_done(self):
         # The axis is considered done when all of the sub-axes are done
@@ -79,11 +72,29 @@ class DataStreamDescriptor(object):
     def tuples(self):
         vals = []
         for a in self.axes:
-            if isinstance(a, DataAxis):
+            if hasattr(a, 'refine_func'): # This means it is a sweep axis
+                if a.unstructured:
+                    for p in a.parameter:
+                        vals.append([p.value])
+                else:
+                    vals.append([a.value])
+            else: # THis means it is a data axis
                 vals.append(a.points)
-            elif isinstance(a, SweepAxis):
-                vals.append([a.value])
         return list(itertools.product(*vals))
+
+    def axis_names(self):
+        # Returns all axis names included those from unstructured axes
+        vals = []
+        for a in self.axes:
+            if hasattr(a, 'refine_func'): # This means it is a sweep axis
+                if a.unstructured:
+                    for p in a.parameter:
+                        vals.append(p.name)
+                else:
+                    vals.append(a.name)
+            else:
+                vals.append(a.name)
+        return vals
 
     def data_axis_points(self):
         return self.num_points_through_axis(self.last_data_axis())    

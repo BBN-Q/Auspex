@@ -84,33 +84,61 @@ class SweepTestCase(unittest.TestCase):
             self.assertTrue(np.sum(f['data']['freq']) == 5*4*np.sum(np.linspace(0,10.0,3)) )
             self.assertTrue(np.sum(f['data']['samples']) == 3*4*np.sum(np.linspace(0,4,5)) )
             self.assertTrue("Here the run loop merely spews" in f['data'].attrs['exp_src'])
+            self.assertTrue(f['data'].attrs['time_val'] == 0)
+            self.assertTrue(f['data'].attrs['unit_freq'] == "Hz")
             print(f['data']['voltage'])
 
-        os.remove("test_write-0000.h5")
+    #     os.remove("test_write-0000.h5")
 
-    def test_writehdf5_adaptive_sweep(self):
-        exp = SweptTestExperiment()
-        if os.path.exists("test_write-0000.h5"):
-            os.remove("test_write-0000.h5")
-        wr = WriteToHDF5("test_write.h5")
+    # def test_writehdf5_adaptive_sweep(self):
+    #     exp = SweptTestExperiment()
+    #     if os.path.exists("test_write-0000.h5"):
+    #         os.remove("test_write-0000.h5")
+    #     wr = WriteToHDF5("test_write.h5")
 
-        edges = [(exp.voltage, wr.data)]
-        exp.set_graph(edges)
+    #     edges = [(exp.voltage, wr.data)]
+    #     exp.set_graph(edges)
 
-        def rf(sweep_axis, num_points):
-            logger.debug("Running refinement function.")
-            if sweep_axis.num_points() >= num_points:
-                return False
-            sweep_axis.points.append(sweep_axis.points[-1]*2)
-            return True
+    #     def rf(sweep_axis, num_points):
+    #         logger.debug("Running refinement function.")
+    #         if sweep_axis.num_points() >= num_points:
+    #             return False
+    #         sweep_axis.points.append(sweep_axis.points[-1]*2)
+    #         return True
 
-        exp.init_instruments()
-        exp.add_sweep(exp.field, np.linspace(0,100.0,11))
-        exp.add_sweep(exp.freq, [1.0, 2.0], refine_func=rf, refine_args=[5])
-        exp.run_sweeps()
-        self.assertTrue(os.path.exists("test_write-0000.h5"))
-        self.assertTrue(wr.points_taken == 5*11*5)
-        os.remove("test_write-0000.h5")
+    #     exp.init_instruments()
+    #     exp.add_sweep(exp.field, np.linspace(0,100.0,11))
+    #     exp.add_sweep(exp.freq, [1.0, 2.0], refine_func=rf, refine_args=[5])
+    #     exp.run_sweeps()
+    #     self.assertTrue(os.path.exists("test_write-0000.h5"))
+    #     self.assertTrue(wr.points_taken == 5*11*5)
+    #     os.remove("test_write-0000.h5")
+
+    # def test_writehdf5_unstructured_sweep(self):
+    #     exp = SweptTestExperiment()
+    #     if os.path.exists("test_write-0000.h5"):
+    #         os.remove("test_write-0000.h5")
+    #     wr = WriteToHDF5("test_write.h5")
+
+    #     edges = [(exp.voltage, wr.data)]
+    #     exp.set_graph(edges)
+    #     exp.init_instruments()
+
+    #     coords = [[ 0, 0.1],
+    #               [10, 4.0],
+    #               [15, 2.5],
+    #               [40, 4.4],
+    #               [50, 2.5],
+    #               [60, 1.4],
+    #               [65, 3.6],
+    #               [66, 3.5],
+    #               [67, 3.6],
+    #               [68, 1.2]]
+    #     exp.add_sweep([exp.field, exp.freq], coords)
+    #     exp.run_sweeps()
+    #     self.assertTrue(os.path.exists("test_write-0000.h5"))
+    #     self.assertTrue(wr.points_taken == 10*5)
+    #     os.remove("test_write-0000.h5")
 
 
 if __name__ == '__main__':

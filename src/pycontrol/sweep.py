@@ -5,89 +5,21 @@ from pycontrol.parameter import ParameterGroup, FloatParameter, IntParameter, Pa
 from pycontrol.stream import DataStream, DataAxis, DataStreamDescriptor, InputConnector, OutputConnector
 from pycontrol.logging import logger
 
-# class SweptParameter(object):
-#     """Data structure for a swept Parameters, contains the Parameter
-#     object rather than subclassing it since we just need to keep track
-#     of some values"""
-#     def __init__(self, parameter, values):
-#         self.parameter = parameter
-#         self.associated_axes = []
-#         self.update_values(values)
-#         self.push = self.parameter.push
-
-#     def update_values(self, values):
-#         self.values = values
-#         self.length = len(values)
-#         for axis in self.associated_axes:
-#             axis.points = self.values
-
-#     def add_values(self, values):
-#         self.values.extend(values)
-#         self.length = len(self.values)
-#         for axis in self.associated_axes:
-#             axis.points = self.values
-
-#     @property
-#     def value(self):
-#         return self.parameter.value
-#     @value.setter
-#     def value(self, value):
-#         self.parameter.value = value
-
-#     def __repr__(self):
-#         return "<SweptParameter: {}>".format(self.parameter.name)
-
-# class SweptParameterGroup(object):
-#     """For unstructured (meshed) coordinate tuples. The actual values
-#     are stored locally as _values, and we acces each tuple by indexing
-#     into that array."""
-#     def __init__(self, parameters, values):
-#         self.parameters = parameters
-#         self.associated_axes = []
-#         self.update_values(values)
-
-#     def push(self):
-#         # Values here will just be the index
-#         for p in self.parameters:
-#             p.push()
-
-#     def update_values(self, values):
-#         self._values = values
-#         self.length = len(values)
-#         self.values = list(range(self.length)) # Dummy index list for sweeper
-#         for axis in self.associated_axes:
-#             axis.points = self._values
-
-#     def add_values(self, values):
-#         self._values.extend(values)
-#         self.length = len(self._values)
-#         for axis in self.associated_axes:
-#             axis.points = self._values
-
-#     @property
-#     def value(self):
-#         return [p.value for p in self.parameters]
-#     @value.setter
-#     def value(self, index):
-#         for i, p in enumerate(self.parameters):
-#             p.value = self._values[index][i]
-
-#     def __repr__(self):
-#         return "<SweptParameterGroup: {}>".format([p.name for p in self.parameters])
-
 class SweepAxis(DataAxis):
     """ Structure for swept axis, separate from DataAxis.
     Can be an unstructured axis, in which case parameter is actually a list of parameters. """
     def __init__(self, parameter, points = [], refine_func=None, refine_args=[]):
-        super(SweepAxis, self).__init__("Name", points)
+        
         self.unstructured = hasattr(parameter, '__iter__')
         self.parameter    = parameter
         if self.unstructured:
+            super(SweepAxis, self).__init__("Unstructured", points)
             self.unit  = [p.unit for p in parameter]
-            self.value = [None for p in parameter]
+            self.value = points[0]
         else:
+            super(SweepAxis, self).__init__(parameter.name, points)
             self.unit = parameter.unit
-            self.value     = None
+            self.value     = points[0]
         
         self.refine_func = refine_func
         self.refine_args = refine_args
@@ -141,7 +73,8 @@ class SweepAxis(DataAxis):
             self.parameter.push()
 
     def __repr__(self):
-        return "<SweepAxis(name={},length={},unit={},value={}>".format(self.name,self.num_points(),self.unit,self.value)
+        return "<SweepAxis(name={},length={},unit={},value={},unstructured={}>".format(self.name,
+                self.num_points(),self.unit,self.value,self.unstructured)
 
 class Sweeper(object):
     """ Control center of sweep axes """
