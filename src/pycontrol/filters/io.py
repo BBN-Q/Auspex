@@ -81,6 +81,12 @@ class WriteToHDF5(Filter):
             data = self.file.create_dataset('data', (len(tuples),), dtype=dtype, 
                                         chunks=True, maxshape=(None,))
 
+        # Write params into attrs
+        axis_names = [a.name for a in axes]
+        for k,v in params.items():
+            if k not in axis_names:
+                data.attrs[k] = v
+
         # Write pointer
         w_idx = 0 
 
