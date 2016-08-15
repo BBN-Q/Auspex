@@ -45,10 +45,10 @@ class DataStreamDescriptor(object):
     def data_dims(self):
         dims = []
         for a in self.axes:
-            if isinstance(a, DataAxis):
-                dims.append(len(a.points))
-            elif isinstance(a, SweepAxis):
+            if isinstance(a, SweepAxis):
                 dims.append(1)
+            elif isinstance(a, DataAxis):
+                dims.append(len(a.points))
         return dims
 
     def axes_done(self):
