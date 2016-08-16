@@ -37,14 +37,13 @@ class KernelIntegrator(Filter):
     async def run(self):
         while True:
             if self.sink.input_streams[0].done():
-                logger.debug("Channelizer %s sink is finished", self.name)
+                logger.debug("KernelIntegrator %s sink is finished", self.name)
                 break
 
             new_data = await self.sink.input_streams[0].queue.get()
 
-            #Assume for now we get a single record at a time
-            #TODO: handle variable numbers of records and partial records
-            filtered = np.sum(new_data * self.aligned_kernel)
+            #TODO: handle variable partial records
+            filtered = np.sum(new_data * self.aligned_kernel, axis=-1)
 
             #push to ouptut connectors
             for os in self.source.output_streams:
