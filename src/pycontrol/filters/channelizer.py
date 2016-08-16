@@ -60,9 +60,10 @@ class Channelizer(Filter):
 
             #filter then decimate
             #TODO: polyphase filterting should provide better performance
+
             filtered = lfilter(self.filter, 1.0, mix_product)
             filtered = filtered[:, self.decimation_factor-1::self.decimation_factor]
 
             #push to ouptut connectors
             for os in self.source.output_streams:
-                await os.push(filtered)
+                await os.push(filtered.real)
