@@ -1,4 +1,4 @@
-import asyncio
+import asyncio, concurrent
 import time
 
 import numpy as np
@@ -65,7 +65,23 @@ class Plotter(Filter):
 
         while True:
 
-            new_data = np.array(await self.stream.queue.get()).flatten()
+            get_finished_task = asyncio.ensure_future(self.stream.finished())
+            get_data_task = asyncio.ensure_future(self.stream.queue.get())
+
+            done, pending = await asyncio.wait((get_finished_task, get_data_task),
+                                     return_when=concurrent.futures.FIRST_COMPLETED)
+
+            #since done contains first completed it will be a set of size 1
+            if get_finished_task in done:
+                logger.info('No more data for plotter "%s"', self.name)
+                get_data_task.cancel()
+                await asyncio.sleep(1) # wait a second for plot server to do final update
+                break
+
+            get_finished_task.cancel()
+            new_data = get_data_task.result().flatten()
+
+            # new_data = new_data.flatten()
             logger.debug('Plotter "%s" received %d points.', self.name, new_data.size)
             #if we're going to clear then reset idx
             if idx + new_data.size > self.points_before_clear:
@@ -87,8 +103,3 @@ class Plotter(Filter):
                 if (time.time() - self.last_update >= self.update_interval) or self.stream.done():
                     self.data_source.data["image"] = [np.reshape(plot_buffer, self.z_data.shape)]
                     self.last_update = time.time()
-
-            if self.stream.done():
-                print("No more data for plotter")
-                await asyncio.sleep(1) # wait a second for plot server to do final update
-                break

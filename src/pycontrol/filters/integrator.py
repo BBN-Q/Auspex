@@ -1,3 +1,5 @@
+import asyncio, concurrent
+
 import numpy as np
 
 from pycontrol.stream import DataStreamDescriptor
@@ -35,12 +37,24 @@ class KernelIntegrator(Filter):
             os.end_connector.update_descriptors()
 
     async def run(self):
+
+        input_stream = self.sink.input_streams[0]
+
         while True:
-            if self.sink.input_streams[0].done():
-                logger.debug("KernelIntegrator %s sink is finished", self.name)
+            get_finished_task = asyncio.ensure_future(input_stream.finished())
+            get_data_task = asyncio.ensure_future(input_stream.queue.get())
+
+            done, pending = await asyncio.wait((get_finished_task, get_data_task),
+                                     return_when=concurrent.futures.FIRST_COMPLETED)
+
+            #since done contains first completed it will be a set of size 1
+            if get_finished_task in done:
+                logger.info('No more data for kernel integrator "%s"', self.name)
+                pending.pop().cancel()
                 break
 
-            new_data = await self.sink.input_streams[0].queue.get()
+            pending.pop().cancel()
+            new_data = done.pop().result()
 
             #TODO: handle variable partial records
             filtered = np.sum(new_data * self.aligned_kernel, axis=-1)

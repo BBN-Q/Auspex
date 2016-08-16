@@ -9,7 +9,7 @@ class SweepAxis(DataAxis):
     """ Structure for swept axis, separate from DataAxis.
     Can be an unstructured axis, in which case parameter is actually a list of parameters. """
     def __init__(self, parameter, points = [], refine_func=None, refine_args=[]):
-        
+
         self.unstructured = hasattr(parameter, '__iter__')
         self.parameter    = parameter
         if self.unstructured:
@@ -20,7 +20,7 @@ class SweepAxis(DataAxis):
             super(SweepAxis, self).__init__(parameter.name, points)
             self.unit = parameter.unit
             self.value     = points[0]
-        
+
         self.refine_func = refine_func
         self.refine_args = refine_args
         self.step        = 0
@@ -58,9 +58,7 @@ class SweepAxis(DataAxis):
             else:
                 self.step = 0
                 self.done = True
-        else:
-            self.done = False
-            logger.debug("Sweep Axis '{}' complete.".format(self.name))
+                logger.debug("Sweep Axis '{}' complete.".format(self.name))
 
     def push(self):
         """ Push parameter value(s) """

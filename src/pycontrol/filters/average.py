@@ -1,4 +1,5 @@
-import asyncio
+import asyncio, concurrent
+
 import numpy as np
 from pycontrol.stream import DataStreamDescriptor
 from pycontrol.filters.filter import Filter, InputConnector, OutputConnector
@@ -92,19 +93,26 @@ class Average(Filter):
         # BUT we may get something longer at any given time!
         carry = np.zeros(0)
 
-        while True:
-            if self.data.input_streams[0].done():
-                # We've stopped receiving new input, make sure we've flushed the output streams
-                if len(self.final_average.output_streams) > 0:
-                    if all([os.done() for os in self.final_average.output_streams]):
-                        logger.debug("Averager %s done", self.name)
-                        break
-                else:
-                    logger.debug("Found no output stream. Averager %s done.", self.name)
-                    break
+        input_stream = self.data.input_streams[0]
 
-            new_data = await self.data.input_streams[0].queue.get()
-            logger.debug("%s got data %s", self.name, new_data)
+        while True:
+
+            get_finished_task = asyncio.ensure_future(input_stream.finished())
+            get_data_task = asyncio.ensure_future(input_stream.queue.get())
+
+            done, pending = await asyncio.wait((get_finished_task, get_data_task),
+                                     return_when=concurrent.futures.FIRST_COMPLETED)
+
+            #since done contains first completed it will be a set of size 1
+            if get_finished_task in done:
+                logger.info('No more data for averager "%s"', self.name)
+                pending.pop().cancel()
+                break
+
+            pending.pop().cancel()
+            new_data = done.pop().result()
+
+            logger.debug('Averager "%s" got data %s', self.name, new_data)
             logger.debug("Now has %d of %d points.", self.data.input_streams[0].points_taken, self.data.input_streams[0].num_points())
 
             # todo: handle unflattened data separately

@@ -5,6 +5,7 @@ import itertools
 
 import numpy as np
 from functools import reduce
+
 from pycontrol.logging import logger
 
 class DataAxis(object):
@@ -44,6 +45,7 @@ class DataStreamDescriptor(object):
 
     def data_dims(self):
         dims = []
+        from pycontrol.sweep import SweepAxis
         for a in self.axes:
             if isinstance(a, SweepAxis):
                 dims.append(1)
@@ -64,7 +66,7 @@ class DataStreamDescriptor(object):
         if len(self.axes)>0:
             return reduce(lambda x,y: x*y, [len(a.points) for a in self.axes])
         else:
-            return 0 
+            return 0
 
     def last_data_axis(self):
         return [i for i, a in enumerate(self.axes) if isinstance(a,DataAxis)][0]
@@ -97,7 +99,7 @@ class DataStreamDescriptor(object):
         return vals
 
     def data_axis_points(self):
-        return self.num_points_through_axis(self.last_data_axis())    
+        return self.num_points_through_axis(self.last_data_axis())
 
     def reset(self):
         for a in self.axes:
