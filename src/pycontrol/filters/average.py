@@ -90,10 +90,6 @@ class Average(Filter):
 
         # We only need to accumulate up to the averaging axis
         # BUT we may get something longer at any given time!
-
-        temp = np.empty(self.data.input_streams[0].num_points())
-        logger.debug("Established averager buffer of size %d", self.data.input_streams[0].num_points())
-
         carry = np.zeros(0)
 
         while True:
