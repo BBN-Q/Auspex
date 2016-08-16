@@ -30,7 +30,10 @@ class Channelizer(Filter):
 
         #store filter coefficients
         #TODO: arbitrary 32 order filter
-        self.filter = firwin(32, 1. / self.decimation_factor, window='hamming')
+        if self.decimation_factor > 1:
+            self.filter = firwin(32, 1. / self.decimation_factor, window='hamming')
+        else:
+            self.filter = np.array([1.0])
 
         #update output descriptors
         decimated_descriptor = deepcopy(self.sink.descriptor)
