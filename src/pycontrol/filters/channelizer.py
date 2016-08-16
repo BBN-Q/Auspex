@@ -48,16 +48,17 @@ class Channelizer(Filter):
 
             new_data = await self.sink.input_streams[0].queue.get()
 
-            #Assume for now we get a single record at a time
-            #TODO: handle variable numbers of records and partial records
+            #Assume for now we get a integer number of records at a time
+            #TODO: handle  and partial records
+            num_records = new_data.size // self.record_length
 
             #mix with reference
-            mix_product = self.reference * new_data
+            mix_product = self.reference * np.reshape(new_data, (num_records, self.record_length), order="C")
 
             #filter then decimate
             #TODO: polyphase filterting should provide better performance
             filtered = lfilter(self.filter, 1.0, mix_product)
-            filtered = filtered[self.decimation_factor-1::self.decimation_factor]
+            filtered = filtered[:, self.decimation_factor-1::self.decimation_factor]
 
             #push to ouptut connectors
             for os in self.source.output_streams:
