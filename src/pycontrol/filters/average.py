@@ -111,9 +111,12 @@ class Average(Filter):
             # todo: handle unflattened data separately
             if len(new_data.shape) > 1:
                 new_data = new_data.flatten()
+            #handle single points
+            elif not isinstance(new_data, np.ndarray) and (new_data.size == 1):
+                new_data = np.array([new_data])
 
             if carry.size > 0:
-                new_data = np.concatenate(1, (carry, new_data))
+                new_data = np.concatenate((carry, new_data))
 
             idx = 0
             while idx < new_data.size:
@@ -126,6 +129,7 @@ class Average(Filter):
                 #otherwise add it to the carry
                 else:
                     carry = new_data[idx:]
+                    break
 
                 #if we have finished averaging emit
                 if completed_averages == self.num_averages:
