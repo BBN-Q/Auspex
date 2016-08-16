@@ -24,19 +24,19 @@ import h5py
 # AWG Samp. Marker Out -> PSPL Trigger
 
 # PARAMETERS: Confirm these before running
-SET_FIELD = -0.017 # Tesla
+SET_FIELD = 0.0126 # Tesla
 MEASURE_CURRENT = 3e-6 # Ampere, should not be zero!
-BASE_ATTENUATION = 4
-DURATIONS = 1e-9*np.array([3.0, 6.0]) # List of durations
+BASE_ATTENUATION = 2
+DURATIONS = 1e-9*np.array([3.0, 5.0]) # List of durations
 ATTENUATIONS = np.arange(-20.0,-6.0,1) # Between -28 and -6
 
 REPS = 1 << 10 # Number of attemps
 SAMPLES_PER_TRIGGER = 5 # Samples per trigger
 
 # File to save
-FOLDER = "data\\CSHE-Switching\\CSHE-Die2-C5R7"
-FILENAME = "CSHE-2-C5R7_Search_Switch" # No extension
-DATASET = "CSHE-2-C5R7/2016-06-27/Search_Switch"
+FOLDER = "data\\CSHE-Switching\\CSHE-Die2-C3R6"
+FILENAME = "CSHE-2-C3R6_Search_Switch" # No extension
+DATASET = "CSHE-2-C3R6/2016-06-28/Search_Switch"
 
 def arb_pulse(amplitude, duration, sample_rate=12e9):
     pulse_points = int(duration*sample_rate)
@@ -131,7 +131,7 @@ if __name__ == '__main__':
     nidaq_trig_segment_id = arb.define_waveform(len(nidaq_trig_wf))
     arb.upload_waveform(nidaq_trig_wf, nidaq_trig_segment_id)
 
-    settle_delay = 200e-6
+    settle_delay = 50e-6
     settle_pts = int(640*np.ceil(settle_delay * 12e9 / 640))
 
     reps = REPS

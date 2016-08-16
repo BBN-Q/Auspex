@@ -1,26 +1,28 @@
 import asyncio
 import logging
 import numbers
+import itertools
+
+import numpy as np
 from functools import reduce
 from pycontrol.logging import logger
 
 class DataAxis(object):
     """An axes in a data stream"""
-    def __init__(self, name, points, unstructured=False, coord_names=[], unit=None):
+    def __init__(self, name, points, unit=None):
         super(DataAxis, self).__init__()
         self.name         = name
         self.points       = points
         self.unit         = unit
-        self.unstructured = unstructured
-        self.coord_names  = coord_names
-        if unstructured and len(coord_names) != len(points[0]):
-            raise ValueError("Coordinate names list must be as numerous as the coordinates themselves.")
+
+        # By definition data axes will be done after every experiment.run() call
+        self.done         = True
 
     def num_points(self):
         return len(self.points)
     def __repr__(self):
-        return "<DataAxis(name={}, points={}, unit={}, unstructured={})>".format(
-            self.name, self.points, self.unit, self.unstructured)
+        return "<DataAxis(name={}, points={}, unit={})>".format(
+            self.name, self.points, self.unit)
 
 class DataStreamDescriptor(object):
     """Axis information"""
@@ -29,6 +31,7 @@ class DataStreamDescriptor(object):
         self.axes = []
         self.params = {} # Parameters associated with each dataset
         self.parent = None
+        self.exp_src = None # Actual source code from the underlying experiment
 
     def add_axis(self, axis):
         self.axes.insert(0, axis)
@@ -40,16 +43,70 @@ class DataStreamDescriptor(object):
         return len(self.axes)
 
     def data_dims(self):
-        return [len(a.points) for a in self.axes]
+        dims = []
+        for a in self.axes:
+            if isinstance(a, SweepAxis):
+                dims.append(1)
+            elif isinstance(a, DataAxis):
+                dims.append(len(a.points))
+        return dims
+
+    def axes_done(self):
+        # The axis is considered done when all of the sub-axes are done
+        # This can happen mulitple times for a single axis
+        doneness = [a.done for a in self.axes]
+        return [np.all(doneness[i:]) for i in range(len(doneness))]
+
+    def done(self):
+        return np.all([a.done for a in self.axes])
 
     def num_points(self):
         if len(self.axes)>0:
             return reduce(lambda x,y: x*y, [len(a.points) for a in self.axes])
         else:
-            return 0
+            return 0 
+
+    def last_data_axis(self):
+        return [i for i, a in enumerate(self.axes) if isinstance(a,DataAxis)][0]
+
+    def tuples(self):
+        vals = []
+        for a in self.axes:
+            if hasattr(a, 'refine_func'): # This means it is a sweep axis
+                if a.unstructured:
+                    for p in a.parameter:
+                        vals.append([p.value])
+                else:
+                    vals.append([a.value])
+            else: # THis means it is a data axis
+                vals.append(a.points)
+        return list(itertools.product(*vals))
+
+    def axis_names(self):
+        # Returns all axis names included those from unstructured axes
+        vals = []
+        for a in self.axes:
+            if hasattr(a, 'refine_func'): # This means it is a sweep axis
+                if a.unstructured:
+                    for p in a.parameter:
+                        vals.append(p.name)
+                else:
+                    vals.append(a.name)
+            else:
+                vals.append(a.name)
+        return vals
+
+    def data_axis_points(self):
+        return self.num_points_through_axis(self.last_data_axis())    
+
+    def reset(self):
+        for a in self.axes:
+            a.done = False
 
     def num_points_through_axis(self, axis):
-        if len(self.axes) == 1:
+        if axis>=len(self.axes):
+            return 0
+        elif len(self.axes) == 1:
             return self.axes[0].num_points()
         else:
             return reduce(lambda x,y: x*y, [len(a.points) for a in self.axes[axis:]])
@@ -81,16 +138,22 @@ class DataStream(object):
         else:
             return 0
 
+    async def finished(self):
+        while not self.done():
+            await asyncio.sleep(2)
+        return True
+
     def percent_complete(self):
-        if self.descriptor is not None:
+        if (self.descriptor is not None) and self.num_points()>0:
             return 100.0*self.points_taken/self.num_points()
         else:
             return 0.0
 
     def done(self):
-        return (self.points_taken >= self.num_points()) and (self.num_points() > 0)
+        return self.descriptor.done() and self.points_taken == self.num_points() and self.queue.empty()
 
     def reset(self):
+        self.descriptor.reset()
         self.points_taken = 0
         if self.start_connector is not None:
             self.start_connector.points_taken = 0
@@ -151,7 +214,7 @@ class InputConnector(object):
 class OutputConnector(object):
     def __init__(self, name="", parent=None, datatype=None):
         self.name = name
-        self.stream = None
+        self.stream = None # Seems unused?
         self.output_streams = []
         self.descriptor = None
         self.points_taken = 0
@@ -180,7 +243,7 @@ class OutputConnector(object):
         return self.descriptor.num_points()
 
     def done(self):
-        return (self.points_taken > self.descriptor.num_points() - 1) and (self.descriptor.num_points() > 0)
+        return np.all([stream.done for stream in self.output_streams])
 
     async def push(self, data):
         if hasattr(data, 'size'):

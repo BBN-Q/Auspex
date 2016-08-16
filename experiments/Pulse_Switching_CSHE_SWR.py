@@ -7,19 +7,19 @@ from pycontrol.instruments.rfmd import Attenuator
 
 from pycontrol.experiment import FloatParameter, IntParameter, Experiment
 from pycontrol.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector
-from pycontrol.filters.debug import Print
 from pycontrol.filters.io import WriteToHDF5
 
 from PyDAQmx import *
 
 import itertools
 import numpy as np
+import pandas as pd
 import asyncio
 import time, sys
 import h5py
 import matplotlib.pyplot as plt
-import pandas as pd
 from scipy.interpolate import interp1d
+from scipy.stats import beta
 
 import analysis.switching as sw
 from analysis.h5shell import h5shell
@@ -47,25 +47,27 @@ def arb_voltage_lookup(arb_calib="calibration/AWG_20160718.csv",
             control_volts.append(arb_control_lookup(mid_volt))
     return interp1d(sample_volts, control_volts)
 
-class BERExperiment(Experiment):
-    """ Switching Bit Error Rate measurement """
+class SWRExperiment(Experiment):
+    """ Experiment class for Switching probability measurment
+    Determine switching probability for V << V0
+    with varying V (and durations?)
+    """
 
     # Sample information
     sample         = "CSHE"
-    comment        = "Bit Error Rate"
+    comment        = "Switching Rate for V << V0"
 
     # Parameters
     field          = FloatParameter(default=0.0, unit="T")
-    pulse_duration = FloatParameter(default=10.0e-9, unit="s")
+    pulse_duration = FloatParameter(default=1.0e-9, unit="s")
     pulse_voltage  = FloatParameter(default=0.1, unit="V")
-    attempts       = IntParameter(default = 1 << 10)
 
+    attempts       = 1 << 10
     settle_delay    = 50e-6
     measure_current = 3.0e-6
     samps_per_trig  = 5
 
-    polarity        = -1
-    pspl_atten      = 10
+    polarity        = 1
 
     min_daq_voltage = 0.0
     max_daq_voltage = 0.4
@@ -80,7 +82,6 @@ class BERExperiment(Experiment):
     mag   = AMI430("192.168.5.109")
     lock  = SR865("USB0::0xB506::0x2000::002638::INSTR")
     pspl  = Picosecond10070A("GPIB0::24::INSTR")
-    atten = Attenuator("calibration/RFSA2113SB_HPD_20160706.csv", lock.set_ao2, lock.set_ao3)
     arb   = M8190A("192.168.5.108")
     keith = Keithley2400("GPIB0::25::INSTR")
 
@@ -110,36 +111,28 @@ class BERExperiment(Experiment):
         self.arb.set_marker_level_high(1.5, channel=1, marker_type="sync")
         self.arb.continuous_mode = False
         self.arb.gate_mode = False
+        self.setup_arb(self.pulse_voltage.value)
 
         # ===================
-        #   Setup the PSPL
+        #   Setup the NIDAQ
         # ===================
 
-        self.pspl.amplitude = self.polarity*7.5*np.power(10, -self.pspl_atten/20.0)
-        self.pspl.trigger_source = "EXT"
-        self.pspl.trigger_level = 0.1
-        self.pspl.output = True
-
-        self.setup_daq(self.attempts.value)
-
-        def set_voltage(voltage):
-            # Calculate the voltage controller attenuator setting
-            vc_atten = abs(20.0 * np.log10(abs(voltage)/7.5)) - self.pspl_atten - 0
-            if vc_atten <= 6.0:
-                raise ValueError("Voltage controlled attenuation under range (6dB).")
-            self.atten.set_attenuation(vc_atten)
-            time.sleep(0.02)
+        self.analog_input = Task()
+        self.read = int32()
+        self.buf_points = 2*self.samps_per_trig*self.attempts
+        self.analog_input.CreateAIVoltageChan("Dev1/ai1", "", DAQmx_Val_Diff,
+            self.min_daq_voltage, self.max_daq_voltage, DAQmx_Val_Volts, None)
+        self.analog_input.CfgSampClkTiming("", 1e6, DAQmx_Val_Rising, DAQmx_Val_FiniteSamps , self.samps_per_trig)
+        self.analog_input.CfgInputBuffer(self.buf_points)
+        self.analog_input.CfgDigEdgeStartTrig("/Dev1/PFI0", DAQmx_Val_Rising)
+        self.analog_input.SetStartTrigRetriggerable(1)
+        self.analog_input.StartTask()
 
         # Assign methods
         self.field.assign_method(self.mag.set_field)
-        self.pulse_duration.assign_method(self.pspl.set_duration)
-        self.pulse_voltage.assign_method(set_voltage)
-        self.attempts.assign_method(self.setup_daq)
+        self.pulse_voltage.assign_method(self.setup_arb)
 
-        # Create hooks for relevant delays
-        self.pulse_duration.add_post_push_hook(lambda: time.sleep(0.1))
-
-    def setup_daq(self, attempt):
+    def setup_arb(self,volt):
         def arb_pulse(amplitude, duration, sample_rate=12e9):
             arb_voltage = arb_voltage_lookup()
             pulse_points = int(duration*sample_rate)
@@ -154,20 +147,17 @@ class BERExperiment(Experiment):
         self.arb.delete_all_waveforms()
         self.arb.reset_sequence_table()
 
+        # Reset waveform
         reset_wf    = arb_pulse(-self.polarity*self.reset_amplitude, self.reset_duration)
         wf_data     = M8190A.create_binary_wf_data(reset_wf)
         rst_segment_id  = self.arb.define_waveform(len(wf_data))
         self.arb.upload_waveform(wf_data, rst_segment_id)
 
-        # no_reset_wf = arb_pulse(0.0, 3.0/12e9)
-        # wf_data     = M8190A.create_binary_wf_data(no_reset_wf)
-        # no_rst_segment_id  = self.arb.define_waveform(len(wf_data))
-        # self.arb.upload_waveform(wf_data, no_rst_segment_id)
-
-        # Picosecond trigger waveform
-        pspl_trig_wf = M8190A.create_binary_wf_data(np.zeros(3200), samp_mkr=1)
-        pspl_trig_segment_id = self.arb.define_waveform(len(pspl_trig_wf))
-        self.arb.upload_waveform(pspl_trig_wf, pspl_trig_segment_id)
+        # Switching waveform
+        switch_wf    = arb_pulse(self.polarity*volt, self.pulse_duration.value)
+        wf_data     = M8190A.create_binary_wf_data(switch_wf)
+        sw_segment_id  = self.arb.define_waveform(len(wf_data))
+        self.arb.upload_waveform(wf_data, sw_segment_id)
 
         # NIDAQ trigger waveform
         nidaq_trig_wf = M8190A.create_binary_wf_data(np.zeros(3200), sync_mkr=1)
@@ -177,13 +167,13 @@ class BERExperiment(Experiment):
         settle_pts = int(640*np.ceil(self.settle_delay * 12e9 / 640))
 
         scenario = Scenario()
-        seq = Sequence(sequence_loop_ct=int(attempt))
+        seq = Sequence(sequence_loop_ct=int(self.attempts))
         #First try with reset flipping pulse
         seq.add_waveform(rst_segment_id)
         seq.add_idle(settle_pts, 0.0)
         seq.add_waveform(nidaq_trig_segment_id)
         seq.add_idle(1 << 16, 0.0) # bonus non-contiguous memory delay
-        seq.add_waveform(pspl_trig_segment_id)
+        seq.add_waveform(sw_segment_id)
         seq.add_idle(settle_pts, 0.0)
         seq.add_waveform(nidaq_trig_segment_id)
         seq.add_idle(1 << 16, 0.0) # bonus non-contiguous memory delay
@@ -194,36 +184,19 @@ class BERExperiment(Experiment):
         self.arb.scenario_start_index = 0
         self.arb.run()
 
-        # ===================
-        #   Setup the NIDAQ
-        # ===================
-
-        self.analog_input = Task()
-        self.read = int32()
-        self.buf_points = 2*self.samps_per_trig*attempt
-        self.analog_input.CreateAIVoltageChan("Dev1/ai1", "", DAQmx_Val_Diff,
-            self.min_daq_voltage, self.max_daq_voltage, DAQmx_Val_Volts, None)
-        self.analog_input.CfgSampClkTiming("", 1e6, DAQmx_Val_Rising, DAQmx_Val_FiniteSamps , self.samps_per_trig)
-        self.analog_input.CfgInputBuffer(self.buf_points)
-        self.analog_input.CfgDigEdgeStartTrig("/Dev1/PFI0", DAQmx_Val_Rising)
-        self.analog_input.SetStartTrigRetriggerable(1)
-        self.analog_input.StartTask()
-
     def init_streams(self):
         # Baked in data axes
         descrip = DataStreamDescriptor()
         descrip.add_axis(DataAxis("samples", range(self.samps_per_trig)))
         descrip.add_axis(DataAxis("state", range(2)))
-        descrip.add_axis(DataAxis("attempts", range(self.attempts.value)))
+        descrip.add_axis(DataAxis("attempts", range(self.attempts)))
         self.daq_buffer.set_descriptor(descrip)
 
     async def run(self):
         """We are no longer using the sweeper."""
-
         # Keep track of the previous values
         logger.debug("Waiting for filters.")
         await asyncio.sleep(1.0)
-
         self.arb.advance()
         self.arb.trigger()
         buf = np.empty(self.buf_points)
@@ -232,13 +205,12 @@ class BERExperiment(Experiment):
         await self.daq_buffer.push(buf)
         # Seemingly we need to give the filters some time to catch up here...
         await asyncio.sleep(0.002)
-        # logger.debug("Stream has filled {} of {} points".format(self.daq_buffer.points_taken, self.daq_buffer.num_points() ))
+        logger.debug("Stream has filled {} of {} points".format(self.daq_buffer.points_taken, self.daq_buffer.num_points() ))
 
     def shutdown_instruments(self):
         self.keith.current = 0.0e-5
         # self.mag.zero()
         self.arb.stop()
-        self.pspl.output = False
         try:
             self.analog_input.StopTask()
         except Exception as e:
@@ -253,14 +225,24 @@ def data_at_volt(fname, volt):
         data_mean = [np.mean(dset.value, axis=-1) for dset in dsets]
     return np.concatenate(data_mean,axis=0)
 
-def stop_measure(data):
+# def stop_measure(data, **kwargs):
+#     """ Determine whether we should stop the measurement at a given pulse voltage """
+#     results = sw.switching_BER(data, **kwargs)
+#     limit = results[1]
+#     ci95 = results[3]
+#     return limit > max(ci95)
+
+def stop_measure(data, **kwargs):
     """ Determine whether we should stop the measurement at a given pulse voltage """
-    results = sw.switching_BER(data)
-    limit = results[1]
-    ci95 = results[3]
+    counts, start_stt = sw.count_matrices(data, multiple=False,**kwargs)
+    count_mat = counts[0]
+    switched_stt = 1 - start_stt
+    # mean_not = beta.mean(1+count_mat[start_stt,start_stt],1+count_mat[start_stt,switched_stt])
+    limit = beta.mean(1+count_mat[start_stt,switched_stt]+count_mat[start_stt,start_stt], 1)
+    ci95 = beta.interval(0.95, 1+count_mat[start_stt,start_stt],1+count_mat[start_stt,switched_stt])
     return limit > max(ci95)
 
-def load_BER_data(fname):
+def load_SWR_data(fname):
     with h5shell(fname, 'r') as f:
         dsets = [f[k] for k in f.ls('-d')]
         volts = [float(dset.attrs['pulse_voltage']) for dset in dsets]
@@ -276,20 +258,18 @@ def load_BER_data(fname):
     data = [data_at_volt(fname,volt) for volt in unique_volts]
     return np.array(unique_volts), np.array(data)
 
-def plot_BER(volts, results):
+def plot_SWR(volts, results):
     mean = []; limit = []; ci68 = []; ci95 = []
     for datum in results:
         mean.append(datum[0])
         limit.append(datum[1])
         ci68.append(datum[2])
         ci95.append(datum[3])
-    mean = 1-np.array(mean)
-    limit = 1-np.array(limit)
-    ci68 = 1- np.array(ci68)
-    ci95 = 1-np.array(ci95)
+    mean = np.array(mean)
+    limit = np.array(limit)
     fig = plt.figure()
     plt.semilogy(volts, mean, '-o')
-    plt.semilogy(volts, limit, linestyle="--")
+    plt.semilogy(volts, 1-limit, linestyle="--")
     plt.fill_between(volts, [ci[0] for ci in ci68], [ci[1] for ci in ci68],  alpha=0.2, edgecolor="none")
     plt.fill_between(volts, [ci[0] for ci in ci95], [ci[1] for ci in ci95],  alpha=0.2, edgecolor="none")
     plt.ylabel("Switching Probability", size=14)
@@ -297,25 +277,23 @@ def plot_BER(volts, results):
     return fig
 
 if __name__ == '__main__':
-    exp = BERExperiment()
+    exp = SWRExperiment()
     exp.sample = "CSHE5 - C2R3"
-    exp.comment = "Switching Bit Error Rate - AP to P - 5ns"
+    exp.comment = "Switching Probability - AP to P - 5ns"
     exp.polarity = 1 # 1: AP to P; -1: P to AP
     exp.field.value = 0.0081
-    exp.attempts.value = 1 << 11
+    exp.attempts = 1 << 11
     exp.pulse_duration.value = 5e-9 # Fixed
     exp.reset_amplitude = 0.7
     exp.reset_duration = 5e-9
-    exp.pspl_atten = 5
     exp.init_instruments()
 
-    wr = WriteToHDF5("data\CSHE-Switching\CSHE-Die5-C2R3\\test\CSHE5-C2R3-AP2P_2016-07-27_BER_5ns.h5")
+    wr = WriteToHDF5("data\CSHE-Switching\CSHE-Die5-C2R3\\test\CSHE5-C2R3-AP2P_2016-07-27_SWR_5ns.h5")
     edges = [(exp.daq_buffer, wr.data)]
     exp.set_graph(edges)
 
     V0 = 0.5
-    voltages_list = V0*np.linspace(1.0,1.8,5)
-    voltages_list = voltages_list[voltages_list < 1.1] # For safety
+    voltages_list = V0*np.linspace(1.0,0.2,5)
 
     t1 = [] # Keep track of time
     t2 = []
@@ -323,6 +301,7 @@ if __name__ == '__main__':
     finish = False
     for volt in voltages_list:
         if finish:
+            print("Reached maximum points. Exit.")
             break
         print("=========================")
         print("Now at: {}.".format(volt))
@@ -339,13 +318,13 @@ if __name__ == '__main__':
             time.sleep(1) # Wait for filters
             data = data_at_volt(wr.filename, volt)
             finish = data.size >= max_points*2
-            forward = stop_measure(data) or finish
+            forward = stop_measure(data, start_state=1, threshold=0.36) or finish
         t2.append(time.time())
         print("Done one series. Elapsed time: {} min".format((t2[-1]-t1[-1])/60))
         time.sleep(2)
 
     exp.shutdown_instruments()
     # Plot data
-    volts, data = load_BER_data(wr.filename)
-    results = [sw.switching_BER(datum) for datum in data]
-    fig = sw.plot_BER(volts, data)
+    volts, data = load_SWR_data(wr.filename)
+    results = [sw.switching_BER(datum, start_state=1, threshold=0.36) for datum in data]
+    fig = plot_SWR(volts, results)

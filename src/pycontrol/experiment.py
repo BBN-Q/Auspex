@@ -11,162 +11,85 @@ import scipy as sp
 import pandas as pd
 import networkx as nx
 import h5py
+from tqdm import tqdm, tqdm_notebook
 
 from pycontrol.instruments.instrument import Instrument
+from pycontrol.parameter import ParameterGroup, FloatParameter, IntParameter, Parameter
+from pycontrol.sweep import SweepAxis, Sweeper
 from pycontrol.stream import DataStream, DataAxis, DataStreamDescriptor, InputConnector, OutputConnector
 from pycontrol.filters.plot import Plotter
 from pycontrol.logging import logger
 
-class Parameter(object):
-    """ Encapsulates the information for an experiment parameter"""
+class ExpProgressBar(object):
+    """ Display progress bar(s) on the terminal.
 
-    def __init__(self, name=None, unit=None, default=None):
-        self.name     = name
-        self._value   = default
-        self.unit     = unit
-        self.default  = default
-        self.method   = None
+    num: number of progress bars to be display, \
+    corresponding to the number of axes (counting from outer most)
 
-        # Hooks to be called before or after updating a sweep parameter
-        self.pre_push_hooks = []
-        self.post_push_hooks = []
+        For running in Jupyter Notebook:
+    Needs to open '_tqdm_notebook.py',\
+    search for 'n = int(s[:npos])'\
+    then replace it with 'n = float(s[:npos])'
+    """
+    def __init__(self, stream=None, num=0, notebook=False):
+        super(ExpProgressBar,self).__init__()
+        logger.debug("initialize the progress bars.")
+        self.stream = stream
+        self.num = num
+        self.notebook = notebook
+        self.reset(stream=stream)
 
-    def add_pre_push_hook(self, hook):
-        self.pre_push_hooks.append(hook)
+    def reset(self, stream=None):
+        """ Reset the progress bar(s) """
+        logger.debug("Update stream descriptor for progress bars.")
+        if stream is not None:
+            self.stream = stream
+        if self.stream is None:
+            logger.warning("No stream is associated with the progress bars!")
+            self.axes = []
+        else:
+            self.axes = self.stream.descriptor.axes
+        self.num = min(self.num, len(self.axes))
+        self.totals = [self.stream.descriptor.num_points_through_axis(axis) for axis in range(self.num)]
+        self.chunk_sizes = [max(1,self.stream.descriptor.num_points_through_axis(axis+1)) for axis in range(self.num)]
+        logger.debug("Reset the progress bars to initial states.")
+        self.bars   = []
+        for i in range(self.num):
+            if self.notebook:
+                self.bars.append(tqdm_notebook(total=self.totals[i]/self.chunk_sizes[i]))
+            else:
+                self.bars.append(tqdm(total=self.totals[i]/self.chunk_sizes[i]))
 
-    def add_post_push_hook(self, hook):
-        self.post_push_hooks.append(hook)
+    def close(self):
+        """ Close all progress bar(s) """
+        logger.debug("Close all the progress bars.")
+        for bar in self.bars:
+            if self.notebook:
+                bar.sp(close=True)
+            else:
+                bar.close()
 
-    @property
-    def value(self):
-        return self._value
-
-    @value.setter
-    def value(self, value):
-        self._value = value
-
-    def __str__(self):
-        result = ""
-        result += "%s" % str(self.value)
-        if self.unit:
-            result += " %s" % self.unit
-        return result
-
-    def __repr__(self):
-        result = "<Parameter(name='%s'" % self.name
-        result += ",value=%s" % repr(self.value)
-        if self.unit:
-            result += ",unit='%s'" % self.unit
-        return result + ")>"
-
-    def assign_method(self, method):
-        logger.debug("Setting method of Parameter %s to %s" % (self.name, str(method)) )
-        self.method = method
-
-    def push(self):
-        if self.method is not None:
-            # logger.debug("Calling pre_push_hooks of Parameter %s with value %s" % (self.name, self._value) )
-            for pph in self.pre_push_hooks:
-                pph()
-            # logger.debug("Calling method of Parameter %s with value %s" % (self.name, self._value) )
-            self.method(self._value)
-            # logger.debug("Calling post_push_hooks of Parameter %s with value %s" % (self.name, self._value) )
-            for pph in self.post_push_hooks:
-                pph()
-
-class FloatParameter(Parameter):
-
-    @property
-    def value(self):
-        return self._value
-
-    @value.setter
-    def value(self, value):
-        try:
-            self._value = float(value)
-        except ValueError:
-            raise ValueError("FloatParameter given non-float value of "
-                             "type '%s'" % type(value))
-
-    def __repr__(self):
-        result = super(FloatParameter, self).__repr__()
-        return result.replace("<Parameter", "<FloatParameter", 1)
-
-class IntParameter(Parameter):
-
-    @property
-    def value(self):
-        return self._value
-
-    @value.setter
-    def value(self, value):
-        try:
-            self._value = int(value)
-        except ValueError:
-            raise ValueError("IntParameter given non-int value of "
-                             "type '%s'" % type(value))
-
-    def __repr__(self):
-        result = super(IntParameter, self).__repr__()
-        return result.replace("<Parameter", "<IntParameter", 1)
-
-class SweptParameter(object):
-    """Data structure for a swept Parameters, contains the Parameter
-    object rather than subclassing it since we just need to keep track
-    of some values"""
-    def __init__(self, parameter, values):
-        self.parameter = parameter
-        self.associated_axes = []
-        self.update_values(values)
-        self.push = self.parameter.push
-
-    def update_values(self, values):
-        self.values = values
-        self.length = len(values)
-        for axis in self.associated_axes:
-            axis.points = self.values
-
-    @property
-    def value(self):
-        return self.parameter.value
-    @value.setter
-    def value(self, value):
-        self.parameter.value = value
-
-    def __repr__(self):
-        return "<SweptParameter: {}>".format(self.parameter.name)
-
-class SweptParameterGroup(object):
-    """For unstructured (meshed) coordinate tuples. The actual values
-    are stored locally as _values, and we acces each tuples by indexing
-    into that array."""
-    def __init__(self, parameters, values):
-        self.parameters = parameters
-        self.associated_axes = []
-        self.update_values(values)
-
-    def push(self):
-        # Values here will just be the index
-        for p in self.parameters:
-            p.push()
-
-    def update_values(self, values):
-        self._values = values
-        self.length = len(values)
-        self.values = list(range(self.length)) # Dummy index list for sweeper
-        for axis in self.associated_axes:
-            axis.points = self._values
-
-    @property
-    def value(self):
-        return [p.value for p in self.parameters]
-    @value.setter
-    def value(self, index):
-        for i, p in enumerate(self.parameters):
-            p.value = self._values[index][i]
-
-    def __repr__(self):
-        return "<SweptParameter: {}>".format([p.name for p in self.parameters])
+    def update(self):
+        """ Update the status of the progress bar(s) """
+        if self.stream is None:
+            logger.warning("No stream is associated with the progress bars!")
+            num_data = 0
+        else:
+            num_data = self.stream.points_taken
+        logger.debug("Update the progress bars.")
+        for i in range(self.num):
+            if num_data == 0:
+                # Reset the progress bar with a new one
+                if self.notebook:
+                    self.bars[i].sp(close=True)
+                    self.bars[i] = tqdm_notebook(total=self.totals[i]/self.chunk_sizes[i])
+                else:
+                    self.bars[i].close()
+                    self.bars[i] = tqdm(total=self.totals[i]/self.chunk_sizes[i])
+            pos = int(10*num_data / self.chunk_sizes[i])/10.0 # One decimal is good enough
+            if pos > self.bars[i].n:
+                self.bars[i].update(pos - self.bars[i].n)
+            num_data = num_data % self.chunk_sizes[i]
 
 class ExperimentGraph(object):
     def __init__(self, edges, loop):
@@ -218,6 +141,9 @@ class MetaExperiment(type):
         # Beware, passing objects won't work at parse time
         self._output_connectors = []
 
+        # Parse ourself
+        self.exp_src = inspect.getsource(self)
+
         for k,v in dct.items():
             if isinstance(v, Instrument):
                 logger.debug("Found '%s' instrument", k)
@@ -239,11 +165,8 @@ class Experiment(metaclass=MetaExperiment):
     def __init__(self):
         super(Experiment, self).__init__()
 
-        # Iterable that yields sweep values
-        self._sweep_generator = None
-
-        # Container for patameters that will be swept
-        self._swept_parameters = []
+        # Sweep control
+        self.sweeper = Sweeper()
 
         # This holds the experiment graph
         self.graph = None
@@ -254,6 +177,9 @@ class Experiment(metaclass=MetaExperiment):
 
         # Also keep references to all of the plot filters
         self.plotters = []
+
+        # ExpProgressBar object to display progress bars
+        self.progressbar = None
 
         # Things we can't metaclass
         self.output_connectors = {}
@@ -294,24 +220,21 @@ class Experiment(metaclass=MetaExperiment):
         """Gets run after a sweep ends, or when the program is terminated."""
         pass
 
+    def init_progressbar(self, num=0, notebook=False):
+        """ initialize the progress bars."""
+        oc = list(self.output_connectors.values())
+        if len(oc)>0:
+            self.progressbar = ExpProgressBar(oc[0].output_streams[0], num=num, notebook=notebook)
+        else:
+            logger.warning("No stream is found for progress bars. Create a dummy bar.")
+            self.progressbar = ExpProgressBar(None, num=num, notebook=notebook)
+
     async def run(self):
         """This is the inner measurement loop, which is the smallest unit that
         is repeated across various sweep variables. For more complicated run control
         than can be provided by the automatic sweeping, the full experimental
         operation should be defined here"""
         pass
-
-    def run_loop(self):
-        """This runs the asyncio main loop."""
-        for n in self.nodes:
-            if hasattr(n, 'final_init'):
-                n.final_init()
-
-        # Set any static parameters
-        for p in self._parameters.values():
-            p.push()
-        tasks = [n.run() for n in self.nodes]
-        self.loop.run_until_complete(asyncio.wait(tasks))
 
     def reset(self):
         for edge in self.graph.edges:
@@ -322,6 +245,7 @@ class Experiment(metaclass=MetaExperiment):
     def update_descriptors(self):
         logger.debug("Starting descriptor update in experiment.")
         for oc in self.output_connectors.values():
+            oc.descriptor.exp_src = self.exp_src
             for k,v in self._parameters.items():
                 oc.descriptor.add_param(k, v.value)
                 if v.unit is not None:
@@ -344,20 +268,22 @@ class Experiment(metaclass=MetaExperiment):
         await asyncio.sleep(1.0)
         last_param_values = None
         logger.debug("Starting experiment sweep.")
-        for param_values in self._sweep_generator:
 
-            # Update the parameter values. Unles set and push if there has been a change
-            # in the value from the previous iteration.
-            for i, sp in enumerate(self._swept_parameters):
-                if last_param_values is None or param_values[i] != last_param_values[i]:
-                    sp.value = param_values[i]
-                    sp.push()
-
-            # update previous values
-            last_param_values = param_values
+        done = True
+        while True:
+            done = self.sweeper.update()
 
             # Run the procedure
+            logger.debug("Starting a new run.")
             await self.run()
+
+            # Update progress bars
+            if self.progressbar is not None:
+                self.progressbar.update()
+           
+            if done:
+                logger.debug("Sweeper has finished.")
+                break
 
     def run_sweeps(self):
         # Go and find any plotters and keep track of them.
@@ -439,36 +365,22 @@ class Experiment(metaclass=MetaExperiment):
         other_nodes = self.nodes[:]
         other_nodes.remove(self)
         tasks = [n.run() for n in other_nodes]
+        for oc in self.output_connectors.values():
+            for stream in oc.output_streams:
+                tasks.append(stream.finished())
         tasks.append(self.sweep())
         self.loop.run_until_complete(asyncio.gather(*tasks))
 
-    def add_sweep(self, param, sweep_list):
-        """Add a good-old-fasioned one-variable sweep."""
-        p = SweptParameter(param, sweep_list)
-        self._swept_parameters.append(p)
-        self.generate_sweep()
+    def add_sweep(self, parameters, sweep_list, refine_func=None, refine_args=None):
+        ax = SweepAxis(parameters, sweep_list, refine_func, refine_args)
+        self.sweeper.add_sweep(ax)
         for oc in self.output_connectors.values():
-            ax = DataAxis(param.name, sweep_list)
             logger.debug("Adding sweep axis %s to connector %s.", ax, oc.name)
             oc.descriptor.add_axis(ax)
-            p.associated_axes.append(ax)
         self.update_descriptors()
-        param.value = sweep_list[0]
-        return p
-
-    def add_unstructured_sweep(self, parameters, coords):
-        p = SweptParameterGroup(parameters, coords)
-        self._swept_parameters.append(p)
-        self.generate_sweep()
-        for oc in self.output_connectors.values():
-            ax = DataAxis("Unstructured", coords, unstructured=True, coord_names=[p.name for p in parameters])
-            logger.debug("Adding unstructred sweep axis %s to connector %s.", ax, oc.name)
-            oc.descriptor.add_axis(ax)
-            p.associated_axes.append(ax)
-        self.update_descriptors()
-        for pp, c in zip(parameters, coords[0]):
-            pp.value = c
-        return p
-
-    def generate_sweep(self):
-        self._sweep_generator = itertools.product(*[sp.values for sp in self._swept_parameters])
+        if ax.unstructured:
+            for p, v in zip(parameters, sweep_list[0]):
+                p.value = v
+        else:
+            parameters.value = sweep_list[0]
+        return ax

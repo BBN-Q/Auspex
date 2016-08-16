@@ -1,4 +1,4 @@
-*.h5
+*checkpoint.ipynb
 *.pyc
 *.png
 *.xml
