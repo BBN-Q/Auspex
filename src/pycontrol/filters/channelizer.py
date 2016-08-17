@@ -6,6 +6,7 @@ from scipy.signal import firwin, lfilter
 
 
 from pycontrol.filters.filter import Filter, InputConnector, OutputConnector
+from pycontrol.stream import  DataStreamDescriptor
 from pycontrol.logging import logger
 
 class Channelizer(Filter):
@@ -33,14 +34,16 @@ class Channelizer(Filter):
         self.reference = np.exp(2j*np.pi * self.freq * self.time_step * np.arange(self.record_length))
 
         #store filter coefficients
-        #TODO: arbitrary 32 order filter
+        #TODO: arbitrary 64 tap filter
         if self.decimation_factor > 1:
             self.filter = firwin(64, self.cutoff, window='hamming')
         else:
             self.filter = np.array([1.0])
 
         #update output descriptors
-        decimated_descriptor = deepcopy(self.sink.descriptor)
+        decimated_descriptor = DataStreamDescriptor()
+        decimated_descriptor.axes = self.sink.descriptor.axes[:]
+        decimated_descriptor.axes[-1] = deepcopy(self.sink.descriptor.axes[-1])
         decimated_descriptor.axes[-1].points = self.sink.descriptor.axes[-1].points[self.decimation_factor-1::self.decimation_factor]
         for os in self.source.output_streams:
             os.set_descriptor(decimated_descriptor)
@@ -62,9 +65,6 @@ class Channelizer(Filter):
             if get_finished_task in done and input_stream.queue.empty():
                 logger.info('No more data for channelizer "%s"', self.name)
                 pending.pop().cancel()
-                for os in self.source.output_streams:
-                    for ax in os.descriptor.axes:
-                        ax.done = True
                 break
 
             pending.pop().cancel()
