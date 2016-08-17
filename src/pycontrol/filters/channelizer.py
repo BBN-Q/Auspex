@@ -14,9 +14,10 @@ class Channelizer(Filter):
     sink = InputConnector()
     source = OutputConnector()
 
-    def __init__(self, freq, decimation_factor=1, **kwargs):
+    def __init__(self, freq, cutoff, decimation_factor=1, **kwargs):
         super(Channelizer, self).__init__(**kwargs)
         self.freq = freq
+        self.cutoff = cutoff
         self.decimation_factor = decimation_factor
 
     def update_descriptors(self):
@@ -26,6 +27,7 @@ class Channelizer(Filter):
         time_pts = self.sink.descriptor.axes[-1].points
         self.record_length = len(time_pts)
         self.time_step = time_pts[1] - time_pts[0]
+        logger.debug("Channelizer time_step = {}".format(self.time_step))
 
         #store refernece for mix down
         self.reference = np.exp(2j*np.pi * self.freq * self.time_step * np.arange(self.record_length))
@@ -33,7 +35,7 @@ class Channelizer(Filter):
         #store filter coefficients
         #TODO: arbitrary 32 order filter
         if self.decimation_factor > 1:
-            self.filter = firwin(32, 1. / self.decimation_factor, window='hamming')
+            self.filter = firwin(64, self.cutoff, window='hamming')
         else:
             self.filter = np.array([1.0])
 
@@ -77,7 +79,6 @@ class Channelizer(Filter):
 
             #filter then decimate
             #TODO: polyphase filterting should provide better performance
-
             filtered = lfilter(self.filter, 1.0, mix_product)
             filtered = filtered[:, self.decimation_factor-1::self.decimation_factor]
 
