@@ -68,7 +68,7 @@ class Filter(metaclass=MetaFilter):
 
             #check whether stream finished returned first in which case we break out and finish
             if get_finished_task in done and input_stream.queue.empty():
-                logger.info('No more data for %s "%s"', self.__class__.__name__, self.name)
+                logger.debug('No more data for %s "%s"', self.__class__.__name__, self.name)
                 get_data_task.cancel()
                 break
 
@@ -76,6 +76,7 @@ class Filter(metaclass=MetaFilter):
             get_finished_task.cancel()
             new_data = get_data_task.result()
             logger.debug('%s "%s" received %d points.', self.__class__.__name__, self.name, new_data.size)
+            logger.debug("Now has %d of %d points.", input_stream.points_taken, input_stream.num_points())
 
             await self.process_data(new_data)
 

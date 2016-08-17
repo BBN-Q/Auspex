@@ -106,4 +106,5 @@ if __name__ == '__main__':
 
     exp.init_instruments()
     exp.add_sweep(exp.freq, 1e6*np.linspace(-0.1,0.1,3))
+    exp.init_progressbar(num=1)
     exp.run_sweeps()

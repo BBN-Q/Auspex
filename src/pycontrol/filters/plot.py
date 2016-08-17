@@ -63,7 +63,6 @@ class Plotter(Filter):
         self.idx = 0
 
     async def process_data(self, data):
-
         #if we're going to clear then reset idx
         if self.idx + data.size > self.points_before_clear:
             logger.debug("Clearing previous plot and restarting")
@@ -79,7 +78,6 @@ class Plotter(Filter):
             if (time.time() - self.last_update >= self.update_interval) or self.stream.done():
                 self.data_source.data["y"] = np.copy(self.plot_buffer)
                 self.last_update = time.time()
-                print("Updating plot!")
 
         else:
             if (time.time() - self.last_update >= self.update_interval) or self.stream.done():

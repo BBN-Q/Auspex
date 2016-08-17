@@ -5,39 +5,16 @@ from pycontrol.stream import InputConnector, OutputConnector
 from pycontrol.logging import logger
 
 class Print(Filter):
-    """docstring for Plotter"""
+    """Debug printer that prints data comming through filter"""
 
     data = InputConnector()
 
     def __init__(self, *args, **kwargs):
         super(Print, self).__init__(*args, **kwargs)
 
-    async def run(self):
-        if self.name is None:
-            self.name = ""
+    async def process_data(self, data):
 
-        self.points_taken = 0
-        stream = self.data.input_streams[0]
-        while True:
-            done, pending = await asyncio.wait((stream.finished(), stream.queue.get()),
-                                     return_when=concurrent.futures.FIRST_COMPLETED)
-            for axis, d in zip(self.descriptor.axes, self.descriptor.axes_done()):
-                logger.debug("Descriptor %s doneness: %s", axis, d)
-
-            new_data = list(done)[0].result()
-            if type(new_data)==bool:
-                if new_data:
-                    logger.debug("Printer %s finished logger.debuging.", self.name)
-                    break
-                else:
-                    logger.debug("Printer %s awaiting data", self.name)
-                    new_data = await stream.queue.get()
-
-            self.points_taken += np.array(new_data).size
-            logger.debug("Printer %s got new data of size %s: %s", self.name, np.shape(new_data), new_data)
-            logger.debug("Printer %s now has %s of %s points.", self.name, self.points_taken, self.data.num_points())
-
-        return True
+        logger.debug('%s "%s" received points: %s', self.__class__.__name__, self.name, data)
 
 class Passthrough(Filter):
     data_in  = InputConnector()

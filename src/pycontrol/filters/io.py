@@ -66,7 +66,7 @@ class WriteToHDF5(Filter):
 
         params['exp_src'] = stream.descriptor.exp_src
         num_axes   = len(axes)
-        
+
         # All of the combinations for the present values of the sweep parameters only
         tuples     = np.array(stream.descriptor.tuples())
 
@@ -75,11 +75,11 @@ class WriteToHDF5(Filter):
         logger.debug("Data type for HDF5: %s", dtype)
         dtype.append((stream.start_connector.name, 'f'))
         if self.compress:
-            data = self.file.create_dataset('data', (len(tuples),), dtype=dtype, 
+            data = self.file.create_dataset('data', (len(tuples),), dtype=dtype,
                                         chunks=True, maxshape=(None,),
                                         compression='gzip')
         else:
-            data = self.file.create_dataset('data', (len(tuples),), dtype=dtype, 
+            data = self.file.create_dataset('data', (len(tuples),), dtype=dtype,
                                         chunks=True, maxshape=(None,))
 
         # Write params into attrs
@@ -88,7 +88,7 @@ class WriteToHDF5(Filter):
                 data.attrs[k] = v
 
         # Write pointer
-        w_idx = 0 
+        w_idx = 0
 
         while True:
             logger.debug("HDF5 awaiting data")

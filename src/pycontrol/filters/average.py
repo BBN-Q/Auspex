@@ -93,9 +93,6 @@ class Average(Filter):
 
     async def process_data(self, data):
 
-        logger.debug('Averager "%s" got data %s', self.name, data)
-        logger.debug("Now has %d of %d points.", self.data.input_streams[0].points_taken, self.data.input_streams[0].num_points())
-
         # TODO: handle complex data
         data = data.real
 
@@ -108,6 +105,7 @@ class Average(Filter):
 
         if self.carry.size > 0:
             data = np.concatenate((self.carry, data))
+            self.carry = np.zeros(0)
 
         idx = 0
         while idx < data.size:
