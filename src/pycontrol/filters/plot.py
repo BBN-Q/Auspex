@@ -43,7 +43,7 @@ class Plotter(Filter):
         xmin = min(self.x_values)
 
         if self.plot_dims == 1:
-            self.figure = Figure(x_range=[xmin, xmax], plot_width=600, plot_height=600, webgl=True)
+            self.figure = Figure(x_range=[xmin, xmax], plot_width=600, plot_height=600, webgl=False)
             self.plot = self.figure.line(np.copy(self.x_values), np.nan*np.ones(self.points_before_clear), name=self.name, **self.plot_args)
         else:
             self.y_values = self.descriptor.axes[-2].points
@@ -51,7 +51,7 @@ class Plotter(Filter):
             self.z_data = np.zeros_like(self.x_mesh)
             ymax = max(self.y_values)
             ymin = min(self.y_values)
-            self.figure = Figure(x_range=[xmin, xmax], y_range=[ymin, ymax], plot_width=600, plot_height=600, webgl=True)
+            self.figure = Figure(x_range=[xmin, xmax], y_range=[ymin, ymax], plot_width=600, plot_height=600, webgl=False)
             self.plot = self.figure.image(image=[self.z_data], x=[xmin], y=[ymin],
                                           dw=[xmax-xmin], dh=[ymax-ymin], name=self.name, **self.plot_args)
 
