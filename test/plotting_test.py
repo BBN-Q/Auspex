@@ -36,6 +36,7 @@ class TestExperiment(Experiment):
     # Constants
     num_samples     = 1024
     delays          = 1e-9*np.arange(100, 10001,100)
+    round_robins    = 2
     sampling_period = 2e-9
     T2              = 5e-6
 
@@ -47,6 +48,7 @@ class TestExperiment(Experiment):
         descrip = DataStreamDescriptor()
         descrip.add_axis(DataAxis("samples", 2e-9*np.arange(self.num_samples)))
         descrip.add_axis(DataAxis("delay", self.delays))
+        descrip.add_axis(DataAxis("round robins", np.arange(self.round_robins)))
         self.voltage.set_descriptor(descrip)
 
     def __repr__(self):
@@ -57,42 +59,51 @@ class TestExperiment(Experiment):
         pulse_width = 700
 
         #fake the response for a Ramsey frequency experiment with a gaussian excitation profile
-        for delay in self.delays:
-            await asyncio.sleep(0.05)
-            record = np.zeros(self.num_samples)
-            record[pulse_start:pulse_start+pulse_width] = np.exp(-0.5*(self.freq.value/2e6)**2) * \
-                                                          np.exp(-delay/self.T2) * \
-                                                          np.sin(2*np.pi * 10e6 * self.sampling_period*np.arange(pulse_width) \
-                                                          + np.cos(2*np.pi * self.freq.value * delay))
+        idx = 0
+        for _ in range(self.round_robins):
+            for delay in self.delays:
+                if idx == 0:
+                    records = np.zeros((5, self.num_samples))
+                await asyncio.sleep(0.01)
+                records[idx,pulse_start:pulse_start+pulse_width] = np.exp(-0.5*(self.freq.value/2e6)**2) * \
+                                                              np.exp(-delay/self.T2) * \
+                                                              np.sin(2*np.pi * 10e6 * self.sampling_period*np.arange(pulse_width) \
+                                                              + np.cos(2*np.pi * self.freq.value * delay))
 
-            #add noise
-            record += 0.1*np.random.randn(self.num_samples)
+                #add noise
+                records[idx] += 0.1*np.random.randn(self.num_samples)
 
-            await self.voltage.push(record)
+                if idx == 4:
+                    await self.voltage.push(records.flatten())
+                    idx = 0
+                else:
+                    idx += 1
 
         logger.debug("Stream has filled {} of {} points".format(self.voltage.points_taken, self.voltage.num_points() ))
 
 if __name__ == '__main__':
 
     exp = TestExperiment()
-    channelizer = Channelizer(10e6, 32, name="Demod")
+    channelizer = Channelizer(10e6, 0.05, 8, name="Demod")
     ki = KernelIntegrator(np.ones(32), name="KI")
+    avg1 = Average("round robins", name="Average channelizer RRs")
+    avg2 = Average("round robins", name="Average KI RRs")
     pl1 = Plotter(name="2D Scope", plot_dims=2, palette="Spectral11")
     pl2 = Plotter(name="Demod", plot_dims=2, palette="Spectral11")
     pl3 = Plotter(name="KI", plot_dims=1)
-    pl4 = Plotter(name="KI", plot_dims=2, palette="Spectral11")
+    # pl4 = Plotter(name="KI", plot_dims=2, palette="Spectral11")
 
     edges = [
-            (exp.voltage, pl1.data),
             (exp.voltage, channelizer.sink),
-            (channelizer.source, pl2.data),
+            (channelizer.source, avg1.data),
             (channelizer.source, ki.sink),
-            (ki.source, pl3.data),
-            (ki.source, pl4.data)
+            (ki.source, avg2.data),
+            (avg1.final_average, pl2.data),
+            (avg2.final_average, pl3.data)
             ]
 
     exp.set_graph(edges)
 
     exp.init_instruments()
-    exp.add_sweep(exp.freq, 1e6*np.linspace(-4,4,41))
+    exp.add_sweep(exp.freq, 1e6*np.linspace(-0.1,0.1,3))
     exp.run_sweeps()
