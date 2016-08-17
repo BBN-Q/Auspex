@@ -81,72 +81,53 @@ class Average(Filter):
             logger.debug("\tnow setting stream end connector %s to %s", stream.end_connector, descriptor_out)
             stream.end_connector.update_descriptors()
 
-    async def run(self):
-        logger.debug('Running "%s" averager async loop', self.name)
-
+    def final_init(self):
         if self.points_before_final_average is None:
             raise Exception("Average has not been initialized. Run 'update_descriptors'")
 
-        completed_averages = 0
+        self.completed_averages = 0
 
         # We only need to accumulate up to the averaging axis
         # BUT we may get something longer at any given time!
-        carry = np.zeros(0)
+        self.carry = np.zeros(0)
 
-        input_stream = self.data.input_streams[0]
+    async def process_data(self, data):
 
-        while True:
+        logger.debug('Averager "%s" got data %s', self.name, data)
+        logger.debug("Now has %d of %d points.", self.data.input_streams[0].points_taken, self.data.input_streams[0].num_points())
 
-            get_finished_task = asyncio.ensure_future(input_stream.finished())
-            get_data_task = asyncio.ensure_future(input_stream.queue.get())
+        # TODO: handle complex data
+        data = data.real
 
-            done, pending = await asyncio.wait((get_finished_task, get_data_task),
-                                     return_when=concurrent.futures.FIRST_COMPLETED)
+        # TODO: handle unflattened data separately
+        if len(data.shape) > 1:
+            data = data.flatten()
+        #handle single points
+        elif not isinstance(data, np.ndarray) and (data.size == 1):
+            data = np.array([data])
 
-            #since done contains first completed it will be a set of size 1
-            if get_finished_task in done:
-                logger.info('No more data for averager "%s"', self.name)
-                pending.pop().cancel()
+        if self.carry.size > 0:
+            data = np.concatenate((self.carry, data))
+
+        idx = 0
+        while idx < data.size:
+            #check whether we have enough data to fill an averaging frame
+            if data.size - idx >= self.points_before_partial_average:
+                #reshape the data to an averaging frame
+                self.sum_so_far += np.reshape(data[idx:idx+self.points_before_partial_average], self.avg_dims)
+                idx += self.points_before_partial_average
+                self.completed_averages += 1
+            #otherwise add it to the carry
+            else:
+                self.carry = data[idx:]
                 break
 
-            pending.pop().cancel()
-            new_data = done.pop().result()
-
-            logger.debug('Averager "%s" got data %s', self.name, new_data)
-            logger.debug("Now has %d of %d points.", self.data.input_streams[0].points_taken, self.data.input_streams[0].num_points())
-
-            # todo: handle unflattened data separately
-            if len(new_data.shape) > 1:
-                new_data = new_data.flatten()
-            #handle single points
-            elif not isinstance(new_data, np.ndarray) and (new_data.size == 1):
-                new_data = np.array([new_data])
-
-            if carry.size > 0:
-                new_data = np.concatenate((carry, new_data))
-
-            idx = 0
-            while idx < new_data.size:
-                #check whether we have enough data to fill an averaging frame
-                if new_data.size - idx >= self.points_before_partial_average:
-                    #reshape the data to an averaging frame
-                    self.sum_so_far += np.reshape(new_data[idx:idx+self.points_before_partial_average], self.avg_dims)
-                    idx += self.points_before_partial_average
-                    completed_averages += 1
-                #otherwise add it to the carry
-                else:
-                    carry = new_data[idx:]
-                    break
-
-                #if we have finished averaging emit
-                if completed_averages == self.num_averages:
-                    for os in self.final_average.output_streams:
-                        await os.push(self.sum_so_far/self.num_averages)
-                    self.sum_so_far = 0.0
-                    completed_averages = 0
-
-            # add the remnant to the carry
-            carry = new_data[idx:]
+            #if we have finished averaging emit
+            if self.completed_averages == self.num_averages:
+                for os in self.final_average.output_streams:
+                    await os.push(self.sum_so_far/self.num_averages)
+                self.sum_so_far[:] = 0.0
+                self.completed_averages = 0
 
 
 class MultiAverage(Filter):

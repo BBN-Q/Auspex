@@ -59,47 +59,29 @@ class Plotter(Filter):
         self.renderer = [r for r in renderers if isinstance(r, GlyphRenderer)][0]
         self.data_source = self.renderer.data_source
 
-    async def run(self):
-        idx = 0
-        plot_buffer = np.nan*np.ones(self.points_before_clear)
+        self.plot_buffer = np.nan*np.ones(self.points_before_clear)
+        self.idx = 0
 
-        while True:
+    async def process_data(self, data):
 
-            get_finished_task = asyncio.ensure_future(self.stream.finished())
-            get_data_task = asyncio.ensure_future(self.stream.queue.get())
+        #if we're going to clear then reset idx
+        if self.idx + data.size > self.points_before_clear:
+            logger.debug("Clearing previous plot and restarting")
+            self.plot_buffer[:] = np.nan
+            num_prev_buffer_pts = self.points_before_clear - self.idx
+            data = data[num_prev_buffer_pts:]
+            self.idx = 0
 
-            done, pending = await asyncio.wait((get_finished_task, get_data_task),
-                                     return_when=concurrent.futures.FIRST_COMPLETED)
+        self.plot_buffer[self.idx:self.idx+data.size] = data.flatten()
+        self.idx += data.size
 
-            #since done contains first completed it will be a set of size 1
-            if get_finished_task in done:
-                logger.info('No more data for plotter "%s"', self.name)
-                get_data_task.cancel()
-                await asyncio.sleep(1) # wait a second for plot server to do final update
-                break
+        if self.plot_dims == 1:
+            if (time.time() - self.last_update >= self.update_interval) or self.stream.done():
+                self.data_source.data["y"] = np.copy(self.plot_buffer)
+                self.last_update = time.time()
+                print("Updating plot!")
 
-            get_finished_task.cancel()
-            new_data = get_data_task.result().flatten()
-
-            # new_data = new_data.flatten()
-            logger.debug('Plotter "%s" received %d points.', self.name, new_data.size)
-            #if we're going to clear then reset idx
-            if idx + new_data.size > self.points_before_clear:
-                logger.debug("Clearing previous plot and restarting")
-                plot_buffer[:] = np.nan
-                num_prev_buffer_pts = self.points_before_clear - idx
-                new_data = new_data[num_prev_buffer_pts:]
-                idx = 0
-
-            plot_buffer[idx:idx+new_data.size] = new_data
-            idx += new_data.size
-
-            if self.plot_dims == 1:
-                if (time.time() - self.last_update >= self.update_interval) or self.stream.done():
-                    self.data_source.data["y"] = np.copy(plot_buffer)
-                    self.last_update = time.time()
-
-            else:
-                if (time.time() - self.last_update >= self.update_interval) or self.stream.done():
-                    self.data_source.data["image"] = [np.reshape(plot_buffer, self.z_data.shape)]
-                    self.last_update = time.time()
+        else:
+            if (time.time() - self.last_update >= self.update_interval) or self.stream.done():
+                self.data_source.data["image"] = [np.reshape(self.plot_buffer, self.z_data.shape)]
+                self.last_update = time.time()

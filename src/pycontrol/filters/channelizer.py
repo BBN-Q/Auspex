@@ -49,39 +49,20 @@ class Channelizer(Filter):
             os.set_descriptor(decimated_descriptor)
             os.end_connector.update_descriptors()
 
-    async def run(self):
+    async def process_data(self, data):
 
-        input_stream = self.sink.input_streams[0]
+        #Assume for now we get a integer number of records at a time
+        #TODO: handle partial records
+        num_records = data.size // self.record_length
 
-        while True:
+        #mix with reference
+        mix_product = self.reference * np.reshape(data, (num_records, self.record_length), order="C")
 
-            get_finished_task = asyncio.ensure_future(input_stream.finished())
-            get_data_task = asyncio.ensure_future(input_stream.queue.get())
+        #filter then decimate
+        #TODO: polyphase filterting should provide better performance
+        filtered = lfilter(self.filter, 1.0, mix_product)
+        filtered = filtered[:, self.decimation_factor-1::self.decimation_factor]
 
-            done, pending = await asyncio.wait((get_finished_task, get_data_task),
-                                     return_when=concurrent.futures.FIRST_COMPLETED)
-
-            #since done contains first completed it will be a set of size 1
-            if get_finished_task in done and input_stream.queue.empty():
-                logger.info('No more data for channelizer "%s"', self.name)
-                pending.pop().cancel()
-                break
-
-            pending.pop().cancel()
-            new_data = done.pop().result()
-
-            #Assume for now we get a integer number of records at a time
-            #TODO: handle  and partial records
-            num_records = new_data.size // self.record_length
-
-            #mix with reference
-            mix_product = self.reference * np.reshape(new_data, (num_records, self.record_length), order="C")
-
-            #filter then decimate
-            #TODO: polyphase filterting should provide better performance
-            filtered = lfilter(self.filter, 1.0, mix_product)
-            filtered = filtered[:, self.decimation_factor-1::self.decimation_factor]
-
-            #push to ouptut connectors
-            for os in self.source.output_streams:
-                await os.push(filtered.real)
+        #push to ouptut connectors
+        for os in self.source.output_streams:
+            await os.push(filtered)

@@ -36,29 +36,11 @@ class KernelIntegrator(Filter):
             os.set_descriptor(output_descriptor)
             os.end_connector.update_descriptors()
 
-    async def run(self):
+    async def process_data(self, data):
 
-        input_stream = self.sink.input_streams[0]
+        #TODO: handle variable partial records
+        filtered = np.sum(data * self.aligned_kernel, axis=-1)
 
-        while True:
-            get_finished_task = asyncio.ensure_future(input_stream.finished())
-            get_data_task = asyncio.ensure_future(input_stream.queue.get())
-
-            done, pending = await asyncio.wait((get_finished_task, get_data_task),
-                                     return_when=concurrent.futures.FIRST_COMPLETED)
-
-            #since done contains first completed it will be a set of size 1
-            if get_finished_task in done:
-                logger.info('No more data for kernel integrator "%s"', self.name)
-                pending.pop().cancel()
-                break
-
-            pending.pop().cancel()
-            new_data = done.pop().result()
-
-            #TODO: handle variable partial records
-            filtered = np.sum(new_data * self.aligned_kernel, axis=-1)
-
-            #push to ouptut connectors
-            for os in self.source.output_streams:
-                await os.push(filtered)
+        #push to ouptut connectors
+        for os in self.source.output_streams:
+            await os.push(filtered)
