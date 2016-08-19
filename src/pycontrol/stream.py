@@ -5,13 +5,15 @@ import itertools
 
 import numpy as np
 from functools import reduce
+
+from pycontrol.sweep import SweepAxis
 from pycontrol.logging import logger
 
 class DataAxis(object):
-    """An axes in a data stream"""
-    def __init__(self, name, points, unit=None):
+    """An axis in a data stream"""
+    def __init__(self, name, points=[], unit=None):
         super(DataAxis, self).__init__()
-        self.name         = name
+        self.name         = str(name)
         self.points       = points
         self.unit         = unit
 
@@ -20,12 +22,24 @@ class DataAxis(object):
 
     def num_points(self):
         return len(self.points)
+
+    def update(self, points=None, unit=None):
+        # Update points or unit
+        if points is not None:
+            if isinstance(points, int) or isinstance(points,float):
+                logger.warning("DataAxis '{}' receives a number: {}. Force converting to array.".format(self.name,points))
+                self.points = [points]
+            else:
+                self.points = list(points)
+        if unit is not None:
+            self.unit = str(unit)
+
     def __repr__(self):
         return "<DataAxis(name={}, points={}, unit={})>".format(
             self.name, self.points, self.unit)
 
 class DataStreamDescriptor(object):
-    """Axis information"""
+    """Axes information"""
     def __init__(self):
         super(DataStreamDescriptor, self).__init__()
         self.axes = []
@@ -34,20 +48,27 @@ class DataStreamDescriptor(object):
         self.exp_src = None # Actual source code from the underlying experiment
 
     def add_axis(self, axis):
-        self.axes.insert(0, axis)
+        # Check if axis is DataAxis
+        if isinstance(axis, DataAxis):
+            logger.debug("Adding DataAxis into DataStreamDescriptor: {}".format(axis))
+            self.axes.insert(0, axis)
+        else:
+            raise TypeError("Failed adding axis. Object is not DataAxis: {}".format(axis))
 
     def add_param(self, key, value):
         self.params[key] = value
 
     def num_dims(self):
+        # Number of axes
         return len(self.axes)
 
     def data_dims(self):
+        # Return dimension (length) of the data axes, exclude sweep axes (return 1 for each)
         dims = []
         for a in self.axes:
             if isinstance(a, SweepAxis):
                 dims.append(1)
-            elif isinstance(a, DataAxis):
+            else:
                 dims.append(len(a.points))
         return dims
 
@@ -62,23 +83,29 @@ class DataStreamDescriptor(object):
 
     def num_points(self):
         if len(self.axes)>0:
-            return reduce(lambda x,y: x*y, [len(a.points) for a in self.axes])
+            return reduce(lambda x,y: x*y, [a.num_points() for a in self.axes])
         else:
             return 0 
 
     def last_data_axis(self):
-        return [i for i, a in enumerate(self.axes) if isinstance(a,DataAxis)][0]
+        # Return the outer most data axis but not sweep axis
+        data_axes_idx = [i for i, a in enumerate(self.axes) if not isinstance(a,SweepAxis)]
+        if len(data_axes_idx)>0:
+            return data_axes_idx[0]
+        else:
+            logger.warning("DataStreamDescriptor has no pure DataAxis. Return None.")
+            return None
 
     def tuples(self):
         vals = []
         for a in self.axes:
-            if hasattr(a, 'refine_func'): # This means it is a sweep axis
+            if isinstance(a, SweepAxis):
                 if a.unstructured:
                     for p in a.parameter:
                         vals.append([p.value])
                 else:
                     vals.append([a.value])
-            else: # THis means it is a data axis
+            else:
                 vals.append(a.points)
         return list(itertools.product(*vals))
 
@@ -86,7 +113,7 @@ class DataStreamDescriptor(object):
         # Returns all axis names included those from unstructured axes
         vals = []
         for a in self.axes:
-            if hasattr(a, 'refine_func'): # This means it is a sweep axis
+            if isinstance(a, SweepAxis):
                 if a.unstructured:
                     for p in a.parameter:
                         vals.append(p.name)
@@ -109,7 +136,7 @@ class DataStreamDescriptor(object):
         elif len(self.axes) == 1:
             return self.axes[0].num_points()
         else:
-            return reduce(lambda x,y: x*y, [len(a.points) for a in self.axes[axis:]])
+            return reduce(lambda x,y: x*y, [a.num_points() for a in self.axes[axis:]])
 
     def __repr__(self):
         return "<DataStreamDescriptor(num_dims={}, num_points={})>".format(
@@ -120,27 +147,31 @@ class DataStream(object):
     def __init__(self, name=None, unit=None, loop=None):
         super(DataStream, self).__init__()
         self.queue = asyncio.Queue(loop=loop)
-        self.points_taken = 0
-        self.descriptor = None
+        self.loop = loop
         self.name = name
         self.unit = unit
+        self.points_taken = 0
+        self.descriptor = None
         self.start_connector = None
-        self.end_connector = None
-        self.loop = loop
+        self.end_connector = None 
 
     def set_descriptor(self, descriptor):
-        logger.debug("Setting descriptor on stream '%s' to '%s'", self.name, descriptor)
-        self.descriptor = descriptor
+        if isinstance(descriptor,DataStreamDescriptor):
+            logger.debug("Setting descriptor on stream '%s' to '%s'", self.name, descriptor)
+            self.descriptor = descriptor
+        else:
+            raise TypeError("Failed setting descriptor. Object is not DataStreamDescriptor: {}".format(descriptor))
 
     def num_points(self):
         if self.descriptor is not None:
             return self.descriptor.num_points()
         else:
+            logger.warning("Stream '{}' has no descriptor. Function num_points() returns 0.".format(self.name))
             return 0
 
-    async def finished(self):
+    async def finished(self, wait_time=2):
         while not self.done():
-            await asyncio.sleep(2)
+            await asyncio.sleep(wait_time)
         return True
 
     def percent_complete(self):
@@ -195,7 +226,7 @@ class InputConnector(object):
             self.num_input_streams += 1
             stream.end_connector = self
         else:
-            raise ValueError("Could not add another input stream to the connector.")
+            raise ValueError("Reached maximum number of input connectors. Could not add another input stream to the connector.")
 
     def num_points(self):
         if len(self.input_streams) > 0:
