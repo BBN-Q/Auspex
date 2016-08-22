@@ -164,16 +164,16 @@ class ExperimentTestCase(unittest.TestCase):
         exp.init_instruments()
         exp.run_sweeps()
 
-    # def test_depth(self):
-    #     exp         = TestExperiment()
-    #     passthrough = Passthrough(name="Passthrough")
-    #     printer     = Print(name="Printer")
+    def test_depth(self):
+        exp         = TestExperiment()
+        passthrough = Passthrough(name="Passthrough")
+        printer     = Print(name="Printer")
 
-    #     edges = [(exp.chan1, passthrough.data_in), (passthrough.data_out, printer.data)]
+        edges = [(exp.chan1, passthrough.data_in), (passthrough.data_out, printer.data)]
 
-    #     exp.set_graph(edges)
-    #     exp.init_instruments()
-    #     exp.run_sweeps()
+        exp.set_graph(edges)
+        exp.init_instruments()
+        exp.run_sweeps()
 
     def test_averager(self):
         exp             = TestExperiment()
