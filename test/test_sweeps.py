@@ -120,7 +120,7 @@ class SweepTestCase(unittest.TestCase):
         exp.add_sweep(exp.field, np.linspace(0,100.0,11))
         exp.add_sweep(exp.freq, [1.0, 2.0], refine_func=rf, refine_args=[5])
         exp.run_sweeps()
-        self.assertTrue(pri.points_taken == 5*11*5)
+        self.assertTrue(pri.data.input_streams[0].points_taken == 5*11*5)
 
     def test_unstructured_sweep(self):
         exp = SweptTestExperiment()
@@ -142,98 +142,7 @@ class SweepTestCase(unittest.TestCase):
                   [68, 1.2]]
         exp.add_sweep([exp.field, exp.freq], coords)
         exp.run_sweeps()
-        # self.assertTrue(pri.data.input_streams[0].points_taken == exp.voltage.num_points())
-
-    # def test_write_unstructured_sweep(self):
-    #     exp = UnsweptTestExperiment()
-    #     pri = Print()
-    #     if os.path.exists("test_write_unstructured-0000.h5"):
-    #         os.remove("test_write_unstructured-0000.h5")
-    #     wr  = WriteToHDF5("test_write_unstructured.h5")
-
-    #     edges = [(exp.voltage, pri.data), (exp.voltage, wr.data)]
-    #     exp.set_graph(edges)
-
-    #     exp.init_instruments()
-
-    #     coords = np.array([[ 0, 0.1],
-    #               [10, 4.0],
-    #               [15, 2.5],
-    #               [40, 4.4],
-    #               [50, 2.5],
-    #               [60, 1.4],
-    #               [65, 3.6],
-    #               [66, 3.5],
-    #               [67, 3.6],
-    #               [68, 1.2]])
-    #     exp.add_unstructured_sweep([exp.field, exp.freq], coords)
-    #     exp.run_loop()
-    #     self.assertTrue(pri.data.input_streams[0].points_taken == exp.voltage.num_points())
-    #     self.assertTrue(os.path.exists("test_write_unstructured-0000.h5"))
-    #     with h5py.File("test_write_unstructured-0000.h5", 'r') as f:
-    #         self.assertTrue([d.label for d in f['data-0000'].dims] == ['Unstructured', 'samples'])
-    #         self.assertTrue([d.keys() for d in f['data-0000'].dims] == [['field', 'freq'], ['samples']])
-    #         self.assertTrue(np.sum(f['data-0000'].dims[0]['freq'].value - coords[:,1]) == 0.0)
-    #         self.assertTrue(np.sum(f['data-0000'].dims[0]['field'].value - coords[:,0]) == 0.0)
-    #     os.remove("test_write_unstructured-0000.h5")
-
-    # def test_run_write_unstructured_sweep(self):
-    #     exp = SweptTestExperiment()
-    #     pri = Print()
-    #     if os.path.exists("test_run_write_unstructured-0000.h5"):
-    #         os.remove("test_run_write_unstructured-0000.h5")
-    #     wr  = WriteToHDF5("test_run_write_unstructured.h5")
-
-
-    #     edges = [(exp.voltage, pri.data), (exp.voltage, wr.data)]
-    #     exp.set_graph(edges)
-
-    #     exp.init_instruments()
-
-    #     coords = np.array([[ 0, 0.1],
-    #               [10, 4.0],
-    #               [15, 2.5],
-    #               [40, 4.4],
-    #               [50, 2.5],
-    #               [60, 1.4],
-    #               [65, 3.6],
-    #               [66, 3.5],
-    #               [67, 3.6],
-    #               [68, 1.2]])
-    #     sweep = exp.add_unstructured_sweep([exp.field, exp.freq], coords)
-    #     exp.run_sweeps()
-
-    #     self.assertTrue(pri.data.input_streams[0].points_taken == exp.voltage.num_points())
-
-
-    #     coords2 = np.array([[ 1, 0.1],
-    #                        [11, 4.0],
-    #                        [11, 2.5],
-    #                        [41, 4.4],
-    #                        [51, 2.5],
-    #                        [61, 1.4]])
-    #     sweep.update_values(coords2)
-    #     exp.dur.value = 2
-    #     exp.reset()
-    #     self.assertTrue(pri.data.input_streams[0].num_points() == len(coords2)*exp.samples)
-    #     self.assertFalse(pri.data.input_streams[0].done())
-    #     self.assertFalse(wr.data.input_streams[0].done())
-    #     self.assertFalse(exp.voltage.output_streams[0].done())
-    #     exp.run_sweeps()
-    #     self.assertTrue(os.path.exists("test_run_write_unstructured-0000.h5"))
-    #     with h5py.File("test_run_write_unstructured-0000.h5", 'r') as f:
-    #         self.assertTrue([d.label for d in f['data-0000'].dims] == ['Unstructured', 'samples'])
-    #         self.assertTrue([d.keys() for d in f['data-0000'].dims] == [['field', 'freq'], ['samples']])
-    #         self.assertTrue(np.sum(f['data-0000'].dims[0]['freq'].value - coords[:,1]) == 0.0)
-    #         self.assertTrue(np.sum(f['data-0000'].dims[0]['field'].value - coords[:,0]) == 0.0)
-    #         self.assertTrue([d.label for d in f['data-0001'].dims] == ['Unstructured', 'samples'])
-    #         self.assertTrue([d.keys() for d in f['data-0001'].dims] == [['field', 'freq'], ['samples']])
-    #         self.assertTrue(np.sum(f['data-0001'].dims[0]['freq'].value - coords2[:,1]) == 0.0)
-    #         self.assertTrue(np.sum(f['data-0001'].dims[0]['field'].value - coords2[:,0]) == 0.0)
-
-    #     os.remove("test_run_write_unstructured-0000.h5")
-
-
+        self.assertTrue(pri.data.input_streams[0].points_taken == exp.voltage.num_points())
 
 if __name__ == '__main__':
     unittest.main()
