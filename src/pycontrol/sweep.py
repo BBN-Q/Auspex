@@ -6,8 +6,8 @@ from pycontrol.stream import DataStream, DataAxis, DataStreamDescriptor, InputCo
 from pycontrol.logging import logger
 
 class SweepAxis(DataAxis):
-    """ Structure for swept axis, separate from DataAxis.
-    Can be an unstructured axis, in which case parameter is actually a list of parameters. """
+    """ Structure for sweep axis, separate from DataAxis.
+    Can be an unstructured axis, in which case 'parameter' is actually a list of parameters. """
     def __init__(self, parameter, points = [], refine_func=None, refine_args=[]):
 
         self.unstructured = hasattr(parameter, '__iter__')
