@@ -175,46 +175,5 @@ class ExperimentTestCase(unittest.TestCase):
         exp.init_instruments()
         exp.run_sweeps()
 
-    def test_averager(self):
-        exp             = TestExperiment()
-        printer_final   = Print(name="Final")
-        avgr            = Average('trials', name="TestAverager")
-
-        edges = [(exp.chan1, avgr.data),
-                 (avgr.final_average, printer_final.data)]
-
-        exp.set_graph(edges)
-        exp.init_instruments()
-        exp.run_sweeps()
-
-    # def test_add_axis_to_averager(self):
-    #     exp             = TestExperiment()
-    #     printer_final   = Print(name="Final")
-    #     avgr            = Average('samples', name="TestAverager")
-
-    #     edges = [(exp.chan1, avgr.data),
-    #              (avgr.final_average, printer_final.data)]
-
-    #     exp.set_graph(edges)
-    #     exp.init_instruments()
-    #     repeats = 2
-    #     exp.chan1.descriptor.add_axis(DataAxis("repeats", list(range(repeats))))
-    #     exp.update_descriptors()
-    #     self.assertTrue(len(exp.chan1.descriptor.axes) == 3)
-    #     exp.run_sweeps()
-
-    def test_scalar_averager(self):
-        exp             = TestExperiment()
-        printer_final   = Print(name="Final")
-        avgr            = Average('samples', name="TestAverager")
-
-        edges = [(exp.chan1, avgr.data),
-                 (avgr.final_average, printer_final.data)]
-
-        exp.set_graph(edges)
-        exp.init_instruments()
-        exp.update_descriptors()
-        exp.run_sweeps()
-
 if __name__ == '__main__':
     unittest.main()

@@ -1,7 +1,7 @@
 import asyncio, concurrent
 
 import numpy as np
-from pycontrol.stream import DataStreamDescriptor
+from pycontrol.stream import DataStreamDescriptor, DataAxis
 from pycontrol.filters.filter import Filter, InputConnector, OutputConnector
 from pycontrol.logging import logger
 
@@ -59,26 +59,34 @@ class Average(Filter):
         logger.debug("Data dimensions are %s", self.data_dims)
         logger.debug("Averaging dimensions are %s", self.avg_dims)
 
-        new_axes = descriptor_in.axes[:]
-        self.num_averages = new_axes.pop(self.axis_num).num_points()
+        # Define final axis descriptor
+        final_axes = descriptor_in.axes[:]
+        descriptor_final = DataStreamDescriptor()
+        descriptor_final.axes = final_axes
+        self.num_averages = final_axes.pop(self.axis_num).num_points()
         logger.debug("Number of partial averages is %d", self.num_averages)
-        descriptor_out = DataStreamDescriptor()
-        descriptor_out.axes = new_axes
 
+        # Define partial axis descriptor
+        partial_axes = descriptor_in.axes[:]
+        descriptor_partial = DataStreamDescriptor()
+        descriptor_partial.axes = partial_axes
+        partial_axes.pop(self.axis_num)
+        descriptor_partial.add_axis(DataAxis("Partial Averages", list(range(self.num_averages))))
+        
         self.sum_so_far = np.zeros(self.avg_dims)
-        self.partial_average.descriptor = descriptor_out
-        self.final_average.descriptor = descriptor_out
+        self.partial_average.descriptor = descriptor_final
+        self.final_average.descriptor = descriptor_final
 
         for stream in self.partial_average.output_streams:
-            logger.debug("\tnow setting stream %s to %s", stream, descriptor_in)
-            stream.set_descriptor(descriptor_out)
-            logger.debug("\tnow setting stream end connector %s to %s", stream.end_connector, descriptor_in)
+            logger.debug("\tnow setting stream %s to %s", stream, descriptor_partial)
+            stream.set_descriptor(descriptor_partial)
+            logger.debug("\tnow setting stream end connector %s to %s", stream.end_connector, descriptor_partial)
             stream.end_connector.update_descriptors()
 
         for stream in self.final_average.output_streams:
-            logger.debug("\tnow setting stream %s to %s", stream, descriptor_out)
-            stream.set_descriptor(descriptor_out)
-            logger.debug("\tnow setting stream end connector %s to %s", stream.end_connector, descriptor_out)
+            logger.debug("\tnow setting stream %s to %s", stream, descriptor_final)
+            stream.set_descriptor(descriptor_final)
+            logger.debug("\tnow setting stream end connector %s to %s", stream.end_connector, descriptor_final)
             stream.end_connector.update_descriptors()
 
     def final_init(self):
@@ -115,6 +123,11 @@ class Average(Filter):
                 self.sum_so_far += np.reshape(data[idx:idx+self.points_before_partial_average], self.avg_dims)
                 idx += self.points_before_partial_average
                 self.completed_averages += 1
+
+                # Emit a partial average since we've accumulated enough data
+                for os in self.partial_average.output_streams:
+                    await os.push(self.sum_so_far/self.completed_averages)
+
             #otherwise add it to the carry
             else:
                 self.carry = data[idx:]
