@@ -63,11 +63,11 @@ class TestExperiment(Experiment):
         logger.debug("Data taker running (inner loop)")
         time_step = 0.1
         await asyncio.sleep(0.002)
-        data_row = np.sin(2*np.pi*self.time_val)*np.ones(5) + 0.1*np.random.random(5)
+        data_row = np.sin(2*np.pi*self.time_val)*np.ones(self.samples*self.num_trials) + 0.1*np.random.random(self.samples*self.num_trials)
         self.time_val += time_step
-        await self.voltage.push(data_row)
+        await self.chan1.push(data_row)
         logger.debug("Stream pushed points {}.".format(data_row))
-        logger.debug("Stream has filled {} of {} points".format(self.voltage.points_taken, self.voltage.num_points() ))
+        logger.debug("Stream has filled {} of {} points".format(self.chan1.points_taken, self.chan1.num_points() ))
 
 class ExperimentTestCase(unittest.TestCase):
 
@@ -153,16 +153,16 @@ class ExperimentTestCase(unittest.TestCase):
         exp.init_instruments()
         exp.run_sweeps()
 
-    # def test_run_simple_graph_branchout(self):
-    #     exp      = TestExperiment()
-    #     printer1 = Print(name="One")
-    #     printer2 = Print(name="Two")
+    def test_run_simple_graph_branchout(self):
+        exp      = TestExperiment()
+        printer1 = Print(name="One")
+        printer2 = Print(name="Two")
 
-    #     edges = [(exp.chan1, printer1.data), (exp.chan1, printer2.data)]
+        edges = [(exp.chan1, printer1.data), (exp.chan1, printer2.data)]
 
-    #     exp.set_graph(edges)
-    #     exp.init_instruments()
-    #     exp.run_sweeps()
+        exp.set_graph(edges)
+        exp.init_instruments()
+        exp.run_sweeps()
 
     # def test_depth(self):
     #     exp         = TestExperiment()
@@ -175,17 +175,17 @@ class ExperimentTestCase(unittest.TestCase):
     #     exp.init_instruments()
     #     exp.run_sweeps()
 
-    # def test_averager(self):
-    #     exp             = TestExperiment()
-    #     printer_final   = Print(name="Final")
-    #     avgr            = Average('trials', name="TestAverager")
+    def test_averager(self):
+        exp             = TestExperiment()
+        printer_final   = Print(name="Final")
+        avgr            = Average('trials', name="TestAverager")
 
-    #     edges = [(exp.chan1, avgr.data),
-    #              (avgr.final_average, printer_final.data)]
+        edges = [(exp.chan1, avgr.data),
+                 (avgr.final_average, printer_final.data)]
 
-    #     exp.set_graph(edges)
-    #     exp.init_instruments()
-    #     exp.run_sweeps()
+        exp.set_graph(edges)
+        exp.init_instruments()
+        exp.run_sweeps()
 
     # def test_add_axis_to_averager(self):
     #     exp             = TestExperiment()
@@ -203,39 +203,18 @@ class ExperimentTestCase(unittest.TestCase):
     #     self.assertTrue(len(exp.chan1.descriptor.axes) == 3)
     #     exp.run_sweeps()
 
-    # def test_scalar_averager(self):
-    #     exp             = TestExperiment()
-    #     printer_final   = Print(name="Final")
-    #     avgr            = Average('samples', name="TestAverager")
+    def test_scalar_averager(self):
+        exp             = TestExperiment()
+        printer_final   = Print(name="Final")
+        avgr            = Average('samples', name="TestAverager")
 
-    #     edges = [(exp.chan1, avgr.data),
-    #              (avgr.final_average, printer_final.data)]
+        edges = [(exp.chan1, avgr.data),
+                 (avgr.final_average, printer_final.data)]
 
-    #     exp.set_graph(edges)
-    #     exp.init_instruments()
-    #     exp.update_descriptors()
-    #     exp.run_sweeps()
-
-    # def test_reset(self):
-    #     exp             = TestExperiment()
-    #     printer_final   = Print(name="Final")
-    #     avgr            = Average('samples', name="TestAverager")
-
-    #     edges = [(exp.chan1, avgr.data),
-    #              (avgr.final_average, printer_final.data)]
-
-    #     exp.set_graph(edges)
-    #     exp.init_instruments()
-    #     logger.debug("Running reset test: 1st sweeps.")
-    #     exp.run_sweeps()
-    #     exp.reset()
-
-    #     self.assertTrue(exp.chan1.output_streams[0].points_taken == 0)
-    #     self.assertTrue(avgr.final_average.output_streams[0].points_taken == 0)
-
-    #     logger.debug("Running reset test: 2nd sweeps.")
-    #     time.sleep(0.1)
-    #     exp.run_sweeps()
+        exp.set_graph(edges)
+        exp.init_instruments()
+        exp.update_descriptors()
+        exp.run_sweeps()
 
 if __name__ == '__main__':
     unittest.main()
