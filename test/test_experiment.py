@@ -141,7 +141,8 @@ class ExperimentTestCase(unittest.TestCase):
         self.assertFalse(avgr.data.descriptor is None)
         self.assertFalse(printer_partial.data.descriptor is None)
         self.assertTrue(exp.chan1.descriptor == avgr.data.descriptor)
-        self.assertTrue(avgr.partial_average.descriptor == printer_partial.data.descriptor)
+        self.assertTrue(avgr.partial_average.descriptor.axes[0].name == 'Partial Averages')
+        self.assertTrue(avgr.partial_average.descriptor.axes[0].points == [0,1,2])
 
     def test_run_simple_graph(self):
         exp     = TestExperiment()

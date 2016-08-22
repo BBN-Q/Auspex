@@ -74,7 +74,7 @@ class Average(Filter):
         descriptor_partial.add_axis(DataAxis("Partial Averages", list(range(self.num_averages))))
         
         self.sum_so_far = np.zeros(self.avg_dims)
-        self.partial_average.descriptor = descriptor_final
+        self.partial_average.descriptor = descriptor_partial
         self.final_average.descriptor = descriptor_final
 
         for stream in self.partial_average.output_streams:
