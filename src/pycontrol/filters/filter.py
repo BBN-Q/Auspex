@@ -1,3 +1,6 @@
+import asyncio
+from concurrent.futures import FIRST_COMPLETED
+
 from pycontrol.stream import DataStream, InputConnector, OutputConnector
 from pycontrol.logging import logger
 
@@ -45,3 +48,38 @@ class Filter(metaclass=MetaFilter):
         for oc in self.output_connectors.values():
             oc.descriptor = self.descriptor
             oc.update_descriptors()
+
+    async def run(self):
+        """
+        Generic run method which waits on a single stream and calls `process_data` on any new_data
+        """
+        logger.debug('Running "%s" run loop', self.name)
+
+        input_stream = getattr(self, self._input_connectors[0]).input_streams[0]
+
+        while True:
+
+            #setup futures that will return either stream is done or new  data
+            get_finished_task = asyncio.ensure_future(input_stream.finished())
+            get_data_task = asyncio.ensure_future(input_stream.queue.get())
+
+            done, pending = await asyncio.wait((get_finished_task, get_data_task),
+                                     return_when=FIRST_COMPLETED)
+
+            #check whether stream finished returned first in which case we break out and finish
+            if get_finished_task in done and input_stream.queue.empty():
+                logger.debug('No more data for %s "%s"', self.__class__.__name__, self.name)
+                get_data_task.cancel()
+                break
+
+            #otherwise cancel the finish check and process new data
+            get_finished_task.cancel()
+            new_data = get_data_task.result()
+            logger.debug('%s "%s" received %d points.', self.__class__.__name__, self.name, new_data.size)
+            logger.debug("Now has %d of %d points.", input_stream.points_taken, input_stream.num_points())
+
+            await self.process_data(new_data)
+
+    async def process_data(self, data):
+        """Generic pass through.  """
+        return data

@@ -4,7 +4,8 @@ import time
 import numpy as np
 
 from pycontrol.instruments.instrument import Instrument, StringCommand, FloatCommand, IntCommand
-from pycontrol.experiment import Experiment, FloatParameter
+from pycontrol.experiment import Experiment
+from pycontrol.parameter import FloatParameter
 from pycontrol.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector
 from pycontrol.filters.debug import Print, Passthrough
 from pycontrol.filters.average import Average

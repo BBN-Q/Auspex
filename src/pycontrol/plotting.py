@@ -26,16 +26,8 @@ class BokehServerThread(threading.Thread):
     def __del__(self):
         self.join()
 
-    def __del__(self):
-        self.join()
-
     def run(self):
-        args = []
-        if 'win32' in sys.platform:
-            args.append("bokeh.bat")
-        else:
-            args.append("bokeh")
-        args.append("serve")
+        args = ["bokeh", "serve"]
         if self.run_in_notebook:
             args.append("--allow-websocket-origin=localhost:8888")
         self.p = subprocess.Popen(args, env=os.environ.copy())

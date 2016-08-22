@@ -28,6 +28,9 @@ logger.setLevel(logging.DEBUG)
 # AWG Samp. Marker Out -> PSPL Trigger
 
 class FieldSwitchingExperiment(Experiment):
+    """ Field Switching Experiment
+    Measure pillar resistance while sweeping bias field
+    """
 
     # Description
     sample = "CSHE2-C4R1"

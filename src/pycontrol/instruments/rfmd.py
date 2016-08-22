@@ -10,7 +10,7 @@ class Attenuator(object):
     def __init__(self, calibration_file, voltage_supply_method, voltage_control_method):
         super(Attenuator, self).__init__()
         self.name = "RFMD VC Attenuator"
-        df = pd.read_csv(calibration_file, sep="\t")
+        df = pd.read_csv(calibration_file, sep=",")
         attenuator_interp = interp1d(df["Attenuation"], df["Control Voltage"])
         self.attenuator_lookup = lambda x : float(attenuator_interp(x))
         self.voltage_control_method = voltage_control_method
