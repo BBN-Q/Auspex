@@ -15,8 +15,8 @@ from tqdm import tqdm, tqdm_notebook
 
 from pycontrol.instruments.instrument import Instrument
 from pycontrol.parameter import ParameterGroup, FloatParameter, IntParameter, Parameter
-from pycontrol.sweep import SweepAxis, Sweeper
-from pycontrol.stream import DataStream, DataAxis, DataStreamDescriptor, InputConnector, OutputConnector
+from pycontrol.sweep import Sweeper
+from pycontrol.stream import DataStream, DataAxis, SweepAxis, DataStreamDescriptor, InputConnector, OutputConnector
 from pycontrol.filters.plot import Plotter
 from pycontrol.logging import logger
 
