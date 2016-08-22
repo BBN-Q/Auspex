@@ -88,13 +88,17 @@ class Sweeper(object):
         """ Update the levels """
         logger.debug("Sweeper updates values.")
         imax = len(self.axes)-1
-        i=0
-        while i<imax and self.axes[i].step==0:
-            i += 1
-        # Need to update parameters from outer --> inner axis
-        for j in range(i,-1,-1):
-            self.axes[j].update()
-        return np.all([a.done for a in self.axes])
+        if imax < 0:
+            logger.debug("There are no sweep axis, only data axes.")
+            return True
+        else:
+            i=0
+            while i<imax and self.axes[i].step==0:
+                i += 1
+            # Need to update parameters from outer --> inner axis
+            for j in range(i,-1,-1):
+                self.axes[j].update()
+            return np.all([a.done for a in self.axes])
 
     def __repr__(self):
         return "Sweeper"

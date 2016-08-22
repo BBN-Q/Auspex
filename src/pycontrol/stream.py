@@ -6,7 +6,7 @@ import itertools
 import numpy as np
 from functools import reduce
 
-from pycontrol.sweep import SweepAxis
+from pycontrol.sweep import *
 from pycontrol.logging import logger
 
 class DataAxis(object):

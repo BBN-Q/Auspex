@@ -45,9 +45,11 @@ class TestExperiment(Experiment):
     # Constants
     samples    = 3
     num_trials = 5
+    time_val   = 0.0
 
-    freq_1.assign_method(lambda x: print("Set: {}".format(x)))
-    freq_2.assign_method(lambda x: print("Set: {}".format(x)))
+    def init_instruments(self):
+        self.freq_1.assign_method(lambda x: print("Set: {}".format(x)))
+        self.freq_2.assign_method(lambda x: print("Set: {}".format(x)))
 
     def init_streams(self):
         # Add "base" data axes
@@ -58,27 +60,14 @@ class TestExperiment(Experiment):
         self.chan2.set_descriptor(descrip)
 
     async def run(self):
-        for c in self.output_connectors.values():
-            for s in c.output_streams:
-                s.reset()
-
-        print("Data taker running")
-        time_val = 0
+        logger.debug("Data taker running (inner loop)")
         time_step = 0.1
-
-        while True:
-            #Produce fake noisy sinusoid data every 0.02 seconds until we have 1000 points
-            if self.chan1.done():
-                print("Data taker finished.")
-                break
-            await asyncio.sleep(0.005)
-
-            data_row = np.sin(2*np.pi*1e3*time_val) + 0.1*np.random.random(self.samples)
-            time_val += time_step
-            await self.chan1.push(data_row)
-            await self.chan2.push(-data_row*2)
-            print("Stream has filled {} of {} points".format(self.chan1.points_taken, self.chan1.num_points() ))
-
+        await asyncio.sleep(0.002)
+        data_row = np.sin(2*np.pi*self.time_val)*np.ones(5) + 0.1*np.random.random(5)
+        self.time_val += time_step
+        await self.voltage.push(data_row)
+        logger.debug("Stream pushed points {}.".format(data_row))
+        logger.debug("Stream has filled {} of {} points".format(self.voltage.points_taken, self.voltage.num_points() ))
 
 class ExperimentTestCase(unittest.TestCase):
 
@@ -147,6 +136,7 @@ class ExperimentTestCase(unittest.TestCase):
                  (avgr.final_average, printer_final.data)]
 
         exp.set_graph(edges)
+        exp.init_instruments()
 
         self.assertFalse(avgr.data.descriptor is None)
         self.assertFalse(printer_partial.data.descriptor is None)
@@ -160,85 +150,92 @@ class ExperimentTestCase(unittest.TestCase):
         edges = [(exp.chan1, printer.data)]
 
         exp.set_graph(edges)
-        exp.run_loop()
+        exp.init_instruments()
+        exp.run_sweeps()
 
-    def test_run_simple_graph_branchout(self):
-        exp      = TestExperiment()
-        printer1 = Print(name="One")
-        printer2 = Print(name="Two")
+    # def test_run_simple_graph_branchout(self):
+    #     exp      = TestExperiment()
+    #     printer1 = Print(name="One")
+    #     printer2 = Print(name="Two")
 
-        edges = [(exp.chan1, printer1.data), (exp.chan1, printer2.data)]
+    #     edges = [(exp.chan1, printer1.data), (exp.chan1, printer2.data)]
 
-        exp.set_graph(edges)
-        exp.run_loop()
+    #     exp.set_graph(edges)
+    #     exp.init_instruments()
+    #     exp.run_sweeps()
 
-    def test_depth(self):
-        exp         = TestExperiment()
-        passthrough = Passthrough(name="Passthrough")
-        printer     = Print(name="Printer")
+    # def test_depth(self):
+    #     exp         = TestExperiment()
+    #     passthrough = Passthrough(name="Passthrough")
+    #     printer     = Print(name="Printer")
 
-        edges = [(exp.chan1, passthrough.data_in), (passthrough.data_out, printer.data)]
+    #     edges = [(exp.chan1, passthrough.data_in), (passthrough.data_out, printer.data)]
 
-        exp.set_graph(edges)
-        exp.run_loop()
+    #     exp.set_graph(edges)
+    #     exp.init_instruments()
+    #     exp.run_sweeps()
 
-    def test_averager(self):
-        exp             = TestExperiment()
-        printer_final   = Print(name="Final")
-        avgr            = Average('trials', name="TestAverager")
+    # def test_averager(self):
+    #     exp             = TestExperiment()
+    #     printer_final   = Print(name="Final")
+    #     avgr            = Average('trials', name="TestAverager")
 
-        edges = [(exp.chan1, avgr.data),
-                 (avgr.final_average, printer_final.data)]
+    #     edges = [(exp.chan1, avgr.data),
+    #              (avgr.final_average, printer_final.data)]
 
-        exp.set_graph(edges)
-        exp.run_loop()
+    #     exp.set_graph(edges)
+    #     exp.init_instruments()
+    #     exp.run_sweeps()
 
-    def test_add_axis_to_averager(self):
-        exp             = TestExperiment()
-        printer_final   = Print(name="Final")
-        avgr            = Average('samples', name="TestAverager")
+    # def test_add_axis_to_averager(self):
+    #     exp             = TestExperiment()
+    #     printer_final   = Print(name="Final")
+    #     avgr            = Average('samples', name="TestAverager")
 
-        edges = [(exp.chan1, avgr.data),
-                 (avgr.final_average, printer_final.data)]
+    #     edges = [(exp.chan1, avgr.data),
+    #              (avgr.final_average, printer_final.data)]
 
-        exp.set_graph(edges)
-        repeats = 2
-        exp.chan1.descriptor.add_axis(DataAxis("repeats", list(range(repeats))))
-        exp.update_descriptors()
-        self.assertTrue(len(exp.chan1.descriptor.axes) == 3)
-        exp.run_loop()
+    #     exp.set_graph(edges)
+    #     exp.init_instruments()
+    #     repeats = 2
+    #     exp.chan1.descriptor.add_axis(DataAxis("repeats", list(range(repeats))))
+    #     exp.update_descriptors()
+    #     self.assertTrue(len(exp.chan1.descriptor.axes) == 3)
+    #     exp.run_sweeps()
 
-    def test_scalar_averager(self):
-        exp             = TestExperiment()
-        printer_final   = Print(name="Final")
-        avgr            = Average('samples', name="TestAverager")
+    # def test_scalar_averager(self):
+    #     exp             = TestExperiment()
+    #     printer_final   = Print(name="Final")
+    #     avgr            = Average('samples', name="TestAverager")
 
-        edges = [(exp.chan1, avgr.data),
-                 (avgr.final_average, printer_final.data)]
+    #     edges = [(exp.chan1, avgr.data),
+    #              (avgr.final_average, printer_final.data)]
 
-        exp.set_graph(edges)
-        exp.update_descriptors()
-        exp.run_loop()
+    #     exp.set_graph(edges)
+    #     exp.init_instruments()
+    #     exp.update_descriptors()
+    #     exp.run_sweeps()
 
-    def test_reset(self):
-        exp             = TestExperiment()
-        printer_final   = Print(name="Final")
-        avgr            = Average('samples', name="TestAverager")
+    # def test_reset(self):
+    #     exp             = TestExperiment()
+    #     printer_final   = Print(name="Final")
+    #     avgr            = Average('samples', name="TestAverager")
 
-        edges = [(exp.chan1, avgr.data),
-                 (avgr.final_average, printer_final.data)]
+    #     edges = [(exp.chan1, avgr.data),
+    #              (avgr.final_average, printer_final.data)]
 
-        exp.set_graph(edges)
-        logger.debug("Running reset test: 1st loop.")
-        exp.run_loop()
-        exp.reset()
+    #     exp.set_graph(edges)
+    #     exp.init_instruments()
+    #     logger.debug("Running reset test: 1st sweeps.")
+    #     exp.run_sweeps()
+    #     exp.reset()
 
-        self.assertTrue(exp.chan1.output_streams[0].points_taken == 0)
-        self.assertTrue(avgr.final_average.output_streams[0].points_taken == 0)
+    #     self.assertTrue(exp.chan1.output_streams[0].points_taken == 0)
+    #     self.assertTrue(avgr.final_average.output_streams[0].points_taken == 0)
 
-        logger.debug("Running reset test: 2nd loop.")
-        time.sleep(0.1)
-        exp.run_loop()
+    #     logger.debug("Running reset test: 2nd sweeps.")
+    #     time.sleep(0.1)
+    #     exp.run_sweeps()
 
 if __name__ == '__main__':
     unittest.main()
