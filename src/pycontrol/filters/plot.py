@@ -1,3 +1,11 @@
+# Copyright 2016 Raytheon BBN Technologies
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+
 import asyncio, concurrent
 import time
 
@@ -55,9 +63,7 @@ class Plotter(Filter):
             self.plot = self.figure.image(image=[self.z_data], x=[xmin], y=[ymin],
                                           dw=[xmax-xmin], dh=[ymax-ymin], name=self.name, **self.plot_args)
 
-        renderers = self.plot.select(dict(name=self.name))
-        self.renderer = [r for r in renderers if isinstance(r, GlyphRenderer)][0]
-        self.data_source = self.renderer.data_source
+        self.data_source = self.plot.data_source
 
         self.plot_buffer = np.nan*np.ones(self.points_before_clear)
         self.idx = 0
