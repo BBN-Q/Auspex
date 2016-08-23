@@ -1,3 +1,11 @@
+# Copyright 2016 Raytheon BBN Technologies
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+
 """
 Created on Wed Mar 21 11:35:40 2012
 Some convenience functions for uploading figures to the wiki.  
