@@ -2,6 +2,8 @@ import asyncio
 import logging
 import numbers
 import itertools
+import zlib
+import pickle
 
 import numpy as np
 from functools import reduce
@@ -213,7 +215,7 @@ class DataStreamDescriptor(object):
 
 class DataStream(object):
     """A stream of data"""
-    def __init__(self, name=None, unit=None, loop=None):
+    def __init__(self, name=None, unit=None, loop=None, compression="none"):
         super(DataStream, self).__init__()
         self.queue = asyncio.Queue(loop=loop)
         self.loop = loop
@@ -222,7 +224,8 @@ class DataStream(object):
         self.points_taken = 0
         self.descriptor = None
         self.start_connector = None
-        self.end_connector = None 
+        self.end_connector = None
+        self.compression = compression
 
     def set_descriptor(self, descriptor):
         if isinstance(descriptor,DataStreamDescriptor):
@@ -238,19 +241,11 @@ class DataStream(object):
             logger.warning("Stream '{}' has no descriptor. Function num_points() returns 0.".format(self.name))
             return 0
 
-    async def finished(self, wait_time=2):
-        while not self.done():
-            await asyncio.sleep(wait_time)
-        return True
-
     def percent_complete(self):
         if (self.descriptor is not None) and self.num_points()>0:
             return 100.0*self.points_taken/self.num_points()
         else:
             return 0.0
-
-    def done(self):
-        return self.descriptor.done() and self.points_taken == self.num_points() and self.queue.empty()
 
     def reset(self):
         self.descriptor.reset()
@@ -274,7 +269,18 @@ class DataStream(object):
                     self.points_taken += 1
                 except:
                     raise ValueError("Got data {} that is neither an array nor a float".format(data))
-        await self.queue.put(data)
+        if self.compression == 'zlib':
+            message = {"type": "data", "compression": "zlib", "data": zlib.compress(pickle.dumps(data, -1))}
+        else:
+            message = {"type": "data", "compression": "none", "data": data}
+        
+        # This can be replaced with some other serialization method
+        # and also should support sending via zmq.
+        await self.queue.put(message)
+    
+    async def push_event(self, event):
+        message = {"type": "event", "compression": "none", "data": event}
+        await self.queue.put(message)
 
 # These connectors are where we attached the DataStreams
 

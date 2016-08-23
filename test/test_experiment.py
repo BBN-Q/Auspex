@@ -165,6 +165,18 @@ class ExperimentTestCase(unittest.TestCase):
         exp.init_instruments()
         exp.run_sweeps()
 
+    def test_compressed_streams(self):
+        exp      = TestExperiment()
+        printer1 = Print(name="One")
+        printer2 = Print(name="Two")
+
+        edges = [(exp.chan1, printer1.data), (exp.chan1, printer2.data)]
+
+        exp.set_graph(edges)
+        exp.set_stream_compression("zlib")
+        exp.init_instruments()
+        exp.run_sweeps()
+
     def test_depth(self):
         exp         = TestExperiment()
         passthrough = Passthrough(name="Passthrough")
