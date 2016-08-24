@@ -99,40 +99,42 @@ class WriteToHDF5(Filter):
         w_idx = 0
 
         while True:
-            logger.debug("HDF5 awaiting data")
-            done, pending = await asyncio.wait((stream.finished(), stream.queue.get()), return_when=concurrent.futures.FIRST_COMPLETED)
-            new_data = list(done)[0].result()
-            if type(new_data)==bool:
-                if new_data:
+
+            message = await stream.queue.get()
+            message_type = message['type']
+            message_data = message['data']
+            message_comp = message['compression']
+            
+            if message_comp == 'zlib':
+                message_data = pickle.loads(zlib.decompress(message_data))
+            # If we receive a message
+            if message['type'] == 'event':
+                logger.debug('%s "%s" received event "%s"', self.__class__.__name__, self.name, message_data)
+                if message['data'] == 'done':
                     break
-                else:
-                    logger.debug("Printer %s awaiting data", self.name)
-                    new_data = np.array(await stream.queue.get()).flatten()
+            elif message['type'] == 'data':
+                logger.debug('%s "%s" received %d points.', self.__class__.__name__, self.name, message_data.size)
+                logger.debug("Now has %d of %d points.", stream.points_taken, stream.num_points())
 
-            logger.debug("HDF5 stream has %d points", stream.points_taken)
-            logger.debug("HDF5: %s got data %s of length %d", stream.name, new_data, new_data.size)
+                # Resize if necessary, also get the new set of sweep tuples since the axes must have changed
+                if w_idx + message_data.size >= data.len():
+                    logger.debug("HDF5 stream was resized to %d points", w_idx + message_data.size)
+                    data.resize((w_idx + message_data.size,))
+                    tuples = np.append(tuples, np.array(stream.descriptor.tuples()), axis=0)
 
-            # import ipdb; ipdb.set_trace()
+                # Write to table
+                for i, axis_name in enumerate(axis_names):
+                    logger.debug("Setting %s to %s", axis_name, tuples[w_idx:w_idx+message_data.size, i])
+                    data[axis_name, w_idx:w_idx+message_data.size] = tuples[w_idx:w_idx+message_data.size, i]
 
-            # Resize if necessary, also get the new set of sweep tuples since the axes must have changed
-            if w_idx + new_data.size >= data.len():
-                logger.debug("HDF5 stream was resized to %d points", w_idx + new_data.size)
-                data.resize((w_idx + new_data.size,))
-                tuples = np.append(tuples, np.array(stream.descriptor.tuples()), axis=0)
+                data[stream.start_connector.name, w_idx:w_idx+message_data.size] = message_data
 
-            # Write to table
-            for i, axis_name in enumerate(axis_names):
-                logger.debug("Setting %s to %s", axis_name, tuples[w_idx:w_idx+new_data.size, i])
-                data[axis_name, w_idx:w_idx+new_data.size] = tuples[w_idx:w_idx+new_data.size, i]
+                self.file.flush()
+                w_idx += message_data.size
+                self.points_taken = w_idx
 
-            data[stream.start_connector.name, w_idx:w_idx+new_data.size] = new_data
-
-            self.file.flush()
-            w_idx += new_data.size
-            self.points_taken = w_idx
-
-            logger.debug("HDF5: Write index at %d", w_idx)
-            logger.debug("HDF5: %s has written %d points", stream.name, w_idx)
+                logger.debug("HDF5: Write index at %d", w_idx)
+                logger.debug("HDF5: %s has written %d points", stream.name, w_idx)
 
         try:
             self.file.close()

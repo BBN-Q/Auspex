@@ -244,11 +244,16 @@ class Experiment(metaclass=MetaExperiment):
         operation should be defined here"""
         pass
 
+    def set_stream_compression(self, compression="zlib"):
+        for oc in self.output_connectors.values():
+            for os in oc.output_streams:
+                os.compression = compression
+
     def reset(self):
         for edge in self.graph.edges:
             edge.reset()
         self.update_descriptors()
-        self.generate_sweep()
+        # self.generate_sweep()
 
     def update_descriptors(self):
         logger.debug("Starting descriptor update in experiment.")
@@ -265,6 +270,11 @@ class Experiment(metaclass=MetaExperiment):
             oc.update_descriptors()
         # TODO: have this push any changes to JSON file
         # if we're using Quince to define connections.
+
+    async def declare_done(self):
+        for oc in self.output_connectors.values():
+            for os in oc.output_streams:
+                await os.push_event("done")
 
     async def sweep(self):
         # Set any static parameters
@@ -291,6 +301,7 @@ class Experiment(metaclass=MetaExperiment):
            
             if done:
                 logger.debug("Sweeper has finished.")
+                await self.declare_done()
                 break
 
     def run_sweeps(self):
@@ -373,9 +384,9 @@ class Experiment(metaclass=MetaExperiment):
         other_nodes = self.nodes[:]
         other_nodes.remove(self)
         tasks = [n.run() for n in other_nodes]
-        for oc in self.output_connectors.values():
-            for stream in oc.output_streams:
-                tasks.append(stream.finished())
+        # for oc in self.output_connectors.values():
+        #     for stream in oc.output_streams:
+        #         tasks.append(stream.finished())
         tasks.append(self.sweep())
         self.loop.run_until_complete(asyncio.gather(*tasks))
 

@@ -7,6 +7,8 @@
 #    http://www.apache.org/licenses/LICENSE-2.0
 
 import asyncio
+import zlib
+import pickle
 from concurrent.futures import FIRST_COMPLETED
 
 from pycontrol.stream import DataStream, InputConnector, OutputConnector
@@ -67,26 +69,31 @@ class Filter(metaclass=MetaFilter):
 
         while True:
 
-            #setup futures that will return either stream is done or new  data
-            get_finished_task = asyncio.ensure_future(input_stream.finished())
-            get_data_task = asyncio.ensure_future(input_stream.queue.get())
+            message = await input_stream.queue.get()
+            message_type = message['type']
+            message_data = message['data']
+            message_comp = message['compression']
+            
+            if message_comp == 'zlib':
+                message_data = pickle.loads(zlib.decompress(message_data))
+            # If we receive a message
+            if message['type'] == 'event':
+                logger.debug('%s "%s" received event "%s"', self.__class__.__name__, self.name, message_data)
+                
+                # Propagate along the graph
+                for oc in self.output_connectors.values():
+                    for os in oc.output_streams:
+                        logger.debug('%s "%s" pushed event "%s" to %s, %s', self.__class__.__name__, self.name, message_data, oc, os)
+                        await os.queue.put(message)
+                
+                # Check to see if we're done
+                if message['data'] == 'done':
+                    break
 
-            done, pending = await asyncio.wait((get_finished_task, get_data_task),
-                                     return_when=FIRST_COMPLETED)
-
-            #check whether stream finished returned first in which case we break out and finish
-            if get_finished_task in done and input_stream.queue.empty():
-                logger.debug('No more data for %s "%s"', self.__class__.__name__, self.name)
-                get_data_task.cancel()
-                break
-
-            #otherwise cancel the finish check and process new data
-            get_finished_task.cancel()
-            new_data = get_data_task.result()
-            logger.debug('%s "%s" received %d points.', self.__class__.__name__, self.name, new_data.size)
-            logger.debug("Now has %d of %d points.", input_stream.points_taken, input_stream.num_points())
-
-            await self.process_data(new_data)
+            elif message['type'] == 'data':
+                logger.debug('%s "%s" received %d points.', self.__class__.__name__, self.name, message_data.size)
+                logger.debug("Now has %d of %d points.", input_stream.points_taken, input_stream.num_points())
+                await self.process_data(message_data)
 
     async def process_data(self, data):
         """Generic pass through.  """
