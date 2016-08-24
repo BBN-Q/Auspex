@@ -21,22 +21,26 @@ from pycontrol.filters.filter import Filter
 from pycontrol.instruments.instrument import Instrument
 
 class QubitExpFactory(object):
-    """The purpose of this factory is to examine ExpSettings.json""" 
-    def __init__(self):
+    """The purpose of this factory is to examine DefaultExpSettings.json and construct
+    and experiment therefrom.""" 
+    
+    @staticmethod
+    def create():
         with open(config.expSettingsFile, 'r') as FID: 
-            self.exp_settings = json.load(FID)
+            exp_settings = json.load(FID)
 
         with open(config.channelLibFile, 'r') as FID: 
-            self.chan_settings = json.load(FID)
+            chan_settings = json.load(FID)
 
-        self.experiment = Experiment()
+        experiment = Experiment()
 
-        self.load_instruments()
-        self.load_channels()
-        self.load_filters()
-        self.load_sweeps()
+        QubitExpFactory.load_instruments(experiment, exp_settings)
+        QubitExpFactory.load_channels(experiment, chan_settings)
+        QubitExpFactory.load_filters(experiment, exp_settings)
+        QubitExpFactory.load_sweeps(experiment, exp_settings)
 
-    def load_instruments(self):
+    @staticmethod
+    def load_instruments(experiment, exp_settings):
         # Inspect all vendor modules in pycontrol instruments and construct
         # a map to the instrument names.
         modules = (
@@ -51,29 +55,33 @@ class QubitExpFactory(object):
                                                             _[1] != Instrument)
             module_map.update(dict(instrs))
 
-        for instr_name, instr_par in self.exp_settings['instruments'].items():
+        for instr_name, instr_par in exp_settings['instruments'].items():
+            instr_type = instr_par['deviceName']
             # Instantiate the desired instrument
-            if instr_name in module_map:
-                inst = module_map[instr_name](instr_par['address'])
+            if instr_type in module_map:
+                inst = module_map[instr_type](instr_par['address'])
                 inst.set_all(instr_par)
                 # Add to class dictionary for convenience
-                setattr(self.experiment, 'instr_name', inst)
+                setattr(experiment, 'instr_name', inst)
                 # Add to _instruments dictionary
-                self.experiment._instruments[instr_name] = inst
-                logger.debug("Found instrument class for '%s' when loading experiment settings.", instr_name)
+                experiment._instruments[instr_name] = inst
+                logger.debug("Found instrument class %s for '%s' when loading experiment settings.", isntr_type, instr_name)
             else:
-                logger.error("Could not find instrument class for '%s' when loading experiment settings.", instr_name)
+                logger.error("Could not find instrument class %s for '%s' when loading experiment settings.", instr_type, instr_name)
 
-    def load_channels(self):
+    @staticmethod
+    def load_channels(experiment, chan_settings):
         # Add output connectors for each defined channel
-        for chan_name, chan_par in self.chan_settings['channelDict'].items():
+        for chan_name, chan_par in chan_settings['channelDict'].items():
             pass
 
-    def load_sweeps(self):
-        for chan_name, chan_par in self.exp_settings['sweeps'].items():
+    @staticmethod
+    def load_sweeps(experiment, exp_settings):
+        for chan_name, chan_par in exp_settings['sweeps'].items():
             pass
 
-    def load_filters(self):
+    @staticmethod
+    def load_filters(experiment, exp_settings):
         modules = (
             importlib.import_module('pycontrol.filters.' + name)
             for loader, name, is_pkg in pkgutil.iter_modules(pycontrol.filters.__path__)
@@ -86,7 +94,7 @@ class QubitExpFactory(object):
                                                             _[1] != Filter)
             module_map.update(dict(filters))
 
-        for filt_name, filt_par in self.exp_settings['measurements'].items():
+        for filt_name, filt_par in exp_settings['measurements'].items():
             filt_type = filt_par['filterType']
             if filt_type in module_map:
                 filt = module_map[filt_type]()
