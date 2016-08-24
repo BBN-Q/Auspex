@@ -26,13 +26,17 @@ class QubitExpFactory(object):
         with open(config.expSettingsFile, 'r') as FID: 
             self.exp_settings = json.load(FID)
 
-            self.experiment = Experiment()
+        with open(config.channelLibFile, 'r') as FID: 
+            self.chan_settings = json.load(FID)
 
-            self.load_instruments()
-            self.load_channels()
-            self.load_filters()
+        self.experiment = Experiment()
 
-    def load_instruments():
+        self.load_instruments()
+        self.load_channels()
+        self.load_filters()
+        self.load_sweeps()
+
+    def load_instruments(self):
         # Inspect all vendor modules in pycontrol instruments and construct
         # a map to the instrument names.
         modules = (
@@ -49,17 +53,27 @@ class QubitExpFactory(object):
 
         for instr_name, instr_par in self.exp_settings['instruments'].items():
             # Instantiate the desired instrument
-            inst = module_map[instr_name](instr_par['address'])
-            inst.set_all(instr_par)
-            # Add to class dictionary for convenience
-            setattr(self.experiment, 'instr_name', inst)
-            # Add to _instruments dictionary
-            self.experiment._instruments[instr_name] = inst
+            if instr_name in module_map:
+                inst = module_map[instr_name](instr_par['address'])
+                inst.set_all(instr_par)
+                # Add to class dictionary for convenience
+                setattr(self.experiment, 'instr_name', inst)
+                # Add to _instruments dictionary
+                self.experiment._instruments[instr_name] = inst
+                logger.debug("Found instrument class for '%s' when loading experiment settings.", instr_name)
+            else:
+                logger.error("Could not find instrument class for '%s' when loading experiment settings.", instr_name)
 
-    def load_channels():
-        pass
+    def load_channels(self):
+        # Add output connectors for each defined channel
+        for chan_name, chan_par in self.chan_settings['channelDict'].items():
+            pass
 
-    def load_filters():
+    def load_sweeps(self):
+        for chan_name, chan_par in self.exp_settings['sweeps'].items():
+            pass
+
+    def load_filters(self):
         modules = (
             importlib.import_module('pycontrol.filters.' + name)
             for loader, name, is_pkg in pkgutil.iter_modules(pycontrol.filters.__path__)
@@ -67,16 +81,15 @@ class QubitExpFactory(object):
 
         module_map = {}
         for mod in modules:
-            instrs = (_ for _ in inspect.getmembers(mod) if inspect.isclass(_[1]) and 
+            filters = (_ for _ in inspect.getmembers(mod) if inspect.isclass(_[1]) and 
                                                             issubclass(_[1], Filter) and
                                                             _[1] != Filter)
-            module_map.update(dict(instrs))
+            module_map.update(dict(filters))
 
         for filt_name, filt_par in self.exp_settings['measurements'].items():
-            # Instantiate the desired instrument
-            inst = module_map[instr_name](instr_par['address'])
-            inst.set_all(instr_par)
-            # Add to class dictionary for convenience
-            setattr(self.experiment, 'instr_name', inst)
-            # Add to _instruments dictionary
-            self.experiment._instruments[instr_name] = inst
+            filt_type = filt_par['filterType']
+            if filt_type in module_map:
+                filt = module_map[filt_type]()
+                logger.debug("Found filter class %s for '%s' when loading experiment settings.", filt_type, filt_name)
+            else:
+                logger.error("Could not find filter class %s for '%s' when loading experiment settings.", filt_type, filt_name)
