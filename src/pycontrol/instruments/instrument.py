@@ -286,6 +286,13 @@ class Instrument(metaclass=MetaInstrument):
 
         self._freeze()
 
+    def set_all(self, settings_dict):
+        """Accept a settings dictionary and attempt to set all of the instrument
+        parameters using the key/value pairs."""
+        for name, value in settings_dict.items():
+            if hasattr(self, name):
+                setattr(self, name, value)
+
     # We want to lock the class dictionary
     # This solution from http://stackoverflow.com/questions/3603502/prevent-creating-new-attributes-outside-init
 
