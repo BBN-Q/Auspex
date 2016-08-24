@@ -15,7 +15,7 @@ import matplotlib as mpl
 import seaborn as sns
 import h5py
 
-# from pycontrol.logging import logger
+# from pycontrol.log import logger
 import logging
 
 logger = logging.getLogger('pycontrol')
