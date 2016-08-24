@@ -20,7 +20,7 @@ from pycontrol.filters.debug import Print
 from pycontrol.filters.channelizer import Channelizer
 from pycontrol.filters.integrator import KernelIntegrator
 
-from pycontrol.logging import logger, logging
+from pycontrol.log import logger, logging
 logger.setLevel(logging.INFO)
 
 class TestInstrument(Instrument):

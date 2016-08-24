@@ -26,7 +26,7 @@ import time
 import matplotlib.pyplot as plt
 from analysis.h5shell import h5shell
 
-from pycontrol.logging import logger
+from pycontrol.log import logger
 
 # Experimental Topology
 # lockin AO 2 -> Analog Attenuator Vdd

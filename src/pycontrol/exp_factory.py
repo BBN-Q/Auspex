@@ -9,10 +9,16 @@
 import json
 import importlib
 import pkgutil
+import inspect
 
 import pycontrol.config as config
-from pycontrol.experiment import Experiment
 import pycontrol.instruments
+import pycontrol.filters
+
+from pycontrol.log import logger
+from pycontrol.experiment import Experiment
+from pycontrol.filters.filter import Filter
+from pycontrol.instruments.instrument import Instrument
 
 class QubitExpFactory(object):
     """The purpose of this factory is to examine ExpSettings.json""" 
@@ -24,7 +30,7 @@ class QubitExpFactory(object):
 
             self.load_instruments()
             self.load_channels()
-            self.load_measurements()
+            self.load_filters()
 
     def load_instruments():
         # Inspect all vendor modules in pycontrol instruments and construct
@@ -41,7 +47,7 @@ class QubitExpFactory(object):
                                                             _[1] != Instrument)
             module_map.update(dict(instrs))
 
-        for instr_name, instr_par in self.exp_settings['instruments'].items()
+        for instr_name, instr_par in self.exp_settings['instruments'].items():
             # Instantiate the desired instrument
             inst = module_map[instr_name](instr_par['address'])
             inst.set_all(instr_par)
@@ -53,5 +59,24 @@ class QubitExpFactory(object):
     def load_channels():
         pass
 
-    def load_measurements():
-        pass
+    def load_filters():
+        modules = (
+            importlib.import_module('pycontrol.filters.' + name)
+            for loader, name, is_pkg in pkgutil.iter_modules(pycontrol.filters.__path__)
+        )
+
+        module_map = {}
+        for mod in modules:
+            instrs = (_ for _ in inspect.getmembers(mod) if inspect.isclass(_[1]) and 
+                                                            issubclass(_[1], Filter) and
+                                                            _[1] != Filter)
+            module_map.update(dict(instrs))
+
+        for filt_name, filt_par in self.exp_settings['measurements'].items():
+            # Instantiate the desired instrument
+            inst = module_map[instr_name](instr_par['address'])
+            inst.set_all(instr_par)
+            # Add to class dictionary for convenience
+            setattr(self.experiment, 'instr_name', inst)
+            # Add to _instruments dictionary
+            self.experiment._instruments[instr_name] = inst

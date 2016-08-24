@@ -12,7 +12,7 @@ import pickle
 from concurrent.futures import FIRST_COMPLETED
 
 from pycontrol.stream import DataStream, InputConnector, OutputConnector
-from pycontrol.logging import logger
+from pycontrol.log import logger
 
 class MetaFilter(type):
     """Meta class to bake the input/output connectors into a Filter class description

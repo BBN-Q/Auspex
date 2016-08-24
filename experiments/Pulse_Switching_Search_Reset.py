@@ -30,7 +30,7 @@ from analysis.h5shell import h5shell
 import pandas as pd
 from scipy.interpolate import interp1d
 
-from pycontrol.logging import logger
+from pycontrol.log import logger
 
 # Experimental Topology
 # lockin AO 3 -> Analog Attenuator Vc (Control Voltages)

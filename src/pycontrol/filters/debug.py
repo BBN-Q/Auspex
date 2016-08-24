@@ -10,7 +10,7 @@ import asyncio, concurrent
 import numpy as np
 from pycontrol.filters.filter import Filter
 from pycontrol.stream import InputConnector, OutputConnector
-from pycontrol.logging import logger
+from pycontrol.log import logger
 
 class Print(Filter):
     """Debug printer that prints data comming through filter"""

@@ -15,7 +15,7 @@ from scipy.signal import firwin, lfilter
 
 from pycontrol.filters.filter import Filter, InputConnector, OutputConnector
 from pycontrol.stream import  DataStreamDescriptor
-from pycontrol.logging import logger
+from pycontrol.log import logger
 
 class Channelizer(Filter):
     """Digital demodulation and filtering to select a particular frequency multiplexed channel"""

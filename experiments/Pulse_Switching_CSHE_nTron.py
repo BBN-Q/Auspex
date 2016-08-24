@@ -32,7 +32,7 @@ from scipy.interpolate import interp1d
 import analysis.switching as sw
 from adapt import refine
 
-from pycontrol.logging import logger
+from pycontrol.log import logger
 
 # Experimental Topology
 # lockin AO 2 -> Analog Attenuator Vdd

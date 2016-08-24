@@ -13,7 +13,7 @@ import numpy as np
 import os.path
 
 from pycontrol.stream import DataStreamDescriptor
-from pycontrol.logging import logger
+from pycontrol.log import logger
 from pycontrol.filters.filter import Filter, InputConnector, OutputConnector
 from tqdm import tqdm, tqdm_notebook
 

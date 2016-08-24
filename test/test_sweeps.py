@@ -18,7 +18,7 @@ from pycontrol.parameter import FloatParameter
 from pycontrol.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector
 from pycontrol.filters.debug import Print
 from pycontrol.filters.io import WriteToHDF5
-from pycontrol.logging import logger
+from pycontrol.log import logger
 
 import logging
 logger.setLevel(logging.DEBUG)

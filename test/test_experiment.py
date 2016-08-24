@@ -17,7 +17,7 @@ from pycontrol.parameter import FloatParameter
 from pycontrol.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector
 from pycontrol.filters.debug import Print, Passthrough
 from pycontrol.filters.average import Average
-from pycontrol.logging import logger, logging
+from pycontrol.log import logger, logging
 logger.setLevel(logging.DEBUG)
 
 class TestInstrument1(Instrument):

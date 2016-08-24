@@ -14,7 +14,7 @@ import numpy as np
 from bokeh.plotting import Figure
 from bokeh.models.renderers import GlyphRenderer
 
-from pycontrol.logging import logger
+from pycontrol.log import logger
 from pycontrol.filters.filter import Filter, InputConnector
 
 class Plotter(Filter):

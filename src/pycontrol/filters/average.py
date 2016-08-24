@@ -11,7 +11,7 @@ import asyncio, concurrent
 import numpy as np
 from pycontrol.stream import DataStreamDescriptor, DataAxis
 from pycontrol.filters.filter import Filter, InputConnector, OutputConnector
-from pycontrol.logging import logger
+from pycontrol.log import logger
 
 class Average(Filter):
     """Takes data and collapses along the specified axis."""

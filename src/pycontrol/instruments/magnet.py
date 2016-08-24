@@ -8,7 +8,7 @@
 
 import numpy as np
 import time
-from pycontrol.logging import logger
+from pycontrol.log import logger
 
 class Electromagnet(object):
     """Wrapper for electromagnet """

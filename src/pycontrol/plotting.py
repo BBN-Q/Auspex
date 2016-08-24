@@ -12,7 +12,7 @@ import psutil
 import os
 import sys
 
-from pycontrol.logging import logger
+from pycontrol.log import logger
 
 def in_notebook():
     # From http://stackoverflow.com/questions/15411967/how-can-i-check-if-code-is-executed-in-the-ipython-notebook

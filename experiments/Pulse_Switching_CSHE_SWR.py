@@ -32,7 +32,7 @@ from scipy.stats import beta
 import analysis.switching as sw
 from analysis.h5shell import h5shell
 
-from pycontrol.logging import logger
+from pycontrol.log import logger
 # Experimental Topology
 # lockin AO 2 -> Analog Attenuator Vdd
 # lockin AO 3 -> Analog Attenuator Vc (Control Voltages)

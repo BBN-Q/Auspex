@@ -26,7 +26,7 @@ from pycontrol.parameter import ParameterGroup, FloatParameter, IntParameter, Pa
 from pycontrol.sweep import Sweeper
 from pycontrol.stream import DataStream, DataAxis, SweepAxis, DataStreamDescriptor, InputConnector, OutputConnector
 from pycontrol.filters.plot import Plotter
-from pycontrol.logging import logger
+from pycontrol.log import logger
 
 class ExpProgressBar(object):
     """ Display progress bar(s) on the terminal.

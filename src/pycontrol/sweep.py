@@ -11,7 +11,7 @@ import numpy as np
 
 from pycontrol.parameter import ParameterGroup, FloatParameter, IntParameter, Parameter
 from pycontrol.stream import DataStream, DataAxis, SweepAxis, DataStreamDescriptor, InputConnector, OutputConnector
-from pycontrol.logging import logger
+from pycontrol.log import logger
 
 class Sweeper(object):
     """ Control center of sweep axes """

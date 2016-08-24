@@ -16,7 +16,7 @@ import pickle
 import numpy as np
 from functools import reduce
 
-from pycontrol.logging import logger
+from pycontrol.log import logger
 
 class DataAxis(object):
     """An axis in a data stream"""

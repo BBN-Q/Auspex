@@ -12,7 +12,7 @@ import numpy as np
 
 from pycontrol.stream import DataStreamDescriptor
 from pycontrol.filters.filter import Filter, InputConnector, OutputConnector
-from pycontrol.logging import logger
+from pycontrol.log import logger
 
 class KernelIntegrator(Filter):
 

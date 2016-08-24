@@ -16,7 +16,7 @@ import visa
 import os
 import time
 
-from pycontrol.logging import logger
+from pycontrol.log import logger
 
 class StringCommand(object):
     """Wraps a particular device command set based on getter and setter strings. The optional
