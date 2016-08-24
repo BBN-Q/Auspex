@@ -44,3 +44,24 @@ class DigitalAttenuator(Instrument):
         self.interface.write("SET {:d} {:.1f}".format(chan, val))
         assert self.interface.read() == "Setting channel {:d} to {:.2f}".format(chan, val)
         assert self.interface.read() == "END"
+
+    @property
+    def ch1Attenuation(self):
+        return self.get_attenuation(1)
+    @ch1Attenuation.setter
+    def ch1Attenuation(self, value):
+        self.set_attenuation(1, value)
+
+    @property
+    def ch2Attenuation(self):
+        return self.get_attenuation(2)
+    @ch2Attenuation.setter
+    def ch2Attenuation(self, value):
+        self.set_attenuation(2, value)
+
+    @property
+    def ch3Attenuation(self):
+        return self.get_attenuation(3)
+    @ch3Attenuation.setter
+    def ch3Attenuation(self, value):
+        self.set_attenuation(3, value)
