@@ -59,13 +59,17 @@ class QubitExpFactory(object):
             instr_type = instr_par['deviceName']
             # Instantiate the desired instrument
             if instr_type in module_map:
-                inst = module_map[instr_type](instr_par['address'])
-                inst.set_all(instr_par)
+                logger.debug("Found instrument class %s for '%s' at loc %s when loading experiment settings.", instr_type, instr_name, instr_par['address'])
+                try:
+                    inst = module_map[instr_type](instr_par['address'])
+                    inst.set_all(instr_par)
+                except:
+                    logger.error("Couldn't initialize instrument.")
+                    inst = None
                 # Add to class dictionary for convenience
                 setattr(experiment, 'instr_name', inst)
                 # Add to _instruments dictionary
                 experiment._instruments[instr_name] = inst
-                logger.debug("Found instrument class %s for '%s' when loading experiment settings.", isntr_type, instr_name)
             else:
                 logger.error("Could not find instrument class %s for '%s' when loading experiment settings.", instr_type, instr_name)
 
