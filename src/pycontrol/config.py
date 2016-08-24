@@ -14,11 +14,11 @@ import sys
 
 # Run this code by importing config.py
 # Load the configuration from the json file and populate the global configuration dictionary
-rootFolder    = os.path.dirname( os.path.abspath(__file__) )
-rootFolder    = os.path.abspath(os.path.join(rootFolder, "../.." ))
-rootFolder    = rootFolder.replace('\\', '/') # use unix-like convention
-configFolder  = os.path.join(rootFolder, 'config')
-PyQLabCfgFile = os.path.join(configFolder, 'config.json')
+rootFolder      = os.path.dirname( os.path.abspath(__file__) )
+rootFolder      = os.path.abspath(os.path.join(rootFolder, "../.." ))
+rootFolder      = rootFolder.replace('\\', '/') # use unix-like convention
+configFolder    = os.path.join(rootFolder, 'config')
+PyQLabCfgFile   = os.path.join(configFolder, 'config.json')
 
 if not os.path.isfile(PyQLabCfgFile):
 	# build a config file from the template
@@ -30,14 +30,14 @@ if not os.path.isfile(PyQLabCfgFile):
 	ifid.close()
 	ofid.close()
 
-
 with open(PyQLabCfgFile, 'r') as f:
 	PyQLabCfg = json.load(f)
 
 # pull out the variables
 # abspath allows the use of relative file names in the config file
-AWGDir = os.path.abspath(PyQLabCfg['AWGDir'])
-instrumentLibFile = os.path.abspath(PyQLabCfg['InstrumentLibraryFile'])
-sweepLibFile = os.path.abspath(PyQLabCfg['SweepLibraryFile'])
+AWGDir             = os.path.abspath(PyQLabCfg['AWGDir'])
+instrumentLibFile  = os.path.abspath(PyQLabCfg['InstrumentLibraryFile'])
+channelLibFile     = os.path.abspath(PyQLabCfg['ChannelLibraryFile'])
+sweepLibFile       = os.path.abspath(PyQLabCfg['SweepLibraryFile'])
 measurementLibFile = os.path.abspath(PyQLabCfg['MeasurementLibraryFile'])
-quickpickFile = os.path.abspath(PyQLabCfg['QuickPickFile']) if 'QuickPickFile' in PyQLabCfg else ''
+expSettingsFile    = os.path.abspath(PyQLabCfg['ExpSettingsFile'])
