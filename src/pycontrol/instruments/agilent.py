@@ -20,6 +20,27 @@ def is_valid_ipv4(ipv4_address):
     except:
         return False
 
+class N5183A(Instrument):
+    """AgilentN5183A microwave source"""
+
+    frequency = FloatCommand(scpi_string=":freq")
+    power     = FloatCommand(scpi_string=":power")
+    phase     = FloatCommand(scpi_string=":phase")
+
+    alc       = StringCommand(scpi_string=":power:alc", value_map={True: '1', False: '0'})
+    mod       = StringCommand(scpi_string=":output:mod", value_map={True: '1', False: '0'})
+
+    output    = StringCommand(scpi_string=":output", value_map={True: '1', False: '0'})
+
+    def __init__(self, resource_name, *args, **kwargs):
+        #If we only have an IP address then tack on the raw socket port to the VISA resource string
+        if is_valid_ipv4(resource_name):
+            resource_name += "::5025::SOCKET"
+        super(N5183A, self).__init__(resource_name, *args, **kwargs)
+        self.interface._resource.read_termination = u"\n"
+        self.interface._resource.write_termination = u"\n"
+        self.interface._resource.timeout = 3000 #seem to have trouble timing out on first query sometimes
+
 class E8363C(Instrument):
     """Agilent E8363C VNA"""
 
@@ -33,12 +54,11 @@ class E8363C(Instrument):
     averaging_enable   = StringCommand(get_string=":SENSe1:AVERage:STATe?", set_string=":SENSe1:AVERage:STATe {:c}", value_map={False:"0", True:"1"})
     averaging_complete = StringCommand(get_string=":STATus:OPERation:AVERaging1:CONDition?", value_map={False:"+0", True:"+2"})
 
-    def __init__(self, name, resource_name, *args, **kwargs):
+    def __init__(self, resource_name, *args, **kwargs):
         #If we only have an IP address then tack on the raw socket port to the VISA resource string
         if is_valid_ipv4(resource_name):
             resource_name += "::5025::SOCKET"
-        super(E8363C, self).__init__(name, resource_name, *args, **kwargs)
-        self.name = "Agilent E8363C VNA"
+        super(E8363C, self).__init__(resource_name, *args, **kwargs)
         self.interface._resource.read_termination = u"\n"
         self.interface._resource.write_termination = u"\n"
         self.interface._resource.timeout = 3000 #seem to have trouble timing out on first query sometimes
