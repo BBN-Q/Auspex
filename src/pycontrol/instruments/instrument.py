@@ -261,14 +261,11 @@ class Instrument(metaclass=MetaInstrument):
 
     __isfrozen = False
 
-    def __init__(self, resource_name, name=None, interface_type=None, check_errors_on_get=False, check_errors_on_set=False):
+    def __init__(self, resource_name, name=None, interface_type=None):
         super(Instrument, self).__init__()
         self.name = name
         self.resource_name = resource_name
         self.instrument_type = None # This can be AWG, Digitizer, etc. 
-
-        self.check_errors_on_get = check_errors_on_get
-        self.check_errors_on_set = check_errors_on_set
 
         if interface_type is None:
             # Load the dummy interface, unless we see that GPIB is in the resource string
