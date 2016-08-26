@@ -38,6 +38,12 @@ def rec_snakeify(dictionary):
         new[snakeify(k)] = v
     return new
 
+def strip_vendor_names(instr_name):
+    vns = ["Agilent", "Alazar", "Keysight", "Holzworth", "Yoko", "Yokogawa"]
+    for vn in vns:
+        instr_name = instr_name.replace(vn, "")
+    return instr_name
+
 class QubitExpFactory(object):
     """The purpose of this factory is to examine DefaultExpSettings.json and construct
     and experiment therefrom.""" 
@@ -74,7 +80,7 @@ class QubitExpFactory(object):
             module_map.update(dict(instrs))
 
         for instr_name, instr_par in exp_settings['instruments'].items():
-            instr_type = instr_par['deviceName']
+            instr_type = strip_vendor_names(instr_par['deviceName'])
             # Instantiate the desired instrument
             if instr_type in module_map:
                 logger.debug("Found instrument class %s for '%s' at loc %s when loading experiment settings.", instr_type, instr_name, instr_par['address'])
