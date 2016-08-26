@@ -81,11 +81,18 @@ class Plotter(Filter):
         self.idx += data.size
 
         if self.plot_dims == 1:
-            if (time.time() - self.last_update >= self.update_interval) or self.stream.done():
+            if (time.time() - self.last_update >= self.update_interval):
                 self.data_source.data["y"] = np.copy(self.plot_buffer)
                 self.last_update = time.time()
 
         else:
-            if (time.time() - self.last_update >= self.update_interval) or self.stream.done():
+            if (time.time() - self.last_update >= self.update_interval):
                 self.data_source.data["image"] = [np.reshape(self.plot_buffer, self.z_data.shape)]
                 self.last_update = time.time()
+
+    async def on_done(self):
+        if self.plot_dims == 1:
+            self.data_source.data["y"] = np.copy(self.plot_buffer)
+        else:
+            self.data_source.data["image"] = [np.reshape(self.plot_buffer, self.z_data.shape)]
+        time.sleep(1.0)

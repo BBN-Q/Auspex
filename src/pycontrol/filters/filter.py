@@ -59,6 +59,11 @@ class Filter(metaclass=MetaFilter):
             oc.descriptor = self.descriptor
             oc.update_descriptors()
 
+    async def on_done(self):
+        """To be run when the done signal is received, in case additional steps are
+        needed (such as flushing a plot or data)."""
+        pass
+
     async def run(self):
         """
         Generic run method which waits on a single stream and calls `process_data` on any new_data
@@ -73,21 +78,22 @@ class Filter(metaclass=MetaFilter):
             message_type = message['type']
             message_data = message['data']
             message_comp = message['compression']
-            
+
             if message_comp == 'zlib':
                 message_data = pickle.loads(zlib.decompress(message_data))
             # If we receive a message
             if message['type'] == 'event':
                 logger.debug('%s "%s" received event "%s"', self.__class__.__name__, self.name, message_data)
-                
+
                 # Propagate along the graph
                 for oc in self.output_connectors.values():
                     for os in oc.output_streams:
                         logger.debug('%s "%s" pushed event "%s" to %s, %s', self.__class__.__name__, self.name, message_data, oc, os)
                         await os.queue.put(message)
-                
+
                 # Check to see if we're done
                 if message['data'] == 'done':
+                    await self.on_done()
                     break
 
             elif message['type'] == 'data':
