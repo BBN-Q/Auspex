@@ -13,7 +13,7 @@ logging.basicConfig(format='%(levelname)s:\t%(message)s', level=logging.INFO)
 
 import numpy as np
 
-from pycontrol.instruments.yokogawa import YokogawaGS200
+from pycontrol.instruments.yokogawa import GS200
 from pycontrol.sweep import Sweep
 from pycontrol.experiment import FloatParameter, Quantity, Procedure
 
@@ -21,7 +21,7 @@ class RampCurrent(Procedure):
     current = FloatParameter(unit="A")
     voltage = Quantity(unit="V")
 
-    yoko = YokogawaGS200("GPIB0::30::INSTR")
+    yoko = GS200("GPIB0::30::INSTR")
 
     def init_instruments(self):
         self.yoko.function = "current"
