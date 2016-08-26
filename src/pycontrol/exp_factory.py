@@ -10,6 +10,7 @@ import json
 import importlib
 import pkgutil
 import inspect
+import re
 
 import pycontrol.config as config
 import pycontrol.instruments
@@ -19,6 +20,23 @@ from pycontrol.log import logger
 from pycontrol.experiment import Experiment
 from pycontrol.filters.filter import Filter
 from pycontrol.instruments.instrument import Instrument
+
+# Convert from camelCase to pep8 compliant labels
+# http://stackoverflow.com/questions/1175208/elegant-python-function-to-convert-camelcase-to-snake-case
+first_cap_re = re.compile('(.)([A-Z][a-z]+)')
+all_cap_re = re.compile('([a-z0-9])([A-Z])')
+def snakeify(name):
+    s1 = first_cap_re.sub(r'\1_\2', name)
+    return all_cap_re.sub(r'\1_\2', s1).lower()
+
+# Recursively re-label dictionary
+def rec_snakeify(dictionary):
+    new = {}
+    for k, v in dictionary.items():
+        if isinstance(v, dict):
+            v = rec_snakeify(v)
+        new[snakeify(k)] = v
+    return new
 
 class QubitExpFactory(object):
     """The purpose of this factory is to examine DefaultExpSettings.json and construct
@@ -61,8 +79,9 @@ class QubitExpFactory(object):
             if instr_type in module_map:
                 logger.debug("Found instrument class %s for '%s' at loc %s when loading experiment settings.", instr_type, instr_name, instr_par['address'])
                 try:
+                    logger.debug("Setting instr %s with params %s.", instr_name, rec_snakeify(instr_par))
                     inst = module_map[instr_type](instr_par['address'])
-                    inst.set_all(instr_par)
+                    inst.set_all(rec_snakeify(instr_par))
                 except:
                     logger.error("Couldn't initialize instrument.")
                     inst = None
