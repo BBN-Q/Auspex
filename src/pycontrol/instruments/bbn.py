@@ -46,22 +46,22 @@ class DigitalAttenuator(Instrument):
         assert self.interface.read() == "END"
 
     @property
-    def ch1Attenuation(self):
+    def ch1_attenuation(self):
         return self.get_attenuation(1)
     @ch1Attenuation.setter
-    def ch1Attenuation(self, value):
+    def ch1_attenuation(self, value):
         self.set_attenuation(1, value)
 
     @property
-    def ch2Attenuation(self):
+    def ch2_attenuation(self):
         return self.get_attenuation(2)
     @ch2Attenuation.setter
-    def ch2Attenuation(self, value):
+    def ch2_attenuation(self, value):
         self.set_attenuation(2, value)
 
     @property
-    def ch3Attenuation(self):
+    def ch3_attenuation(self):
         return self.get_attenuation(3)
     @ch3Attenuation.setter
-    def ch3Attenuation(self, value):
+    def ch3_attenuation(self, value):
         self.set_attenuation(3, value)
