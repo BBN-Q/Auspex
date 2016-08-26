@@ -14,30 +14,31 @@ import sys
 
 # Run this code by importing config.py
 # Load the configuration from the json file and populate the global configuration dictionary
-rootFolder      = os.path.dirname( os.path.abspath(__file__) )
-rootFolder      = os.path.abspath(os.path.join(rootFolder, "../.." ))
-rootFolder      = rootFolder.replace('\\', '/') # use unix-like convention
-configFolder    = os.path.join(rootFolder, 'config')
-PyQLabCfgFile   = os.path.join(configFolder, 'config.json')
+root_path      = os.path.dirname( os.path.abspath(__file__) )
+root_path      = os.path.abspath(os.path.join(root_path, "../.." ))
+config_dir    = os.path.join(root_path, 'config')
+config_file     = os.path.join(config_dir, 'config.json')
 
-if not os.path.isfile(PyQLabCfgFile):
+if not os.path.isfile(config_file):
 	# build a config file from the template
-	templateFile = os.path.join(configFolder, 'config.example.json')
-	ifid = open(templateFile, 'r')
-	ofid = open(PyQLabCfgFile, 'w')
-	for line in ifid:
-		ofid.write(line.replace('/my/path/to', configFolder))
-	ifid.close()
-	ofid.close()
+	template_file = os.path.join(config_dir, 'config.example.json')
+	with open(template_file, 'r') as ifid:
+		template = json.load(ifid)
+	cfg = {}
+	for k,v in template.items():
+		cfg[k] = os.path.join(config_dir, v.replace("/my/path/to/", ""))
 
-with open(PyQLabCfgFile, 'r') as f:
-	PyQLabCfg = json.load(f)
+	with open(config_file, 'w') as ofid:
+		json.dump(cfg, ofid, indent=2)
+else:
+	with open(config_file, 'r') as f:
+		cfg = json.load(f)
 
 # pull out the variables
 # abspath allows the use of relative file names in the config file
-AWGDir             = os.path.abspath(PyQLabCfg['AWGDir'])
-instrumentLibFile  = os.path.abspath(PyQLabCfg['InstrumentLibraryFile'])
-channelLibFile     = os.path.abspath(PyQLabCfg['ChannelLibraryFile'])
-sweepLibFile       = os.path.abspath(PyQLabCfg['SweepLibraryFile'])
-measurementLibFile = os.path.abspath(PyQLabCfg['MeasurementLibraryFile'])
-expSettingsFile    = os.path.abspath(PyQLabCfg['ExpSettingsFile'])
+AWGDir             = os.path.abspath(cfg['AWGDir'])
+instrumentLibFile  = os.path.abspath(cfg['InstrumentLibraryFile'])
+channelLibFile     = os.path.abspath(cfg['ChannelLibraryFile'])
+sweepLibFile       = os.path.abspath(cfg['SweepLibraryFile'])
+measurementLibFile = os.path.abspath(cfg['MeasurementLibraryFile'])
+expSettingsFile    = os.path.abspath(cfg['ExpSettingsFile'])

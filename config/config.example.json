@@ -1,0 +1,8 @@
+{
+	"AWGDir": "/my/path/to/awg",
+	"ChannelLibraryFile": "/my/path/to/ChannelParams.json",
+	"InstrumentLibraryFile": "/my/path/to/Instruments.json",
+	"SweepLibraryFile": "/my/path/to/Sweeps.json",
+	"MeasurementLibraryFile": "/my/path/to/Measurements.json",
+	"ExpSettingsFile": "/my/path/to/DefaultExpSettings.json"
+}
