@@ -46,7 +46,6 @@ def strip_vendor_names(instr_name):
 
 def correct_resource_name(resource_name):
     substs = {"USB::": "USB0::", }
-    # import ipdb; ipdb.set_trace()
     for k, v in substs.items():
         resource_name = resource_name.replace(k, v)
     return resource_name
@@ -97,8 +96,8 @@ class QubitExpFactory(object):
                     logger.debug("Setting instr %s with params %s.", instr_name, rec_snakeify(instr_par))
                     inst = module_map[instr_type](correct_resource_name(instr_par['address']))
                     inst.set_all(rec_snakeify(instr_par))
-                except:
-                    logger.error("Couldn't initialize instrument.")
+                except Exception as e:
+                    logger.error("Initialization caused exception:", str(e))
                     inst = None
                 # Add to class dictionary for convenience
                 setattr(experiment, 'instr_name', inst)
