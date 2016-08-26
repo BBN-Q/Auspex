@@ -44,6 +44,13 @@ def strip_vendor_names(instr_name):
         instr_name = instr_name.replace(vn, "")
     return instr_name
 
+def correct_resource_name(resource_name):
+    substs = {"USB::": "USB0::", }
+    # import ipdb; ipdb.set_trace()
+    for k, v in substs.items():
+        resource_name = resource_name.replace(k, v)
+    return resource_name
+
 class QubitExpFactory(object):
     """The purpose of this factory is to examine DefaultExpSettings.json and construct
     and experiment therefrom.""" 
@@ -62,6 +69,8 @@ class QubitExpFactory(object):
         QubitExpFactory.load_channels(experiment, chan_settings)
         QubitExpFactory.load_filters(experiment, exp_settings)
         QubitExpFactory.load_sweeps(experiment, exp_settings)
+
+        return experiment
 
     @staticmethod
     def load_instruments(experiment, exp_settings):
@@ -86,7 +95,7 @@ class QubitExpFactory(object):
                 logger.debug("Found instrument class %s for '%s' at loc %s when loading experiment settings.", instr_type, instr_name, instr_par['address'])
                 try:
                     logger.debug("Setting instr %s with params %s.", instr_name, rec_snakeify(instr_par))
-                    inst = module_map[instr_type](instr_par['address'])
+                    inst = module_map[instr_type](correct_resource_name(instr_par['address']))
                     inst.set_all(rec_snakeify(instr_par))
                 except:
                     logger.error("Couldn't initialize instrument.")
