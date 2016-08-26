@@ -265,6 +265,7 @@ class Instrument(metaclass=MetaInstrument):
         super(Instrument, self).__init__()
         self.name = name
         self.resource_name = resource_name
+        self.instrument_type = None # This can be AWG, Digitizer, etc. 
 
         self.check_errors_on_get = check_errors_on_get
         self.check_errors_on_set = check_errors_on_set
