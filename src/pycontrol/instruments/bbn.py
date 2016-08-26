@@ -48,20 +48,20 @@ class DigitalAttenuator(Instrument):
     @property
     def ch1_attenuation(self):
         return self.get_attenuation(1)
-    @ch1Attenuation.setter
+    @ch1_attenuation.setter
     def ch1_attenuation(self, value):
         self.set_attenuation(1, value)
 
     @property
     def ch2_attenuation(self):
         return self.get_attenuation(2)
-    @ch2Attenuation.setter
+    @ch2_attenuation.setter
     def ch2_attenuation(self, value):
         self.set_attenuation(2, value)
 
     @property
     def ch3_attenuation(self):
         return self.get_attenuation(3)
-    @ch3Attenuation.setter
+    @ch3_attenuation.setter
     def ch3_attenuation(self, value):
         self.set_attenuation(3, value)
