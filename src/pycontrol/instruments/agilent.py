@@ -41,6 +41,10 @@ class N5183A(Instrument):
         self.interface._resource.write_termination = u"\n"
         self.interface._resource.timeout = 3000 #seem to have trouble timing out on first query sometimes
 
+    def set_all(self, settings):
+        settings['frequency'] = settings['frequency']*1e9
+        super(N5183A, self).set_all(settings)
+
 class E8363C(Instrument):
     """Agilent E8363C VNA"""
 
