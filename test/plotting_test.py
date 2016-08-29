@@ -11,7 +11,7 @@ import os
 import numpy as np
 import sys
 
-from pycontrol.instruments.instrument import Instrument, StringCommand, FloatCommand, IntCommand
+from pycontrol.instruments.instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand
 from pycontrol.experiment import Experiment, FloatParameter
 from pycontrol.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector
 from pycontrol.filters.plot import Plotter
@@ -23,7 +23,7 @@ from pycontrol.filters.integrator import KernelIntegrator
 from pycontrol.log import logger, logging
 logger.setLevel(logging.INFO)
 
-class TestInstrument(Instrument):
+class TestInstrument(SCPIInstrument):
     frequency = FloatCommand(get_string="frequency?", set_string="frequency {:g}", value_range=(0.1, 10))
     serial_number = IntCommand(get_string="serial?")
     mode = StringCommand(name="enumerated mode", scpi_string=":mode", allowed_values=["A", "B", "C"])

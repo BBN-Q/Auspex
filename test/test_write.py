@@ -12,7 +12,7 @@ import os
 import numpy as np
 import h5py
 
-from pycontrol.instruments.instrument import Instrument, StringCommand, FloatCommand, IntCommand
+from pycontrol.instruments.instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand
 from pycontrol.experiment import Experiment
 from pycontrol.parameter import FloatParameter
 from pycontrol.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector
@@ -23,7 +23,7 @@ from pycontrol.log import logger
 import logging
 logger.setLevel(logging.DEBUG)
 
-class TestInstrument1(Instrument):
+class TestInstrument1(SCPIInstrument):
     frequency = FloatCommand(get_string="frequency?", set_string="frequency {:g}", value_range=(0.1, 10))
     serial_number = IntCommand(get_string="serial?")
     mode = StringCommand(scpi_string=":mode", allowed_values=["A", "B", "C"])

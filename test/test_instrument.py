@@ -8,9 +8,9 @@
 
 import unittest
 
-from pycontrol.instruments.instrument import Instrument, StringCommand, FloatCommand, IntCommand
+from pycontrol.instruments.instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand
 
-class TestInstrument(Instrument):
+class TestInstrument(SCPIInstrument):
 	frequency = FloatCommand(get_string="frequency?", set_string="frequency {:g}", value_range=(0.1, 10))
 	serial_number = IntCommand(get_string="serial?")
 	mode = StringCommand(name="enumerated mode", scpi_string=":mode", allowed_values=["A", "B", "C"])
@@ -21,7 +21,7 @@ class InstrumentTestCase(unittest.TestCase):
 	"""
 
 	def setUp(self):
-		self.instrument = TestInstrument("testing instrument", "DUMMY::RESOURCE")
+		self.instrument = TestInstrument("DUMMY::RESOURCE")
 
 	def test_properties(self):
 		"""Check that property and setter/getter are implemented"""
