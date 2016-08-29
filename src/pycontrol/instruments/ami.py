@@ -6,11 +6,11 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-from .instrument import Instrument, StringCommand, FloatCommand, IntCommand
+from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand
 
 import time
 
-class AMI430(Instrument):
+class AMI430(SCPIInstrument):
     """AMI430 Power Supply Programmer"""
 
     SUPPLY_TYPES = \

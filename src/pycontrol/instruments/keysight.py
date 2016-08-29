@@ -6,7 +6,7 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-from .instrument import Instrument, StringCommand, FloatCommand, IntCommand
+from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand
 from .binutils import BitField, BitFieldUnion
 
 import logging
@@ -161,7 +161,7 @@ class Scenario(object):
 
         return table
 
-class M8190A(Instrument):
+class M8190A(SCPIInstrument):
     """M8190A arbitrary waveform generator"""
 
     ref_source         = StringCommand(scpi_string=":ROSC:SOUR",

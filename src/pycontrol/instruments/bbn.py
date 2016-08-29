@@ -6,11 +6,11 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-from .instrument import Instrument, VisaInterface
+from .instrument import SCPIInstrument, VisaInterface
 from types import MethodType
 
 
-class DigitalAttenuator(Instrument):
+class DigitalAttenuator(SCPIInstrument):
     """BBN 3 Channel Instrument"""
 
     NUM_CHANNELS = 3

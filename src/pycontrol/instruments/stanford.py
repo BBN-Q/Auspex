@@ -6,7 +6,7 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-from .instrument import Instrument, StringCommand, FloatCommand, IntCommand
+from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand
 import numpy as np
 import time
 
@@ -16,7 +16,7 @@ def indexed_map(values):
 def indexed_map_chan(values):
     return {v: '%d,0' % i for i, v in enumerate(values)}
 
-class SR830(Instrument):
+class SR830(SCPIInstrument):
     """The SR830 lock-in amplifier."""
     SAMPLE_RATE_VALUES = [62.5e-3, 125e-3, 250e-3, 500e-3, 1, 2, 4, 8, 16,
                                 32, 64, 128, 256, 512, "Trigger"]
@@ -116,7 +116,7 @@ class SR830(Instrument):
         else:
             raise Exception("Unknown delay for unknown filter slope {:f}".format(fs))
 
-class SR865(Instrument):
+class SR865(SCPIInstrument):
     """The SR865 lock-in amplifier."""
     TIME_CONSTANT_VALUES = [1e-6, 3e-9, 10e-6, 30e-6, 100e-6, 300e-6, 1e-3, 3e-3, 10e-3,
                             30e-3, 100e-3, 300e-3, 1, 3, 10, 3, 100, 300, 1e3,

@@ -6,10 +6,10 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-from .instrument import Instrument, StringCommand, FloatCommand, IntCommand
+from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand
 import numpy as np
 
-class DPO72004C(Instrument):
+class DPO72004C(SCPIInstrument):
     """Tektronix DPO72004C Oscilloscope"""
     encoding   = StringCommand(get_string="DAT:ENC;", set_string="DAT:ENC {:s};",
                         allowed_values=["ASCI","RIB","RPB","FPB","SRI","SRP","SFP"])

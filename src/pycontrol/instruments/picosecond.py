@@ -6,9 +6,9 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-from .instrument import Instrument, StringCommand, FloatCommand
+from .instrument import SCPIInstrument, StringCommand, FloatCommand
 
-class Picosecond10070A(Instrument):
+class Picosecond10070A(SCPIInstrument):
     """Picosecond 10070A Pulser"""
     amplitude      = FloatCommand(scpi_string="amplitude")
     delay          = FloatCommand(scpi_string="delay")

@@ -6,9 +6,9 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-from .instrument import Instrument, StringCommand, FloatCommand, IntCommand
+from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand
 
-class Keithley2400(Instrument):
+class Keithley2400(SCPIInstrument):
     """Keithley2400 Sourcemeter"""
 
     current    = FloatCommand(get_string=":sour:curr?",  set_string="sour:curr:lev {:g};")

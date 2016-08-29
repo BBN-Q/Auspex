@@ -6,7 +6,7 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-from .instrument import Instrument, StringCommand, FloatCommand, IntCommand
+from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand
 import socket
 import time
 import numpy as np
@@ -20,7 +20,7 @@ def is_valid_ipv4(ipv4_address):
     except:
         return False
 
-class N5183A(Instrument):
+class N5183A(SCPIInstrument):
     """AgilentN5183A microwave source"""
 
     frequency = FloatCommand(scpi_string=":freq")
@@ -45,7 +45,7 @@ class N5183A(Instrument):
         settings['frequency'] = settings['frequency']*1e9
         super(N5183A, self).set_all(settings)
 
-class E8363C(Instrument):
+class E8363C(SCPIInstrument):
     """Agilent E8363C VNA"""
 
     power              = FloatCommand(scpi_string=":SOURce:POWer:LEVel:IMMediate:AMPLitude", value_range=(-27, 20))

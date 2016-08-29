@@ -6,9 +6,9 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-from .instrument import Instrument, StringCommand, FloatCommand, IntCommand
+from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand
 
-class GS200(Instrument):
+class GS200(SCPIInstrument):
     """GS200 Current source"""
 
     function           = StringCommand(scpi_string=":source:function",

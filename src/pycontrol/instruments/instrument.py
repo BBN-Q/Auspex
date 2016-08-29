@@ -148,9 +148,9 @@ class MetaInstrument(type):
 
 class Instrument(metaclass=MetaInstrument): pass
 
-class CLibInstrument(Instrument): pass
+class CLibInstrument(SCPIInstrument): pass
 
-class SCPIInstrument(Instrument):
+class SCPIInstrument(SCPIInstrument):
 
     __isfrozen = False
 

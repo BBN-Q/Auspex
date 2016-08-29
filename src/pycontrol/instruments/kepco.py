@@ -6,9 +6,9 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-from .instrument import Instrument, StringCommand, RampCommand
+from .instrument import SCPIInstrument, StringCommand, RampCommand
 
-class BOP2020M(Instrument):
+class BOP2020M(SCPIInstrument):
     """For controlling the BOP2020M power supply via GPIB interface card"""
     output  = StringCommand(scpi_string="OUTPUT", value_map={True: '1', False: '0'})
     current = RampCommand(increment=0.1, pause=20e-3, get_string=":CURR?", set_string=":CURR:LEV:IMM {:g}", value_range=(-20,20))

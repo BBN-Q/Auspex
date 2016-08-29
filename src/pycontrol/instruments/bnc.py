@@ -6,11 +6,11 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-from .instrument import Instrument, StringCommand, FloatCommand, IntCommand
+from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand
 import time
 import numpy as np
 
-class BNC845(Instrument):
+class BNC845(SCPIInstrument):
     """For controlling the BNC845 microwave source"""
 
     frequency = FloatCommand(scpi_string="SOURCE:FREQUENCY:FIXED")
