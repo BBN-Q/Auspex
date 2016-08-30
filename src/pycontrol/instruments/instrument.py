@@ -31,8 +31,8 @@ class Command(object):
         self.doc = ""
 
         if self.value_map is not None:
-            self.python_to_instr = value_map
-            self.instr_to_python = {v: k for k, v in value_map.items()}
+            self.python_to_instr = self.value_map
+            self.instr_to_python = {v: k for k, v in self.value_map.items()}
 
             if self.value_range is not None:
                 raise Exception("Cannot specify both value_range and value_map as they are redundant.")
@@ -47,9 +47,9 @@ class Command(object):
     def convert_set(self, set_value_python):
         """Convert the python value to a value understood by the instrument."""
         if self.python_to_instr is None:
-            return str(set_value_python)
+            return set_value_python
         else:
-            return str(self.python_to_instr[set_value_python])
+            return self.python_to_instr[set_value_python]
 
 class SCPICommand(Command):
     def parse(self):
@@ -105,12 +105,12 @@ class RampCommand(FloatCommand):
     """For quantities that are to be ramped from present to desired value. These will always be floats..."""
     def parse(self):
         super(RampCommand, self).parse()
-        if 'increment' in kwargs:
-            self.increment = kwargs.pop('increment')
+        if 'increment' in self.kwargs:
+            self.increment = self.kwargs.pop('increment')
         else:
             raise Exception("RampCommand requires a ramp increment")
-        if 'pause' in kwargs:
-            self.pause = pause
+        if 'pause' in self.kwargs:
+            self.pause = self.kwargs.pop('pause')
         else:
             self.pause = 0.0
 
@@ -146,7 +146,13 @@ class MetaInstrument(type):
                                 add_command_CLib(self, a, v)
 
 
-class Instrument(metaclass=MetaInstrument): pass
+class Instrument(metaclass=MetaInstrument):
+    def set_all(self, settings_dict):
+        """Accept a settings dictionary and attempt to set all of the instrument
+        parameters using the key/value pairs."""
+        for name, value in settings_dict.items():
+            if hasattr(self, name):
+                setattr(self, name, value)
 
 class CLibInstrument(Instrument): pass
 
@@ -154,10 +160,10 @@ class SCPIInstrument(Instrument):
 
     __isfrozen = False
 
-    def __init__(self, resource_name, interface_type=None):
-        self.name = "Instrument"
+    def __init__(self, resource_name, name="Unlabeled", interface_type=None):
+        self.name = name
         self.resource_name = resource_name
-        self.instrument_type = None # This can be AWG, Digitizer, etc. 
+        self.instrument_type = None # This can be AWG, Digitizer, etc.
 
         if interface_type is None:
             # Load the dummy interface, unless we see that GPIB is in the resource string
@@ -175,13 +181,6 @@ class SCPIInstrument(Instrument):
             raise ValueError("That interface type is not yet recognized.")
 
         self._freeze()
-        
-    def set_all(self, settings_dict):
-        """Accept a settings dictionary and attempt to set all of the instrument
-        parameters using the key/value pairs."""
-        for name, value in settings_dict.items():
-            if hasattr(self, name):
-                setattr(self, name, value)
 
     # We want to lock the class dictionary
     # This solution from http://stackoverflow.com/questions/3603502/prevent-creating-new-attributes-outside-init
@@ -247,7 +246,7 @@ def add_command_SCPI(instr, name, cmd):
             self.interface.write(new_cmd.set_string.format(set_value, **kwargs))
             if new_cmd.set_delay is not None:
                 time.sleep(new_cmd.set_delay)
-    
+
     # Add getter and setter methods for passing around
     if new_cmd.additional_args is None:
         # We add properties in this case since not additional arguments are required

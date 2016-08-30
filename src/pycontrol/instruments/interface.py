@@ -1,3 +1,4 @@
+import os
 import visa
 import numpy as np
 from pycontrol.log import logger
