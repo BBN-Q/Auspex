@@ -25,10 +25,10 @@ class HS9000(Instrument, metaclass=MakeSettersGetters):
     instrument_type = "Microwave Source"
     _lib = ctypes.CDLL("HolzworthMulti64.dll")
 
-    def __init__(self, resource_name):
-        self.name = "Holzworth HS9000"
+    def __init__(self, resource_name, name="Unlabeled Holzworth HS9000"):
+        self.name = name
         self.resource_name = resource_name
-        
+
         # parse resource_name: expecting something like "HS9004A-009-1"
         self.model, self.serial, self.chan = resource_name.split("-")
         self.resource_name = resource_name

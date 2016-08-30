@@ -30,20 +30,15 @@ class ATS9870(Instrument):
     instrument_type = "Digitizer"
     _lib = LibAlazar()
 
-    def __init__(self, resource_name, *args, **kwargs):
-        #If we only have an IP address then tack on the raw socket port to the VISA resource string
-        #super(ATS9870, self).__init__(resource_name, *args, **kwargs)
-        pass
-        self.name = "ATS9870"
+    def __init__(self, resource_name, name="Unlabeled Alazar"):
+        self.name = name
         self.resource_name = int(resource_name)
-        self._freeze()
-
         self._lib.connectBoard(self.resource_name, "")
 
     def set_all(self, settings_dict):
         # Flatten the dict and then pass to super
         settings_dict_flat = {}
-        
+
         def flatten(dictionary):
             for k, v in dictionary.items():
                 if isinstance(v, dict):
