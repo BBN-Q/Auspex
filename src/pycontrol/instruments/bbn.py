@@ -6,9 +6,10 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-from .instrument import SCPIInstrument, VisaInterface
+from pycontrol.instruments.instrument import Instrument, SCPIInstrument, VisaInterface, MetaInstrument
 from types import MethodType
-
+from pycontrol.log import logger
+# import aps2
 
 class DigitalAttenuator(SCPIInstrument):
     """BBN 3 Channel Instrument"""
@@ -65,3 +66,77 @@ class DigitalAttenuator(SCPIInstrument):
     @ch3_attenuation.setter
     def ch3_attenuation(self, value):
         self.set_attenuation(3, value)
+
+
+class MakeSettersGetters(MetaInstrument):
+    def __init__(self, name, bases, dct):
+        super(MakeSettersGetters, self).__init__(name, bases, dct)
+
+        for k,v in dct.items():
+            if isinstance(v, property):
+                logger.debug("Adding '%s' command to APS", k)
+                setattr(self, 'set_'+k, v.fset)
+                setattr(self, 'get_'+k, v.fget)
+
+class APS2(Instrument, metaclass=MakeSettersGetters):
+    """BBN APS2"""
+    instrument_type = "AWG"
+
+    def __init__(self, resource_name):
+        self.name = "BBN APS2"
+        self.resource_name = resource_name
+        self._lib = aps2.APS2()
+        self._lib.connect(resource_name)
+
+        self.set_amplitude = self._lib.set_amplitude
+        self.set_offset    = self._lib.set_offset
+        self.set_enabled   = self._lib.set_enabled
+
+    def __del__(self):
+        self._lib.disconnect()
+
+    def set_all(self, settings_dict):
+        # Pop the channel settings
+        ch1_settings = settings_dict.pop('chan_1')
+        ch2_settings = settings_dict.pop('chan_2')
+
+        # Call the non-channel commands
+        super(APS2, self).set_all(settings_dict)
+
+        for name, value in ch1_settings.items():
+            if hasattr(self, name):
+                getattr(self, name)(0, value)
+        for name, value in ch2_settings.items():
+            if hasattr(self, name):
+                getattr(self, name)(1, value)
+
+    @property
+    def seq_file(self):
+        return None
+    @seq_file.setter
+    def seq_file(self, filename):
+        self._lib.load_sequence_file(filename)
+
+    @property
+    def trigger_source(self):
+        return self._lib.get_trigger_source()
+    @trigger_source.setter
+    def trigger_source(self, source):
+        if source in ["Internal", "External", "Software", "System"]:
+            self._lib.set_trigger(getattr(aps2,source.upper()))
+        else:
+            raise ValueError("Invalid trigger source specification.")
+            
+    @property
+    def trigger_interval(self):
+        return self._lib.get_trigger_interval()
+    @trigger_interval.setter
+    def trigger_interval(self, value):
+        self._lib.set_trigger_interval(value)
+
+    @property
+    def sampling_rate(self):
+        return self._lib.get_sampling_rate()
+    @sampling_rate.setter
+    def sampling_rate(self, value):
+        self._lib.set_sampling_rate(value)
