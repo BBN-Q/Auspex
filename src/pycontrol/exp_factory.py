@@ -50,19 +50,56 @@ def correct_resource_name(resource_name):
         resource_name = resource_name.replace(k, v)
     return resource_name
 
+class QubitExperiment(Experiment):
+    """Experiment with a specialized run method for qubit experiments run via factory below."""
+    def init_instruments(self):
+        for name, instr in self._instruments.items():
+            instr_par = self.exp_settings['instruments'][name]
+            logger.debug("Setting instr %s with params %s.", name, rec_snakeify(instr_par))
+            instr.set_all(rec_snakeify(instr_par))
+
+        self.digitizers = [v for _, v in self._instruments.items() if v.instrument_type == "Digitizer"]
+        self.awgs       = [v for _, v in self._instruments.items() if v.instrument_type == "AWG"]
+
+        master_awg_idx = next(ct for ct,awg in enumerate(self.awgs) if self.exp_settings['instruments'][awg.name]['master'])
+        self.awgs[-1], self.awgs[master_awg_idx] = self.awgs[master_awg_idx], self.awgs[-1]
+
+    async def run(self):
+        """This is run for each step in a sweep."""
+        for dig in self.digitizers:
+            dig.acquire()
+        for awg in self.awgs:
+            awg.run()
+
+        for _ in range(self.alazar.numberAcquistions):
+            while not self.alazar.wait_for_acquisition():
+                await asyncio.sleep(0.1)
+            print("Got data!")
+            await self.source.push(self.alazar.ch2Buffer)
+
+        self.alazar.stop()
+        self.aps1.stop()
+        self.aps2.stop()
+
+        for dig in self.digitizers:
+            dig.stop()
+        for awg in self.awgs:
+            awg.stop()
+
 class QubitExpFactory(object):
     """The purpose of this factory is to examine DefaultExpSettings.json and construct
-    and experiment therefrom.""" 
-    
+    and experiment therefrom."""
+
     @staticmethod
     def create():
-        with open(config.expSettingsFile, 'r') as FID: 
+        with open(config.expSettingsFile, 'r') as FID:
             exp_settings = json.load(FID)
 
-        with open(config.channelLibFile, 'r') as FID: 
+        with open(config.channelLibFile, 'r') as FID:
             chan_settings = json.load(FID)
 
-        experiment = Experiment()
+        experiment = QubitExperiment()
+        experiment.exp_settings = exp_settings
 
         QubitExpFactory.load_instruments(experiment, exp_settings)
         QubitExpFactory.load_channels(experiment, chan_settings)
@@ -82,7 +119,7 @@ class QubitExpFactory(object):
 
         module_map = {}
         for mod in modules:
-            instrs = (_ for _ in inspect.getmembers(mod) if inspect.isclass(_[1]) and 
+            instrs = (_ for _ in inspect.getmembers(mod) if inspect.isclass(_[1]) and
                                                             issubclass(_[1], Instrument) and
                                                             _[1] != Instrument)
             module_map.update(dict(instrs))
@@ -93,9 +130,7 @@ class QubitExpFactory(object):
             if instr_type in module_map:
                 logger.debug("Found instrument class %s for '%s' at loc %s when loading experiment settings.", instr_type, instr_name, instr_par['address'])
                 try:
-                    logger.debug("Setting instr %s with params %s.", instr_name, rec_snakeify(instr_par))
-                    inst = module_map[instr_type](correct_resource_name(instr_par['address']))
-                    inst.set_all(rec_snakeify(instr_par))
+                    inst = module_map[instr_type](correct_resource_name(instr_par['address']), name=instr_name)
                 except Exception as e:
                     logger.error("Initialization caused exception:", str(e))
                     inst = None
@@ -126,7 +161,7 @@ class QubitExpFactory(object):
 
         module_map = {}
         for mod in modules:
-            filters = (_ for _ in inspect.getmembers(mod) if inspect.isclass(_[1]) and 
+            filters = (_ for _ in inspect.getmembers(mod) if inspect.isclass(_[1]) and
                                                             issubclass(_[1], Filter) and
                                                             _[1] != Filter)
             module_map.update(dict(filters))
