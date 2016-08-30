@@ -9,7 +9,7 @@
 from pycontrol.instruments.instrument import Instrument, SCPIInstrument, VisaInterface, MetaInstrument
 from types import MethodType
 from pycontrol.log import logger
-# import aps2
+import aps2
 
 class DigitalAttenuator(SCPIInstrument):
     """BBN 3 Channel Instrument"""
@@ -82,18 +82,22 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
     """BBN APS2"""
     instrument_type = "AWG"
 
-    def __init__(self, resource_name):
-        self.name = "BBN APS2"
+    def __init__(self, resource_name, name="Unlabeled APS2"):
+        self.name = name
         self.resource_name = resource_name
-        self._lib = aps2.APS2()
-        self._lib.connect(resource_name)
+        self.wrapper = aps2.APS2()
+        self.wrapper.connect(resource_name)
 
-        self.set_amplitude = self._lib.set_amplitude
-        self.set_offset    = self._lib.set_offset
-        self.set_enabled   = self._lib.set_enabled
+        self.set_amplitude = self.wrapper.set_channel_scale
+        self.set_offset    = self.wrapper.set_channel_offset
+        self.set_enabled   = self.wrapper.set_channel_enabled
+
+        self.get_amplitude = self.wrapper.get_channel_scale
+        self.get_offset    = self.wrapper.get_channel_offset
+        self.get_enabled   = self.wrapper.get_channel_enabled
 
     def __del__(self):
-        self._lib.disconnect()
+        self.wrapper.disconnect()
 
     def set_all(self, settings_dict):
         # Pop the channel settings
@@ -115,28 +119,28 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
         return None
     @seq_file.setter
     def seq_file(self, filename):
-        self._lib.load_sequence_file(filename)
+        self.wrapper.load_sequence_file(filename)
 
     @property
     def trigger_source(self):
-        return self._lib.get_trigger_source()
+        return self.wrapper.get_trigger_source()
     @trigger_source.setter
     def trigger_source(self, source):
         if source in ["Internal", "External", "Software", "System"]:
-            self._lib.set_trigger(getattr(aps2,source.upper()))
+            self.wrapper.set_trigger_source(getattr(aps2,source.upper()))
         else:
             raise ValueError("Invalid trigger source specification.")
-            
+
     @property
     def trigger_interval(self):
-        return self._lib.get_trigger_interval()
+        return self.wrapper.get_trigger_interval()
     @trigger_interval.setter
     def trigger_interval(self, value):
-        self._lib.set_trigger_interval(value)
+        self.wrapper.set_trigger_interval(value)
 
     @property
     def sampling_rate(self):
-        return self._lib.get_sampling_rate()
+        return self.wrapper.get_sampling_rate()
     @sampling_rate.setter
     def sampling_rate(self, value):
-        self._lib.set_sampling_rate(value)
+        self.wrapper.set_sampling_rate(value)
