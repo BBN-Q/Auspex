@@ -18,20 +18,21 @@ from pycontrol.log import logger
 from pycontrol.filters.filter import Filter, InputConnector
 
 class Plotter(Filter):
-    data = InputConnector()
+    sink = InputConnector()
 
-    def __init__(self, *args, name="", plot_dims=1, **plot_args):
+    def __init__(self, *args, name="", plot_dims=1, plot_mode='real', **plot_args):
 
         super(Plotter, self).__init__(*args, name=name)
         self.plot_dims = plot_dims
+        self.plot_mode = plot_mode
         self.plot_args = plot_args
         self.update_interval = 0.5
         self.last_update = time.time()
 
     def update_descriptors(self):
-        logger.info("Updating Plotter %s descriptors based on input descriptor %s", self.name, self.data.descriptor)
-        self.stream = self.data.input_streams[0]
-        self.descriptor = self.data.descriptor
+        logger.info("Updating Plotter %s descriptors based on input descriptor %s", self.name, self.sink.descriptor)
+        self.stream = self.sink.input_streams[0]
+        self.descriptor = self.sink.descriptor
 
     def final_init(self):
 

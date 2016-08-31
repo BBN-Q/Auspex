@@ -20,7 +20,7 @@ from tqdm import tqdm, tqdm_notebook
 class WriteToHDF5(Filter):
     """Writes data to file."""
 
-    data = InputConnector()
+    sink = InputConnector()
     def __init__(self, filename, compress=True, **kwargs):
         super(WriteToHDF5, self).__init__(**kwargs)
         self.compress = compress
@@ -66,7 +66,7 @@ class WriteToHDF5(Filter):
         return h5py.File(filename, 'w')
 
     async def run(self):
-        stream     = self.data.input_streams[0]
+        stream     = self.sink.input_streams[0]
         desc       = stream.descriptor
         axes       = stream.descriptor.axes
         params     = stream.descriptor.params
@@ -153,7 +153,7 @@ class ProgressBar(Filter):
     search for 'n = int(s[:npos])'\
     then replace it with 'n = float(s[:npos])'
     """
-    data = InputConnector()
+    sink = InputConnector()
     def __init__(self, num=0, notebook=False):
         super(ProgressBar,self).__init__()
         self.num    = num
@@ -162,7 +162,7 @@ class ProgressBar(Filter):
         self.w_id   = 0
 
     async def run(self):
-        self.stream = self.data.input_streams[0]
+        self.stream = self.sink.input_streams[0]
         axes = self.stream.descriptor.axes
         num_axes = len(axes)
         totals = [self.stream.descriptor.num_points_through_axis(axis) for axis in range(num_axes)]

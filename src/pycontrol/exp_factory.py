@@ -19,7 +19,8 @@ import pycontrol.filters
 from pycontrol.log import logger
 from pycontrol.experiment import Experiment
 from pycontrol.filters.filter import Filter
-from pycontrol.instruments.instrument import Instrument
+from pycontrol.instruments.instrument import Instrument, SCPIInstrument, CLibInstrument
+from pycontrol.stream import OutputConnector
 
 # Convert from camelCase to pep8 compliant labels
 # http://stackoverflow.com/questions/1175208/elegant-python-function-to-convert-camelcase-to-snake-case
@@ -71,15 +72,11 @@ class QubitExperiment(Experiment):
         for awg in self.awgs:
             awg.run()
 
-        for _ in range(self.alazar.numberAcquistions):
-            while not self.alazar.wait_for_acquisition():
-                await asyncio.sleep(0.1)
-            print("Got data!")
-            await self.source.push(self.alazar.ch2Buffer)
-
-        self.alazar.stop()
-        self.aps1.stop()
-        self.aps2.stop()
+        # for _ in range(self.alazar.numberAcquistions):
+        #     while not self.alazar.wait_for_acquisition():
+        #         await asyncio.sleep(0.1)
+        #     print("Got data!")
+        #     await self.source.push(self.alazar.ch2Buffer)
 
         for dig in self.digitizers:
             dig.stop()
@@ -99,17 +96,16 @@ class QubitExpFactory(object):
             chan_settings = json.load(FID)
 
         experiment = QubitExperiment()
-        experiment.exp_settings = exp_settings
+        experiment.exp_settings = rec_snakeify(exp_settings)
 
-        QubitExpFactory.load_instruments(experiment, exp_settings)
-        QubitExpFactory.load_channels(experiment, chan_settings)
-        QubitExpFactory.load_filters(experiment, exp_settings)
-        QubitExpFactory.load_sweeps(experiment, exp_settings)
+        QubitExpFactory.load_instruments(experiment)
+        QubitExpFactory.load_filters(experiment)
+        QubitExpFactory.load_sweeps(experiment)
 
         return experiment
 
     @staticmethod
-    def load_instruments(experiment, exp_settings):
+    def load_instruments(experiment):
         # Inspect all vendor modules in pycontrol instruments and construct
         # a map to the instrument names.
         modules = (
@@ -121,11 +117,13 @@ class QubitExpFactory(object):
         for mod in modules:
             instrs = (_ for _ in inspect.getmembers(mod) if inspect.isclass(_[1]) and
                                                             issubclass(_[1], Instrument) and
-                                                            _[1] != Instrument)
+                                                            _[1] != Instrument and _[1] != SCPIInstrument and
+                                                            _[1] != CLibInstrument)
             module_map.update(dict(instrs))
+        logger.debug("Found instruments %s.", module_map)
 
-        for instr_name, instr_par in exp_settings['instruments'].items():
-            instr_type = strip_vendor_names(instr_par['deviceName'])
+        for instr_name, instr_par in experiment.exp_settings['instruments'].items():
+            instr_type = strip_vendor_names(instr_par['device_name'])
             # Instantiate the desired instrument
             if instr_type in module_map:
                 logger.debug("Found instrument class %s for '%s' at loc %s when loading experiment settings.", instr_type, instr_name, instr_par['address'])
@@ -141,19 +139,26 @@ class QubitExpFactory(object):
             else:
                 logger.error("Could not find instrument class %s for '%s' when loading experiment settings.", instr_type, instr_name)
 
+
     @staticmethod
-    def load_channels(experiment, chan_settings):
-        # Add output connectors for each defined channel
-        for chan_name, chan_par in chan_settings['channelDict'].items():
+    def load_sweeps(experiment):
+        for chan_name, chan_par in experiment.exp_settings['sweeps'].items():
             pass
 
     @staticmethod
-    def load_sweeps(experiment, exp_settings):
-        for chan_name, chan_par in exp_settings['sweeps'].items():
-            pass
+    def load_filters(experiment):
+        # Change PyQLab measurements to Pycontrol filters
+        name_changes = {'KernelIntegration': 'KernelIntegrator',
+                        'DigitalDemod': 'Channelizer' }
 
-    @staticmethod
-    def load_filters(experiment, exp_settings):
+        # These stores any filters we create as well as their connections
+        filters = {}
+        graph   = []
+
+        # ============================================
+        # Find all of the filter modules by inspection
+        # ============================================
+
         modules = (
             importlib.import_module('pycontrol.filters.' + name)
             for loader, name, is_pkg in pkgutil.iter_modules(pycontrol.filters.__path__)
@@ -161,15 +166,84 @@ class QubitExpFactory(object):
 
         module_map = {}
         for mod in modules:
-            filters = (_ for _ in inspect.getmembers(mod) if inspect.isclass(_[1]) and
+            filts = (_ for _ in inspect.getmembers(mod) if inspect.isclass(_[1]) and
                                                             issubclass(_[1], Filter) and
                                                             _[1] != Filter)
-            module_map.update(dict(filters))
+            module_map.update(dict(filts))
 
-        for filt_name, filt_par in exp_settings['measurements'].items():
-            filt_type = filt_par['filterType']
+        # ==================================================
+        # Find out which output connectors we need to create
+        # ==================================================
+
+        # First look for raw streams
+        raw_stream_settings = {k: v for k, v in experiment.exp_settings['measurements'].items() if v['filter_type'] == "RawStream"}
+        # Remove them from the exp_settings
+        for k in raw_stream_settings:
+            experiment.exp_settings['measurements'].pop(k)
+        # Next look for other types of streams
+        # TODO: look for X6 type streams 
+        for stream_name, stream_settings in raw_stream_settings.items():
+            logger.debug("Added %s output connector to experiment.", stream_name)
+            oc = OutputConnector(name=stream_name, parent=experiment)
+            experiment._output_connectors.append(oc)
+            experiment.output_connectors[stream_name] = oc
+            setattr(experiment, stream_name, oc)
+                  
+        # ========================
+        # Process the measurements
+        # ========================
+
+        for filt_name, filt_par in experiment.exp_settings['measurements'].items():
+            filt_type = filt_par['filter_type']
+            
+            # Translate if necessary
+            if filt_type in name_changes:
+                filt_type = name_changes[filt_type]
+
             if filt_type in module_map:
-                filt = module_map[filt_type]()
+                filt = module_map[filt_type](filt_par)
+                filt.name = filt_name
+                filters[filt_name] = filt
                 logger.debug("Found filter class %s for '%s' when loading experiment settings.", filt_type, filt_name)
             else:
                 logger.error("Could not find filter class %s for '%s' when loading experiment settings.", filt_type, filt_name)
+
+        # ====================================
+        # Establish all of the connections
+        # ====================================
+
+        for name, filt in filters.items():
+            source_name = snakeify(experiment.exp_settings['measurements'][name]['data_source'])
+            if source_name in filters:
+                source = filters[source_name].source
+            elif source_name in experiment.output_connectors:
+                source = experiment.output_connectors[source_name]
+            else:
+                raise ValueError("Couldn't find anywhere to attach the source of the specified filter {}".format(name))
+            
+            # ========================
+            # Create plot if requested
+            # ========================
+
+            has_plot = experiment.exp_settings['measurements'][name]['plot_scope']
+            if has_plot:
+                plot = module_map['Plotter'](name=name, plot_mode=experiment.exp_settings['measurements'][name]['plot_mode'])
+                graph.append([filt.source, plot.sink])
+
+            # ==========================
+            # Create writer if requested
+            # ==========================
+
+            # import ipdb; ipdb.set_trace()
+            if 'save_records' in experiment.exp_settings['measurements'][name]:
+                has_writer = experiment.exp_settings['measurements'][name]['save_records']
+                if has_writer:
+                    filename = experiment.exp_settings['measurements'][name]['records_file_path']
+                    writer = module_map['WriteToHDF5'](filename, name=name)
+                    graph.append([filt.source, writer.sink])
+
+            logger.debug("Connecting %s to %s", source, filt)
+            graph.append([source, filt.sink])
+
+        experiment.set_graph(graph)
+

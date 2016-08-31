@@ -49,7 +49,7 @@ class Filter(metaclass=MetaFilter):
             setattr(self, oc, a)
 
     def __repr__(self):
-        return "<Filter(name={})>".format(self.name)
+        return "<{}(name={})>".format(self.__class__.__name__, self.name)
 
     def update_descriptors(self):
         self.descriptor = list(self.input_connectors.values())[0].descriptor

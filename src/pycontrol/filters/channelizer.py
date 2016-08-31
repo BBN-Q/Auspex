@@ -23,9 +23,9 @@ class Channelizer(Filter):
     sink = InputConnector()
     source = OutputConnector()
 
-    def __init__(self, freq, cutoff, decimation_factor=1, **kwargs):
+    def __init__(self, frequency=4e9, cutoff=5e9, decimation_factor=1, **kwargs):
         super(Channelizer, self).__init__(**kwargs)
-        self.freq = freq
+        self.frequency = frequency
         self.cutoff = cutoff
         self.decimation_factor = decimation_factor
 
