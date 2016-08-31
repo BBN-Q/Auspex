@@ -20,7 +20,7 @@ from pycontrol.log import logger
 from pycontrol.experiment import Experiment
 from pycontrol.filters.filter import Filter
 from pycontrol.instruments.instrument import Instrument, SCPIInstrument, CLibInstrument
-from pycontrol.stream import OutputConnector
+from pycontrol.stream import OutputConnector, DataStreamDescriptor, DataAxis
 
 # Convert from camelCase to pep8 compliant labels
 # http://stackoverflow.com/questions/1175208/elegant-python-function-to-convert-camelcase-to-snake-case
@@ -177,9 +177,11 @@ class QubitExpFactory(object):
 
         # First look for raw streams
         raw_stream_settings = {k: v for k, v in experiment.exp_settings['measurements'].items() if v['filter_type'] == "RawStream"}
+        
         # Remove them from the exp_settings
         for k in raw_stream_settings:
             experiment.exp_settings['measurements'].pop(k)
+        
         # Next look for other types of streams
         # TODO: look for X6 type streams 
         for stream_name, stream_settings in raw_stream_settings.items():
@@ -188,6 +190,16 @@ class QubitExpFactory(object):
             experiment._output_connectors.append(oc)
             experiment.output_connectors[stream_name] = oc
             setattr(experiment, stream_name, oc)
+
+            # First, find the digitizer
+            import ipdb; ipdb.set_trace()
+            source_instr = experiment._instruments[snakeify(stream_settings['data_source'])]
+            source_instr_settings = experiment.exp_settings['instruments'][snakeify(stream_settings['data_source'])]
+            descrip = DataStreamDescriptor()
+            descrip.add_axis(DataAxis("samples",      range(source_instr_settings['averager']['record_length'])))
+            descrip.add_axis(DataAxis("segments",     range(source_instr_settings['averager']['nbr_segments'])))
+            descrip.add_axis(DataAxis("round_robins", range(source_instr_settings['averager']['nbr_round_robins'])))
+            oc.set_descriptor(descrip)
                   
         # ========================
         # Process the measurements
@@ -201,7 +213,7 @@ class QubitExpFactory(object):
                 filt_type = name_changes[filt_type]
 
             if filt_type in module_map:
-                filt = module_map[filt_type](filt_par)
+                filt = module_map[filt_type](**filt_par)
                 filt.name = filt_name
                 filters[filt_name] = filt
                 logger.debug("Found filter class %s for '%s' when loading experiment settings.", filt_type, filt_name)

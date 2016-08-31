@@ -39,7 +39,7 @@ class Channelizer(Filter):
         logger.debug("Channelizer time_step = {}".format(self.time_step))
 
         #store refernece for mix down
-        self.reference = np.exp(2j*np.pi * self.freq * self.time_step * np.arange(self.record_length))
+        self.reference = np.exp(2j*np.pi * self.frequency * self.time_step * np.arange(self.record_length))
 
         #store filter coefficients
         #TODO: arbitrary 64 tap filter

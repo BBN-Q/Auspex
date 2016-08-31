@@ -32,7 +32,7 @@ class MetaFilter(type):
 
 class Filter(metaclass=MetaFilter):
     """Any node on the graph that takes input streams with optional output streams"""
-    def __init__(self, name=None):
+    def __init__(self, name=None, **kwargs):
         self.name = name
         self.input_connectors = {}
         self.output_connectors = {}
