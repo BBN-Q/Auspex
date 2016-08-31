@@ -78,7 +78,7 @@ class SweepTestCase(unittest.TestCase):
             os.remove("test_writehdf5-0000.h5")
         wr = WriteToHDF5("test_writehdf5.h5")
 
-        edges = [(exp.voltage, wr.data)]
+        edges = [(exp.voltage, wr.sink)]
         exp.set_graph(edges)
 
         exp.init_instruments()
@@ -104,7 +104,7 @@ class SweepTestCase(unittest.TestCase):
             os.remove("test_writehdf5_adaptive-0000.h5")
         wr = WriteToHDF5("test_writehdf5_adaptive.h5")
 
-        edges = [(exp.voltage, wr.data)]
+        edges = [(exp.voltage, wr.sink)]
         exp.set_graph(edges)
 
         def rf(sweep_axis, num_points):
@@ -128,7 +128,7 @@ class SweepTestCase(unittest.TestCase):
             os.remove("test_writehdf5_unstructured-0000.h5")
         wr = WriteToHDF5("test_writehdf5_unstructured.h5")
 
-        edges = [(exp.voltage, wr.data)]
+        edges = [(exp.voltage, wr.sink)]
         exp.set_graph(edges)
         exp.init_instruments()
 
