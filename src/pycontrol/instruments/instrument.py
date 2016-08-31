@@ -1,6 +1,7 @@
 import numpy as np
 import os
 import time
+from unittest.mock import MagicMock
 
 from pycontrol.instruments.interface import Interface, VisaInterface
 from pycontrol.log import logger
@@ -170,15 +171,19 @@ class SCPIInstrument(Instrument):
             if any([x in resource_name for x in ["GPIB", "USB", "SOCKET", "hislip", "inst0"]]):
                 interface_type = "VISA"
 
-        if interface_type is None:
-            self.interface = Interface()
-        elif interface_type == "VISA":
-            if "SOCKET" in resource_name or "hislip" in resource_name or "inst0" in resource_name:
-                ## assume single NIC for now
-                resource_name = "TCPIP0::" + resource_name
-            self.interface = VisaInterface(resource_name)
-        else:
-            raise ValueError("That interface type is not yet recognized.")
+        try:
+            if interface_type is None:
+                self.interface = Interface()
+            elif interface_type == "VISA":
+                if "SOCKET" in resource_name or "hislip" in resource_name or "inst0" in resource_name:
+                    ## assume single NIC for now
+                    resource_name = "TCPIP0::" + resource_name
+                self.interface = VisaInterface(resource_name)
+            else:
+                raise ValueError("That interface type is not yet recognized.")
+        except:
+            logger.error("Could not initialize interface for %s.", resource_name)
+            self.interface = MagicMock()
 
         self._freeze()
 

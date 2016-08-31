@@ -7,7 +7,15 @@
 #    http://www.apache.org/licenses/LICENSE-2.0
 
 from pycontrol.instruments.instrument import Instrument
-from libAlazar import LibAlazar
+from pycontrol.log import logger
+from unittest.mock import MagicMock
+
+try:
+    from libAlazar import LibAlazar
+except:
+    logger.warning("Could not load alazar library")
+    fake_alazar = True
+
 import re
 
 # Convert from pep8 back to camelCase labels
@@ -28,11 +36,16 @@ def rec_camelize(dictionary):
 class ATS9870(Instrument):
     """Alazar ATS9870 digitizer"""
     instrument_type = "Digitizer"
-    _lib = LibAlazar()
 
     def __init__(self, resource_name, name="Unlabeled Alazar"):
         self.name = name
         self.resource_name = int(resource_name)
+        self.fake = fake_alazar
+        if self.fake:
+            self._lib = MagicMock()
+        else:
+            self._lib = LibAlazar()
+        
         self._lib.connectBoard(self.resource_name, "")
 
     def set_all(self, settings_dict):

@@ -8,6 +8,7 @@
 
 from pycontrol.instruments.instrument import Instrument, MetaInstrument
 from pycontrol.log import logger
+from unittest.mock import MagicMock
 import ctypes
 
 class MakeSettersGetters(MetaInstrument):
@@ -23,12 +24,16 @@ class MakeSettersGetters(MetaInstrument):
 class HS9000(Instrument, metaclass=MakeSettersGetters):
     """Holzworth HS9000 microwave source"""
     instrument_type = "Microwave Source"
-    _lib = ctypes.CDLL("HolzworthMulti64.dll")
 
     def __init__(self, resource_name, name="Unlabeled Holzworth HS9000"):
         self.name = name
         self.resource_name = resource_name
-
+        try:
+            self._lib = ctypes.CDLL("HolzworthMulti64.dll")
+        except:
+            logger.warning("Could not find APS2 python driver.")
+            self._lib = MagicMock()
+        
         # parse resource_name: expecting something like "HS9004A-009-1"
         self.model, self.serial, self.chan = resource_name.split("-")
         self.resource_name = resource_name

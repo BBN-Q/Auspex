@@ -8,8 +8,13 @@
 
 from pycontrol.instruments.instrument import Instrument, SCPIInstrument, VisaInterface, MetaInstrument
 from types import MethodType
+from unittest.mock import MagicMock
 from pycontrol.log import logger
-import aps2
+try:
+    import aps2
+except:
+    logger.error("Could not find APS2 python driver.")
+    fake_aps2 = True
 
 class DigitalAttenuator(SCPIInstrument):
     """BBN 3 Channel Instrument"""
@@ -85,7 +90,11 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
     def __init__(self, resource_name, name="Unlabeled APS2"):
         self.name = name
         self.resource_name = resource_name
-        self.wrapper = aps2.APS2()
+        
+        if fake_aps2:
+            self.wrapper = MagicMock()
+        else:
+            self.wrapper = aps2.APS2()
         self.wrapper.connect(resource_name)
 
         self.set_amplitude = self.wrapper.set_channel_scale
