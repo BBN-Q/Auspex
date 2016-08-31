@@ -47,6 +47,10 @@ class ATS9870(Instrument):
             self._lib = LibAlazar()
         
         self._lib.connectBoard(self.resource_name, "")
+        
+        commands = ['acquire', 'stop', 'wait_for_acquisition']
+        for c in commands:
+            setattr(self, c, getattr(self._lib, c))
 
     def set_all(self, settings_dict):
         # Flatten the dict and then pass to super
