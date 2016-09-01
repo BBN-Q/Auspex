@@ -12,6 +12,7 @@ from unittest.mock import MagicMock
 from pycontrol.log import logger
 try:
     import aps2
+    fake_aps2 = False
 except:
     logger.error("Could not find APS2 python driver.")
     fake_aps2 = True
@@ -90,7 +91,7 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
     def __init__(self, resource_name, name="Unlabeled APS2"):
         self.name = name
         self.resource_name = resource_name
-        
+
         if fake_aps2:
             self.wrapper = MagicMock()
         else:
@@ -104,6 +105,9 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
         self.get_amplitude = self.wrapper.get_channel_scale
         self.get_offset    = self.wrapper.get_channel_offset
         self.get_enabled   = self.wrapper.get_channel_enabled
+
+        self.run           = self.wrapper.run
+        self.stop          = self.wrapper.stop
 
     def __del__(self):
         self.wrapper.disconnect()

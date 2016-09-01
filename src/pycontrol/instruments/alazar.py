@@ -12,6 +12,7 @@ from unittest.mock import MagicMock
 
 try:
     from libAlazar import LibAlazar
+    fake_alazar = False
 except:
     logger.warning("Could not load alazar library")
     fake_alazar = True
@@ -45,9 +46,9 @@ class ATS9870(Instrument):
             self._lib = MagicMock()
         else:
             self._lib = LibAlazar()
-        
+
         self._lib.connectBoard(self.resource_name, "")
-        
+
         commands = ['acquire', 'stop', 'wait_for_acquisition']
         for c in commands:
             setattr(self, c, getattr(self._lib, c))
@@ -87,7 +88,13 @@ class ATS9870(Instrument):
         ]
 
         finicky_dict = {k: v for k, v in settings_dict_flat.items() if k in allowed_keywords}
+        # TODO: don't do this
+        finicky_dict['bufferSize'] = 4096000
         self._lib.setAll(finicky_dict)
+        self.number_acquisitions     = self._lib.numberAcquisitions
+        self.samples_per_acquisition = self._lib.samplesPerAcquisition
+        self.ch1_buffer              = self._lib.ch1Buffer
+        self.ch2_buffer              = self._lib.ch2Buffer
 
     def __del__(self):
         self._lib.disconnect()
