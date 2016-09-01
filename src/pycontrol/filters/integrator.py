@@ -7,7 +7,6 @@
 #    http://www.apache.org/licenses/LICENSE-2.0
 
 import asyncio, concurrent
-
 import numpy as np
 
 from pycontrol.stream import DataStreamDescriptor
@@ -20,8 +19,10 @@ class KernelIntegrator(Filter):
     source = OutputConnector()
 
     """Integrate with a given kernel. Kernel will be padded/truncated to match record length"""
-    def __init__(self, kernel, **kwargs):
+    def __init__(self, kernel=None, **kwargs):
         super(KernelIntegrator, self).__init__(**kwargs)
+        if kernel is None:
+            raise ValueError("Integrator was passed kernel None")
         self.kernel = kernel
 
     def update_descriptors(self):

@@ -12,6 +12,9 @@ import pkgutil
 import inspect
 import re
 import asyncio
+import base64
+
+import numpy as np
 
 import pycontrol.config as config
 import pycontrol.instruments
@@ -64,7 +67,7 @@ class QubitExperiment(Experiment):
         self.awgs       = [v for _, v in self._instruments.items() if v.instrument_type == "AWG"]
 
         # Swap the master AWG so it is last in the list
-        master_awg_idx = next(ct for ct,awg in enumerate(self.awgs) if self.exp_settings['instruments'][awg.name]['master'])
+        master_awg_idx = next(ct for ct,awg in enumerate(self.awgs) if self.exp_settings['instruments'][awg.name]['is_master'])
         self.awgs[-1], self.awgs[master_awg_idx] = self.awgs[master_awg_idx], self.awgs[-1]
 
     async def run(self):
@@ -75,18 +78,19 @@ class QubitExperiment(Experiment):
             awg.run()
 
         async def wait_for_acq(digitizer):
-            for _ in range(digitizer.numberAcquisitions):
+            for _ in range(digitizer.number_acquisitions):
                 while not digitizer.wait_for_acquisition():
                     await asyncio.sleep(0.1)
 
                 # Find the associated output stream and push the data
-                oc = dig_to_oc[digitizer]
-                await oc.push(digitizer.ch2Buffer)
+                oc = self.dig_to_oc[digitizer]
+
+                await oc.push(digitizer.ch2_buffer)
                 logger.debug("Digitizer %s got data.", digitizer)
             logger.debug("Digitizer %s finished getting data.", digitizer)
 
         # Wait for all of the acquisition to complete
-        asyncio.wait([wait_for_acq(dig) for dig in self.digitizers])
+        await asyncio.wait([wait_for_acq(dig) for dig in self.digitizers])
 
         for dig in self.digitizers:
             dig.stop()
@@ -187,13 +191,13 @@ class QubitExpFactory(object):
 
         # First look for raw streams
         raw_stream_settings = {k: v for k, v in experiment.exp_settings['measurements'].items() if v['filter_type'] == "RawStream"}
-        
+
         # Remove them from the exp_settings
         for k in raw_stream_settings:
             experiment.exp_settings['measurements'].pop(k)
-        
+
         # Next look for other types of streams
-        # TODO: look for X6 type streams 
+        # TODO: look for X6 type streams
         dig_to_oc = {} # Map for convenience
         for stream_name, stream_settings in raw_stream_settings.items():
             logger.debug("Added %s output connector to experiment.", stream_name)
@@ -210,7 +214,7 @@ class QubitExpFactory(object):
             descrip.add_axis(DataAxis("segments",     range(source_instr_settings['averager']['nbr_segments'])))
             descrip.add_axis(DataAxis("round_robins", range(source_instr_settings['averager']['nbr_round_robins'])))
             oc.set_descriptor(descrip)
-                  
+
             dig_to_oc[source_instr] = oc
 
         # ========================
@@ -219,7 +223,7 @@ class QubitExpFactory(object):
 
         for filt_name, filt_par in experiment.exp_settings['measurements'].items():
             filt_type = filt_par['filter_type']
-            
+
             # Translate if necessary
             if filt_type in name_changes:
                 filt_type = name_changes[filt_type]
@@ -246,7 +250,7 @@ class QubitExpFactory(object):
                 source = experiment.output_connectors[source_name]
             else:
                 raise ValueError("Couldn't find anywhere to attach the source of the specified filter {}".format(name))
-            
+
             # ========================
             # Create plot if requested
             # ========================
@@ -273,4 +277,3 @@ class QubitExpFactory(object):
 
         experiment.dig_to_oc = dig_to_oc
         experiment.set_graph(graph)
-
