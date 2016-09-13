@@ -298,7 +298,7 @@ class Experiment(metaclass=MetaExperiment):
             # Update progress bars
             if self.progressbar is not None:
                 self.progressbar.update()
-           
+
             if done:
                 logger.debug("Sweeper has finished.")
                 await self.declare_done()
@@ -330,7 +330,7 @@ class Experiment(metaclass=MetaExperiment):
 
             #On some systems there is a possibility we try to `push_session` before the
             #the server on the BokehServerThread has started. Wait a second, here.
-            time.sleep(1)
+            time.sleep(3)
 
             tabs = True # Tabs seem a bit sluggish in jupyter notebooks...
             if tabs:
