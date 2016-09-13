@@ -210,7 +210,8 @@ class QubitExpFactory(object):
             source_instr = experiment._instruments[snakeify(stream_settings['data_source'])]
             source_instr_settings = experiment.exp_settings['instruments'][snakeify(stream_settings['data_source'])]
             descrip = DataStreamDescriptor()
-            descrip.add_axis(DataAxis("samples",      range(source_instr_settings['averager']['record_length'])))
+            samp_time = 1.0/source_instr_settings["horizontal"]["sampling_rate"]
+            descrip.add_axis(DataAxis("time",         samp_time*np.array(range(source_instr_settings['averager']['record_length']))))
             descrip.add_axis(DataAxis("segments",     range(source_instr_settings['averager']['nbr_segments'])))
             descrip.add_axis(DataAxis("round_robins", range(source_instr_settings['averager']['nbr_round_robins'])))
             oc.set_descriptor(descrip)
@@ -257,8 +258,10 @@ class QubitExpFactory(object):
 
             has_plot = experiment.exp_settings['measurements'][name]['plot_scope']
             if has_plot:
+                averager = module_map['Averager'](name=name+"_average", axis='round_robins')
                 plot = module_map['Plotter'](name=name, plot_mode=experiment.exp_settings['measurements'][name]['plot_mode'])
-                graph.append([filt.source, plot.sink])
+                graph.append([filt.source, averager.sink])
+                graph.append([averager.final_average, plot.sink])
 
             # ==========================
             # Create writer if requested
