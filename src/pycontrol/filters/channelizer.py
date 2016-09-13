@@ -23,7 +23,7 @@ class Channelizer(Filter):
     sink = InputConnector()
     source = OutputConnector()
 
-    def __init__(self, frequency=4e9, cutoff=5e9, decimation_factor=1, **kwargs):
+    def __init__(self, frequency=-9.0e6, cutoff=0.1, decimation_factor=2, **kwargs):
         super(Channelizer, self).__init__(**kwargs)
         self.frequency = frequency
         self.cutoff = cutoff
@@ -58,7 +58,6 @@ class Channelizer(Filter):
             os.end_connector.update_descriptors()
 
     async def process_data(self, data):
-
         #Assume for now we get a integer number of records at a time
         #TODO: handle partial records
         num_records = data.size // self.record_length

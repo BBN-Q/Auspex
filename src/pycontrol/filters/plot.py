@@ -20,7 +20,7 @@ from pycontrol.filters.filter import Filter, InputConnector
 class Plotter(Filter):
     sink = InputConnector()
 
-    def __init__(self, *args, name="", plot_dims=1, plot_mode='real', **plot_args):
+    def __init__(self, *args, name="", plot_dims=None, plot_mode='real', **plot_args):
 
         super(Plotter, self).__init__(*args, name=name)
         self.plot_dims = plot_dims
@@ -35,6 +35,13 @@ class Plotter(Filter):
         self.descriptor = self.sink.descriptor
 
     def final_init(self):
+
+        # Determine the plot dimensions
+        if self.plot_dims is None:
+            if len(self.descriptor.axes) > 1:
+                self.plot_dims = 2
+            else:
+                self.plot_dims = 1
 
         # Check the descriptor axes
         num_axes = len(self.descriptor.axes)
@@ -62,7 +69,7 @@ class Plotter(Filter):
             ymin = min(self.y_values)
             self.figure = Figure(x_range=[xmin, xmax], y_range=[ymin, ymax], plot_width=600, plot_height=600, webgl=False)
             self.plot = self.figure.image(image=[self.z_data], x=[xmin], y=[ymin],
-                                          dw=[xmax-xmin], dh=[ymax-ymin], name=self.name, **self.plot_args)
+                                          dw=[xmax-xmin], dh=[ymax-ymin], name=self.name, palette="Spectral11", **self.plot_args)
 
         self.data_source = self.plot.data_source
 

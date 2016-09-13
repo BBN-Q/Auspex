@@ -31,7 +31,11 @@ class KernelIntegrator(Filter):
         #pad or truncate the kernel to match the record length
         record_length = self.sink.descriptor.axes[-1].num_points()
 
-        self.aligned_kernel = np.resize(self.kernel, record_length)
+        # This
+        if self.kernel.size < record_length:
+            self.aligned_kernel = np.append(self.kernel, np.zeros(record_length-self.kernel.size, dtype=np.complex128))
+        else:
+            self.aligned_kernel = np.resize(self.kernel, record_length)
         #zero pad if necessary
         if record_length > len(self.kernel):
             self.aligned_kernel[record_length:] = 0.0

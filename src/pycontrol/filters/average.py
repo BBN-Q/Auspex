@@ -13,15 +13,15 @@ from pycontrol.stream import DataStreamDescriptor, DataAxis
 from pycontrol.filters.filter import Filter, InputConnector, OutputConnector
 from pycontrol.log import logger
 
-class Average(Filter):
+class Averager(Filter):
     """Takes data and collapses along the specified axis."""
 
-    data = InputConnector()
+    sink = InputConnector()
     partial_average = OutputConnector()
     final_average = OutputConnector()
 
     def __init__(self, axis, **kwargs):
-        super(Average, self).__init__(**kwargs)
+        super(Averager, self).__init__(**kwargs)
         self._axis = axis
         self.points_before_final_average   = None
         self.points_before_partial_average = None
@@ -35,14 +35,14 @@ class Average(Filter):
     def axis(self, value):
         if isinstance(value, str):
             self._axis = value
-            if self.data.descriptor is not None:
+            if self.sink.descriptor is not None:
                 self.update_descriptors()
         else:
             raise ValueError("Must specify averaging axis as string.")
 
     def update_descriptors(self):
-        logger.debug('Updating averager "%s" descriptors based on input descriptor: %s.', self.name, self.data.descriptor)
-        descriptor_in = self.data.descriptor
+        logger.debug('Updating averager "%s" descriptors based on input descriptor: %s.', self.name, self.sink.descriptor)
+        descriptor_in = self.sink.descriptor
         names = [a.name for a in descriptor_in.axes]
 
         # Convert named axes to an index
@@ -80,7 +80,7 @@ class Average(Filter):
         descriptor_partial.axes = partial_axes
         partial_axes.pop(self.axis_num)
         descriptor_partial.add_axis(DataAxis("Partial Averages", list(range(self.num_averages))))
-        
+
         self.sum_so_far = np.zeros(self.avg_dims)
         self.partial_average.descriptor = descriptor_partial
         self.final_average.descriptor = descriptor_final
@@ -171,7 +171,7 @@ class MultiAverage(Filter):
     @axes.setter
     def axes(self, value):
         self._axes = self.get_axes(value)
-        if self.data.descriptor is not None:
+        if self.sink.descriptor is not None:
             self.update_descriptors()
 
     def get_axes(self,value):
@@ -184,8 +184,8 @@ class MultiAverage(Filter):
         raise ValueError("Must specify averaging axes as a string (one axis) or a list of strings.")
 
     def update_descriptors(self):
-        logger.debug('Updating averager "%s" descriptors based on input descriptor: %s.', self.name, self.data.descriptor)
-        descriptor_in = self.data.descriptor
+        logger.debug('Updating averager "%s" descriptors based on input descriptor: %s.', self.name, self.sink.descriptor)
+        descriptor_in = self.sink.descriptor
         names = [a.name for a in descriptor_in.axes]
 
         # Convert named axes to an index
@@ -242,12 +242,12 @@ class MultiAverage(Filter):
         # We only need to accumulate up to the outer most averaging axis
         # BUT we may get something longer at any given time!
 
-        logger.debug("Established averager buffer of size %d", self.data.input_streams[0].num_points())
+        logger.debug("Established averager buffer of size %d", self.sink.input_streams[0].num_points())
 
         carry = np.zeros(0)
 
         while True:
-            if self.data.input_streams[0].done():
+            if self.sink.input_streams[0].done():
                 # We've stopped receiving new input, make sure we've flushed the output streams
                 if len(self.average.output_streams) > 0:
                     if all([os.done() for os in self.average.output_streams]):
@@ -257,9 +257,9 @@ class MultiAverage(Filter):
                     logger.debug("Found no output stream. Averager %s done.", self.name)
                     break
 
-            new_data = await self.data.input_streams[0].queue.get()
+            new_data = await self.sink.input_streams[0].queue.get()
             logger.debug("%s got data %s", self.name, new_data)
-            logger.debug("Now has %d of %d points.", self.data.input_streams[0].points_taken, self.data.input_streams[0].num_points())
+            logger.debug("Now has %d of %d points.", self.sink.input_streams[0].points_taken, self.sink.input_streams[0].num_points())
 
             # todo: handle unflattened data separately
             if len(new_data.shape) > 1:
