@@ -53,6 +53,21 @@ class ATS9870(Instrument):
         for c in commands:
             setattr(self, c, getattr(self._lib, c))
 
+    def acquire_all(self, channel=2):
+        ch1 = np.array([], dtype=np.float32)
+        ch2 = np.array([], dtype=np.float32)
+
+        for _ in range(self.numberAcquisitions):
+            while not self.wait_for_acquisition():
+                time.sleep(0.0001)
+            ch1 = np.append(ch1, self._lib.ch1Buffer)
+            ch2 = np.append(ch2, self._lib.ch2Buffer)
+
+        if channel==1:
+            return ch1
+        else:
+            return ch2
+
     def set_all(self, settings_dict):
         # Flatten the dict and then pass to super
         settings_dict_flat = {}
