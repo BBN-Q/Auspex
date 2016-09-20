@@ -26,23 +26,6 @@ from pycontrol.filters.filter import Filter
 from pycontrol.instruments.instrument import Instrument, SCPIInstrument, CLibInstrument
 from pycontrol.stream import OutputConnector, DataStreamDescriptor, DataAxis
 
-# Convert from camelCase to pep8 compliant labels
-# http://stackoverflow.com/questions/1175208/elegant-python-function-to-convert-camelcase-to-snake-case
-first_cap_re = re.compile('(.)([A-Z][a-z]+)')
-all_cap_re = re.compile('([a-z0-9])([A-Z])')
-def snakeify(name):
-    s1 = first_cap_re.sub(r'\1_\2', name)
-    return all_cap_re.sub(r'\1_\2', s1).lower()
-
-# Recursively re-label dictionary
-def rec_snakeify(dictionary):
-    new = {}
-    for k, v in dictionary.items():
-        if isinstance(v, dict):
-            v = rec_snakeify(v)
-        new[snakeify(k)] = v
-    return new
-
 def strip_vendor_names(instr_name):
     vns = ["Agilent", "Alazar", "Keysight", "Holzworth", "Yoko", "Yokogawa"]
     for vn in vns:
@@ -60,8 +43,8 @@ class QubitExperiment(Experiment):
     def init_instruments(self):
         for name, instr in self._instruments.items():
             instr_par = self.exp_settings['instruments'][name]
-            logger.debug("Setting instr %s with params %s.", name, rec_snakeify(instr_par))
-            instr.set_all(rec_snakeify(instr_par))
+            logger.debug("Setting instr %s with params %s.", name, instr_par)
+            instr.set_all(instr_par)
 
         self.digitizers = [v for _, v in self._instruments.items() if v.instrument_type == "Digitizer"]
         self.awgs       = [v for _, v in self._instruments.items() if v.instrument_type == "AWG"]
@@ -103,18 +86,23 @@ class QubitExpFactory(object):
 
     @staticmethod
     def create():
-        with open(config.expSettingsFile, 'r') as FID:
-            exp_settings = json.load(FID)
+        with open(config.instrumentLibFile, 'r') as FID:
+            instrument_settings = json.load(FID)
 
-        with open(config.channelLibFile, 'r') as FID:
-            chan_settings = json.load(FID)
+        with open(config.measurementLibFile, 'r') as FID:
+            measurement_settings = json.load(FID)
+
+        with open(config.sweepLibFile, 'r') as FID:
+            sweep_settings = json.load(FID)
 
         experiment = QubitExperiment()
-        experiment.exp_settings = rec_snakeify(exp_settings)
+        experiment.instrument_settings  = instrument_settings
+        experiment.measurement_settings = measurement_settings
+        experiment.sweep_settings       = sweep_settings
 
         QubitExpFactory.load_instruments(experiment)
-        QubitExpFactory.load_filters(experiment)
         QubitExpFactory.load_sweeps(experiment)
+        QubitExpFactory.load_filters(experiment)
 
         return experiment
 
@@ -136,36 +124,69 @@ class QubitExpFactory(object):
             module_map.update(dict(instrs))
         logger.debug("Found instruments %s.", module_map)
 
-        for instr_name, instr_par in experiment.exp_settings['instruments'].items():
-            instr_type = strip_vendor_names(instr_par['device_name'])
-            # Instantiate the desired instrument
-            if instr_type in module_map:
-                logger.debug("Found instrument class %s for '%s' at loc %s when loading experiment settings.", instr_type, instr_name, instr_par['address'])
-                try:
-                    inst = module_map[instr_type](correct_resource_name(instr_par['address']), name=instr_name)
-                except Exception as e:
-                    logger.error("Initialization caused exception:", str(e))
-                    inst = None
-                # Add to class dictionary for convenience
-                setattr(experiment, 'instr_name', inst)
-                # Add to _instruments dictionary
-                experiment._instruments[instr_name] = inst
-            else:
-                logger.error("Could not find instrument class %s for '%s' when loading experiment settings.", instr_type, instr_name)
+        # Loop through instruments, and add them to the experiment if they are enabled.
+        for instr_name, instr_par in experiment.instrument_settings['instrDict'].items():
+            if instr_par['enabled']:
+                # This should go away as pycontrol and pyqlab converge on naming schemes
+                instr_type = strip_vendor_names(instr_par['device_name'])
+                # Instantiate the desired instrument
+                if instr_type in module_map:
+                    logger.debug("Found instrument class %s for '%s' at loc %s when loading experiment settings.", instr_type, instr_name, instr_par['address'])
+                    try:
+                        inst = module_map[instr_type](correct_resource_name(instr_par['address']), name=instr_name)
+                    except Exception as e:
+                        logger.error("Initialization caused exception:", str(e))
+                        inst = None
+                    # Add to class dictionary for convenience
+                    setattr(experiment, 'instr_name', inst)
+                    # Add to _instruments dictionary
+                    experiment._instruments[instr_name] = inst
+                else:
+                    logger.error("Could not find instrument class %s for '%s' when loading experiment settings.", instr_type, instr_name)
 
 
     @staticmethod
     def load_sweeps(experiment):
-        for chan_name, chan_par in experiment.exp_settings['sweeps'].items():
-            pass
+        # Load the active sweeps from the sweep ordering
+        for name in experiment.sweep_settings['sweepOrder']:
+            par = experiment.sweep_settings['sweepDict']['sweeps']
+
+            if par['usePointsList']:
+                points = np.array(par['points'])
+            else:
+                points = np.arange(par['start'], par['stop'] + 0.5*par['step'], par['step'])
+
+            # Treat segment sweeps separately since they are DataAxes rather than SweepAxes
+            if par['x__class__'] == 'SegmentNum':
+                pass
+            if par['x__class__'] == 'SegmentNumWithCals':
+                points = np.append(points, np.zeros(numCals))
+                data.metadata = ['data' for p in points] + ['cal' for s in range(par['numCals'])]
+            else:
+                # Here we create a parameter for experiment and associate it with the 
+                # relevant method in the instrument
+
+                # Add a parameter to the experiment corresponding to the thing we want to sweep
+                param = FloatParameter()
+                param.name = name
+                setattr(experiment, name, param)
+                experiment._parameters[name] = param
+
+                # Get the instrument
+                instr = experiment._instruments[par['instr']]
+                method_name = 'set_' + par['x__class__'].lower()
+                if hasattr(instr, method_name):
+                    param.assign_method(getattr(instr, method_name)) # Couple the parameter to the instrument
+                    experiment.add_sweep(param, points) # Create the requested sweep on this parameter
+                else:
+                    raise ValueError("The instrument {} has no method set_{}".format(name, par['x__class__'].lower()))
+            
+                # Add the sweep to the exeriment
+                experiment.add_sweep()
 
     @staticmethod
     def load_filters(experiment):
-        # Change PyQLab measurements to Pycontrol filters
-        name_changes = {'KernelIntegration': 'KernelIntegrator',
-                        'DigitalDemod': 'Channelizer' }
-
-        # These stores any filters we create as well as their connections
+        # These store any filters we create as well as their connections
         filters = {}
         graph   = []
 
@@ -189,62 +210,75 @@ class QubitExpFactory(object):
         # Find out which output connectors we need to create
         # ==================================================
 
-        # First look for raw streams
-        raw_stream_settings = {k: v for k, v in experiment.exp_settings['measurements'].items() if v['filter_type'] == "RawStream"}
+        # Get the enabled measurements
+        enabled_meas = {k: v for k, v in experiment.exp_settings['filterDict'].items() if v['enabled']}
 
-        # Remove them from the exp_settings
-        for k in raw_stream_settings:
-            experiment.exp_settings['measurements'].pop(k)
+        # First look for digitizer streams (Alazar or X6)
+        dig_settings    = {k: v for k, v in enabled_meas if "StreamSelector" in v['x__class__']}
+        
+        # Remove these "Fake" filters from the exp_settings
+        for k in dig_settings.keys():
+            enabled_meas.pop(k)
 
-        # Next look for other types of streams
-        # TODO: look for X6 type streams
-        dig_to_oc = {} # Map for convenience
-        for stream_name, stream_settings in raw_stream_settings.items():
-            logger.debug("Added %s output connector to experiment.", stream_name)
-            oc = OutputConnector(name=stream_name, parent=experiment)
+        # Map from Digitizer -> OutputConnector for convenience
+        dig_to_oc = {} 
+        
+        for name, settings in dig_settings.items():
+            
+            # Create and add the OutputConnector
+            logger.debug("Adding %s output connector to experiment.", name)
+            oc = OutputConnector(name=name, parent=experiment)
             experiment._output_connectors.append(oc)
-            experiment.output_connectors[stream_name] = oc
-            setattr(experiment, stream_name, oc)
+            experiment.output_connectors[name] = oc
+            setattr(experiment, name, oc)
 
-            # First, find the digitizer
-            source_instr = experiment._instruments[snakeify(stream_settings['data_source'])]
-            source_instr_settings = experiment.exp_settings['instruments'][snakeify(stream_settings['data_source'])]
+            # Find the digitizer instrument and settings
+            source_instr          = experiment._instruments[settings['data_source']]
+            source_instr_settings = experiment.instr_settings['instrDict'][settings['data_source']]
+            
+            # Construct the descriptor
             descrip = DataStreamDescriptor()
-            samp_time = 1.0/source_instr_settings["horizontal"]["sampling_rate"]
-            descrip.add_axis(DataAxis("time",         samp_time*np.array(range(source_instr_settings['averager']['record_length']))))
-            descrip.add_axis(DataAxis("segments",     range(source_instr_settings['averager']['nbr_segments'])))
-            descrip.add_axis(DataAxis("round_robins", range(source_instr_settings['averager']['nbr_round_robins'])))
+
+            # If this is an X6, check to see what stream we are getting and modify the axis descriptor.
+            # If it's an integrated stream, then the time axis has already been eliminated.
+            if 'X6' in settings['x__class__']:
+                if settings['stream_type'] != 'Integrated':
+                    samp_time = 1.0e-9
+                    descrip.add_axis(DataAxis("time", samp_time*np.array(range(source_instr_settings['record_length']))))
+            else:
+                samp_time = 1.0/source_instr_settings["sampling_rate"]
+                descrip.add_axis(DataAxis("time", samp_time*np.array(range(source_instr_settings['record_length']))))
+
+            descrip.add_axis(DataAxis("segments",     range(source_instr_settings['nbr_segments'])))
+            descrip.add_axis(DataAxis("round_robins", range(source_instr_settings['nbr_round_robins'])))
             oc.set_descriptor(descrip)
 
+            # Add to our mapping
             dig_to_oc[source_instr] = oc
 
         # ========================
         # Process the measurements
         # ========================
 
-        for filt_name, filt_par in experiment.exp_settings['measurements'].items():
-            filt_type = filt_par['filter_type']
-
-            # Translate if necessary
-            if filt_type in name_changes:
-                filt_type = name_changes[filt_type]
+        for name, settings in enabled_meas.items():
+            filt_type = settings['x__class__']
 
             if filt_type in module_map:
                 if filt_type == "KernelIntegrator":
-                    filt_par['kernel'] = np.fromstring( base64.b64decode(filt_par['kernel']), dtype=np.complex128)
-                filt = module_map[filt_type](**filt_par)
-                filt.name = filt_name
-                filters[filt_name] = filt
-                logger.debug("Found filter class %s for '%s' when loading experiment settings.", filt_type, filt_name)
+                    settings['kernel'] = np.fromstring( base64.b64decode(settings['kernel']), dtype=np.complex128)
+                filt = module_map[filt_type](**settings)
+                filt.name = name
+                filters[name] = filt
+                logger.debug("Found filter class %s for '%s' when loading experiment settings.", filt_type, name)
             else:
-                logger.error("Could not find filter class %s for '%s' when loading experiment settings.", filt_type, filt_name)
+                logger.error("Could not find filter class %s for '%s' when loading experiment settings.", filt_type, name)
 
         # ====================================
         # Establish all of the connections
         # ====================================
 
         for name, filt in filters.items():
-            source_name = snakeify(experiment.exp_settings['measurements'][name]['data_source'])
+            source_name = experiment.exp_settings['measurements'][name]['data_source']
             if source_name in filters:
                 source = filters[source_name].source
             elif source_name in experiment.output_connectors:
@@ -252,28 +286,28 @@ class QubitExpFactory(object):
             else:
                 raise ValueError("Couldn't find anywhere to attach the source of the specified filter {}".format(name))
 
-            # ========================
-            # Create plot if requested
-            # ========================
+            # # ========================
+            # # Create plot if requested
+            # # ========================
 
-            has_plot = experiment.exp_settings['measurements'][name]['plot_scope']
-            if has_plot:
-                averager = module_map['Averager'](name=name+"_average", axis='round_robins')
-                plot = module_map['Plotter'](name=name, plot_mode=experiment.exp_settings['measurements'][name]['plot_mode'])
-                graph.append([filt.source, averager.sink])
-                graph.append([averager.final_average, plot.sink])
+            # has_plot = experiment.exp_settings['measurements'][name]['plot_scope']
+            # if has_plot:
+            #     averager = module_map['Averager'](name=name+"_average", axis='round_robins')
+            #     plot = module_map['Plotter'](name=name, plot_mode=experiment.exp_settings['measurements'][name]['plot_mode'])
+            #     graph.append([filt.source, averager.sink])
+            #     graph.append([averager.final_average, plot.sink])
 
-            # ==========================
-            # Create writer if requested
-            # ==========================
+            # # ==========================
+            # # Create writer if requested
+            # # ==========================
 
-            # import ipdb; ipdb.set_trace()
-            if 'save_records' in experiment.exp_settings['measurements'][name]:
-                has_writer = experiment.exp_settings['measurements'][name]['save_records']
-                if has_writer:
-                    filename = experiment.exp_settings['measurements'][name]['records_file_path']
-                    writer = module_map['WriteToHDF5'](filename, name=name)
-                    graph.append([filt.source, writer.sink])
+            # # import ipdb; ipdb.set_trace()
+            # if 'save_records' in experiment.exp_settings['measurements'][name]:
+            #     has_writer = experiment.exp_settings['measurements'][name]['save_records']
+            #     if has_writer:
+            #         filename = experiment.exp_settings['measurements'][name]['records_file_path']
+            #         writer = module_map['WriteToHDF5'](filename, name=name)
+            #         graph.append([filt.source, writer.sink])
 
             logger.debug("Connecting %s to %s", source, filt)
             graph.append([source, filt.sink])
