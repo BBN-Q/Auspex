@@ -50,7 +50,7 @@ class DataAxis(object):
 class SweepAxis(DataAxis):
     """ Structure for sweep axis, separate from DataAxis.
     Can be an unstructured axis, in which case 'parameter' is actually a list of parameters. """
-    def __init__(self, parameter, points = [], refine_func=None, refine_args=[]):
+    def __init__(self, parameter, points = [], metadata=None, refine_func=None, refine_args=[]):
 
         self.unstructured = hasattr(parameter, '__iter__')
         self.parameter    = parameter
@@ -67,6 +67,7 @@ class SweepAxis(DataAxis):
         self.refine_args = refine_args
         self.step        = 0
         self.done        = False
+        self.metadata    = metadata
 
         if self.unstructured and len(parameter) != len(points[0]):
             raise ValueError("Parameter value tuples must be the same length as the number of parameters.")
@@ -209,6 +210,26 @@ class DataStreamDescriptor(object):
         for a in self.axes:
             a.done = False
 
+    def __copy__(self):
+        newone = type(self)()
+        newone.__dict__.update(self.__dict__)
+        newone.axes = self.axes[:]
+        return newone
+
+    def copy(self):
+        return self.__copy__()
+
+    def axis(self, axis_name):
+        names = [a.name for a in self.axes]
+        self.axes[names.index(axis_name)]
+
+    def pop_axis(self, axis_name):
+        # Pop the time axis (which should be here)
+        names = [a.name for a in self.axes]
+        if axis_name not in names:
+            raise Exception("Couldn't pop axis {} from descriptor, it probably doesn't exist.".format(axis_name))
+        return self.axes.pop(names.index(axis_name))         
+
     def num_points_through_axis(self, axis):
         if axis>=len(self.axes):
             return 0
@@ -328,11 +349,14 @@ class InputConnector(object):
 class OutputConnector(object):
     def __init__(self, name="", parent=None, datatype=None):
         self.name = name
-        self.stream = None # Seems unused?
         self.output_streams = []
-        self.descriptor = None
         self.points_taken = 0
         self.parent = parent
+
+        # Set up a default descriptor, and add access
+        # to its methods for convenience.
+        self.descriptor = DataStreamDescriptor()
+        self.add_axis   = self.descriptor.add_axis
 
     # We allow the connectors itself to posess
     # a descriptor, that it may pass
