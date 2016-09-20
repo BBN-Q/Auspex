@@ -68,17 +68,17 @@ class Averager(Filter):
         logger.debug("Averaging dimensions are %s", self.avg_dims)
 
         # Define final axis descriptor
-        final_axes = descriptor_in.axes[:]
-        descriptor_final = DataStreamDescriptor()
-        descriptor_final.axes = final_axes
-        self.num_averages = final_axes.pop(self.axis_num).num_points()
+        # final_axes = descriptor_in.axes[:]
+        descriptor_final = descriptor_in.copy()
+        self.num_averages = descriptor_final.pop_axis(self.axis).num_points()
         logger.debug("Number of partial averages is %d", self.num_averages)
 
         # Define partial axis descriptor
-        partial_axes = descriptor_in.axes[:]
-        descriptor_partial = DataStreamDescriptor()
-        descriptor_partial.axes = partial_axes
-        partial_axes.pop(self.axis_num)
+        # partial_axes = descriptor_in.axes[:]
+        descriptor_partial = descriptor_in.copy()
+        descriptor_partial.pop_axis(self.axis)
+        # descriptor_partial.axes = partial_axes
+        # partial_axes.pop(self.axis_num)
         descriptor_partial.add_axis(DataAxis("Partial Averages", list(range(self.num_averages))))
 
         self.sum_so_far = np.zeros(self.avg_dims)

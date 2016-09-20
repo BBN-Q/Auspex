@@ -37,6 +37,9 @@ class Filter(metaclass=MetaFilter):
         self.input_connectors = {}
         self.output_connectors = {}
 
+        # For signaling to Quince that something is wrong
+        self.out_of_spec = False
+
         for ic in self._input_connectors:
             a = InputConnector(name=ic, parent=self)
             a.parent = self
@@ -52,12 +55,23 @@ class Filter(metaclass=MetaFilter):
         return "<{}(name={})>".format(self.__class__.__name__, self.name)
 
     def update_descriptors(self):
-        self.descriptor = list(self.input_connectors.values())[0].descriptor
-        logger.debug("Starting descriptor update in filter %s, where the descriptor is %s",
-                self.name, self.descriptor)
-        for oc in self.output_connectors.values():
-            oc.descriptor = self.descriptor
-            oc.update_descriptors()
+        """This method is called whenever the connectivity of the graph changes. This may have implications
+        for the internal functioning of the filter, in which case update_descriptors should be overloaded. 
+        Any simple changes to the axes within the StreamDescriptors should take place via the class method
+        descriptor_map."""
+        self.out_of_spec = False
+
+        input_descriptors  = {k: v.descriptor for k,v in self.input_connectors.items()}
+        output_descriptors = self.descriptor_map(input_descriptors)
+        
+        for name, descriptor in output_descriptors.items():
+            if name in self.output_connectors:
+                self.output_connectors[name].descriptor = descriptor
+                self.output_connectors[name].update_descriptors()
+
+    def descriptor_map(self, input_descriptors):
+        """Return a dict of the output descriptors."""
+        return {'source': v for v in input_descriptors.values()}
 
     async def on_done(self):
         """To be run when the done signal is received, in case additional steps are
