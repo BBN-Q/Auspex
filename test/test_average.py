@@ -16,7 +16,7 @@ from pycontrol.experiment import Experiment
 from pycontrol.parameter import FloatParameter
 from pycontrol.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector
 from pycontrol.filters.debug import Print, Passthrough
-from pycontrol.filters.average import Average
+from pycontrol.filters.average import Averager
 from pycontrol.log import logger, logging
 logger.setLevel(logging.DEBUG)
 
@@ -82,10 +82,10 @@ class ExperimentTestCase(unittest.TestCase):
     def test_final_average(self):
         exp             = TestExperiment()
         printer_final   = Print(name="Final")
-        avgr            = Average('trials', name="TestAverager")
+        avgr            = Averager('trials', name="TestAverager")
 
-        edges = [(exp.chan1, avgr.data),
-                 (avgr.final_average, printer_final.data)]
+        edges = [(exp.chan1, avgr.sink),
+                 (avgr.final_average, printer_final.sink)]
 
         exp.set_graph(edges)
         exp.init_instruments()
@@ -94,10 +94,10 @@ class ExperimentTestCase(unittest.TestCase):
     def test_partial_average(self):
         exp             = TestExperiment()
         printer_partial = Print(name="Partial")
-        avgr            = Average('trials', name="TestAverager")
+        avgr            = Averager('trials', name="TestAverager")
 
-        edges = [(exp.chan1, avgr.data),
-                 (avgr.partial_average, printer_partial.data)]
+        edges = [(exp.chan1, avgr.sink),
+                 (avgr.partial_average, printer_partial.sink)]
 
         exp.set_graph(edges)
         exp.init_instruments()
@@ -106,10 +106,10 @@ class ExperimentTestCase(unittest.TestCase):
     # def test_add_axis_to_averager(self):
     #     exp             = TestExperiment()
     #     printer_final   = Print(name="Final")
-    #     avgr            = Average('samples', name="TestAverager")
+    #     avgr            = Averager('samples', name="TestAverager")
 
-    #     edges = [(exp.chan1, avgr.data),
-    #              (avgr.final_average, printer_final.data)]
+    #     edges = [(exp.chan1, avgr.sink),
+    #              (avgr.final_average, printer_final.sink)]
 
     #     exp.set_graph(edges)
     #     exp.init_instruments()

@@ -11,12 +11,14 @@ import asyncio
 import time
 import numpy as np
 
+from copy import copy, deepcopy
+
 from pycontrol.instruments.instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand
 from pycontrol.experiment import Experiment
 from pycontrol.parameter import FloatParameter
 from pycontrol.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector
 from pycontrol.filters.debug import Print, Passthrough
-from pycontrol.filters.average import Average
+from pycontrol.filters.average import Averager
 from pycontrol.log import logger, logging
 logger.setLevel(logging.DEBUG)
 
@@ -61,11 +63,8 @@ class TestExperiment(Experiment):
 
     def init_streams(self):
         # Add "base" data axes
-        descrip = DataStreamDescriptor()
-        descrip.add_axis(DataAxis("samples", list(range(self.samples))))
-        descrip.add_axis(DataAxis("trials", list(range(self.num_trials))))
-        self.chan1.set_descriptor(descrip)
-        self.chan2.set_descriptor(descrip)
+        self.chan1.add_axis(DataAxis("samples", list(range(self.samples))))
+        self.chan2.add_axis(DataAxis("trials", list(range(self.num_trials))))
 
     async def run(self):
         logger.debug("Data taker running (inner loop)")
@@ -101,17 +100,17 @@ class ExperimentTestCase(unittest.TestCase):
         exp             = TestExperiment()
         printer_partial = Print(name="Partial")
         printer_final   = Print(name="Final")
-        avgr            = Average('samples', name="TestAverager")
+        avgr            = Averager('samples', name="TestAverager")
 
-        edges = [(exp.chan1, avgr.data),
-                 (avgr.partial_average, printer_partial.data),
-                 (avgr.final_average, printer_final.data)]
+        edges = [(exp.chan1, avgr.sink),
+                 (avgr.partial_average, printer_partial.sink),
+                 (avgr.final_average, printer_final.sink)]
 
         exp.set_graph(edges)
 
-        self.assertTrue(exp.chan1.output_streams[0] == avgr.data.input_streams[0])
-        self.assertTrue(avgr.partial_average.output_streams[0] == printer_partial.data.input_streams[0])
-        self.assertTrue(avgr.final_average.output_streams[0] == printer_final.data.input_streams[0])
+        self.assertTrue(exp.chan1.output_streams[0] == avgr.sink.input_streams[0])
+        self.assertTrue(avgr.partial_average.output_streams[0] == printer_partial.sink.input_streams[0])
+        self.assertTrue(avgr.final_average.output_streams[0] == printer_final.sink.input_streams[0])
         self.assertTrue(len(exp.nodes) == 4)
         self.assertTrue(exp in exp.nodes)
         self.assertTrue(avgr in exp.nodes)
@@ -120,11 +119,11 @@ class ExperimentTestCase(unittest.TestCase):
         exp             = TestExperiment()
         printer_partial = Print(name="Partial")
         printer_final   = Print(name="Final")
-        avgr            = Average('samples', name="TestAverager")
+        avgr            = Averager('samples', name="TestAverager")
 
-        edges = [(exp.chan1, avgr.data),
-                 (avgr.partial_average, printer_partial.data),
-                 (avgr.final_average, printer_final.data)]
+        edges = [(exp.chan1, avgr.sink),
+                 (avgr.partial_average, printer_partial.sink),
+                 (avgr.final_average, printer_final.sink)]
 
         exp.set_graph(edges)
 
@@ -137,26 +136,39 @@ class ExperimentTestCase(unittest.TestCase):
         exp             = TestExperiment()
         printer_partial = Print(name="Partial")
         printer_final   = Print(name="Final")
-        avgr            = Average('samples', name="TestAverager")
+        avgr            = Averager('samples', name="TestAverager")
 
-        edges = [(exp.chan1, avgr.data),
-                 (avgr.partial_average, printer_partial.data),
-                 (avgr.final_average, printer_final.data)]
+        edges = [(exp.chan1, avgr.sink),
+                 (avgr.partial_average, printer_partial.sink),
+                 (avgr.final_average, printer_final.sink)]
 
         exp.set_graph(edges)
         exp.init_instruments()
 
-        self.assertFalse(avgr.data.descriptor is None)
-        self.assertFalse(printer_partial.data.descriptor is None)
-        self.assertTrue(exp.chan1.descriptor == avgr.data.descriptor)
+        self.assertFalse(avgr.sink.descriptor is None)
+        self.assertFalse(printer_partial.sink.descriptor is None)
+        self.assertTrue(exp.chan1.descriptor == avgr.sink.descriptor)
         self.assertTrue(avgr.partial_average.descriptor.axes[0].name == 'Partial Averages')
         self.assertTrue(avgr.partial_average.descriptor.axes[0].points == [0,1,2])
+
+    def test_copy_descriptor(self):
+        dsd = DataStreamDescriptor()
+        dsd.add_axis(DataAxis("One", [1,2,3,4]))
+        dsd.add_axis(DataAxis("Two", [1,2,3,4,5]))
+        self.assertTrue(len(dsd.axes)==2)
+        self.assertTrue("One" in [a.name for a in dsd.axes])
+        dsdc = copy(dsd)
+        self.assertTrue(dsd.axes == dsdc.axes)
+        ax = dsdc.pop_axis("One")
+        self.assertTrue(ax.name == "One")
+        self.assertTrue(len(dsdc.axes)==1)
+        self.assertTrue(dsdc.axes[0].name == "Two")
 
     def test_run_simple_graph(self):
         exp     = TestExperiment()
         printer = Print()
 
-        edges = [(exp.chan1, printer.data)]
+        edges = [(exp.chan1, printer.sink)]
 
         exp.set_graph(edges)
         exp.init_instruments()
@@ -167,7 +179,7 @@ class ExperimentTestCase(unittest.TestCase):
         printer1 = Print(name="One")
         printer2 = Print(name="Two")
 
-        edges = [(exp.chan1, printer1.data), (exp.chan1, printer2.data)]
+        edges = [(exp.chan1, printer1.sink), (exp.chan1, printer2.sink)]
 
         exp.set_graph(edges)
         exp.init_instruments()
@@ -178,7 +190,7 @@ class ExperimentTestCase(unittest.TestCase):
         printer1 = Print(name="One")
         printer2 = Print(name="Two")
 
-        edges = [(exp.chan1, printer1.data), (exp.chan1, printer2.data)]
+        edges = [(exp.chan1, printer1.sink), (exp.chan1, printer2.sink)]
 
         exp.set_graph(edges)
         exp.set_stream_compression("zlib")
@@ -190,7 +202,7 @@ class ExperimentTestCase(unittest.TestCase):
         passthrough = Passthrough(name="Passthrough")
         printer     = Print(name="Printer")
 
-        edges = [(exp.chan1, passthrough.data_in), (passthrough.data_out, printer.data)]
+        edges = [(exp.chan1, passthrough.sink), (passthrough.source, printer.sink)]
 
         exp.set_graph(edges)
         exp.init_instruments()

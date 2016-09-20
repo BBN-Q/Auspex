@@ -53,10 +53,8 @@ class SweptTestExperiment(Experiment):
 
     def init_streams(self):
         # Add a "base" data axis: say we are averaging 5 samples per trigger
-        descrip = DataStreamDescriptor()
-        descrip.add_axis(DataAxis("samples", range(self.samples)))
-        self.voltage.set_descriptor(descrip)
-
+        self.voltage.add_axis(DataAxis("samples", list(range(self.samples))))
+        
     def __repr__(self):
         return "<SweptTestExperiment>"
 

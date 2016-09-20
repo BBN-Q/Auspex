@@ -53,9 +53,7 @@ class SweptTestExperiment(Experiment):
 
     def init_streams(self):
         # Add a "base" data axis: say we are averaging 5 samples per trigger
-        descrip = DataStreamDescriptor()
-        descrip.add_axis(DataAxis("samples", range(self.samples)))
-        self.voltage.set_descriptor(descrip)
+        self.voltage.add_axis(DataAxis("trials", list(range(self.samples))))
 
     def __repr__(self):
         return "<SweptTestExperiment>"
@@ -85,7 +83,7 @@ class SweepTestCase(unittest.TestCase):
         exp = SweptTestExperiment()
         pri = Print()
 
-        edges = [(exp.voltage, pri.data)]
+        edges = [(exp.voltage, pri.sink)]
         exp.set_graph(edges)
 
         exp.init_instruments()
@@ -93,16 +91,16 @@ class SweepTestCase(unittest.TestCase):
         exp.add_sweep(exp.freq, np.linspace(0,10.0,3))
         exp.run_sweeps()
 
-        logger.debug("Run test: logger.debuger ended up with %d points.", pri.data.input_streams[0].points_taken)
+        logger.debug("Run test: logger.debuger ended up with %d points.", pri.sink.input_streams[0].points_taken)
         logger.debug("Run test: voltage ended up with %d points.", exp.voltage.output_streams[0].points_taken)
 
-        self.assertTrue(pri.data.input_streams[0].points_taken == exp.voltage.num_points())
+        self.assertTrue(pri.sink.input_streams[0].points_taken == exp.voltage.num_points())
 
     def test_run_sweep(self):
         exp = SweptTestExperiment()
         pri = Print(name="Printer")
 
-        edges = [(exp.voltage, pri.data)]
+        edges = [(exp.voltage, pri.sink)]
         exp.set_graph(edges)
 
         exp.init_instruments()
@@ -114,7 +112,7 @@ class SweepTestCase(unittest.TestCase):
         exp = SweptTestExperiment()
         pri = Print(name="Printer")
 
-        edges = [(exp.voltage, pri.data)]
+        edges = [(exp.voltage, pri.sink)]
         exp.set_graph(edges)
 
         def rf(sweep_axis, num_points):
@@ -128,13 +126,13 @@ class SweepTestCase(unittest.TestCase):
         exp.add_sweep(exp.field, np.linspace(0,100.0,11))
         exp.add_sweep(exp.freq, [1.0, 2.0], refine_func=rf, refine_args=[5])
         exp.run_sweeps()
-        self.assertTrue(pri.data.input_streams[0].points_taken == 5*11*5)
+        self.assertTrue(pri.sink.input_streams[0].points_taken == 5*11*5)
 
     def test_unstructured_sweep(self):
         exp = SweptTestExperiment()
         pri = Print()
 
-        edges = [(exp.voltage, pri.data)]
+        edges = [(exp.voltage, pri.sink)]
         exp.set_graph(edges)
         exp.init_instruments()
 
@@ -150,7 +148,7 @@ class SweepTestCase(unittest.TestCase):
                   [68, 1.2]]
         exp.add_sweep([exp.field, exp.freq], coords)
         exp.run_sweeps()
-        self.assertTrue(pri.data.input_streams[0].points_taken == exp.voltage.num_points())
+        self.assertTrue(pri.sink.input_streams[0].points_taken == exp.voltage.num_points())
 
 if __name__ == '__main__':
     unittest.main()
