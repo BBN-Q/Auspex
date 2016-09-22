@@ -1,7 +1,7 @@
 *checkpoint.ipynb
 *.pyc
-*.png
 *.xml
 *.html
 *.h5
 data/*
+doc/_build/*
