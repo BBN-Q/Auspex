@@ -88,7 +88,6 @@ class ExperimentTestCase(unittest.TestCase):
                  (avgr.final_average, printer_final.sink)]
 
         exp.set_graph(edges)
-        exp.init_instruments()
         exp.run_sweeps()
 
     def test_partial_average(self):
@@ -100,7 +99,6 @@ class ExperimentTestCase(unittest.TestCase):
                  (avgr.partial_average, printer_partial.sink)]
 
         exp.set_graph(edges)
-        exp.init_instruments()
         exp.run_sweeps()
 
     # def test_add_axis_to_averager(self):

@@ -305,15 +305,22 @@ class Experiment(metaclass=MetaExperiment):
                 break
 
     def run_sweeps(self):
-        # Go and find any plotters and keep track of them.
-        # Launch the bokeh-server if necessary.
+        # Connect the instruments to their resources
+        for instrument in self._instruments.values():
+            instrument.connect()
 
+        # Initialize the instruments and stream
+        self.init_instruments()
+
+        # Call any final initialization on the filter pipeline
         for n in self.nodes:
             if hasattr(n, 'final_init'):
                 n.final_init()
 
+        # Go and find any plotters
         self.plotters = [n for n in self.nodes if isinstance(n, Plotter)]
 
+        # Launch the bokeh-server if necessary.
         if len(self.plotters) > 0:
             logger.debug("Found %d plotters", len(self.plotters))
 
@@ -369,7 +376,11 @@ class Experiment(metaclass=MetaExperiment):
             if len(self.plotters) > 0:
                 time.sleep(0.5)
                 bokeh_thread.join()
+            
             self.shutdown_instruments()
+
+            for instrument in self._instruments.values():
+                instrument.disconnect()
 
         def catch_ctrl_c(signum, frame):
             logger.info("Caught SIGINT. Shutting down.")
@@ -384,14 +395,12 @@ class Experiment(metaclass=MetaExperiment):
         other_nodes = self.nodes[:]
         other_nodes.remove(self)
         tasks = [n.run() for n in other_nodes]
-        # for oc in self.output_connectors.values():
-        #     for stream in oc.output_streams:
-        #         tasks.append(stream.finished())
+
         tasks.append(self.sweep())
         self.loop.run_until_complete(asyncio.gather(*tasks))
 
     def add_sweep(self, parameters, sweep_list, refine_func=None, refine_args=None):
-        ax = SweepAxis(parameters, sweep_list, refine_func, refine_args)
+        ax = SweepAxis(parameters, sweep_list, refine_func=refine_func, refine_args=refine_args)
         self.sweeper.add_sweep(ax)
         for oc in self.output_connectors.values():
             logger.debug("Adding sweep axis %s to connector %s.", ax, oc.name)

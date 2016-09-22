@@ -143,7 +143,6 @@ class ExperimentTestCase(unittest.TestCase):
                  (avgr.final_average, printer_final.sink)]
 
         exp.set_graph(edges)
-        exp.init_instruments()
 
         self.assertFalse(avgr.sink.descriptor is None)
         self.assertFalse(printer_partial.sink.descriptor is None)
@@ -171,7 +170,6 @@ class ExperimentTestCase(unittest.TestCase):
         edges = [(exp.chan1, printer.sink)]
 
         exp.set_graph(edges)
-        exp.init_instruments()
         exp.run_sweeps()
 
     def test_run_simple_graph_branchout(self):
@@ -182,7 +180,6 @@ class ExperimentTestCase(unittest.TestCase):
         edges = [(exp.chan1, printer1.sink), (exp.chan1, printer2.sink)]
 
         exp.set_graph(edges)
-        exp.init_instruments()
         exp.run_sweeps()
 
     def test_compressed_streams(self):
@@ -194,7 +191,6 @@ class ExperimentTestCase(unittest.TestCase):
 
         exp.set_graph(edges)
         exp.set_stream_compression("zlib")
-        exp.init_instruments()
         exp.run_sweeps()
 
     def test_depth(self):
@@ -205,7 +201,6 @@ class ExperimentTestCase(unittest.TestCase):
         edges = [(exp.chan1, passthrough.sink), (passthrough.source, printer.sink)]
 
         exp.set_graph(edges)
-        exp.init_instruments()
         exp.run_sweeps()
 
 if __name__ == '__main__':

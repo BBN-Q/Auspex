@@ -6,7 +6,7 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-from pycontrol.instruments.instrument import Instrument
+from pycontrol.instruments.instrument import Instrument, DigitizerChannel
 from pycontrol.log import logger
 from unittest.mock import MagicMock
 
@@ -34,12 +34,31 @@ def rec_camelize(dictionary):
         new[camelize(k)] = v
     return new
 
+class AlazarChannel(DigitizerChannel):
+    channel = None
+
+    def __init__(self, settings_dict=None):
+        if settings_dict:
+            self.set_all(settings_dict)
+
+    def set_all(self, settings_dict):
+        for name, value in settings_dict.items():
+            if hasattr(self, name):
+                setattr(self, name, value)
+
 class ATS9870(Instrument):
     """Alazar ATS9870 digitizer"""
     instrument_type = "Digitizer"
 
     def __init__(self, resource_name, name="Unlabeled Alazar"):
         self.name = name
+
+        # Just store the integers here...
+        self.channel_numbers = []
+        
+        # For lookup
+        self._buf_to_chan = {}
+
         self.resource_name = int(resource_name)
         self.fake = fake_alazar
         if self.fake:
@@ -52,6 +71,18 @@ class ATS9870(Instrument):
         commands = ['acquire', 'stop', 'wait_for_acquisition']
         for c in commands:
             setattr(self, c, getattr(self._lib, c))
+
+    def add_channel(self, channel):
+        if not isinstance(channel, AlazarChannel):
+            raise TypeError("X6 passed {} rather than an X6Channel object.".format(str(channel)))
+
+        # We can have either 1 or 2, or both.
+        if len(self.channel_numbers) < 2 and channel.channel not in self.channel_numbers:
+            self.channel_numbers.append(channel.channel)
+            self._buf_to_chan[channel] = channel.channel
+
+    def get_buffer_for_channel(self, channel):
+        return getattr(self._lib, 'ch{:d}Buffer'.format(self._buf_to_chan[channel]))
 
     def acquire_all(self, channel=2):
         ch1 = np.array([], dtype=np.float32)

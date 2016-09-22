@@ -79,7 +79,6 @@ class SweepTestCase(unittest.TestCase):
         edges = [(exp.voltage, wr.sink)]
         exp.set_graph(edges)
 
-        exp.init_instruments()
         exp.add_sweep(exp.field, np.linspace(0,100.0,4))
         exp.add_sweep(exp.freq, np.linspace(0,10.0,3))
         exp.run_sweeps()
@@ -112,7 +111,6 @@ class SweepTestCase(unittest.TestCase):
             sweep_axis.points.append(sweep_axis.points[-1]*2)
             return True
 
-        exp.init_instruments()
         exp.add_sweep(exp.field, np.linspace(0,100.0,11))
         exp.add_sweep(exp.freq, [1.0, 2.0], refine_func=rf, refine_args=[5])
         exp.run_sweeps()
@@ -128,7 +126,6 @@ class SweepTestCase(unittest.TestCase):
 
         edges = [(exp.voltage, wr.sink)]
         exp.set_graph(edges)
-        exp.init_instruments()
 
         coords = [[ 0, 0.1],
                   [10, 4.0],

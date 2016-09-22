@@ -23,8 +23,11 @@ import pycontrol.filters
 from pycontrol.log import logger
 from pycontrol.experiment import Experiment
 from pycontrol.filters.filter import Filter
-from pycontrol.instruments.instrument import Instrument, SCPIInstrument, CLibInstrument
+from pycontrol.instruments.instrument import Instrument, SCPIInstrument, CLibInstrument, DigitizerChannel
 from pycontrol.stream import OutputConnector, DataStreamDescriptor, DataAxis
+from pycontrol.experiment import FloatParameter
+from pycontrol.instruments.X6 import X6Channel
+from pycontrol.instruments.alazar import AlazarChannel
 
 def strip_vendor_names(instr_name):
     vns = ["Agilent", "Alazar", "Keysight", "Holzworth", "Yoko", "Yokogawa"]
@@ -65,10 +68,15 @@ class QubitExperiment(Experiment):
                 while not digitizer.wait_for_acquisition():
                     await asyncio.sleep(0.1)
 
-                # Find the associated output stream and push the data
-                oc = self.dig_to_oc[digitizer]
+                # Find all of the channels associated with this particular digitizer
+                dig_channels = [chan for chan, dig in self.chan_to_dig.items() if dig == digitizer]
 
-                await oc.push(digitizer.ch2_buffer)
+                # Loop over these channels and push the data to the associated
+                # OutputConnectors
+                for chan in dig_channels:
+                    oc = self.chan_to_oc[chan]
+                    await oc.push(digitizer.get_buffer_for_channel(chan))
+
                 logger.debug("Digitizer %s got data.", digitizer)
             logger.debug("Digitizer %s finished getting data.", digitizer)
 
@@ -128,13 +136,14 @@ class QubitExpFactory(object):
         for instr_name, instr_par in experiment.instrument_settings['instrDict'].items():
             if instr_par['enabled']:
                 # This should go away as pycontrol and pyqlab converge on naming schemes
-                instr_type = strip_vendor_names(instr_par['device_name'])
+                instr_type = strip_vendor_names(instr_par['x__class__'])
                 # Instantiate the desired instrument
                 if instr_type in module_map:
                     logger.debug("Found instrument class %s for '%s' at loc %s when loading experiment settings.", instr_type, instr_name, instr_par['address'])
                     try:
                         inst = module_map[instr_type](correct_resource_name(instr_par['address']), name=instr_name)
                     except Exception as e:
+                        import ipdb; ipdb.set_trace()
                         logger.error("Initialization caused exception:", str(e))
                         inst = None
                     # Add to class dictionary for convenience
@@ -149,7 +158,7 @@ class QubitExpFactory(object):
     def load_sweeps(experiment):
         # Load the active sweeps from the sweep ordering
         for name in experiment.sweep_settings['sweepOrder']:
-            par = experiment.sweep_settings['sweepDict']['sweeps']
+            par = experiment.sweep_settings['sweepDict'][name]
 
             if par['usePointsList']:
                 points = np.array(par['points'])
@@ -159,7 +168,7 @@ class QubitExpFactory(object):
             # Treat segment sweeps separately since they are DataAxes rather than SweepAxes
             if par['x__class__'] == 'SegmentNum':
                 pass
-            if par['x__class__'] == 'SegmentNumWithCals':
+            elif par['x__class__'] == 'SegmentNumWithCals':
                 points = np.append(points, np.zeros(numCals))
                 data.metadata = ['data' for p in points] + ['cal' for s in range(par['numCals'])]
             else:
@@ -211,22 +220,25 @@ class QubitExpFactory(object):
         # ==================================================
 
         # Get the enabled measurements
-        enabled_meas = {k: v for k, v in experiment.exp_settings['filterDict'].items() if v['enabled']}
+        enabled_meas = {k: v for k, v in experiment.measurement_settings['filterDict'].items() if v['enabled']}
 
         # First look for digitizer streams (Alazar or X6)
-        dig_settings    = {k: v for k, v in enabled_meas if "StreamSelector" in v['x__class__']}
+        dig_settings    = {k: v for k, v in enabled_meas.items() if "StreamSelector" in v['x__class__']}
         
-        # Remove these "Fake" filters from the exp_settings
+        # These stream selectors are really just a convenience
+        # Remove them from the list of "real" filters
         for k in dig_settings.keys():
             enabled_meas.pop(k)
 
-        # Map from Digitizer -> OutputConnector for convenience
-        dig_to_oc = {} 
+        # Map from Channel -> OutputConnector
+        # and from Channel -> Digitizer for future lookup
+        chan_to_oc  = {} 
+        chan_to_dig = {}
         
         for name, settings in dig_settings.items():
             
             # Create and add the OutputConnector
-            logger.debug("Adding %s output connector to experiment.", name)
+            logger.info("Adding %s output connector to experiment.", name)
             oc = OutputConnector(name=name, parent=experiment)
             experiment._output_connectors.append(oc)
             experiment.output_connectors[name] = oc
@@ -234,27 +246,41 @@ class QubitExpFactory(object):
 
             # Find the digitizer instrument and settings
             source_instr          = experiment._instruments[settings['data_source']]
-            source_instr_settings = experiment.instr_settings['instrDict'][settings['data_source']]
+            source_instr_settings = experiment.instrument_settings['instrDict'][settings['data_source']]
             
             # Construct the descriptor
             descrip = DataStreamDescriptor()
 
-            # If this is an X6, check to see what stream we are getting and modify the axis descriptor.
-            # If it's an integrated stream, then the time axis has already been eliminated.
+            # Prepare the the instrument channels and the descriptors
             if 'X6' in settings['x__class__']:
+                # Create a channel
+                channel = X6Channel(settings)
+                
+                # If it's an integrated stream, then the time axis has already been eliminated.
+                # Otherswise, add the time axis.
                 if settings['stream_type'] != 'Integrated':
                     samp_time = 1.0e-9
                     descrip.add_axis(DataAxis("time", samp_time*np.array(range(source_instr_settings['record_length']))))
+
             else:
+                # Create a channel
+                channel = AlazarChannel(settings)
+
+                # Add the time axis
                 samp_time = 1.0/source_instr_settings["sampling_rate"]
                 descrip.add_axis(DataAxis("time", samp_time*np.array(range(source_instr_settings['record_length']))))
 
+            # Add the channel to the instrument
+            source_instr.add_channel(channel)
+
+            # Add the usual axes
             descrip.add_axis(DataAxis("segments",     range(source_instr_settings['nbr_segments'])))
             descrip.add_axis(DataAxis("round_robins", range(source_instr_settings['nbr_round_robins'])))
             oc.set_descriptor(descrip)
 
-            # Add to our mapping
-            dig_to_oc[source_instr] = oc
+            # Add to our mappings
+            chan_to_oc[channel]    = oc
+            chan_to_dig[channel]   = source_instr
 
         # ========================
         # Process the measurements
@@ -269,7 +295,7 @@ class QubitExpFactory(object):
                 filt = module_map[filt_type](**settings)
                 filt.name = name
                 filters[name] = filt
-                logger.debug("Found filter class %s for '%s' when loading experiment settings.", filt_type, name)
+                logger.info("Found filter class %s for '%s' when loading experiment settings.", filt_type, name)
             else:
                 logger.error("Could not find filter class %s for '%s' when loading experiment settings.", filt_type, name)
 
@@ -278,39 +304,25 @@ class QubitExpFactory(object):
         # ====================================
 
         for name, filt in filters.items():
-            source_name = experiment.exp_settings['measurements'][name]['data_source']
-            if source_name in filters:
-                source = filters[source_name].source
-            elif source_name in experiment.output_connectors:
-                source = experiment.output_connectors[source_name]
+            
+            # If there is a colon in the name, then we are to hook up to a specific connector
+            # Otherwise we can safely assume that the name is "source"
+            source = experiment.measurement_settings['filterDict'][name]['data_source'].split(":")
+            node_name = source[0]
+            conn_name = "source"
+            if len(source) == 2:
+                conn_name = source[1]
+
+            if node_name in filters:
+                source = filters[node_name].output_connectors[conn_name]
+            elif node_name in experiment.output_connectors:
+                source = experiment.output_connectors[node_name]
             else:
                 raise ValueError("Couldn't find anywhere to attach the source of the specified filter {}".format(name))
 
-            # # ========================
-            # # Create plot if requested
-            # # ========================
-
-            # has_plot = experiment.exp_settings['measurements'][name]['plot_scope']
-            # if has_plot:
-            #     averager = module_map['Averager'](name=name+"_average", axis='round_robins')
-            #     plot = module_map['Plotter'](name=name, plot_mode=experiment.exp_settings['measurements'][name]['plot_mode'])
-            #     graph.append([filt.source, averager.sink])
-            #     graph.append([averager.final_average, plot.sink])
-
-            # # ==========================
-            # # Create writer if requested
-            # # ==========================
-
-            # # import ipdb; ipdb.set_trace()
-            # if 'save_records' in experiment.exp_settings['measurements'][name]:
-            #     has_writer = experiment.exp_settings['measurements'][name]['save_records']
-            #     if has_writer:
-            #         filename = experiment.exp_settings['measurements'][name]['records_file_path']
-            #         writer = module_map['WriteToHDF5'](filename, name=name)
-            #         graph.append([filt.source, writer.sink])
-
-            logger.debug("Connecting %s to %s", source, filt)
+            logger.info("Connecting %s@%s ---> %s", node_name, conn_name, filt)
             graph.append([source, filt.sink])
 
-        experiment.dig_to_oc = dig_to_oc
+        experiment.chan_to_oc  = chan_to_oc
+        experiment.chan_to_dig = chan_to_dig
         experiment.set_graph(graph)

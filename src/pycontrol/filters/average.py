@@ -47,7 +47,7 @@ class Averager(Filter):
 
         # Convert named axes to an index
         if self._axis not in names:
-            raise ValueError("Could not find axis {} within the DataStreamDescriptor {}".format(self._axis, self.descriptor_in))
+            raise ValueError("Could not find axis {} within the DataStreamDescriptor {}".format(self._axis, descriptor_in))
         self.axis_num = names.index(self._axis)
         logger.debug("Axis %s corresponds to numerical axis %d", self._axis, self.axis_num)
 

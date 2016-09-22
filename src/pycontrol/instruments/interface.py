@@ -17,6 +17,8 @@ class Interface(object):
     def values(self, query):
         logger.debug("Returning values %s" % query)
         return np.random.random()
+    def close(self):
+        pass
 
 class VisaInterface(Interface):
     """PyVISA interface for communicating with instruments."""
@@ -51,6 +53,8 @@ class VisaInterface(Interface):
                 is_big_endian=False):
         return self._resource.query_binary_values(query_string, container=container, datatype=datatype,
                 is_big_endian=is_big_endian)
+    def close(self):
+        self._resource.close()
 
     # IEEE Mandated SCPI commands
     def CLS(self):

@@ -120,6 +120,8 @@ class SCPIFloatCommand(SCPICommand, FloatCommand): pass
 class SCPIIntCommand(SCPICommand, IntCommand): pass
 class SCPIRampCommand(SCPICommand, RampCommand): pass
 
+class DigitizerChannel(object): pass
+
 class MetaInstrument(type):
     def __init__(self, name, bases, dct):
         type.__init__(self, name, bases, dct)
@@ -161,31 +163,45 @@ class SCPIInstrument(Instrument):
 
     __isfrozen = False
 
-    def __init__(self, resource_name, name="Unlabeled", interface_type=None):
-        self.name = name
-        self.resource_name = resource_name
+    def __init__(self, resource_name=None, name="Yet-to-be-named SCPI Instrument"):
+        self.name            = name
+        self.resource_name   = resource_name
         self.instrument_type = None # This can be AWG, Digitizer, etc.
+        self.interface       = None
+        self._freeze()
+
+    def connect(self, resource_name=None, interface_type=None):
+        """Either connect to the resource name specified during initialization, or specify
+        a new resource name here."""
+
+        self._unfreeze()
+        if resource_name is None and self.resource_name is None:
+            raise Exception("Must supply a resource name to 'connect' if the instrument was initialized without one.")
+        elif self.resource_name is None and resource_name is not None:
+            self.resource_name = resource_name
 
         if interface_type is None:
             # Load the dummy interface, unless we see that GPIB is in the resource string
-            if any([x in resource_name for x in ["GPIB", "USB", "SOCKET", "hislip", "inst0"]]):
+            if any([x in self.resource_name for x in ["GPIB", "USB", "SOCKET", "hislip", "inst0"]]):
                 interface_type = "VISA"
 
         try:
             if interface_type is None:
                 self.interface = Interface()
             elif interface_type == "VISA":
-                if "SOCKET" in resource_name or "hislip" in resource_name or "inst0" in resource_name:
+                if "SOCKET" in self.resource_name or "hislip" in self.resource_name or "inst0" in self.resource_name:
                     ## assume single NIC for now
-                    resource_name = "TCPIP0::" + resource_name
-                self.interface = VisaInterface(resource_name)
+                    self.resource_name = "TCPIP0::" + self.resource_name
+                self.interface = VisaInterface(self.resource_name)
             else:
                 raise ValueError("That interface type is not yet recognized.")
         except:
-            logger.error("Could not initialize interface for %s.", resource_name)
+            logger.error("Could not initialize interface for %s.", self.resource_name)
             self.interface = MagicMock()
-
         self._freeze()
+
+    def disconnect(self):
+        self.interface.close()
 
     # We want to lock the class dictionary
     # This solution from http://stackoverflow.com/questions/3603502/prevent-creating-new-attributes-outside-init
@@ -272,14 +288,3 @@ def add_command_CLib(instr, name, cmd):
     drivers that interface with C Libraries."""
     cmd.parse()
     return cmd
-
-# class TestSCPIInstr(SCPIInstrument):
-#     f = FloatCommand(scpi_string=":flsdf", aliases=["ajsdf", "askdjh"])
-#     s = StringCommand(scpi_string=":flsdfds")
-
-# class TestCLibInstr(CLibInstrument):
-#     flsdfds = FloatCommand(scpi_string=":flsdf")
-#     sasa = StringCommand(scpi_string=":flsdfds")
-
-# if __name__ == '__main__':
-#   main()
