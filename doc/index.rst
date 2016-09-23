@@ -46,6 +46,7 @@ Contents:
 
    Instrument Drivers <instruments>
    Defining Experiments <experiments>
+   Advanced Sweeps <sweeps>
    Integration with PyQLab/Quince <integration>
    Full API <api/pycontrol>
 

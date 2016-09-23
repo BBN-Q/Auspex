@@ -1,5 +1,5 @@
 Instrument Documentation
-=======================
+========================
 
 Instruments
 ************
