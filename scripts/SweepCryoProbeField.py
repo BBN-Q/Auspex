@@ -15,10 +15,10 @@ import numpy as np
 import scipy as sp
 # import pandas as pd
 
-from pycontrol.instruments.ami import AMI430
-from pycontrol.instruments.keithley import Keithley2400
-from pycontrol.sweep import Sweep
-from pycontrol.experiment import FloatParameter, Quantity, Procedure
+from auspex.instruments.ami import AMI430
+from auspex.instruments.keithley import Keithley2400
+from auspex.sweep import Sweep
+from auspex.experiment import FloatParameter, Quantity, Procedure
 
 class RampCurrent(Procedure):
     field  = FloatParameter(unit="T")

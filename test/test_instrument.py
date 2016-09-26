@@ -8,7 +8,7 @@
 
 import unittest
 
-from pycontrol.instruments.instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand
+from auspex.instruments.instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand
 
 class TestInstrument(SCPIInstrument):
 	frequency     = FloatCommand(get_string="frequency?", set_string="frequency {:g}", value_range=(0.1, 10))

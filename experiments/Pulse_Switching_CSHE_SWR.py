@@ -6,16 +6,16 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-from pycontrol.instruments.keysight import *
-from pycontrol.instruments.picosecond import Picosecond10070A
-from pycontrol.instruments.stanford import SR865
-from pycontrol.instruments.keithley import Keithley2400
-from pycontrol.instruments.ami import AMI430
-from pycontrol.instruments.rfmd import Attenuator
+from auspex.instruments.keysight import *
+from auspex.instruments.picosecond import Picosecond10070A
+from auspex.instruments.stanford import SR865
+from auspex.instruments.keithley import Keithley2400
+from auspex.instruments.ami import AMI430
+from auspex.instruments.rfmd import Attenuator
 
-from pycontrol.experiment import FloatParameter, IntParameter, Experiment
-from pycontrol.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector
-from pycontrol.filters.io import WriteToHDF5
+from auspex.experiment import FloatParameter, IntParameter, Experiment
+from auspex.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector
+from auspex.filters.io import WriteToHDF5
 
 from PyDAQmx import *
 
@@ -32,7 +32,7 @@ from scipy.stats import beta
 import analysis.switching as sw
 from analysis.h5shell import h5shell
 
-from pycontrol.log import logger
+from auspex.log import logger
 # Experimental Topology
 # lockin AO 2 -> Analog Attenuator Vdd
 # lockin AO 3 -> Analog Attenuator Vc (Control Voltages)

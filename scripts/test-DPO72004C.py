@@ -6,7 +6,7 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-from pycontrol.instruments.tektronix import DPO72004C
+from auspex.instruments.tektronix import DPO72004C
 import numpy as np
 import matplotlib.pyplot as plt
 

@@ -15,10 +15,10 @@ import matplotlib as mpl
 import seaborn as sns
 import h5py
 
-# from pycontrol.log import logger
+# from auspex.log import logger
 import logging
 
-logger = logging.getLogger('pycontrol')
+logger = logging.getLogger('auspex')
 logging.basicConfig(format='%(name)s-%(levelname)s: %(message)s')
 logger.setLevel(logging.INFO)
 

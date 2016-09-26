@@ -6,10 +6,10 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-from pycontrol.instruments.instrument import Instrument, SCPIInstrument, VisaInterface, MetaInstrument
+from auspex.instruments.instrument import Instrument, SCPIInstrument, VisaInterface, MetaInstrument
 from types import MethodType
 from unittest.mock import MagicMock
-from pycontrol.log import logger
+from auspex.log import logger
 try:
     import aps2
     fake_aps2 = False

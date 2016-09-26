@@ -6,8 +6,8 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-from pycontrol.instruments.instrument import Instrument, MetaInstrument
-from pycontrol.log import logger
+from auspex.instruments.instrument import Instrument, MetaInstrument
+from auspex.log import logger
 from unittest.mock import MagicMock
 import ctypes
 

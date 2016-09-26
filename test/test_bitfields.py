@@ -8,7 +8,7 @@
 
 import unittest
 
-from pycontrol.instruments.binutils import BitField, BitFieldUnion
+from auspex.instruments.binutils import BitField, BitFieldUnion
 
 class TestBitFieldUnion(BitFieldUnion):
     num_words  = BitField(16)

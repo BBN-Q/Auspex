@@ -12,9 +12,9 @@ import h5py
 import numpy as np
 import os.path
 
-from pycontrol.stream import DataStreamDescriptor
-from pycontrol.log import logger
-from pycontrol.filters.filter import Filter, InputConnector, OutputConnector
+from auspex.stream import DataStreamDescriptor
+from auspex.log import logger
+from auspex.filters.filter import Filter, InputConnector, OutputConnector
 from tqdm import tqdm, tqdm_notebook
 
 class WriteToHDF5(Filter):

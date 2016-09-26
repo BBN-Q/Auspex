@@ -6,13 +6,13 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-from pycontrol.instruments.keithley import Keithley2400
-from pycontrol.instruments.ami import AMI430
+from auspex.instruments.keithley import Keithley2400
+from auspex.instruments.ami import AMI430
 
-from pycontrol.experiment import Parameter, FloatParameter, IntParameter, Experiment
-from pycontrol.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector
-from pycontrol.filters.debug import Print
-from pycontrol.filters.io import WriteToHDF5
+from auspex.experiment import Parameter, FloatParameter, IntParameter, Experiment
+from auspex.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector
+from auspex.filters.debug import Print
+from auspex.filters.io import WriteToHDF5
 
 import itertools
 import numpy as np
@@ -24,7 +24,7 @@ import matplotlib.pyplot as plt
 from analysis.h5shell import h5shell
 
 import logging
-logger = logging.getLogger('pycontrol')
+logger = logging.getLogger('auspex')
 logging.basicConfig(format='%(name)s-%(levelname)s: \t%(message)s')
 logger.setLevel(logging.DEBUG)
 

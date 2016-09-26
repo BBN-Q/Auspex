@@ -13,9 +13,9 @@ import numpy as np
 from scipy.signal import firwin, lfilter
 
 
-from pycontrol.filters.filter import Filter, InputConnector, OutputConnector
-from pycontrol.stream import  DataStreamDescriptor
-from pycontrol.log import logger
+from auspex.filters.filter import Filter, InputConnector, OutputConnector
+from auspex.stream import  DataStreamDescriptor
+from auspex.log import logger
 
 class Channelizer(Filter):
     """Digital demodulation and filtering to select a particular frequency multiplexed channel"""

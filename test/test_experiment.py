@@ -13,13 +13,13 @@ import numpy as np
 
 from copy import copy, deepcopy
 
-from pycontrol.instruments.instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand
-from pycontrol.experiment import Experiment
-from pycontrol.parameter import FloatParameter
-from pycontrol.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector
-from pycontrol.filters.debug import Print, Passthrough
-from pycontrol.filters.average import Averager
-from pycontrol.log import logger, logging
+from auspex.instruments.instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand
+from auspex.experiment import Experiment
+from auspex.parameter import FloatParameter
+from auspex.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector
+from auspex.filters.debug import Print, Passthrough
+from auspex.filters.average import Averager
+from auspex.log import logger, logging
 logger.setLevel(logging.DEBUG)
 
 class TestInstrument1(SCPIInstrument):

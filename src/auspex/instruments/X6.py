@@ -6,8 +6,8 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-from pycontrol.instruments.instrument import Instrument, DigitizerChannel
-from pycontrol.log import logger
+from auspex.instruments.instrument import Instrument, DigitizerChannel
+from auspex.log import logger
 
 class X6Channel(DigitizerChannel):
     """Channel for an X6"""

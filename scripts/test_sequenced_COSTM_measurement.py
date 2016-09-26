@@ -6,11 +6,11 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-from pycontrol.instruments.keysight import *
-from pycontrol.instruments.stanford import SR830, SR865
-from pycontrol.instruments.kepco import BOP2020M
-from pycontrol.instruments.magnet import Electromagnet
-from pycontrol.instruments.hall_probe import HallProbe
+from auspex.instruments.keysight import *
+from auspex.instruments.stanford import SR830, SR865
+from auspex.instruments.kepco import BOP2020M
+from auspex.instruments.magnet import Electromagnet
+from auspex.instruments.hall_probe import HallProbe
 
 from PyDAQmx import *
 

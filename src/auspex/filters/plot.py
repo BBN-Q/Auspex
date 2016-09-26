@@ -14,8 +14,8 @@ import numpy as np
 from bokeh.plotting import Figure
 from bokeh.models.renderers import GlyphRenderer
 
-from pycontrol.log import logger
-from pycontrol.filters.filter import Filter, InputConnector
+from auspex.log import logger
+from auspex.filters.filter import Filter, InputConnector
 
 class Plotter(Filter):
     sink = InputConnector()

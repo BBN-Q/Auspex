@@ -1,7 +1,7 @@
 import os
 import visa
 import numpy as np
-from pycontrol.log import logger
+from auspex.log import logger
 
 class Interface(object):
     """Currently just a dummy interface for testing."""

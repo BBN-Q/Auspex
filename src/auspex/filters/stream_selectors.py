@@ -6,7 +6,7 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-from pycontrol.filters.filter import Filter, InputConnector, OutputConnector
+from auspex.filters.filter import Filter, InputConnector, OutputConnector
 
 class AlazarStreamSelector(Filter):
     """Digital demodulation and filtering to select a particular frequency multiplexed channel"""

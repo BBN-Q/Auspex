@@ -6,7 +6,7 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-from pycontrol.instruments.keysight import *
+from auspex.instruments.keysight import *
 import numpy as np
 
 def waveform(time, delay=1.5e-9, rise_time=150e-12, fall_time=2.0e-9):

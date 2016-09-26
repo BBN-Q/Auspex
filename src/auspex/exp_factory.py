@@ -16,18 +16,18 @@ import base64
 
 import numpy as np
 
-import pycontrol.config as config
-import pycontrol.instruments
-import pycontrol.filters
+import auspex.config as config
+import auspex.instruments
+import auspex.filters
 
-from pycontrol.log import logger
-from pycontrol.experiment import Experiment
-from pycontrol.filters.filter import Filter
-from pycontrol.instruments.instrument import Instrument, SCPIInstrument, CLibInstrument, DigitizerChannel
-from pycontrol.stream import OutputConnector, DataStreamDescriptor, DataAxis
-from pycontrol.experiment import FloatParameter
-from pycontrol.instruments.X6 import X6Channel
-from pycontrol.instruments.alazar import AlazarChannel
+from auspex.log import logger
+from auspex.experiment import Experiment
+from auspex.filters.filter import Filter
+from auspex.instruments.instrument import Instrument, SCPIInstrument, CLibInstrument, DigitizerChannel
+from auspex.stream import OutputConnector, DataStreamDescriptor, DataAxis
+from auspex.experiment import FloatParameter
+from auspex.instruments.X6 import X6Channel
+from auspex.instruments.alazar import AlazarChannel
 
 def strip_vendor_names(instr_name):
     vns = ["Agilent", "Alazar", "Keysight", "Holzworth", "Yoko", "Yokogawa"]
@@ -116,11 +116,11 @@ class QubitExpFactory(object):
 
     @staticmethod
     def load_instruments(experiment):
-        # Inspect all vendor modules in pycontrol instruments and construct
+        # Inspect all vendor modules in auspex instruments and construct
         # a map to the instrument names.
         modules = (
-            importlib.import_module('pycontrol.instruments.' + name)
-            for loader, name, is_pkg in pkgutil.iter_modules(pycontrol.instruments.__path__)
+            importlib.import_module('auspex.instruments.' + name)
+            for loader, name, is_pkg in pkgutil.iter_modules(auspex.instruments.__path__)
         )
 
         module_map = {}
@@ -135,7 +135,7 @@ class QubitExpFactory(object):
         # Loop through instruments, and add them to the experiment if they are enabled.
         for instr_name, instr_par in experiment.instrument_settings['instrDict'].items():
             if instr_par['enabled']:
-                # This should go away as pycontrol and pyqlab converge on naming schemes
+                # This should go away as auspex and pyqlab converge on naming schemes
                 instr_type = strip_vendor_names(instr_par['x__class__'])
                 # Instantiate the desired instrument
                 if instr_type in module_map:
@@ -204,8 +204,8 @@ class QubitExpFactory(object):
         # ============================================
 
         modules = (
-            importlib.import_module('pycontrol.filters.' + name)
-            for loader, name, is_pkg in pkgutil.iter_modules(pycontrol.filters.__path__)
+            importlib.import_module('auspex.filters.' + name)
+            for loader, name, is_pkg in pkgutil.iter_modules(auspex.filters.__path__)
         )
 
         module_map = {}

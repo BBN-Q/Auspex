@@ -19,15 +19,15 @@ from scipy.interpolate import interp1d
 
 from PyDAQmx import *
 
-from pycontrol.instruments.kepco import BOP2020M
-from pycontrol.instruments.magnet import Electromagnet
-from pycontrol.instruments.hall_probe import HallProbe
-from pycontrol.instruments.stanford import SR865
-from pycontrol.instruments.picosecond import Picosecond10070A
-from pycontrol.instruments.keysight import *
+from auspex.instruments.kepco import BOP2020M
+from auspex.instruments.magnet import Electromagnet
+from auspex.instruments.hall_probe import HallProbe
+from auspex.instruments.stanford import SR865
+from auspex.instruments.picosecond import Picosecond10070A
+from auspex.instruments.keysight import *
 
-from pycontrol.sweep import Sweep
-from pycontrol.experiment import FloatParameter, IntParameter, Quantity, Procedure
+from auspex.sweep import Sweep
+from auspex.experiment import FloatParameter, IntParameter, Quantity, Procedure
 
 class Trace(object):
     """Object for storing trace data"""

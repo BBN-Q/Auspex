@@ -3,8 +3,8 @@ import os
 import time
 from unittest.mock import MagicMock
 
-from pycontrol.instruments.interface import Interface, VisaInterface
-from pycontrol.log import logger
+from auspex.instruments.interface import Interface, VisaInterface
+from auspex.log import logger
 
 class Command(object):
     """Store the arguments and keywords, so that we may later dispatch

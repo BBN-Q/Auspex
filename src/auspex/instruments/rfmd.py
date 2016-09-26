@@ -9,7 +9,7 @@
 import numpy as np
 import pandas as pd
 from scipy.interpolate import interp1d
-from pycontrol.log import logger
+from auspex.log import logger
 
 class Attenuator(object):
     """Simple wrapper for using the RFMD voltage controller attenuator.

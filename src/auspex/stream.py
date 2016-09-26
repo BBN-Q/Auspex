@@ -16,7 +16,7 @@ import pickle
 import numpy as np
 from functools import reduce
 
-from pycontrol.log import logger
+from auspex.log import logger
 
 class DataAxis(object):
     """An axis in a data stream"""
@@ -144,7 +144,7 @@ class DataStreamDescriptor(object):
     def data_dims(self):
         # Return dimension (length) of the data axes, exclude sweep axes (return 1 for each)
         dims = []
-        from pycontrol.sweep import SweepAxis
+        from auspex.sweep import SweepAxis
         for a in self.axes:
             if isinstance(a, SweepAxis):
                 dims.append(1)

@@ -6,7 +6,7 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-from pycontrol.instruments.keysight import *
+from auspex.instruments.keysight import *
 
 
 from PyDAQmx import *

@@ -1,16 +1,15 @@
-
 from setuptools import setup
 
 setup(
-    name='pycontrol',
+    name='auspex',
     version='0.1',
-    author='pycontrol Developers',
+    author='auspex Developers',
     package_dir={'':'src'},
     packages=[
-        'pycontrol', 'pycontrol.instruments'
+        'auspex', 'auspex.instruments', 'auspex.filters'
     ],
     scripts=[],
-    description='Control things with Python',
+    description='Automated system for python-based experiments.',
     long_description=open('README.md').read(),
     install_requires=[
         "Numpy >= 1.6.1",

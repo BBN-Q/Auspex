@@ -21,12 +21,12 @@ import networkx as nx
 import h5py
 from tqdm import tqdm, tqdm_notebook
 
-from pycontrol.instruments.instrument import Instrument
-from pycontrol.parameter import ParameterGroup, FloatParameter, IntParameter, Parameter
-from pycontrol.sweep import Sweeper
-from pycontrol.stream import DataStream, DataAxis, SweepAxis, DataStreamDescriptor, InputConnector, OutputConnector
-from pycontrol.filters.plot import Plotter
-from pycontrol.log import logger
+from auspex.instruments.instrument import Instrument
+from auspex.parameter import ParameterGroup, FloatParameter, IntParameter, Parameter
+from auspex.sweep import Sweeper
+from auspex.stream import DataStream, DataAxis, SweepAxis, DataStreamDescriptor, InputConnector, OutputConnector
+from auspex.filters.plot import Plotter
+from auspex.log import logger
 
 class ExpProgressBar(object):
     """ Display progress bar(s) on the terminal.

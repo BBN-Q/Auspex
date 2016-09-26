@@ -11,16 +11,16 @@ import os
 import numpy as np
 import sys
 
-from pycontrol.instruments.instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand
-from pycontrol.experiment import Experiment, FloatParameter
-from pycontrol.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector
-from pycontrol.filters.plot import Plotter
-from pycontrol.filters.average import Average
-from pycontrol.filters.debug import Print
-from pycontrol.filters.channelizer import Channelizer
-from pycontrol.filters.integrator import KernelIntegrator
+from auspex.instruments.instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand
+from auspex.experiment import Experiment, FloatParameter
+from auspex.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector
+from auspex.filters.plot import Plotter
+from auspex.filters.average import Average
+from auspex.filters.debug import Print
+from auspex.filters.channelizer import Channelizer
+from auspex.filters.integrator import KernelIntegrator
 
-from pycontrol.log import logger, logging
+from auspex.log import logger, logging
 logger.setLevel(logging.INFO)
 
 class TestInstrument(SCPIInstrument):

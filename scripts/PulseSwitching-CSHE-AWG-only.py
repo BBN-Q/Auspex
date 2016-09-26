@@ -6,10 +6,10 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-from pycontrol.instruments.keysight import *
-from pycontrol.instruments.stanford import SR865
-from pycontrol.instruments.keithley import Keithley2400
-from pycontrol.instruments.ami import AMI430
+from auspex.instruments.keysight import *
+from auspex.instruments.stanford import SR865
+from auspex.instruments.keithley import Keithley2400
+from auspex.instruments.ami import AMI430
 
 from PyDAQmx import *
 

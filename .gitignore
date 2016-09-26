@@ -5,3 +5,5 @@
 *.h5
 data/*
 doc/_build/*
+doc/make.bat
+config/config.json

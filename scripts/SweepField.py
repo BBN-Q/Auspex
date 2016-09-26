@@ -15,12 +15,12 @@ import numpy as np
 import scipy as sp
 import pandas as pd
 
-from pycontrol.instruments.kepco import BOP2020M
-from pycontrol.instruments.stanford import SR830
-from pycontrol.instruments.magnet import Electromagnet
-from pycontrol.instruments.hall_probe import HallProbe
-from pycontrol.sweep import Sweep
-from pycontrol.experiment import FloatParameter, Quantity, Procedure
+from auspex.instruments.kepco import BOP2020M
+from auspex.instruments.stanford import SR830
+from auspex.instruments.magnet import Electromagnet
+from auspex.instruments.hall_probe import HallProbe
+from auspex.sweep import Sweep
+from auspex.experiment import FloatParameter, Quantity, Procedure
 
 # import ipdb
 

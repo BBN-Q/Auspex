@@ -16,7 +16,7 @@ import visa
 import os
 import time
 
-from pycontrol.log import logger
+from auspex.log import logger
 
 class StringCommand(object):
     """Wraps a particular device command set based on getter and setter strings. The optional

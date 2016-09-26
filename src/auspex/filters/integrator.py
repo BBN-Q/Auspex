@@ -9,9 +9,9 @@
 import asyncio, concurrent
 import numpy as np
 
-from pycontrol.stream import DataStreamDescriptor
-from pycontrol.filters.filter import Filter, InputConnector, OutputConnector
-from pycontrol.log import logger
+from auspex.stream import DataStreamDescriptor
+from auspex.filters.filter import Filter, InputConnector, OutputConnector
+from auspex.log import logger
 
 class KernelIntegrator(Filter):
 

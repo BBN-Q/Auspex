@@ -12,13 +12,13 @@ import os
 import numpy as np
 import h5py
 
-from pycontrol.instruments.instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand
-from pycontrol.experiment import Experiment
-from pycontrol.parameter import FloatParameter
-from pycontrol.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector
-from pycontrol.filters.debug import Print
-from pycontrol.filters.io import WriteToHDF5
-from pycontrol.log import logger
+from auspex.instruments.instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand
+from auspex.experiment import Experiment
+from auspex.parameter import FloatParameter
+from auspex.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector
+from auspex.filters.debug import Print
+from auspex.filters.io import WriteToHDF5
+from auspex.log import logger
 
 import logging
 logger.setLevel(logging.DEBUG)

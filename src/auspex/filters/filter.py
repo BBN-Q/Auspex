@@ -11,8 +11,8 @@ import zlib
 import pickle
 from concurrent.futures import FIRST_COMPLETED
 
-from pycontrol.stream import DataStream, InputConnector, OutputConnector
-from pycontrol.log import logger
+from auspex.stream import DataStream, InputConnector, OutputConnector
+from auspex.log import logger
 
 class MetaFilter(type):
     """Meta class to bake the input/output connectors into a Filter class description

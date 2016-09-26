@@ -13,9 +13,9 @@ logging.basicConfig(format='%(levelname)s:\t%(message)s', level=logging.INFO)
 
 import numpy as np
 
-from pycontrol.instruments.yokogawa import GS200
-from pycontrol.sweep import Sweep
-from pycontrol.experiment import FloatParameter, Quantity, Procedure
+from auspex.instruments.yokogawa import GS200
+from auspex.sweep import Sweep
+from auspex.experiment import FloatParameter, Quantity, Procedure
 
 class RampCurrent(Procedure):
     current = FloatParameter(unit="A")

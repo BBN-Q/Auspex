@@ -6,7 +6,7 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-from pycontrol.log import logger
+from auspex.log import logger
 
 class Parameter(object):
     """ Encapsulates the information for an experiment parameter"""
