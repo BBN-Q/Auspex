@@ -1,5 +1,4 @@
-# PyControl #
-
+![auspex](doc/images/Auspex-Small.png)
 [![build status](https://qiplab.bbn.com/ci/projects/1/status.png?ref=master)](https://qiplab.bbn.com/ci/projects/1?ref=master)
 
 Supports running physics experiments with:
