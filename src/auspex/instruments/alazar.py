@@ -86,7 +86,7 @@ class ATS9870(Instrument):
             self._buf_to_chan[channel] = channel.channel
 
     def get_buffer_for_channel(self, channel):
-        return getattr(self._lib, 'ch{:d}Buffer'.format(self._buf_to_chan[channel]))
+        return getattr(self._lib, 'ch{}Buffer'.format(self._buf_to_chan[channel]))
 
     def acquire_all(self, channel=2):
         ch1 = np.array([], dtype=np.float32)
