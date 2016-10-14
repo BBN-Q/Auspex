@@ -7,9 +7,8 @@ python:
 
 # Setup anaconda
 before_install:
-  - sudo apt-get update
+  # - sudo apt-get update
   - pip install -r requirements.txt
-
 
 install:
   - export PYTHONPATH=$PYTHONPATH:$PWD/src
