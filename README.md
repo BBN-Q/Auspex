@@ -1,6 +1,6 @@
 ![auspex](doc/images/Auspex-Small.png)
 <!-- [![build status](https://qiplab.bbn.com/ci/projects/1/status.png?ref=master)](https://qiplab.bbn.com/ci/projects/1?ref=master) -->
-[![Documentation Status](https://readthedocs.org/projects/auspex/badge/?version=latest)](http://auspex.readthedocs.io/en/latest/?badge=latest)
+[![Build Status](https://travis-ci.org/BBN-Q/Auspex.svg?branch=master)](https://travis-ci.org/BBN-Q/Auspex)[![Documentation Status](https://readthedocs.org/projects/auspex/badge/?version=latest)](http://auspex.readthedocs.io/en/latest/?badge=latest)
 
 Supports running physics experiments with:
 
@@ -10,36 +10,5 @@ Supports running physics experiments with:
 4. Saving data to [HDF5](https://www.hdfgroup.org/HDF5/) files
 
 
-## Continuous Integration ##
-
-The project is under continuous integration using Docker.  To test locally:
-
-1. Build the image using the Dockerfile in test. The Dockerfile gives us Anaconda3 with PyVISA and the BBN certificate installed.
-
-    ```shell
-    cryan ~ $ cd /path/to/repo/test/docker
-    cryan docker $ docker build -t cryan/pycontrol .
-    ```
-
-1. Run an ephemeral container based off of the image and mount the local copy of the repository with changes to test.
-
-    ```shell
-    docker run -it --rm -v /path/to/repo/:/pycontrol cryan/pycontrol /bin/bash
-    ```
-
-1. In the container setup and run the tests
-
-    ```shell
-    root@0c4b7fe64114:/# export PYTHONPATH=/pycontrol/
-    root@0c4b7fe64114:/# python -m unittest discover -v /pycontrol/test/
-    test_getters (test_instrument.InstrumentTestCase)
-    Check that Commands with only `get_string` have only get methods ... ok
-    test_properties (test_instrument.InstrumentTestCase)
-    Check that property and setter/getter are implemented ... ok
-
-    ----------------------------------------------------------------------
-    Ran 2 tests in 0.000s
-
-    OK
-    root@349fa096554f:/#
-    ```
+## Documentation ** 
+Full documentation can be found at [readthedocs].(http://auspex.readthedocs.io/en/latest/)
