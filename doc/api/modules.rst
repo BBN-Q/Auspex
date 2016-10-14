@@ -1,7 +1,7 @@
-pycontrol
-=========
+auspex
+======
 
 .. toctree::
    :maxdepth: 4
 
-   pycontrol
+   auspex

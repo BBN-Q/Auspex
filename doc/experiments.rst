@@ -94,14 +94,14 @@ These sweeps can be based on *Parameter* tuples in order to accomodate non-recti
 The Measurement Pipeline
 ************************
 
-The central ``run`` method of an *Experiment* should not need to worry about file IO and plotting, nor should we bake common analysis routines (filtering, plotting, etc.) into the code that is only responsible for taking data. Pycontrol relegates these tasks to the measurement pipeline, which provides dataflow such as that in the image below.
+The central ``run`` method of an *Experiment* should not need to worry about file IO and plotting, nor should we bake common analysis routines (filtering, plotting, etc.) into the code that is only responsible for taking data. Auspex relegates these tasks to the measurement pipeline, which provides dataflow such as that in the image below.
 
 .. figure:: images/ExperimentFlow.png
    :align: center
 
    An example of measurement dataflow starting from the *Experiment* at left.
 
-Each block is referred to as a *node* of the experiment graph. Data flow is assumed to be acyclic, though pycontrol will not save you from yourself if you attempt to circumvent this restriction. Data flow can be one-to-many, but not many-to-one. Certain nodes, such as *correlators* may take multiple inputs, but they are always wired to distinct input connectors. There are a number of advantages to representing processing and analysis as graphs, most of which stem from the ease of reconfiguration. We have even developed a specialized tool, *Quince*, that provides a graphical interfaces for modifying the contents and connectivity of the graph.
+Each block is referred to as a *node* of the experiment graph. Data flow is assumed to be acyclic, though auspex will not save you from yourself if you attempt to circumvent this restriction. Data flow can be one-to-many, but not many-to-one. Certain nodes, such as *correlators* may take multiple inputs, but they are always wired to distinct input connectors. There are a number of advantages to representing processing and analysis as graphs, most of which stem from the ease of reconfiguration. We have even developed a specialized tool, *Quince*, that provides a graphical interfaces for modifying the contents and connectivity of the graph.
 
 Finally, we stress data is streamed asynchronously across the graph. Each node processes data as it is received, though many types of nodes must wait until enough data has accumulated to perform their stated functions.
 
