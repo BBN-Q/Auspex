@@ -11,4 +11,4 @@ Supports running physics experiments with:
 
 
 ## Documentation ** 
-Full documentation can be found at [readthedocs].(http://auspex.readthedocs.io/en/latest/)
+Full documentation can be found at [readthedocs](http://auspex.readthedocs.io/en/latest/).
