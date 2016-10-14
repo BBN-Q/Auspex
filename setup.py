@@ -18,6 +18,7 @@ setup(
         "h5py >= 2.6.0",
         "tqdm >= 4.7.0",
         "pandas >= 0.18.1",
-        "networkx >= 1.11"
+        "networkx >= 1.11",
+        "bokeh >= 0.12.1"
     ]
 )
