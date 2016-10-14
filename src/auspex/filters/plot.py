@@ -60,7 +60,7 @@ class Plotter(Filter):
 
         if self.plot_dims == 1:
             self.figure = Figure(x_range=[xmin, xmax], plot_width=600, plot_height=600, webgl=False)
-            self.plot = self.figure.line(np.copy(self.x_values), np.nan*np.ones(self.points_before_clear), name=self.name, **self.plot_args)
+            self.plot = self.figure.line(np.copy(self.x_values), np.nan*np.ones(self.points_before_clear), name=self.name)
         else:
             self.y_values = self.descriptor.axes[-2].points
             self.x_mesh, self.y_mesh = np.meshgrid(self.x_values, self.y_values)
@@ -69,7 +69,7 @@ class Plotter(Filter):
             ymin = min(self.y_values)
             self.figure = Figure(x_range=[xmin, xmax], y_range=[ymin, ymax], plot_width=600, plot_height=600, webgl=False)
             self.plot = self.figure.image(image=[self.z_data], x=[xmin], y=[ymin],
-                                          dw=[xmax-xmin], dh=[ymax-ymin], name=self.name, palette="Spectral11", **self.plot_args)
+                                          dw=[xmax-xmin], dh=[ymax-ymin], name=self.name, palette="Spectral11")
 
         self.data_source = self.plot.data_source
 
