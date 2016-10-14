@@ -31,14 +31,18 @@ class HS9000(Instrument, metaclass=MakeSettersGetters):
         try:
             self._lib = ctypes.CDLL("HolzworthMulti64.dll")
         except:
-            logger.warning("Could not find APS2 python driver.")
+            logger.warning("Could not find the Holzworth driver.")
             self._lib = MagicMock()
-        
+
         # parse resource_name: expecting something like "HS9004A-009-1"
         self.model, self.serial, self.chan = resource_name.split("-")
-        self.resource_name = resource_name
 
         self._lib.usbCommWrite.restype = ctypes.c_char_p
+
+    def connect(self, resource_name=None):
+        if resource_name is not None:
+            self.resource_name = resource_name
+            self.model, self.serial, self.chan = resource_name.split("-")
 
     def query(self, scpi_string):
         return self._lib.usbCommWrite(self.resource_name.encode('ascii'), scpi_string.encode('ascii')).decode('ascii')

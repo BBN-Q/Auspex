@@ -55,7 +55,7 @@ class ATS9870(Instrument):
 
         # Just store the integers here...
         self.channel_numbers = []
-        
+
         # For lookup
         self._buf_to_chan = {}
 
@@ -66,11 +66,15 @@ class ATS9870(Instrument):
         else:
             self._lib = LibAlazar()
 
-        self._lib.connectBoard(self.resource_name, "")
-
         commands = ['acquire', 'stop', 'wait_for_acquisition']
         for c in commands:
             setattr(self, c, getattr(self._lib, c))
+
+    def connect(self, resource_name=None):
+        if resource_name:
+            self.resource_name = resource_name
+
+        self._lib.connectBoard(self.resource_name, "")
 
     def add_channel(self, channel):
         if not isinstance(channel, AlazarChannel):

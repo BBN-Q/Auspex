@@ -45,7 +45,7 @@ class QubitExperiment(Experiment):
     """Experiment with a specialized run method for qubit experiments run via factory below."""
     def init_instruments(self):
         for name, instr in self._instruments.items():
-            instr_par = self.exp_settings['instruments'][name]
+            instr_par = self.instrument_settings['instrDict'][name]
             logger.debug("Setting instr %s with params %s.", name, instr_par)
             instr.set_all(instr_par)
 
@@ -53,7 +53,7 @@ class QubitExperiment(Experiment):
         self.awgs       = [v for _, v in self._instruments.items() if v.instrument_type == "AWG"]
 
         # Swap the master AWG so it is last in the list
-        master_awg_idx = next(ct for ct,awg in enumerate(self.awgs) if self.exp_settings['instruments'][awg.name]['is_master'])
+        master_awg_idx = next(ct for ct,awg in enumerate(self.awgs) if self.instrument_settings['instrDict'][awg.name]['is_master'])
         self.awgs[-1], self.awgs[master_awg_idx] = self.awgs[master_awg_idx], self.awgs[-1]
 
     async def run(self):
@@ -172,7 +172,7 @@ class QubitExpFactory(object):
                 points = np.append(points, np.zeros(numCals))
                 data.metadata = ['data' for p in points] + ['cal' for s in range(par['numCals'])]
             else:
-                # Here we create a parameter for experiment and associate it with the 
+                # Here we create a parameter for experiment and associate it with the
                 # relevant method in the instrument
 
                 # Add a parameter to the experiment corresponding to the thing we want to sweep
@@ -189,7 +189,7 @@ class QubitExpFactory(object):
                     experiment.add_sweep(param, points) # Create the requested sweep on this parameter
                 else:
                     raise ValueError("The instrument {} has no method set_{}".format(name, par['x__class__'].lower()))
-            
+
                 # Add the sweep to the exeriment
                 experiment.add_sweep()
 
@@ -224,7 +224,7 @@ class QubitExpFactory(object):
 
         # First look for digitizer streams (Alazar or X6)
         dig_settings    = {k: v for k, v in enabled_meas.items() if "StreamSelector" in v['x__class__']}
-        
+
         # These stream selectors are really just a convenience
         # Remove them from the list of "real" filters
         for k in dig_settings.keys():
@@ -232,11 +232,11 @@ class QubitExpFactory(object):
 
         # Map from Channel -> OutputConnector
         # and from Channel -> Digitizer for future lookup
-        chan_to_oc  = {} 
+        chan_to_oc  = {}
         chan_to_dig = {}
-        
+
         for name, settings in dig_settings.items():
-            
+
             # Create and add the OutputConnector
             logger.info("Adding %s output connector to experiment.", name)
             oc = OutputConnector(name=name, parent=experiment)
@@ -247,7 +247,7 @@ class QubitExpFactory(object):
             # Find the digitizer instrument and settings
             source_instr          = experiment._instruments[settings['data_source']]
             source_instr_settings = experiment.instrument_settings['instrDict'][settings['data_source']]
-            
+
             # Construct the descriptor
             descrip = DataStreamDescriptor()
 
@@ -255,7 +255,7 @@ class QubitExpFactory(object):
             if 'X6' in settings['x__class__']:
                 # Create a channel
                 channel = X6Channel(settings)
-                
+
                 # If it's an integrated stream, then the time axis has already been eliminated.
                 # Otherswise, add the time axis.
                 if settings['stream_type'] != 'Integrated':
@@ -304,7 +304,7 @@ class QubitExpFactory(object):
         # ====================================
 
         for name, filt in filters.items():
-            
+
             # If there is a colon in the name, then we are to hook up to a specific connector
             # Otherwise we can safely assume that the name is "source"
             source = experiment.measurement_settings['filterDict'][name]['data_source'].split(":")

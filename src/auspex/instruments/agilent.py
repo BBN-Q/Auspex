@@ -37,6 +37,9 @@ class N5183A(SCPIInstrument):
         if is_valid_ipv4(resource_name):
             resource_name += "::5025::SOCKET"
         super(N5183A, self).__init__(resource_name, *args, **kwargs)
+
+    def connect(self, resource_name=None, interface_type=None):
+        super(N5183A, self).connect(resource_name=resource_name, interface_type=interface_type)
         self.interface._resource.read_termination = u"\n"
         self.interface._resource.write_termination = u"\n"
         self.interface._resource.timeout = 3000 #seem to have trouble timing out on first query sometimes

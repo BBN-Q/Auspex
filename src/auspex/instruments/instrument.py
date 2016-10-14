@@ -177,7 +177,7 @@ class SCPIInstrument(Instrument):
         self._unfreeze()
         if resource_name is None and self.resource_name is None:
             raise Exception("Must supply a resource name to 'connect' if the instrument was initialized without one.")
-        elif self.resource_name is None and resource_name is not None:
+        elif resource_name is not None:
             self.resource_name = resource_name
 
         if interface_type is None:

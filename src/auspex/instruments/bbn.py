@@ -96,7 +96,6 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
             self.wrapper = MagicMock()
         else:
             self.wrapper = aps2.APS2()
-        self.wrapper.connect(resource_name)
 
         self.set_amplitude = self.wrapper.set_channel_scale
         self.set_offset    = self.wrapper.set_channel_offset
@@ -109,23 +108,28 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
         self.run           = self.wrapper.run
         self.stop          = self.wrapper.stop
 
+    def connect(self, resource_name=None):
+        if resource_name is None and self.resource_name is None:
+            raise Exception("Must supply a resource name to 'connect' if the instrument was initialized without one.")
+        elif resource_name is not None:
+            self.resource_name = resource_name
+
+        self.wrapper.connect(self.resource_name)
+
     def __del__(self):
         self.wrapper.disconnect()
 
     def set_all(self, settings_dict):
         # Pop the channel settings
-        ch1_settings = settings_dict.pop('chan_1')
-        ch2_settings = settings_dict.pop('chan_2')
+        channel_settings = settings_dict.pop('channels')
 
         # Call the non-channel commands
         super(APS2, self).set_all(settings_dict)
 
-        for name, value in ch1_settings.items():
-            if hasattr(self, name):
-                getattr(self, name)(0, value)
-        for name, value in ch2_settings.items():
-            if hasattr(self, name):
-                getattr(self, name)(1, value)
+        for chan, ch_settings in enumerate(channel_settings):
+            for name, value in ch_settings.items():
+                if hasattr(self, name):
+                    getattr(self, name)(chan, value)
 
     @property
     def seq_file(self):
