@@ -1,5 +1,6 @@
 ![auspex](doc/images/Auspex-Small.png)
-[![build status](https://qiplab.bbn.com/ci/projects/1/status.png?ref=master)](https://qiplab.bbn.com/ci/projects/1?ref=master)
+<!-- [![build status](https://qiplab.bbn.com/ci/projects/1/status.png?ref=master)](https://qiplab.bbn.com/ci/projects/1?ref=master) -->
+[![Documentation Status](https://readthedocs.org/projects/auspex/badge/?version=latest)](http://auspex.readthedocs.io/en/latest/?badge=latest)
 
 Supports running physics experiments with:
 
