@@ -12,7 +12,10 @@ setup(
     description='Automated system for python-based experiments.',
     long_description=open('README.md').read(),
     install_requires=[
-        "Numpy >= 1.6.1",
-        "pandas >= 0.14",
+        "numpy >= 1.11.1",
+        "scipy >= 0.17.1",
+        "PyVISA >= 1.8",
+        "h5py >= 2.6.0",
+        "tqdm >= 4.7.0"
     ]
 )
