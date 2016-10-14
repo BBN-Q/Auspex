@@ -80,13 +80,15 @@ class Plotter(Filter):
         #if we're going to clear then reset idx
         if self.idx + data.size > self.points_before_clear:
             logger.debug("Clearing previous plot and restarting")
+            spill_over = (self.idx + data.size) % self.points_before_clear
+            if spill_over == 0:
+                spill_over = self.points_before_clear
             self.plot_buffer[:] = np.nan
-            num_prev_buffer_pts = self.points_before_clear - self.idx
-            data = data[num_prev_buffer_pts:]
-            self.idx = 0
-
-        self.plot_buffer[self.idx:self.idx+data.size] = data.flatten()
-        self.idx += data.size
+            self.plot_buffer[:spill_over] = data[-spill_over:]
+            self.idx = spill_over
+        else:
+            self.plot_buffer[self.idx:self.idx+data.size] = data.flatten()
+            self.idx += data.size
 
         if self.plot_dims == 1:
             if (time.time() - self.last_update >= self.update_interval):
