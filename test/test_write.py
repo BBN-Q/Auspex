@@ -108,7 +108,8 @@ class SweepTestCase(unittest.TestCase):
             logger.debug("Running refinement function.")
             if sweep_axis.num_points() >= num_points:
                 return False
-            sweep_axis.points.append(sweep_axis.points[-1]*2)
+            # sweep_axis.points.append(sweep_axis.points[-1]*2)
+            sweep_axis.add_points(sweep_axis.points[-1]*2)
             return True
 
         exp.add_sweep(exp.field, np.linspace(0,100.0,11))
@@ -143,6 +144,47 @@ class SweepTestCase(unittest.TestCase):
         self.assertTrue(wr.points_taken == 10*5)
 
         os.remove("test_writehdf5_unstructured-0000.h5")
+
+    def test_writehdf5_adaptive_unstructured_sweep(self):
+        exp = SweptTestExperiment()
+        if os.path.exists("test_writehdf5_adaptive_unstructured-0000.h5"):
+            os.remove("test_writehdf5_adaptive_unstructured-0000.h5")
+        wr = WriteToHDF5("test_writehdf5_adaptive_unstructured.h5")
+
+        edges = [(exp.voltage, wr.sink)]
+        exp.set_graph(edges)
+
+        coords = [[ 0, 0.1],
+                  [10, 4.0],
+                  [15, 2.5],
+                  [40, 4.4],
+                  [50, 2.5],
+                  [60, 1.4],
+                  [65, 3.6],
+                  [66, 3.5],
+                  [67, 3.6],
+                  [68, 1.2]]
+
+        def rf(sweep_axis, num_points):
+            logger.debug("Running refinement function.")
+            if sweep_axis.num_points() >= num_points:
+                return False
+
+            first_points = np.array(sweep_axis.points[-10:])
+            new_points   = first_points.copy()
+            new_points[:,0] += 100
+            new_points[:,1] += 10
+
+            sweep_axis.add_points(new_points)
+            logger.debug("Sweep points now: {}.".format(sweep_axis.points))
+            return True
+
+        exp.add_sweep([exp.field, exp.freq], coords, refine_func=rf, refine_args=[30])
+        exp.run_sweeps()
+        self.assertTrue(os.path.exists("test_writehdf5_adaptive_unstructured-0000.h5"))
+        self.assertTrue(wr.points_taken == 10*5*3)
+
+        # os.remove("test_writehdf5_adaptive_unstructured-0000.h5")
 
 if __name__ == '__main__':
     unittest.main()

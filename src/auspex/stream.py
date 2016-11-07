@@ -23,7 +23,7 @@ class DataAxis(object):
     def __init__(self, name, points=[], unit=None):
         super(DataAxis, self).__init__()
         self.name         = str(name)
-        self.points       = points
+        self.points       = np.array(points)
         self.unit         = unit
 
         # By definition data axes will be done after every experiment.run() call
@@ -32,16 +32,19 @@ class DataAxis(object):
     def num_points(self):
         return len(self.points)
 
-    def update(self, points=None, unit=None):
-        # Update points or unit
-        if points is not None:
-            if isinstance(points, int) or isinstance(points,float):
-                logger.warning("DataAxis '{}' receives a number: {}. Force converting to array.".format(self.name,points))
-                self.points = [points]
-            else:
-                self.points = list(points)
-        if unit is not None:
-            self.unit = str(unit)
+    def add_points(self, points):
+        self.points = np.append(self.points, points)
+
+    # def update(self, points=None, unit=None):
+    #     # Update points or unit
+    #     if points is not None:
+    #         if isinstance(points, int) or isinstance(points,float):
+    #             logger.warning("DataAxis '{}' receives a number: {}. Force converting to array.".format(self.name,points))
+    #             self.points = [points]
+    #         else:
+    #             self.points = list(points)
+    #     if unit is not None:
+    #         self.unit = str(unit)
 
     def __repr__(self):
         return "<DataAxis(name={}, points={}, unit={})>".format(
@@ -74,6 +77,12 @@ class SweepAxis(DataAxis):
 
         logger.debug("Created {}".format(self.__repr__()))
 
+    def add_points(self, points):
+        if self.unstructured:
+            self.points = np.append(self.points, points, axis=0)
+        else:
+            self.points = np.append(self.points, points)
+
     def update(self):
         """ Update value after each run.
         If refine_func is None, loop through the list of points.
@@ -85,16 +94,12 @@ class SweepAxis(DataAxis):
             self.push()
             self.step += 1
             self.done = False
+
         if self.step==self.num_points():
             # Check to see if we need to perform any refinements
             if self.refine_func is not None:
-                if self.refine_func(self, *self.refine_args):
-                    # Refine_func should return true if we have more refinements...
-                    self.value = self.points[self.step]
-                    self.push()
-                    self.step += 1
-                    self.done = False
-                else:
+                if not self.refine_func(self, *self.refine_args):
+                    # Returns false if no refinements needed, otherwise adds points to list
                     self.step = 0
                     self.done = True
                     logger.debug("Sweep Axis '{}' complete.".format(self.name))
