@@ -184,7 +184,7 @@ class SweepTestCase(unittest.TestCase):
         self.assertTrue(os.path.exists("test_writehdf5_adaptive_unstructured-0000.h5"))
         self.assertTrue(wr.points_taken == 10*5*3)
 
-        # os.remove("test_writehdf5_adaptive_unstructured-0000.h5")
+        os.remove("test_writehdf5_adaptive_unstructured-0000.h5")
 
 if __name__ == '__main__':
     unittest.main()

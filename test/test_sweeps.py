@@ -117,7 +117,7 @@ class SweepTestCase(unittest.TestCase):
             logger.debug("Running refinement function.")
             if sweep_axis.num_points() >= num_points:
                 return False
-            sweep_axis.points.append(sweep_axis.points[-1]*2)
+            sweep_axis.add_points(sweep_axis.points[-1]*2)
             return True
 
         exp.add_sweep(exp.field, np.linspace(0,100.0,11))
