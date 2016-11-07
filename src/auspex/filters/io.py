@@ -95,6 +95,13 @@ class WriteToHDF5(Filter):
             if k not in axis_names:
                 data.attrs[k] = v
 
+        # Include the fixed rectilinear axes if we have rectilinear sweeps
+        if True not in [a.unstructured for a in axes]:
+            for i, a in enumerate(axes):
+                self.file[a.name] = a.points
+                self.file['data'].dims.create_scale(self.file[a.name], a.name)
+                self.file['data'].dims[0].attach_scale(self.file[a.name])
+
         # Write pointer
         w_idx = 0
 

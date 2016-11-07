@@ -25,6 +25,9 @@ class DataAxis(object):
         self.name         = str(name)
         self.points       = np.array(points)
         self.unit         = unit
+        
+        if not hasattr(self, 'unstructured'):
+            self.unstructured = False
 
         # By definition data axes will be done after every experiment.run() call
         self.done         = True
