@@ -6,7 +6,7 @@ setup(
     author='auspex Developers',
     package_dir={'':'src'},
     packages=[
-        'auspex', 'auspex.instruments', 'auspex.filters'
+        'auspex', 'auspex.instruments', 'auspex.filters', 'auspex.analysis'
     ],
     scripts=[],
     description='Automated system for python-based experiments.',

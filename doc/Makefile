@@ -91,9 +91,9 @@ qthelp:
 	@echo
 	@echo "Build finished; now you can run "qcollectiongenerator" with the" \
 	      ".qhcp project file in $(BUILDDIR)/qthelp, like this:"
-	@echo "# qcollectiongenerator $(BUILDDIR)/qthelp/pycontrol.qhcp"
+	@echo "# qcollectiongenerator $(BUILDDIR)/qthelp/auspex.qhcp"
 	@echo "To view the help file:"
-	@echo "# assistant -collectionFile $(BUILDDIR)/qthelp/pycontrol.qhc"
+	@echo "# assistant -collectionFile $(BUILDDIR)/qthelp/auspex.qhc"
 
 .PHONY: applehelp
 applehelp:
@@ -110,8 +110,8 @@ devhelp:
 	@echo
 	@echo "Build finished."
 	@echo "To view the help file:"
-	@echo "# mkdir -p $$HOME/.local/share/devhelp/pycontrol"
-	@echo "# ln -s $(BUILDDIR)/devhelp $$HOME/.local/share/devhelp/pycontrol"
+	@echo "# mkdir -p $$HOME/.local/share/devhelp/auspex"
+	@echo "# ln -s $(BUILDDIR)/devhelp $$HOME/.local/share/devhelp/auspex"
 	@echo "# devhelp"
 
 .PHONY: epub

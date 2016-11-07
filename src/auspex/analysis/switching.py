@@ -12,7 +12,6 @@ from scipy.stats import beta
 from scipy.spatial import Delaunay
 import matplotlib.pyplot as plt
 import matplotlib as mpl
-import seaborn as sns
 import h5py
 
 # from auspex.log import logger
@@ -55,6 +54,7 @@ def count_matrices(data, multiple=False, start_state=None, threshold=None, displ
     if display:
         plt.figure()
         for ct in range(num_clusters):
+            import seaborn as sns
             sns.distplot(all_vals[state == ct], kde=False, norm_hist=False)
 
     init_state  = state[::2]
@@ -206,14 +206,16 @@ def crossover_pairs(points, values, threshold):
                 pairs.append([k,nb])
     return np.array(pairs)
 
-def load_switching_data(filename, start_state=None, failure=False, threshold=None, display=False):
+def load_switching_data(filename, start_state=None, failure=False,
+                        threshold=None, display=False,
+                        voltage_scale_factor=1.0, duration_scale_factor=1.0):
     with h5py.File(filename, 'r') as f:
         logger.debug("Read data from file: %s" % filename)
-        durations = np.array([f['axes'][k].value for k in f['axes'].keys() if "duration-data" in k])
-        voltages = np.array([f['axes'][k].value for k in f['axes'].keys() if "voltage-data" in k])
-        dsets = np.array([f[k].value for k in f.keys() if "data" in k])
-        data = np.concatenate(dsets, axis=0)
-        voltages = np.concatenate(voltages, axis=0)
+        durations = duration_scale_factor*np.array([f['axes'][k].value for k in f['axes'].keys() if "duration-data" in k])
+        voltages  = voltage_scale_factor*np.array([f['axes'][k].value for k in f['axes'].keys() if "voltage-data" in k])
+        dsets     = np.array([f[k].value for k in f.keys() if "data" in k])
+        data      = np.concatenate(dsets, axis=0)
+        voltages  = np.concatenate(voltages, axis=0)
         durations = np.concatenate(durations, axis=0)
     data_mean = np.mean(data, axis=-1)
     points = np.array([durations, voltages]).transpose()
