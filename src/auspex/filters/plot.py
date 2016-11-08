@@ -20,7 +20,7 @@ from auspex.filters.filter import Filter, InputConnector
 class Plotter(Filter):
     sink = InputConnector()
 
-    def __init__(self, *args, name="", plot_dims=None, plot_mode='real', **plot_args):
+    def __init__(self, *args, name="", plot_dims=None, plot_mode='real', notebook=False, **plot_args):
 
         super(Plotter, self).__init__(*args, name=name)
         self.plot_dims = plot_dims
@@ -28,6 +28,7 @@ class Plotter(Filter):
         self.plot_args = plot_args
         self.update_interval = 0.5
         self.last_update = time.time()
+        self.run_in_notebook = notebook
 
     def update_descriptors(self):
         logger.info("Updating Plotter %s descriptors based on input descriptor %s", self.name, self.sink.descriptor)

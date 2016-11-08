@@ -51,8 +51,8 @@ class WriteToHDF5(Filter):
                 logger.error("Encounter exception: {}".format(e))
                 logger.error("Cannot close file '{}'. File may be damaged.".format(self.file.filename))
         # Get new file name
-        filename = self.new_filename()
-        head = os.path.dirname(filename)
+        self.filename = self.new_filename()
+        head = os.path.dirname(self.filename)
         head = os.path.normpath(head)
         dirs = head.split(os.sep)
         # Check if path exists. If not, create new one(s).
@@ -62,8 +62,8 @@ class WriteToHDF5(Filter):
             if not os.path.exists(fulldir):
                 logger.debug("Create new directory: {}.".format(fulldir))
                 os.mkdir(fulldir)
-        logger.debug("Create new data file: %s." %filename)
-        return h5py.File(filename, 'w')
+        logger.debug("Create new data file: %s." %self.filename)
+        return h5py.File(self.filename, 'w')
 
     async def run(self):
         stream     = self.sink.input_streams[0]

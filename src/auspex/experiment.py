@@ -323,7 +323,7 @@ class Experiment(metaclass=MetaExperiment):
         if len(self.plotters) > 0:
             logger.debug("Found %d plotters", len(self.plotters))
 
-            from .plotting import BokehServerThread, in_notebook
+            from .plotting import BokehServerThread
             from bokeh.client import push_session
             from bokeh.plotting import hplot
             from bokeh.io import curdoc, curstate
@@ -331,7 +331,10 @@ class Experiment(metaclass=MetaExperiment):
             from bokeh.document import Document
             from bokeh.models.widgets import Panel, Tabs
 
-            bokeh_thread = BokehServerThread()
+            # If anybody has requested notebook plots, show them all in notebook
+            run_in_notebook = True in [p.run_in_notebook for p in self.plotters]
+
+            bokeh_thread = BokehServerThread(notebook=run_in_notebook)
             bokeh_thread.start()
 
             #On some systems there is a possibility we try to `push_session` before the
@@ -350,8 +353,10 @@ class Experiment(metaclass=MetaExperiment):
             doc.add_root(h)
             session = push_session(doc, session_id=sid)
 
-            if in_notebook():
-                logging.info("Displaying in iPython notebook")
+
+
+            if run_in_notebook:
+                logger.info("Displaying in iPython notebook")
                 from bokeh.embed import autoload_server, components
                 from bokeh.io import output_notebook
                 from IPython.display import display, HTML
@@ -375,7 +380,7 @@ class Experiment(metaclass=MetaExperiment):
             if len(self.plotters) > 0:
                 time.sleep(0.5)
                 bokeh_thread.join()
-            
+
             self.shutdown_instruments()
 
             for instrument in self._instruments.values():

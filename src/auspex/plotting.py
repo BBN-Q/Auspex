@@ -14,22 +14,11 @@ import sys
 
 from auspex.log import logger
 
-def in_notebook():
-    # From http://stackoverflow.com/questions/15411967/how-can-i-check-if-code-is-executed-in-the-ipython-notebook
-    try:
-        cfg = get_ipython().config
-        if cfg['IPKernelApp']['parent_appname'] == 'ipython-notebook':
-            return True
-        else:
-            return False
-    except NameError:
-        return False
-
 class BokehServerThread(threading.Thread):
-    def __init__(self):
+    def __init__(self, notebook=False):
         super(BokehServerThread, self).__init__()
         self.daemon = True
-        self.run_in_notebook = in_notebook()
+        self.run_in_notebook = notebook
 
     def __del__(self):
         self.join()
