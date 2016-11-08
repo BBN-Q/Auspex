@@ -18,6 +18,9 @@ class Keithley2400(SCPIInstrument):
     def __init__(self, resource_name, *args, **kwargs):
         super(Keithley2400, self).__init__(resource_name, *args, **kwargs)
         self.name = "Keithley 2400 Sourcemeter"
+
+    def connect(self, resource_name=None, interface_type=None):
+        super(Keithley2400, self).connect(resource_name=None, interface_type=None)
         self.interface.write("format:data ascii")
         self.interface._resource.read_termination = "\n"
 

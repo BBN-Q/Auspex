@@ -12,6 +12,7 @@ import time
 
 class AMI430(SCPIInstrument):
     """AMI430 Power Supply Programmer"""
+    instrument_type = "Magnet"
 
     SUPPLY_TYPES = \
     ["AMI 12100PS", "AMI 12200PS", "AMI 4Q05100PS", "AMI 4Q06125PS", "AMI 4Q06250PS",
@@ -68,20 +69,20 @@ class AMI430(SCPIInstrument):
         resource_name += "::7180::SOCKET"
         super(AMI430, self).__init__(resource_name, *args, **kwargs)
         self.name = "American Magnetics Model 430"
-        self.interface._resource.read_termination = u"\r\n"
-        #device responds with 'American Magnetics Model 430 IP Interface\r\nHello\r\n' on connect
-        connect_response = self.interface.read()
-        assert connect_response == "American Magnetics Model 430 IP Interface"
-        connect_response = self.interface.read()
-        assert connect_response == "Hello."
-
-        #Default to T field units
-        self.field_units = "T"
 
     #TODO when we want more than one segment
     # def set_ramp_rate_current(self, segment, current, ) = FloatCommand("Ramp rate for specified segement (A/sec or A/min)", set_string="CONFigure:RAMP:RATE:CURRent {segment:d},{:f}",
     #     get_string="RAMP:RATE:CURRent:{segment:d}?", additional_args=["segment"])
 
+    def connect(self, resource_name=None, interface_type=None):
+        super(AMI430, self).connect(resource_name=None, interface_type=None)
+        self.interface._resource.read_termination = u"\r\n"
+        #device responds with 'American Magnetics Model 430 IP Interface\r\nHello\r\n' on connect
+        assert self.interface.read() == "American Magnetics Model 430 IP Interface"
+        assert self.interface.read() == "Hello."
+
+        #Default to T field units
+        self.field_units = "T"
 
     #Ramping state controls
     def ramp(self):

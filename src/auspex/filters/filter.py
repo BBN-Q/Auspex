@@ -9,6 +9,7 @@
 import asyncio
 import zlib
 import pickle
+import numpy as np
 from concurrent.futures import FIRST_COMPLETED
 
 from auspex.stream import DataStream, InputConnector, OutputConnector
@@ -56,14 +57,14 @@ class Filter(metaclass=MetaFilter):
 
     def update_descriptors(self):
         """This method is called whenever the connectivity of the graph changes. This may have implications
-        for the internal functioning of the filter, in which case update_descriptors should be overloaded. 
+        for the internal functioning of the filter, in which case update_descriptors should be overloaded.
         Any simple changes to the axes within the StreamDescriptors should take place via the class method
         descriptor_map."""
         self.out_of_spec = False
 
         input_descriptors  = {k: v.descriptor for k,v in self.input_connectors.items()}
         output_descriptors = self.descriptor_map(input_descriptors)
-        
+
         for name, descriptor in output_descriptors.items():
             if name in self.output_connectors:
                 self.output_connectors[name].descriptor = descriptor
@@ -111,6 +112,8 @@ class Filter(metaclass=MetaFilter):
                     break
 
             elif message['type'] == 'data':
+                if not hasattr(message_data, 'size'):
+                    message_data = np.array([message_data])
                 logger.debug('%s "%s" received %d points.', self.__class__.__name__, self.name, message_data.size)
                 logger.debug("Now has %d of %d points.", input_stream.points_taken, input_stream.num_points())
                 await self.process_data(message_data)
