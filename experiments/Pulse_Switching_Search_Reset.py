@@ -7,68 +7,50 @@
 #    http://www.apache.org/licenses/LICENSE-2.0
 
 from auspex.instruments.keysight import *
-from auspex.instruments.picosecond import Picosecond10070A
 from auspex.instruments.stanford import SR865
 from auspex.instruments.keithley import Keithley2400
 from auspex.instruments.ami import AMI430
+from auspex.instruments.rfmd import Attenuator
 
 from PyDAQmx import *
 
-from auspex.experiment import FloatParameter, IntParameter, Experiment
-from auspex.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector
-from auspex.filters.debug import Print
+from auspex.experiment import FloatParameter, Experiment
+from auspex.stream import DataAxis, OutputConnector, DataStreamDescriptor
 from auspex.filters.io import WriteToHDF5
-from auspex.filters.average import Average
+from auspex.filters.average import Averager
 from auspex.filters.plot import Plotter
+from auspex.log import logger
 
 import asyncio
 import numpy as np
 import time
+import datetime
 from scipy.interpolate import interp1d
 import matplotlib.pyplot as plt
-from analysis.h5shell import h5shell
 import pandas as pd
-from scipy.interpolate import interp1d
-
-from auspex.log import logger
+import h5py
 
 # Experimental Topology
 # lockin AO 3 -> Analog Attenuator Vc (Control Voltages)
 # Keithley Output -> Voltage divider with 1 MOhm, DAQmx AI1
 # PSPL Trigger -> DAQmx PFI0
 
-def arb_voltage_lookup(arb_calib="calibration/AWG_20160718.csv",
-                        midpoint_calib="calibration/midpoint_20160718.csv"):
-    df_midpoint = pd.read_csv(midpoint_calib, sep=",")
+def arb_voltage_lookup(arb_calib="calibration/AWG_20160901.csv"):
     df_arb = pd.read_csv(arb_calib, sep=",")
-    midpoint_lookup = interp1d(df_midpoint["Sample Voltage"],df_midpoint["Midpoint Voltage"])
-    arb_control_lookup = interp1d(df_arb["Midpoint Voltage"],df_arb["Control Voltage"])
-    sample_volts = []
-    control_volts = []
-    for volt in df_midpoint['Sample Voltage']:
-        mid_volt = midpoint_lookup(volt)
-        if (mid_volt > min(df_arb['Midpoint Voltage'])) and (mid_volt < max(df_arb['Midpoint Voltage'])):
-            sample_volts.append(volt)
-            control_volts.append(arb_control_lookup(mid_volt))
-    return interp1d(sample_volts, control_volts)
+    return interp1d(df_arb["Amp Out"], df_arb["Control Voltage"])
 
 class ResetSearchExperiment(Experiment):
 
-    daq_buffer = OutputConnector()
+    voltage    = OutputConnector()
+    field      = FloatParameter(default=0, unit="T")
+    duration   = FloatParameter(default=5e-9, unit="s")
 
-    sample = "CSHE2"
-    comment = "AWG Reset Amplitude Search"
-
-    field = FloatParameter(default=0, unit="T")
-    amplitude = FloatParameter(default=0, unit="V")
-    amplitudes = np.arange(-0.7, 0.71, 0.05) # Reset amplitudes
-    duration = 5e-9
-    reps = 1 << 10
-    reps_over = FloatParameter(default=5)
-    samps_per_trig = 5
-    settle_delay = 50e-6
-
+    repeats         = 200
+    amplitudes      = np.arange(-0.01, 0.011, 0.01) # Reset amplitudes
+    samps_per_trig  = 5
+    settle_delay    = 50e-6
     measure_current = 3e-6
+
     # Instruments
     arb   = M8190A("192.168.5.108")
     mag   = AMI430("192.168.5.109")
@@ -76,6 +58,15 @@ class ResetSearchExperiment(Experiment):
     lock  = SR865("USB0::0xB506::0x2000::002638::INSTR")
 
     polarity = -1
+
+    def init_streams(self):
+        # Baked in data axes
+        descrip = DataStreamDescriptor()
+        descrip.data_name='voltage'
+        descrip.add_axis(DataAxis("sample", range(self.samps_per_trig)))
+        descrip.add_axis(DataAxis("amplitude", self.amplitudes))
+        descrip.add_axis(DataAxis("repeat", range(self.repeats)))
+        self.voltage.set_descriptor(descrip)
 
     def init_instruments(self):
         # Set up Keithley
@@ -90,23 +81,22 @@ class ResetSearchExperiment(Experiment):
         self.arb.sample_freq = 12.0e9
         self.arb.waveform_output_mode = "WSPEED"
         self.setup_AWG()
-        # Set up NIDAQ
+
         self.analog_input = Task()
         self.read = int32()
-        self.buf_points = len(self.amplitudes)*self.samps_per_trig * self.reps
-        # DAQmx Configure Code
+        self.buf_points = len(self.amplitudes)*self.samps_per_trig*self.repeats
         self.analog_input.CreateAIVoltageChan("Dev1/ai1", "", DAQmx_Val_Diff, 0.0, 0.5, DAQmx_Val_Volts, None)
         self.analog_input.CfgSampClkTiming("", 1e6, DAQmx_Val_Rising, DAQmx_Val_FiniteSamps, self.samps_per_trig)
         self.analog_input.CfgInputBuffer(self.buf_points)
         self.analog_input.CfgDigEdgeStartTrig("/Dev1/PFI0", DAQmx_Val_Rising)
         self.analog_input.SetStartTrigRetriggerable(1)
-        # DAQmx Start Code
         self.analog_input.StartTask()
 
         # Assign methods
         self.field.assign_method(self.mag.set_field)
+        self.duration.assign_method(self.setup_AWG)
 
-    def setup_AWG(self):
+    def setup_AWG(self, *args):
         self.arb.abort()
         self.arb.delete_all_waveforms()
         self.arb.reset_sequence_table()
@@ -120,8 +110,8 @@ class ResetSearchExperiment(Experiment):
         self.arb.continuous_mode = False
         self.arb.gate_mode = False
 
-        def arb_pulse(amplitude, duration, sample_rate=12e9):
-            pulse_points = int(duration*sample_rate)
+        def arb_pulse(amplitude, sample_rate=12e9):
+            pulse_points = int(self.duration.value*sample_rate)
 
             if pulse_points < 320:
                 wf = np.zeros(320)
@@ -133,7 +123,7 @@ class ResetSearchExperiment(Experiment):
         segment_ids = []
         arb_voltage = arb_voltage_lookup()
         for amp in self.amplitudes:
-            waveform   = arb_pulse(np.sign(amp)*arb_voltage(abs(amp)), self.duration)
+            waveform   = arb_pulse(np.sign(amp)*arb_voltage(abs(amp)))
             wf_data    = M8190A.create_binary_wf_data(waveform)
             segment_id = self.arb.define_waveform(len(wf_data))
             segment_ids.append(segment_id)
@@ -148,13 +138,14 @@ class ResetSearchExperiment(Experiment):
         start_idxs = [0]
 
         scenario = Scenario()
+        seq = Sequence(sequence_loop_ct=int(self.repeats))
         for si in segment_ids:
-            seq = Sequence(sequence_loop_ct=int(self.reps))
+            # seq = Sequence(sequence_loop_ct=int(1))
             seq.add_waveform(si) # Apply switching pulse to the sample
             seq.add_idle(settle_pts, 0.0) # Wait for the measurement to settle
             seq.add_waveform(nidaq_trig_segment_id) # Trigger the NIDAQ measurement
             seq.add_idle(1 << 14, 0.0) # bonus non-contiguous memory delay
-            scenario.sequences.append(seq)
+        scenario.sequences.append(seq)
 
         self.arb.upload_scenario(scenario, start_idx=start_idxs[-1])
         start_idxs.append(start_idxs[-1] + len(scenario.scpi_strings()))
@@ -167,14 +158,6 @@ class ResetSearchExperiment(Experiment):
         self.arb.scenario_start_index = 0
         self.arb.run()
 
-    def init_streams(self):
-        # Baked in data axes
-        descrip = DataStreamDescriptor()
-        descrip.add_axis(DataAxis("samps_per_trig", range(self.samps_per_trig)))
-        descrip.add_axis(DataAxis("reps", range(self.reps)))
-        descrip.add_axis(DataAxis("amplitude", self.amplitudes))
-        self.daq_buffer.set_descriptor(descrip)
-
     async def run(self):
         # Establish buffers
         buffers = np.empty(self.buf_points)
@@ -183,10 +166,10 @@ class ResetSearchExperiment(Experiment):
         self.analog_input.ReadAnalogF64(self.buf_points, -1, DAQmx_Val_GroupByChannel,
                                       buffers, self.buf_points, byref(self.read), None)
         logger.debug("Read a buffer of {} points".format(buffers.size))
-        await self.daq_buffer.push(buffers)
+        await self.voltage.push(buffers)
         # Seemingly we need to give the filters some time to catch up here...
         await asyncio.sleep(0.02)
-        logger.debug("Stream has filled {} of {} points".format(self.daq_buffer.points_taken, self.daq_buffer.num_points() ))
+        logger.debug("Stream has filled {} of {} points".format(self.voltage.points_taken, self.voltage.num_points() ))
 
     def shutdown_instruments(self):
         try:
@@ -199,45 +182,74 @@ class ResetSearchExperiment(Experiment):
         # mag.zero()
 
 if __name__ == "__main__":
+    sample_name = "CSHE-Die7-C6R7"
+    date = datetime.datetime.today().strftime('%Y-%m-%d')
+    file_path = "data\CSHE-Switching\{samp:}\{samp:}-SearchReset_{date:}.h5".format(samp=sample_name, date=date)
+
     exp = ResetSearchExperiment()
-    exp.sample = "CSHE5-C1R3"
-    exp.field.value = -0.0074
-    exp.duration = 5e-9
+    exp.field.value     = 0.007
+    exp.duration.value  = 5e-9
     exp.measure_current = 3e-6
-    amps = np.arange(-0.25, 0.26, 0.05)
+    amps = np.linspace(-0.95, 0.95, 75)
     amps = np.append(amps, np.flipud(amps))
     exp.amplitudes = amps
     exp.init_streams()
-    exp.add_sweep(exp.reps_over, np.linspace(0,9,5))
+    # exp.add_sweep(exp.repeats, np.arange(5))
 
-    wr = WriteToHDF5("data\CSHE-Switching\CSHE-Die5-C1R3\CSHE5-C1R3-Search_Reset_2016-07-07.h5")
-    # Set up averager and plot
-    averager = Average('amplitude')
-    fig = Plotter(name="CSHE5-C1R3 - Search Reset", plot_dims=1)
-    edges = [(exp.daq_buffer, wr.data), (exp.daq_buffer, averager.data), (averager.final_average,fig.data)]
+    wr          = WriteToHDF5(file_path)
+    avg_sample = Averager('sample')
+    # avg_rep    = Averager('repeat')
+    fig1        = Plotter(name="Sample Averaged", plot_dims=1)
+    # fig2        = Plotter(name="Repeat Averaged", plot_dims=1)
+    edges = [(exp.voltage, avg_sample.sink),
+             (avg_sample.final_average, wr.sink),
+             (avg_sample.partial_average, fig1.sink)]
+            #  (avg_sample.final_average, avg_rep.sink)]
+            #  (avg_rep.partial_average, fig2.sink)
+            #  ]
     exp.set_graph(edges)
-    exp.init_instruments()
 
     exp.init_progressbar(num=1)
     exp.run_sweeps()
-    exp.shutdown_instruments()
+    # import cProfile
+    # cProfile.runctx('exp.run_sweeps()', globals(), locals(), filename="ResetSearch.prof")
+    #
+    with h5py.File(wr.filename) as f:
+        amps = f['amplitude'].value[:]
+        reps = f['repeat'].value[:]
+        Vs   = f['data'].value['voltage'][:]
+        Vs = Vs.reshape(reps.size, amps.size)
 
-    f = h5shell(wr.filename,'r')
-    dset= f[f.grep('data')[-1]]
-    buffers = dset.value
-    f.close()
-    # Plot the result
-    NUM = len(amps)
-    buff_mean = np.mean(buffers, axis=(2,3))
-    mean_state = np.mean(buff_mean, axis=0)
-
-    fig = plt.figure()
-    for i in range(NUM):
-        plt.plot(amps[i]*np.ones(buff_mean[:,i].size),
-                1e-3*buff_mean[:,i]/max(exp.measure_current,1e-7),
-                    '.', color='blue')
-    plt.plot(amps, 1e-3*mean_state/max(exp.measure_current,1e-7), '-', color='red')
-    plt.xlabel("AWG amplitude (V)", size=14);
-    plt.ylabel("Resistance (kOhm)", size=14);
-    plt.title("AWG Reset Amplitude Search")
-    plt.show()
+        for v in Vs:
+            plt.plot(v)
+        plt.show()
+        #
+        # fig = plt.figure(figsize=(4,4))
+        # plt.plot(Hs*1e3, Rs*1e-3,'-', lw=2)
+        # plt.ylim(Rs.min()*0.95e-3, Rs.max()*1.05e-3)
+        # plt.xlabel('Field (mT)', size=16)
+        # plt.ylabel(r'Resistance (k$\Omega$)', size=16)
+        # plt.title('Field Sweep\n{}'.format(sample_name), size=16)
+        # plt.show()
+    # cProfile.runctx('exp.run_sweeps()', globals(), locals(), filename="ResetSearch.prof")
+    # exp.shutdown_instruments()
+    #
+    # f = h5shell(wr.filename,'r')
+    # dset= f[f.grep('data')[-1]]
+    # buffers = dset.value
+    # f.close()
+    # # Plot the result
+    # NUM = len(amps)
+    # buff_mean = np.mean(buffers, axis=(2,3))
+    # mean_state = np.mean(buff_mean, axis=0)
+    #
+    # fig = plt.figure()
+    # for i in range(NUM):
+    #     plt.plot(amps[i]*np.ones(buff_mean[:,i].size),
+    #             1e-3*buff_mean[:,i]/max(exp.measure_current,1e-7),
+    #                 '.', color='blue')
+    # plt.plot(amps, 1e-3*mean_state/max(exp.measure_current,1e-7), '-', color='red')
+    # plt.xlabel("AWG amplitude (V)", size=14);
+    # plt.ylabel("Resistance (kOhm)", size=14);
+    # plt.title("AWG Reset Amplitude Search")
+    # plt.show()
