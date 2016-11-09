@@ -191,7 +191,7 @@ class Experiment(metaclass=MetaExperiment):
         # Things we can't metaclass
         self.output_connectors = {}
         for oc in self._output_connectors:
-            a = OutputConnector(name=oc, parent=self)
+            a = OutputConnector(name=oc, data_name=oc, parent=self)
             a.parent = self
             self.output_connectors[oc] = a
             setattr(self, oc, a)
@@ -341,7 +341,7 @@ class Experiment(metaclass=MetaExperiment):
             #the server on the BokehServerThread has started. Wait a second, here.
             time.sleep(3)
 
-            tabs = True # Tabs seem a bit sluggish in jupyter notebooks...
+            tabs = not run_in_notebook # Tabs seem a bit sluggish in jupyter notebooks...
             if tabs:
                 h = Tabs(tabs=[Panel(child=p.figure, title=p.name) for p in self.plotters])
             else:

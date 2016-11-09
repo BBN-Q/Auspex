@@ -25,7 +25,7 @@ class DataAxis(object):
         self.name         = str(name)
         self.points       = np.array(points)
         self.unit         = unit
-        
+
         if not hasattr(self, 'unstructured'):
             self.unstructured = False
 
@@ -129,6 +129,7 @@ class DataStreamDescriptor(object):
     """Axes information"""
     def __init__(self):
         super(DataStreamDescriptor, self).__init__()
+        self.data_name = "Data"
         self.axes = []
         self.params = {} # Parameters associated with each dataset
         self.parent = None
@@ -152,7 +153,7 @@ class DataStreamDescriptor(object):
     def data_dims(self):
         # Return dimension (length) of the data axes, exclude sweep axes (return 1 for each)
         dims = []
-        from auspex.sweep import SweepAxis
+
         for a in self.axes:
             if isinstance(a, SweepAxis):
                 dims.append(1)
@@ -236,7 +237,7 @@ class DataStreamDescriptor(object):
         names = [a.name for a in self.axes]
         if axis_name not in names:
             raise Exception("Couldn't pop axis {} from descriptor, it probably doesn't exist.".format(axis_name))
-        return self.axes.pop(names.index(axis_name))         
+        return self.axes.pop(names.index(axis_name))
 
     def num_points_through_axis(self, axis):
         if axis>=len(self.axes):
@@ -310,11 +311,11 @@ class DataStream(object):
             message = {"type": "data", "compression": "zlib", "data": zlib.compress(pickle.dumps(data, -1))}
         else:
             message = {"type": "data", "compression": "none", "data": data}
-        
+
         # This can be replaced with some other serialization method
         # and also should support sending via zmq.
         await self.queue.put(message)
-    
+
     async def push_event(self, event):
         message = {"type": "event", "compression": "none", "data": event}
         await self.queue.put(message)
@@ -355,15 +356,20 @@ class InputConnector(object):
         return "<InputConnector(name={})>".format(self.name)
 
 class OutputConnector(object):
-    def __init__(self, name="", parent=None, datatype=None):
+    def __init__(self, name="", data_name=None, parent=None, datatype=None):
         self.name = name
         self.output_streams = []
         self.points_taken = 0
         self.parent = parent
 
+        # if data_name is not none, then it is the origin of the whole chain
+        self.data_name = data_name
+
         # Set up a default descriptor, and add access
         # to its methods for convenience.
         self.descriptor = DataStreamDescriptor()
+        if self.data_name:
+            self.descriptor.data_name = self.data_name
         self.add_axis   = self.descriptor.add_axis
 
     # We allow the connectors itself to posess

@@ -81,7 +81,7 @@ class WriteToHDF5(Filter):
         # Create a 2D dataset with a 1D data column
         dtype = [(a, 'f') for a in axis_names]
         logger.debug("Data type for HDF5: %s", dtype)
-        dtype.append((stream.start_connector.name, 'f'))
+        dtype.append((desc.data_name, 'f'))
         if self.compress:
             data = self.file.create_dataset('data', (len(tuples),), dtype=dtype,
                                         chunks=True, maxshape=(None,),
@@ -99,8 +99,10 @@ class WriteToHDF5(Filter):
         if True not in [a.unstructured for a in axes]:
             for i, a in enumerate(axes):
                 self.file[a.name] = a.points
-                self.file['data'].dims.create_scale(self.file[a.name], a.name)
-                self.file['data'].dims[0].attach_scale(self.file[a.name])
+                data.dims.create_scale(self.file[a.name], a.name)
+                data.dims[0].attach_scale(self.file[a.name])
+                data[a.name] = tuples[:,i]
+        # Write the initial batch of coordinate tuples
 
         # Write pointer
         w_idx = 0
@@ -132,12 +134,12 @@ class WriteToHDF5(Filter):
                     data.resize((w_idx + message_data.size,))
                     tuples = np.append(tuples, np.array(stream.descriptor.tuples()), axis=0)
 
-                # Write to table
-                for i, axis_name in enumerate(axis_names):
-                    logger.debug("Setting %s to %s", axis_name, tuples[w_idx:w_idx+message_data.size, i])
-                    data[axis_name, w_idx:w_idx+message_data.size] = tuples[w_idx:w_idx+message_data.size, i]
+                    # Write to table
+                    for i, axis_name in enumerate(axis_names):
+                        logger.debug("Setting %s to %s", axis_name, tuples[w_idx:w_idx+message_data.size, i])
+                        data[axis_name, w_idx:w_idx+message_data.size] = tuples[w_idx:w_idx+message_data.size, i]
 
-                data[stream.start_connector.name, w_idx:w_idx+message_data.size] = message_data
+                data[desc.data_name, w_idx:w_idx+message_data.size] = message_data
 
                 self.file.flush()
                 w_idx += message_data.size
