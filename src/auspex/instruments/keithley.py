@@ -20,7 +20,7 @@ class Keithley2400(SCPIInstrument):
         self.name = "Keithley 2400 Sourcemeter"
 
     def connect(self, resource_name=None, interface_type=None):
-        super(Keithley2400, self).connect(resource_name=None, interface_type=None)
+        super(Keithley2400, self).connect(resource_name=resource_name, interface_type=interface_type)
         self.interface.write("format:data ascii")
         self.interface._resource.read_termination = "\n"
 

@@ -204,13 +204,16 @@ class M8190A(SCPIInstrument):
         resource_name += "::inst0::INSTR" #user guide recommends HiSLIP protocol
         super(M8190A, self).__init__(resource_name, *args, **kwargs)
         self.name = "M8190A AWG"
-        self.interface._resource.read_termination = u"\n"
 
         #Aliases for run/stop
         self._unfreeze()
         self.run = self.initiate
         self.stop = self.abort
         self._freeze()
+
+    def connect(self, resource_name=None, interface_type=None):
+        super(M8190A, self).connect(resource_name=resource_name, interface_type=interface_type)
+        self.interface._resource.read_termination = u"\n"
 
     def abort(self, channel=None):
         """Abort/stop signal generation on a channel"""

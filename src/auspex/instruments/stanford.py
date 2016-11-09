@@ -99,6 +99,9 @@ class SR830(SCPIInstrument):
     def __init__(self, resource_name, mode='current', **kwargs):
         super(SR830, self).__init__(resource_name, **kwargs)
         self.name = "SR830 Lockin Amplifier"
+
+    def connect(self, resource_name=None, interface_type=None):
+        super(SR830, self).connect(resource_name=resource_name, interface_type=interface_type)
         self.interface._resource.read_termination = u"\n"
 
     def measure_delay(self):
@@ -167,6 +170,9 @@ class SR865(SCPIInstrument):
     def __init__(self, resource_name, mode='current', **kwargs):
         super(SR865, self).__init__(resource_name, **kwargs)
         self.name = "SR865 Lockin Amplifier"
+
+    def connect(self, resource_name=None, interface_type=None):
+        super(SR865, self).connect(resource_name=resource_name, interface_type=interface_type)
         self.interface._resource.read_termination = u"\n"
 
     @property
