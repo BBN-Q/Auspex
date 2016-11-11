@@ -54,7 +54,7 @@ class SweptTestExperiment(Experiment):
     def init_streams(self):
         # Add a "base" data axis: say we are averaging 5 samples per trigger
         self.voltage.add_axis(DataAxis("samples", list(range(self.samples))))
-        
+
     def __repr__(self):
         return "<SweptTestExperiment>"
 
@@ -165,9 +165,9 @@ class SweepTestCase(unittest.TestCase):
                   [67, 3.6],
                   [68, 1.2]]
 
-        def rf(sweep_axis, num_points):
+        def rf(sweep_axis):
             logger.debug("Running refinement function.")
-            if sweep_axis.num_points() >= num_points:
+            if sweep_axis.num_points() >= 30:
                 return False
 
             first_points = np.array(sweep_axis.points[-10:])
@@ -179,7 +179,7 @@ class SweepTestCase(unittest.TestCase):
             logger.debug("Sweep points now: {}.".format(sweep_axis.points))
             return True
 
-        exp.add_sweep([exp.field, exp.freq], coords, refine_func=rf, refine_args=[30])
+        exp.add_sweep([exp.field, exp.freq], coords, refine_func=rf)
         exp.run_sweeps()
         self.assertTrue(os.path.exists("test_writehdf5_adaptive_unstructured-0000.h5"))
         self.assertTrue(wr.points_taken == 10*5*3)

@@ -113,15 +113,15 @@ class SweepTestCase(unittest.TestCase):
         edges = [(exp.voltage, pri.sink)]
         exp.set_graph(edges)
 
-        def rf(sweep_axis, num_points):
+        def rf(sweep_axis):
             logger.debug("Running refinement function.")
-            if sweep_axis.num_points() >= num_points:
+            if sweep_axis.num_points() >= 5:
                 return False
             sweep_axis.add_points(sweep_axis.points[-1]*2)
             return True
 
         exp.add_sweep(exp.field, np.linspace(0,100.0,11))
-        exp.add_sweep(exp.freq, [1.0, 2.0], refine_func=rf, refine_args=[5])
+        exp.add_sweep(exp.freq, [1.0, 2.0], refine_func=rf)
         exp.run_sweeps()
         self.assertTrue(pri.sink.input_streams[0].points_taken == 5*11*5)
 
