@@ -9,5 +9,5 @@
 import logging
 
 logger = logging.getLogger('auspex')
-logging.basicConfig(format='%(name)s-%(levelname)s: %(message)s')
+logging.basicConfig(format='%(name)s-%(levelname)s: %(asctime)s ----> %(message)s')
 logger.setLevel(logging.INFO)
