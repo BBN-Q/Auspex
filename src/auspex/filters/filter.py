@@ -118,6 +118,13 @@ class Filter(metaclass=MetaFilter):
                 logger.debug("Now has %d of %d points.", input_stream.points_taken, input_stream.num_points())
                 await self.process_data(message_data)
 
+            elif message['type'] == 'data_direct':
+                await self.process_direct(message_data)
+
     async def process_data(self, data):
-        """Generic pass through.  """
-        return data
+        """Process data coming through the filter pipeline"""
+        pass
+
+    async def process_direct(self, data):
+        """Process direct data, ignore things like the data descriptors."""
+        pass

@@ -184,6 +184,8 @@ class Experiment(metaclass=MetaExperiment):
 
         # Also keep references to all of the plot filters
         self.plotters = []
+        self.extra_plotters = []
+        self._extra_plots_to_streams = {}
 
         # ExpProgressBar object to display progress bars
         self.progressbar = None
@@ -274,6 +276,9 @@ class Experiment(metaclass=MetaExperiment):
         for oc in self.output_connectors.values():
             for os in oc.output_streams:
                 await os.push_event("done")
+        for p in self.extra_plotters:
+            stream = self._extra_plots_to_streams[p]
+            await stream.push_event("done")
 
     async def sweep(self):
         # Set any static parameters
@@ -288,7 +293,7 @@ class Experiment(metaclass=MetaExperiment):
 
         done = True
         while True:
-            done = self.sweeper.update()
+            await self.sweeper.update()
 
             # Run the procedure
             logger.debug("Starting a new run.")
@@ -298,7 +303,7 @@ class Experiment(metaclass=MetaExperiment):
             if self.progressbar is not None:
                 self.progressbar.update()
 
-            if done:
+            if self.sweeper.done():
                 logger.debug("Sweeper has finished.")
                 await self.declare_done()
                 break
@@ -311,13 +316,17 @@ class Experiment(metaclass=MetaExperiment):
         # Initialize the instruments and stream
         self.init_instruments()
 
-        # Call any final initialization on the filter pipeline
-        for n in self.nodes:
-            if hasattr(n, 'final_init'):
-                n.final_init()
-
         # Go and find any plotters
         self.plotters = [n for n in self.nodes if isinstance(n, Plotter)]
+
+        # We might have some additional plotters that are separate from
+        # The asyncio filter pipeline
+        self.plotters.extend(self.extra_plotters)
+
+        # Call any final initialization on the filter pipeline
+        for n in self.nodes + self.extra_plotters:
+            if hasattr(n, 'final_init'):
+                n.final_init()
 
         # Launch the bokeh-server if necessary.
         if len(self.plotters) > 0:
@@ -352,8 +361,6 @@ class Experiment(metaclass=MetaExperiment):
             doc = Document()
             doc.add_root(h)
             session = push_session(doc, session_id=sid)
-
-
 
             if run_in_notebook:
                 logger.info("Displaying in iPython notebook")
@@ -397,14 +404,15 @@ class Experiment(metaclass=MetaExperiment):
         # not the experiment's run method, so replace this
         # in the list of tasks.
         other_nodes = self.nodes[:]
+        other_nodes.extend(self.extra_plotters)
         other_nodes.remove(self)
         tasks = [n.run() for n in other_nodes]
 
         tasks.append(self.sweep())
         self.loop.run_until_complete(asyncio.gather(*tasks))
 
-    def add_sweep(self, parameters, sweep_list, refine_func=None, refine_args=None):
-        ax = SweepAxis(parameters, sweep_list, refine_func=refine_func, refine_args=refine_args)
+    def add_sweep(self, parameters, sweep_list, refine_func=None):
+        ax = SweepAxis(parameters, sweep_list, refine_func=refine_func)
         self.sweeper.add_sweep(ax)
         for oc in self.output_connectors.values():
             logger.debug("Adding sweep axis %s to connector %s.", ax, oc.name)
@@ -416,3 +424,17 @@ class Experiment(metaclass=MetaExperiment):
         else:
             parameters.value = sweep_list[0]
         return ax
+
+    def add_direct_plotter(self, plotter):
+        """A plotter that lives outside the filter pipeline, intended for advanced
+        use cases when plotting data during refinement."""
+        plotter_stream = DataStream()
+        plotter.sink.add_input_stream(plotter_stream)
+        self.extra_plotters.append(plotter)
+        self._extra_plots_to_streams[plotter] = plotter_stream
+
+    async def push_to_plot(self, plotter, data):
+        """Push data to a direct plotter."""
+
+        stream = self._extra_plots_to_streams[plotter]
+        await stream.push_direct(data)

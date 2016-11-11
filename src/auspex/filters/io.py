@@ -27,6 +27,7 @@ class WriteToHDF5(Filter):
         self.filename = filename
         self.points_taken = 0
         self.file = None
+        self.up_to_date = False
 
     def final_init(self):
         self.file = self.new_file()
@@ -63,7 +64,7 @@ class WriteToHDF5(Filter):
                 logger.debug("Create new directory: {}.".format(fulldir))
                 os.mkdir(fulldir)
         logger.debug("Create new data file: %s." %self.filename)
-        return h5py.File(self.filename, 'w')
+        return h5py.File(self.filename, 'w', libver='latest')
 
     async def run(self):
         stream     = self.sink.input_streams[0]
@@ -76,33 +77,37 @@ class WriteToHDF5(Filter):
         num_axes   = len(axes)
 
         # All of the combinations for the present values of the sweep parameters only
-        tuples     = np.array(stream.descriptor.tuples())
+        tuples     = stream.descriptor.tuples()
 
         # Create a 2D dataset with a 1D data column
         dtype = [(a, 'f') for a in axis_names]
         logger.debug("Data type for HDF5: %s", dtype)
         dtype.append((desc.data_name, 'f'))
         if self.compress:
-            data = self.file.create_dataset('data', (len(tuples),), dtype=dtype,
+            self.data = self.file.create_dataset('data', (len(tuples),), dtype=dtype,
                                         chunks=True, maxshape=(None,),
                                         compression='gzip')
+            # self.file.swmr_mode = True
         else:
-            data = self.file.create_dataset('data', (len(tuples),), dtype=dtype,
+            self.data = self.file.create_dataset('data', (len(tuples),), dtype=dtype,
                                         chunks=True, maxshape=(None,))
+            # self.file.swmr_mode = True
 
         # Write params into attrs
         for k,v in params.items():
             if k not in axis_names:
-                data.attrs[k] = v
+                self.data.attrs[k] = v
 
         # Include the fixed rectilinear axes if we have rectilinear sweeps
-        if True not in [a.unstructured for a in axes]:
-            for i, a in enumerate(axes):
-                self.file[a.name] = a.points
-                data.dims.create_scale(self.file[a.name], a.name)
-                data.dims[0].attach_scale(self.file[a.name])
-                data[a.name] = tuples[:,i]
-        # Write the initial batch of coordinate tuples
+        structured_axes = [a for a in axes if not a.unstructured]
+        for i, a in enumerate(structured_axes):
+            self.file[a.name] = a.points
+            self.data.dims.create_scale(self.file[a.name], a.name)
+            self.data.dims[0].attach_scale(self.file[a.name])
+
+        # Write the initial coordinate tuples
+        for i, a in enumerate(axis_names):
+            self.data[a,:] = tuples[:,i]
 
         # Write pointer
         w_idx = 0
@@ -125,21 +130,25 @@ class WriteToHDF5(Filter):
                 if not hasattr(message_data, 'size'):
                     message_data = np.array([message_data])
 
-                logger.debug('%s "%s" received %d points.', self.__class__.__name__, self.name, message_data.size)
+                logger.debug('%s "%s" received %d points: %f', self.__class__.__name__, self.name, message_data.size, message_data)
                 logger.debug("Now has %d of %d points.", stream.points_taken, stream.num_points())
 
+                self.up_to_date = (w_idx == self.data.len())
+
                 # Resize if necessary, also get the new set of sweep tuples since the axes must have changed
-                if w_idx + message_data.size >= data.len():
+                if w_idx + message_data.size > self.data.len():
+                    # Get new data size
+                    num_points = stream.descriptor.num_points()
+                    self.data.resize((num_points,))
+                    self.file.flush()
                     logger.debug("HDF5 stream was resized to %d points", w_idx + message_data.size)
-                    data.resize((w_idx + message_data.size,))
-                    tuples = np.append(tuples, np.array(stream.descriptor.tuples()), axis=0)
 
-                    # Write to table
+                    # Get and write new coordinate tuples
+                    tuples = stream.descriptor.tuples()
                     for i, axis_name in enumerate(axis_names):
-                        logger.debug("Setting %s to %s", axis_name, tuples[w_idx:w_idx+message_data.size, i])
-                        data[axis_name, w_idx:w_idx+message_data.size] = tuples[w_idx:w_idx+message_data.size, i]
+                        self.data[axis_name, w_idx:num_points] = tuples[w_idx:num_points, i]
 
-                data[desc.data_name, w_idx:w_idx+message_data.size] = message_data
+                self.data[desc.data_name, w_idx:w_idx+message_data.size] = message_data
 
                 self.file.flush()
                 w_idx += message_data.size

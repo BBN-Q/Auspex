@@ -12,6 +12,8 @@ import numbers
 import itertools
 import zlib
 import pickle
+import time
+import datetime
 
 import numpy as np
 from functools import reduce
@@ -28,7 +30,6 @@ class DataAxis(object):
 
         if not hasattr(self, 'unstructured'):
             self.unstructured = False
-
         # By definition data axes will be done after every experiment.run() call
         self.done         = True
 
@@ -38,17 +39,6 @@ class DataAxis(object):
     def add_points(self, points):
         self.points = np.append(self.points, points)
 
-    # def update(self, points=None, unit=None):
-    #     # Update points or unit
-    #     if points is not None:
-    #         if isinstance(points, int) or isinstance(points,float):
-    #             logger.warning("DataAxis '{}' receives a number: {}. Force converting to array.".format(self.name,points))
-    #             self.points = [points]
-    #         else:
-    #             self.points = list(points)
-    #     if unit is not None:
-    #         self.unit = str(unit)
-
     def __repr__(self):
         return "<DataAxis(name={}, points={}, unit={})>".format(
             self.name, self.points, self.unit)
@@ -56,7 +46,7 @@ class DataAxis(object):
 class SweepAxis(DataAxis):
     """ Structure for sweep axis, separate from DataAxis.
     Can be an unstructured axis, in which case 'parameter' is actually a list of parameters. """
-    def __init__(self, parameter, points = [], metadata=None, refine_func=None, refine_args=[]):
+    def __init__(self, parameter, points = [], metadata=None, refine_func=None):
 
         self.unstructured = hasattr(parameter, '__iter__')
         self.parameter    = parameter
@@ -70,7 +60,6 @@ class SweepAxis(DataAxis):
             self.value     = points[0]
 
         self.refine_func = refine_func
-        self.refine_args = refine_args
         self.step        = 0
         self.done        = False
         self.metadata    = metadata
@@ -86,11 +75,11 @@ class SweepAxis(DataAxis):
         else:
             self.points = np.append(self.points, points)
 
-    def update(self):
+    async def update(self):
         """ Update value after each run.
         If refine_func is None, loop through the list of points.
         """
-        if self.step < self.num_points():
+        if not self.done and self.step < self.num_points():
             self.value = self.points[self.step]
             logger.debug("Sweep Axis '{}' at step {} takes value: {}.".format(self.name,
                                                                                self.step,self.value))
@@ -98,10 +87,12 @@ class SweepAxis(DataAxis):
             self.step += 1
             self.done = False
 
-        if self.step==self.num_points():
+        if not self.done and self.step==self.num_points():
             # Check to see if we need to perform any refinements
+            await asyncio.sleep(0.1)
+            logger.debug("Refining on axis {}".format(self.name))
             if self.refine_func is not None:
-                if not self.refine_func(self, *self.refine_args):
+                if not await self.refine_func(self):
                     # Returns false if no refinements needed, otherwise adds points to list
                     self.step = 0
                     self.done = True
@@ -188,15 +179,10 @@ class DataStreamDescriptor(object):
     def tuples(self):
         vals = []
         for a in self.axes:
-            if isinstance(a, SweepAxis):
-                if a.unstructured:
-                    for p in a.parameter:
-                        vals.append([p.value])
-                else:
-                    vals.append([a.value])
-            else:
-                vals.append(a.points)
-        return list(itertools.product(*vals))
+            vals.append(a.points)
+        nested_list = list(itertools.product(*vals))
+        flattened_list = np.array([np.hstack(i) for i in nested_list])
+        return flattened_list
 
     def axis_names(self):
         # Returns all axis names included those from unstructured axes
@@ -319,6 +305,11 @@ class DataStream(object):
     async def push_event(self, event):
         message = {"type": "event", "compression": "none", "data": event}
         await self.queue.put(message)
+
+    async def push_direct(self, data):
+        message = {"type": "data_direct", "compression": "none", "data": data}
+        await self.queue.put(message)
+
 
 # These connectors are where we attached the DataStreams
 
