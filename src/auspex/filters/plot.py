@@ -16,6 +16,7 @@ from bokeh.models.renderers import GlyphRenderer
 
 from auspex.log import logger
 from auspex.filters.filter import Filter, InputConnector
+import matplotlib.pyplot as plt
 
 class Plotter(Filter):
     sink = InputConnector()
@@ -107,3 +108,57 @@ class Plotter(Filter):
         else:
             self.data_source.data["image"] = [np.reshape(self.plot_buffer, self.z_data.shape)]
         time.sleep(1.0)
+
+class MeshPlotter(Filter):
+    sink = InputConnector()
+
+    def __init__(self, *args, name="", plot_mode='real', notebook=False, **plot_args):
+        super(MeshPlotter, self).__init__(*args, name=name)
+        self.plot_mode = plot_mode
+        self.plot_args = plot_args
+        self.update_interval = 0.5
+        self.last_update = time.time()
+        self.run_in_notebook = notebook
+
+    def update_descriptors(self):
+        logger.info("Updating MeshPlotter %s descriptors based on input descriptor %s", self.name, self.sink.descriptor)
+        self.stream = self.sink.input_streams[0]
+        self.descriptor = self.sink.descriptor
+
+    def final_init(self):
+        # This should be a set of 2D coordinate tuples
+        if hasattr(self, 'descriptor'):
+            self.x_values = self.descriptor.axes[-1].points[:,0]
+            self.y_values = self.descriptor.axes[-1].points[:,1]
+        else:
+            self.x_values = [0,10]
+            self.y_values = [0,10]
+
+        xmax = max(self.x_values)
+        xmin = min(self.x_values)
+        ymax = max(self.y_values)
+        ymin = min(self.y_values)
+        # self.figure = Figure(x_range=[xmin, xmax], plot_width=600, plot_height=600, webgl=False)
+        # self.plot = self.figure.line(np.copy(np.linspace(0,10,10)), np.random.random(10), name=self.name)
+        self.figure = Figure(x_range=[xmin, xmax], y_range=[ymin, ymax], plot_width=600, plot_height=600, webgl=False)
+        self.plot   = self.figure.patches(xs=[[xmin, xmax, xmin],[xmin, xmax, xmax]],
+                                          ys=[[ymin, ymin, ymax],[ymax, ymax, xmin]],
+                                          fill_color=["#ff0000","#000000"],
+                                          line_color=None)
+        self.data_source = self.plot.data_source
+
+
+    async def process_direct(self, data):
+        xs, ys, vals = data
+        vals = np.array(vals)
+        xs = [list(el) for el in xs]
+        ys = [list(el) for el in ys]
+        vals   -= vals.min()
+        vals   /= vals.max()
+        colors = [tuple(el)[:3] for el in plt.cm.RdGy(vals)]
+        colors = ["#%02x%02x%02x" % (int(255*color[0]), int(255*color[1]), int(255*color[2])) for color in colors]
+
+        self.data_source.data = {'xs': xs, 'ys': ys, 'fill_color': colors}
+
+    async def on_done(self):
+        time.sleep(0.5)
