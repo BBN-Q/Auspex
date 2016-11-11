@@ -37,6 +37,7 @@ class Filter(metaclass=MetaFilter):
         self.name = name
         self.input_connectors = {}
         self.output_connectors = {}
+        self.experiment = None # Keep a reference to the parent experiment
 
         # For signaling to Quince that something is wrong
         self.out_of_spec = False

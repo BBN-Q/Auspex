@@ -143,7 +143,7 @@ class MeshPlotter(Filter):
         self.figure = Figure(x_range=[xmin, xmax], y_range=[ymin, ymax], plot_width=600, plot_height=600, webgl=False)
         self.plot   = self.figure.patches(xs=[[xmin, xmax, xmin],[xmin, xmax, xmax]],
                                           ys=[[ymin, ymin, ymax],[ymax, ymax, xmin]],
-                                          fill_color=["#ff0000","#000000"],
+                                          fill_color=["#000000","#000000"],
                                           line_color=None)
         self.data_source = self.plot.data_source
 
@@ -157,7 +157,10 @@ class MeshPlotter(Filter):
         vals   /= vals.max()
         colors = [tuple(el)[:3] for el in plt.cm.RdGy(vals)]
         colors = ["#%02x%02x%02x" % (int(255*color[0]), int(255*color[1]), int(255*color[2])) for color in colors]
-
+        self.figure.x_range.start = np.min(xs)
+        self.figure.x_range.end = np.max(xs)
+        self.figure.y_range.start = np.min(ys)
+        self.figure.y_range.end = np.max(ys)
         self.data_source.data = {'xs': xs, 'ys': ys, 'fill_color': colors}
 
     async def on_done(self):

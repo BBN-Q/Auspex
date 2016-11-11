@@ -22,9 +22,9 @@ from auspex.stream import OutputConnector, DataStreamDescriptor
 from auspex.filters.plot import Plotter, MeshPlotter
 from auspex.filters.io import WriteToHDF5
 from auspex.log import logger, logging
-
-import auspex.analysis.switching as sw
-from adapt import refine
+from auspex.refine import delaunay_refine_from_file
+# import auspex.analysis.switching as sw
+# from adapt import refine
 
 class TestExperiment(Experiment):
     """Here the run loop merely spews data until it fills up the stream. """
@@ -60,35 +60,11 @@ if __name__ == '__main__':
 
     # Construct the coarse grid
     coarse_ts = np.linspace(0.0, 10.0, 7)
-    coarse_vs = np.linspace(0.0, 10.0, 7)
+    coarse_vs = np.linspace(0.0, 7.5, 7)
     points    = [coarse_ts, coarse_vs]
     points    = list(itertools.product(*points))
 
-    async def refine_func(sweep_axis, max_points=500):
-        vals = wr.data.value['voltage']
-        amps = wr.data.value['amplitude']
-        durs = wr.data.value['duration']
-        points = np.array([durs,amps]).transpose()
-
-        new_points = refine.refine_scalar_field(points, vals, all_points=False,
-                                    criterion="integral", threshold = "one_sigma")
-        if len(points) + len(new_points) > max_points:
-            print("Reached maximum points ({}).".format(max_points))
-            return False
-        print("Reached {} points.".format(len(points) + len(new_points)))
-        sweep_axis.add_points(new_points)
-        exp.update_descriptors()
-
-        # Plot previous mesh
-        mesh, scale_factors = sw.scaled_Delaunay(points)
-        xs   = durs[mesh.simplices]/scale_factors[0]
-        ys   = amps[mesh.simplices]/scale_factors[1]
-        avg_vals = [np.mean(row) for row in vals[mesh.simplices]]
-
-        await exp.push_to_plot(fig1, [xs,ys,avg_vals])
-
-        time.sleep(0.1)
-        return True
+    refine_func = delaunay_refine_from_file(wr, 'duration', 'amplitude', 'voltage', max_points=1000, plotter=fig1)
 
     exp.add_sweep([exp.duration, exp.amplitude], points, refine_func=refine_func)
     exp.run_sweeps()
