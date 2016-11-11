@@ -22,7 +22,7 @@ class Attenuator(object):
         attenuator_interp = interp1d(df["Attenuation"], df["Control Voltage"])
         self.attenuator_lookup = lambda x : float(attenuator_interp(x))
         self.voltage_control_method = voltage_control_method
-        voltage_supply_method(3.0)
+        # voltage_supply_method(3.0)
 
     # Add a property setter only
     def set_attenuation(self, value):

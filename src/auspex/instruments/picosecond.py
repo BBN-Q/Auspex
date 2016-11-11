@@ -22,6 +22,9 @@ class Picosecond10070A(SCPIInstrument):
     def __init__(self, resource_name, *args, **kwargs):
         super(Picosecond10070A, self).__init__(resource_name, *args, **kwargs)
         self.name = "Picosecond 10070A Pulser"
+
+    def connect(self, resource_name=None, interface_type=None):
+        super(Picosecond10070A, self).connect(resource_name=resource_name, interface_type=interface_type)
         self.interface.write("header off")
         self.interface.write("trigger GPIB")
         self.interface._resource.read_termination = u"\n"
