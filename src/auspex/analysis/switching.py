@@ -15,103 +15,105 @@ import matplotlib as mpl
 import h5py
 
 # from auspex.log import logger
-import logging
+from auspex.log import logger
 
-logger = logging.getLogger('auspex')
-logging.basicConfig(format='%(name)s-%(levelname)s: %(message)s')
-logger.setLevel(logging.INFO)
+def load_switching_data(filename, start_state=None, failure=False,
+                        threshold=None,
+                        voltage_scale_factor=1.0, duration_scale_factor=1.0):
+    with h5py.File(filename, 'r') as f:
+        # Regular axes
+        states = f['state'][:]
+        reps   = f['attempt'][:]
+        # Unstructured axes
+        dat = f['data'][:].reshape((-1, reps.size, states.size))
+        Vs  = dat['voltage']
+        # Get the point tuples
+        durs   = dat['pulse_duration'][:,0,0]
+        amps   = dat['pulse_voltage'][:,0,0]
+        points = np.array([durs, amps]).transpose()
 
-def cluster(data, num_clusters=2):
+    if failure:
+        return points, reset_failure(Vs, start_state=start_state)
+    else:
+        return points, switching_phase(Vs, start_state=start_state, threshold=threshold)
+
+def switching_phase(data, **kwargs):
+    counts, start_stt = count_matrices(data, **kwargs)
+    switched_stt = int(1 - start_stt)
+
+    beta_as = 1 + counts[:,start_stt,switched_stt]
+    beta_bs = 1 + counts[:,start_stt,start_stt]
+
+    return np.vectorize(beta.mean)(beta_as, beta_bs)
+
+def clusterer(data, num_clusters=2):
     all_vals = data.flatten()
     all_vals.resize((all_vals.size,1))
-    logger.debug("Clustering data: %s" % data.__repr__())
-    logger.debug("Number of clusters: %d" % num_clusters)
+    logger.info("Number of clusters: %d" % num_clusters)
+
     init_guess = np.linspace(np.min(all_vals), np.max(all_vals), num_clusters)
     init_guess[[1,-1]] = init_guess[[-1,1]]
     init_guess.resize((num_clusters,1))
-    logger.debug("Initial guess: {}".format(init_guess))
-    clusterer = KMeans(init=init_guess, n_clusters=num_clusters)
-    state = clusterer.fit_predict(all_vals)
-    # Print mean of each cluster
+
+    clust = KMeans(init=init_guess, n_clusters=num_clusters)
+    state = clust.fit_predict(all_vals)
+
     for ct in range(num_clusters):
-        logger.info("Mean of %d-th cluster: %f" %(ct,np.mean(all_vals[state==ct])))
-    return clusterer
+        logger.info("Cluster {}: {} +/- {}".format(ct, all_vals[state==ct].mean(), all_vals[state==ct].std()))
+    return clust
 
-def average_data(data, avg_points):
-    return np.array([np.mean(d.reshape(avg_points, -1, order="F"), axis=0) for d in data])
+# def average_data(data, avg_points):
+#     return np.array([np.mean(d.reshape(avg_points, -1, order="F"), axis=0) for d in data])
+    # if display:
+    #     plt.figure()
+    #     for ct in range(num_clusters):
+    #         import seaborn as sns
+    #         sns.distplot(all_vals[state == ct], kde=False, norm_hist=False)
 
-def count_matrices(data, multiple=False, start_state=None, threshold=None, display=False):
+def count_matrices(data, start_state=None, threshold=None):
     num_clusters = 2
-    all_vals = data.flatten()
-    all_vals.resize((all_vals.size,1))
     if threshold is None:
-        clusterer = cluster(data)
-        state = clusterer.fit_predict(all_vals)
+        clust = clusterer(data)
+        state = clust.fit_predict(data.reshape(-1, 1)).reshape(data.shape)
     else:
         logger.debug("Cluster data based on threshold = {}".format(threshold))
-        state = [0 if val < threshold else 1 for val in all_vals]
-        state = np.array(state)
-    if display:
-        plt.figure()
-        for ct in range(num_clusters):
-            import seaborn as sns
-            sns.distplot(all_vals[state == ct], kde=False, norm_hist=False)
+        state = data > threshold
 
-    init_state  = state[::2]
-    initial_state_fractions = [np.sum(init_state == ct)/len(init_state) for ct in range(num_clusters)]
-    for ct, fraction in enumerate(initial_state_fractions):
+    init_state  = state[:,:,0]
+    final_state = state[:,:,1]
+    switched    = np.logical_xor(init_state, final_state)
+
+    init_state_frac = [np.mean(init_state == ct) for ct in range(num_clusters)]
+    for ct, fraction in enumerate(init_state_frac):
         logger.info("Initial fraction of state %d: %f" %(ct, fraction))
+
     if start_state is not None and start_state in range(num_clusters):
         start_stt = start_state
     else:
-        start_stt = np.argmax(initial_state_fractions)
-    logger.info("Start state set to state: %d" %start_stt)
+        start_stt = np.argmax(init_state_frac)
+    logger.info("Start state set to state: {}".format(start_stt))
+    logger.info("Switched state is state: {}".format(1-start_stt))
 
-    switched_stt = 1 - start_stt
-    logger.info("Switched state is state: %d" %switched_stt)
-    # print("Most frequenctly occuring initial state: {} (with {}% probability)".format(start_stt,
-    #                                                         initial_state_fractions[start_stt]))
-    if multiple:
-        multidata = data
-    else:
-        multidata = [data]
-    counts =[]
-    for buf in multidata:
-        if threshold is None:
-            state = clusterer.predict(buf.reshape((buf.size,1)))
-        else:
-            state = [0 if val < threshold else 1 for val in buf.reshape((buf.size,1))]
-            state = np.array(state)
-        init_state = state[::2]
-        final_state = state[1::2]
-        switched = np.logical_xor(init_state, final_state)
+    # This array contains a 2x2 count_matrix for each coordinate tuple
+    count_mat = np.zeros((init_state.shape[0], 2, 2))
 
-        count_mat = np.zeros((2,2), dtype=np.int)
+    # count_mat      = np.zeros((2,2), dtype=np.int)
+    count_mat[:,0,0] = np.logical_and(init_state == 0, np.logical_not(switched)).sum(axis=-1)
+    count_mat[:,0,1] = np.logical_and(init_state == 0, switched).sum(axis=-1)
+    count_mat[:,1,0] = np.logical_and(init_state == 1, switched).sum(axis=-1)
+    count_mat[:,1,1] = np.logical_and(init_state == 1, np.logical_not(switched)).sum(axis=-1)
 
-        count_mat[0,0] = np.sum(np.logical_and(init_state == 0, np.logical_not(switched) ))
-        count_mat[0,1] = np.sum(np.logical_and(init_state == 0, switched ))
-        count_mat[1,0] = np.sum(np.logical_and(init_state == 1, switched ))
-        count_mat[1,1] = np.sum(np.logical_and(init_state == 1, np.logical_not(switched) ))
-        counts.append(count_mat)
-    return counts, start_stt
-
-
-def switching_phase(data, **kwargs):
-    counts, start_stt = count_matrices(data, multiple=True, **kwargs)
-    switched_stt = int(1 - start_stt)
-    mean = np.array([beta.mean(1+c[start_stt,switched_stt],
-                               1+c[start_stt,start_stt]) for c in counts])
-    return mean
+    return count_mat, start_stt
 
 def reset_failure(data, **kwargs):
-    counts, start_stt = count_matrices(data, multiple=True, **kwargs)
+    counts, start_stt = count_matrices(data, **kwargs)
     switched_stt = int(1 - start_stt)
     num_failed = np.array([c[switched_stt,switched_stt] + c[switched_stt, start_stt] for c in counts])
     return num_failed
 
 def switching_BER(data, **kwargs):
     """ Process data for BER experiment. """
-    counts, start_stt = count_matrices(data, multiple=False, **kwargs)
+    counts, start_stt = count_matrices(data, **kwargs)
     count_mat = counts[0]
     switched_stt = int(1 - start_stt)
     mean = beta.mean(1+count_mat[start_stt,switched_stt],1+count_mat[start_stt,start_stt])
@@ -206,23 +208,23 @@ def crossover_pairs(points, values, threshold):
                 pairs.append([k,nb])
     return np.array(pairs)
 
-def load_switching_data(filename, start_state=None, failure=False,
-                        threshold=None, display=False,
-                        voltage_scale_factor=1.0, duration_scale_factor=1.0):
-    with h5py.File(filename, 'r') as f:
-        logger.debug("Read data from file: %s" % filename)
-        durations = duration_scale_factor*np.array([f['axes'][k].value for k in f['axes'].keys() if "duration-data" in k])
-        voltages  = voltage_scale_factor*np.array([f['axes'][k].value for k in f['axes'].keys() if "voltage-data" in k])
-        dsets     = np.array([f[k].value for k in f.keys() if "data" in k])
-        data      = np.concatenate(dsets, axis=0)
-        voltages  = np.concatenate(voltages, axis=0)
-        durations = np.concatenate(durations, axis=0)
-    data_mean = np.mean(data, axis=-1)
-    points = np.array([durations, voltages]).transpose()
-    if failure:
-        return points, reset_failure(data_mean,start_state=start_state, display=display)
-    else:
-        return points, switching_phase(data_mean,start_state=start_state,threshold=threshold, display=display)
+# def load_switching_data(filename, start_state=None, failure=False,
+#                         threshold=None, display=False,
+#                         voltage_scale_factor=1.0, duration_scale_factor=1.0):
+#     with h5py.File(filename, 'r') as f:
+#         logger.debug("Read data from file: %s" % filename)
+#         durations = duration_scale_factor*np.array([f['axes'][k].value for k in f['axes'].keys() if "duration-data" in k])
+#         voltages  = voltage_scale_factor*np.array([f['axes'][k].value for k in f['axes'].keys() if "voltage-data" in k])
+#         dsets     = np.array([f[k].value for k in f.keys() if "data" in k])
+#         data      = np.concatenate(dsets, axis=0)
+#         voltages  = np.concatenate(voltages, axis=0)
+#         durations = np.concatenate(durations, axis=0)
+#     data_mean = np.mean(data, axis=-1)
+#     points = np.array([durations, voltages]).transpose()
+#     if failure:
+#         return points, reset_failure(data_mean,start_state=start_state, display=display)
+#     else:
+#         return points, switching_phase(data_mean,start_state=start_state,threshold=threshold, display=display)
 
 def load_BER_data(filename):
     with h5py.File(filename, 'r') as f:
