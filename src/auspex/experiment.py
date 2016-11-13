@@ -9,6 +9,7 @@
 import inspect
 import time
 import itertools
+import logging
 import asyncio
 import signal
 import sys
@@ -200,7 +201,10 @@ class Experiment(metaclass=MetaExperiment):
 
         # Create the asyncio measurement loop
         self.loop = asyncio.get_event_loop()
-        self.loop.set_debug(True)
+
+        # Based on the logging level, infer whether we want asyncio debug
+        do_debug = logger.getEffectiveLevel() <= logging.DEBUG
+        self.loop.set_debug(do_debug)
 
         # Run the stream init
         self.init_streams()
