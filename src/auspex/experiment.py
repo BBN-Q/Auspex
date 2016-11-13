@@ -335,7 +335,7 @@ class Experiment(metaclass=MetaExperiment):
 
             from .plotting import BokehServerThread
             from bokeh.client import push_session
-            from bokeh.plotting import hplot
+            from bokeh.layouts import row, gridplot
             from bokeh.io import curdoc, curstate
             from bokeh.util.session_id import generate_session_id
             from bokeh.document import Document
@@ -353,14 +353,21 @@ class Experiment(metaclass=MetaExperiment):
 
             tabs = not run_in_notebook # Tabs seem a bit sluggish in jupyter notebooks...
             if tabs:
-                h = Tabs(tabs=[Panel(child=p.figure, title=p.name) for p in self.plotters])
+                container = Tabs(tabs=[Panel(child=p.figure, title=p.name) for p in self.plotters])
             else:
-                h = hplot(*[p.figure for p in self.plotters])
+                if len(self.plotters) <= 2:
+                    container = row(*[p.figure for p in self.plotters])
+                else:
+                    padded_list = self.plotters[:]
+                    if len(padded_list)%2 != 0:
+                        padded_list.append(None)
+                    grid = list(zip(*[iter(padded_list)]*2))
+                    container = gridplot(grid)
 
             curdoc().clear()
             sid = generate_session_id()
             doc = Document()
-            doc.add_root(h)
+            doc.add_root(container)
             session = push_session(doc, session_id=sid)
 
             if run_in_notebook:
