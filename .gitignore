@@ -10,3 +10,4 @@ config/config.json
 *.egg-info*
 *.dll
 *.log
+*.prof
