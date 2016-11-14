@@ -179,6 +179,8 @@ class ResetSearchExperiment(Experiment):
             pass
         self.arb.stop()
         self.keith.current = 0.0
+        self.mag.disconnect()
+        del self.mag
         # mag.zero()
 
 if __name__ == "__main__":
@@ -194,62 +196,29 @@ if __name__ == "__main__":
     amps = np.append(amps, np.flipud(amps))
     exp.amplitudes = amps
     exp.init_streams()
-    # exp.add_sweep(exp.repeats, np.arange(5))
 
-    wr          = WriteToHDF5(file_path)
+    wr         = WriteToHDF5(file_path)
     avg_sample = Averager('sample')
-    # avg_rep    = Averager('repeat')
-    fig1        = Plotter(name="Sample Averaged", plot_dims=1)
-    # fig2        = Plotter(name="Repeat Averaged", plot_dims=1)
+    fig1       = Plotter(name="Sample Averaged", plot_dims=1)
     edges = [(exp.voltage, avg_sample.sink),
              (avg_sample.final_average, wr.sink),
              (avg_sample.partial_average, fig1.sink)]
-            #  (avg_sample.final_average, avg_rep.sink)]
-            #  (avg_rep.partial_average, fig2.sink)
-            #  ]
     exp.set_graph(edges)
 
     exp.init_progressbar(num=1)
     exp.run_sweeps()
-    # import cProfile
-    # cProfile.runctx('exp.run_sweeps()', globals(), locals(), filename="ResetSearch.prof")
-    #
+
     with h5py.File(wr.filename) as f:
         amps = f['amplitude'].value[:]
         reps = f['repeat'].value[:]
         Vs   = f['data'].value['voltage'][:]
         Vs = Vs.reshape(reps.size, amps.size)
-
-        for v in Vs:
-            plt.plot(v)
+        Vs = Vs>(0.5*(Vs.max()+Vs.min()))
+        Vs = 2*Vs-1
+        fig = plt.figure(figsize=(4,4))
+        plt.ylim(Vs.min()*1.1, Vs.max()*1.1)
+        plt.xlabel('Reset Amplitude (V)', size=16)
+        plt.ylabel('Final State', size=16)
+        plt.title('Reset Pulse Search\n{}'.format(sample_name), size=16)
+        plt.plot(amps, Vs.mean(axis=0))
         plt.show()
-        #
-        # fig = plt.figure(figsize=(4,4))
-        # plt.plot(Hs*1e3, Rs*1e-3,'-', lw=2)
-        # plt.ylim(Rs.min()*0.95e-3, Rs.max()*1.05e-3)
-        # plt.xlabel('Field (mT)', size=16)
-        # plt.ylabel(r'Resistance (k$\Omega$)', size=16)
-        # plt.title('Field Sweep\n{}'.format(sample_name), size=16)
-        # plt.show()
-    # cProfile.runctx('exp.run_sweeps()', globals(), locals(), filename="ResetSearch.prof")
-    # exp.shutdown_instruments()
-    #
-    # f = h5shell(wr.filename,'r')
-    # dset= f[f.grep('data')[-1]]
-    # buffers = dset.value
-    # f.close()
-    # # Plot the result
-    # NUM = len(amps)
-    # buff_mean = np.mean(buffers, axis=(2,3))
-    # mean_state = np.mean(buff_mean, axis=0)
-    #
-    # fig = plt.figure()
-    # for i in range(NUM):
-    #     plt.plot(amps[i]*np.ones(buff_mean[:,i].size),
-    #             1e-3*buff_mean[:,i]/max(exp.measure_current,1e-7),
-    #                 '.', color='blue')
-    # plt.plot(amps, 1e-3*mean_state/max(exp.measure_current,1e-7), '-', color='red')
-    # plt.xlabel("AWG amplitude (V)", size=14);
-    # plt.ylabel("Resistance (kOhm)", size=14);
-    # plt.title("AWG Reset Amplitude Search")
-    # plt.show()
