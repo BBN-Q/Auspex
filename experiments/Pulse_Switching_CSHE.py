@@ -13,26 +13,32 @@ from auspex.instruments.keithley import Keithley2400
 from auspex.instruments.ami import AMI430
 from auspex.instruments.rfmd import Attenuator
 
+from PyDAQmx import *
+
 from auspex.experiment import FloatParameter, IntParameter, Experiment
 from auspex.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector
 from auspex.filters.debug import Print
 from auspex.filters.io import WriteToHDF5
 
-from PyDAQmx import *
+from auspex.experiment import FloatParameter, Experiment
+from auspex.stream import DataAxis, OutputConnector, DataStreamDescriptor
+from auspex.filters.io import WriteToHDF5
+from auspex.filters.average import Averager
+from auspex.filters.plot import Plotter
+from auspex.log import logger
 
-import itertools
-import numpy as np
-import asyncio
-import time, sys
-import h5py
-import matplotlib.pyplot as plt
-import pandas as pd
-from scipy.interpolate import interp1d
-
-import analysis.switching as sw
+import auspex.analysis.switching as sw
 from adapt import refine
 
-from auspex.log import logger
+import asyncio
+import itertools
+import numpy as np
+import time
+import datetime
+from scipy.interpolate import interp1d
+import matplotlib.pyplot as plt
+import pandas as pd
+import h5py
 
 # Experimental Topology
 # lockin AO 2 -> Analog Attenuator Vdd
@@ -41,74 +47,53 @@ from auspex.log import logger
 # AWG Sync Marker Out -> DAQmx PFI0
 # AWG Samp. Marker Out -> PSPL Trigger
 
-def arb_voltage_lookup(arb_calib="calibration/AWG_20160718.csv",
-                        midpoint_calib="calibration/midpoint_20160718.csv"):
-    df_midpoint = pd.read_csv(midpoint_calib, sep=",")
+def arb_voltage_lookup(arb_calib="calibration/AWG_20160901.csv"):
     df_arb = pd.read_csv(arb_calib, sep=",")
-    midpoint_lookup = interp1d(df_midpoint["Sample Voltage"],df_midpoint["Midpoint Voltage"])
-    arb_control_lookup = interp1d(df_arb["Midpoint Voltage"],df_arb["Control Voltage"])
-    sample_volts = []
-    control_volts = []
-    for volt in df_midpoint['Sample Voltage']:
-        mid_volt = midpoint_lookup(volt)
-        if (mid_volt > min(df_arb['Midpoint Voltage'])) and (mid_volt < max(df_arb['Midpoint Voltage'])):
-            sample_volts.append(volt)
-            control_volts.append(arb_control_lookup(mid_volt))
-    return interp1d(sample_volts, control_volts)
+    return interp1d(df_arb["Amp Out"], df_arb["Control Voltage"])
 
 class SwitchingExperiment(Experiment):
 
-    # Sample information
-    sample         = "Sample"
-    comment        = "Phase Diagram"
-    # Parameters
+    # Parameters and outputs
     field          = FloatParameter(default=0.0, unit="T")
     pulse_duration = FloatParameter(default=5.0e-9, unit="s")
     pulse_voltage  = FloatParameter(default=0.1, unit="V")
+    voltage        = OutputConnector()
 
     # Constants (set with attribute access if you want to change these!)
-    iteration       = 1
     attempts        = 1 << 10
-    settle_delay    = 50e-6
+    settle_delay    = 100e-6
     measure_current = 3.0e-6
     samps_per_trig  = 5
-
     polarity        = 1
     pspl_atten      = 4
-
     min_daq_voltage = 0.0
     max_daq_voltage = 0.4
-
     reset_amplitude = 0.2
     reset_duration  = 5.0e-9
 
-    # Things coming back
-    daq_buffer     = OutputConnector()
-
-    # Instrument resources
+    # Instrument Resources
     mag   = AMI430("192.168.5.109")
     lock  = SR865("USB0::0xB506::0x2000::002638::INSTR")
     pspl  = Picosecond10070A("GPIB0::24::INSTR")
-    atten = Attenuator("calibration/RFSA2113SB_HPD_20160706.csv", lock.set_ao2, lock.set_ao3)
+    atten = Attenuator("calibration/RFSA2113SB_HPD_20160901.csv", lock.set_ao2, lock.set_ao3)
     arb   = M8190A("192.168.5.108")
     keith = Keithley2400("GPIB0::25::INSTR")
 
+    def init_streams(self):
+        self.voltage.add_axis(DataAxis("sample", range(self.samps_per_trig)))
+        self.voltage.add_axis(DataAxis("state", range(2)))
+        self.voltage.add_axis(DataAxis("attempt", range(self.attempts)))
+
     def init_instruments(self):
 
-        # ===================
-        #    Setup the Keithley
-        # ===================
-
+        # Setup the Keithley
         self.keith.triad()
         self.keith.conf_meas_res(res_range=1e5)
         self.keith.conf_src_curr(comp_voltage=0.5, curr_range=1.0e-5)
         self.keith.current = self.measure_current
         self.mag.ramp()
 
-        # ===================
-        #    Setup the AWG
-        # ===================
-
+        # Setup the AWG
         self.arb.set_output(True, channel=1)
         self.arb.set_output(False, channel=2)
         self.arb.sample_freq = 12.0e9
@@ -173,10 +158,7 @@ class SwitchingExperiment(Experiment):
         self.arb.scenario_start_index = 0
         self.arb.run()
 
-        # ===================
-        #   Setup the NIDAQ
-        # ===================
-
+        # Setup the NIDAQ
         self.analog_input = Task()
         self.read = int32()
         self.buf_points = 2*self.samps_per_trig*self.attempts
@@ -188,10 +170,7 @@ class SwitchingExperiment(Experiment):
         self.analog_input.SetStartTrigRetriggerable(1)
         self.analog_input.StartTask()
 
-        # ===================
-        #   Setup the PSPL
-        # ===================
-
+        # Setup the PSPL
         self.pspl.amplitude = self.polarity*7.5*np.power(10, (-self.pspl_atten)/20.0)
         self.pspl.trigger_source = "EXT"
         self.pspl.trigger_level = 0.1
@@ -213,14 +192,6 @@ class SwitchingExperiment(Experiment):
         # Create hooks for relevant delays
         self.pulse_duration.add_post_push_hook(lambda: time.sleep(0.1))
 
-    def init_streams(self):
-        # Baked in data axes
-        descrip = DataStreamDescriptor()
-        descrip.add_axis(DataAxis("samples", range(self.samps_per_trig)))
-        descrip.add_axis(DataAxis("state", range(2)))
-        descrip.add_axis(DataAxis("attempts", range(self.attempts)))
-        self.daq_buffer.set_descriptor(descrip)
-
     async def run(self):
         """This is run for each step in a sweep."""
         self.arb.advance()
@@ -228,10 +199,10 @@ class SwitchingExperiment(Experiment):
         buf = np.empty(self.buf_points)
         self.analog_input.ReadAnalogF64(self.buf_points, -1, DAQmx_Val_GroupByChannel,
                                         buf, self.buf_points, byref(self.read), None)
-        await self.daq_buffer.push(buf)
+        await self.voltage.push(buf)
         # Seemingly we need to give the filters some time to catch up here...
         await asyncio.sleep(0.02)
-        logger.debug("Stream has filled {} of {} points".format(self.daq_buffer.points_taken, self.daq_buffer.num_points() ))
+        logger.debug("Stream has filled {} of {} points".format(self.voltage.points_taken, self.voltage.num_points() ))
 
     def shutdown_instruments(self):
         self.keith.current = 0.0e-5
@@ -245,50 +216,94 @@ class SwitchingExperiment(Experiment):
             pass
 
 if __name__ == '__main__':
-    exp = SwitchingExperiment()
-    exp.sample = "CSHE2-C3R6"
-    exp.comment = "Phase Diagram -  AP to P - Interations = 12"
-    exp.polarity = 1 # 1: AP to P; -1: P to AP
-    exp.iteration = 12
-    exp.field.value = 0.0126
-    exp.measure_current = 3e-6
-    wr = WriteToHDF5("data\CSHE-Switching\CSHE-Die2-C3R6\CSHE2-C3R6-AP2P_2016-06-29.h5")
-    # pr = Print()
-    edges = [(exp.daq_buffer, wr.data)]
-    exp.set_graph(edges)
-    exp.init_instruments()
 
-    coarse_ts = 1e-9*np.linspace(0.1, 5, 10) # List of durations
-    coarse_vs = np.linspace(0.5, 1.15, 10)
+    exp = SwitchingExperiment()
+    exp.field.value     = 0.007
+    exp.polarity        = 1 # 1: AP to P; -1: P to AP
+    exp.measure_current = 3e-6
+    exp.reset_amplitude = 0.78
+    exp.reset_duration  = 5.0e-9
+    exp.settle_delay    = 200e-6
+    exp.pspl_atten      = 3
+    max_points          = 100
+
+    sample_name = "CSHE-Die7-C6R7"
+    date        = datetime.datetime.today().strftime('%Y-%m-%d')
+    pol         = "APtoP" if exp.polarity < 0 else "PtoAP"
+    file_path   = "data\CSHE-Switching\{samp:}\{samp:}-PulseSwitching-{pol:}_{date:}.h5".format(pol=pol,samp=sample_name, date=date)
+
+    wr   = WriteToHDF5(file_path)
+    avg  = Averager('sample')
+
+    edges = [(exp.voltage, avg.sink),
+             (avg.final_average, wr.sink)]
+    exp.set_graph(edges)
+
+    # Construct the coarse grid
+    coarse_ts = np.linspace(0.1, 10.0, 7)*1e-9
+    coarse_vs = np.linspace(0.40, 0.90, 7)
     points    = [coarse_ts, coarse_vs]
     points    = list(itertools.product(*points))
 
-    main_sweep = exp.add_unstructured_sweep([exp.pulse_duration, exp.pulse_voltage], points)
-    figs = []
-    t1 = time.time()
-    for i in range(exp.iteration):
-        exp.reset()
-        exp.run_sweeps()
-        points, mean = sw.load_switching_data(wr.filename)
-        figs.append(sw.phase_diagram_mesh(points, mean, title="Iteration={}".format(i)))
-        new_points = refine.refine_scalar_field(points, mean, all_points=False,
-                                    criterion="integral", threshold = "one_sigma")
-        if new_points is None:
-            print("No more points can be added.")
-            break
-        #
-        print("Added {} new points.".format(len(new_points)))
-        print("Elapsed time: {}".format((time.time()-t1)/60))
-        time.sleep(3)
-        main_sweep.update_values(new_points)
+    # Add an extra plotter
+    fig1 = MeshPlotter(name="Switching Phase Diagram")
 
-    t2 = time.time()
-    # Shut down
-    exp.shutdown_instruments()
-    # For evaluation of adaptive method, plot the mesh
+    def refine_func(sweep_axis):
+        points, mean = sw.load_switching_data(wr.filename)
+        new_points   = refine.refine_scalar_field(points, mean, all_points=False,
+                                    criterion="integral", threshold = "one_sigma")
+        if len(points) + len(new_points) > max_points:
+            print("Reached maximum points ({}).".format(max_points))
+            return False
+        print("Reached {} points.".format(len(points) + len(new_points)))
+        sweep_axis.add_points(new_points)
+
+        # Plot previous mesh
+        x = [list(el) for el in points[mesh.simplices,0]]
+        y = [list(el) for el in points[mesh.simplices,1]]
+        val = [np.mean(vals) for vals in mean[mesh.simplices]]
+
+        desc = DataStreamDescriptor()
+        desc.add_axis(sweep_axis)
+        exp.push_to_plot(fig1, desc, points)
+
+        time.sleep(1)
+        return True
+
+    sweep_axis = exp.add_sweep([exp.pulse_duration, exp.pulse_voltage],
+                               points, refine_func=refine_func)
+
+    # Borrow the descriptor from the main sweep and use it for our direct plotter
+
+    exp.add_plotter(fig1, desc)
+
+    exp.run_sweeps()
+
+    points, mean = sw.load_switching_data(wr.filename)
     mesh, scale_factors = sw.scaled_Delaunay(points)
     fig_mesh = sw.phase_diagram_mesh(points, mean, shading='gouraud')
     plt.triplot(mesh.points[:,0]/scale_factors[0],
                 mesh.points[:,1]/scale_factors[1], mesh.simplices.copy());
 
-    # plt.show()
+    plt.show()
+
+    # t1 = time.time()
+    # for i in range(exp.iterations):
+    #     exp.reset()
+    #     exp.run_sweeps()
+    #     points, mean = sw.load_switching_data(wr.filename)
+    #     figs.append(sw.phase_diagram_mesh(points, mean, title="Iteration={}".format(i)))
+    #     new_points = refine.refine_scalar_field(points, mean, all_points=False,
+    #                                 criterion="integral", threshold = "one_sigma")
+    #     if new_points is None:
+    #         print("No more points can be added.")
+    #         break
+    #     print("Added {} new points.".format(len(new_points)))
+    #     print("Elapsed time: {}".format((time.time()-t1)/60))
+    #     time.sleep(3)
+    #     main_sweep.update_values(new_points)
+
+    # t2 = time.time()
+    # Shut down
+    # exp.shutdown_instruments()
+    # For evaluation of adaptive method, plot the mesh

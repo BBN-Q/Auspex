@@ -13,9 +13,12 @@ from auspex.instruments.keithley import Keithley2400
 from auspex.instruments.ami import AMI430
 from auspex.instruments.rfmd import Attenuator
 
-from auspex.experiment import FloatParameter, IntParameter, Experiment
-from auspex.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector
+from auspex.experiment import Experiment
+from auspex.parameter import FloatParameter
+from auspex.stream import OutputConnector
 from auspex.filters.io import WriteToHDF5
+from auspex.filters.plot import Plotter
+from auspex.log import logger
 
 from PyDAQmx import *
 
@@ -61,16 +64,12 @@ class SWRExperiment(Experiment):
     with varying V (and durations?)
     """
 
-    # Sample information
-    sample         = "CSHE"
-    comment        = "Switching Rate for V << V0"
-
-    # Parameters
     field          = FloatParameter(default=0.0, unit="T")
     pulse_duration = FloatParameter(default=1.0e-9, unit="s")
     pulse_voltage  = FloatParameter(default=0.1, unit="V")
+    daq_buffer     = OutputConnector()
 
-    attempts       = 1 << 10
+    attempts        = 1 << 10
     settle_delay    = 50e-6
     measure_current = 3.0e-6
     samps_per_trig  = 5
@@ -83,15 +82,16 @@ class SWRExperiment(Experiment):
     reset_amplitude = 0.1
     reset_duration  = 5.0e-9
 
-    # Things coming back
-    daq_buffer     = OutputConnector()
-
-    # Instrument resources
     mag   = AMI430("192.168.5.109")
     lock  = SR865("USB0::0xB506::0x2000::002638::INSTR")
     pspl  = Picosecond10070A("GPIB0::24::INSTR")
     arb   = M8190A("192.168.5.108")
     keith = Keithley2400("GPIB0::25::INSTR")
+
+    def init_streams(self):
+        self.daq_buffer.add_axis(DataAxis("samples", range(self.samps_per_trig)))
+        self.daq_buffer.add_axis(DataAxis("state", range(2)))
+        self.daq_buffer.add_axis(DataAxis("attempts", range(self.attempts)))
 
     def init_instruments(self):
 
@@ -192,16 +192,7 @@ class SWRExperiment(Experiment):
         self.arb.scenario_start_index = 0
         self.arb.run()
 
-    def init_streams(self):
-        # Baked in data axes
-        descrip = DataStreamDescriptor()
-        descrip.add_axis(DataAxis("samples", range(self.samps_per_trig)))
-        descrip.add_axis(DataAxis("state", range(2)))
-        descrip.add_axis(DataAxis("attempts", range(self.attempts)))
-        self.daq_buffer.set_descriptor(descrip)
-
     async def run(self):
-        """We are no longer using the sweeper."""
         # Keep track of the previous values
         logger.debug("Waiting for filters.")
         await asyncio.sleep(1.0)
