@@ -130,7 +130,7 @@ class WriteToHDF5(Filter):
                 if not hasattr(message_data, 'size'):
                     message_data = np.array([message_data])
 
-                logger.debug('%s "%s" received %d points: %f', self.__class__.__name__, self.name, message_data.size, message_data)
+                logger.debug('%s "%s" received %d points', self.__class__.__name__, self.name, message_data.size)
                 logger.debug("Now has %d of %d points.", stream.points_taken, stream.num_points())
 
                 self.up_to_date = (w_idx == self.data.len())

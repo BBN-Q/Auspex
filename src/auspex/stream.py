@@ -79,7 +79,7 @@ class SweepAxis(DataAxis):
         """ Update value after each run.
         If refine_func is None, loop through the list of points.
         """
-        if not self.done and self.step < self.num_points():
+        if self.step < self.num_points():
             self.value = self.points[self.step]
             logger.debug("Sweep Axis '{}' at step {} takes value: {}.".format(self.name,
                                                                                self.step,self.value))

@@ -104,7 +104,7 @@ class SweepTestCase(unittest.TestCase):
         edges = [(exp.voltage, wr.sink)]
         exp.set_graph(edges)
 
-        def rf(sweep_axis, num_points):
+        async def rf(sweep_axis, num_points=5):
             logger.debug("Running refinement function.")
             if sweep_axis.num_points() >= num_points:
                 return False
@@ -113,7 +113,7 @@ class SweepTestCase(unittest.TestCase):
             return True
 
         exp.add_sweep(exp.field, np.linspace(0,100.0,11))
-        exp.add_sweep(exp.freq, [1.0, 2.0], refine_func=rf, refine_args=[5])
+        exp.add_sweep(exp.freq, [1.0, 2.0], refine_func=rf)
         exp.run_sweeps()
         self.assertTrue(os.path.exists("test_writehdf5_adaptive-0000.h5"))
         self.assertTrue(wr.points_taken == 5*11*5)
@@ -165,7 +165,7 @@ class SweepTestCase(unittest.TestCase):
                   [67, 3.6],
                   [68, 1.2]]
 
-        def rf(sweep_axis):
+        async def rf(sweep_axis):
             logger.debug("Running refinement function.")
             if sweep_axis.num_points() >= 30:
                 return False
