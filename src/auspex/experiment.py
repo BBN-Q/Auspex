@@ -390,6 +390,7 @@ class Experiment(metaclass=MetaExperiment):
                 bokeh_thread.join()
 
             self.shutdown_instruments()
+            self.reset()
 
             for instrument in self._instruments.values():
                 instrument.disconnect()
