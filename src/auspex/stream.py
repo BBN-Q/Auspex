@@ -51,7 +51,7 @@ class SweepAxis(DataAxis):
         self.unstructured = hasattr(parameter, '__iter__')
         self.parameter    = parameter
         if self.unstructured:
-            super(SweepAxis, self).__init__("Unstructured", points)
+            super(SweepAxis, self).__init__("+".join([p.name for p in parameter]), points)
             self.unit  = [p.unit for p in parameter]
             self.value = points[0]
         else:

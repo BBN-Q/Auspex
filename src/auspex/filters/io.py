@@ -98,12 +98,20 @@ class WriteToHDF5(Filter):
             if k not in axis_names:
                 self.data.attrs[k] = v
 
-        # Include the fixed rectilinear axes if we have rectilinear sweeps
-        structured_axes = [a for a in axes if not a.unstructured]
-        for i, a in enumerate(structured_axes):
-            self.file[a.name] = a.points
+        # Create a table for the DataStreamDescriptor
+        ref_dtype = h5py.special_dtype(ref=h5py.Reference)
+        self.descriptor = self.file.create_dataset("descriptor", (len(axes),), dtype=ref_dtype)
+
+        # Associated axis dimensions with the data and add
+        # references to the descriptor.
+        for i, a in enumerate(axes):
+            if a.unstructured:
+                self.file.create_dataset(a.name, (a.num_points(),len(a.parameter)), maxshape=(None,len(a.parameter)) )
+            else:
+                self.file[a.name] = a.points
             self.data.dims.create_scale(self.file[a.name], a.name)
             self.data.dims[0].attach_scale(self.file[a.name])
+            self.descriptor[i] = self.file[a.name].ref
 
         # Write the initial coordinate tuples
         for i, a in enumerate(axis_names):
@@ -140,13 +148,17 @@ class WriteToHDF5(Filter):
                     # Get new data size
                     num_points = stream.descriptor.num_points()
                     self.data.resize((num_points,))
-                    self.file.flush()
                     logger.debug("HDF5 stream was resized to %d points", w_idx + message_data.size)
 
-                    # Get and write new coordinate tuples
+                    # Get and write new coordinate tuples to the main
+                    # data set as well as the individual axis tables.
                     tuples = stream.descriptor.tuples()
                     for i, axis_name in enumerate(axis_names):
                         self.data[axis_name, w_idx:num_points] = tuples[w_idx:num_points, i]
+                    for i, a in enumerate(axes):
+                        if a.unstructured and a.num_points() > self.file[a.name].len():
+                            self.file[a.name].resize((a.num_points(),len(a.parameter)))
+                            self.file[a.name][:] = a.points
 
                 self.data[desc.data_name, w_idx:w_idx+message_data.size] = message_data
 
