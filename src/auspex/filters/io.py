@@ -106,12 +106,19 @@ class WriteToHDF5(Filter):
         # references to the descriptor.
         for i, a in enumerate(axes):
             if a.unstructured:
-                self.file.create_dataset(a.name, (a.num_points(),len(a.parameter)), maxshape=(None,len(a.parameter)) )
+                name = "+".join(a.name)
+                dtype = [(p.name, 'f') for p in a.parameter]
+                self.file.create_dataset(name, (a.num_points(),), dtype=dtype, maxshape=(None,) )
+                for j, (col_name, col_unit) in enumerate(zip(a.name, a.unit)):
+                    self.file[name][col_name,:] = a.points[:,j]
+                    self.file[name].attrs['unit_'+col_name] = col_unit
             else:
-                self.file[a.name] = a.points
-            self.data.dims.create_scale(self.file[a.name], a.name)
-            self.data.dims[0].attach_scale(self.file[a.name])
-            self.descriptor[i] = self.file[a.name].ref
+                name = a.name
+                self.file[name] = a.points
+                self.file[name].attrs['unit'] = "None" if a.unit is None else a.unit
+            self.data.dims.create_scale(self.file[name], name)
+            self.data.dims[0].attach_scale(self.file[name])
+            self.descriptor[i] = self.file[name].ref
 
         # Write the initial coordinate tuples
         for i, a in enumerate(axis_names):
@@ -156,9 +163,12 @@ class WriteToHDF5(Filter):
                     for i, axis_name in enumerate(axis_names):
                         self.data[axis_name, w_idx:num_points] = tuples[w_idx:num_points, i]
                     for i, a in enumerate(axes):
-                        if a.unstructured and a.num_points() > self.file[a.name].len():
-                            self.file[a.name].resize((a.num_points(),len(a.parameter)))
-                            self.file[a.name][:] = a.points
+                        if a.unstructured:
+                            name = "+".join(a.name)
+                            if a.num_points() > self.file[name].len():
+                                self.file[name].resize((a.num_points(),))
+                                for j, col_name in enumerate(a.name):
+                                    self.file[name][col_name,:] = a.points[:,j]
 
                 self.data[desc.data_name, w_idx:w_idx+message_data.size] = message_data
 

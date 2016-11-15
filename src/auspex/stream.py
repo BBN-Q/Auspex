@@ -24,14 +24,23 @@ class DataAxis(object):
     """An axis in a data stream"""
     def __init__(self, name, points=[], unit=None):
         super(DataAxis, self).__init__()
-        self.name         = str(name)
+        if isinstance(name, list):
+            self.unstructured = True
+            self.name = name
+        else:
+            self.unstructured = False
+            self.name         = str(name)
         self.points       = np.array(points)
         self.unit         = unit
 
-        if not hasattr(self, 'unstructured'):
-            self.unstructured = False
         # By definition data axes will be done after every experiment.run() call
         self.done         = True
+
+        if self.unstructured:
+            if unit is not None and len(name) != len(unit):
+                raise ValueError("DataAxis unit length {} and tuples length {} must match.".format(len(unit),len(name)))
+        if self.unstructured and len(name) != len(points[0]):
+            raise ValueError("DataAxis points length {} and names length {} must match.".format(len(points[0]), len(name)))
 
     def num_points(self):
         return len(self.points)
@@ -51,12 +60,11 @@ class SweepAxis(DataAxis):
         self.unstructured = hasattr(parameter, '__iter__')
         self.parameter    = parameter
         if self.unstructured:
-            super(SweepAxis, self).__init__("+".join([p.name for p in parameter]), points)
-            self.unit  = [p.unit for p in parameter]
+            unit = [p.unit for p in parameter]
+            super(SweepAxis, self).__init__([p.name for p in parameter], points=points, unit=unit)
             self.value = points[0]
         else:
-            super(SweepAxis, self).__init__(parameter.name, points)
-            self.unit = parameter.unit
+            super(SweepAxis, self).__init__(parameter.name, points, unit=parameter.unit)
             self.value     = points[0]
 
         self.refine_func = refine_func
