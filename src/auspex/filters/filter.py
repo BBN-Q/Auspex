@@ -12,6 +12,7 @@ import pickle
 import numpy as np
 from concurrent.futures import FIRST_COMPLETED
 
+from auspex.parameter import Parameter
 from auspex.stream import DataStream, InputConnector, OutputConnector
 from auspex.log import logger
 
@@ -23,6 +24,8 @@ class MetaFilter(type):
         logger.debug("Adding connectors to %s", name)
         self._input_connectors  = []
         self._output_connectors = []
+        self._parameters        = []
+        self.quince_parameters  = []
         for k,v in dct.items():
             if isinstance(v, InputConnector):
                 logger.debug("Found '%s' input connector.", k)
@@ -30,9 +33,15 @@ class MetaFilter(type):
             elif isinstance(v, OutputConnector):
                 logger.debug("Found '%s' output connector.", k)
                 self._output_connectors.append(k)
+            elif isinstance(v, Parameter):
+                logger.debug("Found '%s' parameter.", k)
+                if v.name is None:
+                    v.name = k
+                self._parameters.append(k)
 
 class Filter(metaclass=MetaFilter):
     """Any node on the graph that takes input streams with optional output streams"""
+
     def __init__(self, name=None, **kwargs):
         self.name = name
         self.input_connectors = {}

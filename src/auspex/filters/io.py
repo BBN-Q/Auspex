@@ -12,6 +12,7 @@ import h5py
 import numpy as np
 import os.path
 
+from auspex.parameter import Parameter
 from auspex.stream import DataStreamDescriptor
 from auspex.log import logger
 from auspex.filters.filter import Filter, InputConnector, OutputConnector
@@ -21,15 +22,19 @@ class WriteToHDF5(Filter):
     """Writes data to file."""
 
     sink = InputConnector()
-    def __init__(self, filename, compress=True, **kwargs):
+    filename = Parameter()
+
+    def __init__(self, filename=None, compress=True, **kwargs):
         super(WriteToHDF5, self).__init__(**kwargs)
         self.compress = compress
-        self.filename = filename
+        self.filename.value = filename
         self.points_taken = 0
         self.file = None
         self.up_to_date = False
 
     def final_init(self):
+        if not self.filename.value:
+            raise Exception("Filename never supplied to writer.")
         self.file = self.new_file()
 
     def new_filename(self):
