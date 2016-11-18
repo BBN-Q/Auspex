@@ -14,22 +14,28 @@ import numpy as np
 from bokeh.plotting import Figure
 from bokeh.models.renderers import GlyphRenderer
 
+from auspex.parameter import Parameter, IntParameter
 from auspex.log import logger
 from auspex.filters.filter import Filter, InputConnector
 import matplotlib.pyplot as plt
 
 class Plotter(Filter):
-    sink = InputConnector()
+    sink      = InputConnector()
+    plot_dims = IntParameter(value_range=(1,2), snap=1)
+    plot_mode = Parameter(allowed_values=["real", "imaginary", "quad"], default="real")
 
-    def __init__(self, *args, name="", plot_dims=None, plot_mode='real', notebook=False, **plot_args):
-
+    def __init__(self, *args, name="", plot_dims=None, plot_mode=None, notebook=False, **plot_args):
         super(Plotter, self).__init__(*args, name=name)
-        self.plot_dims = plot_dims
-        self.plot_mode = plot_mode
+        if plot_dims:
+            self.plot_dims.value = plot_dims
+        if plot_mode:
+            self.plot_mode.value = plot_mode
         self.plot_args = plot_args
         self.update_interval = 0.5
         self.last_update = time.time()
         self.run_in_notebook = notebook
+
+        self.quince_parameters = [self.plot_dims, self.plot_mode]
 
     def update_descriptors(self):
         logger.info("Updating Plotter %s descriptors based on input descriptor %s", self.name, self.sink.descriptor)
@@ -39,18 +45,18 @@ class Plotter(Filter):
     def final_init(self):
 
         # Determine the plot dimensions
-        if self.plot_dims is None:
+        if self.plot_dims.value is None:
             if len(self.descriptor.axes) > 1:
-                self.plot_dims = 2
+                self.plot_dims.value = 2
             else:
-                self.plot_dims = 1
+                self.plot_dims.value = 1
 
         # Check the descriptor axes
         num_axes = len(self.descriptor.axes)
-        if self.plot_dims > num_axes:
+        if self.plot_dims.value > num_axes:
             raise Exception("Cannot plot in more dimensions than there are data axes.")
 
-        if self.plot_dims == 1:
+        if self.plot_dims.value == 1:
             self.points_before_clear = self.descriptor.axes[-1].num_points()
         else:
             self.points_before_clear = self.descriptor.axes[-1].num_points() * self.descriptor.axes[-2].num_points()
@@ -60,7 +66,7 @@ class Plotter(Filter):
         xmax = max(self.x_values)
         xmin = min(self.x_values)
 
-        if self.plot_dims == 1:
+        if self.plot_dims.value == 1:
             self.figure = Figure(x_range=[xmin, xmax], plot_width=600, plot_height=600, webgl=False)
             self.plot = self.figure.line(np.copy(self.x_values), np.nan*np.ones(self.points_before_clear), name=self.name)
         else:
@@ -92,7 +98,7 @@ class Plotter(Filter):
             self.plot_buffer[self.idx:self.idx+data.size] = data.flatten()
             self.idx += data.size
 
-        if self.plot_dims == 1:
+        if self.plot_dims.value == 1:
             if (time.time() - self.last_update >= self.update_interval):
                 self.data_source.data["y"] = np.copy(self.plot_buffer)
                 self.last_update = time.time()
@@ -103,7 +109,7 @@ class Plotter(Filter):
                 self.last_update = time.time()
 
     async def on_done(self):
-        if self.plot_dims == 1:
+        if self.plot_dims.value == 1:
             self.data_source.data["y"] = np.copy(self.plot_buffer)
         else:
             self.data_source.data["image"] = [np.reshape(self.plot_buffer, self.z_data.shape)]

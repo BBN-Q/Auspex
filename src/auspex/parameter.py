@@ -97,6 +97,9 @@ class Parameter(object):
             
             param_dict['snap'] = self.snap
         
+        if self.default:
+            param_dict['default'] = self.default
+
         return param_dict
 
     def assign_method(self, method):

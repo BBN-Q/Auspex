@@ -20,7 +20,7 @@ class Averager(Filter):
     sink            = InputConnector()
     partial_average = OutputConnector()
     final_average   = OutputConnector()
-    axis            = Parameter()
+    axis            = Parameter(allowed_values=[""])
 
     def __init__(self, averaging_axis=None, **kwargs):
         super(Averager, self).__init__(**kwargs)
@@ -29,6 +29,8 @@ class Averager(Filter):
         self.points_before_partial_average = None
         self.sum_so_far = None
         self.num_averages = None
+
+        self.quince_parameters = [self.axis]
 
     # @property
     # def axis(self):
@@ -46,6 +48,8 @@ class Averager(Filter):
         logger.debug('Updating averager "%s" descriptors based on input descriptor: %s.', self.name, self.sink.descriptor)
         descriptor_in = self.sink.descriptor
         names = [a.name for a in descriptor_in.axes]
+
+        self.axis.allowed_values = names
 
         if self.axis.value is None:
             self.axis.value = descriptor_in.axes[0].name

@@ -16,20 +16,19 @@ class AlazarStreamSelector(Filter):
     source  = OutputConnector()
     channel = IntParameter(value_range=(1,2), snap=1)
 
-    quince_parameters = ["channel"]
-
     def __init__(self, name=""):
         super(AlazarStreamSelector, self).__init__(name=name)
         self.channel.value = 1 # Either 1 or 2
+        self.quince_parameters = [self.channel]
 
 class X6StreamSelector(Filter):
     """Digital demodulation and filtering to select a particular frequency multiplexed channel"""
 
     sink   = InputConnector()
     source = OutputConnector()
-    channel       = IntParameter(value_range=(1,4), snap=1)
+    channel       = IntParameter(value_range=(1,3), snap=1)
     demod_channel = IntParameter(value_range=(1,3), snap=1)
-    stream_type   = Parameter(allowed_values=["Raw", "Demodulated", "Integrated"])
+    stream_type   = Parameter(allowed_values=["Raw", "Demodulated", "Integrated"], default='Demodulated')
 
     def __init__(self, name=""):
         super(X6StreamSelector, self).__init__(name=name)
