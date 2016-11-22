@@ -29,11 +29,11 @@ from auspex.experiment import FloatParameter
 from auspex.instruments.X6 import X6Channel
 from auspex.instruments.alazar import AlazarChannel
 
-def strip_vendor_names(instr_name):
-    vns = ["Agilent", "Alazar", "Keysight", "Holzworth", "Yoko", "Yokogawa"]
-    for vn in vns:
-        instr_name = instr_name.replace(vn, "")
-    return instr_name
+# def strip_vendor_names(instr_name):
+#     vns = ["Agilent", "Alazar", "Keysight", "Holzworth", "Yoko", "Yokogawa"]
+#     for vn in vns:
+#         instr_name = instr_name.replace(vn, "")
+#     return instr_name
 
 def correct_resource_name(resource_name):
     substs = {"USB::": "USB0::", }
@@ -136,7 +136,7 @@ class QubitExpFactory(object):
         for instr_name, instr_par in experiment.instrument_settings['instrDict'].items():
             if instr_par['enabled']:
                 # This should go away as auspex and pyqlab converge on naming schemes
-                instr_type = strip_vendor_names(instr_par['x__class__'])
+                instr_type = instr_par['x__class__']
                 # Instantiate the desired instrument
                 if instr_type in module_map:
                     logger.debug("Found instrument class %s for '%s' at loc %s when loading experiment settings.", instr_type, instr_name, instr_par['address'])
