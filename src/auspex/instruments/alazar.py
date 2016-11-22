@@ -46,7 +46,7 @@ class AlazarChannel(DigitizerChannel):
             if hasattr(self, name):
                 setattr(self, name, value)
 
-class ATS9870(Instrument):
+class AlazarATS9870(Instrument):
     """Alazar ATS9870 digitizer"""
     instrument_type = "Digitizer"
 

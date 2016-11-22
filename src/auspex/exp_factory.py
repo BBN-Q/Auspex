@@ -291,7 +291,10 @@ class QubitExpFactory(object):
 
             if filt_type in module_map:
                 if filt_type == "KernelIntegrator":
-                    settings['kernel'] = np.fromstring( base64.b64decode(settings['kernel']), dtype=np.complex128)
+                    if 'np.' in settings['kernel']:
+                        settings['kernel'] = eval(settings['kernel'].encode('unicode_escape'))
+                    else:
+                        settings['kernel'] = np.fromstring( base64.b64decode(settings['kernel']), dtype=np.complex128)
                 filt = module_map[filt_type](**settings)
                 filt.name = name
                 filters[name] = filt
