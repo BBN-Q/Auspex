@@ -107,6 +107,7 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
 
         self.run           = self.wrapper.run
         self.stop          = self.wrapper.stop
+        self.connected     = False
 
     def connect(self, resource_name=None):
         if resource_name is None and self.resource_name is None:
@@ -115,9 +116,15 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
             self.resource_name = resource_name
 
         self.wrapper.connect(self.resource_name)
+        self.connected = True
+
+    def disconnect(self):
+        if self.resource_name and self.connected:
+            self.wrapper.disconnect()
+            self.connected = False
 
     def __del__(self):
-        self.wrapper.disconnect()
+        self.disconnect()
 
     def set_all(self, settings_dict):
         # Pop the channel settings
