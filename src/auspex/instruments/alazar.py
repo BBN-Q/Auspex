@@ -50,16 +50,17 @@ class AlazarATS9870(Instrument):
     """Alazar ATS9870 digitizer"""
     instrument_type = "Digitizer"
 
-    def __init__(self, resource_name, name="Unlabeled Alazar"):
+    def __init__(self, resource_name=None, name="Unlabeled Alazar"):
         self.name = name
 
         # Just store the integers here...
         self.channel_numbers = []
 
+        self.resource_name = resource_name
+
         # For lookup
         self._buf_to_chan = {}
 
-        self.resource_name = int(resource_name)
         self.fake = fake_alazar
         if self.fake:
             self._lib = MagicMock()
@@ -74,6 +75,7 @@ class AlazarATS9870(Instrument):
         if resource_name:
             self.resource_name = resource_name
 
+        self.resource_name = int(resource_name)
         self._lib.connectBoard(self.resource_name, "")
 
     def add_channel(self, channel):
