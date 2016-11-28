@@ -11,7 +11,7 @@ from auspex.log import logger
 from unittest.mock import MagicMock
 
 try:
-    from libAlazar import LibAlazar
+    from libalazar import ATS9870
     fake_alazar = False
 except:
     logger.warning("Could not load alazar library")
@@ -56,27 +56,32 @@ class AlazarATS9870(Instrument):
         # Just store the integers here...
         self.channel_numbers = []
 
-        self.resource_name = resource_name
+        self.resource_name = int(resource_name)
 
         # For lookup
         self._buf_to_chan = {}
 
         self.fake = fake_alazar
-        if self.fake:
-            self._lib = MagicMock()
-        else:
-            self._lib = LibAlazar()
-
-        commands = ['acquire', 'stop', 'wait_for_acquisition']
-        for c in commands:
-            setattr(self, c, getattr(self._lib, c))
 
     def connect(self, resource_name=None):
         if resource_name:
-            self.resource_name = resource_name
+            self.resource_name = int(resource_name)
 
-        self.resource_name = int(resource_name)
-        self._lib.connectBoard(self.resource_name, "")
+        if self.fake:
+            self._lib = MagicMock()
+        else:
+            self._lib = ATS9870("{}/{}".format(self.name, self.resource_name))
+
+        self._lib.connectBoard()
+
+    def acquire(self):
+        self._lib.acquire()
+
+    def stop(self):
+        self._lib.stop()
+
+    def wait_for_acquisition(self):
+        self._lib.wait_for_acquisition()
 
     def add_channel(self, channel):
         if not isinstance(channel, AlazarChannel):
@@ -136,20 +141,21 @@ class AlazarATS9870(Instrument):
             'verticalCoupling',
             'verticalOffset',
             'verticalScale',
-            'bufferSize',
         ]
 
         finicky_dict = {k: v for k, v in settings_dict_flat.items() if k in allowed_keywords}
-        # TODO: don't do this
-        finicky_dict['bufferSize'] = 4096000
+
         self._lib.setAll(finicky_dict)
         self.number_acquisitions     = self._lib.numberAcquisitions
         self.samples_per_acquisition = self._lib.samplesPerAcquisition
         self.ch1_buffer              = self._lib.ch1Buffer
         self.ch2_buffer              = self._lib.ch2Buffer
 
-    def __del__(self):
+    def disconnect(self):
         self._lib.disconnect()
 
-    def __repr__(self):
-        return "I'm an alazar!"
+    def __del__(self):
+        self.disconnect()
+
+    def __str__(self):
+        return "I'm an alazar with name {}!".format(self.name)
