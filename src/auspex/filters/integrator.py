@@ -48,6 +48,7 @@ class KernelIntegrator(Filter):
         output_descriptor = DataStreamDescriptor()
         #TODO: handle reduction to single point
         output_descriptor.axes = self.sink.descriptor.axes[:-1]
+        output_descriptor.exp_src = self.sink.descriptor.exp_src
         for os in self.source.output_streams:
             os.set_descriptor(output_descriptor)
             os.end_connector.update_descriptors()
