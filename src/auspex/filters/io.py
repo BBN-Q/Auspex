@@ -40,9 +40,10 @@ class WriteToHDF5(Filter):
     def new_filename(self):
         # Increment the filename until we find one we want.
         i = 0
-        ext = self.filename.find('.h5')
+        filename = self.filename.value
+        ext = filename.find('.h5')
         if ext > -1:
-            filename = self.filename[:ext]
+            filename = filename[:ext]
         while os.path.exists("{}-{:04d}.h5".format(filename,i)):
             i += 1
         return "{}-{:04d}.h5".format(filename,i)
@@ -57,8 +58,8 @@ class WriteToHDF5(Filter):
                 logger.error("Encounter exception: {}".format(e))
                 logger.error("Cannot close file '{}'. File may be damaged.".format(self.file.filename))
         # Get new file name
-        self.filename = self.new_filename()
-        head = os.path.dirname(self.filename)
+        self.filename.value = self.new_filename()
+        head = os.path.dirname(self.filename.value)
         head = os.path.normpath(head)
         dirs = head.split(os.sep)
         # Check if path exists. If not, create new one(s).
@@ -68,8 +69,8 @@ class WriteToHDF5(Filter):
             if not os.path.exists(fulldir):
                 logger.debug("Create new directory: {}.".format(fulldir))
                 os.mkdir(fulldir)
-        logger.debug("Create new data file: %s." %self.filename)
-        return h5py.File(self.filename, 'w', libver='latest')
+        logger.debug("Create new data file: %s." % self.filename.value)
+        return h5py.File(self.filename.value, 'w', libver='latest')
 
     async def run(self):
         stream     = self.sink.input_streams[0]
