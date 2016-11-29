@@ -31,22 +31,17 @@ class KernelIntegrator(Filter):
 
         logger.debug('Updating KernelIntegrator "%s" descriptors based on input descriptor: %s.', self.name, self.sink.descriptor)
 
-        #pad or truncate the kernel to match the record length
+        # pad or truncate the kernel to match the record length
         record_length = self.sink.descriptor.axes[-1].num_points()
-
-        # This
         if self.kernel.value.size < record_length:
             self.aligned_kernel = np.append(self.kernel.value, np.zeros(record_length-self.kernel.value.size, dtype=np.complex128))
         else:
-            self.aligned_kernel = np.resize(self.kernel.value, record_length)
-        #zero pad if necessary
-        if record_length > len(self.kernel.value):
-            self.aligned_kernel[record_length:] = 0.0
+            self.aligned_kernel = self.kernel.value.resize(record_length)
 
-        #Integrator reduces and removes axis on output stream
-        #update output descriptors
+        # Integrator reduces and removes axis on output stream
+        # update output descriptors
         output_descriptor = DataStreamDescriptor()
-        #TODO: handle reduction to single point
+        # TODO: handle reduction to single point
         output_descriptor.axes = self.sink.descriptor.axes[:-1]
         output_descriptor.exp_src = self.sink.descriptor.exp_src
         for os in self.source.output_streams:
@@ -55,9 +50,9 @@ class KernelIntegrator(Filter):
 
     async def process_data(self, data):
 
-        #TODO: handle variable partial records
-        filtered = np.sum(data * self.aligned_kernel, axis=-1)
+        # TODO: handle variable partial records
+        filtered = np.inner(np.reshape(data, (-1, len(self.aligned_kernel))), self.aligned_kernel)
 
-        #push to ouptut connectors
+        # push to ouptut connectors
         for os in self.source.output_streams:
             await os.push(filtered)
