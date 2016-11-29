@@ -56,7 +56,7 @@ class AlazarATS9870(Instrument):
         # Just store the integers here...
         self.channel_numbers = []
 
-        self.resource_name = int(resource_name)
+        self.resource_name = resource_name
 
         # For lookup
         self._buf_to_chan = {}
@@ -65,12 +65,12 @@ class AlazarATS9870(Instrument):
 
     def connect(self, resource_name=None):
         if resource_name:
-            self.resource_name = int(resource_name)
+            self.resource_name = resource_name
 
         if self.fake:
             self._lib = MagicMock()
         else:
-            self._lib = ATS9870("{}/{}".format(self.name, self.resource_name))
+            self._lib = ATS9870("{}/{}".format(self.name, int(self.resource_name)))
 
         self._lib.connectBoard()
 
@@ -155,7 +155,8 @@ class AlazarATS9870(Instrument):
         self._lib.disconnect()
 
     def __del__(self):
-        self.disconnect()
+        if hasattr(self, '_lib'):
+            self.disconnect()
 
     def __str__(self):
         return "I'm an alazar with name {}!".format(self.name)
