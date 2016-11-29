@@ -80,8 +80,8 @@ class AlazarATS9870(Instrument):
     def stop(self):
         self._lib.stop()
 
-    def wait_for_acquisition(self):
-        self._lib.wait_for_acquisition()
+    def data_available(self):
+        return self._lib.data_available()
 
     def add_channel(self, channel):
         if not isinstance(channel, AlazarChannel):
@@ -159,4 +159,4 @@ class AlazarATS9870(Instrument):
             self.disconnect()
 
     def __str__(self):
-        return "I'm an alazar with name {}!".format(self.name)
+        return "<AlazarATS9870({}/{})>".format(self.name, self.resource_name)

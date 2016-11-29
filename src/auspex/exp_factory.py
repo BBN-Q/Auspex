@@ -13,6 +13,7 @@ import inspect
 import re
 import asyncio
 import base64
+import datetime
 
 import numpy as np
 
@@ -63,11 +64,15 @@ class QubitExperiment(Experiment):
         for awg in self.awgs:
             awg.run()
 
+        timeout = 3
         async def wait_for_acq(digitizer):
+            t = datetime.datetime.now()
             for _ in range(digitizer.number_acquisitions):
-                while not digitizer.wait_for_acquisition():
+                while not digitizer.data_available():
+                    if (datetime.datetime.now() - t).seconds > timeout:
+                        logger.error("Digitizer %s timed out.", digitizer)
+                        break
                     await asyncio.sleep(0.1)
-
                 # Find all of the channels associated with this particular digitizer
                 dig_channels = [chan for chan, dig in self.chan_to_dig.items() if dig == digitizer]
 
