@@ -126,10 +126,10 @@ class Filter(metaclass=MetaFilter):
                     message_data = np.array([message_data])
                 logger.debug('%s "%s" received %d points.', self.__class__.__name__, self.name, message_data.size)
                 logger.debug("Now has %d of %d points.", input_stream.points_taken, input_stream.num_points())
-                await self.process_data(message_data)
+                await self.process_data(message_data.flatten())
 
             elif message['type'] == 'data_direct':
-                await self.process_direct(message_data)
+                await self.process_direct(message_data.flatten())
 
     async def process_data(self, data):
         """Process data coming through the filter pipeline"""
