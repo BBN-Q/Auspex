@@ -68,16 +68,16 @@ class Averager(Filter):
             self.points_before_partial_average = 1
             self.avg_dims = [1]
         else:
-            self.points_before_partial_average = descriptor_in.num_points_throughaxis.value(self.axis_num+1)
+            self.points_before_partial_average = descriptor_in.num_points_through_axis(self.axis_num+1)
             self.avg_dims = self.data_dims[self.axis_num+1:]
 
         # If we get multiple final average simultaneously
         self.reshape_dims = self.data_dims[self.axis_num:]
         if self.axis_num > 0:
             self.reshape_dims = [-1] + self.reshape_dims
-        self.meanaxis.value = self.axis_num - len(self.data_dims)
+        self.mean_axis = self.axis_num - len(self.data_dims)
 
-        self.points_before_final_average   = descriptor_in.num_points_throughaxis.value(self.axis_num)
+        self.points_before_final_average   = descriptor_in.num_points_through_axis(self.axis_num)
         logger.debug("Points before partial average: %s.", self.points_before_partial_average)
         logger.debug("Points before final average: %s.", self.points_before_final_average)
         logger.debug("Data dimensions are %s", self.data_dims)
@@ -86,16 +86,16 @@ class Averager(Filter):
         # Define final axis descriptor
         # final_axes = descriptor_in.axes[:]
         descriptor_final = descriptor_in.copy()
-        self.num_averages = descriptor_final.popaxis.value(self.axis).num_points()
+        self.num_averages = descriptor_final.pop_axis(self.axis.value).num_points()
         logger.debug("Number of partial averages is %d", self.num_averages)
 
         # Define partial axis descriptor
         # partial_axes = descriptor_in.axes[:]
         descriptor_partial = descriptor_in.copy()
-        descriptor_partial.popaxis.value(self.axis)
+        descriptor_partial.pop_axis(self.axis.value)
         # descriptor_partial.axes = partial_axes
         # partial_axes.pop(self.axis_num)
-        descriptor_partial.addaxis.value(DataAxis("Partial Averages", list(range(self.num_averages))))
+        descriptor_partial.add_axis(DataAxis("Partial Averages", list(range(self.num_averages))))
 
         self.sum_so_far = np.zeros(self.avg_dims)
         self.partial_average.descriptor = descriptor_partial
@@ -147,7 +147,7 @@ class Averager(Filter):
                 num_chunks = int((data.size - idx)/self.points_before_final_average)
                 new_points = num_chunks*self.points_before_final_average
                 reshaped   = data[idx:idx+new_points].reshape(self.reshape_dims)
-                averaged   = reshaped.mean(axis=self.meanaxis.value)
+                averaged   = reshaped.mean(axis=self.mean_axis)
                 idx       += new_points
 
                 for os in self.final_average.output_streams + self.partial_average.output_streams:
@@ -233,7 +233,7 @@ class Averager(Filter):
 #             self.avg_dims = [1]
 #         else:
 #             outaxis.value = min(self.axes_num)
-#             self.average_points = descriptor_in.num_points_throughaxis.value(outaxis.value)
+#             self.average_points = descriptor_in.num_points_through_axis.value(outaxis.value)
 #             self.data_dims = descriptor_in.data_dims()
 #             self.avg_dims = self.data_dims[outaxis.value:]
 #
