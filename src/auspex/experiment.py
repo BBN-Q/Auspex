@@ -257,7 +257,7 @@ class Experiment(metaclass=MetaExperiment):
     def reset(self):
         for edge in self.graph.edges:
             edge.reset()
-            
+
     def update_descriptors(self):
         logger.debug("Starting descriptor update in experiment.")
         for oc in self.output_connectors.values():
@@ -355,7 +355,7 @@ class Experiment(metaclass=MetaExperiment):
 
             tabs = not run_in_notebook # Tabs seem a bit sluggish in jupyter notebooks...
             if tabs:
-                container = Tabs(tabs=[Panel(child=p.figure, title=p.name) for p in self.plotters])
+                container = Tabs(tabs=[Panel(child=p.plot, title=p.name) for p in self.plotters])
             else:
                 if len(self.plotters) <= 2:
                     container = row(*[p.figure for p in self.plotters])

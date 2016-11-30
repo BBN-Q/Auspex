@@ -87,8 +87,8 @@ class WriteToHDF5(Filter):
 
         # Create a 2D dataset with a 1D data column
         dtype = [(a, 'f') for a in axis_names]
+        dtype.append((desc.data_name, desc.dtype))
         logger.debug("Data type for HDF5: %s", dtype)
-        dtype.append((desc.data_name, 'f'))
         if self.compress:
             self.data = self.file.create_dataset('data', (len(tuples),), dtype=dtype,
                                         chunks=True, maxshape=(None,),

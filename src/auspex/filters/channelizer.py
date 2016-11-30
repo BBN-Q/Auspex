@@ -61,6 +61,7 @@ class Channelizer(Filter):
         decimated_descriptor.axes[-1] = deepcopy(self.sink.descriptor.axes[-1])
         decimated_descriptor.axes[-1].points = self.sink.descriptor.axes[-1].points[self.decimation_factor.value-1::self.decimation_factor.value]
         decimated_descriptor.exp_src = self.sink.descriptor.exp_src
+        decimated_descriptor.dtype = np.complex64
         for os in self.source.output_streams:
             os.set_descriptor(decimated_descriptor)
             os.end_connector.update_descriptors()

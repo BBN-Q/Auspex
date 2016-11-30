@@ -12,6 +12,7 @@ import time
 import numpy as np
 
 from bokeh.plotting import Figure
+from bokeh.layouts import gridplot
 from bokeh.models.renderers import GlyphRenderer
 
 from auspex.parameter import Parameter, IntParameter
@@ -22,7 +23,7 @@ import matplotlib.pyplot as plt
 class Plotter(Filter):
     sink      = InputConnector()
     plot_dims = IntParameter(value_range=(0,1,2), snap=1, default=0) # 0 means auto
-    plot_mode = Parameter(allowed_values=["real", "imaginary", "quad"], default="real")
+    plot_mode = Parameter(allowed_values=["real", "imag", "real/imag", "amp/phase", "quad"], default="real/imag")
 
     def __init__(self, *args, name="", plot_dims=None, plot_mode=None, notebook=False, **plot_args):
         super(Plotter, self).__init__(*args, name=name)
@@ -66,22 +67,40 @@ class Plotter(Filter):
         xmax = max(self.x_values)
         xmin = min(self.x_values)
 
+        # Establish how the data will be mapped to multiple subplots. Each
+        # top level list element will become a row, and subelements will
+        # become columns. A single plot_buffer is used to store data, and it
+        # will be cast according to these functions.
+
+        if self.plot_mode.value == "real":
+            self.mapping_functions = [[np.real]]
+        elif self.plot_mode.value == "imag":
+            self.mapping_functions = [[np.imag]]
+        elif self.plot_mode.value == "real/imag":
+            self.mapping_functions = [[np.real, np.imag]]
+        elif self.plot_mode.value == "amp/phase":
+            self.mapping_functions = [[np.abs, lambda x: np.angle(x, deg=1)]]
+        elif self.plot_mode.value =="quad":
+            self.mapping_functions = [[np.abs, lambda x: np.angle(x, deg=1)],[np.real, np.imag]]
+
         if self.plot_dims.value == 1:
-            self.figure = Figure(x_range=[xmin, xmax], plot_width=600, plot_height=600, webgl=False)
-            self.plot = self.figure.line(np.copy(self.x_values), np.nan*np.ones(self.points_before_clear), name=self.name)
+            self.figures = [[Figure(x_range=[xmin, xmax], plot_width=600, plot_height=600, webgl=False) for col in row] for row in self.mapping_functions]
+            self.plots = [[fig.line(np.copy(self.x_values), np.nan*np.ones(self.points_before_clear), name=self.name) for fig in row] for row in self.figures]
         else:
             self.y_values = self.descriptor.axes[-2].points
             self.x_mesh, self.y_mesh = np.meshgrid(self.x_values, self.y_values)
             self.z_data = np.zeros_like(self.x_mesh)
             ymax = max(self.y_values)
             ymin = min(self.y_values)
-            self.figure = Figure(x_range=[xmin, xmax], y_range=[ymin, ymax], plot_width=600, plot_height=600, webgl=False)
-            self.plot = self.figure.image(image=[self.z_data], x=[xmin], y=[ymin],
-                                          dw=[xmax-xmin], dh=[ymax-ymin], name=self.name, palette="Spectral11")
+            self.figures = [[Figure(x_range=[xmin, xmax], y_range=[ymin, ymax], plot_width=600, plot_height=600, webgl=False) for col in row] for row in self.mapping_functions]
+            self.plots = [[fig.image(image=[self.z_data], x=[xmin], y=[ymin],
+                                          dw=[xmax-xmin], dh=[ymax-ymin], name=self.name, palette="Spectral11") for fig in row] for row in self.figures]
 
-        self.data_source = self.plot.data_source
+        # Construct the master gridplot
+        self.plot = gridplot(self.figures)
 
-        self.plot_buffer = np.nan*np.ones(self.points_before_clear)
+        self.data_sources = [[plot.data_source for plot in row] for row in self.plots]
+        self.plot_buffer = np.nan*np.ones(self.points_before_clear, dtype=self.descriptor.dtype)
         self.idx = 0
 
     async def process_data(self, data):
@@ -100,19 +119,27 @@ class Plotter(Filter):
 
         if self.plot_dims.value == 1:
             if (time.time() - self.last_update >= self.update_interval):
-                self.data_source.data["y"] = np.copy(self.plot_buffer)
+                for i,j in zip(self.mapping_functions, self.data_sources):
+                    for mapping_function, data_source in zip(i,j):
+                        data_source.data["y"] = np.copy(mapping_function(self.plot_buffer))
                 self.last_update = time.time()
 
         else:
             if (time.time() - self.last_update >= self.update_interval):
-                self.data_source.data["image"] = [np.reshape(self.plot_buffer, self.z_data.shape)]
+                for i,j in zip(self.mapping_functions, self.data_sources):
+                    for mapping_function, data_source in zip(i,j):
+                        data_source.data["image"] = [np.reshape(mapping_function(self.plot_buffer), self.z_data.shape)]
                 self.last_update = time.time()
 
     async def on_done(self):
         if self.plot_dims.value == 1:
-            self.data_source.data["y"] = np.copy(self.plot_buffer)
+            for i,j in zip(self.mapping_functions, self.data_sources):
+                for mapping_function, data_source in zip(i,j):
+                    data_source.data["y"] = np.copy(mapping_function(self.plot_buffer))
         else:
-            self.data_source.data["image"] = [np.reshape(self.plot_buffer, self.z_data.shape)]
+            for i,j in zip(self.mapping_functions, self.data_sources):
+                for mapping_function, data_source in zip(i,j):
+                    data_source.data["image"] = [np.reshape(mapping_function(self.plot_buffer), self.z_data.shape)]
         time.sleep(1.0)
 
 class MeshPlotter(Filter):

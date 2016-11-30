@@ -126,13 +126,14 @@ class SweepAxis(DataAxis):
 
 class DataStreamDescriptor(object):
     """Axes information"""
-    def __init__(self):
+    def __init__(self, dtype=np.float32):
         super(DataStreamDescriptor, self).__init__()
         self.data_name = "Data"
         self.axes = []
         self.params = {} # Parameters associated with each dataset
         self.parent = None
         self.exp_src = None # Actual source code from the underlying experiment
+        self.dtype = dtype
 
     def add_axis(self, axis):
         # Check if axis is DataAxis or SweepAxis (which inherits from DataAxis)
