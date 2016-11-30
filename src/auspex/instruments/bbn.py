@@ -128,10 +128,11 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
 
     def set_all(self, settings_dict):
         # Pop the channel settings
-        channel_settings = settings_dict.pop('channels')
+        settings = settings_dict.copy()
+        channel_settings = settings.pop('channels')
 
         # Call the non-channel commands
-        super(APS2, self).set_all(settings_dict)
+        super(APS2, self).set_all(settings)
 
         for chan, ch_settings in enumerate(channel_settings):
             for name, value in ch_settings.items():
