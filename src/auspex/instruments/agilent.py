@@ -100,3 +100,34 @@ class E8363C(SCPIInstrument):
         freqs = np.linspace(self.frequency_start, self.frequency_stop, self.sweep_num_points)
 
         return (freqs, vals)
+
+class E9010A(SCPIInstrument):
+    """Agilent E9010A SA"""
+
+    frequency_center = FloatCommand(scpi_string=":FREQuency:CENTer")
+    frequency_span   = FloatCommand(scpi_string=":FREQuency:SPAN")
+    frequency_start  = FloatCommand(scpi_string=":FREQuency:STARt")
+    frequency_stop   = FloatCommand(scpi_string=":FREQuency:STOP")
+
+    # This seems to return incorrect numbers for large sweeps?
+    num_sweep_points = FloatCommand(scpi_string="OBW:SWE:POIN")
+
+    def __init__(self, resource_name, *args, **kwargs):
+        #If we only have an IP address then tack on the raw socket port to the VISA resource string
+        if is_valid_ipv4(resource_name):
+            resource_name += "::5025::SOCKET"
+        super(E9010A, self).__init__(resource_name, *args, **kwargs)
+
+    def connect(self, resource_name=None, interface_type=None):
+        super(E9010A, self).connect(resource_name=resource_name, interface_type=interface_type)
+        self.interface._resource.read_termination = u"\n"
+        self.interface._resource.write_termination = u"\n"
+        self.interface._resource.timeout = 3000 #seem to have trouble timing out on first query sometimes
+
+    def get_axis(self):
+        return np.linspace(self.frequency_start, self.frequency_stop, self.num_sweep_points)
+
+    def get_trace(self, num=1):
+        self.interface.write(':FORM:DATA REAL,32')
+        return self.interface.query_binary_values(":TRACE:DATA? TRACE{:d}".format(num),
+            datatype="f", is_big_endian=True)
