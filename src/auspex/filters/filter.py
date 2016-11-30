@@ -9,6 +9,7 @@
 import asyncio
 import zlib
 import pickle
+import copy
 import numpy as np
 from concurrent.futures import FIRST_COMPLETED
 
@@ -37,7 +38,7 @@ class MetaFilter(type):
                 logger.debug("Found '%s' parameter.", k)
                 if v.name is None:
                     v.name = k
-                self._parameters.append(k)
+                self._parameters.append(v)
 
 class Filter(metaclass=MetaFilter):
     """Any node on the graph that takes input streams with optional output streams"""
@@ -46,6 +47,7 @@ class Filter(metaclass=MetaFilter):
         self.name = name
         self.input_connectors = {}
         self.output_connectors = {}
+        self.parameters = {}
         self.experiment = None # Keep a reference to the parent experiment
 
         # For signaling to Quince that something is wrong
@@ -61,6 +63,11 @@ class Filter(metaclass=MetaFilter):
             a.parent = self
             self.output_connectors[oc] = a
             setattr(self, oc, a)
+        for param in self._parameters:
+            a = copy.deepcopy(param)
+            a.parent = self
+            self.parameters[param.name] = a
+            setattr(self, param.name, a)
 
     def __repr__(self):
         return "<{}(name={})>".format(self.__class__.__name__, self.name)
