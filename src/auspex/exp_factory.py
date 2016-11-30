@@ -280,7 +280,11 @@ class QubitExpFactory(object):
 
             # Add the usual axes
             descrip.add_axis(DataAxis("segments",     range(source_instr_settings['nbr_segments'])))
-            descrip.add_axis(DataAxis("round_robins", range(source_instr_settings['nbr_round_robins'])))
+
+            # Digitizer mode preserves round_robins, averager mode collapsing along them:
+            if source_instr_settings['acquire_mode'] == 'digitizer':
+                descrip.add_axis(DataAxis("round_robins", range(source_instr_settings['nbr_round_robins'])))
+
             oc.set_descriptor(descrip)
 
             # Add to our mappings
