@@ -257,9 +257,7 @@ class Experiment(metaclass=MetaExperiment):
     def reset(self):
         for edge in self.graph.edges:
             edge.reset()
-        self.update_descriptors()
-        # self.generate_sweep()
-
+            
     def update_descriptors(self):
         logger.debug("Starting descriptor update in experiment.")
         for oc in self.output_connectors.values():
@@ -409,6 +407,7 @@ class Experiment(metaclass=MetaExperiment):
         def catch_ctrl_c(signum, frame):
             logger.info("Caught SIGINT. Shutting down.")
             shutdown()
+            raise NameError("Shutting down.")
             sys.exit(0)
 
         signal.signal(signal.SIGINT, catch_ctrl_c)
