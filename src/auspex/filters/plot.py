@@ -23,7 +23,7 @@ import matplotlib.pyplot as plt
 class Plotter(Filter):
     sink      = InputConnector()
     plot_dims = IntParameter(value_range=(0,1,2), snap=1, default=0) # 0 means auto
-    plot_mode = Parameter(allowed_values=["real", "imag", "real/imag", "amp/phase", "quad"], default="real/imag")
+    plot_mode = Parameter(allowed_values=["real", "imag", "real/imag", "amp/phase", "quad"], default="quad")
 
     def __init__(self, *args, name="", plot_dims=None, plot_mode=None, notebook=False, **plot_args):
         super(Plotter, self).__init__(*args, name=name)
@@ -71,7 +71,7 @@ class Plotter(Filter):
         # top level list element will become a row, and subelements will
         # become columns. A single plot_buffer is used to store data, and it
         # will be cast according to these functions.
-
+        plot_height = 600
         if self.plot_mode.value == "real":
             self.mapping_functions = [[np.real]]
         elif self.plot_mode.value == "imag":
@@ -82,9 +82,10 @@ class Plotter(Filter):
             self.mapping_functions = [[np.abs, lambda x: np.angle(x, deg=1)]]
         elif self.plot_mode.value =="quad":
             self.mapping_functions = [[np.abs, lambda x: np.angle(x, deg=1)],[np.real, np.imag]]
+            plot_height = 450
 
         if self.plot_dims.value == 1:
-            self.figures = [[Figure(x_range=[xmin, xmax], plot_width=600, plot_height=600, webgl=False) for col in row] for row in self.mapping_functions]
+            self.figures = [[Figure(x_range=[xmin, xmax], plot_width=plot_height, plot_height=plot_height, webgl=False) for col in row] for row in self.mapping_functions]
             self.plots = [[fig.line(np.copy(self.x_values), np.nan*np.ones(self.points_before_clear), name=self.name) for fig in row] for row in self.figures]
         else:
             self.y_values = self.descriptor.axes[-2].points
@@ -92,7 +93,7 @@ class Plotter(Filter):
             self.z_data = np.zeros_like(self.x_mesh)
             ymax = max(self.y_values)
             ymin = min(self.y_values)
-            self.figures = [[Figure(x_range=[xmin, xmax], y_range=[ymin, ymax], plot_width=600, plot_height=600, webgl=False) for col in row] for row in self.mapping_functions]
+            self.figures = [[Figure(x_range=[xmin, xmax], y_range=[ymin, ymax], plot_width=plot_height, plot_height=plot_height, webgl=False) for col in row] for row in self.mapping_functions]
             self.plots = [[fig.image(image=[self.z_data], x=[xmin], y=[ymin],
                                           dw=[xmax-xmin], dh=[ymax-ymin], name=self.name, palette="Spectral11") for fig in row] for row in self.figures]
 
@@ -140,7 +141,7 @@ class Plotter(Filter):
             for i,j in zip(self.mapping_functions, self.data_sources):
                 for mapping_function, data_source in zip(i,j):
                     data_source.data["image"] = [np.reshape(mapping_function(self.plot_buffer), self.z_data.shape)]
-        time.sleep(1.0)
+        time.sleep(0.1)
 
 class MeshPlotter(Filter):
     sink = InputConnector()
