@@ -15,7 +15,7 @@ from auspex.instruments.instrument import SCPIInstrument, StringCommand, FloatCo
 from auspex.experiment import Experiment, FloatParameter
 from auspex.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector
 from auspex.filters.plot import Plotter
-from auspex.filters.average import Average
+from auspex.filters.average import Averager
 from auspex.filters.debug import Print
 from auspex.filters.channelizer import Channelizer
 from auspex.filters.integrator import KernelIntegrator
@@ -52,11 +52,10 @@ class TestExperiment(Experiment):
         pass
 
     def init_streams(self):
-        # Add a "base" data axis: say we are averaging 5 samples per trigger
         descrip = DataStreamDescriptor()
         descrip.add_axis(DataAxis("samples", 2e-9*np.arange(self.num_samples)))
         descrip.add_axis(DataAxis("delay", self.delays))
-        descrip.add_axis(DataAxis("round robins", np.arange(self.round_robins)))
+        descrip.add_axis(DataAxis("round_robins", np.arange(self.round_robins)))
         self.voltage.set_descriptor(descrip)
 
     def __repr__(self):
@@ -94,20 +93,20 @@ if __name__ == '__main__':
     exp = TestExperiment()
     channelizer = Channelizer(10e6, 0.05, 8, name="Demod")
     ki = KernelIntegrator(np.ones(32), name="KI")
-    avg1 = Average("round robins", name="Average channelizer RRs")
-    avg2 = Average("round robins", name="Average KI RRs")
+    avg1 = Averager("round_robins", name="Average channelizer RRs")
+    avg2 = Averager("round_robins", name="Average KI RRs")
     pl1 = Plotter(name="2D Scope", plot_dims=2, palette="Spectral11")
-    pl2 = Plotter(name="Demod", plot_dims=2, palette="Spectral11")
-    pl3 = Plotter(name="KI", plot_dims=1)
+    pl2 = Plotter(name="Demod", plot_dims=2, plot_mode="quad", palette="Spectral11")
+    pl3 = Plotter(name="KI", plot_dims=1, plot_mode='real')
     # pl4 = Plotter(name="KI", plot_dims=2, palette="Spectral11")
 
     edges = [
             (exp.voltage, channelizer.sink),
-            (channelizer.source, avg1.data),
+            (channelizer.source, avg1.sink),
             (channelizer.source, ki.sink),
-            (ki.source, avg2.data),
-            (avg1.final_average, pl2.data),
-            (avg2.final_average, pl3.data)
+            (ki.source, avg2.sink),
+            (avg1.final_average, pl2.sink),
+            (avg2.final_average, pl3.sink)
             ]
 
     exp.set_graph(edges)
