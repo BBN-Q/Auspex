@@ -21,7 +21,7 @@ import matplotlib.pyplot as plt
 
 class Plotter(Filter):
     sink      = InputConnector()
-    plot_dims = IntParameter(value_range=(1,2), snap=1)
+    plot_dims = IntParameter(value_range=(0,1,2), snap=1, default=0) # 0 means auto
     plot_mode = Parameter(allowed_values=["real", "imaginary", "quad"], default="real")
 
     def __init__(self, *args, name="", plot_dims=None, plot_mode=None, notebook=False, **plot_args):
@@ -45,7 +45,7 @@ class Plotter(Filter):
     def final_init(self):
 
         # Determine the plot dimensions
-        if self.plot_dims.value is None:
+        if not self.plot_dims.value:
             if len(self.descriptor.axes) > 1:
                 self.plot_dims.value = 2
             else:
