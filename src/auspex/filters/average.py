@@ -32,18 +32,6 @@ class Averager(Filter):
 
         self.quince_parameters = [self.axis]
 
-    # @property
-    # def axis(self):
-    #     return self.axis.value
-    # @axis.setter
-    # def axis(self, value):
-    #     if isinstance(value, str):
-    #         self.axis.value = value
-    #         if self.sink.descriptor is not None:
-    #             self.update_descriptors()
-    #     else:
-    #         raise ValueError("Must specify averaging axis as string.")
-
     def update_descriptors(self):
         logger.debug('Updating averager "%s" descriptors based on input descriptor: %s.', self.name, self.sink.descriptor)
         descriptor_in = self.sink.descriptor
@@ -84,20 +72,16 @@ class Averager(Filter):
         logger.debug("Averaging dimensions are %s", self.avg_dims)
 
         # Define final axis descriptor
-        # final_axes = descriptor_in.axes[:]
         descriptor_final = descriptor_in.copy()
         self.num_averages = descriptor_final.pop_axis(self.axis.value).num_points()
         logger.debug("Number of partial averages is %d", self.num_averages)
 
         # Define partial axis descriptor
-        # partial_axes = descriptor_in.axes[:]
         descriptor_partial = descriptor_in.copy()
         descriptor_partial.pop_axis(self.axis.value)
-        # descriptor_partial.axes = partial_axes
-        # partial_axes.pop(self.axis_num)
         descriptor_partial.add_axis(DataAxis("Partial Averages", list(range(self.num_averages))))
 
-        self.sum_so_far = np.zeros(self.avg_dims)
+        self.sum_so_far = np.zeros(self.avg_dims, dtype=descriptor_final.dtype)
         self.partial_average.descriptor = descriptor_partial
         self.final_average.descriptor = descriptor_final
 
@@ -121,12 +105,9 @@ class Averager(Filter):
 
         # We only need to accumulate up to the averaging axis
         # BUT we may get something longer at any given time!
-        self.carry = np.zeros(0)
+        self.carry = np.zeros(0, dtype=self.final_average.descriptor.dtype)
 
     async def process_data(self, data):
-
-        # TODO: handle complex data
-        data = data.real
 
         # TODO: handle unflattened data separately
         if len(data.shape) > 1:
@@ -137,7 +118,7 @@ class Averager(Filter):
 
         if self.carry.size > 0:
             data = np.concatenate((self.carry, data))
-            self.carry = np.zeros(0)
+            self.carry = np.zeros(0, dtype=self.final_average.descriptor.dtype)
 
         idx = 0
         while idx < data.size:
