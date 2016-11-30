@@ -187,6 +187,7 @@ class WriteToHDF5(Filter):
 
         try:
             self.file.close()
+            self.file = None
         except:
             # This doesn't seem to happen when we don't used named columns
             logger.debug("Ignoring 'dictionary changed sized during iteration' error.")
