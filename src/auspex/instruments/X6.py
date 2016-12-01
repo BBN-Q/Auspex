@@ -19,21 +19,20 @@ except:
 
 class X6Channel(DigitizerChannel):
     """Channel for an X6"""
-    stream_type       = None
-    if_freq           = None
-    demod_kernel      = None
-    demod_kernel_bias = None
-    raw_kernel        = None
-    raw_kernel_bias   = None
-    threshold         = None
-    threshold_invert  = None
-
-    phys_chan   = 0
-    demod_chan  = 0
-    result_chan = 0
-    channel     = (0,0,0)
 
     def __init__(self, settings_dict=None):
+        self.stream_type       = "Physical"
+        self.if_freq           = 0.0
+        self.kernel            = None
+        self.kernel_bias       = 0.0
+        self.threshold         = 0.0
+        self.threshold_invert  = False
+
+        self.phys_chan   = 1
+        self.demod_chan  = 0
+        self.result_chan = 0
+        self.channel     = (1,0,0)
+
         if settings_dict:
             self.set_all(settings_dict)
 
@@ -44,6 +43,7 @@ class X6Channel(DigitizerChannel):
 
         if self.stream_type == "Integrated":
             self.result_chan = 1
+            self.demod_chan = 0
         elif self.stream_type == "Demodulated":
             self.result_chan = 0
         else: #Raw
@@ -63,6 +63,24 @@ class X6(Instrument):
         self.resource_address = resource_address
         self.name             = name
 
+        if fake_x6:
+            self._lib = MagicMock()
+        else:
+            self._lib = X6()
+
+        # pass thru functions
+        self.acquire    = self._lib.acquire
+        self.stop       = self._lib.stop
+        self.disconnect = self._lib.disconnect
+
+        # pass thru properties
+        self.record_length    = self._lib.record_length
+        self.nbr_waveforms    = self._lib.nbr_waveforms
+        self.nbr_segments     = self._lib.nbr_segments
+        self.nbr_round_robins = self._lib.nbr_round_robins
+        self.reference        = self._lib.reference
+        self.acquire_mode     = self._lib.acquire_mode
+
     def __str__(self):
         return "<X6({}/{})>".format(self.name, self.resource_name)
 
@@ -70,37 +88,41 @@ class X6(Instrument):
         if resource_name:
             self.resource_name = resource_name
 
-        if fake_x6:
-            self._lib = MagicMock()
-        else:
-            self._lib = X6()
-
         self._lib.connect(int(self.resource_name))
 
-    def disconnect(self):
-        self._lib.disconnect()
-
     def set_all(self, settings_dict):
-        # Pop the channel settings
-        settings = settings_dict.copy()
-        channel_settings = settings.pop('channels')
-
         # Call the non-channel commands
         super(APS2, self).set_all(settings)
 
-        for chan, ch_settings in enumerate(channel_settings):
-            if chan not in self.channels[chan]:
-                logger.warning("Channel {} has not been added to X6 {}".format(chan, self))
-                continue
-            self.channels[chan].set_all(ch_settings)
-            # todo: use channel settings to call library functions like:
-            # enable_stream, write_kernel, set_threshold, etc.
+        # perform channel setup
+        for chan in self.channels:
+            self.channel_setup(chan)
 
-    def acquire(self):
-        self._lib.acquire()
+    def channel_setup(self, channel, settings):
+        a, b, c = channel.channel
+        if channel.stream_type == "Physical":
+            self._lib.enable_stream(a, 0, 0)
+            return
+        elif channel.stream_type == "Demodulated":
+            self._lib.set_nco_freq(a, b, channel.if_freq)
 
-    def stop(self):
-        self._lib.stop()
+            if channel.kernel:
+                self._lib.enable_stream(a, b, 1)
+                self._lib.write_kernel(a, b, 1, channel.kernel)
+                self._lib.set_kernel_bias(a, b, 1, channel.kernel_bias)
+            else:
+                self._lib.enable_stream(a, b, 0)
+        elif channel.stream_type == "Integrated":
+            self._lib.enable_stream(a, b, 1)
+            if not channel.kernel:
+                logger.error("Integrated streams must specify a kernel")
+                return
+            self._lib.write_kernel(a, b, c, channel.kernel)
+            self._lib.set_kernel_bias(a, b, c, channel.kernel_bias)
+            self._lib.set_threshold(a, b, channel.threshold)
+            self._lib.set_threshold_invert(a, b, channel.threshold_invert)
+        else:
+            logger.error("Unrecognized stream type %s" % channel.stream_type)
 
     def data_available(self):
         return self._lib.get_num_new_records() > 0
