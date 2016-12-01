@@ -9,6 +9,8 @@
 import asyncio, concurrent
 import itertools
 import h5py
+import pickle
+import zlib
 import numpy as np
 import os.path
 
@@ -37,6 +39,7 @@ class WriteToHDF5(Filter):
         self.group = None
         self.create_group = True
         self.up_to_date = False
+        self.sink.max_input_streams = 100
 
         self.quince_parameters = [self.filename, self.groupname]
 
@@ -85,7 +88,13 @@ class WriteToHDF5(Filter):
         return h5py.File(self.filename.value, 'w', libver='latest')
 
     async def run(self):
-        stream     = self.sink.input_streams[0]
+        streams    = self.sink.input_streams
+        stream     = streams[0]
+
+        for s in streams[1:]:
+            if not np.all(s.descriptor.tuples() == streams[0].descriptor.tuples()):
+                raise ValueError("Multiple streams connected to writer must have matching descriptors.")
+
         desc       = stream.descriptor
         axes       = stream.descriptor.axes
         params     = stream.descriptor.params
@@ -103,18 +112,24 @@ class WriteToHDF5(Filter):
         else:
             self.group = self.file
 
+
         dtype = desc.axis_data_type(with_metadata=True)
-        dtype.append((desc.data_name, desc.dtype))
+
+        # Extend the dtypes for each data column
+        for stream in streams:
+            dtype.append((stream.descriptor.data_name, stream.descriptor.dtype))
+
         logger.debug("Data type for HDF5: %s", dtype)
         if self.compress:
             self.data = self.group.create_dataset('data', (len(tuples),), dtype=dtype,
                                         chunks=True, maxshape=(None,),
                                         compression='gzip')
-            # TODO: update when HDF version changes...
+            # TODO: use single writer multiple reader when HDF5 libraries are updated in h5py
             # self.file.swmr_mode = True
         else:
             self.data = self.group.create_dataset('data', (len(tuples),), dtype=dtype,
                                         chunks=True, maxshape=(None,))
+            # TODO: use single writer multiple reader when HDF5 libraries are updated in h5py
             # self.file.swmr_mode = True
 
         # Write params into attrs
@@ -162,24 +177,42 @@ class WriteToHDF5(Filter):
 
         while True:
 
-            message = await stream.queue.get()
-            message_type = message['type']
-            message_data = message['data']
-            message_comp = message['compression']
+            # Wait for all of the acquisition to complete
+            messages, pending = await asyncio.wait([stream.queue.get() for stream in streams])
+            messages = [m.result() for m in list(messages)] # Returns a set for some stupid reason
 
-            if message_comp == 'zlib':
-                message_data = pickle.loads(zlib.decompress(message_data))
+            # Ensure we aren't getting different types of messages at the same time.
+            message_types = [m['type'] for m in messages]
+            try:
+                if len(set(message_types)) > 1:
+                    raise ValueError("Writer received concurrent messages with different message types {}".format([m['type'] for m in messages]))
+            except:
+                import ipdb; ipdb.set_trace()
+                
+            # Infer the type from the first message
+            message_type = messages[0]['type']
+
+            message_data = [message['data'] for message in messages]
+            message_comp = [message['compression'] for message in messages]
+            message_data = [pickle.loads(zlib.decompress(dat)) if comp == 'zlib' else dat for comp, dat in zip(message_comp, message_data)]
+            message_data = [dat if hasattr(dat, 'size') else np.array([dat]) for dat in message_data]  # Convert single values to arrays
+
+
             # If we receive a message
-            if message['type'] == 'event':
+            if message_type == 'event':
                 logger.debug('%s "%s" received event "%s"', self.__class__.__name__, self.name, message_data)
-                if message['data'] == 'done':
+                if messages[0]['data'] == 'done':
                     break
-            elif message['type'] == 'data':
-                if not hasattr(message_data, 'size'):
-                    message_data = np.array([message_data])
-                message_data = message_data.flatten()
 
-                logger.debug('%s "%s" received %d points', self.__class__.__name__, self.name, message_data.size)
+            elif message_type == 'data':
+                for ii in range(1, len(message_data)):
+                    if not hasattr(message_data[ii], 'size'):
+                        message_data[ii] = np.array([message_data[ii]])
+                    message_data[ii] = message_data[ii].flatten()
+                    if message_data[ii].size != message_data[0].size:
+                        raise ValueError("Writer received data of unequal length.")
+
+                logger.debug('%s "%s" received %d points', self.__class__.__name__, self.name, message_data[0].size)
                 logger.debug("Now has %d of %d points.", stream.points_taken, stream.num_points())
 
                 try:
@@ -188,11 +221,11 @@ class WriteToHDF5(Filter):
                     import ipdb; ipdb.set_trace()
 
                 # Resize if necessary, also get the new set of sweep tuples since the axes must have changed
-                if w_idx + message_data.size > self.data.len():
+                if w_idx + message_data[0].size > self.data.len():
                     # Get new data size
                     num_points = stream.descriptor.num_points()
                     self.data.resize((num_points,))
-                    logger.debug("HDF5 stream was resized to %d points", w_idx + message_data.size)
+                    logger.debug("HDF5 stream was resized to %d points", w_idx + message_data[0].size)
 
                     # Get and write new coordinate tuples to the main
                     # data set as well as the individual axis tables.
@@ -207,10 +240,11 @@ class WriteToHDF5(Filter):
                                 for j, col_name in enumerate(a.name):
                                     self.group[name][col_name,:] = a.points[:,j]
 
-                self.data[desc.data_name, w_idx:w_idx+message_data.size] = message_data
+                for s, d in zip(streams, message_data):
+                    self.data[s.descriptor.data_name, w_idx:w_idx+d.size] = d
 
                 self.file.flush()
-                w_idx += message_data.size
+                w_idx += message_data[0].size
                 self.points_taken = w_idx
 
                 logger.debug("HDF5: Write index at %d", w_idx)
