@@ -100,20 +100,12 @@ class X6(Instrument):
 
     def channel_setup(self, channel, settings):
         a, b, c = channel.channel
+        self._lib.enable_stream(a, b, c)
         if channel.stream_type == "Physical":
-            self._lib.enable_stream(a, 0, 0)
             return
         elif channel.stream_type == "Demodulated":
             self._lib.set_nco_freq(a, b, channel.if_freq)
-
-            if channel.kernel:
-                self._lib.enable_stream(a, b, 1)
-                self._lib.write_kernel(a, b, 1, channel.kernel)
-                self._lib.set_kernel_bias(a, b, 1, channel.kernel_bias)
-            else:
-                self._lib.enable_stream(a, b, 0)
         elif channel.stream_type == "Integrated":
-            self._lib.enable_stream(a, b, 1)
             if not channel.kernel:
                 logger.error("Integrated streams must specify a kernel")
                 return
