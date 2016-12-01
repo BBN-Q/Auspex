@@ -52,6 +52,7 @@ class AlazarATS9870(Instrument):
 
     def __init__(self, resource_name=None, name="Unlabeled Alazar"):
         self.name = name
+        self.fetch_count = 0
 
         # Just store the integers here...
         self.channel_numbers = []
@@ -76,6 +77,7 @@ class AlazarATS9870(Instrument):
 
     def acquire(self):
         self._lib.acquire()
+        self.fetch_count = 0
 
     def stop(self):
         self._lib.stop()
@@ -83,9 +85,12 @@ class AlazarATS9870(Instrument):
     def data_available(self):
         return self._lib.data_available()
 
+    def done(self):
+        return self.fetch_count >= ( len(self.channel_numbers) * self.number_acquisitions)
+
     def add_channel(self, channel):
         if not isinstance(channel, AlazarChannel):
-            raise TypeError("X6 passed {} rather than an X6Channel object.".format(str(channel)))
+            raise TypeError("Alazar passed {} rather than an AlazarChannel object.".format(str(channel)))
 
         # We can have either 1 or 2, or both.
         if len(self.channel_numbers) < 2 and channel.channel not in self.channel_numbers:
@@ -93,22 +98,8 @@ class AlazarATS9870(Instrument):
             self._buf_to_chan[channel] = channel.channel
 
     def get_buffer_for_channel(self, channel):
+        self.fetch_count += 1
         return getattr(self._lib, 'ch{}Buffer'.format(self._buf_to_chan[channel]))
-
-    def acquire_all(self, channel=2):
-        ch1 = np.array([], dtype=np.float32)
-        ch2 = np.array([], dtype=np.float32)
-
-        for _ in range(self.numberAcquisitions):
-            while not self.wait_for_acquisition():
-                time.sleep(0.0001)
-            ch1 = np.append(ch1, self._lib.ch1Buffer)
-            ch2 = np.append(ch2, self._lib.ch2Buffer)
-
-        if channel==1:
-            return ch1
-        else:
-            return ch2
 
     def set_all(self, settings_dict):
         # Flatten the dict and then pass to super
