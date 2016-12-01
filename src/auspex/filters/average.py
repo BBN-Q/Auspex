@@ -20,7 +20,7 @@ class Averager(Filter):
     sink            = InputConnector()
     partial_average = OutputConnector()
     final_average   = OutputConnector()
-    axis            = Parameter(allowed_values=[""])
+    axis            = Parameter(allowed_values=["round_robins", "segments", "time"])
 
     def __init__(self, averaging_axis=None, **kwargs):
         super(Averager, self).__init__(**kwargs)
