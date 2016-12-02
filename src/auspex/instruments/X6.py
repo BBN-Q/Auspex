@@ -73,16 +73,6 @@ class X6(Instrument):
         self.stop       = self._lib.stop
         self.disconnect = self._lib.disconnect
 
-        # pass thru instance variables
-        self.record_length    = self._lib.record_length
-        self.nbr_waveforms    = self._lib.nbr_waveforms
-        self.nbr_segments     = self._lib.nbr_segments
-        self.nbr_round_robins = self._lib.nbr_round_robins
-
-        # pass thru properties
-        self.reference = property(self._lib.get_reference_source, self._lib.set_reference_source)
-        self.acquire_mode = property(self._lib.get_acquire_mode, self._lib.set_acquire_mode)
-
     def __str__(self):
         return "<X6({}/{})>".format(self.name, self.resource_name)
 
@@ -106,7 +96,7 @@ class X6(Instrument):
         if channel.stream_type == "Raw":
             return
         elif channel.stream_type == "Demodulated":
-            self._lib.set_nco_freq(a, b, channel.if_freq)
+            self._lib.set_nco_frequency(a, b, channel.if_freq)
         elif channel.stream_type == "Integrated":
             if not channel.kernel:
                 logger.error("Integrated streams must specify a kernel")
@@ -140,3 +130,46 @@ class X6(Instrument):
 
     def get_buffer_for_channel(self, channel):
         return self._lib.transfer_stream(*channel.channel)
+
+    # pass thru properties
+    @property
+    def reference(self):
+        return self._lib.reference
+    @reference.setter
+    def reference(self, value):
+        self._lib.reference = value
+
+    @property
+    def acquire_mode(self):
+        return self._lib.acquire_mode
+    @acquire_mode.setter
+    def acquire_mode(self, value):
+        self._lib.acquire_mode = value
+
+    @property
+    def record_length(self):
+        return self._lib.record_length
+    @record_length.setter
+    def record_length(self, value):
+        self._lib.record_length = value
+
+    @property
+    def nbr_waveforms(self):
+        return self._lib.nbr_waveforms
+    @nbr_waveforms.setter
+    def nbr_waveforms(self, value):
+        self._lib.nbr_waveforms = value
+
+    @property
+    def nbr_segments(self):
+        return self._lib.nbr_segments
+    @nbr_segments.setter
+    def nbr_segments(self, value):
+        self._lib.nbr_segments = value
+
+    @property
+    def nbr_round_robins(self):
+        return self._lib.nbr_round_robins
+    @nbr_round_robins.setter
+    def nbr_round_robins(self, value):
+        self._lib.nbr_round_robins = value
