@@ -101,6 +101,11 @@ class QubitExpFactory(object):
     and experiment therefrom."""
 
     @staticmethod
+    def run():
+        exp = QubitExpFactory.create()
+        exp.run_sweeps()
+
+    @staticmethod
     def create():
         with open(config.instrumentLibFile, 'r') as FID:
             instrument_settings = json.load(FID)
