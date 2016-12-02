@@ -11,7 +11,7 @@ from auspex.log import logger
 from unittest.mock import MagicMock
 
 try:
-    from libx6 import X6
+    import libx6
     fake_x6 = False
 except:
     logger.warning("Could not load x6 library")
@@ -21,7 +21,7 @@ class X6Channel(DigitizerChannel):
     """Channel for an X6"""
 
     def __init__(self, settings_dict=None):
-        self.stream_type       = "Physical"
+        self.stream_type       = "Raw"
         self.if_freq           = 0.0
         self.kernel            = None
         self.kernel_bias       = 0.0
@@ -56,52 +56,54 @@ class X6(Instrument):
     """BBN QDSP running on the II-X6 digitizer"""
     instrument_type = "Digitizer"
 
-    def __init__(self, resource_address=None, name="Unlabeled X6"):
+    def __init__(self, resource_name=None, name="Unlabeled X6"):
         # Must have one or more channels, but fewer than XX
         self.channels = []
 
-        self.resource_address = resource_address
-        self.name             = name
+        self.resource_name = resource_name
+        self.name          = name
 
         if fake_x6:
             self._lib = MagicMock()
         else:
-            self._lib = X6()
+            self._lib = libx6.X6()
 
         # pass thru functions
         self.acquire    = self._lib.acquire
         self.stop       = self._lib.stop
         self.disconnect = self._lib.disconnect
 
-        # pass thru properties
+        # pass thru instance variables
         self.record_length    = self._lib.record_length
         self.nbr_waveforms    = self._lib.nbr_waveforms
         self.nbr_segments     = self._lib.nbr_segments
         self.nbr_round_robins = self._lib.nbr_round_robins
-        self.reference        = self._lib.reference
-        self.acquire_mode     = self._lib.acquire_mode
+
+        # pass thru properties
+        self.reference = property(self._lib.get_reference_source, self._lib.set_reference_source)
+        self.acquire_mode = property(self._lib.get_acquire_mode, self._lib.set_acquire_mode)
 
     def __str__(self):
         return "<X6({}/{})>".format(self.name, self.resource_name)
 
     def connect(self, resource_name=None):
-        if resource_name:
+        if resource_name is not None:
             self.resource_name = resource_name
 
         self._lib.connect(int(self.resource_name))
 
     def set_all(self, settings_dict):
         # Call the non-channel commands
-        super(APS2, self).set_all(settings)
+        super(X6, self).set_all(settings_dict)
 
         # perform channel setup
         for chan in self.channels:
             self.channel_setup(chan)
 
-    def channel_setup(self, channel, settings):
+    def channel_setup(self, channel):
         a, b, c = channel.channel
         self._lib.enable_stream(a, b, c)
-        if channel.stream_type == "Physical":
+        if channel.stream_type == "Raw":
             return
         elif channel.stream_type == "Demodulated":
             self._lib.set_nco_freq(a, b, channel.if_freq)
