@@ -277,8 +277,8 @@ class QubitExpFactory(object):
                     samp_time = 4.0e-9
                     descrip.add_axis(DataAxis("time", samp_time*np.array(range(source_instr_settings['record_length']//4))))
                 elif settings['stream_type'] == 'Demodulated':
-                    samp_time = 16.0e-9
-                    descrip.add_axis(DataAxis("time", samp_time*np.array(range(source_instr_settings['record_length']//16))))
+                    samp_time = 32.0e-9
+                    descrip.add_axis(DataAxis("time", samp_time*np.array(range(source_instr_settings['record_length']//32))))
                     descrip.dtype = np.complex128
                 else: # Integrated
                     descrip.dtype = np.complex128
