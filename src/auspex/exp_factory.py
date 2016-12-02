@@ -266,9 +266,12 @@ class QubitExpFactory(object):
 
                 # If it's an integrated stream, then the time axis has already been eliminated.
                 # Otherswise, add the time axis.
-                if settings['stream_type'] != 'Integrated':
-                    samp_time = 1.0e-9
-                    descrip.add_axis(DataAxis("time", samp_time*np.array(range(source_instr_settings['record_length']))))
+                if settings['stream_type'] == 'Raw':
+                    samp_time = 4.0e-9
+                    descrip.add_axis(DataAxis("time", samp_time*np.array(range(source_instr_settings['record_length']//4))))
+                elif settings['stream_type'] == 'Demodulated':
+                    samp_time = 16.0e-9
+                    descrip.add_axis(DataAxis("time", samp_time*np.array(range(source_instr_settings['record_length']//16))))
 
             else:
                 # Create a channel
