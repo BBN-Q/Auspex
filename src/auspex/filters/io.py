@@ -39,13 +39,13 @@ class WriteToHDF5(Filter):
         self.up_to_date = False
 
         self.quince_parameters = [self.filename, self.groupname]
-        
+
     def final_init(self):
         if not self.filename.value:
             raise Exception("Filename never supplied to writer.")
         # If self.file is still None, then we need to create
-        # the file object. Otherwise, we presume someone has 
-        # already set it up for us. 
+        # the file object. Otherwise, we presume someone has
+        # already set it up for us.
         if not self.file:
             self.file = self.new_file()
 
@@ -168,6 +168,7 @@ class WriteToHDF5(Filter):
             elif message['type'] == 'data':
                 if not hasattr(message_data, 'size'):
                     message_data = np.array([message_data])
+                message_data = message_data.flatten()
 
                 logger.debug('%s "%s" received %d points', self.__class__.__name__, self.name, message_data.size)
                 logger.debug("Now has %d of %d points.", stream.points_taken, stream.num_points())
