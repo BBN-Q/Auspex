@@ -32,9 +32,12 @@ class BokehServerThread(threading.Thread):
     def join(self, timeout=None):
         if self.p:
             print("Killing bokeh server thread {}".format(self.p.pid))
-            for child_proc in psutil.Process(self.p.pid).children():
-                print("Killing child process {}".format(child_proc.pid))
-                child_proc.kill()
+            try:
+                for child_proc in psutil.Process(self.p.pid).children():
+                    print("Killing child process {}".format(child_proc.pid))
+                    child_proc.kill()
+            except:
+                print("Couldn't kill child processes.")
             self.p.kill()
             self.p = None
             super(BokehServerThread, self).join(timeout=timeout)
