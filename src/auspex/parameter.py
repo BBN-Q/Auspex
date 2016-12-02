@@ -118,7 +118,8 @@ class Parameter(object):
                 pph()
 
 class FilenameParameter(Parameter):
-    pass
+    def __init__(self, *args, **kwargs):
+        super(FilenameParameter, self).__init__(*args, **kwargs)
 
 class ParameterGroup(Parameter):
     """ An array of Parameters """
