@@ -83,7 +83,9 @@ class QubitExperiment(Experiment):
                 # OutputConnectors
                 for chan in dig_channels:
                     oc = self.chan_to_oc[chan]
-                    await oc.push(digitizer.get_buffer_for_channel(chan))
+                    buf = digitizer.get_buffer_for_channel(chan)
+                    if buf is not None and buf.size > 0:
+                        await oc.push(buf)
 
                 logger.debug("Digitizer %s got data.", digitizer)
             logger.debug("Digitizer %s finished getting data.", digitizer)
