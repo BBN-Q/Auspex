@@ -26,6 +26,7 @@ from auspex.parameter import ParameterGroup, FloatParameter, IntParameter, Param
 from auspex.sweep import Sweeper
 from auspex.stream import DataStream, DataAxis, SweepAxis, DataStreamDescriptor, InputConnector, OutputConnector
 from auspex.filters.plot import Plotter
+from auspex.filters.io import WriteToHDF5
 from auspex.log import logger
 
 class ExpProgressBar(object):
@@ -188,6 +189,12 @@ class Experiment(metaclass=MetaExperiment):
         self.extra_plotters = []
         self._extra_plots_to_streams = {}
 
+        # Furthermore, keep references to all of the file writers.
+        # If multiple writers request acces to the same filename, they
+        # should share the same file object and write in separate 
+        # hdf5 groups.
+        self.writers = []
+
         # ExpProgressBar object to display progress bars
         self.progressbar = None
 
@@ -311,12 +318,32 @@ class Experiment(metaclass=MetaExperiment):
                 break
 
     def run_sweeps(self):
+        # Make sure we are starting from scratch
+        self.reset()
+
         # Connect the instruments to their resources
         for instrument in self._instruments.values():
             instrument.connect()
 
         # Initialize the instruments and stream
         self.init_instruments()
+
+        # Go find any writers
+        self.writers = [n for n in self.nodes if isinstance(n, WriteToHDF5)]
+        self.filenames = [w.filename.value for w in self.writers]
+        self.files = []
+
+        # Check for redundancy in filenames, and share plot file objects
+        for filename in set(self.filenames):
+            wrs = [w for w in self.writers if w.filename.value == filename]
+
+            # Let the first writer with this filename create the file...
+            wrs[0].file = wrs[0].new_file()
+            self.files.append(wrs[0].file)
+
+            # Make the rest of the writers use this same file object
+            for w in wrs[1:]:
+                w.file = wrs[0].file
 
         # Go and find any plotters
         self.plotters = [n for n in self.nodes if isinstance(n, Plotter)]
@@ -394,12 +421,18 @@ class Experiment(metaclass=MetaExperiment):
                 session.show()
 
         def shutdown():
+            logger.debug("Shutting Down!")
             if len(self.plotters) > 0:
                 time.sleep(0.5)
                 bokeh_thread.join()
 
+            for f in self.files:
+                try:
+                    logger.debug("Closing %s", f)
+                    f.close()
+                except:
+                    logger.debug("File probably already closed...")
             self.shutdown_instruments()
-            self.reset()
 
             for instrument in self._instruments.values():
                 instrument.disconnect()
@@ -422,6 +455,7 @@ class Experiment(metaclass=MetaExperiment):
 
         tasks.append(self.sweep())
         self.loop.run_until_complete(asyncio.gather(*tasks))
+        shutdown()
 
     def add_sweep(self, parameters, sweep_list, refine_func=None):
         ax = SweepAxis(parameters, sweep_list, refine_func=refine_func)

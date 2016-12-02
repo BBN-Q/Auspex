@@ -41,6 +41,7 @@ class SweptTestExperiment(Experiment):
 
     # DataStreams
     voltage = OutputConnector()
+    current = OutputConnector()
 
     # Constants
     samples = 5
@@ -65,6 +66,7 @@ class SweptTestExperiment(Experiment):
         data_row = np.sin(2*np.pi*self.time_val)*np.ones(5) + 0.1*np.random.random(5)
         self.time_val += time_step
         await self.voltage.push(data_row)
+        await self.current.push(np.sin(2*np.pi*self.time_val) + 0.1*np.random.random(1))
         logger.debug("Stream pushed points {}.".format(data_row))
         logger.debug("Stream has filled {} of {} points".format(self.voltage.points_taken, self.voltage.num_points() ))
 
@@ -84,16 +86,51 @@ class SweepTestCase(unittest.TestCase):
         exp.run_sweeps()
         self.assertTrue(os.path.exists("test_writehdf5-0000.h5"))
         with h5py.File("test_writehdf5-0000.h5", 'r') as f:
-            self.assertTrue(0.0 not in f['data']['voltage'])
-            self.assertTrue(np.sum(f['data']['field']) == 5*3*np.sum(np.linspace(0,100.0,4)) )
-            self.assertTrue(np.sum(f['data']['freq']) == 5*4*np.sum(np.linspace(0,10.0,3)) )
-            self.assertTrue(np.sum(f['data']['samples']) == 3*4*np.sum(np.linspace(0,4,5)) )
-            self.assertTrue("Here the run loop merely spews" in f['data'].attrs['exp_src'])
-            self.assertTrue(f['data'].attrs['time_val'] == 0)
-            self.assertTrue(f['data'].attrs['unit_freq'] == "Hz")
-            print(f['data']['voltage'])
+            self.assertTrue(0.0 not in f['voltage']['data']['voltage'])
+            self.assertTrue(np.sum(f['voltage']['data']['field']) == 5*3*np.sum(np.linspace(0,100.0,4)) )
+            self.assertTrue(np.sum(f['voltage']['data']['freq']) == 5*4*np.sum(np.linspace(0,10.0,3)) )
+            self.assertTrue(np.sum(f['voltage']['data']['samples']) == 3*4*np.sum(np.linspace(0,4,5)) )
+            self.assertTrue("Here the run loop merely spews" in f.attrs['exp_src'])
+            self.assertTrue(f['voltage']['data'].attrs['time_val'] == 0)
+            self.assertTrue(f['voltage']['data'].attrs['unit_freq'] == "Hz")
+            print(f['voltage']['data']['voltage'])
 
         os.remove("test_writehdf5-0000.h5")
+
+    def test_samefile_writehdf5(self):
+        exp = SweptTestExperiment()
+        if os.path.exists("test_samefile_writehdf5-0000.h5"):
+            os.remove("test_samefile_writehdf5-0000.h5")
+        wr1 = WriteToHDF5("test_samefile_writehdf5.h5")
+        wr2 = WriteToHDF5("test_samefile_writehdf5.h5")
+
+        edges = [(exp.voltage, wr1.sink), (exp.current, wr2.sink)]
+        exp.set_graph(edges)
+
+        exp.add_sweep(exp.field, np.linspace(0,100.0,4))
+        exp.add_sweep(exp.freq, np.linspace(0,10.0,3))
+        exp.run_sweeps()
+        self.assertTrue(os.path.exists("test_samefile_writehdf5-0000.h5"))
+        with h5py.File("test_samefile_writehdf5-0000.h5", 'r') as f:
+            self.assertTrue(0.0 not in f['voltage']['data']['voltage'])
+            self.assertTrue(np.sum(f['voltage']['data']['field']) == 5*3*np.sum(np.linspace(0,100.0,4)) )
+            self.assertTrue(np.sum(f['voltage']['data']['freq']) == 5*4*np.sum(np.linspace(0,10.0,3)) )
+            self.assertTrue(np.sum(f['voltage']['data']['samples']) == 3*4*np.sum(np.linspace(0,4,5)) )
+            self.assertTrue("Here the run loop merely spews" in f.attrs['exp_src'])
+            self.assertTrue(f['voltage']['data'].attrs['time_val'] == 0)
+            self.assertTrue(f['voltage']['data'].attrs['unit_freq'] == "Hz")
+
+            self.assertTrue(0.0 not in f['current']['data']['current'])
+            self.assertTrue(np.sum(f['current']['data']['field']) == 3*np.sum(np.linspace(0,100.0,4)) )
+            self.assertTrue(np.sum(f['current']['data']['freq']) == 4*np.sum(np.linspace(0,10.0,3)) )
+            # self.assertTrue('field' in f['current']['data'].keys())
+            # self.assertFalse('samples' in f['current']['data'].keys())
+            self.assertTrue("Here the run loop merely spews" in f.attrs['exp_src'])
+            self.assertTrue(f['current']['data'].attrs['time_val'] == 0)
+            self.assertTrue(f['current']['data'].attrs['unit_freq'] == "Hz")
+            print(f['current']['data']['current'])
+
+        os.remove("test_samefile_writehdf5-0000.h5")
 
     def test_writehdf5_adaptive_sweep(self):
         exp = SweptTestExperiment()

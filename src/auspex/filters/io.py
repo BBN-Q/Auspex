@@ -30,12 +30,18 @@ class WriteToHDF5(Filter):
         self.filename.value = filename
         self.points_taken = 0
         self.file = None
+        self.group = None
+        self.create_group = True
         self.up_to_date = False
-
+        
     def final_init(self):
         if not self.filename.value:
             raise Exception("Filename never supplied to writer.")
-        self.file = self.new_file()
+        # If self.file is still None, then we need to create
+        # the file object. Otherwise, we presume someone has 
+        # already set it up for us. 
+        if not self.file:
+            self.file = self.new_file()
 
     def new_filename(self):
         # Increment the filename until we find one we want.
@@ -79,23 +85,29 @@ class WriteToHDF5(Filter):
         params     = stream.descriptor.params
         axis_names = desc.axis_names()
 
-        params['exp_src'] = stream.descriptor.exp_src
+        self.file.attrs['exp_src'] = stream.descriptor.exp_src
         num_axes   = len(axes)
 
         # All of the combinations for the present values of the sweep parameters only
         tuples     = stream.descriptor.tuples()
+
+        # If desired, create the group in which the dataset and axes will reside
+        if self.create_group:
+            self.group = self.file.create_group(desc.data_name)
+        else:
+            self.group = self.file
 
         # Create a 2D dataset with a 1D data column
         dtype = [(a, 'f') for a in axis_names]
         dtype.append((desc.data_name, desc.dtype))
         logger.debug("Data type for HDF5: %s", dtype)
         if self.compress:
-            self.data = self.file.create_dataset('data', (len(tuples),), dtype=dtype,
+            self.data = self.group.create_dataset('data', (len(tuples),), dtype=dtype,
                                         chunks=True, maxshape=(None,),
                                         compression='gzip')
             # self.file.swmr_mode = True
         else:
-            self.data = self.file.create_dataset('data', (len(tuples),), dtype=dtype,
+            self.data = self.group.create_dataset('data', (len(tuples),), dtype=dtype,
                                         chunks=True, maxshape=(None,))
             # self.file.swmr_mode = True
 
@@ -106,7 +118,7 @@ class WriteToHDF5(Filter):
 
         # Create a table for the DataStreamDescriptor
         ref_dtype = h5py.special_dtype(ref=h5py.Reference)
-        self.descriptor = self.file.create_dataset("descriptor", (len(axes),), dtype=ref_dtype)
+        self.descriptor = self.group.create_dataset("descriptor", (len(axes),), dtype=ref_dtype)
 
         # Associated axis dimensions with the data and add
         # references to the descriptor.
@@ -114,17 +126,17 @@ class WriteToHDF5(Filter):
             if a.unstructured:
                 name = "+".join(a.name)
                 dtype = [(p.name, 'f') for p in a.parameter]
-                self.file.create_dataset(name, (a.num_points(),), dtype=dtype, maxshape=(None,) )
+                self.group.create_dataset(name, (a.num_points(),), dtype=dtype, maxshape=(None,) )
                 for j, (col_name, col_unit) in enumerate(zip(a.name, a.unit)):
-                    self.file[name][col_name,:] = a.points[:,j]
-                    self.file[name].attrs['unit_'+col_name] = col_unit
+                    self.group[name][col_name,:] = a.points[:,j]
+                    self.group[name].attrs['unit_'+col_name] = col_unit
             else:
                 name = a.name
-                self.file[name] = a.points
-                self.file[name].attrs['unit'] = "None" if a.unit is None else a.unit
-            self.data.dims.create_scale(self.file[name], name)
-            self.data.dims[0].attach_scale(self.file[name])
-            self.descriptor[i] = self.file[name].ref
+                self.group[name] = a.points
+                self.group[name].attrs['unit'] = "None" if a.unit is None else a.unit
+            self.data.dims.create_scale(self.group[name], name)
+            self.data.dims[0].attach_scale(self.group[name])
+            self.descriptor[i] = self.group[name].ref
 
         # Write the initial coordinate tuples
         for i, a in enumerate(axis_names):
@@ -154,7 +166,10 @@ class WriteToHDF5(Filter):
                 logger.debug('%s "%s" received %d points', self.__class__.__name__, self.name, message_data.size)
                 logger.debug("Now has %d of %d points.", stream.points_taken, stream.num_points())
 
-                self.up_to_date = (w_idx == self.data.len())
+                try:
+                    self.up_to_date = (w_idx == self.data.len())
+                except:
+                    import ipdb; ipdb.set_trace()
 
                 # Resize if necessary, also get the new set of sweep tuples since the axes must have changed
                 if w_idx + message_data.size > self.data.len():
@@ -171,10 +186,10 @@ class WriteToHDF5(Filter):
                     for i, a in enumerate(axes):
                         if a.unstructured:
                             name = "+".join(a.name)
-                            if a.num_points() > self.file[name].len():
-                                self.file[name].resize((a.num_points(),))
+                            if a.num_points() > self.group[name].len():
+                                self.group[name].resize((a.num_points(),))
                                 for j, col_name in enumerate(a.name):
-                                    self.file[name][col_name,:] = a.points[:,j]
+                                    self.group[name][col_name,:] = a.points[:,j]
 
                 self.data[desc.data_name, w_idx:w_idx+message_data.size] = message_data
 
@@ -185,12 +200,12 @@ class WriteToHDF5(Filter):
                 logger.debug("HDF5: Write index at %d", w_idx)
                 logger.debug("HDF5: %s has written %d points", stream.name, w_idx)
 
-        try:
-            self.file.close()
-            self.file = None
-        except:
-            # This doesn't seem to happen when we don't used named columns
-            logger.debug("Ignoring 'dictionary changed sized during iteration' error.")
+        # try:
+        #     self.file.close()
+        #     self.file = None
+        # except:
+        #     # This doesn't seem to happen when we don't used named columns
+        #     logger.debug("Ignoring 'dictionary changed sized during iteration' error.")
 
 class ProgressBar(Filter):
     """ Display progress bar(s) on the terminal/notebook.
