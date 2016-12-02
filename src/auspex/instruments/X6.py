@@ -122,7 +122,11 @@ class X6(Instrument):
         return self._lib.get_num_new_records() > 0
 
     def done(self):
-        return not self._lib.get_is_running()
+        if self.data_available():
+            return False
+        if self._lib.get_is_running():
+            return False
+        return True
 
     def add_channel(self, channel):
         if not isinstance(channel, X6Channel):
