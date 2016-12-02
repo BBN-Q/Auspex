@@ -28,9 +28,8 @@ class X6Channel(DigitizerChannel):
         self.threshold         = 0.0
         self.threshold_invert  = False
 
-        self.phys_chan   = 1
-        self.demod_chan  = 0
-        self.result_chan = 0
+        self.phys_channel   = 1
+        self.dsp_channel    = 0
         self.channel     = (1,0,0)
 
         if settings_dict:
@@ -42,15 +41,16 @@ class X6Channel(DigitizerChannel):
                 setattr(self, name, value)
 
         if self.stream_type == "Integrated":
-            self.result_chan = 1
-            self.demod_chan = 0
+            demod_channel = 0
+            result_channel = self.dsp_channel
         elif self.stream_type == "Demodulated":
-            self.result_chan = 0
+            demod_channel = self.dsp_channel
+            result_channel = 0
         else: #Raw
-            self.result_chan = 0
-            self.demod_chan  = 0
+            demod_channel  = 0
+            result_channel = 0
 
-        self.channel = (self.phys_chan, self.demod_chan, self.result_chan)
+        self.channel = (self.phys_channel, demod_channel, result_channel)
 
 class X6(Instrument):
     """BBN QDSP running on the II-X6 digitizer"""
