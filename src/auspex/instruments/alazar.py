@@ -62,18 +62,16 @@ class AlazarATS9870(Instrument):
         # For lookup
         self._buf_to_chan = {}
 
-        self.fake = fake_alazar
+        if fake_alazar:
+            self._lib = MagicMock()
+        else:
+            self._lib = ATS9870()
 
     def connect(self, resource_name=None):
         if resource_name:
             self.resource_name = resource_name
 
-        if self.fake:
-            self._lib = MagicMock()
-        else:
-            self._lib = ATS9870("{}/{}".format(self.name, int(self.resource_name)))
-
-        self._lib.connectBoard()
+        self._lib.connect("{}/{}".format(self.name, int(self.resource_name)))
 
     def acquire(self):
         self._lib.acquire()
