@@ -69,13 +69,13 @@ class QubitExperiment(Experiment):
             t = datetime.datetime.now()
             while not digitizer.done():
                 if (datetime.datetime.now() - t).seconds > timeout:
-                        logger.error("Digitizer %s timed out.", digitizer)
-                        break
+                    logger.error("Digitizer %s timed out.", digitizer)
+                    break
 
                 if not digitizer.data_available():
                     await asyncio.sleep(0.1)
                     continue
-                    
+
                 # Find all of the channels associated with this particular digitizer
                 dig_channels = [chan for chan, dig in self.chan_to_dig.items() if dig == digitizer]
 

@@ -123,9 +123,6 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
             self.wrapper.disconnect()
             self.connected = False
 
-    def __del__(self):
-        self.disconnect()
-
     def set_all(self, settings_dict):
         # Pop the channel settings
         settings = settings_dict.copy()
