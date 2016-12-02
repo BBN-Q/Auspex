@@ -150,6 +150,15 @@ class MetaInstrument(type):
 
 
 class Instrument(metaclass=MetaInstrument):
+    def connect(self, resource_name=None):
+        pass
+
+    def disconnect(self):
+        pass
+
+    def __del__(self):
+        self.disconnect()
+
     def set_all(self, settings_dict):
         """Accept a settings dictionary and attempt to set all of the instrument
         parameters using the key/value pairs."""

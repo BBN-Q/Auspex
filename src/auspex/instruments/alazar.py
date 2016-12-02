@@ -86,7 +86,7 @@ class AlazarATS9870(Instrument):
         return self._lib.data_available()
 
     def done(self):
-        return self.fetch_count >= ( len(self.channel_numbers) * self.number_acquisitions)
+        return self.fetch_count >= (len(self.channel_numbers) * self.number_acquisitions)
 
     def add_channel(self, channel):
         if not isinstance(channel, AlazarChannel):
@@ -144,10 +144,6 @@ class AlazarATS9870(Instrument):
 
     def disconnect(self):
         self._lib.disconnect()
-
-    def __del__(self):
-        if hasattr(self, '_lib'):
-            self.disconnect()
 
     def __str__(self):
         return "<AlazarATS9870({}/{})>".format(self.name, self.resource_name)

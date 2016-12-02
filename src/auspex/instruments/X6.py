@@ -8,24 +8,31 @@
 
 from auspex.instruments.instrument import Instrument, DigitizerChannel
 from auspex.log import logger
+from unittest.mock import MagicMock
+
+try:
+    from libx6 import X6
+    fake_x6 = False
+except:
+    logger.warning("Could not load x6 library")
+    fake_x6 = True
 
 class X6Channel(DigitizerChannel):
     """Channel for an X6"""
-    stream_type       = None
-    if_freq           = None
-    demod_kernel      = None
-    demod_kernel_bias = None
-    raw_kernel        = None
-    raw_kernel_bias   = None
-    threshold         = None
-    threshold_invert  = None
 
-    phys_chan   = 0
-    demod_chan  = 0
-    result_chan = 0
-    channel     = (0,0,0)
-    
     def __init__(self, settings_dict=None):
+        self.stream_type       = "Physical"
+        self.if_freq           = 0.0
+        self.kernel            = None
+        self.kernel_bias       = 0.0
+        self.threshold         = 0.0
+        self.threshold_invert  = False
+
+        self.phys_chan   = 1
+        self.demod_chan  = 0
+        self.result_chan = 0
+        self.channel     = (1,0,0)
+
         if settings_dict:
             self.set_all(settings_dict)
 
@@ -36,6 +43,7 @@ class X6Channel(DigitizerChannel):
 
         if self.stream_type == "Integrated":
             self.result_chan = 1
+            self.demod_chan = 0
         elif self.stream_type == "Demodulated":
             self.result_chan = 0
         else: #Raw
@@ -45,7 +53,7 @@ class X6Channel(DigitizerChannel):
         self.channel = (self.phys_chan, self.demod_chan, self.result_chan)
 
 class X6(Instrument):
-    """Alazar X6 digitizer"""
+    """BBN QDSP running on the II-X6 digitizer"""
     instrument_type = "Digitizer"
 
     def __init__(self, resource_address=None, name="Unlabeled X6"):
@@ -55,8 +63,64 @@ class X6(Instrument):
         self.resource_address = resource_address
         self.name             = name
 
-        # For lookup
-        self._buf_to_chan = {}
+        if fake_x6:
+            self._lib = MagicMock()
+        else:
+            self._lib = X6()
+
+        # pass thru functions
+        self.acquire    = self._lib.acquire
+        self.stop       = self._lib.stop
+        self.disconnect = self._lib.disconnect
+
+        # pass thru properties
+        self.record_length    = self._lib.record_length
+        self.nbr_waveforms    = self._lib.nbr_waveforms
+        self.nbr_segments     = self._lib.nbr_segments
+        self.nbr_round_robins = self._lib.nbr_round_robins
+        self.reference        = self._lib.reference
+        self.acquire_mode     = self._lib.acquire_mode
+
+    def __str__(self):
+        return "<X6({}/{})>".format(self.name, self.resource_name)
+
+    def connect(self, resource_name=None):
+        if resource_name:
+            self.resource_name = resource_name
+
+        self._lib.connect(int(self.resource_name))
+
+    def set_all(self, settings_dict):
+        # Call the non-channel commands
+        super(APS2, self).set_all(settings)
+
+        # perform channel setup
+        for chan in self.channels:
+            self.channel_setup(chan)
+
+    def channel_setup(self, channel, settings):
+        a, b, c = channel.channel
+        self._lib.enable_stream(a, b, c)
+        if channel.stream_type == "Physical":
+            return
+        elif channel.stream_type == "Demodulated":
+            self._lib.set_nco_freq(a, b, channel.if_freq)
+        elif channel.stream_type == "Integrated":
+            if not channel.kernel:
+                logger.error("Integrated streams must specify a kernel")
+                return
+            self._lib.write_kernel(a, b, c, channel.kernel)
+            self._lib.set_kernel_bias(a, b, c, channel.kernel_bias)
+            self._lib.set_threshold(a, b, channel.threshold)
+            self._lib.set_threshold_invert(a, b, channel.threshold_invert)
+        else:
+            logger.error("Unrecognized stream type %s" % channel.stream_type)
+
+    def data_available(self):
+        return self._lib.get_num_new_records() > 0
+
+    def done(self):
+        return not self._lib.get_is_running()
 
     def add_channel(self, channel):
         if not isinstance(channel, X6Channel):
@@ -67,7 +131,6 @@ class X6(Instrument):
 
         # todo: other checking here
         self.channels.append(channel)
-        self._buf_to_chan[channel] = channel.channel
 
     def get_buffer_for_channel(self, channel):
-        return getattr(self._lib, 'ch{:d}Buffer'.format(self._buf_to_chan[channel]))
+        return self._lib.transfer_stream(*channel.channel)
