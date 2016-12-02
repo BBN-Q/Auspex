@@ -86,14 +86,14 @@ class SweepTestCase(unittest.TestCase):
         exp.run_sweeps()
         self.assertTrue(os.path.exists("test_writehdf5-0000.h5"))
         with h5py.File("test_writehdf5-0000.h5", 'r') as f:
-            self.assertTrue(0.0 not in f['voltage']['data']['voltage'])
-            self.assertTrue(np.sum(f['voltage']['data']['field']) == 5*3*np.sum(np.linspace(0,100.0,4)) )
-            self.assertTrue(np.sum(f['voltage']['data']['freq']) == 5*4*np.sum(np.linspace(0,10.0,3)) )
-            self.assertTrue(np.sum(f['voltage']['data']['samples']) == 3*4*np.sum(np.linspace(0,4,5)) )
+            self.assertTrue(0.0 not in f['main']['data']['voltage'])
+            self.assertTrue(np.sum(f['main']['data']['field']) == 5*3*np.sum(np.linspace(0,100.0,4)) )
+            self.assertTrue(np.sum(f['main']['data']['freq']) == 5*4*np.sum(np.linspace(0,10.0,3)) )
+            self.assertTrue(np.sum(f['main']['data']['samples']) == 3*4*np.sum(np.linspace(0,4,5)) )
             self.assertTrue("Here the run loop merely spews" in f.attrs['exp_src'])
-            self.assertTrue(f['voltage']['data'].attrs['time_val'] == 0)
-            self.assertTrue(f['voltage']['data'].attrs['unit_freq'] == "Hz")
-            print(f['voltage']['data']['voltage'])
+            self.assertTrue(f['main']['data'].attrs['time_val'] == 0)
+            self.assertTrue(f['main']['data'].attrs['unit_freq'] == "Hz")
+            print(f['main']['data']['voltage'])
 
         os.remove("test_writehdf5-0000.h5")
 
@@ -101,8 +101,8 @@ class SweepTestCase(unittest.TestCase):
         exp = SweptTestExperiment()
         if os.path.exists("test_samefile_writehdf5-0000.h5"):
             os.remove("test_samefile_writehdf5-0000.h5")
-        wr1 = WriteToHDF5("test_samefile_writehdf5.h5")
-        wr2 = WriteToHDF5("test_samefile_writehdf5.h5")
+        wr1 = WriteToHDF5("test_samefile_writehdf5.h5", "group1")
+        wr2 = WriteToHDF5("test_samefile_writehdf5.h5", "group2")
 
         edges = [(exp.voltage, wr1.sink), (exp.current, wr2.sink)]
         exp.set_graph(edges)
@@ -112,25 +112,25 @@ class SweepTestCase(unittest.TestCase):
         exp.run_sweeps()
         self.assertTrue(os.path.exists("test_samefile_writehdf5-0000.h5"))
         with h5py.File("test_samefile_writehdf5-0000.h5", 'r') as f:
-            self.assertTrue(0.0 not in f['voltage']['data']['voltage'])
-            self.assertTrue(np.sum(f['voltage']['data']['field']) == 5*3*np.sum(np.linspace(0,100.0,4)) )
-            self.assertTrue(np.sum(f['voltage']['data']['freq']) == 5*4*np.sum(np.linspace(0,10.0,3)) )
-            self.assertTrue(np.sum(f['voltage']['data']['samples']) == 3*4*np.sum(np.linspace(0,4,5)) )
+            self.assertTrue(0.0 not in f['group1']['data']['voltage'])
+            self.assertTrue(np.sum(f['group1']['data']['field']) == 5*3*np.sum(np.linspace(0,100.0,4)) )
+            self.assertTrue(np.sum(f['group1']['data']['freq']) == 5*4*np.sum(np.linspace(0,10.0,3)) )
+            self.assertTrue(np.sum(f['group1']['data']['samples']) == 3*4*np.sum(np.linspace(0,4,5)) )
             self.assertTrue("Here the run loop merely spews" in f.attrs['exp_src'])
-            self.assertTrue(f['voltage']['data'].attrs['time_val'] == 0)
-            self.assertTrue(f['voltage']['data'].attrs['unit_freq'] == "Hz")
+            self.assertTrue(f['group1']['data'].attrs['time_val'] == 0)
+            self.assertTrue(f['group1']['data'].attrs['unit_freq'] == "Hz")
 
-            self.assertTrue(0.0 not in f['current']['data']['current'])
-            self.assertTrue(np.sum(f['current']['data']['field']) == 3*np.sum(np.linspace(0,100.0,4)) )
-            self.assertTrue(np.sum(f['current']['data']['freq']) == 4*np.sum(np.linspace(0,10.0,3)) )
-            # self.assertTrue('field' in f['current']['data'].keys())
-            # self.assertFalse('samples' in f['current']['data'].keys())
+            self.assertTrue(0.0 not in f['group2']['data']['current'])
+            self.assertTrue(np.sum(f['group2']['data']['field']) == 3*np.sum(np.linspace(0,100.0,4)) )
+            self.assertTrue(np.sum(f['group2']['data']['freq']) == 4*np.sum(np.linspace(0,10.0,3)) )
+            # self.assertTrue('field' in f['group2']['data'].keys())
+            # self.assertFalse('samples' in f['group2']['data'].keys())
             self.assertTrue("Here the run loop merely spews" in f.attrs['exp_src'])
-            self.assertTrue(f['current']['data'].attrs['time_val'] == 0)
-            self.assertTrue(f['current']['data'].attrs['unit_freq'] == "Hz")
-            print(f['current']['data']['current'])
+            self.assertTrue(f['group2']['data'].attrs['time_val'] == 0)
+            self.assertTrue(f['group2']['data'].attrs['unit_freq'] == "Hz")
+            print(f['group2']['data']['current'])
 
-        os.remove("test_samefile_writehdf5-0000.h5")
+        # os.remove("test_samefile_writehdf5-0000.h5")
 
     def test_writehdf5_adaptive_sweep(self):
         exp = SweptTestExperiment()

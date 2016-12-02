@@ -12,7 +12,7 @@ import h5py
 import numpy as np
 import os.path
 
-from auspex.parameter import Parameter
+from auspex.parameter import Parameter, FilenameParameter
 from auspex.stream import DataStreamDescriptor
 from auspex.log import logger
 from auspex.filters.filter import Filter, InputConnector, OutputConnector
@@ -22,17 +22,23 @@ class WriteToHDF5(Filter):
     """Writes data to file."""
 
     sink = InputConnector()
-    filename = Parameter()
+    filename = FilenameParameter()
+    groupname = Parameter(default='main')
 
-    def __init__(self, filename=None, compress=True, **kwargs):
+    def __init__(self, filename=None, groupname=None, compress=True, **kwargs):
         super(WriteToHDF5, self).__init__(**kwargs)
         self.compress = compress
-        self.filename.value = filename
+        if filename:
+            self.filename.value = filename
+        if groupname:
+            self.groupname.value = groupname
         self.points_taken = 0
         self.file = None
         self.group = None
         self.create_group = True
         self.up_to_date = False
+
+        self.quince_parameters = [self.filename, self.groupname]
         
     def final_init(self):
         if not self.filename.value:
@@ -93,7 +99,7 @@ class WriteToHDF5(Filter):
 
         # If desired, create the group in which the dataset and axes will reside
         if self.create_group:
-            self.group = self.file.create_group(desc.data_name)
+            self.group = self.file.create_group(self.groupname.value)
         else:
             self.group = self.file
 
