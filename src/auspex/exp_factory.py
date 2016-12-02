@@ -246,7 +246,7 @@ class QubitExpFactory(object):
         for name, settings in dig_settings.items():
 
             # Create and add the OutputConnector
-            logger.info("Adding %s output connector to experiment.", name)
+            logger.debug("Adding %s output connector to experiment.", name)
             oc = OutputConnector(name=name, parent=experiment)
             experiment._output_connectors.append(oc)
             experiment.output_connectors[name] = oc
@@ -310,7 +310,7 @@ class QubitExpFactory(object):
                 filt = module_map[filt_type](**settings)
                 filt.name = name
                 filters[name] = filt
-                logger.info("Found filter class %s for '%s' when loading experiment settings.", filt_type, name)
+                logger.debug("Found filter class %s for '%s' when loading experiment settings.", filt_type, name)
             else:
                 logger.error("Could not find filter class %s for '%s' when loading experiment settings.", filt_type, name)
 
@@ -335,7 +335,7 @@ class QubitExpFactory(object):
             else:
                 raise ValueError("Couldn't find anywhere to attach the source of the specified filter {}".format(name))
 
-            logger.info("Connecting %s@%s ---> %s", node_name, conn_name, filt)
+            logger.debug("Connecting %s@%s ---> %s", node_name, conn_name, filt)
             graph.append([source, filt.sink])
 
         experiment.chan_to_oc  = chan_to_oc

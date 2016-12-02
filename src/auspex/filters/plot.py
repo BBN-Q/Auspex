@@ -39,7 +39,7 @@ class Plotter(Filter):
         self.quince_parameters = [self.plot_dims, self.plot_mode]
 
     def update_descriptors(self):
-        logger.info("Updating Plotter %s descriptors based on input descriptor %s", self.name, self.sink.descriptor)
+        logger.debug("Updating Plotter %s descriptors based on input descriptor %s", self.name, self.sink.descriptor)
         self.stream = self.sink.input_streams[0]
         self.descriptor = self.sink.descriptor
 
