@@ -130,7 +130,7 @@ class SweepTestCase(unittest.TestCase):
             self.assertTrue(f['group2']['data'].attrs['unit_freq'] == "Hz")
             print(f['group2']['data']['current'])
 
-        # os.remove("test_samefile_writehdf5-0000.h5")
+        os.remove("test_samefile_writehdf5-0000.h5")
 
     def test_writehdf5_adaptive_sweep(self):
         exp = SweptTestExperiment()
