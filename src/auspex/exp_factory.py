@@ -263,39 +263,16 @@ class QubitExpFactory(object):
             source_instr          = experiment._instruments[settings['data_source']]
             source_instr_settings = experiment.instrument_settings['instrDict'][settings['data_source']]
 
-            # Construct the descriptor
-            descrip = DataStreamDescriptor()
-
-            # Prepare the the instrument channels and the descriptors
-            if 'X6' in settings['x__class__']:
-                # Create a channel
-                channel = X6Channel(settings)
-
-                # If it's an integrated stream, then the time axis has already been eliminated.
-                # Otherswise, add the time axis.
-                if settings['stream_type'] == 'Raw':
-                    samp_time = 4.0e-9
-                    descrip.add_axis(DataAxis("time", samp_time*np.array(range(source_instr_settings['record_length']//4))))
-                elif settings['stream_type'] == 'Demodulated':
-                    samp_time = 32.0e-9
-                    descrip.add_axis(DataAxis("time", samp_time*np.array(range(source_instr_settings['record_length']//32))))
-                    descrip.dtype = np.complex128
-                else: # Integrated
-                    descrip.dtype = np.complex128
-
-            else:
-                # Create a channel
-                channel = AlazarChannel(settings)
-
-                # Add the time axis
-                samp_time = 1.0/source_instr_settings["sampling_rate"]
-                descrip.add_axis(DataAxis("time", samp_time*np.array(range(source_instr_settings['record_length']))))
+            # Construct the descriptor from the stream
+            stream_type = settings['x__class__']
+            stream = module_map[stream_type](name=name)
+            channel, descrip = stream.get_descriptor(source_instr_settings, settings)
 
             # Add the channel to the instrument
             source_instr.add_channel(channel)
 
             # Add the usual axes
-            descrip.add_axis(DataAxis("segments",     range(source_instr_settings['nbr_segments'])))
+            descrip.add_axis(DataAxis("segments", range(source_instr_settings['nbr_segments'])))
 
             # Digitizer mode preserves round_robins, averager mode collapsing along them:
             if source_instr_settings['acquire_mode'] == 'digitizer':
