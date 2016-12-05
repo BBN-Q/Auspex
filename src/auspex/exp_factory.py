@@ -30,12 +30,6 @@ from auspex.experiment import FloatParameter
 from auspex.instruments.X6 import X6Channel
 from auspex.instruments.alazar import AlazarChannel
 
-# def strip_vendor_names(instr_name):
-#     vns = ["Agilent", "Alazar", "Keysight", "Holzworth", "Yoko", "Yokogawa"]
-#     for vn in vns:
-#         instr_name = instr_name.replace(vn, "")
-#     return instr_name
-
 def correct_resource_name(resource_name):
     substs = {"USB::": "USB0::", }
     for k, v in substs.items():
