@@ -46,19 +46,20 @@ class DataAxis(object):
     def data_type(self, with_metadata=False):
         dtype = []
         if self.unstructured:
+            name = "+".join(self.name)
             dtype.extend([(p.name, 'f') for p in self.parameter])
         else:
             name = self.name
             dtype.append((name, 'f'))
         
         if with_metadata and self.metadata:
-            dtype.append((self.name + "_metadata", 'S128'))
+            dtype.append((name + "_metadata", 'S128'))
         return dtype
 
     def points_with_metadata(self):
         if self.metadata:
             if self.unstructured:
-                return [list(self.points[i]).append(self.metadata[i]) for i in range(len(self.points))]
+                return [list(self.points[i]) + [self.metadata[i]] for i in range(len(self.points))]
             return [(self.points[i], self.metadata[i], ) for i in range(len(self.points))]
         if self.unstructured:
             return [tuple(self.points[i]) for i in range(len(self.points))]
@@ -231,7 +232,6 @@ class DataStreamDescriptor(object):
                 vals.append(a.points_with_metadata())
             else:
                 vals.append(a.points)
-        import ipdb; ipdb.set_trace()
         nested_list = list(itertools.product(*vals))
         flattened_list = [tuple((val for sublist in line for val in sublist)) for line in nested_list]
         if as_structured_array:
