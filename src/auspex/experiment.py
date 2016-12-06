@@ -459,6 +459,7 @@ class Experiment(metaclass=MetaExperiment):
 
     def add_sweep(self, parameters, sweep_list, refine_func=None):
         ax = SweepAxis(parameters, sweep_list, refine_func=refine_func)
+        ax.experiment = self
         self.sweeper.add_sweep(ax)
         for oc in self.output_connectors.values():
             logger.debug("Adding sweep axis %s to connector %s.", ax, oc.name)

@@ -55,7 +55,7 @@ class DataAxis(object):
 class SweepAxis(DataAxis):
     """ Structure for sweep axis, separate from DataAxis.
     Can be an unstructured axis, in which case 'parameter' is actually a list of parameters. """
-    def __init__(self, parameter, points = [], metadata=None, refine_func=None):
+    def __init__(self, parameter, points = [], metadata=None, refine_func=None, callback_func=None):
 
         self.unstructured = hasattr(parameter, '__iter__')
         self.parameter    = parameter
@@ -67,10 +67,18 @@ class SweepAxis(DataAxis):
             super(SweepAxis, self).__init__(parameter.name, points, unit=parameter.unit)
             self.value     = points[0]
 
+        # This is run at the end of this sweep axis
+        # Refine_func receives the sweep axis and the experiment as arguments
         self.refine_func = refine_func
+
+        # This is run before each point in the sweep axis is executed
+        # Callback_func receives the sweep axis and the experiment as arguments
+        self.callback_func = callback_func
+
         self.step        = 0
         self.done        = False
         self.metadata    = metadata
+        self.experiment  = None # Should be explicitly set by the experiment
 
         if self.unstructured and len(parameter) != len(points[0]):
             raise ValueError("Parameter value tuples must be the same length as the number of parameters.")
@@ -88,6 +96,8 @@ class SweepAxis(DataAxis):
         If refine_func is None, loop through the list of points.
         """
         if self.step < self.num_points():
+            if self.callback_func:
+                self.callback_func(self, self.experiment)
             self.value = self.points[self.step]
             logger.debug("Sweep Axis '{}' at step {} takes value: {}.".format(self.name,
                                                                                self.step,self.value))
@@ -100,7 +110,7 @@ class SweepAxis(DataAxis):
             await asyncio.sleep(0.1)
             logger.debug("Refining on axis {}".format(self.name))
             if self.refine_func is not None:
-                if not await self.refine_func(self):
+                if not await self.refine_func(self, self.experiment):
                     # Returns false if no refinements needed, otherwise adds points to list
                     self.step = 0
                     self.done = True

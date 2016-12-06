@@ -113,7 +113,7 @@ class SweepTestCase(unittest.TestCase):
         edges = [(exp.voltage, pri.sink)]
         exp.set_graph(edges)
 
-        async def rf(sweep_axis):
+        async def rf(sweep_axis, exp):
             logger.debug("Running refinement function.")
             if sweep_axis.num_points() >= 5:
                 return False
