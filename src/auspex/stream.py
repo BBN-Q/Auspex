@@ -22,7 +22,7 @@ from auspex.log import logger
 
 class DataAxis(object):
     """An axis in a data stream"""
-    def __init__(self, name, points=[], unit=None):
+    def __init__(self, name, points=[], unit=None, metadata=None):
         super(DataAxis, self).__init__()
         if isinstance(name, list):
             self.unstructured = True
@@ -32,6 +32,7 @@ class DataAxis(object):
             self.name         = str(name)
         self.points       = np.array(points)
         self.unit         = unit
+        self.metadata     = metadata
 
         # By definition data axes will be done after every experiment.run() call
         self.done         = True
@@ -41,6 +42,27 @@ class DataAxis(object):
                 raise ValueError("DataAxis unit length {} and tuples length {} must match.".format(len(unit),len(name)))
         if self.unstructured and len(name) != len(points[0]):
             raise ValueError("DataAxis points length {} and names length {} must match.".format(len(points[0]), len(name)))
+
+    def data_type(self, with_metadata=False):
+        dtype = []
+        if self.unstructured:
+            dtype.extend([(p.name, 'f') for p in self.parameter])
+        else:
+            name = self.name
+            dtype.append((name, 'f'))
+        
+        if with_metadata and self.metadata:
+            dtype.append((self.name + "_metadata", 'S128'))
+        return dtype
+
+    def points_with_metadata(self):
+        if self.metadata:
+            if self.unstructured:
+                return [list(self.points[i]).append(self.metadata[i]) for i in range(len(self.points))]
+            return [(self.points[i], self.metadata[i], ) for i in range(len(self.points))]
+        if self.unstructured:
+            return [tuple(self.points[i]) for i in range(len(self.points))]
+        return [(self.points[i],) for i in range(len(self.points))]
 
     def num_points(self):
         return len(self.points)
@@ -195,26 +217,41 @@ class DataStreamDescriptor(object):
             logger.warning("DataStreamDescriptor has no pure DataAxis. Return None.")
             return None
 
-    def tuples(self):
+    def axis_data_type(self, with_metadata=False):
+        dtype = []
+        for a in self.axes:
+            dtype.extend(a.data_type(with_metadata=with_metadata))
+        # dtype.append((self.data_name, self.dtype))
+        return dtype
+
+    def tuples(self, with_metadata=False, as_structured_array=True):
         vals = []
         for a in self.axes:
-            vals.append(a.points)
+            if with_metadata:
+                vals.append(a.points_with_metadata())
+            else:
+                vals.append(a.points)
+        import ipdb; ipdb.set_trace()
         nested_list = list(itertools.product(*vals))
-        flattened_list = np.array([np.hstack(i) for i in nested_list])
+        flattened_list = [tuple((val for sublist in line for val in sublist)) for line in nested_list]
+        if as_structured_array:
+            return np.core.records.fromrecords(flattened_list, dtype=self.axis_data_type(with_metadata=True))
         return flattened_list
 
-    def axis_names(self):
+    def axis_names(self, with_metadata=False):
         # Returns all axis names included those from unstructured axes
         vals = []
         for a in self.axes:
-            if isinstance(a, SweepAxis):
-                if a.unstructured:
-                    for p in a.parameter:
-                        vals.append(p.name)
-                else:
-                    vals.append(a.name)
+            if a.unstructured:
+                for p in a.parameter:
+                    vals.append(p.name)
             else:
                 vals.append(a.name)
+            if with_metadata and a.metadata:
+                if a.unstructured:
+                    vals.append("+".join(a.name) + "_metadata")
+                else:
+                    vals.append(a.name + "_metadata")
         return vals
 
     def data_axis_points(self):

@@ -89,13 +89,13 @@ class WriteToHDF5(Filter):
         desc       = stream.descriptor
         axes       = stream.descriptor.axes
         params     = stream.descriptor.params
-        axis_names = desc.axis_names()
+        axis_names = desc.axis_names(with_metadata=True)
 
         self.file.attrs['exp_src'] = stream.descriptor.exp_src
         num_axes   = len(axes)
 
         # All of the combinations for the present values of the sweep parameters only
-        tuples     = stream.descriptor.tuples()
+        tuples     = stream.descriptor.tuples(with_metadata=True, as_structured_array=True)
 
         # If desired, create the group in which the dataset and axes will reside
         if self.create_group:
@@ -103,14 +103,14 @@ class WriteToHDF5(Filter):
         else:
             self.group = self.file
 
-        # Create a 2D dataset with a 1D data column
-        dtype = [(a, 'f') for a in axis_names]
+        dtype = desc.axis_data_type(with_metadata=True)
         dtype.append((desc.data_name, desc.dtype))
         logger.debug("Data type for HDF5: %s", dtype)
         if self.compress:
             self.data = self.group.create_dataset('data', (len(tuples),), dtype=dtype,
                                         chunks=True, maxshape=(None,),
                                         compression='gzip')
+            # TODO: update when HDF version changes...
             # self.file.swmr_mode = True
         else:
             self.data = self.group.create_dataset('data', (len(tuples),), dtype=dtype,
@@ -131,22 +131,31 @@ class WriteToHDF5(Filter):
         for i, a in enumerate(axes):
             if a.unstructured:
                 name = "+".join(a.name)
-                dtype = [(p.name, 'f') for p in a.parameter]
-                self.group.create_dataset(name, (a.num_points(),), dtype=dtype, maxshape=(None,) )
+            else:
+                name = a.name
+
+            dtype = a.data_type(with_metadata=True)
+            self.group.create_dataset(name, (a.num_points(),), dtype=dtype, maxshape=(None,) )
+            
+            if a.unstructured:
                 for j, (col_name, col_unit) in enumerate(zip(a.name, a.unit)):
                     self.group[name][col_name,:] = a.points[:,j]
                     self.group[name].attrs['unit_'+col_name] = col_unit
             else:
-                name = a.name
-                self.group[name] = a.points
+                self.group[name][:] = a.points
                 self.group[name].attrs['unit'] = "None" if a.unit is None else a.unit
+
+            if a.metadata:
+                self.group[name + "_metadata"] = np.string_(a.metadata)
+                self.group[name][name + "_metadata",:] = np.string_(a.metadata)
+
             self.data.dims.create_scale(self.group[name], name)
             self.data.dims[0].attach_scale(self.group[name])
             self.descriptor[i] = self.group[name].ref
 
         # Write the initial coordinate tuples
         for i, a in enumerate(axis_names):
-            self.data[a,:] = tuples[:,i]
+            self.data[a,:] = tuples[a]
 
         # Write pointer
         w_idx = 0
@@ -187,9 +196,9 @@ class WriteToHDF5(Filter):
 
                     # Get and write new coordinate tuples to the main
                     # data set as well as the individual axis tables.
-                    tuples = stream.descriptor.tuples()
-                    for i, axis_name in enumerate(axis_names):
-                        self.data[axis_name, w_idx:num_points] = tuples[w_idx:num_points, i]
+                    tuples = stream.descriptor.tuples(with_metadata=True, as_structured_array=True)
+                    for axis_name in axis_names:
+                        self.data[axis_name, w_idx:num_points] = tuples[axis_name][w_idx:num_points]
                     for i, a in enumerate(axes):
                         if a.unstructured:
                             name = "+".join(a.name)

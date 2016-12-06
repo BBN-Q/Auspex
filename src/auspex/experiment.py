@@ -457,8 +457,8 @@ class Experiment(metaclass=MetaExperiment):
         self.loop.run_until_complete(asyncio.gather(*tasks))
         shutdown()
 
-    def add_sweep(self, parameters, sweep_list, refine_func=None):
-        ax = SweepAxis(parameters, sweep_list, refine_func=refine_func)
+    def add_sweep(self, parameters, sweep_list, refine_func=None, callback_func=None, metadata=None):
+        ax = SweepAxis(parameters, sweep_list, refine_func=refine_func, callback_func=callback_func, metadata=metadata)
         ax.experiment = self
         self.sweeper.add_sweep(ax)
         for oc in self.output_connectors.values():
