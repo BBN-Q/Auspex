@@ -204,6 +204,55 @@ class SweepTestCase(unittest.TestCase):
 
         os.remove("test_writehdf5_metadata_unstructured-0000.h5")
 
+    def test_writehdf5_metadata_unstructured_adaptive(self):
+        exp = SweptTestExperimentMetadata()
+        if os.path.exists("test_writehdf5_metadata_unstructured_adaptive-0000.h5"):
+            os.remove("test_writehdf5_metadata_unstructured_adaptive-0000.h5")
+        wr = WriteToHDF5("test_writehdf5_metadata_unstructured_adaptive.h5")
+
+        edges = [(exp.voltage, wr.sink)]
+        exp.set_graph(edges)
+        coords = [[ 0, 0.1],
+                  [10, 4.0],
+                  [15, 2.5],
+                  [40, 4.4],
+                  [50, 2.5],
+                  [60, 1.4],
+                  [65, 3.6],
+                  [66, 3.5],
+                  [67, 3.6]]
+        md = ["data"]*9
+
+        async def rf(sweep_axis, exp):
+            logger.debug("Running refinement function.")
+            if sweep_axis.num_points() >= 12:
+                return False
+            sweep_axis.metadata = sweep_axis.metadata + ["a","b","c"]
+            sweep_axis.add_points([
+                  [np.nan, np.nan],
+                  [np.nan, np.nan],
+                  [np.nan, np.nan]])
+            logger.debug("Sweep points now: {}.".format(sweep_axis.points))
+            return True
+
+        exp.add_sweep([exp.field, exp.freq], coords, metadata=md, refine_func=rf)
+        exp.run_sweeps()
+        self.assertTrue(os.path.exists("test_writehdf5_metadata_unstructured_adaptive-0000.h5"))
+        with h5py.File("test_writehdf5_metadata_unstructured_adaptive-0000.h5", 'r') as f:
+            self.assertTrue(0.0 not in f['main']['data']['voltage'])
+            self.assertTrue(np.sum(np.isnan(f['main']['data']['field'])) == 3*5 )
+            self.assertTrue(np.sum(np.isnan(f['main']['data']['freq'])) == 3*5 )
+            self.assertTrue(np.sum(np.isnan(f['main']['data']['samples'])) == 3*4*2 )
+            self.assertTrue(np.sum(f['main']['data']['field+freq_metadata'] == b'a') == 5)
+            self.assertTrue(np.sum(f['main']['data']['field+freq_metadata'] == b'b') == 5)
+            self.assertTrue(np.sum(f['main']['data']['field+freq_metadata'] == b'c') == 5)
+            self.assertTrue("Here the run loop merely spews" in f.attrs['exp_src'])
+            self.assertTrue(f['main']['data'].attrs['time_val'] == 0)
+            self.assertTrue(f['main']['data'].attrs['unit_freq'] == "Hz")
+            print(f['main']['data']['voltage'])
+
+        # os.remove("test_writehdf5_metadata_unstructured_adaptive-0000.h5")
+
     def test_samefile_writehdf5(self):
         exp = SweptTestExperiment()
         if os.path.exists("test_samefile_writehdf5-0000.h5"):
@@ -237,7 +286,7 @@ class SweepTestCase(unittest.TestCase):
             self.assertTrue(f['group2']['data'].attrs['unit_freq'] == "Hz")
             print(f['group2']['data']['current'])
 
-        # os.remove("test_samefile_writehdf5-0000.h5")
+        os.remove("test_samefile_writehdf5-0000.h5")
 
     def test_writehdf5_adaptive_sweep(self):
         exp = SweptTestExperiment()
