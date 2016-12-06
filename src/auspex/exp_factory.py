@@ -176,10 +176,16 @@ class QubitExpFactory(object):
 
             # Treat segment sweeps separately since they are DataAxes rather than SweepAxes
             if par['x__class__'] == 'SegmentNum':
-                pass
+                experiment.segment_axis = DataAxis(par['axisLabel'], points)
+
             elif par['x__class__'] == 'SegmentNumWithCals':
+                # There should be metadata for each cal describing what it is
+                metadata = ['data' for p in points] + ['cal' for s in range(par['numCals'])]
+
+                # Add zeros for the extra points
                 points = np.append(points, np.zeros(numCals))
-                data.metadata = ['data' for p in points] + ['cal' for s in range(par['numCals'])]
+                experiment.segment_axis = DataAxis(par['axisLabel'], points, metadata=metadata)
+
             else:
                 # Here we create a parameter for experiment and associate it with the
                 # relevant method in the instrument
@@ -198,9 +204,6 @@ class QubitExpFactory(object):
                     experiment.add_sweep(param, points) # Create the requested sweep on this parameter
                 else:
                     raise ValueError("The instrument {} has no method set_{}".format(name, par['x__class__'].lower()))
-
-                # Add the sweep to the exeriment
-                experiment.add_sweep()
 
     @staticmethod
     def load_filters(experiment):
@@ -265,8 +268,13 @@ class QubitExpFactory(object):
             # Add the channel to the instrument
             source_instr.add_channel(channel)
 
-            # Add the usual axes
-            descrip.add_axis(DataAxis("segments", range(source_instr_settings['nbr_segments'])))
+            # Add the segment axis, which should already be defined...
+            if hasatttr(experiment, 'segment_axis'):
+                # This should contains the proper range and units based on the sweep descriptor
+                descrip.add_axis(experiment.segment_axis)
+            else:
+                # This is the generic axis based on the instrument parameters
+                descrip.add_axis(DataAxis("segments",     range(source_instr_settings['nbr_segments'])))
 
             # Digitizer mode preserves round_robins, averager mode collapsing along them:
             if source_instr_settings['acquire_mode'] == 'digitizer':
