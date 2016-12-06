@@ -251,7 +251,7 @@ class SweepTestCase(unittest.TestCase):
             self.assertTrue(f['main']['data'].attrs['unit_freq'] == "Hz")
             print(f['main']['data']['voltage'])
 
-        # os.remove("test_writehdf5_metadata_unstructured_adaptive-0000.h5")
+        os.remove("test_writehdf5_metadata_unstructured_adaptive-0000.h5")
 
     def test_samefile_writehdf5(self):
         exp = SweptTestExperiment()
@@ -275,12 +275,9 @@ class SweepTestCase(unittest.TestCase):
             self.assertTrue("Here the run loop merely spews" in f.attrs['exp_src'])
             self.assertTrue(f['group1']['data'].attrs['time_val'] == 0)
             self.assertTrue(f['group1']['data'].attrs['unit_freq'] == "Hz")
-
             self.assertTrue(0.0 not in f['group2']['data']['current'])
             self.assertTrue(np.sum(f['group2']['data']['field']) == 3*np.sum(np.linspace(0,100.0,4)) )
             self.assertTrue(np.sum(f['group2']['data']['freq']) == 4*np.sum(np.linspace(0,10.0,3)) )
-            # self.assertTrue('field' in f['group2']['data'].keys())
-            # self.assertFalse('samples' in f['group2']['data'].keys())
             self.assertTrue("Here the run loop merely spews" in f.attrs['exp_src'])
             self.assertTrue(f['group2']['data'].attrs['time_val'] == 0)
             self.assertTrue(f['group2']['data'].attrs['unit_freq'] == "Hz")
