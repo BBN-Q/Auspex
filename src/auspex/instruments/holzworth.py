@@ -21,31 +21,46 @@ class MakeSettersGetters(MetaInstrument):
                 setattr(self, 'set_'+k, v.fset)
                 setattr(self, 'get_'+k, v.fget)
 
-class HS9000(Instrument, metaclass=MakeSettersGetters):
+class HolzworthHS9000(Instrument, metaclass=MakeSettersGetters):
     """Holzworth HS9000 microwave source"""
     instrument_type = "Microwave Source"
 
-    def __init__(self, resource_name, name="Unlabeled Holzworth HS9000"):
+    def __init__(self, resource_name=None, name="Unlabeled Holzworth HS9000"):
         self.name = name
         self.resource_name = resource_name
         try:
-            self._lib = ctypes.CDLL("HolzworthMulti64.dll")
+            self._lib = ctypes.CDLL("HolzworthMulti.dll")
         except:
             logger.warning("Could not find the Holzworth driver.")
             self._lib = MagicMock()
 
-        # parse resource_name: expecting something like "HS9004A-009-1"
-        self.model, self.serial, self.chan = resource_name.split("-")
-
         self._lib.usbCommWrite.restype = ctypes.c_char_p
+        self._lib.openDevice.restype = ctypes.c_int
+
+    @classmethod
+    def enumerate(cls):
+        try:
+            lib = ctypes.CDLL("HolzworthMulti.dll")
+        except:
+            logger.error("Could not find the Holzworth driver.")
+            return
+        lib.getAttachedDevices.restype = ctypes.c_char_p
+        devices = lib.getAttachedDevices()
+        return devices.decode('ascii').split(',')
 
     def connect(self, resource_name=None):
         if resource_name is not None:
             self.resource_name = resource_name
-            self.model, self.serial, self.chan = resource_name.split("-")
+        # parse resource_name: expecting something like "HS9004A-009-1"
+        model, serial, self.chan = resource_name.split("-")
+        self.serial = model + '-' + serial
+        success = self._lib.openDevice(self.serial.encode('ascii'))
+        if success != 0:
+            logger.info("Could not open Holzworth at address: {}, might already be open on another channel.".format(self.serial))
 
-    def query(self, scpi_string):
-        return self._lib.usbCommWrite(self.resource_name.encode('ascii'), scpi_string.encode('ascii')).decode('ascii')
+    def ref_query(self, scpi_string):
+        serial = self.serial + '-R'
+        return self._lib.usbCommWrite(serial.encode('ascii'), scpi_string.encode('ascii')).decode('ascii')
 
     def ch_query(self, scpi_string):
         chan_string = ":CH{}".format(self.chan)
@@ -79,7 +94,10 @@ class HS9000(Instrument, metaclass=MakeSettersGetters):
     @property
     def output(self):
         v = self.ch_query(":PWR:RF?")
-        return bool(v.split()[0])
+        if v == 'ON':
+            return True
+        else:
+            return False
     @output.setter
     def output(self, value):
         if value:
@@ -89,16 +107,16 @@ class HS9000(Instrument, metaclass=MakeSettersGetters):
 
     @property
     def reference(self):
-        v = self.query(":REF:STATUS?")
-        return float(v.split()[0])*1e6
+        v = self.ref_query(":REF:STATUS?")
+        return v
     @reference.setter
     def reference(self, value):
         ref_opts = ["INT", "10MHz", "100MHz"]
         if value in ref_opts:
             if value == "INT":
-                self.query(":REF:INT:100MHz")
+                self.ref_query(":REF:INT:100MHz")
             else:
-                self.query(":REF:EXT:{}".format(value))
+                self.ref_query(":REF:EXT:{}".format(value))
         else:
             raise ValueError("Reference must be one of {}.".format(ref_opts))
 
