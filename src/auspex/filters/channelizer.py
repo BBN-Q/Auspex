@@ -24,17 +24,17 @@ class Channelizer(Filter):
     source            = OutputConnector()
     decimation_factor = IntParameter(value_range=(1,100), default=2, snap=1)
     frequency         = FloatParameter(value_range=(-5e9,5e9), increment=1.0e6, default=-9e6)
-    cutoff            = FloatParameter(value_range=(0.00, 10), increment=0.1, default=0.1)
+    bandwidth         = FloatParameter(value_range=(0.00, 100e6), increment=0.1e6, default=5e6)
 
-    def __init__(self, frequency=None, cutoff=None, decimation_factor=None, **kwargs):
+    def __init__(self, frequency=None, bandwidth=None, decimation_factor=None, **kwargs):
         super(Channelizer, self).__init__(**kwargs)
         if frequency:
             self.frequency.value = frequency
-        if cutoff:
-            self.cutoff.value = cutoff
+        if bandwidth:
+            self.bandwidth.value = bandwidth
         if decimation_factor:
             self.decimation_factor.value = decimation_factor
-        self.quince_parameters = [self.decimation_factor, self.frequency, self.cutoff]
+        self.quince_parameters = [self.decimation_factor, self.frequency, self.bandwidth]
 
     def update_descriptors(self):
         logger.debug('Updating Channelizer "%s" descriptors based on input descriptor: %s.', self.name, self.sink.descriptor)
