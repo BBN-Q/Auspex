@@ -269,7 +269,7 @@ class QubitExpFactory(object):
             source_instr.add_channel(channel)
 
             # Add the segment axis, which should already be defined...
-            if hasatttr(experiment, 'segment_axis'):
+            if hasattr(experiment, 'segment_axis'):
                 # This should contains the proper range and units based on the sweep descriptor
                 descrip.add_axis(experiment.segment_axis)
             else:

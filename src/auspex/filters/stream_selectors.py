@@ -29,7 +29,7 @@ class AlazarStreamSelector(Filter):
         channel = AlazarChannel(channel_settings)
 
         # Add the time axis
-        samp_time = 1.0/source_instr.sampling_rate
+        samp_time = 1.0/source_instr_settings['sampling_rate']
         descrip = DataStreamDescriptor()
         descrip.add_axis(DataAxis("time", samp_time*np.arange(source_instr_settings['record_length'])))
         return channel, descrip
