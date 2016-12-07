@@ -10,7 +10,7 @@ from copy import deepcopy
 import asyncio, concurrent
 
 import numpy as np
-from scipy.signal import firwin, lfilter
+import scipy.signal
 
 from auspex.parameter import Parameter, IntParameter, FloatParameter
 from auspex.filters.filter import Filter, InputConnector, OutputConnector
@@ -39,23 +39,45 @@ class Channelizer(Filter):
     def update_descriptors(self):
         logger.debug('Updating Channelizer "%s" descriptors based on input descriptor: %s.', self.name, self.sink.descriptor)
 
-        #extract record time sampling
+        # extract record time sampling
         time_pts = self.sink.descriptor.axes[-1].points
         self.record_length = len(time_pts)
         self.time_step = time_pts[1] - time_pts[0]
         logger.debug("Channelizer time_step = {}".format(self.time_step))
 
-        #store refernece for mix down
-        self.reference = np.exp(2j*np.pi * self.frequency.value * self.time_step * np.arange(self.record_length))
+        # store refernece for mix down
+        self.reference = np.exp(2j*np.pi * self.frequency.value * time_pts)
 
-        #store filter coefficients
-        #TODO: arbitrary 64 tap filter
-        if self.decimation_factor.value > 1:
-            self.filter = firwin(64, self.cutoff.value, window='hamming')
+        # convert bandwidth to normalized Nyquist interval
+        n_bandwidth = self.bandwidth.value * self.time_step
+        n_frequency = self.frequency.value * self.time_step
+
+        d = 1
+        while d < (0.45 / (2*n_frequency + n_bandwidth/2)) and \
+              d < self.decimation_factor.value and \
+              n_bandwidth < 0.05:
+            d *= 2
+            n_bandwidth *= 2
+
+        if d > 1:
+            # need 2-stage filtering
+            self.decimations = [d, self.decimation_factor.value // d]
+            # give 20% breathing room from the Nyquist zone edge for the FIR decimator
+            fir_cutoff = 0.8 / self.decimations[-1]
+
+            self.filters = [
+                scipy.signal.dlti(*scipy.signal.iirdesign(n_bandwidth/2, n_bandwidth, 3, 30, ftype="butter")),
+                scipy.signal.dlti(scipy.signal.firwin(32, fir_cutoff, window='blackman'), 1.),
+            ]
+
         else:
-            self.filter = np.array([1.0])
+            # 1 stage filtering should suffice
+            self.decimations = [self.decimation_factor.value]
+            self.filters = [
+                scipy.signal.dlti(*scipy.signal.iirdesign(n_bandwidth/2, n_bandwidth, 3, 30, ftype="butter"))
+            ]
 
-        #update output descriptors
+        # update output descriptors
         decimated_descriptor = DataStreamDescriptor()
         decimated_descriptor.axes = self.sink.descriptor.axes[:]
         decimated_descriptor.axes[-1] = deepcopy(self.sink.descriptor.axes[-1])
@@ -67,18 +89,21 @@ class Channelizer(Filter):
             os.end_connector.update_descriptors()
 
     async def process_data(self, data):
-        #Assume for now we get a integer number of records at a time
-        #TODO: handle partial records
+        # Assume for now we get a integer number of records at a time
+        # TODO: handle partial records
         num_records = data.size // self.record_length
 
-        #mix with reference
+        # mix with reference
         mix_product = self.reference * np.reshape(data, (num_records, self.record_length), order="C")
 
-        #filter then decimate
-        #TODO: polyphase filterting should provide better performance
-        filtered = lfilter(self.filter, 1.0, mix_product)
-        filtered = filtered[:, self.decimation_factor.value-1::self.decimation_factor.value]
+        # filter and decimate
+        filtered = mix_product
+        for d, f in zip(self.decimations, self.filters):
+            filtered = scipy.signal.decimate(filtered, d, ftype=f, zero_phase=False)
 
-        #push to ouptut connectors
+        # recover gain from selecting single sideband
+        filtered *= 2
+
+        # push to ouptut connectors
         for os in self.source.output_streams:
             await os.push(filtered)
