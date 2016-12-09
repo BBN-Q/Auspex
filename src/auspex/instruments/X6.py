@@ -109,7 +109,7 @@ class X6(Instrument):
             logger.error("Unrecognized stream type %s" % channel.stream_type)
 
     def data_available(self):
-        return self._lib.get_num_new_records() > 0
+        return self._lib.get_data_available()
 
     def done(self):
         if self.data_available():
