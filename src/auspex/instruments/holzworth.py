@@ -52,7 +52,7 @@ class HolzworthHS9000(Instrument, metaclass=MakeSettersGetters):
         if resource_name is not None:
             self.resource_name = resource_name
         # parse resource_name: expecting something like "HS9004A-009-1"
-        model, serial, self.chan = resource_name.split("-")
+        model, serial, self.chan = self.resource_name.split("-")
         self.serial = model + '-' + serial
         success = self._lib.openDevice(self.serial.encode('ascii'))
         if success != 0:
@@ -70,10 +70,10 @@ class HolzworthHS9000(Instrument, metaclass=MakeSettersGetters):
     @property
     def frequency(self):
         v = self.ch_query(":FREQ?")
-        return float(v.split()[0])*1e6
+        return float(v.split()[0])*1e-3
     @frequency.setter
     def frequency(self, value):
-        self.ch_query(":FREQ:{} GHz".format(value*1e-9))
+        self.ch_query(":FREQ:{} GHz".format(value))
 
     @property
     def power(self):
