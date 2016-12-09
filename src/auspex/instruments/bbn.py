@@ -133,8 +133,8 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
 
         for chan, ch_settings in enumerate(channel_settings):
             for name, value in ch_settings.items():
-                if hasattr(self, name):
-                    getattr(self, name)(chan, value)
+                if hasattr(self, 'set_' + name):
+                    getattr(self, 'set_' + name)(chan, value)
 
     @property
     def seq_file(self):
