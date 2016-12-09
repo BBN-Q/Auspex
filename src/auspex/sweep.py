@@ -21,7 +21,7 @@ class Sweeper(object):
 
     def add_sweep(self, axis):
         self.axes.append(axis)
-        logger.debug("Add sweep axis: {}".format(axis))
+        logger.debug("Add sweep axis to sweeper object: {}".format(axis))
 
     async def update(self):
         """ Update the levels """

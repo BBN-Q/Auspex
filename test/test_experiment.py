@@ -147,8 +147,6 @@ class ExperimentTestCase(unittest.TestCase):
         self.assertFalse(avgr.sink.descriptor is None)
         self.assertFalse(printer_partial.sink.descriptor is None)
         self.assertTrue(exp.chan1.descriptor == avgr.sink.descriptor)
-        self.assertTrue(avgr.partial_average.descriptor.axes[0].name == 'Partial Averages')
-        self.assertTrue(np.sum(avgr.partial_average.descriptor.axes[0].points) == 3)
 
     def test_copy_descriptor(self):
         dsd = DataStreamDescriptor()

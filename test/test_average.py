@@ -60,18 +60,16 @@ class TestExperiment(Experiment):
         self.freq_2.assign_method(lambda x: print("Set: {}".format(x)))
 
     def init_streams(self):
-        # Add "base" data axes
-        descrip = DataStreamDescriptor()
-        descrip.add_axis(DataAxis("samples", list(range(self.samples))))
-        descrip.add_axis(DataAxis("trials", list(range(self.num_trials))))
-        self.chan1.set_descriptor(descrip)
-        self.chan2.set_descriptor(descrip)
+        self.chan1.add_axis(DataAxis("samples", list(range(self.samples))))
+        self.chan1.add_axis(DataAxis("trials", list(range(self.num_trials))))
+        self.chan2.add_axis(DataAxis("samples", list(range(self.samples))))
+        self.chan2.add_axis(DataAxis("trials", list(range(self.num_trials))))
 
     async def run(self):
         logger.debug("Data taker running (inner loop)")
         time_step = 0.1
-        await asyncio.sleep(0.002)
-        data_row = np.sin(2*np.pi*self.time_val)*np.ones(self.samples*self.num_trials) + 0.1*np.random.random(self.samples*self.num_trials)
+        await asyncio.sleep(0.2)
+        data_row = np.ones(self.samples*self.num_trials) + 0.1*np.random.random(self.samples*self.num_trials)
         self.time_val += time_step
         await self.chan1.push(data_row)
         logger.debug("Stream pushed points {}.".format(data_row))
@@ -79,7 +77,7 @@ class TestExperiment(Experiment):
 
 class ExperimentTestCase(unittest.TestCase):
 
-    def test_final_average(self):
+    def test_final_average_runs(self):
         exp             = TestExperiment()
         printer_final   = Print(name="Final")
         avgr            = Averager('trials', name="TestAverager")
@@ -90,7 +88,7 @@ class ExperimentTestCase(unittest.TestCase):
         exp.set_graph(edges)
         exp.run_sweeps()
 
-    def test_partial_average(self):
+    def test_partial_average_runs(self):
         exp             = TestExperiment()
         printer_partial = Print(name="Partial")
         avgr            = Averager('trials', name="TestAverager")
@@ -101,6 +99,21 @@ class ExperimentTestCase(unittest.TestCase):
         exp.set_graph(edges)
         exp.run_sweeps()
 
+    def test_sameness(self):
+        exp             = TestExperiment()
+        printer_partial = Print(name="Partial")
+        printer_final   = Print(name="Final")
+        avgr            = Averager(name="TestAverager")
+
+        edges = [(exp.chan1, avgr.sink),
+                 (avgr.partial_average, printer_partial.sink),
+                 (avgr.final_average, printer_final.sink)]
+        exp.set_graph(edges)
+
+        exp.add_sweep(exp.freq_1, np.linspace(0,9,10))
+        avgr.axis.value = 'freq_1'
+        avgr.update_descriptors()
+        exp.run_sweeps()
     # def test_add_axis_to_averager(self):
     #     exp             = TestExperiment()
     #     printer_final   = Print(name="Final")
