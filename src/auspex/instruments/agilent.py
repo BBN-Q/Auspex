@@ -20,7 +20,7 @@ def is_valid_ipv4(ipv4_address):
     except:
         return False
 
-class N5183A(SCPIInstrument):
+class AgilentN5183A(SCPIInstrument):
     """AgilentN5183A microwave source"""
 
     frequency = FloatCommand(scpi_string=":freq")
@@ -32,23 +32,25 @@ class N5183A(SCPIInstrument):
 
     output    = StringCommand(scpi_string=":output", value_map={True: '1', False: '0'})
 
-    def __init__(self, resource_name, *args, **kwargs):
+    def __init__(self, resource_name=None, *args, **kwargs):
         #If we only have an IP address then tack on the raw socket port to the VISA resource string
-        if is_valid_ipv4(resource_name):
-            resource_name += "::5025::SOCKET"
-        super(N5183A, self).__init__(resource_name, *args, **kwargs)
+        super(AgilentN5183A, self).__init__(resource_name, *args, **kwargs)
 
     def connect(self, resource_name=None, interface_type=None):
-        super(N5183A, self).connect(resource_name=resource_name, interface_type=interface_type)
+        if resource_name is not None:
+            self.resource_name = resource_name
+        if is_valid_ipv4(self.resource_name):
+            self.resource_name += "::5025::SOCKET"
+        super(AgilentN5183A, self).connect(resource_name=resource_name, interface_type=interface_type)
         self.interface._resource.read_termination = u"\n"
         self.interface._resource.write_termination = u"\n"
         self.interface._resource.timeout = 3000 #seem to have trouble timing out on first query sometimes
 
     def set_all(self, settings):
         settings['frequency'] = settings['frequency']*1e9
-        super(N5183A, self).set_all(settings)
+        super(AgilentN5183A, self).set_all(settings)
 
-class E8363C(SCPIInstrument):
+class AgilentE8363C(SCPIInstrument):
     """Agilent E8363C VNA"""
 
     power              = FloatCommand(scpi_string=":SOURce:POWer:LEVel:IMMediate:AMPLitude", value_range=(-27, 20))
@@ -65,7 +67,7 @@ class E8363C(SCPIInstrument):
         #If we only have an IP address then tack on the raw socket port to the VISA resource string
         if is_valid_ipv4(resource_name):
             resource_name += "::5025::SOCKET"
-        super(E8363C, self).__init__(resource_name, *args, **kwargs)
+        super(AgilentE8363C, self).__init__(resource_name, *args, **kwargs)
         self.interface._resource.read_termination = u"\n"
         self.interface._resource.write_termination = u"\n"
         self.interface._resource.timeout = 3000 #seem to have trouble timing out on first query sometimes
@@ -101,7 +103,7 @@ class E8363C(SCPIInstrument):
 
         return (freqs, vals)
 
-class E9010A(SCPIInstrument):
+class AgilentE9010A(SCPIInstrument):
     """Agilent E9010A SA"""
 
     frequency_center = FloatCommand(scpi_string=":FREQuency:CENTer")
@@ -116,10 +118,10 @@ class E9010A(SCPIInstrument):
         #If we only have an IP address then tack on the raw socket port to the VISA resource string
         if is_valid_ipv4(resource_name):
             resource_name += "::5025::SOCKET"
-        super(E9010A, self).__init__(resource_name, *args, **kwargs)
+        super(AgilentE9010A, self).__init__(resource_name, *args, **kwargs)
 
     def connect(self, resource_name=None, interface_type=None):
-        super(E9010A, self).connect(resource_name=resource_name, interface_type=interface_type)
+        super(AgilentE9010A, self).connect(resource_name=resource_name, interface_type=interface_type)
         self.interface._resource.read_termination = u"\n"
         self.interface._resource.write_termination = u"\n"
         self.interface._resource.timeout = 3000 #seem to have trouble timing out on first query sometimes
