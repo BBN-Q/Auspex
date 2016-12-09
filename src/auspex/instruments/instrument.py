@@ -151,7 +151,8 @@ class MetaInstrument(type):
 
 class Instrument(metaclass=MetaInstrument):
     def connect(self, resource_name=None):
-        pass
+        if resource_name is not None:
+            self.resource_name = resource_name
 
     def disconnect(self):
         pass
