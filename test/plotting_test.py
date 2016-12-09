@@ -91,8 +91,8 @@ class TestExperiment(Experiment):
 if __name__ == '__main__':
 
     exp = TestExperiment()
-    channelizer = Channelizer(10e6, 0.05, 8, name="Demod")
-    ki = KernelIntegrator(np.ones(32), name="KI")
+    channelizer = Channelizer(frequency=10e6, bandwidth=5e6, decimation_factor=8, name="Demod")
+    ki = KernelIntegrator(kernel="", bias=0, simple_kernel=True, box_car_start=0, box_car_stop=64e-9, frequency=0, name="KI")
     avg1 = Averager("round_robins", name="Average channelizer RRs")
     avg2 = Averager("round_robins", name="Average KI RRs")
     pl1 = Plotter(name="2D Scope", plot_dims=2, palette="Spectral11")
