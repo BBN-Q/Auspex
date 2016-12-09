@@ -28,12 +28,13 @@ class KernelIntegrator(Filter):
     """Integrate with a given kernel. Kernel will be padded/truncated to match record length"""
     def __init__(self, **kwargs):
         super(KernelIntegrator, self).__init__(**kwargs)
-        self.kernel.value = kwargs['kernel']
-        self.bias.value = kwargs['bias']
-        self.simple_kernel.value = kwargs['simple_kernel']
-        self.box_car_start.value = kwargs['box_car_start']
-        self.box_car_stop.value = kwargs['box_car_stop']
-        self.frequency.value = kwargs['frequency']
+        if len(kwargs) > 0:
+            self.kernel.value = kwargs['kernel']
+            self.bias.value = kwargs['bias']
+            self.simple_kernel.value = kwargs['simple_kernel']
+            self.box_car_start.value = kwargs['box_car_start']
+            self.box_car_stop.value = kwargs['box_car_stop']
+            self.frequency.value = kwargs['frequency']
 
     def update_descriptors(self):
         if self.kernel.value is None:
