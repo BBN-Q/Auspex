@@ -11,6 +11,7 @@ import time
 import itertools
 import logging
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 import signal
 import sys
 import numbers
@@ -209,6 +210,9 @@ class Experiment(metaclass=MetaExperiment):
         # Create the asyncio measurement loop
         self.loop = asyncio.get_event_loop()
 
+        # For executing computations in filters
+        self.executor = ThreadPoolExecutor(max_workers=6)
+
         # Based on the logging level, infer whether we want asyncio debug
         do_debug = logger.getEffectiveLevel() <= logging.DEBUG
         self.loop.set_debug(do_debug)
@@ -355,6 +359,8 @@ class Experiment(metaclass=MetaExperiment):
         # Call any final initialization on the filter pipeline
         for n in self.nodes + self.extra_plotters:
             n.experiment = self
+            n.loop       = self.loop
+            n.executor   = self.executor
             if hasattr(n, 'final_init'):
                 n.final_init()
 

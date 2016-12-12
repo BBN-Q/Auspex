@@ -71,10 +71,14 @@ class KernelIntegrator(Filter):
             os.set_descriptor(output_descriptor)
             os.end_connector.update_descriptors()
 
+    def process_kernel(self, data):
+        return np.inner(np.reshape(data, (-1, len(self.aligned_kernel))), self.aligned_kernel)
+
     async def process_data(self, data):
 
         # TODO: handle variable partial records
-        filtered = np.inner(np.reshape(data, (-1, len(self.aligned_kernel))), self.aligned_kernel)
+        filtered = await self.experiment.loop.run_in_executor(self.experiment.executor,
+                                                              self.process_kernel, data)
 
         # push to ouptut connectors
         for os in self.source.output_streams:
