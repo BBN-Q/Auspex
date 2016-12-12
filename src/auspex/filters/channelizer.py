@@ -11,6 +11,7 @@ import asyncio, concurrent
 
 import numpy as np
 import scipy.signal
+import scipy.fftpack
 
 from auspex.parameter import Parameter, IntParameter, FloatParameter
 from auspex.filters.filter import Filter, InputConnector, OutputConnector
@@ -45,37 +46,17 @@ class Channelizer(Filter):
         self.time_step = time_pts[1] - time_pts[0]
         logger.debug("Channelizer time_step = {}".format(self.time_step))
 
-        # store refernece for mix down
+        # store reference for mix down
         self.reference = np.exp(2j*np.pi * self.frequency.value * time_pts, dtype=np.complex64)
 
         # convert bandwidth to normalized Nyquist interval
         n_bandwidth = self.bandwidth.value * self.time_step
-        n_frequency = self.frequency.value * self.time_step
 
-        d = 1
-        while d < self.decimation_factor.value and \
-              n_bandwidth < 0.1:
-            d *= 2
-            n_bandwidth *= 2
-            n_frequency *= 2
-
-        if d > 1:
-            # need 2-stage filtering
-            self.decimations = [d, self.decimation_factor.value // d]
-            # give 20% breathing room from the Nyquist zone edge for the FIR decimator
-            fir_cutoff = 0.8 / self.decimations[0]
-
-            self.filters = [
-                scipy.signal.dlti(scipy.signal.firwin(32, fir_cutoff, window='blackman'), 1.),
-                scipy.signal.dlti(*scipy.signal.iirdesign(n_bandwidth/2, n_bandwidth, 3, 30, ftype="butter")),
-            ]
-
-        else:
-            # 1 stage filtering should suffice
-            self.decimations = [self.decimation_factor.value]
-            self.filters = [
-                scipy.signal.dlti(*scipy.signal.iirdesign(n_bandwidth/2, n_bandwidth, 3, 30, ftype="butter"))
-            ]
+        # create brick wall filter coefficients
+        freq_pts = scipy.fftpack.fftfreq(self.record_length)
+        demod_cutoff = 0.5/self.decimation_factor.value
+        self.demod_indices = np.where( np.logical_and(freq_pts >= -demod_cutoff, freq_pts < demod_cutoff) )
+        self.filter_coefs = np.complex64(np.abs(freq_pts) < n_bandwidth/2)[self.demod_indices]
 
         # update output descriptors
         decimated_descriptor = DataStreamDescriptor()
@@ -96,13 +77,20 @@ class Channelizer(Filter):
         # mix with reference
         mix_product = self.reference * np.reshape(data, (num_records, self.record_length), order="C")
 
-        # filter and decimate
-        filtered = mix_product
-        for d, f in zip(self.decimations, self.filters):
-            filtered = scipy.signal.decimate(filtered, d, ftype=f, zero_phase=False)
+        # convert to frequency domain
+        f_domain = scipy.fftpack.fft(mix_product, overwrite_x=True)
 
-        # recover gain from selecting single sideband
-        filtered *= 2
+        # decimate
+        f_domain = f_domain[..., self.demod_indices]
+
+        # filter
+        f_domain = self.filter_coefs * f_domain
+
+        # back to time domain
+        filtered = scipy.fftpack.ifft(f_domain, overwrite_x=True)
+
+        # recover gain from selecting single sideband and decimation
+        filtered *= 2*self.decimation_factor.value
 
         # push to ouptut connectors
         for os in self.source.output_streams:
