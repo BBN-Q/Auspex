@@ -359,6 +359,8 @@ class Experiment(metaclass=MetaExperiment):
         # Call any final initialization on the filter pipeline
         for n in self.nodes + self.extra_plotters:
             n.experiment = self
+            n.loop       = self.loop
+            n.executor   = self.executor
             if hasattr(n, 'final_init'):
                 n.final_init()
 
