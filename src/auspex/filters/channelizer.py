@@ -55,7 +55,7 @@ class Channelizer(Filter):
         # create brick wall filter coefficients
         freq_pts = scipy.fftpack.fftfreq(self.record_length)
         demod_cutoff = 0.5/self.decimation_factor.value
-        self.demod_indices = np.where( np.logical_and(freq_pts >= -demod_cutoff, freq_pts < demod_cutoff) )
+        self.demod_indices = np.where( np.logical_and(freq_pts >= -demod_cutoff, freq_pts < demod_cutoff) )[0]
         self.filter_coefs = np.complex64(np.abs(freq_pts) < n_bandwidth/2)[self.demod_indices]
 
         # update output descriptors
