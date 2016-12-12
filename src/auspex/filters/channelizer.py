@@ -88,7 +88,7 @@ class Channelizer(Filter):
             os.set_descriptor(decimated_descriptor)
             os.end_connector.update_descriptors()
 
-    def process_kernel(self, data):
+    async def process_data(self, data):
         # Assume for now we get a integer number of records at a time
         # TODO: handle partial records
         num_records = data.size // self.record_length
@@ -103,11 +103,6 @@ class Channelizer(Filter):
 
         # recover gain from selecting single sideband
         filtered *= 2
-        return filtered
-
-    async def process_data(self, data):
-        filtered = await self.experiment.loop.run_in_executor(self.experiment.executor,
-                                                              self.process_kernel, data)
 
         # push to ouptut connectors
         for os in self.source.output_streams:
