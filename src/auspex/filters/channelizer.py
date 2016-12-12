@@ -46,7 +46,7 @@ class Channelizer(Filter):
         logger.debug("Channelizer time_step = {}".format(self.time_step))
 
         # store refernece for mix down
-        self.reference = np.exp(2j*np.pi * self.frequency.value * time_pts)
+        self.reference = np.exp(2j*np.pi * self.frequency.value * time_pts, dtype=np.complex64)
 
         # convert bandwidth to normalized Nyquist interval
         n_bandwidth = self.bandwidth.value * self.time_step
