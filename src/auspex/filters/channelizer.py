@@ -106,7 +106,7 @@ class Channelizer(Filter):
         return filtered
 
     async def process_data(self, data):
-        filtered = await self.experiment.loop.run_in_executor(self.experiment.executor,
+        filtered = await self.loop.run_in_executor(self.executor,
                                                               self.process_kernel, data)
 
         # push to ouptut connectors
