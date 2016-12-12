@@ -146,8 +146,10 @@ class Averager(Filter):
                 num_chunks       = int((data.size - idx)/self.points_before_partial_average)
                 new_points       = num_chunks*self.points_before_partial_average
 
+                # Find the appropriate dimensions for the partial
                 partial_reshape_dims = self.reshape_dims[:]
                 partial_reshape_dims[self.mean_axis] = -1
+                partial_reshape_dims = partial_reshape_dims[self.mean_axis:]
 
                 reshaped         = data[idx:idx+new_points].reshape(partial_reshape_dims)
                 summed           = reshaped.sum(axis=self.mean_axis)
