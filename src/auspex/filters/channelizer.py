@@ -53,21 +53,21 @@ class Channelizer(Filter):
         n_frequency = self.frequency.value * self.time_step
 
         d = 1
-        while d < (0.45 / (2*n_frequency + n_bandwidth/2)) and \
-              d < self.decimation_factor.value and \
-              n_bandwidth < 0.05:
+        while d < self.decimation_factor.value and \
+              n_bandwidth < 0.1:
             d *= 2
             n_bandwidth *= 2
+            n_frequency *= 2
 
         if d > 1:
             # need 2-stage filtering
             self.decimations = [d, self.decimation_factor.value // d]
             # give 20% breathing room from the Nyquist zone edge for the FIR decimator
-            fir_cutoff = 0.8 / self.decimations[-1]
+            fir_cutoff = 0.8 / self.decimations[0]
 
             self.filters = [
-                scipy.signal.dlti(*scipy.signal.iirdesign(n_bandwidth/2, n_bandwidth, 3, 30, ftype="butter")),
                 scipy.signal.dlti(scipy.signal.firwin(32, fir_cutoff, window='blackman'), 1.),
+                scipy.signal.dlti(*scipy.signal.iirdesign(n_bandwidth/2, n_bandwidth, 3, 30, ftype="butter")),
             ]
 
         else:
