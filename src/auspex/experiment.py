@@ -191,7 +191,7 @@ class Experiment(metaclass=MetaExperiment):
 
         # Furthermore, keep references to all of the file writers.
         # If multiple writers request acces to the same filename, they
-        # should share the same file object and write in separate 
+        # should share the same file object and write in separate
         # hdf5 groups.
         self.writers = []
 
@@ -356,7 +356,7 @@ class Experiment(metaclass=MetaExperiment):
         for n in self.nodes + self.extra_plotters:
             n.experiment = self
             n.loop       = self.loop
-            n.executor   = self.executor
+            # n.executor   = self.executor
             if hasattr(n, 'final_init'):
                 n.final_init()
 
