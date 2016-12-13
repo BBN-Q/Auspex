@@ -59,8 +59,8 @@ class AlazarATS9870(Instrument):
         self.name = name
         self.fetch_count = 0
 
-        # Just store the integers here...
-        self.channel_numbers = []
+        # A list of AlazarChannel objects
+        self.channels = []
 
         self.resource_name = resource_name
 
@@ -81,6 +81,8 @@ class AlazarATS9870(Instrument):
             self.resource_name = resource_name
 
         self._lib.connect("{}/{}".format(self.name, int(self.resource_name)))
+        for channel in self.channels:
+            self.get_socket(channel)
 
     def acquire(self):
         self.fetch_count = 0
@@ -93,17 +95,17 @@ class AlazarATS9870(Instrument):
         return self._lib.data_available()
 
     def done(self):
-        return self.fetch_count >= (len(self.channel_numbers) * self.number_acquisitions)
+        return self.fetch_count >= (len(self.channels) * self.number_acquisitions)
 
     def get_socket(self, channel):
-        if channel in self._chan_to_socket:
+        if channel in self._chan_to_rsocket:
             return self._chan_to_rsocket[channel]
 
         try:
             rsock, wsock = socketpair()
         except:
             raise Exception("Could not create read/write socket pair")
-        self._lib.bind_socket(channel.channel, wsock)
+        self._lib.bind_socket(wsock, channel.channel - 1)
         self._chan_to_rsocket[channel] = rsock
         self._chan_to_wsocket[channel] = wsock
         return rsock
@@ -113,10 +115,9 @@ class AlazarATS9870(Instrument):
             raise TypeError("Alazar passed {} rather than an AlazarChannel object.".format(str(channel)))
 
         # We can have either 1 or 2, or both.
-        if len(self.channel_numbers) < 2 and channel.channel not in self.channel_numbers:
-            self.channel_numbers.append(channel.channel)
+        if len(self.channels) < 2 and channel not in self.channels:
+            self.channels.append(channel)
             self._chan_to_buf[channel] = channel.channel
-            self.get_socket(channel)
 
     def receive_data(self, channel, oc):
         # push data from a socket into an OutputConnector (oc)
@@ -137,12 +138,12 @@ class AlazarATS9870(Instrument):
 
     async def wait_for_acquisition(self, timeout=5):
         while not self.done():
-            if (datetime.datetime.now - self.last_timestamp).seconds > timeout:
-                logger.error("Digitizer %s timed out.", digitizer)
+            if (datetime.datetime.now() - self.last_timestamp).seconds > timeout:
+                logger.error("Digitizer %s timed out.", self.name)
                 break
             await asyncio.sleep(0.2)
 
-        logger.debug("Digitizer %s finished getting data.", digitizer)
+        logger.debug("Digitizer %s finished getting data.", self.name)
 
     def set_all(self, settings_dict):
         # Flatten the dict and then pass to super
