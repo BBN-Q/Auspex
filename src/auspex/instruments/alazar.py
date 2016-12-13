@@ -66,11 +66,9 @@ class AlazarATS9870(Instrument):
 
         # For lookup
         self._chan_to_buf = {}
-        self._chan_to_socket = {}
+        self._chan_to_rsocket = {}
+        self._chan_to_wsocket = {}
 
-        # read and write sockets
-        self.rsock = -1
-        self.wsock = -1
         self.last_timestamp = datetime.datetime.now()
 
         if fake_alazar:
@@ -85,14 +83,11 @@ class AlazarATS9870(Instrument):
         self._lib.connect("{}/{}".format(self.name, int(self.resource_name)))
 
     def acquire(self):
-        self._lib.acquire()
         self.fetch_count = 0
+        self._lib.acquire()
 
     def stop(self):
         self._lib.stop()
-        # TODO ensure socket cleanup even on error
-        self.wsock.close()
-        self.rsock.close()
 
     def data_available(self):
         return self._lib.data_available()
@@ -102,14 +97,16 @@ class AlazarATS9870(Instrument):
 
     def get_socket(self, channel):
         if channel in self._chan_to_socket:
-            return self._chan_to_socket
+            return self._chan_to_rsocket[channel]
 
         try:
-            self.rsock, self.wsock = socketpair()
+            rsock, wsock = socketpair()
         except:
             raise Exception("Could not create read/write socket pair")
-        self._lib.bind_socket(channel, self.wsock)
-        return self.rsock
+        self._lib.bind_socket(channel.channel, wsock)
+        self._chan_to_rsocket[channel] = rsock
+        self._chan_to_wsocket[channel] = wsock
+        return rsock
 
     def add_channel(self, channel):
         if not isinstance(channel, AlazarChannel):
@@ -119,9 +116,9 @@ class AlazarATS9870(Instrument):
         if len(self.channel_numbers) < 2 and channel.channel not in self.channel_numbers:
             self.channel_numbers.append(channel.channel)
             self._chan_to_buf[channel] = channel.channel
-            self._chan_to_socket[channel] = get_socket(channel.channel)
+            self.get_socket(channel)
 
-    def receive_data(self, channel, oc, loop):
+    def receive_data(self, channel, oc):
         # push data from a socket into an OutputConnector (oc)
         self.last_timestamp = datetime.datetime.now()
         self.fetch_count += 1
@@ -131,7 +128,8 @@ class AlazarATS9870(Instrument):
         # reinterpret as int (size_t)
         msg_size = struct.unpack('n', msg)[0]
         buf = socket.recv(msg_size)
-        loop.call_soon(oc.push, buf)
+        loop = asyncio.get_event_loop()
+        loop.call_soon(oc.push, np.frombuffer(buf, dtype=np.float32))
 
     def get_buffer_for_channel(self, channel):
         self.fetch_count += 1
@@ -192,7 +190,9 @@ class AlazarATS9870(Instrument):
 
     def __del__(self):
         self.disconnect()
-        for socket in self._chan_to_socket.values():
+        for socket in self._chan_to_rsocket.values():
+            socket.close()
+        for socket in self._chan_to_wsocket.values():
             socket.close()
 
     def __str__(self):

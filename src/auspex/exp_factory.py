@@ -75,7 +75,13 @@ class QubitExpFactory(object):
                 for chan, dig in self.chan_to_dig.items():
                     socket = dig.get_socket(chan)
                     oc = self.chan_to_oc[chan]
-                    self.loop.add_reader(socket, dig.receive_data, chan, oc, self.loop)
+                    self.loop.add_reader(socket, dig.receive_data, chan, oc)
+
+            def shutdown_instruments(self):
+                # remove socket readers
+                for chan, dig in self.chan_to_dig.items():
+                    socket = dig.get_socket(chan)
+                    self.loop.remove_reader(socket)
 
             async def run(self):
                 """This is run for each step in a sweep."""
@@ -93,6 +99,7 @@ class QubitExpFactory(object):
                     dig.stop()
                 for awg in self.awgs:
                     awg.stop()
+
                 # hack to try to get plots to finish updating before we exit
                 await asyncio.sleep(2)
 
