@@ -6,6 +6,11 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
+from socket import socketpair
+import struct
+import datetime
+import asyncio
+
 from auspex.instruments.instrument import Instrument, DigitizerChannel
 from auspex.log import logger
 from unittest.mock import MagicMock
@@ -60,7 +65,13 @@ class AlazarATS9870(Instrument):
         self.resource_name = resource_name
 
         # For lookup
-        self._buf_to_chan = {}
+        self._chan_to_buf = {}
+        self._chan_to_socket = {}
+
+        # read and write sockets
+        self.rsock = -1
+        self.wsock = -1
+        self.last_timestamp = datetime.datetime.now()
 
         if fake_alazar:
             self._lib = MagicMock()
@@ -79,12 +90,26 @@ class AlazarATS9870(Instrument):
 
     def stop(self):
         self._lib.stop()
+        # TODO ensure socket cleanup even on error
+        self.wsock.close()
+        self.rsock.close()
 
     def data_available(self):
         return self._lib.data_available()
 
     def done(self):
         return self.fetch_count >= (len(self.channel_numbers) * self.number_acquisitions)
+
+    def get_socket(self, channel):
+        if channel in self._chan_to_socket:
+            return self._chan_to_socket
+
+        try:
+            self.rsock, self.wsock = socketpair()
+        except:
+            raise Exception("Could not create read/write socket pair")
+        self._lib.bind_socket(channel, self.wsock)
+        return self.rsock
 
     def add_channel(self, channel):
         if not isinstance(channel, AlazarChannel):
@@ -93,11 +118,33 @@ class AlazarATS9870(Instrument):
         # We can have either 1 or 2, or both.
         if len(self.channel_numbers) < 2 and channel.channel not in self.channel_numbers:
             self.channel_numbers.append(channel.channel)
-            self._buf_to_chan[channel] = channel.channel
+            self._chan_to_buf[channel] = channel.channel
+            self._chan_to_socket[channel] = get_socket(channel.channel)
+
+    def receive_data(self, channel, oc, loop):
+        # push data from a socket into an OutputConnector (oc)
+        self.last_timestamp = datetime.datetime.now()
+        self.fetch_count += 1
+        # wire format is just: [size, buffer...]
+        socket = self._chan_to_socket[channel]
+        msg = socket.recv(4)
+        # reinterpret as int (size_t)
+        msg_size = struct.unpack('n', msg)[0]
+        buf = socket.recv(msg_size)
+        loop.call_soon(oc.push, buf)
 
     def get_buffer_for_channel(self, channel):
         self.fetch_count += 1
-        return getattr(self._lib, 'ch{}Buffer'.format(self._buf_to_chan[channel]))
+        return getattr(self._lib, 'ch{}Buffer'.format(self._chan_to_buf[channel]))
+
+    async def wait_for_acquisition(self, timeout=5):
+        while not self.done():
+            if (datetime.datetime.now - self.last_timestamp).seconds > timeout:
+                logger.error("Digitizer %s timed out.", digitizer)
+                break
+            await asyncio.sleep(0.2)
+
+        logger.debug("Digitizer %s finished getting data.", digitizer)
 
     def set_all(self, settings_dict):
         # Flatten the dict and then pass to super
@@ -142,6 +189,11 @@ class AlazarATS9870(Instrument):
 
     def disconnect(self):
         self._lib.disconnect()
+
+    def __del__(self):
+        self.disconnect()
+        for socket in self._chan_to_socket.values():
+            socket.close()
 
     def __str__(self):
         return "<AlazarATS9870({}/{})>".format(self.name, self.resource_name)
