@@ -10,6 +10,7 @@ from socket import socketpair
 import struct
 import datetime
 import asyncio
+import numpy as np
 
 from auspex.instruments.instrument import Instrument, DigitizerChannel
 from auspex.log import logger
@@ -124,13 +125,20 @@ class AlazarATS9870(Instrument):
         self.last_timestamp = datetime.datetime.now()
         self.fetch_count += 1
         # wire format is just: [size, buffer...]
-        socket = self._chan_to_socket[channel]
-        msg = socket.recv(4)
+        socket = self._chan_to_rsocket[channel]
+        # TODO receive 4 or 8 bytes depending on sizeof(size_t)
+        msg = socket.recv(8)
         # reinterpret as int (size_t)
         msg_size = struct.unpack('n', msg)[0]
         buf = socket.recv(msg_size)
-        loop = asyncio.get_event_loop()
-        loop.call_soon(oc.push, np.frombuffer(buf, dtype=np.float32))
+        if len(buf) != msg_size:
+            logger.error("Socket msg shorter than expected")
+            # TODO what now??
+            loop = asyncio.get_event_loop()
+            loop.remove_reader(socket)
+            return
+        data = np.frombuffer(buf, dtype=np.float32)
+        asyncio.ensure_future(oc.push(data))
 
     def get_buffer_for_channel(self, channel):
         self.fetch_count += 1
