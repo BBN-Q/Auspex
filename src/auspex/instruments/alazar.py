@@ -6,7 +6,7 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-from socket import socketpair
+import socket
 import struct
 import datetime
 import asyncio
@@ -103,7 +103,7 @@ class AlazarATS9870(Instrument):
             return self._chan_to_rsocket[channel]
 
         try:
-            rsock, wsock = socketpair()
+            rsock, wsock = socket.socketpair()
         except:
             raise Exception("Could not create read/write socket pair")
         self._lib.bind_socket(wsock, channel.channel - 1)
@@ -125,15 +125,16 @@ class AlazarATS9870(Instrument):
         self.last_timestamp = datetime.datetime.now()
         self.fetch_count += 1
         # wire format is just: [size, buffer...]
-        socket = self._chan_to_rsocket[channel]
+        sock = self._chan_to_rsocket[channel]
         # TODO receive 4 or 8 bytes depending on sizeof(size_t)
-        msg = socket.recv(8)
+        msg = sock.recv(8)
         # reinterpret as int (size_t)
         msg_size = struct.unpack('n', msg)[0]
-        buf = socket.recv(msg_size)
+        buf = sock.recv(msg_size, socket.MSG_WAITALL)
         if len(buf) != msg_size:
-            logger.error("Socket msg shorter than expected")
-            # TODO what now??
+            logger.error("Channel %s socket msg shorter than expected" % channel.channel)
+            logger.error("Expected %s bytes, received %s bytes" % (msg_size, len(buf)))
+            # assume that we cannot recover, so stop listening.
             loop = asyncio.get_event_loop()
             loop.remove_reader(socket)
             return

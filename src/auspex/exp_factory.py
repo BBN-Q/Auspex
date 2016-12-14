@@ -91,7 +91,7 @@ class QubitExpFactory(object):
                     awg.run()
 
                 # Wait for all of the acquisitions to complete
-                timeout = 5
+                timeout = 10
                 await asyncio.wait([dig.wait_for_acquisition(timeout)
                     for dig in self.digitizers])
 
