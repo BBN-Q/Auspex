@@ -230,6 +230,7 @@ class SCPIInstrument(Instrument):
     def __del__(self):
         #close the VISA resource
         if hasattr(self, 'interface') and hasattr(self.interface, "_resource"):
+            logger.debug("VISA Interface for {} @ {} closed.".format(self.name, self.resource_name))
             self.interface._resource.close()
 
     def __repr__(self):
