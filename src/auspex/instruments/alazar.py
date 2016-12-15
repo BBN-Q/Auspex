@@ -136,7 +136,7 @@ class AlazarATS9870(Instrument):
             logger.error("Expected %s bytes, received %s bytes" % (msg_size, len(buf)))
             # assume that we cannot recover, so stop listening.
             loop = asyncio.get_event_loop()
-            loop.remove_reader(socket)
+            loop.remove_reader(sock)
             return
         data = np.frombuffer(buf, dtype=np.float32)
         asyncio.ensure_future(oc.push(data))
