@@ -10,6 +10,7 @@ from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand
 from auspex.log import logger
 import time
 import numpy as np
+import socket
 
 class BNC845(SCPIInstrument):
     """SCPI instrument driver for Berkely Nucleonics BNC845-M RF Signal Generator.
@@ -36,15 +37,20 @@ class BNC845(SCPIInstrument):
     freq_source  = StringCommand(scpi_string=":FREQ:SOUR",
                           value_map={'INTERNAL': 'INT', 'EXTERNAL': 'EXT'})
 
-    def __init__(self, resource_name, *args, **kwargs):
+    def __init__(self, resource_name=None, *args, **kwargs):
         """Berkely Nucleonics BNC845-M RF Signal Generator
 
         Args:
             resource_name: The IP address of the source to conenct to, as string.
         """
+        if resource_name is not None:
+            try:
+                socket.inet_pton(socket.AF_INET, resource_name)
+                resource_name = resource_name + "::inst0::INSTR"
+            except OSError: #not a valid IP address
+                logger.error("Invalid IP address for BNC845: {}.".format(resource_name))
+                raise
         super(BNC845, self).__init__(resource_name, *args, **kwargs)
-        self.resource_name = resource_name + "::inst0::INSTR"
-
 
     def connect(self, resource_name=None, interface_type=None):
         """Connect to the RF source via a specified physical interface. Defaults
@@ -58,6 +64,13 @@ class BNC845(SCPIInstrument):
         Returns:
             None.
         """
+        if resource_name is not None:
+            try:
+                socket.inet_pton(socket.AF_INET, resource_name)
+                resource_name = resource_name + "::inst0::INSTR"
+            except OSError: #not a valid IP address
+                logger.error("Invalid IP address for BNC845: {}.".format(resource_name))
+                raise
         super(BNC845, self).connect(resource_name, interface_type)
         self.interface._resource.read_termination = '\n'
         self.interface._resource.write_termination = '\n'
