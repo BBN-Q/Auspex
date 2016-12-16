@@ -68,8 +68,22 @@ class QubitExpFactory(object):
                 self.awgs       = [v for _, v in self._instruments.items() if v.instrument_type == "AWG"]
 
                 # Swap the master AWG so it is last in the list
-                # master_awg_idx = next(ct for ct,awg in enumerate(self.awgs) if self.instrument_settings['instrDict'][awg.name]['is_master'])
-                # self.awgs[-1], self.awgs[master_awg_idx] = self.awgs[master_awg_idx], self.awgs[-1]
+                master_awg_idx = next(ct for ct,awg in enumerate(self.awgs) if self.instrument_settings['instrDict'][awg.name]['is_master'])
+                self.awgs[-1], self.awgs[master_awg_idx] = self.awgs[master_awg_idx], self.awgs[-1]
+
+                # attach digitizer stream sockets to output connectors
+                for chan, dig in self.chan_to_dig.items():
+                    socket = dig.get_socket(chan)
+                    oc = self.chan_to_oc[chan]
+                    self.loop.add_reader(socket, dig.receive_data, chan, oc)
+
+            def shutdown_instruments(self):
+                # remove socket readers
+                for chan, dig in self.chan_to_dig.items():
+                    socket = dig.get_socket(chan)
+                    self.loop.remove_reader(socket)
+                for name, instr in self._instruments.items():
+                    instr.disconnect()
 
             async def run(self):
                 """This is run for each step in a sweep."""
@@ -78,40 +92,17 @@ class QubitExpFactory(object):
                 for awg in self.awgs:
                     awg.run()
 
+                # Wait for all of the acquisitions to complete
                 timeout = 10
-                async def wait_for_acq(digitizer):
-                    t = datetime.datetime.now()
-                    while not digitizer.done():
-                        if (datetime.datetime.now() - t).seconds > timeout:
-                            logger.error("Digitizer %s timed out.", digitizer)
-                            break
-
-                        if not digitizer.data_available():
-                            await asyncio.sleep(0.1)
-                            continue
-                        t = datetime.datetime.now()
-
-                        # Find all of the channels associated with this particular digitizer
-                        dig_channels = [chan for chan, dig in self.chan_to_dig.items() if dig == digitizer]
-
-                        # Loop over these channels and push the data to the associated
-                        # OutputConnectors
-                        for chan in dig_channels:
-                            oc = self.chan_to_oc[chan]
-                            buf = digitizer.get_buffer_for_channel(chan)
-                            if buf is not None and buf.size > 0:
-                                await oc.push(buf)
-
-                        logger.debug("Digitizer %s got data.", digitizer)
-                    logger.debug("Digitizer %s finished getting data.", digitizer)
-
-                # Wait for all of the acquisition to complete
-                await asyncio.wait([wait_for_acq(dig) for dig in self.digitizers])
+                await asyncio.wait([dig.wait_for_acquisition(timeout)
+                    for dig in self.digitizers])
 
                 for dig in self.digitizers:
                     dig.stop()
                 for awg in self.awgs:
                     awg.stop()
+
+                # hack to try to get plots to finish updating before we exit
                 await asyncio.sleep(2)
 
         experiment = QubitExperiment()
