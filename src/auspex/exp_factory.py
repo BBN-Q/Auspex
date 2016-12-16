@@ -82,6 +82,8 @@ class QubitExpFactory(object):
                 for chan, dig in self.chan_to_dig.items():
                     socket = dig.get_socket(chan)
                     self.loop.remove_reader(socket)
+                for name, instr in self._instruments.items():
+                    instr.disconnect()
 
             async def run(self):
                 """This is run for each step in a sweep."""
