@@ -154,7 +154,7 @@ class X6(Instrument):
             rsock, wsock = socket.socketpair()
         except:
             raise Exception("Could not create read/write socket pair")
-        self._lib.bind_socket(wsock, *channel.channel)
+        self._lib.bind_socket(*channel.channel, wsock)
         self._chan_to_rsocket[channel] = rsock
         self._chan_to_wsocket[channel] = wsock
         return rsock
@@ -199,7 +199,7 @@ class X6(Instrument):
                 break
             await asyncio.sleep(0.2)
 
-        logger.debug("Digitizer %s finished getting data.", self.name)
+        logger.info("Digitizer %s finished getting data.", self.name)
 
     # pass thru properties
     @property
