@@ -152,7 +152,7 @@ class AlazarATS9870(Instrument):
                 break
             await asyncio.sleep(0.2)
 
-        logger.debug("Digitizer %s finished getting data.", self.name)
+        logger.info("Digitizer %s finished getting data.", self.name)
 
     def set_all(self, settings_dict):
         # Flatten the dict and then pass to super
@@ -197,13 +197,15 @@ class AlazarATS9870(Instrument):
 
     def disconnect(self):
         self._lib.disconnect()
-
-    def __del__(self):
-        self.disconnect()
         for socket in self._chan_to_rsocket.values():
             socket.close()
         for socket in self._chan_to_wsocket.values():
             socket.close()
+        self._chan_to_rsocket.clear()
+        self._chan_to_wsocket.clear()
+
+    def __del__(self):
+        self.disconnect()
 
     def __str__(self):
         return "<AlazarATS9870({}/{})>".format(self.name, self.resource_name)
