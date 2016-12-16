@@ -154,7 +154,7 @@ class X6(Instrument):
             rsock, wsock = socket.socketpair()
         except:
             raise Exception("Could not create read/write socket pair")
-        self._lib.bind_socket(*channel.channel, wsock)
+        self._lib.register_socket(*channel.channel, wsock)
         self._chan_to_rsocket[channel] = rsock
         self._chan_to_wsocket[channel] = wsock
         return rsock
