@@ -54,14 +54,23 @@ class AgilentE8363C(SCPIInstrument):
     averaging_enable   = StringCommand(get_string=":SENSe1:AVERage:STATe?", set_string=":SENSe1:AVERage:STATe {:c}", value_map={False:"0", True:"1"})
     averaging_complete = StringCommand(get_string=":STATus:OPERation:AVERaging1:CONDition?", value_map={False:"+0", True:"+2"})
 
-    def __init__(self, resource_name, *args, **kwargs):
+    def __init__(self, resource_name=None, *args, **kwargs):
         #If we only have an IP address then tack on the raw socket port to the VISA resource string
-        if is_valid_ipv4(resource_name):
-            resource_name += "::hpib7,16::INSTR"
         super(AgilentE8363C, self).__init__(resource_name, *args, **kwargs)
+
+
+    def connect(self, resource_name=None, interface_type=None):
+        if resource_name is not None:
+            self.resource_name = resource_name
+        if is_valid_ipv4(resource_name):
+            self.resource_name += "::hpib7,16::INSTR"
+        else:
+            logger.error("The resource name for the Agilent E8363C: {} is " +
+                "not a valid IPv4 address.".format(self.resource_name))
+        super(AgilentE8363C, self).connect(resource_name=None,
+            interface_type=interface_type)
         self.interface._resource.read_termination = u"\n"
         self.interface._resource.write_termination = u"\n"
-        self.interface._resource.timeout = 3000 #seem to have trouble timing out on first query sometimes
 
     def averaging_restart(self):
         """ Restart trace averaging """

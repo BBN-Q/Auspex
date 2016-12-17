@@ -208,7 +208,7 @@ class SCPIInstrument(Instrument):
             if interface_type is None:
                 self.interface = Interface()
             elif interface_type == "VISA":
-                if any(is_valid_ipv4(substr) for substr in self.resource_name.split("::"))
+                if any(is_valid_ipv4(substr) for substr in self.resource_name.split("::")):
                     ## assume single NIC for now
                     self.resource_name = "TCPIP0::" + self.resource_name
                 self.interface = VisaInterface(self.resource_name)
