@@ -6,19 +6,10 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand
+from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand, is_valid_ipv4
 import socket
 import time
 import numpy as np
-
-#Helper function to check for IPv4 address
-#See http://stackoverflow.com/a/11264379
-def is_valid_ipv4(ipv4_address):
-    try:
-        socket.inet_aton(ipv4_address)
-        return True
-    except:
-        return False
 
 class AgilentN5183A(SCPIInstrument):
     """AgilentN5183A microwave source"""

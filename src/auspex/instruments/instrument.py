@@ -6,6 +6,15 @@ from unittest.mock import MagicMock
 from auspex.instruments.interface import Interface, VisaInterface
 from auspex.log import logger
 
+#Helper function to check for IPv4 address
+#See http://stackoverflow.com/a/11264379
+def is_valid_ipv4(ipv4_address):
+    try:
+        socket.inet_aton(ipv4_address)
+        return True
+    except:
+        return False
+
 class Command(object):
     """Store the arguments and keywords, so that we may later dispatch
     depending on the instrument type."""
@@ -199,7 +208,7 @@ class SCPIInstrument(Instrument):
             if interface_type is None:
                 self.interface = Interface()
             elif interface_type == "VISA":
-                if "SOCKET" in self.resource_name or "hislip" in self.resource_name or "inst0" in self.resource_name:
+                if any(is_valid_ipv4(substr) for substr in self.resource_name.split("::"))
                     ## assume single NIC for now
                     self.resource_name = "TCPIP0::" + self.resource_name
                 self.interface = VisaInterface(self.resource_name)
