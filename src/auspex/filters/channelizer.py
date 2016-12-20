@@ -6,6 +6,7 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
+import os
 from copy import deepcopy
 import asyncio, concurrent
 
@@ -17,6 +18,15 @@ from auspex.parameter import Parameter, IntParameter, FloatParameter
 from auspex.filters.filter import Filter, InputConnector, OutputConnector
 from auspex.stream import  DataStreamDescriptor
 from auspex.log import logger
+
+import numpy.ctypeslib as npct
+from ctypes import c_int, c_size_t
+np_float  = npct.ndpointer(dtype=np.float32, flags='C_CONTIGUOUS')
+
+libipp = npct.load_library("libchannelizer",  os.path.abspath(os.path.join( os.path.dirname(__file__), "libchannelizer")))
+libipp.filter_records_fir.argtypes = [np_float, c_size_t, c_int, np_float, c_size_t, c_size_t, np_float]
+libipp.filter_records_iir.argtypes = [np_float, c_size_t, np_float, c_size_t, c_size_t, np_float]
+libipp.init()
 
 class Channelizer(Filter):
     """Digital demodulation and filtering to select a particular frequency multiplexed channel"""
@@ -46,17 +56,70 @@ class Channelizer(Filter):
         self.time_step = time_pts[1] - time_pts[0]
         logger.debug("Channelizer time_step = {}".format(self.time_step))
 
-        # store reference for mix down
-        self.reference = np.exp(2j*np.pi * self.frequency.value * time_pts, dtype=np.complex64)
+        # convert bandwidth normalized to Nyquist interval
+        n_bandwidth = self.bandwidth.value * self.time_step * 2
+        n_frequency = self.frequency.value * self.time_step * 2
 
-        # convert bandwidth to normalized Nyquist interval
-        n_bandwidth = self.bandwidth.value * self.time_step
+        # decide how to split up decimation factor into stages. Heuristics are:
+        # * maximize first stage decimation:
+        #     * minimize subsequent stages time taken
+        #     * filter and decimate while signal is still real
+        #     * first stage decimation cannot be too large or then 2omega signal from mixing will alias
+        # * second stage filter to bring n_bandwidth/2 above 0.1
 
-        # create brick wall filter coefficients
-        freq_pts = scipy.fftpack.fftfreq(self.record_length)
-        demod_cutoff = 0.5/self.decimation_factor.value
-        self.demod_indices = np.where( np.logical_and(freq_pts >= -demod_cutoff, freq_pts < demod_cutoff) )[0]
-        self.filter_coefs = np.complex64(np.abs(freq_pts) < n_bandwidth/2)[self.demod_indices]
+        self.decim_factors = [1]*3
+        self.filters = [None]*3
+
+        # first stage decimating filter
+        d1 = 1
+        while (d1 < 8) and (2*n_frequency <= 0.8/d1) and (d1 < self.decimation_factor.value):
+            d1 *= 2
+            n_bandwidth *= 2
+            n_frequency *= 2
+
+        if d1 > 1:
+            # create an anti-aliasing filter
+            # pass-band to 0.8 * decimation factor; anecdotally single precision needs order <= 4 for stability
+            b,a = scipy.signal.cheby1(4, 3, 0.8/d1)
+            b = np.float32(b)
+            a = np.float32(a)
+            self.decim_factors[0] = d1
+            self.filters[0]  = (b,a)
+
+        # store decimated reference for mix down
+        ref = np.exp(2j*np.pi * self.frequency.value * time_pts[::d1], dtype=np.complex64)
+        self.reference_r = np.real(ref)
+        self.reference_i = np.imag(ref)
+
+        # optional second stage anti-aliasing decimating filter
+        d2 = 1
+        import ipdb; ipdb.set_trace()
+
+        if n_bandwidth/2 < 0.1:
+            while (d2 < 8) and ((d1*d2) < self.decimation_factor.value) and (n_bandwidth/2 <= 0.1):
+                d2 *= 2
+                n_bandwidth *= 2
+                n_frequency *= 2
+
+            if d2 > 1:
+                # create an anti-aliasing filter
+                # pass-band to 0.8 * decimation factor; anecdotally single precision needs order <= 4 for stability
+                b,a = scipy.signal.cheby1(4, 3, 0.8/d2)
+                b = np.float32(b)
+                a = np.float32(a)
+                self.decim_factors[1] = d2
+                self.filters[1]  = (b,a)
+
+
+        # final channel selection filter
+        if n_bandwidth < 0.1:
+            raise(ValueError, "Insufficient decimation to achieve stable filter")
+
+        b,a = scipy.signal.cheby1(4, 3, n_bandwidth/2)
+        b = np.float32(b)
+        a = np.float32(a)
+        self.decim_factors[2] = self.decimation_factor.value // (d1*d2)
+        self.filters[2]  = (b,a)
 
         # update output descriptors
         decimated_descriptor = DataStreamDescriptor()
@@ -67,30 +130,55 @@ class Channelizer(Filter):
         decimated_descriptor.dtype = np.complex64
         for os in self.source.output_streams:
             os.set_descriptor(decimated_descriptor)
-            os.end_connector.update_descriptors()
+            if os.end_connector is not None:
+                os.end_connector.update_descriptors()
 
     async def process_data(self, data):
         # Assume for now we get a integer number of records at a time
         # TODO: handle partial records
         num_records = data.size // self.record_length
+        reshaped_data = np.reshape(data, (num_records, self.record_length), order="C")
+
+        # first stage decimating filter
+        if self.filters[0] is not None:
+            stacked_coeffs = np.concatenate(self.filters[0])
+            # filter
+            filtered = np.empty_like(reshaped_data)
+            libipp.filter_records_iir(stacked_coeffs, self.filters[0][0].size-1, reshaped_data, self.record_length, num_records, filtered)
+
+            # decimate
+            if self.decim_factors[0] > 1:
+                filtered = filtered[:, ::self.decim_factors[0]]
 
         # mix with reference
-        mix_product = self.reference * np.reshape(data, (num_records, self.record_length), order="C")
+        # keep real and imaginary separate for filtering below
+        filtered_r = self.reference_r * filtered
+        filtered_i = self.reference_i * filtered
 
-        # convert to frequency domain
-        f_domain = scipy.fftpack.fft(mix_product, overwrite_x=True)
+        # channel selection filters
+        for ct in [1,2]:
+            if self.filters[ct] == None:
+                continue
 
-        # decimate
-        f_domain = f_domain[..., self.demod_indices]
+            coeffs = self.filters[ct]
+            stacked_coeffs = np.concatenate(self.filters[ct])
+            out_r = np.empty_like(filtered_r)
+            out_i = np.empty_like(filtered_i)
+            libipp.filter_records_iir(stacked_coeffs, self.filters[ct][0].size-1, filtered_r, filtered_r.shape[-1], num_records, out_r)
+            libipp.filter_records_iir(stacked_coeffs, self.filters[ct][0].size-1, filtered_i, filtered_i.shape[-1], num_records, out_i)
 
-        # filter
-        f_domain = self.filter_coefs * f_domain
+            # decimate
+            if self.decim_factors[ct] > 1:
+                filtered_r = np.copy(out_r[:, ::self.decim_factors[ct]], order="C")
+                filtered_i = np.copy(out_i[:, ::self.decim_factors[ct]], order="C")
+            else:
+                filtered_r = out_r
+                filtered_i = out_i
 
-        # back to time domain
-        filtered = scipy.fftpack.ifft(f_domain, overwrite_x=True)
+        filtered = filtered_r + 1j*filtered_i
 
-        # recover gain from selecting single sideband and decimation
-        filtered *= 2*self.decimation_factor.value
+        # recover gain from selecting single sideband
+        filtered *= 2
 
         # push to ouptut connectors
         for os in self.source.output_streams:
