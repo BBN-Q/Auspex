@@ -9,12 +9,12 @@ using std::cout;
 using std::endl;
 
 void init() {
-  cout << "Initializing IPP Libraries!" << endl;
+  // cout << "Initializing IPP Libraries!" << endl;
   const IppLibraryVersion *lib;
   ippInit();
   // print version info so we know something worked
   lib = ippGetLibVersion();
-  cout << lib->Name << lib->Version << endl;
+  // cout << lib->Name << lib->Version << endl;
 }
 
 void filter_records_fir(float *coeffs, size_t num_taps, int decim_factor,
