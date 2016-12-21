@@ -1,6 +1,7 @@
 import numpy as np
 import os
 import time
+import socket
 from unittest.mock import MagicMock
 
 from auspex.instruments.interface import Interface, VisaInterface
@@ -11,9 +12,14 @@ from auspex.log import logger
 def is_valid_ipv4(ipv4_address):
     try:
         socket.inet_aton(ipv4_address)
+        if ipv4_address.count(".") != 3:
+            logger.warning("User-provided IP {} is a valid IP address but does" +
+                " not appear to be in human-readable format.".format(ipv4_address))
         return True
-    except:
+    except socket.error:
         return False
+    except:
+        raise
 
 class Command(object):
     """Store the arguments and keywords, so that we may later dispatch
@@ -206,12 +212,16 @@ class SCPIInstrument(Instrument):
 
         try:
             if interface_type is None:
+                logger.warning("Instrument {} is using a generic instrument " +
+                    "interface as none was provided.".format(self.name))
                 self.interface = Interface()
             elif interface_type == "VISA":
                 if any(is_valid_ipv4(substr) for substr in self.resource_name.split("::")):
                     ## assume single NIC for now
                     self.resource_name = "TCPIP0::" + self.resource_name
                 self.interface = VisaInterface(self.resource_name)
+                print(self.interface._resource)
+                logger.debug("A pyVISA interface {} was created for instrument {}.".format(str(self.interface._resource), self.name))
             else:
                 raise ValueError("That interface type is not yet recognized.")
         except:

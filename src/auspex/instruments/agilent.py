@@ -7,6 +7,7 @@
 #    http://www.apache.org/licenses/LICENSE-2.0
 
 from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand, is_valid_ipv4
+from auspex.log import logger
 import socket
 import time
 import numpy as np
@@ -32,6 +33,7 @@ class AgilentN5183A(SCPIInstrument):
             self.resource_name = resource_name
         if is_valid_ipv4(self.resource_name):
             self.resource_name += "::5025::SOCKET"
+        print(self.resource_name)
         super(AgilentN5183A, self).connect(resource_name=resource_name, interface_type=interface_type)
         self.interface._resource.read_termination = u"\n"
         self.interface._resource.write_termination = u"\n"
@@ -58,11 +60,11 @@ class AgilentE8363C(SCPIInstrument):
         #If we only have an IP address then tack on the raw socket port to the VISA resource string
         super(AgilentE8363C, self).__init__(resource_name, *args, **kwargs)
 
-
-    def connect(self, resource_name=None, interface_type=None):
+    def connect(self, resource_name=None, interface_type="VISA"):
         if resource_name is not None:
             self.resource_name = resource_name
-        if is_valid_ipv4(resource_name):
+        print(self.resource_name)
+        if is_valid_ipv4(self.resource_name):
             self.resource_name += "::hpib7,16::INSTR"
         else:
             logger.error("The resource name for the Agilent E8363C: {} is " +
