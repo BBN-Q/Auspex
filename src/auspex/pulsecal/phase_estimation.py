@@ -35,9 +35,7 @@ def phase_estimation( data_in, vardata_in, verbose=False):
     xvar = vardata[1::2]
 
     phases = np.arctan2(xdata, zdata)
-    print(phases)
     distances = np.sqrt(xdata**2 + zdata**2);
-    print(distances)
 
     curGuess = phases[0]
     phase = curGuess
@@ -83,14 +81,14 @@ def phase_estimation( data_in, vardata_in, verbose=False):
         curGuess = possibles[0];
         if verbose == True:
             print('Current Guess: %f'%(curGuess))
-    
     phase = curGuess;
-    sigma = np.max(np.abs(restrict(curGuess - lowerBound)), np.abs(restrict(curGuess - upperBound)));
+    sigma = np.maximum(np.abs(restrict(curGuess - lowerBound)), np.abs(restrict(curGuess - upperBound)));
     
     return phase,sigma
 
 
 def simulate_measurement(amp, target, numPulses):
+    
     idealAmp = 0.34
     noiseScale = 0.05
     polarization = 0.99 # residual polarization after each pulse
@@ -112,23 +110,4 @@ def simulate_measurement(amp, target, numPulses):
     vardata = noiseScale**2 * np.ones((len(data,)));
     
     return data, vardata
-    
-def main():
-    numPulses = 9
-    amp = .55
-    direction = 'X'
-    target = np.pi
-    
-    data, vardata =  simulate_measurement(amp, target, numPulses)   
-    #print(data,vardata)
-    #plt.figure()
-    #plt.plot(data)
-    #plt.show()
-    
-    phase, sigma = phase_estimation(data, vardata, verbose=True)
-    print(phase,sigma)
-    
-if __name__ == '__main__':
-    main()    
-    
     
