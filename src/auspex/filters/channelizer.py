@@ -60,17 +60,21 @@ class Channelizer(Filter):
         n_bandwidth = self.bandwidth.value * self.time_step * 2
         n_frequency = self.frequency.value * self.time_step * 2
 
-        # decide how to split up decimation factor into stages. Heuristics are:
-        # * maximize first stage decimation:
-        #     * minimize subsequent stages time taken
-        #     * filter and decimate while signal is still real
-        #     * first stage decimation cannot be too large or then 2omega signal from mixing will alias
-        # * second stage filter to bring n_bandwidth/2 above 0.1
+        # arbitrarily decide on three stage filter pipeline
+        # 1. first stage decimating filter on real data
+        # 2. decond stage decimating filter on mixed product to boost n_bandwidth
+        # 3. final channel selecting filter at n_bandwidth/2
+
+        # anecdotally don't decimate more than a factor of eight for stability
 
         self.decim_factors = [1]*3
         self.filters = [None]*3
 
         # first stage decimating filter
+        # maximize first stage decimation:
+        #     * minimize subsequent stages time taken
+        #     * filter and decimate while signal is still real
+        #     * first stage decimation cannot be too large or then 2omega signal from mixing will alias
         d1 = 1
         while (d1 < 8) and (2*n_frequency <= 0.8/d1) and (d1 < self.decimation_factor.value):
             d1 *= 2
@@ -91,24 +95,22 @@ class Channelizer(Filter):
         self.reference_r = np.real(ref)
         self.reference_i = np.imag(ref)
 
-        # optional second stage anti-aliasing decimating filter
+        # second stage filter to bring n_bandwidth/2 up
+        # decimation cannot be too large or will impinge on channel bandwidth (keep n_bandwidth/2 <= 0.8)
         d2 = 1
-        import ipdb; ipdb.set_trace()
+        while (d2 < 8) and ((d1*d2) < self.decimation_factor.value) and (n_bandwidth/2 <= 0.8):
+            d2 *= 2
+            n_bandwidth *= 2
+            n_frequency *= 2
 
-        if n_bandwidth/2 < 0.1:
-            while (d2 < 8) and ((d1*d2) < self.decimation_factor.value) and (n_bandwidth/2 <= 0.1):
-                d2 *= 2
-                n_bandwidth *= 2
-                n_frequency *= 2
-
-            if d2 > 1:
-                # create an anti-aliasing filter
-                # pass-band to 0.8 * decimation factor; anecdotally single precision needs order <= 4 for stability
-                b,a = scipy.signal.cheby1(4, 3, 0.8/d2)
-                b = np.float32(b)
-                a = np.float32(a)
-                self.decim_factors[1] = d2
-                self.filters[1]  = (b,a)
+        if d2 > 1:
+            # create an anti-aliasing filter
+            # pass-band to 0.8 * decimation factor; anecdotally single precision needs order <= 4 for stability
+            b,a = scipy.signal.cheby1(4, 3, 0.8/d2)
+            b = np.float32(b)
+            a = np.float32(a)
+            self.decim_factors[1] = d2
+            self.filters[1]  = (b,a)
 
 
         # final channel selection filter
