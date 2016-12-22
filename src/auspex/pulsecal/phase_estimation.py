@@ -7,7 +7,6 @@
 #    http://www.apache.org/licenses/LICENSE-2.0
 
 import numpy as np
-import matplotlib.pyplot as plt
 
 def restrict(phase):
     out = np.mod( phase + np.pi, 2*np.pi, ) - np.pi
@@ -24,18 +23,18 @@ def phase_estimation( data_in, vardata_in, verbose=False):
     avgdata = (data_in[0::2] + data_in[1::2])/2
     
     # normalize data using the first two pulses to calibrate the "meter"
-    data = 1 + np.divide( 2*(avgdata[2:] - avgdata[0]), (avgdata[0] - avgdata[1]))
+    data = 1 + 2*(avgdata[2:] - avgdata[0]) / (avgdata[0] - avgdata[1])
     zdata = data[0::2]
     xdata = data[1::2]
 
     # similar scaling with variances
     vardata = (vardata_in[0::2] + vardata_in[1::2])/2
-    vardata = np.divide( vardata[2:] * 2, abs(avgdata[0] - avgdata[1])**2)
+    vardata = vardata[2:] * 2 / abs(avgdata[0] - avgdata[1])**2
     zvar = vardata[0::2]
     xvar = vardata[1::2]
 
     phases = np.arctan2(xdata, zdata)
-    distances = np.sqrt(xdata**2 + zdata**2);
+    distances = np.sqrt(xdata**2 + zdata**2)
 
     curGuess = phases[0]
     phase = curGuess
@@ -44,7 +43,7 @@ def phase_estimation( data_in, vardata_in, verbose=False):
     if verbose == True:
         print('Current Guess: %f'%(curGuess))
         
-    for k in np.arange(1,len(phases)):
+    for k in range(1,len(phases)):
         
         if verbose == True:
             print('k: %d'%(k))
@@ -54,12 +53,12 @@ def phase_estimation( data_in, vardata_in, verbose=False):
         # (x,z) tuple is long enough that we can assign it to the correct
         # quadrant of the circle with 2σ confidence
         if distances[k] < 2*np.sqrt(xvar[k] + zvar[k]):
-            print('Phase estimation terminated at %dth pulse because the (x,z) vector is too short'%(k));
+            print('Phase estimation terminated at %dth pulse because the (x,z) vector is too short'%(k))
             break
         
-        lowerBound = restrict(curGuess - np.pi/2**(k));
-        upperBound = restrict(curGuess + np.pi/2**(k));
-        possiblesTest = [ restrict((phases[k] + 2*n*np.pi)/2**(k)) for n in np.arange(0,2**(k)+1)]
+        lowerBound = restrict(curGuess - np.pi/2**(k))
+        upperBound = restrict(curGuess + np.pi/2**(k))
+        possiblesTest = [ restrict((phases[k] + 2*n*np.pi)/2**(k)) for n in range(0,2**(k)+1)]
         
         if verbose == True:
             print('Lower Bound: %f'%lowerBound)
@@ -78,36 +77,10 @@ def phase_estimation( data_in, vardata_in, verbose=False):
             if satisfiesLB == True and satisfiesUP == True:
                 possibles.append(p)
                     
-        curGuess = possibles[0];
+        curGuess = possibles[0]
         if verbose == True:
             print('Current Guess: %f'%(curGuess))
-    phase = curGuess;
-    sigma = np.maximum(np.abs(restrict(curGuess - lowerBound)), np.abs(restrict(curGuess - upperBound)));
+    phase = curGuess
+    sigma = np.maximum(np.abs(restrict(curGuess - lowerBound)), np.abs(restrict(curGuess - upperBound)))
     
     return phase,sigma
-
-
-def simulate_measurement(amp, target, numPulses):
-    
-    idealAmp = 0.34
-    noiseScale = 0.05
-    polarization = 0.99 # residual polarization after each pulse
-
-    # data representing over/under rotation of pi/2 pulse
-    # theta = pi/2 * (amp/idealAmp);
-    theta = target * (amp/idealAmp)
-    ks = [ 2**k for k in np.arange(0,numPulses+1)]
-    
-    xdata = [ polarization**x * np.sin(x*theta) for x in ks];
-    xdata = np.insert(xdata,0,-1.0)
-    zdata = [ polarization**x * np.cos(x*theta) for x in ks];
-    zdata = np.insert(zdata,0,1.0)
-    data = np.array([zdata,xdata]).flatten('F')
-    data = np.tile(data,(2,1)).flatten('F')
-    
-    # add noise
-    #data += noiseScale * np.random.randn(len(data));
-    vardata = noiseScale**2 * np.ones((len(data,)));
-    
-    return data, vardata
-    
