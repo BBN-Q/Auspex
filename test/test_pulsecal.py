@@ -76,7 +76,7 @@ class OptimizeAmplitudeTestCase(unittest.TestCase):
         
         # NOTE: expected result is from the same input fed to the matlab
         # routine
-        self.assertAlmostEqual(phase,0.3400,places=4)
+        self.assertAlmostEqual(amp_out,0.3400,places=4)
 
 
 if __name__ == '__main__':
