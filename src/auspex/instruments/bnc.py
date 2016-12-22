@@ -6,7 +6,7 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand
+from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand, is_valid_ipv4
 from auspex.log import logger
 import time
 import numpy as np
@@ -44,12 +44,10 @@ class BNC845(SCPIInstrument):
             resource_name: The IP address of the source to conenct to, as string.
         """
         if resource_name is not None:
-            try:
-                socket.inet_pton(socket.AF_INET, resource_name)
+            if is_valid_ipv4(resource_name):
                 resource_name = resource_name + "::inst0::INSTR"
-            except OSError: #not a valid IP address
+            else:
                 logger.error("Invalid IP address for BNC845: {}.".format(resource_name))
-                raise
         super(BNC845, self).__init__(resource_name, *args, **kwargs)
 
     def connect(self, resource_name=None, interface_type=None):
@@ -65,12 +63,10 @@ class BNC845(SCPIInstrument):
             None.
         """
         if resource_name is not None:
-            try:
-                socket.inet_pton(socket.AF_INET, resource_name)
+            if is_valid_ipv4(resource_name):
                 resource_name = resource_name + "::inst0::INSTR"
-            except OSError: #not a valid IP address
+            else:
                 logger.error("Invalid IP address for BNC845: {}.".format(resource_name))
-                raise
         super(BNC845, self).connect(resource_name, interface_type)
         self.interface._resource.read_termination = '\n'
         self.interface._resource.write_termination = '\n'
