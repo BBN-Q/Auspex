@@ -11,6 +11,30 @@ import numpy as np
 
 import auspex.pulsecal.phase_estimation as pe
 
+def simulate_measurement(amp, target, numPulses):
+    
+    idealAmp = 0.34
+    noiseScale = 0.05
+    polarization = 0.99 # residual polarization after each pulse
+
+    # data representing over/under rotation of pi/2 pulse
+    # theta = pi/2 * (amp/idealAmp);
+    theta = target * (amp/idealAmp)
+    ks = [ 2**k for k in range(0,numPulses+1)]
+    
+    xdata = [ polarization**x * np.sin(x*theta) for x in ks];
+    xdata = np.insert(xdata,0,-1.0)
+    zdata = [ polarization**x * np.cos(x*theta) for x in ks];
+    zdata = np.insert(zdata,0,1.0)
+    data = np.array([zdata,xdata]).flatten('F')
+    data = np.tile(data,(2,1)).flatten('F')
+    
+    # add noise
+    #data += noiseScale * np.random.randn(len(data));
+    vardata = noiseScale**2 * np.ones((len(data,)));
+    
+    return data, vardata
+    
 
 class PhaseEstimateTestCase(unittest.TestCase):
 
@@ -22,7 +46,7 @@ class PhaseEstimateTestCase(unittest.TestCase):
         target = np.pi
         
         # Using the same simulated data as matlab
-        data, vardata =  pe.simulate_measurement(amp, target, numPulses)   
+        data, vardata =  simulate_measurement(amp, target, numPulses)   
         
         # Verify output matches what was previously seen by matlab
         phase, sigma = pe.phase_estimation(data, vardata, verbose=True)
