@@ -223,6 +223,42 @@ class WriteToHDF5(Filter):
         #     # This doesn't seem to happen when we don't used named columns
         #     logger.debug("Ignoring 'dictionary changed sized during iteration' error.")
 
+class DataBuffer(Filter):
+    """Writes data to file."""
+
+    sink = InputConnector()
+
+    def __init__(self, **kwargs):
+        super(DataBuffer, self).__init__(**kwargs)
+        self.quince_parameters = []
+
+    def final_init(self):
+        self.descriptor = self.sink.input_streams[0].descriptor
+        self.buffer = np.empty(self.descriptor.num_points(), dtype=self.sink.input_streams[0].descriptor.dtype)
+        self.w_idx = 0
+
+    async def process_data(self, data):
+        if self.w_idx + data.size > self.buffer.size:
+            # Create a new buffer and paste the old buffer into it
+            old_buffer = self.buffer
+            new_size = self.descriptor.num_points()
+            self.buffer = np.empty(num_points(), dtype=self.descriptor.dtype)
+            self.buffer[:old_buffer.size] = old_buffer
+
+        self.buffer[self.w_idx:self.w_idx+data.size] = data
+        self.w_idx += data.size
+
+    def get_data(self):
+        dtype = self.descriptor.axis_data_type(with_metadata=True)
+        dtype.append((self.descriptor.data_name, self.descriptor.dtype))
+        data = np.empty(self.buffer.size, dtype=dtype)
+
+        tuples = self.descriptor.tuples(with_metadata=True, as_structured_array=True)
+        for a in self.descriptor.axis_names(with_metadata=True):
+            data[a] = tuples[a]
+        data[self.descriptor.data_name] = self.buffer
+        return data
+
 class ProgressBar(Filter):
     """ Display progress bar(s) on the terminal/notebook.
 
