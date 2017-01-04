@@ -16,6 +16,7 @@ import base64
 import datetime
 
 import numpy as np
+import networkx as nx
 
 import auspex.config as config
 import auspex.instruments
@@ -62,6 +63,62 @@ class QubitExpFactory(object):
             with open(meta_file, 'r') as FID:
                 meta_info = json.load(FID)
 
+            # Construct a graph of all instruments in order to properly enabled those
+            # associated with the meta_file. We only need to use string representations
+            # here, not actual filter and instrument objects.
+
+            # Strip any colons
+            def strip_conn_name(text):
+                if ':' in text:
+                    return text.split(":")[0]
+                return text
+
+            # Graph edges for the measurement filters
+            edges = [(strip_conn_name(pars['data_source']), name) for name, pars in measurement_settings["filterDict"].items()]
+            dag = nx.DiGraph()
+            dag.add_edges_from(edges)
+
+            inst_to_enable = []
+            filt_to_enable = []
+
+            # Find any writer endpoints of the receiver channels
+            for receiver_text in meta_info['receivers']:
+                dig_name, chan_name = receiver_text.split("-")
+
+                # Enable this digitizer
+                inst_to_enable.append(dig_name)
+
+                # Find descendants of the channel selector
+                chan_descendants = nx.descendants(dag, chan_name)
+                # Find endpoints within the descendants   
+                endpoints = [n for n in chan_descendants if dag.in_degree(n) == 1 and dag.out_degree(n) == 0]
+                # Find endpoints which are enabled writers
+                writers = [e for e in endpoints if measurement_settings["filterDict"][e]["x__class__"] == "WriteToHDF5" and 
+                                                   measurement_settings["filterDict"][e]["enabled"]]
+                # The user should only have one writer enabled, otherwise we will be confused.
+                if len(writers) > 1:
+                    raise Exception("More than one viable data writer was found for a receiver channel {}. Please enabled only one!".format(receiver_text))
+                if len(writers) == 0:
+                    raise Exception("No viable data writer was found for receiver channel {}. Please enabled only one!".format(receiver_text))
+                
+                # Trace back our ancestors
+                ancestors = nx.ancestors(dag, writers[0])
+                # We will have gotten the digitizer, which should be removed since we're already taking care of it
+                ancestors.remove(dig_name)
+                filt_to_enable.extend(ancestors)
+                
+
+            # Disable EVERYTHING and then build ourselved back up with the relevant nodes
+            for instr_name in instrument_settings['instrDict'].keys():
+                instrument_settings['instrDict'][instr_name]['enabled'] = False
+            for instr_name in inst_to_enable:
+                instrument_settings['instrDict'][instr_name]['enabled'] = True
+
+            for meas_name in measurement_settings['filterDict'].keys():
+                measurement_settings['filterDict'][meas_name]['enabled'] = False
+            for meas_name in filt_to_enable:
+                measurement_settings['filterDict'][meas_name]['enabled'] = True
+
             # First enable any instruments and set the sequence files
             for instr_name, seq_file in meta_info['instruments'].items():
                 instrument_settings['instrDict'][instr_name]['enabled']  = True
@@ -82,7 +139,6 @@ class QubitExpFactory(object):
 
             # Replace the sweep order with just the metafile sweep
             sweep_settings["sweepOrder"] = ["SegmentSweep"]
-            print(sweep_settings)
 
 
         class QubitExperiment(Experiment):
