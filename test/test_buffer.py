@@ -112,7 +112,7 @@ class SweptTestExperimentMetadata(Experiment):
         logger.debug("Stream pushed points {}.".format(data_row))
         logger.debug("Stream has filled {} of {} points".format(self.voltage.points_taken, self.voltage.num_points() ))
 
-class SweepTestCase(unittest.TestCase):
+class BufferTestCase(unittest.TestCase):
 
     def test_buffer(self):
         exp = SweptTestExperiment()
@@ -125,7 +125,24 @@ class SweepTestCase(unittest.TestCase):
         exp.add_sweep(exp.freq, np.linspace(0,10.0,3))
         exp.run_sweeps()
 
-        print(db.get_data())
+        data = db.get_data()
+        self.assertTrue(len(data) == 4*3*5)
+        self.assertTrue(len(data['field']) == 4*3*5)
+
+    def test_buffer_metadata(self):
+        exp = SweptTestExperimentMetadata()
+        db  = DataBuffer()
+
+        edges = [(exp.voltage, db.sink)]
+        exp.set_graph(edges)
+
+        exp.add_sweep(exp.field, np.linspace(0,100.0,4))
+        exp.add_sweep(exp.freq, np.linspace(0,10.0,3))
+        exp.run_sweeps()
+
+        data = db.get_data()
+        self.assertTrue(len(data) == 4*3*5)
+        self.assertTrue(len(data['samples_metadata']) == 4*3*5)
 
 if __name__ == '__main__':
     unittest.main()
