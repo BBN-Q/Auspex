@@ -163,10 +163,12 @@ class DataStreamDescriptor(object):
         super(DataStreamDescriptor, self).__init__()
         self.data_name = "Data"
         self.axes = []
+        self.unit = None
         self.params = {} # Parameters associated with each dataset
         self.parent = None
         self.exp_src = None # Actual source code from the underlying experiment
         self.dtype = dtype
+        self.metadata = {}
 
     def add_axis(self, axis):
         # Check if axis is DataAxis or SweepAxis (which inherits from DataAxis)
@@ -405,11 +407,12 @@ class InputConnector(object):
         return "<InputConnector(name={})>".format(self.name)
 
 class OutputConnector(object):
-    def __init__(self, name="", data_name=None, parent=None, datatype=None):
+    def __init__(self, name="", data_name=None, unit=None, parent=None, datatype=None):
         self.name = name
         self.output_streams = []
         self.points_taken = 0
         self.parent = parent
+        self.unit = unit
 
         # if data_name is not none, then it is the origin of the whole chain
         self.data_name = data_name
@@ -419,6 +422,7 @@ class OutputConnector(object):
         self.descriptor = DataStreamDescriptor()
         if self.data_name:
             self.descriptor.data_name = self.data_name
+            self.descriptor.unit = self.unit
         self.add_axis   = self.descriptor.add_axis
 
     # We allow the connectors itself to posess
