@@ -21,6 +21,7 @@ class Averager(Filter):
     sink            = InputConnector()
     partial_average = OutputConnector()
     final_average   = OutputConnector()
+    final_variance  = OutputConnector()
     axis            = Parameter(allowed_values=["round_robins", "segments", "time"])
 
     def __init__(self, averaging_axis=None, **kwargs):
@@ -93,6 +94,13 @@ class Averager(Filter):
         for stream in self.partial_average.output_streams + self.final_average.output_streams:
             stream.set_descriptor(descriptor)
             stream.end_connector.update_descriptors()
+
+        # Define variance axis descriptor
+        descriptor = descriptor_in.copy()
+        descriptor.pop_axis(self.axis.value)
+        descriptor.unit = descriptor.unit + "^2"
+        descriptor.metadata["num_averages"] = self.num_averages
+        self.final_variance.descriptor = descriptor
 
         # for stream in self.final_average.output_streams:
         #     logger.debug("\tnow setting stream %s to %s", stream, descriptor)
