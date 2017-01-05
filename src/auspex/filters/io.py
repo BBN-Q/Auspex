@@ -125,6 +125,8 @@ class WriteToHDF5(Filter):
         # Create a table for the DataStreamDescriptor
         ref_dtype = h5py.special_dtype(ref=h5py.Reference)
         self.descriptor = self.group.create_dataset("descriptor", (len(axes),), dtype=ref_dtype)
+        for k,v in desc.metadata.items():
+            self.descriptor.attrs[k] = v
 
         # Associated axis dimensions with the data and add
         # references to the descriptor.
