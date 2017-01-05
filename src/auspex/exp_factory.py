@@ -81,6 +81,9 @@ class QubitExpFactory(object):
             inst_to_enable = []
             filt_to_enable = []
 
+            # Create a mapping from qubits to data writers
+            qubit_to_writer = {}
+
             # Find any writer endpoints of the receiver channels
             for receiver_text, num_segments in meta_info['receivers'].items():
                 dig_name, chan_name = receiver_text.split("-")
@@ -97,18 +100,24 @@ class QubitExpFactory(object):
                 # Find endpoints which are enabled writers
                 writers = [e for e in endpoints if measurement_settings["filterDict"][e]["x__class__"] == "WriteToHDF5" and 
                                                    measurement_settings["filterDict"][e]["enabled"]]
+                plotters = [e for e in endpoints if measurement_settings["filterDict"][e]["x__class__"] == "Plotter" and 
+                                                   measurement_settings["filterDict"][e]["enabled"]]
                 # The user should only have one writer enabled, otherwise we will be confused.
                 if len(writers) > 1:
                     raise Exception("More than one viable data writer was found for a receiver channel {}. Please enabled only one!".format(receiver_text))
                 if len(writers) == 0:
                     raise Exception("No viable data writer was found for receiver channel {}. Please enabled only one!".format(receiver_text))
                 
+                # For now we assume a single qubit
+                # TODO: have meta info give the relationships of qubits to receivers so we don't need to dig in the channel lib
+                qubit_to_writer["q1"] = writers[0]
+
                 # Trace back our ancestors
                 ancestors = nx.ancestors(dag, writers[0])
                 # We will have gotten the digitizer, which should be removed since we're already taking care of it
                 ancestors.remove(dig_name)
                 filt_to_enable.extend(ancestors)
-                
+                filt_to_enable.extend(plotters)
 
             # Disable EVERYTHING and then build ourselved back up with the relevant nodes
             for instr_name in instrument_settings['instrDict'].keys():
@@ -198,6 +207,8 @@ class QubitExpFactory(object):
         experiment.sweep_settings       = sweep_settings
         experiment.run_in_notebook = notebook
         experiment.name = expname
+
+        experiment.qubit_to_writer = qubit_to_writer
 
         QubitExpFactory.load_instruments(experiment)
         QubitExpFactory.load_segment_sweeps(experiment)
