@@ -226,13 +226,8 @@ class DataStreamDescriptor(object):
         return dtype
 
     def tuples(self, with_metadata=False, as_structured_array=True):
-        vals = []
-        for a in self.axes:
-            if with_metadata:
-                vals.append(a.points_with_metadata())
-            else:
-                vals.append(a.points)
-        nested_list = list(itertools.product(*vals))
+        vals           = [a.points_with_metadata() for a in self.axes]
+        nested_list    = list(itertools.product(*vals))
         flattened_list = [tuple((val for sublist in line for val in sublist)) for line in nested_list]
         if as_structured_array:
             return np.core.records.fromrecords(flattened_list, dtype=self.axis_data_type(with_metadata=True))
