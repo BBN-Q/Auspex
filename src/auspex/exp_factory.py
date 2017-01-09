@@ -43,12 +43,12 @@ class QubitExpFactory(object):
     will override the defaulty JSON."""
 
     @staticmethod
-    def run():
-        exp = QubitExpFactory.create()
+    def run(notebook=False):
+        exp = QubitExpFactory.create(notebook=notebook)
         exp.run_sweeps()
 
     @staticmethod
-    def create(meta_file=None):
+    def create(meta_file=None, notebook=False):
         with open(config.instrumentLibFile, 'r') as FID:
             instrument_settings = json.load(FID)
 
@@ -194,6 +194,7 @@ class QubitExpFactory(object):
         experiment.instrument_settings  = instrument_settings
         experiment.measurement_settings = measurement_settings
         experiment.sweep_settings       = sweep_settings
+        experiment.run_in_notebook = notebook
 
         QubitExpFactory.load_instruments(experiment)
         QubitExpFactory.load_sweeps(experiment)
@@ -383,6 +384,8 @@ class QubitExpFactory(object):
                 filt = module_map[filt_type](**settings)
                 filt.name = name
                 filters[name] = filt
+                if filt_type == 'Plotter':
+                    filt.run_in_notebook = experiment.run_in_notebook 
                 logger.debug("Found filter class %s for '%s' when loading experiment settings.", filt_type, name)
             else:
                 logger.error("Could not find filter class %s for '%s' when loading experiment settings.", filt_type, name)

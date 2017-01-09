@@ -387,7 +387,7 @@ class Experiment(metaclass=MetaExperiment):
                 container = Tabs(tabs=[Panel(child=p.plot, title=p.name) for p in self.plotters])
             else:
                 if len(self.plotters) <= 2:
-                    container = row(*[p.figure for p in self.plotters])
+                    container = row(*[p.plot for p in self.plotters])
                 else:
                     padded_list = self.plotters[:]
                     if len(padded_list)%2 != 0:
