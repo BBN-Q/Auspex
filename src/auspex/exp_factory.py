@@ -43,12 +43,12 @@ class QubitExpFactory(object):
     will override the defaulty JSON."""
 
     @staticmethod
-    def run(notebook=False):
-        exp = QubitExpFactory.create(notebook=notebook)
+    def run(notebook=False, expname=None):
+        exp = QubitExpFactory.create(notebook=notebook, expname=expname)
         exp.run_sweeps()
 
     @staticmethod
-    def create(meta_file=None, notebook=False):
+    def create(meta_file=None, notebook=False, expname=None):
         with open(config.instrumentLibFile, 'r') as FID:
             instrument_settings = json.load(FID)
 
@@ -195,6 +195,7 @@ class QubitExpFactory(object):
         experiment.measurement_settings = measurement_settings
         experiment.sweep_settings       = sweep_settings
         experiment.run_in_notebook = notebook
+        experiment.name = expname
 
         QubitExpFactory.load_instruments(experiment)
         QubitExpFactory.load_sweeps(experiment)

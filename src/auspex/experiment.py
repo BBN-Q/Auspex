@@ -14,6 +14,7 @@ import asyncio
 import signal
 import sys
 import numbers
+import os
 
 import numpy as np
 import scipy as sp
@@ -330,6 +331,9 @@ class Experiment(metaclass=MetaExperiment):
 
         # Go find any writers
         self.writers = [n for n in self.nodes if isinstance(n, WriteToHDF5)]
+        if self.name:
+            for w in self.writers:
+                w.filename.value = os.path.join(os.path.dirname(w.filename.value), self.name)
         self.filenames = [w.filename.value for w in self.writers]
         self.files = []
 
