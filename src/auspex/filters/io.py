@@ -13,6 +13,7 @@ import pickle
 import zlib
 import numpy as np
 import os.path
+import time
 
 from auspex.parameter import Parameter, FilenameParameter
 from auspex.stream import DataStreamDescriptor
@@ -27,7 +28,7 @@ class WriteToHDF5(Filter):
     filename = FilenameParameter()
     groupname = Parameter(default='main')
 
-    def __init__(self, filename=None, groupname=None, compress=True, **kwargs):
+    def __init__(self, filename=None, groupname=None, add_date=True, compress=True, **kwargs):
         super(WriteToHDF5, self).__init__(**kwargs)
         self.compress = compress
         if filename:
@@ -40,6 +41,7 @@ class WriteToHDF5(Filter):
         self.create_group = True
         self.up_to_date = False
         self.sink.max_input_streams = 100
+        self.add_date = add_date
 
         self.quince_parameters = [self.filename, self.groupname]
 
@@ -59,6 +61,14 @@ class WriteToHDF5(Filter):
         ext = filename.find('.h5')
         if ext > -1:
             filename = filename[:ext]
+        if self.add_date:
+            date = time.strftime("%y%m%d")
+            dirname = os.path.dirname(filename)
+            basename = os.path.basename(filename)
+            fulldir = os.path.join(dirname, date)
+            if not os.path.exists(fulldir):
+                os.mkdir(fulldir)
+            filename = os.path.join(fulldir, basename)
         while os.path.exists("{}-{:04d}.h5".format(filename,i)):
             i += 1
         return "{}-{:04d}.h5".format(filename,i)
