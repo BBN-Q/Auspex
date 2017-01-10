@@ -136,7 +136,7 @@ class Filter(metaclass=MetaFilter):
                 await self.process_data(message_data.flatten())
 
             elif message['type'] == 'data_direct':
-                await self.process_direct(message_data.flatten())
+                await self.process_direct(message_data)
 
     async def process_data(self, data):
         """Process data coming through the filter pipeline"""

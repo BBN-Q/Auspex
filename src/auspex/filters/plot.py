@@ -109,7 +109,7 @@ class Plotter(Filter):
                                           dw=[xmax-xmin], dh=[ymax-ymin], name=self.name, palette="Spectral11") for fig in row] for row in self.figures]
 
         # Construct the master gridplot
-        self.plot = gridplot(self.figures)
+        self.fig = gridplot(self.figures)
 
         self.data_sources = [[plot.data_source for plot in row] for row in self.plots]
         self.plot_buffer = np.nan*np.ones(self.points_before_clear, dtype=self.descriptor.dtype)
@@ -187,10 +187,9 @@ class MeshPlotter(Filter):
         xmin = min(self.x_values)
         ymax = max(self.y_values)
         ymin = min(self.y_values)
-        # self.figure = Figure(x_range=[xmin, xmax], plot_width=600, plot_height=600, webgl=False)
-        # self.plot = self.figure.line(np.copy(np.linspace(0,10,10)), np.random.random(10), name=self.name)
-        self.figure = Figure(x_range=[xmin, xmax], y_range=[ymin, ymax], plot_width=600, plot_height=600, webgl=False)
-        self.plot   = self.figure.patches(xs=[[xmin, xmax, xmin],[xmin, xmax, xmax]],
+
+        self.fig  = Figure(x_range=[xmin, xmax], y_range=[ymin, ymax], plot_width=600, plot_height=600, webgl=False)
+        self.plot = self.fig.patches(xs=[[xmin, xmax, xmin],[xmin, xmax, xmax]],
                                           ys=[[ymin, ymin, ymax],[ymax, ymax, xmin]],
                                           fill_color=["#000000","#000000"],
                                           line_color=None)
@@ -206,11 +205,11 @@ class MeshPlotter(Filter):
         vals   /= vals.max()
         colors = [tuple(el)[:3] for el in plt.cm.RdGy(vals)]
         colors = ["#%02x%02x%02x" % (int(255*color[0]), int(255*color[1]), int(255*color[2])) for color in colors]
-        self.figure.x_range.start = np.min(xs)
-        self.figure.x_range.end = np.max(xs)
-        self.figure.y_range.start = np.min(ys)
-        self.figure.y_range.end = np.max(ys)
-        self.data_source.data = {'xs': xs, 'ys': ys, 'fill_color': colors}
+        self.fig.x_range.start = np.min(xs)
+        self.fig.x_range.end   = np.max(xs)
+        self.fig.y_range.start = np.min(ys)
+        self.fig.y_range.end   = np.max(ys)
+        self.data_source.data  = {'xs': xs, 'ys': ys, 'fill_color': colors}
 
     async def on_done(self):
         time.sleep(0.5)
