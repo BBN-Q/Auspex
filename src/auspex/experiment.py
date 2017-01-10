@@ -174,6 +174,8 @@ class Experiment(metaclass=MetaExperiment):
     """The measurement loop to be run for each set of sweep parameters."""
     def __init__(self):
         super(Experiment, self).__init__()
+        # Experiment name
+        self.name = None
 
         # Sweep control
         self.sweeper = Sweeper()
