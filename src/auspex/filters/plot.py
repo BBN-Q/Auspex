@@ -155,7 +155,7 @@ class Plotter(Filter):
         time.sleep(0.1)
 
     def axis_label(self, index):
-        unit_str = ' (' + self.descriptor.axes[index].unit + ')' if self.descriptor.axes[index].unit else ''
+        unit_str = " ({})".format(self.descriptor.axes[index].unit) if self.descriptor.axes[index].unit else ''
         return self.descriptor.axes[index].name + unit_str
 
 class MeshPlotter(Filter):
