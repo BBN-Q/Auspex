@@ -94,7 +94,7 @@ class Plotter(Filter):
             self.y_labels = [['' for col in row] for row in self.mapping_functions]
 
         if self.plot_dims.value == 1:
-            self.figures = [[Figure(x_range=[xmin, xmax], plot_width=plot_height, plot_height=plot_height, webgl=False, x_axis_label=self.descriptor.axes[-1].name,\
+            self.figures = [[Figure(x_range=[xmin, xmax], plot_width=plot_height, plot_height=plot_height, webgl=False, x_axis_label=self.axis_label(-1),\
             y_axis_label=y_lab) for (col, y_lab) in zip(row, y_label)] for (row, y_label) in zip(self.mapping_functions, self.y_labels)]
             self.plots = [[fig.line(np.copy(self.x_values), np.nan*np.ones(self.points_before_clear), name=self.name) for fig in row] for row in self.figures]
         else:
@@ -103,8 +103,8 @@ class Plotter(Filter):
             self.z_data = np.zeros_like(self.x_mesh)
             ymax = max(self.y_values)
             ymin = min(self.y_values)
-            self.figures = [[Figure(x_range=[xmin, xmax], y_range=[ymin, ymax], plot_width=plot_height, plot_height=plot_height, webgl=False, x_axis_label=self.descriptor.axes[-1].name,\
-            y_axis_label=self.descriptor.axes[-2].name) for col in row] for row in self.mapping_functions]
+            self.figures = [[Figure(x_range=[xmin, xmax], y_range=[ymin, ymax], plot_width=plot_height, plot_height=plot_height, webgl=False, x_axis_label=self.axis_label(-1),\
+            y_axis_label=self.axis_label(-2)) for col in row] for row in self.mapping_functions]
             self.plots = [[fig.image(image=[self.z_data], x=[xmin], y=[ymin],
                                           dw=[xmax-xmin], dh=[ymax-ymin], name=self.name, palette="Spectral11") for fig in row] for row in self.figures]
 
@@ -153,6 +153,10 @@ class Plotter(Filter):
                 for mapping_function, data_source in zip(i,j):
                     data_source.data["image"] = [np.reshape(mapping_function(self.plot_buffer), self.z_data.shape)]
         time.sleep(0.1)
+
+    def axis_label(self, index):
+        unit_str = ' (' + self.descriptor.axes[index].unit + ')' if self.descriptor.axes[index].unit else ''
+        return self.descriptor.axes[index].name + unit_str
 
 class MeshPlotter(Filter):
     sink = InputConnector()
