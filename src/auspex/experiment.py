@@ -382,12 +382,12 @@ class Experiment(metaclass=MetaExperiment):
             #the server on the BokehServerThread has started. Wait a second, here.
             time.sleep(3)
 
-            tabs = not run_in_notebook # Tabs seem a bit sluggish in jupyter notebooks...
+            tabs = True #not run_in_notebook # Tabs seem a bit sluggish in jupyter notebooks...
             if tabs:
-                container = Tabs(tabs=[Panel(child=p.plot, title=p.name) for p in self.plotters])
+                container = Tabs(tabs=[Panel(child=p.fig, title=p.name) for p in self.plotters])
             else:
                 if len(self.plotters) <= 2:
-                    container = row(*[p.figure for p in self.plotters])
+                    container = row(*[p.fig for p in self.plotters])
                 else:
                     padded_list = self.plotters[:]
                     if len(padded_list)%2 != 0:
@@ -420,7 +420,7 @@ class Experiment(metaclass=MetaExperiment):
                         """.format(script)
                 display(HTML(html))
             else:
-                session.show()
+                session.show(container)
 
         def shutdown():
             logger.debug("Shutting Down!")
