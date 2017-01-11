@@ -148,7 +148,7 @@ class MetaExperiment(type):
         self._constants         = {}
 
         # Beware, passing objects won't work at parse time
-        self._output_connectors = []
+        self._output_connectors = {}
 
         # Parse ourself
         self.exp_src = inspect.getsource(self)
@@ -164,7 +164,7 @@ class MetaExperiment(type):
                 self._parameters[k] = v
             elif isinstance(v, OutputConnector):
                 logger.debug("Found '%s' output connector.", k)
-                self._output_connectors.append(k)
+                self._output_connectors[k] = v
             elif isinstance(v, numbers.Number) or isinstance(v, str):
                 self._constants[k] = v
                 # Keep track of numerical parameters
@@ -200,9 +200,10 @@ class Experiment(metaclass=MetaExperiment):
 
         # Things we can't metaclass
         self.output_connectors = {}
-        for oc in self._output_connectors:
-            a = OutputConnector(name=oc, data_name=oc, parent=self)
+        for oc in self._output_connectors.keys():
+            a = OutputConnector(name=oc, data_name=oc, unit=self._output_connectors[oc].data_unit, parent=self)
             a.parent = self
+
             self.output_connectors[oc] = a
             setattr(self, oc, a)
 

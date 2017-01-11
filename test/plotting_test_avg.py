@@ -39,7 +39,7 @@ class TestExperiment(Experiment):
     freq  = FloatParameter(unit="Hz")
 
     # DataStreams
-    voltage = OutputConnector()
+    voltage = OutputConnector(unit="V")
 
     def init_instruments(self):
         pass

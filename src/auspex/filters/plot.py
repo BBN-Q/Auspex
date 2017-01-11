@@ -94,6 +94,10 @@ class Plotter(Filter):
         else:
             self.y_labels = [['' for col in row] for row in self.mapping_functions]
 
+        data_name = self.descriptor.data_name
+        data_unit = self.descriptor.data_unit
+        self.y_labels = [["{} ({}) [{}]".format(data_name,data_unit,col) for col in row] for row in self.y_labels]
+
         if self.plot_dims.value == 1:
             self.figures = [[Figure(x_range=[xmin, xmax], plot_width=plot_height, plot_height=plot_height, webgl=False, x_axis_label=self.axis_label(-1),\
             y_axis_label=y_lab) for (col, y_lab) in zip(row, y_label)] for (row, y_label) in zip(self.mapping_functions, self.y_labels)]
@@ -274,8 +278,8 @@ class XYPlotter(Filter):
         else:
             y_data = [[]]
 
-        x_label = "{} ({})".format(self.desc_x.axes[data_axis].name, self.desc_x.axes[data_axis].unit if self.desc_x.axes[data_axis].unit else '')
-        y_label = "{} ({})".format(self.desc_y.axes[data_axis].name, self.desc_y.axes[data_axis].unit if self.desc_y.axes[data_axis].unit else '')
+        x_label = "{} ({})".format(self.desc_x.data_name, self.desc_x.data_unit)
+        y_label = "{} ({})".format(self.desc_y.data_name, self.desc_y.data_unit)
 
         self.fig = Figure(plot_width=self.plot_height, plot_height=self.plot_height, webgl=False,
                           x_axis_label=x_label, y_axis_label=y_label)

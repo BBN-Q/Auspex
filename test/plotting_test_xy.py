@@ -32,8 +32,8 @@ class TestExperiment(Experiment):
     dur   = FloatParameter(default=5,unit="ns")
 
     # DataStreams
-    voltage = OutputConnector()
-    current = OutputConnector()
+    voltage = OutputConnector(unit="V")
+    current = OutputConnector(unit="A")
 
     # Constants
     samples = 1
@@ -69,5 +69,4 @@ if __name__ == '__main__':
     exp.set_graph(edges)
     exp.add_sweep(exp.amp, [1,1.2,1.3])
     exp.add_sweep(exp.field, np.linspace(0,100.0,10))
-    
     exp.run_sweeps()
