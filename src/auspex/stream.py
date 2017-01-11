@@ -162,6 +162,7 @@ class DataStreamDescriptor(object):
     def __init__(self, dtype=np.float32):
         super(DataStreamDescriptor, self).__init__()
         self.data_name = "Data"
+        self.data_unit = "Unit"
         self.axes = []
         self.params = {} # Parameters associated with each dataset
         self.parent = None
@@ -400,7 +401,7 @@ class InputConnector(object):
         return "<InputConnector(name={})>".format(self.name)
 
 class OutputConnector(object):
-    def __init__(self, name="", data_name=None, parent=None, datatype=None):
+    def __init__(self, name="", data_name=None, unit=None, parent=None, datatype=None):
         self.name = name
         self.output_streams = []
         self.points_taken = 0
@@ -408,12 +409,15 @@ class OutputConnector(object):
 
         # if data_name is not none, then it is the origin of the whole chain
         self.data_name = data_name
+        self.data_unit = unit
 
         # Set up a default descriptor, and add access
         # to its methods for convenience.
         self.descriptor = DataStreamDescriptor()
         if self.data_name:
             self.descriptor.data_name = self.data_name
+        if unit:
+            self.descriptor.data_unit = unit
         self.add_axis   = self.descriptor.add_axis
 
     # We allow the connectors itself to posess

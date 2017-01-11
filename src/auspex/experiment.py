@@ -25,7 +25,7 @@ from auspex.instruments.instrument import Instrument
 from auspex.parameter import ParameterGroup, FloatParameter, IntParameter, Parameter
 from auspex.sweep import Sweeper
 from auspex.stream import DataStream, DataAxis, SweepAxis, DataStreamDescriptor, InputConnector, OutputConnector
-from auspex.filters.plot import Plotter
+from auspex.filters.plot import Plotter, XYPlotter, MeshPlotter
 from auspex.filters.io import WriteToHDF5
 from auspex.log import logger
 
@@ -148,7 +148,7 @@ class MetaExperiment(type):
         self._constants         = {}
 
         # Beware, passing objects won't work at parse time
-        self._output_connectors = []
+        self._output_connectors = {}
 
         # Parse ourself
         self.exp_src = inspect.getsource(self)
@@ -164,7 +164,7 @@ class MetaExperiment(type):
                 self._parameters[k] = v
             elif isinstance(v, OutputConnector):
                 logger.debug("Found '%s' output connector.", k)
-                self._output_connectors.append(k)
+                self._output_connectors[k] = v
             elif isinstance(v, numbers.Number) or isinstance(v, str):
                 self._constants[k] = v
                 # Keep track of numerical parameters
@@ -200,9 +200,10 @@ class Experiment(metaclass=MetaExperiment):
 
         # Things we can't metaclass
         self.output_connectors = {}
-        for oc in self._output_connectors:
-            a = OutputConnector(name=oc, data_name=oc, parent=self)
+        for oc in self._output_connectors.keys():
+            a = OutputConnector(name=oc, data_name=oc, unit=self._output_connectors[oc].data_unit, parent=self)
             a.parent = self
+
             self.output_connectors[oc] = a
             setattr(self, oc, a)
 
@@ -346,7 +347,7 @@ class Experiment(metaclass=MetaExperiment):
                 w.file = wrs[0].file
 
         # Go and find any plotters
-        self.plotters = [n for n in self.nodes if isinstance(n, Plotter)]
+        self.plotters = [n for n in self.nodes if isinstance(n, (Plotter, MeshPlotter, XYPlotter))]
 
         # We might have some additional plotters that are separate from
         # The asyncio filter pipeline
@@ -400,6 +401,9 @@ class Experiment(metaclass=MetaExperiment):
             doc = Document()
             doc.add_root(container)
             session = push_session(doc, session_id=sid)
+
+            for p in self.plotters:
+                p.session = session
 
             if run_in_notebook:
                 logger.info("Displaying in iPython notebook")
