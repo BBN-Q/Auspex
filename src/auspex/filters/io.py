@@ -188,10 +188,20 @@ class WriteToHDF5(Filter):
         w_idx = 0
 
         while True:
-
             # Wait for all of the acquisition to complete
-            messages, pending = await asyncio.wait([stream.queue.get() for stream in streams])
-            messages = [m.result() for m in list(messages)] # Returns a set for some stupid reason
+            # Against at least some peoples rational expectations, asyncio.wait doesn't return Futures
+            # in the order of the iterable it was passed, but perhaps just in order of completion. So,
+            # we construct a dictionary in order that that can be mapped back where we need them:
+            futures = {
+                asyncio.ensure_future(stream.queue.get()): stream
+                for stream in streams
+            }
+
+            responses, _ = await asyncio.wait(futures)
+
+            # Construct the inverse lookup
+            response_for_stream = {futures[res]: res for res in list(responses)}
+            messages = [response_for_stream[stream].result() for stream in streams]
 
             # Ensure we aren't getting different types of messages at the same time.
             message_types = [m['type'] for m in messages]
