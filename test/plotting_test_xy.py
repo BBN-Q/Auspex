@@ -28,7 +28,7 @@ class TestExperiment(Experiment):
 
     # Parameters
     field = FloatParameter(unit="Oe")
-    freq  = FloatParameter(unit="Hz")
+    amp   = FloatParameter(unit="A")
     dur   = FloatParameter(default=5,unit="ns")
 
     # DataStreams
@@ -38,11 +38,6 @@ class TestExperiment(Experiment):
     # Constants
     samples = 1
     time_val = 0
-
-    def init_instruments(self):
-        self.field.assign_method(lambda x: logger.debug("Field got value " + str(x)))
-        self.freq.assign_method(lambda x: logger.debug("Freq got value " + str(x)))
-        self.dur.assign_method(lambda x: logger.debug("Duration got value " + str(x)))
 
     def init_streams(self):
         # Add a "base" data axis: say we are averaging 5 samples per trigger
@@ -54,11 +49,11 @@ class TestExperiment(Experiment):
 
     async def run(self):
         logger.debug("Data taker running (inner loop)")
-        time_step = 0.1
+        time_step = 0.02
         await asyncio.sleep(0.1)
         self.time_val += time_step
-        await self.voltage.push(np.cos(2*np.pi*self.time_val) + 0.1*np.random.random())
-        await self.current.push(np.sin(2*np.pi*self.time_val) + 0.1*np.random.random())
+        await self.voltage.push(self.amp.value*np.cos(2*np.pi*self.time_val) + 0.01*np.random.random())
+        await self.current.push(self.amp.value*np.sin(2*np.pi*self.time_val) + 0.01*np.random.random())
         logger.debug("Stream has filled {} of {} points".format(self.voltage.points_taken, self.voltage.num_points() ))
 
 
@@ -66,12 +61,13 @@ if __name__ == '__main__':
 
     exp = TestExperiment()
     plt = Plotter(name="Normal Plotter")
-    plt_xy = XYPlotter(name="XY Test")
+    plt_xy = XYPlotter(name="XY Test", x_series=True, series="inner")
 
     edges = [(exp.current, plt_xy.sink_x), (exp.voltage, plt_xy.sink_y),
              (exp.voltage, plt.sink)]
 
     exp.set_graph(edges)
-    exp.add_sweep(exp.field, np.linspace(0,100.0,50))
-
+    exp.add_sweep(exp.amp, [1,1.2,1.3])
+    exp.add_sweep(exp.field, np.linspace(0,100.0,10))
+    
     exp.run_sweeps()

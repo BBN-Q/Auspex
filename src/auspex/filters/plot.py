@@ -14,6 +14,7 @@ import numpy as np
 from bokeh.plotting import Figure
 from bokeh.layouts import gridplot
 from bokeh.models.renderers import GlyphRenderer
+from bokeh.palettes import Viridis256, d3
 
 from auspex.parameter import Parameter, IntParameter
 from auspex.log import logger
@@ -218,7 +219,7 @@ class XYPlotter(Filter):
     sink_x = InputConnector()
     sink_y = InputConnector()
 
-    def __init__(self, *args, name="", x_series=False, y_series=False, notebook=False, **plot_args):
+    def __init__(self, *args, name="", x_series=False, y_series=False, series="inner", notebook=False, **plot_args):
         """Theyintent is to let someone plot this vs. that from different streams."""
         super(XYPlotter, self).__init__(*args, name=name)
 
@@ -229,6 +230,7 @@ class XYPlotter(Filter):
         self.x_series        = x_series
         self.y_series        = y_series or self.x_series
         self.plot_height     = 600
+        self.series          = series
 
         self.quince_parameters = []
 
@@ -247,35 +249,52 @@ class XYPlotter(Filter):
             if self.desc_x.axes[-2].num_points() != self.desc_y.axes[-2].num_points():
                 raise ValueError("XYPlotter x and y second-to-last axis lengths must match when plotting series.")
 
+        if self.series == "inner":
+            series_axis = -2
+            data_axis = -1
+        elif self.series == "outer":
+            series_axis = 0
+            data_axis = 1
+        else:
+            raise ValueError("series must be either inner or outer")
+
         # How many points before clear
-        self.points_before_clear_y = self.desc_y.axes[-1].num_points()
-        self.points_before_clear_x = self.desc_x.axes[-1].num_points()
+        self.points_before_clear_y = self.desc_y.axes[data_axis].num_points()
+        self.points_before_clear_x = self.desc_x.axes[data_axis].num_points()
 
         if self.x_series:
-            x_data = [[] for x in range(self.desc_x.axes[-2].num_points())]
-            self.points_before_clear_x *= self.desc_x.axes[-2].num_points()
+            x_data = [[] for x in range(self.desc_x.axes[series_axis].num_points())]
+            self.points_before_clear_x *= self.desc_x.axes[series_axis].num_points()
         else:
             x_data = [[]]
         if self.y_series:
-            y_data = [[] for y in range(self.desc_y.axes[-2].num_points())]
-            self.points_before_clear_y *= self.desc_y.axes[-2].num_points()
-            self.num_series = self.desc_y.axes[-2].num_points()
+            y_data = [[] for y in range(self.desc_y.axes[series_axis].num_points())]
+            self.points_before_clear_y *= self.desc_y.axes[series_axis].num_points()
+            self.num_series = self.desc_y.axes[series_axis].num_points()
         else:
             y_data = [[]]
 
-        x_label = "{} ({})".format(self.desc_x.axes[-1].name, self.desc_x.axes[-1].unit if self.desc_x.axes[-1].unit else '')
-        y_label = "{} ({})".format(self.desc_y.axes[-1].name, self.desc_y.axes[-1].unit if self.desc_y.axes[-1].unit else '')
+        x_label = "{} ({})".format(self.desc_x.axes[data_axis].name, self.desc_x.axes[data_axis].unit if self.desc_x.axes[data_axis].unit else '')
+        y_label = "{} ({})".format(self.desc_y.axes[data_axis].name, self.desc_y.axes[data_axis].unit if self.desc_y.axes[data_axis].unit else '')
 
         self.fig = Figure(plot_width=self.plot_height, plot_height=self.plot_height, webgl=False,
                           x_axis_label=x_label, y_axis_label=y_label)
 
-        self.plot = self.fig.multi_line(x_data, y_data, name=self.name, **self.plot_args)
+        if self.desc_y.axes[series_axis].num_points() <= 10:
+            self.colors = d3['Category10'][self.desc_y.axes[series_axis].num_points()]
+        elif self.desc_y.axes[series_axis].num_points() <= 20:
+            self.colors = d3['Category20'][self.desc_y.axes[series_axis].num_points()]
+        else:
+            self.colors = Viridis256[:self.desc_y.axes[series_axis].num_points()]
+
+        self.plot = self.fig.multi_line(x_data, y_data, name=self.name,
+                                        line_width=2, color=self.colors,
+                                        **self.plot_args)
         
         renderers = self.plot.select(dict(name=self.name))
         self.renderer = [r for r in renderers if isinstance(r, GlyphRenderer)][0]
         self.data_source = self.renderer.data_source
 
-        # self.data_sources = [[plot.data_source for plot in row] for row in self.plots]
         self.plot_buffer_x = np.nan*np.ones(self.points_before_clear_x, dtype=self.desc_x.dtype)
         self.plot_buffer_y = np.nan*np.ones(self.points_before_clear_y, dtype=self.desc_y.dtype)
         self.idx = 0
@@ -343,14 +362,14 @@ class XYPlotter(Filter):
 
                 if (time.time() - self.last_update >= self.update_interval):
                     if self.x_series:
-                        x_data = np.reshape(self.x_data, (self.num_series, -1)).T
+                        x_data = np.reshape(self.plot_buffer_x, (self.num_series, -1)).T
                     elif self.y_series:
                         x_data = np.tile(self.plot_buffer_x, (self.num_series, 1))
                     else:
                         x_data = [self.plot_buffer_x]
 
                     if self.y_series:
-                        y_data = np.reshape(self.y_data, (self.num_series, -1)).T
+                        y_data = np.reshape(self.plot_buffer_y, (self.num_series, -1)).T
                     else:
                         y_data = [self.plot_buffer_y]
 
@@ -359,7 +378,7 @@ class XYPlotter(Filter):
                     y_data = np.array([series[~np.isnan(series)] for series in y_data])
                     
                     # Convert to lists and then push all at once...
-                    self.data_source.data = dict(xs=x_data.tolist(), ys=y_data.tolist())
+                    self.data_source.data = dict(xs=x_data.tolist(), ys=y_data.tolist(), line_color=self.colors[0:len(y_data)])
 
                     self.last_update = time.time()
 
