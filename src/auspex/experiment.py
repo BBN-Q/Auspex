@@ -25,7 +25,7 @@ from auspex.instruments.instrument import Instrument
 from auspex.parameter import ParameterGroup, FloatParameter, IntParameter, Parameter
 from auspex.sweep import Sweeper
 from auspex.stream import DataStream, DataAxis, SweepAxis, DataStreamDescriptor, InputConnector, OutputConnector
-from auspex.filters.plot import Plotter
+from auspex.filters.plot import Plotter, XYPlotter, MeshPlotter
 from auspex.filters.io import WriteToHDF5
 from auspex.log import logger
 
@@ -346,7 +346,7 @@ class Experiment(metaclass=MetaExperiment):
                 w.file = wrs[0].file
 
         # Go and find any plotters
-        self.plotters = [n for n in self.nodes if isinstance(n, Plotter)]
+        self.plotters = [n for n in self.nodes if isinstance(n, (Plotter, MeshPlotter, XYPlotter))]
 
         # We might have some additional plotters that are separate from
         # The asyncio filter pipeline
@@ -400,6 +400,9 @@ class Experiment(metaclass=MetaExperiment):
             doc = Document()
             doc.add_root(container)
             session = push_session(doc, session_id=sid)
+
+            for p in self.plotters:
+                p.session = session
 
             if run_in_notebook:
                 logger.info("Displaying in iPython notebook")
