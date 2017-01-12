@@ -82,12 +82,14 @@ class QubitExpFactory(object):
             filt_to_enable = []
 
             # Find any writer endpoints of the receiver channels
-            for receiver_text in meta_info['receivers']:
+            for receiver_text, num_segments in meta_info['receivers'].items():
                 dig_name, chan_name = receiver_text.split("-")
 
                 # Enable this digitizer
                 inst_to_enable.append(dig_name)
 
+                # Set number of segments in the digitizer
+                instrument_settings['instrDict'][dig_name]['nbr_segments'] = num_segments
                 # Find descendants of the channel selector
                 chan_descendants = nx.descendants(dag, chan_name)
                 # Find endpoints within the descendants   
