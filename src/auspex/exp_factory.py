@@ -268,8 +268,7 @@ class QubitExpFactory(object):
                     experiment.segment_axis = DataAxis(data_axis['name'], points, unit=data_axis['unit'], metadata=metadata)
 
                 else:
-                    metadata = ['data']*len(data_axis['points'])
-                    experiment.segment_axis = DataAxis(data_axis['name'], data_axis['points'], unit=data_axis['unit'], metadata=metadata)
+                    experiment.segment_axis = DataAxis(data_axis['name'], data_axis['points'], unit=data_axis['unit'])
 
             else:
                 # Here we create a parameter for experiment and associate it with the
