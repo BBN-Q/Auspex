@@ -1,0 +1,11 @@
+ippInit
+ippGetLibVersion
+ippsMalloc_8u
+ippsFree
+ippsFIRMRGetSize
+ippsFIRMRInit_32f
+ippsFIRMR_32f
+ippsIIRGetStateSize_32f
+ippsIIRInit_32f
+ippsIIR_32f
+ippsIIRSetDlyLine_32f
