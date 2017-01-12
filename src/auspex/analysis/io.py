@@ -13,9 +13,9 @@ def load_from_HDF5(filename, groupname='main'):
     with h5py.File(filename, 'r') as f:
     	# Reconstruct the descriptor
     	descriptor = DataStreamDescriptor()
-    	axis_refs = f['groupname']['descriptor']
+    	axis_refs = f[groupname]['descriptor']
     	for ref in reversed(axis_refs):
-    		ax = f['groupname'][ref]
+    		ax = f[groupname][ref]
     		if len(ax.dtype) > 1:
     			# Unstructured
 
@@ -31,7 +31,7 @@ def load_from_HDF5(filename, groupname='main'):
     			points = ax[:]
     			descriptor.add_axis(DataAxis(name, points=points, unit=unit))
 
-    	data = f['groupname']['data'][:]
+    	data = f[groupname]['data'][:]
     	return data, descriptor
 
 if __name__ == '__main__':
