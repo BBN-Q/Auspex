@@ -14,6 +14,7 @@ import asyncio
 import signal
 import sys
 import numbers
+import os
 
 import numpy as np
 import scipy as sp
@@ -173,6 +174,8 @@ class Experiment(metaclass=MetaExperiment):
     """The measurement loop to be run for each set of sweep parameters."""
     def __init__(self):
         super(Experiment, self).__init__()
+        # Experiment name
+        self.name = None
 
         # Sweep control
         self.sweeper = Sweeper()
@@ -331,6 +334,9 @@ class Experiment(metaclass=MetaExperiment):
 
         # Go find any writers
         self.writers = [n for n in self.nodes if isinstance(n, WriteToHDF5)]
+        if self.name:
+            for w in self.writers:
+                w.filename.value = os.path.join(os.path.dirname(w.filename.value), self.name)
         self.filenames = [w.filename.value for w in self.writers]
         self.files = []
 
