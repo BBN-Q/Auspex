@@ -7,6 +7,10 @@
 #    http://www.apache.org/licenses/LICENSE-2.0
 
 from QGL import *
+from QGL import config as QGLconfig
+import auspex.config as config
+from copy import copy
+import os
 
 from auspex.exp_factory import QubitExpFactory
 from auspex.analysis.io import load_from_HDF5
@@ -15,7 +19,7 @@ def calibrate(qubit, calibrations):
     """Takes in a qubit (as a string) and list of calibrations (as instantiated classes).
     e.g. calibrate_pulses("q1", [RabiAmp, PhaseEstimation])"""
     for calibration in calibrations:
-        if calibration not isinstance(PulseCalibration):
+        if not isinstance(calibration, PulseCalibration):
             raise TypeError("calibrate_pulses was passed a calibration that is not actually a calibration.")
         calibration.calibrate()
 
@@ -32,12 +36,15 @@ class PulseCalibration(object):
         return [[Id(self.qubit), MEAS(self.qubit)]]
 
     def run(self):
-        meta_file = compile_to_hardware(self.sequence(), fileName=self.filename)
-        exp = QubitExpFactory.create(meta_file=meta_file)
+        seq_files = compile_to_hardware(self.sequence(), fileName=self.filename)
+        metafileName = os.path.join(QGLconfig.AWGDir, self.filename + '-meta.json')
+        exp = QubitExpFactory.create(meta_file=metafileName)
         exp.run_sweeps()
+        # TODO: there should be no need for saving the calibration data
+        wrs = [w for w in exp.writers if w.name == exp.qubit_to_writer[self.qubit_name]]
+        filename = wrs[0].filename.value
+        groupname = wrs[0].groupname.value
 
-        filename  = exp.qubit_to_writer[self.qubit_name].filename.value
-        groupname = exp.qubit_to_writer[self.qubit_name].groupname.value
         dataset, descriptor = load_from_HDF5(filename, groupname=groupname)
         # TODO: get the name of the relevant data from the graph
         data, var = dataset['data']['M1'], dataset['data']['M1-var']
@@ -72,7 +79,7 @@ class PhaseEstimation(PulseCalibration):
     Kimmel et al, quant-ph/1502.02677 (2015). Every experiment i doubled.
     vardata should be the variance of the mean"""
 
-    def __init__(self, qubit_name, num_pulses='1', amplitude='0.1'):
+    def __init__(self, qubit_name, num_pulses= 1, amplitude= 0.1, direction = 'X'):
         """Phase estimation calibration. Direction is either 'X' or 'Y',
         num_pulses is log2(n) of the longest sequence n,
         and amplitude is self-exaplanatory."""
@@ -90,13 +97,13 @@ class PhaseEstimation(PulseCalibration):
         # (1, 2, 4, 8, 16, 32, 64, 128, ...) x X90
         seqs = [[Xtheta(self.qubit, amp=self.amplitude)]*n for n in 2**np.arange(self.num_pulses+1)]
         # measure each along Z or Y
-        seqs = [s + m for s in seqs for m in [ [MEAS(q)], [X90m(self.qubit), MEAS(q)] ]]
+        seqs = [s + m for s in seqs for m in [ [MEAS(self.qubit)], [X90m(self.qubit), MEAS(self.qubit)] ]]
         # tack on calibrations to the beginning
-        seqs = [[Id(q), MEAS(q)], [X(q), MEAS(q)]] + seqs
+        seqs = [[Id(self.qubit), MEAS(self.qubit)], [X(self.qubit), MEAS(self.qubit)]] + seqs
         # repeat each
         return [copy(s) for s in seqs for _ in range(2)]
 
-    def optimize(update_data):
+    def calibrate(self):
         """Attempts to optimize the pulse amplitude for a pi/2 or pi pulse about X or Y. """
 
         ct = 1
@@ -132,13 +139,13 @@ class PhaseEstimation(PulseCalibration):
         return amp
 
 class Pi2Calibration(PhaseEstimation):
-    def __init__(self, qubit_name, num_pulses='1'):
+    def __init__(self, qubit_name, num_pulses= 9):
         super(Pi2Calibration, self).__init__(qubit_name)
         self.amplitude = self.qubit.pulseParams['pi2Amp']
         self.target    = np.pi/2.0
 
 class PiCalibration(PulseCalibration):
-    def __init__(self, qubit_name, num_pulses='1'):
+    def __init__(self, qubit_name, num_pulses= 9):
         super(PiCalibration, self).__init__(qubit_name)
         self.amplitude = self.qubit.pulseParams['piAmp']
         self.target    = np.pi
@@ -223,6 +230,3 @@ def phase_estimation( data_in, vardata_in, verbose=False):
     
     return phase, sigma
 
-
-calibrate("q1", [Pi2Cal(direction="Y"),
-                 PiCal()])
