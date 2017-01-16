@@ -98,7 +98,8 @@ class Averager(Filter):
         # Define variance axis descriptor
         descriptor = descriptor_in.copy()
         descriptor.pop_axis(self.axis.value)
-        descriptor.unit = descriptor.unit + "^2"
+        if descriptor.unit:
+            descriptor.unit = descriptor.unit + "^2"
         descriptor.metadata["num_averages"] = self.num_averages
         self.final_variance.descriptor = descriptor
 
