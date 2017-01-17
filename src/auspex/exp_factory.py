@@ -200,8 +200,9 @@ class QubitExpFactory(object):
         experiment.name = expname
 
         QubitExpFactory.load_instruments(experiment)
-        QubitExpFactory.load_sweeps(experiment)
+        QubitExpFactory.load_segment_sweeps(experiment)
         QubitExpFactory.load_filters(experiment)
+        QubitExpFactory.load_parameter_sweeps(experiment)
 
         return experiment
 
@@ -246,7 +247,7 @@ class QubitExpFactory(object):
 
 
     @staticmethod
-    def load_sweeps(experiment):
+    def load_segment_sweeps(experiment):
         # Load the active sweeps from the sweep ordering
         for name in experiment.sweep_settings['sweepOrder']:
             par = experiment.sweep_settings['sweepDict'][name]
@@ -272,7 +273,13 @@ class QubitExpFactory(object):
                 else:
                     experiment.segment_axis = DataAxis(data_axis['name'], data_axis['points'], unit=data_axis['unit'])
 
-            else:
+    @staticmethod
+    def load_parameter_sweeps(experiment):
+        # Load the active sweeps from the sweep ordering
+        for name in experiment.sweep_settings['sweepOrder']:
+            par = experiment.sweep_settings['sweepDict'][name]
+            # Treat segment sweeps separately since they are DataAxes rather than SweepAxes
+            if par['x__class__'] != 'SegmentNum':
                 # Here we create a parameter for experiment and associate it with the
                 # relevant method in the instrument
 
@@ -285,6 +292,7 @@ class QubitExpFactory(object):
                 # Get the instrument
                 instr = experiment._instruments[par['instr']]
                 method_name = 'set_' + par['x__class__'].lower()
+                points = np.linspace(par['start'], par['stop'], par['numPoints'])
                 if hasattr(instr, method_name):
                     param.assign_method(getattr(instr, method_name)) # Couple the parameter to the instrument
                     experiment.add_sweep(param, points) # Create the requested sweep on this parameter
