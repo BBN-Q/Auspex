@@ -58,6 +58,9 @@ class QubitExpFactory(object):
         with open(config.sweepLibFile, 'r') as FID:
             sweep_settings = json.load(FID)
 
+        # Create a mapping from qubits to data writers
+        qubit_to_writer = {}
+
         if meta_file:
             # Use the meta info to modify the other JSON
             with open(meta_file, 'r') as FID:
@@ -80,9 +83,6 @@ class QubitExpFactory(object):
 
             inst_to_enable = []
             filt_to_enable = []
-
-            # Create a mapping from qubits to data writers
-            qubit_to_writer = {}
 
             # Find any writer endpoints of the receiver channels
             for receiver_text, num_segments in meta_info['receivers'].items():
