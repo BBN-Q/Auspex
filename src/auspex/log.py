@@ -18,11 +18,13 @@ def in_jupyter():
         return False
 
 logger = logging.getLogger('auspex')
-logging.basicConfig(format='%(name)s-%(levelname)s: %(asctime)s ----> %(message)s')
-logger.setLevel(logging.INFO)
 
 if in_jupyter():
     importlib.reload(logging)
     logger.handlers = [logging.StreamHandler(sys.stderr)]
     formatter = logging.Formatter('%(name)s-%(levelname)s: %(asctime)s ----> %(message)s')
     logger.handlers[0].setFormatter(formatter)
+else:
+	logging.basicConfig(format='%(name)s-%(levelname)s: %(asctime)s ----> %(message)s')
+
+logger.setLevel(logging.INFO)
