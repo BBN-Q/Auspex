@@ -51,7 +51,7 @@ class DataAxis(object):
         else:
             name = self.name
             dtype.append((name, 'f'))
-        
+
         if with_metadata and self.metadata:
             dtype.append((name + "_metadata", 'S128'))
         return dtype
@@ -164,10 +164,12 @@ class DataStreamDescriptor(object):
         self.data_name = "Data"
         self.data_unit = "Unit"
         self.axes = []
+        self.unit = None
         self.params = {} # Parameters associated with each dataset
         self.parent = None
         self.exp_src = None # Actual source code from the underlying experiment
         self.dtype = dtype
+        self.metadata = {}
 
     def add_axis(self, axis):
         # Check if axis is DataAxis or SweepAxis (which inherits from DataAxis)
@@ -406,6 +408,7 @@ class OutputConnector(object):
         self.output_streams = []
         self.points_taken = 0
         self.parent = parent
+        self.unit = unit
 
         # if data_name is not none, then it is the origin of the whole chain
         self.data_name = data_name
@@ -416,8 +419,7 @@ class OutputConnector(object):
         self.descriptor = DataStreamDescriptor()
         if self.data_name:
             self.descriptor.data_name = self.data_name
-        if unit:
-            self.descriptor.data_unit = unit
+            self.descriptor.unit = self.unit
         self.add_axis   = self.descriptor.add_axis
 
     # We allow the connectors itself to posess
