@@ -220,7 +220,39 @@ class PiCalibration(PhaseEstimation):
         self.target    = np.pi
 
 class DRAGCalibration(PulseCalibration):
-    pass
+    def __init__(self, qubit_name, deltas = np.linspace(-1,1,11), num_pulses = np.arange(16, 64, 4)):
+        super(DRAGCalibration, self).__init__(qubit_name)
+        self.filename = 'DRAG/DRAG'
+        self.deltas = deltas
+        self.num_pulses = num_pulses
+
+    def sequence(self):
+        seqs = []
+        for n in self.num_pulses:
+            seqs += [[X90(q, dragScaling = d), X90m(q, dragScaling = d)]*n + [X90(q, dragScaling = d), MEAS(q)] for d in self.deltas]
+        seqs += create_cal_seqs((q,),2)
+        return seqs
+
+    def calibrate(self):
+        #generate sequence
+        self.set()
+        #run
+        data, _ = self.run()
+        #fit and analyze
+        fitted_drag = fit_drag(data)
+        #generate sequence with new pulses and drag parameters
+        #self.deltas = XXX
+        self.set()
+        data, _ = self.run()
+        fitted_drag = fit_drag(data)
+        print("DRAG", fitted_drag)
+
+        with open(config.channelLibFile, 'r') as FID:
+            chan_settings = json.load(FID)
+        chan_settings['channelDict'][self.qubit_name]['pulseParams']['dragScaling'] = fitted_drag
+        self.update_libraries([chan_settings], [config.channelLibFile])
+
+        return fitted_drag
 
 def restrict(phase):
     out = np.mod( phase + np.pi, 2*np.pi, ) - np.pi
