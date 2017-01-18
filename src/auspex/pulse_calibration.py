@@ -71,7 +71,7 @@ class PulseCalibration(object):
         """Runs the actual calibration routine, must be overridden"""
         pass
 
-    def write_to_file(self, libraries, filenames):
+    def update_libraries(self, libraries, filenames):
         """Update calibrated json libraries"""
         for library, filename in zip(libraries, filenames):
             with open(filename, 'w') as FID:
@@ -104,7 +104,7 @@ class RamseyCalibration(PulseCalibration):
             instr_settings = json.load(FID)
         with open(config.channelLibFile, 'r') as FID:
             chan_settings = json.load(FID)
-        qubit_source = chan_settings['channelDict'][chan_settings['channelDict']['q1']['physChan']]['generator']
+        qubit_source = chan_settings['channelDict'][chan_settings['channelDict'][self.qubit_name]['physChan']]['generator']
         orig_freq = instr_settings['instrDict'][qubit_source]['frequency']
         set_freq = orig_freq + self.added_detuning/1e9
         instr_to_set = {'instr': qubit_source, 'method': 'set_frequency', 'value': set_freq}
@@ -116,8 +116,10 @@ class RamseyCalibration(PulseCalibration):
         fit_freq_A = mean(fit_freqs) #the fit result can be one or two frequencies
         set_freq = orig_freq + added_detuning + fit_freq_A/2
         set_freq = orig_freq + self.added_detuning/1e9
-        instr_to_set = {'instr': qubit_source, 'method': 'set_frequency', 'value': set_freq}
+        instr_to_set['value'] = set_freq
+        self.set([instr_to_set])
         data, _ = self.run()
+
         fit_freqs = fit_ramsey(data, two_freqs = self.two_freqs)
         fit_freq_B = mean(fit_freqs)
 
@@ -131,6 +133,9 @@ class RamseyCalibration(PulseCalibration):
         else:
             chan_settings['channelDict'][qubit_source]['frequency'] += (fit_freq - orig_freq)*1e9
             self.update_libraries([chan_settings], [config.channelLibFile])
+
+        print('Frequency', fit_freq)
+        return fit_freq
 
 class PhaseEstimation(PulseCalibration):
     """Estimates pulse rotation angle from a sequence of P^k experiments, where
@@ -194,7 +199,12 @@ class PhaseEstimation(PulseCalibration):
                     print('Hit max iteration count');
                 break
         print('Amp',amp)
-        
+
+        set_amp = 'pi2Amp' if isinstance(self, Pi2Calibration) else 'piAmp'
+        with open(config.channelLibFile, 'r') as FID:
+            chan_settings = json.load(FID)
+        chan_settings['channelDict'][self.qubit_name]['pulseParams'][set_amp] = amp
+        self.update_libraries([chan_settings], [config.channelLibFile])
         return amp
 
 class Pi2Calibration(PhaseEstimation):
