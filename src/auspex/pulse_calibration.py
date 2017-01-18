@@ -11,11 +11,16 @@ from QGL import config as QGLconfig
 import auspex.config as config
 from copy import copy
 import os
+import json
 
 from auspex.exp_factory import QubitExpFactory
 from auspex.analysis.io import load_from_HDF5
+from auspex.parameter import FloatParameter
+from auspex.analysis.fits import *
 
-def calibrate(qubit, calibrations):
+from JSONLibraryUtils import LibraryCoders
+
+def calibrate(calibrations):
     """Takes in a qubit (as a string) and list of calibrations (as instantiated classes).
     e.g. calibrate_pulses("q1", [RabiAmp, PhaseEstimation])"""
     for calibration in calibrations:
@@ -27,21 +32,31 @@ class PulseCalibration(object):
     """Base class for calibration of qubit control pulses."""
     def __init__(self, qubit_name):
         super(PulseCalibration, self).__init__()
-        self.qubit_name = qubit
-        self.qubit      = QubitFactory(qubit)
+        self.qubit_name = qubit_name
+        self.qubit      = QubitFactory(qubit_name)
         self.filename   = 'None'
-    
+        self.exp        = None
+
     def sequence(self):
         """Returns the sequence for the given calibration, must be overridden"""
         return [[Id(self.qubit), MEAS(self.qubit)]]
 
-    def run(self):
+    def set(self, instrs_to_set = None):
         seq_files = compile_to_hardware(self.sequence(), fileName=self.filename)
         metafileName = os.path.join(QGLconfig.AWGDir, self.filename + '-meta.json')
-        exp = QubitExpFactory.create(meta_file=metafileName)
-        exp.run_sweeps()
+        self.exp = QubitExpFactory.create(meta_file=metafileName)
+        self.exp.connect_instruments()
+        #set instruments for calibration
+        for instr_to_set in instrs_to_set:
+            par = FloatParameter()
+            par.assign_method(getattr(self.exp._instruments[instr_to_set['instr']], instr_to_set['method']))
+            par.value = instr_to_set['value']
+            par.push()
+
+    def run(self):
+        self.exp.run_sweeps()
         # TODO: there should be no need for saving the calibration data
-        wrs = [w for w in exp.writers if w.name == exp.qubit_to_writer[self.qubit_name]]
+        wrs = [w for w in self.exp.writers if w.name == self.exp.qubit_to_writer[self.qubit_name]]
         filename = wrs[0].filename.value
         groupname = wrs[0].groupname.value
 
@@ -56,6 +71,12 @@ class PulseCalibration(object):
         """Runs the actual calibration routine, must be overridden"""
         pass
 
+    def write_to_file(self, libraries, filenames):
+        """Update calibrated json libraries"""
+        for library, filename in zip(libraries, filenames):
+            with open(filename, 'w') as FID:
+                json.dump(library, FID, cls=LibraryCoders.LibraryEncoder, indent=2, sort_keys=True)
+
 class RabiAmpCalibration(PulseCalibration):
     def __init__(self, qubit_name, amps=np.linspace(0.0, 1.0, 51)):
         super(RabiAmpCalibration, self).__init__(qubit_name)
@@ -65,13 +86,51 @@ class RabiAmpCalibration(PulseCalibration):
         return [[Xtheta(self.qubit, amp=a), MEAS(self.qubit)] for a in self.amps]
 
 class RamseyCalibration(PulseCalibration):
-    def __init__(self, qubit_name, delays=np.linspace(0.0, 1.0, 51)):
+    def __init__(self, qubit_name, delays=np.linspace(0.0, 50.0, 51)*1e-6, two_freqs = False, added_detuning = 150e3, set_source = True):
         super(RamseyCalibration, self).__init__(qubit_name)
+        self.filename = 'Ramsey/Ramsey'
         self.delays = delays
+        self.two_freqs = two_freqs
+        self.added_detuning = added_detuning
+        self.set_source = set_source
 
     def sequence(self):
         return [[X90(self.qubit), Id(self.qubit, delay), MEAS(self.qubit)] for delay in self.delays]
 
+    def calibrate(self):
+
+        #find qubit control source (from config)
+        with open(config.instrumentLibFile, 'r') as FID:
+            instr_settings = json.load(FID)
+        with open(config.channelLibFile, 'r') as FID:
+            chan_settings = json.load(FID)
+        qubit_source = chan_settings['channelDict'][chan_settings['channelDict']['q1']['physChan']]['generator']
+        orig_freq = instr_settings['instrDict'][qubit_source]['frequency']
+        set_freq = orig_freq + self.added_detuning/1e9
+        instr_to_set = {'instr': qubit_source, 'method': 'set_frequency', 'value': set_freq}
+        self.set([instr_to_set])
+        data, _ = self.run()
+
+        #TODO: fit Ramsey and find new detuning. Finally, set source or qubit channel frequency
+        fit_freqs = fit_ramsey(data, two_freqs = self.two_freqs)
+        fit_freq_A = mean(fit_freqs) #the fit result can be one or two frequencies
+        set_freq = orig_freq + added_detuning + fit_freq_A/2
+        set_freq = orig_freq + self.added_detuning/1e9
+        instr_to_set = {'instr': qubit_source, 'method': 'set_frequency', 'value': set_freq}
+        data, _ = self.run()
+        fit_freqs = fit_ramsey(data, two_freqs = self.two_freqs)
+        fit_freq_B = mean(fit_freqs)
+
+        if fit_freq_B < fit_freq_A:
+            fit_freq = orig_freq + self.added_detuning + 0.5*(fit_freq_A + 0.5*fit_freq_A + fit_freq_B)
+        else:
+            fit_freq = orig_freq + self.added_detuning + 0.5*(fit_freq_A - 0.5*fit_freq_A + fit_freq_B)
+        if self.set_source:
+            instr_settings['instrDict'][qubit_source]['frequency'] = fit_freq
+            self.update_libraries([instr_settings], [config.instrumentLibFile])
+        else:
+            chan_settings['channelDict'][qubit_source]['frequency'] += (fit_freq - orig_freq)*1e9
+            self.update_libraries([chan_settings], [config.channelLibFile])
 
 class PhaseEstimation(PulseCalibration):
     """Estimates pulse rotation angle from a sequence of P^k experiments, where
@@ -144,7 +203,7 @@ class Pi2Calibration(PhaseEstimation):
         self.amplitude = self.qubit.pulseParams['pi2Amp']
         self.target    = np.pi/2.0
 
-class PiCalibration(PulseCalibration):
+class PiCalibration(PhaseEstimation):
     def __init__(self, qubit_name, num_pulses= 9):
         super(PiCalibration, self).__init__(qubit_name)
         self.amplitude = self.qubit.pulseParams['piAmp']
