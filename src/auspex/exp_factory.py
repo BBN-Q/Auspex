@@ -108,11 +108,11 @@ class QubitExpFactory(object):
                 # We will have gotten the digitizer, which should be removed since we're already taking care of it
                 ancestors.remove(dig_name)
                 filt_to_enable.extend(ancestors)
-                
 
-            # Disable EVERYTHING and then build ourselved back up with the relevant nodes
+            # Disable digitizers and APSs and then build ourselved back up with the relevant nodes
             for instr_name in instrument_settings['instrDict'].keys():
-                instrument_settings['instrDict'][instr_name]['enabled'] = False
+                if instrument_settings['instrDict'][instr_name]["x__module__"] in ['instruments.Digitizers', 'instruments.APS', 'instruments.APS2']:
+                    instrument_settings['instrDict'][instr_name]['enabled'] = False
             for instr_name in inst_to_enable:
                 instrument_settings['instrDict'][instr_name]['enabled'] = True
 
