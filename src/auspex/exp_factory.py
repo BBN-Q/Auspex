@@ -346,7 +346,7 @@ class QubitExpFactory(object):
             # Create and add the OutputConnector
             logger.debug("Adding %s output connector to experiment.", name)
             oc = OutputConnector(name=name, parent=experiment)
-            experiment._output_connectors.append(oc)
+            experiment._output_connectors[name] = oc
             experiment.output_connectors[name] = oc
             setattr(experiment, name, oc)
 
