@@ -201,6 +201,9 @@ class Experiment(metaclass=MetaExperiment):
         # ExpProgressBar object to display progress bars
         self.progressbar = None
 
+        # indicates whether the instruments are already connected
+        self.instrs_connected = False
+
         # Things we can't metaclass
         self.output_connectors = {}
         for oc in self._output_connectors.keys():
@@ -321,7 +324,7 @@ class Experiment(metaclass=MetaExperiment):
                 await self.declare_done()
                 break
 
-    def run_sweeps(self):
+    def connect_instruments(self):
         # Make sure we are starting from scratch
         self.reset()
 
@@ -331,6 +334,13 @@ class Experiment(metaclass=MetaExperiment):
 
         # Initialize the instruments and stream
         self.init_instruments()
+
+        self.instrs_connected = True
+
+    def run_sweeps(self):
+        #connect all instruments
+        if not self.instrs_connected:
+            self.connect_instruments()
 
         # Go find any writers
         self.writers = [n for n in self.nodes if isinstance(n, WriteToHDF5)]
