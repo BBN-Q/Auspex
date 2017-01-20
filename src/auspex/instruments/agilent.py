@@ -116,6 +116,8 @@ class AgilentE9010A(SCPIInstrument):
     frequency_stop   = FloatCommand(scpi_string=":FREQuency:STOP")
 
     num_sweep_points = FloatCommand(scpi_string=":SWEep:POINTs")
+    resolution_bandwidth = FloatCommand(scpi_string=":BANDwidth")
+    sweep_time = FloatCommand(scpi_string=":SWEep:TIME")
 
     def __init__(self, resource_name=None, *args, **kwargs):
         super(AgilentE9010A, self).__init__(resource_name, *args, **kwargs)
@@ -138,3 +140,7 @@ class AgilentE9010A(SCPIInstrument):
         self.interface.write(':FORM:DATA REAL,32')
         return self.interface.query_binary_values(":TRACE:DATA? TRACE{:d}".format(num),
             datatype="f", is_big_endian=True)
+
+    def restart_sweep(self):
+        """ Aborts current sweep and restarts. """
+        self.interface.write(":INITiate:RESTart")
