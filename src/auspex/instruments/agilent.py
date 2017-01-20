@@ -115,8 +115,7 @@ class AgilentE9010A(SCPIInstrument):
     frequency_start  = FloatCommand(scpi_string=":FREQuency:STARt")
     frequency_stop   = FloatCommand(scpi_string=":FREQuency:STOP")
 
-    # This seems to return incorrect numbers for large sweeps?
-    num_sweep_points = FloatCommand(scpi_string="OBW:SWE:POIN")
+    num_sweep_points = FloatCommand(scpi_string=":SWEep:POINTs")
 
     def __init__(self, resource_name=None, *args, **kwargs):
         super(AgilentE9010A, self).__init__(resource_name, *args, **kwargs)
