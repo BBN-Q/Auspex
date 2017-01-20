@@ -63,7 +63,6 @@ class AgilentE8363C(SCPIInstrument):
     def connect(self, resource_name=None, interface_type="VISA"):
         if resource_name is not None:
             self.resource_name = resource_name
-        print(self.resource_name)
         if is_valid_ipv4(self.resource_name):
             self.resource_name += "::hpib7,16::INSTR"
         else:
@@ -116,13 +115,15 @@ class AgilentE9010A(SCPIInstrument):
     # This seems to return incorrect numbers for large sweeps?
     num_sweep_points = FloatCommand(scpi_string="OBW:SWE:POIN")
 
-    def __init__(self, resource_name, *args, **kwargs):
-        #If we only have an IP address then tack on the raw socket port to the VISA resource string
-        if is_valid_ipv4(resource_name):
-            resource_name += "::5025::SOCKET"
+    def __init__(self, resource_name=None, *args, **kwargs):
         super(AgilentE9010A, self).__init__(resource_name, *args, **kwargs)
 
     def connect(self, resource_name=None, interface_type=None):
+        if resource_name is not None:
+            self.resource_name = resource_name
+        #If we only have an IP address then tack on the raw socket port to the VISA resource string
+        if is_valid_ipv4(resource_name):
+            resource_name += "::5025::SOCKET"
         super(AgilentE9010A, self).connect(resource_name=resource_name, interface_type=interface_type)
         self.interface._resource.read_termination = u"\n"
         self.interface._resource.write_termination = u"\n"
