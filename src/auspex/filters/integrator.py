@@ -9,9 +9,9 @@
 import asyncio, concurrent
 import numpy as np
 
+from .filter import Filter
 from auspex.parameter import Parameter, FloatParameter, IntParameter, BoolParameter
-from auspex.stream import DataStreamDescriptor
-from auspex.filters.filter import Filter, InputConnector, OutputConnector
+from auspex.stream import DataStreamDescriptor, InputConnector, OutputConnector
 from auspex.log import logger
 
 class KernelIntegrator(Filter):

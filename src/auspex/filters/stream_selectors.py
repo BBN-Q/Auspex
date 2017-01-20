@@ -6,11 +6,15 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
+from .filter import Filter
+from auspex.log import logger
+from auspex.instruments import *
 from auspex.parameter import Parameter, IntParameter
 from auspex.filters.filter import Filter, InputConnector, OutputConnector
-from auspex.instruments.alazar import AlazarChannel
-from auspex.instruments.X6 import X6Channel
-from auspex.stream import DataStreamDescriptor, DataAxis
+# from auspex.instruments.alazar import AlazarChannel
+# from auspex.instruments.X6 import X6Channel
+from auspex.stream import DataStreamDescriptor, DataAxis, InputConnector, OutputConnector
+
 import numpy as np
 
 class AlazarStreamSelector(Filter):

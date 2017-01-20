@@ -15,10 +15,11 @@ import numpy as np
 import os.path
 import time
 
+from .filter import Filter
 from auspex.parameter import Parameter, FilenameParameter
-from auspex.stream import DataStreamDescriptor
+from auspex.stream import DataStreamDescriptor, InputConnector, OutputConnector
 from auspex.log import logger
-from auspex.filters.filter import Filter, InputConnector, OutputConnector
+
 from tqdm import tqdm, tqdm_notebook
 
 class WriteToHDF5(Filter):

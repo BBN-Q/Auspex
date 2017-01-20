@@ -13,6 +13,7 @@ from copy import deepcopy
 import numpy as np
 import scipy.signal
 
+from .filter import Filter
 from auspex.parameter import Parameter, IntParameter, FloatParameter
 from auspex.filters.filter import Filter, InputConnector, OutputConnector
 from auspex.stream import  DataStreamDescriptor
@@ -23,6 +24,7 @@ try:
     import numpy.ctypeslib as npct
     from ctypes import c_int, c_size_t
     np_float  = npct.ndpointer(dtype=np.float32, flags='C_CONTIGUOUS')
+
     libchannelizer_path = os.path.abspath(os.path.join( os.path.dirname(__file__), "libchannelizer"))
     if "Windows" in platform.platform():
         os.environ["PATH"] += ";" + libchannelizer_path
@@ -30,10 +32,12 @@ try:
     libipp.filter_records_fir.argtypes = [np_float, c_size_t, c_int, np_float, c_size_t, c_size_t, np_float]
     libipp.filter_records_iir.argtypes = [np_float, c_size_t, np_float, c_size_t, c_size_t, np_float]
     libipp.init()
+
     load_fallback = False
 except:
     logger.warning("Could not load channelizer library; falling back to python methods.")
     load_fallback = True
+
 
 class Channelizer(Filter):
     """Digital demodulation and filtering to select a particular frequency multiplexed channel"""
