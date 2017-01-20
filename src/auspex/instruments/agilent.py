@@ -14,6 +14,7 @@ import numpy as np
 
 class AgilentN5183A(SCPIInstrument):
     """AgilentN5183A microwave source"""
+    instrument_type = "Microwave Source"
 
     frequency = FloatCommand(scpi_string=":freq")
     power     = FloatCommand(scpi_string=":power")
@@ -45,6 +46,7 @@ class AgilentN5183A(SCPIInstrument):
 
 class AgilentE8363C(SCPIInstrument):
     """Agilent E8363C VNA"""
+    instrument_type = "Vector Network Analyzer"
 
     power              = FloatCommand(scpi_string=":SOURce:POWer:LEVel:IMMediate:AMPLitude", value_range=(-27, 20))
     frequency_center   = FloatCommand(scpi_string=":SENSe:FREQuency:CENTer")
@@ -106,6 +108,7 @@ class AgilentE8363C(SCPIInstrument):
 
 class AgilentE9010A(SCPIInstrument):
     """Agilent E9010A SA"""
+    instrument_type = "Spectrum Analyzer"
 
     frequency_center = FloatCommand(scpi_string=":FREQuency:CENTer")
     frequency_span   = FloatCommand(scpi_string=":FREQuency:SPAN")
