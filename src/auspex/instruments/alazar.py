@@ -12,8 +12,9 @@ import datetime
 import asyncio
 import numpy as np
 
-from auspex.instruments.instrument import Instrument, DigitizerChannel
+from .instrument import Instrument, DigitizerChannel
 from auspex.log import logger
+
 from unittest.mock import MagicMock
 
 try:

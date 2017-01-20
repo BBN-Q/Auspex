@@ -6,12 +6,12 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand, is_valid_ipv4
-from auspex.log import logger
 import socket
 import time
 import re
 import numpy as np
+from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand, is_valid_ipv4
+from auspex.log import logger
 
 class Agilent34970A(SCPIInstrument):
     """Agilent 34970A MUX"""

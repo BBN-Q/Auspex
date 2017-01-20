@@ -6,6 +6,7 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
+from auspex.log import logger
 from .instrument import SCPIInstrument, StringCommand, FloatCommand
 
 class Picosecond10070A(SCPIInstrument):

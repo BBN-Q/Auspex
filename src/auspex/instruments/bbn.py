@@ -6,15 +6,16 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-from auspex.instruments.instrument import Instrument, SCPIInstrument, VisaInterface, MetaInstrument
+from .instrument import Instrument, SCPIInstrument, VisaInterface, MetaInstrument
+from auspex.log import logger
+
 from types import MethodType
 from unittest.mock import MagicMock
-from auspex.log import logger
 try:
     import aps2
     fake_aps2 = False
 except:
-    logger.error("Could not find APS2 python driver.")
+    logger.warning("Could not find APS2 python driver.")
     fake_aps2 = True
 
 class DigitalAttenuator(SCPIInstrument):
