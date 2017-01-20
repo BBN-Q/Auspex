@@ -8,6 +8,7 @@
 
 from QGL import *
 from QGL import config as QGLconfig
+from QGL.BasicSequences.helpers import create_cal_seqs, time_descriptor, cal_descriptor
 import auspex.config as config
 from copy import copy
 import os
@@ -17,6 +18,7 @@ from auspex.exp_factory import QubitExpFactory
 from auspex.analysis.io import load_from_HDF5
 from auspex.parameter import FloatParameter
 from auspex.analysis.fits import *
+from auspex.analysis.helpers import normalize_data
 
 from JSONLibraryUtils import LibraryCoders
 
@@ -36,13 +38,14 @@ class PulseCalibration(object):
         self.qubit      = QubitFactory(qubit_name)
         self.filename   = 'None'
         self.exp        = None
+        self.axis_descriptor = None
 
     def sequence(self):
         """Returns the sequence for the given calibration, must be overridden"""
         return [[Id(self.qubit), MEAS(self.qubit)]]
 
     def set(self, instrs_to_set = None):
-        seq_files = compile_to_hardware(self.sequence(), fileName=self.filename)
+        seq_files = compile_to_hardware(self.sequence(), fileName=self.filename, axis_descriptor=self.axis_descriptor)
         metafileName = os.path.join(QGLconfig.AWGDir, self.filename + '-meta.json')
         self.exp = QubitExpFactory.create(meta_file=metafileName)
         self.exp.connect_instruments()
@@ -93,6 +96,7 @@ class RamseyCalibration(PulseCalibration):
         self.two_freqs = two_freqs
         self.added_detuning = added_detuning
         self.set_source = set_source
+        self.axis_descriptor = [time_descriptor(self.delays)]
 
     def sequence(self):
         return [[X90(self.qubit), Id(self.qubit, delay), MEAS(self.qubit)] for delay in self.delays]
@@ -112,15 +116,16 @@ class RamseyCalibration(PulseCalibration):
         data, _ = self.run()
 
         #TODO: fit Ramsey and find new detuning. Finally, set source or qubit channel frequency
-        fit_freqs = fit_ramsey(data, two_freqs = self.two_freqs)
+        fit_freqs, fit_errs = fit_ramsey(self.delays, data, two_freqs = self.two_freqs)
         fit_freq_A = mean(fit_freqs) #the fit result can be one or two frequencies
+        #TODO: set conditions for success
         set_freq = orig_freq + added_detuning + fit_freq_A/2
         set_freq = orig_freq + self.added_detuning/1e9
         instr_to_set['value'] = set_freq
         self.set([instr_to_set])
         data, _ = self.run()
 
-        fit_freqs = fit_ramsey(data, two_freqs = self.two_freqs)
+        fit_freqs, fit_errs = fit_ramsey(self.delays, data, two_freqs = self.two_freqs)
         fit_freq_B = mean(fit_freqs)
 
         if fit_freq_B < fit_freq_A:
@@ -239,7 +244,8 @@ class DRAGCalibration(PulseCalibration):
         #run
         data, _ = self.run()
         #fit and analyze
-        fitted_drag = fit_drag(data)
+        norm_data = normalize_data(data)
+        fitted_drag = fit_drag(self.deltas, self.num_pulses, norm_data)
         #generate sequence with new pulses and drag parameters
         #self.deltas = XXX
         self.set()
