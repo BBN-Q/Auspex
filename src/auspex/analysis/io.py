@@ -16,7 +16,7 @@ def load_from_HDF5(filename, groupname='main'):
     	axis_refs = f[groupname]['descriptor']
     	for ref in reversed(axis_refs):
     		ax = f[groupname][ref]
-    		if len(ax.dtype) > 1:
+    		if not 'unit' in ax.attrs:
     			# Unstructured
 
     			names = [k for k in ax.dtype.fields.keys()]
