@@ -95,19 +95,19 @@ class QubitExpFactory(object):
                 instrument_settings['instrDict'][dig_name]['nbr_segments'] = num_segments
                 # Find descendants of the channel selector
                 chan_descendants = nx.descendants(dag, chan_name)
-                # Find endpoints within the descendants   
+                # Find endpoints within the descendants
                 endpoints = [n for n in chan_descendants if dag.in_degree(n) == 1 and dag.out_degree(n) == 0]
                 # Find endpoints which are enabled writers
-                writers = [e for e in endpoints if measurement_settings["filterDict"][e]["x__class__"] == "WriteToHDF5" and 
+                writers = [e for e in endpoints if measurement_settings["filterDict"][e]["x__class__"] == "WriteToHDF5" and
                                                    measurement_settings["filterDict"][e]["enabled"]]
-                plotters = [e for e in endpoints if measurement_settings["filterDict"][e]["x__class__"] == "Plotter" and 
+                plotters = [e for e in endpoints if measurement_settings["filterDict"][e]["x__class__"] == "Plotter" and
                                                    measurement_settings["filterDict"][e]["enabled"]]
                 # The user should only have one writer enabled, otherwise we will be confused.
                 if len(writers) > 1:
                     raise Exception("More than one viable data writer was found for a receiver channel {}. Please enabled only one!".format(receiver_text))
                 if len(writers) == 0:
                     raise Exception("No viable data writer was found for receiver channel {}. Please enabled only one!".format(receiver_text))
-                
+
                 # For now we assume a single qubit
                 # TODO: have meta info give the relationships of qubits to receivers so we don't need to dig in the channel lib
                 qubit_to_writer["q1"] = writers[0]
@@ -138,12 +138,12 @@ class QubitExpFactory(object):
             # Set the appropriate sweep
             desc = meta_info["axis_descriptor"]
             sweep_settings["sweepDict"] = {"SegmentSweep": {
-                                            "axisLabel": "{} ({})".format(desc[0]["name"], desc[0]["unit"]), 
-                                            "enabled": True, 
-                                            "label": "SegmentSweep", 
-                                            "meta_file": meta_file, 
+                                            "axisLabel": "{} ({})".format(desc[0]["name"], desc[0]["unit"]),
+                                            "enabled": True,
+                                            "label": "SegmentSweep",
+                                            "meta_file": meta_file,
                                             "meta_info": meta_info,
-                                            "x__class__": "SegmentNum", 
+                                            "x__class__": "SegmentNum",
                                             "x__module__": "Sweeps"
                                             }
                                           }
@@ -269,7 +269,7 @@ class QubitExpFactory(object):
 
                 # See if there are multiple partitions, and therefore metadata
                 if len(par['meta_info']['axis_descriptor']) > 1:
-                    
+
                     meta_axis = par['meta_info']['axis_descriptor'][1]
 
                     # There should be metadata for each cal describing what it is
@@ -399,16 +399,11 @@ class QubitExpFactory(object):
             filt_type = settings['x__class__']
 
             if filt_type in module_map:
-                if filt_type == "KernelIntegrator":
-                    if 'np.' in settings['kernel']:
-                        settings['kernel'] = eval(settings['kernel'].encode('unicode_escape'))
-                    else:
-                        settings['kernel'] = np.fromstring( base64.b64decode(settings['kernel']), dtype=np.complex128)
                 filt = module_map[filt_type](**settings)
                 filt.name = name
                 filters[name] = filt
                 if filt_type == 'Plotter':
-                    filt.run_in_notebook = experiment.run_in_notebook 
+                    filt.run_in_notebook = experiment.run_in_notebook
                 logger.debug("Found filter class %s for '%s' when loading experiment settings.", filt_type, name)
             else:
                 logger.error("Could not find filter class %s for '%s' when loading experiment settings.", filt_type, name)
