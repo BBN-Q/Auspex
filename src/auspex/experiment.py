@@ -337,6 +337,12 @@ class Experiment(metaclass=MetaExperiment):
 
         self.instrs_connected = True
 
+    def disconnect_instruments(self):
+        # Connect the instruments to their resources
+        for instrument in self._instruments.values():
+            instrument.disconnect()
+        self.instrs_connected = False
+
     def run_sweeps(self):
         #connect all instruments
         if not self.instrs_connected:
@@ -455,9 +461,7 @@ class Experiment(metaclass=MetaExperiment):
                 except:
                     logger.debug("File probably already closed...")
             self.shutdown_instruments()
-
-            for instrument in self._instruments.values():
-                instrument.disconnect()
+            self.disconnect_instruments()
 
         def catch_ctrl_c(signum, frame):
             logger.info("Caught SIGINT. Shutting down.")
