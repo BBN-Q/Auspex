@@ -241,17 +241,24 @@ class DRAGCalibration(PulseCalibration):
     def calibrate(self):
         #generate sequence
         self.set()
-        #run
+        #first run
         data, _ = self.run()
         #fit and analyze
-        norm_data = normalize_data(data)
-        fitted_drag = fit_drag(self.deltas, self.num_pulses, norm_data)
+        opt_drag, error_drag = fit_drag(self.deltas, self.num_pulses, norm_data)
+
         #generate sequence with new pulses and drag parameters
-        #self.deltas = XXX
+        new_drag_step = 0.25*(max(self.deltas) - min(self.deltas))
+        self.deltas = np.range(opt_drag - new_drag_step, opt_drag + new_drag_step, len(self.deltas))
+        new_pulse_step = 2*(max(self.num_pulses)-min(self.num_pulses))/len(self.num_pulses)
+        self.num_pulses = np.arange(max(self.num_pulses) - new_pulse_step, max(self.num_pulses) + new_pulse_step*(len(self.num_pulses)-1), new_pulse_step)
         self.set()
+
+        #second run, finer range
         data, _ = self.run()
-        fitted_drag = fit_drag(data)
-        print("DRAG", fitted_drag)
+        opt_drag, error_drag = fit_drag(data)
+        #TODO: success condition
+
+        print("DRAG", opt_drag)
 
         with open(config.channelLibFile, 'r') as FID:
             chan_settings = json.load(FID)
