@@ -161,9 +161,9 @@ class Averager(Filter):
                 reshaped         = data[idx:idx+new_points].reshape(partial_reshape_dims)
                 summed           = reshaped.sum(axis=self.mean_axis)
                 self.sum_so_far += summed
-                idx             += new_points
-                
+
                 self.current_avg_frame[idx_frame:idx_frame+new_points] = data[idx:idx+new_points]
+                idx             += new_points
                 idx_frame       += new_points
 
                 self.completed_averages += num_chunks
@@ -172,11 +172,11 @@ class Averager(Filter):
                 if self.completed_averages == self.num_averages:
                     reshaped = self.current_avg_frame.reshape(self.reshape_dims)
                     for os in self.final_average.output_streams + self.partial_average.output_streams:
-                        await os.push(reshaped.means(axis=self.mean_axis))
+                        await os.push(reshaped.mean(axis=self.mean_axis))
                     for os in self.final_variance.output_streams:
                         await os.push(reshaped.var(axis=self.mean_axis, ddof=1)) # N-1 in the denominator 
                     self.sum_so_far[:]      = 0.0
-                    self.current_frame[:]   = 0.0
+                    self.current_avg_frame[:]   = 0.0
                     self.completed_averages = 0
                     self.idx_frame          = 0 
                 else:
