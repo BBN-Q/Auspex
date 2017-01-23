@@ -5,7 +5,10 @@
 # You may obtain a copy of the License at
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
+
 from auspex.stream import DataStream, DataAxis, SweepAxis, DataStreamDescriptor, InputConnector, OutputConnector
+from auspex.log import logger
+
 import h5py
 import numpy as np
 

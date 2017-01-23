@@ -14,7 +14,6 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 import h5py
 
-# from auspex.log import logger
 from auspex.log import logger
 
 def load_switching_data(filename, start_state=None, failure=False,
