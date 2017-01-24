@@ -20,18 +20,21 @@ from auspex.filters.filter import Filter, InputConnector, OutputConnector
 from auspex.stream import  DataStreamDescriptor
 from auspex.log import logger
 
-# load libchannelizer to access Intel IPP filtering functions
-import numpy.ctypeslib as npct
-from ctypes import c_int, c_size_t
-np_float  = npct.ndpointer(dtype=np.float32, flags='C_CONTIGUOUS')
-#On Windows add build path to system path to pick up DLL mingw dependencies
-libchannelizer_path = os.path.abspath(os.path.join( os.path.dirname(__file__), "libchannelizer"))
-if "Windows" in platform.platform():
-    os.environ["PATH"] += ";" + libchannelizer_path
-libipp = npct.load_library("libchannelizer",  libchannelizer_path)
-libipp.filter_records_fir.argtypes = [np_float, c_size_t, c_int, np_float, c_size_t, c_size_t, np_float]
-libipp.filter_records_iir.argtypes = [np_float, c_size_t, np_float, c_size_t, c_size_t, np_float]
-libipp.init()
+try:
+    # load libchannelizer to access Intel IPP filtering functions
+    import numpy.ctypeslib as npct
+    from ctypes import c_int, c_size_t
+    np_float  = npct.ndpointer(dtype=np.float32, flags='C_CONTIGUOUS')
+    #On Windows add build path to system path to pick up DLL mingw dependencies
+    libchannelizer_path = os.path.abspath(os.path.join( os.path.dirname(__file__), "libchannelizer"))
+    if "Windows" in platform.platform():
+        os.environ["PATH"] += ";" + libchannelizer_path
+    libipp = npct.load_library("libchannelizer",  libchannelizer_path)
+    libipp.filter_records_fir.argtypes = [np_float, c_size_t, c_int, np_float, c_size_t, c_size_t, np_float]
+    libipp.filter_records_iir.argtypes = [np_float, c_size_t, np_float, c_size_t, c_size_t, np_float]
+    libipp.init()
+except:
+    logger.warning("Could not load channelizer library.")
 
 class Channelizer(Filter):
     """Digital demodulation and filtering to select a particular frequency multiplexed channel"""
