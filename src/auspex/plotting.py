@@ -63,7 +63,11 @@ class BokehServerProcess(object):
             return None
         with open(self.pid_filename) as f:
             pid = int(f.readline())
-        if psutil.pid_exists(pid):
-            return pid
-        else:
+        # check that a process is running on that PID
+        if not psutil.pid_exists(pid):
             return None
+        # check that the process is a Bokeh server
+        cmd = psutil.Process(pid).cmdline()
+        if (len(cmd) >= 2) and ('python' in cmd[0]) and ('bokeh' in cmd[1]):
+            return pid
+        return None
