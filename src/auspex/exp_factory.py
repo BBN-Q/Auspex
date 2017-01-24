@@ -418,7 +418,7 @@ class QubitExpFactory(object):
             # If there is a colon in the name, then we are to hook up to a specific connector
             # Otherwise we can safely assume that the name is "source"
 
-            data_sources = [s.strip() for s in experiment.measurement_settings['filterDict'][name].split(",")]
+            data_sources = [s.strip() for s in experiment.measurement_settings['filterDict'][name]['data_source'].split(",")]
 
             for data_source in data_sources:
                 source = data_source.split(":")

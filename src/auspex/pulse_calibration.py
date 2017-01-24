@@ -44,7 +44,7 @@ class PulseCalibration(object):
         """Returns the sequence for the given calibration, must be overridden"""
         return [[Id(self.qubit), MEAS(self.qubit)]]
 
-    def set(self, instrs_to_set = None):
+    def set(self, instrs_to_set = []):
         seq_files = compile_to_hardware(self.sequence(), fileName=self.filename, axis_descriptor=self.axis_descriptor)
         metafileName = os.path.join(QGLconfig.AWGDir, self.filename + '-meta.json')
         self.exp = QubitExpFactory.create(meta_file=metafileName)
@@ -177,6 +177,7 @@ class PhaseEstimation(PulseCalibration):
 
         ct = 1
         amp = self.amplitude
+        self.set()
         while True:
             [phase, sigma] = phase_estimation(*self.run())
             print("Phase: %.4f Sigma: %.4f"%(phase,sigma))
@@ -203,6 +204,8 @@ class PhaseEstimation(PulseCalibration):
                 else:
                     print('Hit max iteration count');
                 break
+            #update amplitude
+            self.amplitude = amp
         print('Amp',amp)
 
         set_amp = 'pi2Amp' if isinstance(self, Pi2Calibration) else 'piAmp'
