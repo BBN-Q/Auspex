@@ -108,7 +108,7 @@ class Averager(Filter):
             raise Exception("Average has not been initialized. Run 'update_descriptors'")
 
         self.completed_averages = 0
-
+        self.idx_frame          = 0
         # We only need to accumulate up to the averaging axis
         # BUT we may get something longer at any given time!
         self.carry = np.zeros(0, dtype=self.final_average.descriptor.dtype)
@@ -127,7 +127,6 @@ class Averager(Filter):
             self.carry = np.zeros(0, dtype=self.final_average.descriptor.dtype)
 
         idx       = 0
-        idx_frame = 0
         while idx < data.size:
             #check whether we have enough data to fill an averaging frame
             if data.size - idx >= self.points_before_final_average:
@@ -162,23 +161,23 @@ class Averager(Filter):
                 summed           = reshaped.sum(axis=self.mean_axis)
                 self.sum_so_far += summed
 
-                self.current_avg_frame[idx_frame:idx_frame+new_points] = data[idx:idx+new_points]
+                self.current_avg_frame[self.idx_frame:self.idx_frame+new_points] = data[idx:idx+new_points]
                 idx             += new_points
-                idx_frame       += new_points
+                self.idx_frame  += new_points
 
                 self.completed_averages += num_chunks
 
                 # If we now have enoough for the final average, push to both partial and final...
                 if self.completed_averages == self.num_averages:
-                    reshaped = self.current_avg_frame.reshape(self.reshape_dims)
+                    reshaped = self.current_avg_frame.reshape(partial_reshape_dims)
                     for os in self.final_average.output_streams + self.partial_average.output_streams:
                         await os.push(reshaped.mean(axis=self.mean_axis))
                     for os in self.final_variance.output_streams:
                         await os.push(reshaped.var(axis=self.mean_axis, ddof=1)) # N-1 in the denominator 
-                    self.sum_so_far[:]      = 0.0
-                    self.current_avg_frame[:]   = 0.0
-                    self.completed_averages = 0
-                    self.idx_frame          = 0 
+                    self.sum_so_far[:]        = 0.0
+                    self.current_avg_frame[:] = 0.0
+                    self.completed_averages   = 0
+                    self.idx_frame            = 0 
                 else:
                     # Emit a partial average since we've accumulated enough data
                     if (time.time() - self.last_update >= self.update_interval):
