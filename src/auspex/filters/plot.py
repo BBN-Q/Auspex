@@ -134,29 +134,23 @@ class Plotter(Filter):
             self.plot_buffer[self.idx:self.idx+data.size] = data.flatten()
             self.idx += data.size
 
-        if self.plot_dims.value == 1:
-            if (time.time() - self.last_update >= self.update_interval):
-                for i,j in zip(self.mapping_functions, self.data_sources):
-                    for mapping_function, data_source in zip(i,j):
+        if (time.time() - self.last_update >= self.update_interval):
+            for i,j in zip(self.mapping_functions, self.data_sources):
+                for mapping_function, data_source in zip(i,j):
+                    if self.plot_dims.value == 1:
                         data_source.data["y"] = np.copy(mapping_function(self.plot_buffer))
-                self.last_update = time.time()
-
-        else:
-            if (time.time() - self.last_update >= self.update_interval):
-                for i,j in zip(self.mapping_functions, self.data_sources):
-                    for mapping_function, data_source in zip(i,j):
+                    else:
                         data_source.data["image"] = [np.reshape(mapping_function(self.plot_buffer), self.z_data.shape)]
-                self.last_update = time.time()
+            self.last_update = time.time()
 
     async def on_done(self):
-        if self.plot_dims.value == 1:
-            for i,j in zip(self.mapping_functions, self.data_sources):
-                for mapping_function, data_source in zip(i,j):
+        for i,j in zip(self.mapping_functions, self.data_sources):
+            for mapping_function, data_source in zip(i,j):
+                if self.plot_dims.value == 1:
                     data_source.data["y"] = np.copy(mapping_function(self.plot_buffer))
-        else:
-            for i,j in zip(self.mapping_functions, self.data_sources):
-                for mapping_function, data_source in zip(i,j):
+                else:
                     data_source.data["image"] = [np.reshape(mapping_function(self.plot_buffer), self.z_data.shape)]
+
         time.sleep(0.1)
 
     def axis_label(self, index):
@@ -294,7 +288,7 @@ class XYPlotter(Filter):
         self.plot = self.fig.multi_line(x_data, y_data, name=self.name,
                                         line_width=2, color=self.colors,
                                         **self.plot_args)
-        
+
         renderers = self.plot.select(dict(name=self.name))
         self.renderer = [r for r in renderers if isinstance(r, GlyphRenderer)][0]
         self.data_source = self.renderer.data_source
@@ -318,7 +312,7 @@ class XYPlotter(Filter):
                     raise ValueError("Writer received concurrent messages with different message types {}".format([m['type'] for m in messages]))
             except:
                 import ipdb; ipdb.set_trace()
-                
+
             # Infer the type from the first message
             message_type = messages[0]['type']
 
@@ -380,7 +374,7 @@ class XYPlotter(Filter):
                     # Strip NaNs
                     x_data = np.array([series[~np.isnan(series)] for series in x_data])
                     y_data = np.array([series[~np.isnan(series)] for series in y_data])
-                    
+
                     # Convert to lists and then push all at once...
                     self.data_source.data = dict(xs=x_data.tolist(), ys=y_data.tolist(), line_color=self.colors[0:len(y_data)])
 
@@ -391,4 +385,3 @@ class XYPlotter(Filter):
     #         for mapping_function, data_source in zip(i,j):
     #             data_source.data["y"] = np.copy(mapping_function(self.plot_buffer))
     #     time.sleep(0.1)
-
