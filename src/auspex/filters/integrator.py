@@ -53,7 +53,7 @@ class KernelIntegrator(Filter):
             # add modulation
             kernel *= np.exp(2j * np.pi * self.frequency.value * time_step * time_pts)
         else:
-            kernel = self.kernel.value
+            kernel = eval(self.kernel.value.encode('unicode_escape'))
         # pad or truncate the kernel to match the record length
         if kernel.size < record_length:
             self.aligned_kernel = np.append(kernel, np.zeros(record_length-kernel.size, dtype=np.complex128))
