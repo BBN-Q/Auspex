@@ -371,23 +371,17 @@ class Experiment(metaclass=MetaExperiment):
         if len(self.plotters) > 0:
             logger.debug("Found %d plotters", len(self.plotters))
 
-            from .plotting import BokehServerThread
+            from .plotting import BokehServerProcess
             from bokeh.client import push_session
             from bokeh.layouts import row, gridplot
-            from bokeh.io import curdoc, curstate
-            from bokeh.util.session_id import generate_session_id
-            from bokeh.document import Document
+            from bokeh.io import curdoc
             from bokeh.models.widgets import Panel, Tabs
 
             # If anybody has requested notebook plots, show them all in notebook
             run_in_notebook = True in [p.run_in_notebook for p in self.plotters]
 
-            bokeh_thread = BokehServerThread(notebook=run_in_notebook)
-            bokeh_thread.start()
-
-            #On some systems there is a possibility we try to `push_session` before the
-            #the server on the BokehServerThread has started. Wait a second, here.
-            time.sleep(3)
+            bokeh_process = BokehServerProcess(notebook=run_in_notebook)
+            bokeh_process.run()
 
             tabs = True #not run_in_notebook # Tabs seem a bit sluggish in jupyter notebooks...
             if tabs:
@@ -402,11 +396,10 @@ class Experiment(metaclass=MetaExperiment):
                     grid = list(zip(*[iter(padded_list)]*2))
                     container = gridplot(grid)
 
-            curdoc().clear()
-            sid = generate_session_id()
-            doc = Document()
+            doc = curdoc()
+            doc.clear()
             doc.add_root(container)
-            session = push_session(doc, session_id=sid)
+            session = push_session(doc)
 
             for p in self.plotters:
                 p.session = session
@@ -418,7 +411,7 @@ class Experiment(metaclass=MetaExperiment):
                 from IPython.display import display, HTML
 
                 output_notebook()
-                script = autoload_server(model=None, session_id=sid)
+                script = autoload_server(model=None, session_id=session.id)
                 html = \
                         """
                         <html>
@@ -434,9 +427,6 @@ class Experiment(metaclass=MetaExperiment):
 
         def shutdown():
             logger.debug("Shutting Down!")
-            if len(self.plotters) > 0:
-                time.sleep(0.5)
-                bokeh_thread.join()
 
             for f in self.files:
                 try:
