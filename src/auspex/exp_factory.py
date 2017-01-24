@@ -419,23 +419,28 @@ class QubitExpFactory(object):
 
         for name, filt in filters.items():
 
+            # Multiple data sources are comma separated, with optional whitespace.
             # If there is a colon in the name, then we are to hook up to a specific connector
             # Otherwise we can safely assume that the name is "source"
-            source = experiment.measurement_settings['filterDict'][name]['data_source'].split(":")
-            node_name = source[0]
-            conn_name = "source"
-            if len(source) == 2:
-                conn_name = source[1]
 
-            if node_name in filters:
-                source = filters[node_name].output_connectors[conn_name]
-            elif node_name in experiment.output_connectors:
-                source = experiment.output_connectors[node_name]
-            else:
-                raise ValueError("Couldn't find anywhere to attach the source of the specified filter {}".format(name))
+            data_sources = [s.strip() for s in experiment.measurement_settings['filterDict'][name].split(",")]
 
-            logger.debug("Connecting %s@%s ---> %s", node_name, conn_name, filt)
-            graph.append([source, filt.sink])
+            for data_source in data_sources:
+                source = data_source.split(":")
+                node_name = source[0]
+                conn_name = "source"
+                if len(source) == 2:
+                    conn_name = source[1]
+
+                if node_name in filters:
+                    source = filters[node_name].output_connectors[conn_name]
+                elif node_name in experiment.output_connectors:
+                    source = experiment.output_connectors[node_name]
+                else:
+                    raise ValueError("Couldn't find anywhere to attach the source of the specified filter {}".format(name))
+
+                logger.debug("Connecting %s@%s ---> %s", node_name, conn_name, filt)
+                graph.append([source, filt.sink])
 
         experiment.chan_to_oc  = chan_to_oc
         experiment.chan_to_dig = chan_to_dig
