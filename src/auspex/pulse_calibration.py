@@ -342,8 +342,7 @@ def phase_estimation( data_in, vardata_in, verbose=False):
         curGuess = possibles[0]
         if verbose == True:
             print('Current Guess: %f'%(curGuess))
-    phase = curGuess
-    sigma = np.maximum(np.abs(restrict(curGuess - lowerBound)), np.abs(restrict(curGuess - upperBound)))
-    
-    return phase, sigma
+        phase = curGuess
+        sigma = np.maximum(np.abs(restrict(curGuess - lowerBound)), np.abs(restrict(curGuess - upperBound)))
 
+    return phase, sigma
