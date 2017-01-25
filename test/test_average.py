@@ -132,7 +132,7 @@ class ExperimentTestCase(unittest.TestCase):
         exp.set_graph(edges)
         exp.run_sweeps()
 
-        var_data  = var_buff.get_data()['chan1'].reshape(var_buff.descriptor.data_dims())
+        var_data  = var_buff.get_data()['Variance'].reshape(var_buff.descriptor.data_dims())
         mean_data = mean_buff.get_data()['chan1'].reshape(mean_buff.descriptor.data_dims())
         orig_data = exp.vals.reshape(exp.chan1.descriptor.data_dims())
 
