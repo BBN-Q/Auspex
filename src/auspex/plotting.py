@@ -68,6 +68,6 @@ class BokehServerProcess(object):
             return None
         # check that the process is a Bokeh server
         cmd = psutil.Process(pid).cmdline()
-        if (len(cmd) >= 2) and ('python' in cmd[0]) and ('bokeh' in cmd[1]):
+        if any('bokeh' in item for item in cmd):
             return pid
         return None
