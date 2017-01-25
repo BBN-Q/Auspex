@@ -36,7 +36,8 @@ def load_from_HDF5(filename, groupname='main'):
             descriptor.metadata[attr_name] = axis_refs.attrs[attr_name]
 
         data = g['data'][:]
-        return data, descriptor
+        variance = g['variance'][:]
+        return data, variance, descriptor
 
 if __name__ == '__main__':
     filename = "test_writehdf5_adaptive_unstructured-0000.h5"
