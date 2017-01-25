@@ -191,7 +191,8 @@ class SCPIInstrument(Instrument):
     def __init__(self, resource_name=None, name="Yet-to-be-named SCPI Instrument"):
         self.name            = name
         self.resource_name   = resource_name
-        self.instrument_type = None # This can be AWG, Digitizer, etc.
+        if not hasattr(self, "instrument_type"):
+            self.instrument_type = None # This can be AWG, Digitizer, etc.
         self.interface       = None
         self._freeze()
 

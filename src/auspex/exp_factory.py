@@ -113,15 +113,26 @@ class QubitExpFactory(object):
                 qubit_to_writer["q1"] = writers[0]
 
                 # Trace back our ancestors
-                ancestors = nx.ancestors(dag, writers[0])
+                writer_ancestors = nx.ancestors(dag, writers[0])
                 # We will have gotten the digitizer, which should be removed since we're already taking care of it
-                ancestors.remove(dig_name)
-                filt_to_enable.extend(ancestors)
-                filt_to_enable.extend(plotters)
+                writer_ancestors.remove(dig_name)
 
-            # Disable EVERYTHING and then build ourselved back up with the relevant nodes
+                instrument_settings['instrDict'][dig_name]['nbr_segments'] = num_segments
+
+                plotters = [e for e in endpoints if measurement_settings["filterDict"][e]["x__class__"] == "Plotter" and
+                                                   measurement_settings["filterDict"][e]["enabled"]]
+                if plotters:
+                    plotter_ancestors = set().union(*[nx.ancestors(dag, pl) for pl in plotters])
+                    plotter_ancestors.remove(dig_name)
+                else:
+                    plotter_ancestors = []
+
+                filt_to_enable.extend(set().union(writers, writer_ancestors, plotters, plotter_ancestors))
+
+            # Disable digitizers and APSs and then build ourself back up with the relevant nodes
             for instr_name in instrument_settings['instrDict'].keys():
-                instrument_settings['instrDict'][instr_name]['enabled'] = False
+                if instrument_settings['instrDict'][instr_name]["x__module__"] in ['instruments.Digitizers', 'instruments.APS', 'instruments.APS2']:
+                    instrument_settings['instrDict'][instr_name]['enabled'] = False
             for instr_name in inst_to_enable:
                 instrument_settings['instrDict'][instr_name]['enabled'] = True
 
@@ -357,7 +368,7 @@ class QubitExpFactory(object):
             # Create and add the OutputConnector
             logger.debug("Adding %s output connector to experiment.", name)
             oc = OutputConnector(name=name, parent=experiment)
-            experiment._output_connectors.append(oc)
+            experiment._output_connectors[name] = oc
             experiment.output_connectors[name] = oc
             setattr(experiment, name, oc)
 

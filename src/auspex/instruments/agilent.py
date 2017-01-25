@@ -14,6 +14,7 @@ import numpy as np
 
 class AgilentN5183A(SCPIInstrument):
     """AgilentN5183A microwave source"""
+    instrument_type = "Microwave Source"
 
     frequency = FloatCommand(scpi_string=":freq")
     power     = FloatCommand(scpi_string=":power")
@@ -45,6 +46,7 @@ class AgilentN5183A(SCPIInstrument):
 
 class AgilentE8363C(SCPIInstrument):
     """Agilent E8363C VNA"""
+    instrument_type = "Vector Network Analyzer"
 
     power              = FloatCommand(scpi_string=":SOURce:POWer:LEVel:IMMediate:AMPLitude", value_range=(-27, 20))
     frequency_center   = FloatCommand(scpi_string=":SENSe:FREQuency:CENTer")
@@ -63,7 +65,6 @@ class AgilentE8363C(SCPIInstrument):
     def connect(self, resource_name=None, interface_type="VISA"):
         if resource_name is not None:
             self.resource_name = resource_name
-        print(self.resource_name)
         if is_valid_ipv4(self.resource_name):
             self.resource_name += "::hpib7,16::INSTR"
         else:
@@ -107,22 +108,26 @@ class AgilentE8363C(SCPIInstrument):
 
 class AgilentE9010A(SCPIInstrument):
     """Agilent E9010A SA"""
+    instrument_type = "Spectrum Analyzer"
 
     frequency_center = FloatCommand(scpi_string=":FREQuency:CENTer")
     frequency_span   = FloatCommand(scpi_string=":FREQuency:SPAN")
     frequency_start  = FloatCommand(scpi_string=":FREQuency:STARt")
     frequency_stop   = FloatCommand(scpi_string=":FREQuency:STOP")
 
-    # This seems to return incorrect numbers for large sweeps?
-    num_sweep_points = FloatCommand(scpi_string="OBW:SWE:POIN")
+    num_sweep_points = FloatCommand(scpi_string=":SWEep:POINTs")
+    resolution_bandwidth = FloatCommand(scpi_string=":BANDwidth")
+    sweep_time = FloatCommand(scpi_string=":SWEep:TIME")
 
-    def __init__(self, resource_name, *args, **kwargs):
-        #If we only have an IP address then tack on the raw socket port to the VISA resource string
-        if is_valid_ipv4(resource_name):
-            resource_name += "::5025::SOCKET"
+    def __init__(self, resource_name=None, *args, **kwargs):
         super(AgilentE9010A, self).__init__(resource_name, *args, **kwargs)
 
     def connect(self, resource_name=None, interface_type=None):
+        if resource_name is not None:
+            self.resource_name = resource_name
+        #If we only have an IP address then tack on the raw socket port to the VISA resource string
+        if is_valid_ipv4(resource_name):
+            resource_name += "::5025::SOCKET"
         super(AgilentE9010A, self).connect(resource_name=resource_name, interface_type=interface_type)
         self.interface._resource.read_termination = u"\n"
         self.interface._resource.write_termination = u"\n"
@@ -135,3 +140,7 @@ class AgilentE9010A(SCPIInstrument):
         self.interface.write(':FORM:DATA REAL,32')
         return self.interface.query_binary_values(":TRACE:DATA? TRACE{:d}".format(num),
             datatype="f", is_big_endian=True)
+
+    def restart_sweep(self):
+        """ Aborts current sweep and restarts. """
+        self.interface.write(":INITiate:RESTart")
