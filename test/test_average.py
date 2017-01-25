@@ -16,6 +16,7 @@ from auspex.experiment import Experiment
 from auspex.parameter import FloatParameter
 from auspex.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector
 from auspex.filters.debug import Print, Passthrough
+from auspex.filters.io import DataBuffer
 from auspex.filters.average import Averager
 from auspex.log import logger, logging
 logger.setLevel(logging.DEBUG)
@@ -75,6 +76,34 @@ class TestExperiment(Experiment):
         logger.debug("Stream pushed points {}.".format(data_row))
         logger.debug("Stream has filled {} of {} points".format(self.chan1.points_taken, self.chan1.num_points() ))
 
+class VarianceExperiment(Experiment):
+
+    # DataStreams
+    chan1 = OutputConnector()
+
+    # Constants
+    samples = 3
+    trials  = 5
+    repeats = 10
+    idx     = 0
+    
+    # For variance comparison
+    vals = np.random.random((samples*trials*repeats))
+
+    def init_streams(self):
+        self.chan1.add_axis(DataAxis("samples", list(range(self.samples))))
+        self.chan1.add_axis(DataAxis("trials", list(range(self.trials))))
+        self.chan1.add_axis(DataAxis("repeats", list(range(self.repeats))))
+
+    async def run(self):
+        logger.debug("Data taker running (inner loop)")
+        await asyncio.sleep(0.05)
+        data_row = self.vals[self.idx:self.idx+(self.samples*self.trials*self.repeats)]
+        self.idx += (self.samples*self.trials*self.repeats)
+        await self.chan1.push(data_row)
+        logger.debug("Stream pushed points {}.".format(data_row))
+        logger.debug("Stream has filled {} of {} points".format(self.chan1.points_taken, self.chan1.num_points() ))
+
 class ExperimentTestCase(unittest.TestCase):
 
     def test_final_average_runs(self):
@@ -87,6 +116,29 @@ class ExperimentTestCase(unittest.TestCase):
 
         exp.set_graph(edges)
         exp.run_sweeps()
+
+    def test_final_variance_runs(self):
+        exp             = VarianceExperiment()
+        printer_final   = Print(name="Final")
+        avgr            = Averager('repeats', name="TestAverager")
+        var_buff        = DataBuffer(name='Variance Buffer')
+        mean_buff       = DataBuffer(name='Mean Buffer')
+
+        edges = [(exp.chan1,           avgr.sink),
+                 (avgr.final_variance, printer_final.sink),
+                 (avgr.final_variance, var_buff.sink),
+                 (avgr.final_average,  mean_buff.sink)]
+
+        exp.set_graph(edges)
+        exp.run_sweeps()
+
+        var_data  = var_buff.get_data()['chan1'].reshape(var_buff.descriptor.data_dims())
+        mean_data = mean_buff.get_data()['chan1'].reshape(mean_buff.descriptor.data_dims())
+        orig_data = exp.vals.reshape(exp.chan1.descriptor.data_dims())
+
+        self.assertTrue(np.abs(np.sum(mean_data - np.mean(orig_data, axis=0))) <= 1e-7)
+        self.assertTrue(np.abs(np.sum(var_data - np.var(orig_data, axis=0, ddof=1))) <= 1e-7)
+
 
     def test_partial_average_runs(self):
         exp             = TestExperiment()
@@ -114,21 +166,6 @@ class ExperimentTestCase(unittest.TestCase):
         avgr.axis.value = 'freq_1'
         avgr.update_descriptors()
         exp.run_sweeps()
-    # def test_add_axis_to_averager(self):
-    #     exp             = TestExperiment()
-    #     printer_final   = Print(name="Final")
-    #     avgr            = Averager('samples', name="TestAverager")
-
-    #     edges = [(exp.chan1, avgr.sink),
-    #              (avgr.final_average, printer_final.sink)]
-
-    #     exp.set_graph(edges)
-    #     exp.init_instruments()
-    #     repeats = 2
-    #     exp.chan1.descriptor.add_axis(DataAxis("repeats", list(range(repeats))))
-    #     exp.update_descriptors()
-    #     self.assertTrue(len(exp.chan1.descriptor.axes) == 3)
-    #     exp.run_sweeps()
 
 if __name__ == '__main__':
     unittest.main()

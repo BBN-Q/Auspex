@@ -58,6 +58,9 @@ class QubitExpFactory(object):
         with open(config.sweepLibFile, 'r') as FID:
             sweep_settings = json.load(FID)
 
+        # Create a mapping from qubits to data writers
+        qubit_to_writer = {}
+
         if meta_file:
             # Use the meta info to modify the other JSON
             with open(meta_file, 'r') as FID:
@@ -92,17 +95,23 @@ class QubitExpFactory(object):
                 instrument_settings['instrDict'][dig_name]['nbr_segments'] = num_segments
                 # Find descendants of the channel selector
                 chan_descendants = nx.descendants(dag, chan_name)
-                # Find endpoints within the descendants   
+                # Find endpoints within the descendants
                 endpoints = [n for n in chan_descendants if dag.in_degree(n) == 1 and dag.out_degree(n) == 0]
                 # Find endpoints which are enabled writers
-                writers = [e for e in endpoints if measurement_settings["filterDict"][e]["x__class__"] == "WriteToHDF5" and 
+                writers = [e for e in endpoints if measurement_settings["filterDict"][e]["x__class__"] == "WriteToHDF5" and
+                                                   measurement_settings["filterDict"][e]["enabled"]]
+                plotters = [e for e in endpoints if measurement_settings["filterDict"][e]["x__class__"] == "Plotter" and
                                                    measurement_settings["filterDict"][e]["enabled"]]
                 # The user should only have one writer enabled, otherwise we will be confused.
                 if len(writers) > 1:
                     raise Exception("More than one viable data writer was found for a receiver channel {}. Please enabled only one!".format(receiver_text))
                 if len(writers) == 0:
                     raise Exception("No viable data writer was found for receiver channel {}. Please enabled only one!".format(receiver_text))
-                
+
+                # For now we assume a single qubit
+                # TODO: have meta info give the relationships of qubits to receivers so we don't need to dig in the channel lib
+                qubit_to_writer["q1"] = writers[0]
+
                 # Trace back our ancestors
                 writer_ancestors = nx.ancestors(dag, writers[0])
                 # We will have gotten the digitizer, which should be removed since we're already taking care of it
@@ -140,12 +149,12 @@ class QubitExpFactory(object):
             # Set the appropriate sweep
             desc = meta_info["axis_descriptor"]
             sweep_settings["sweepDict"] = {"SegmentSweep": {
-                                            "axisLabel": "{} ({})".format(desc[0]["name"], desc[0]["unit"]), 
-                                            "enabled": True, 
-                                            "label": "SegmentSweep", 
-                                            "meta_file": meta_file, 
+                                            "axisLabel": "{} ({})".format(desc[0]["name"], desc[0]["unit"]),
+                                            "enabled": True,
+                                            "label": "SegmentSweep",
+                                            "meta_file": meta_file,
                                             "meta_info": meta_info,
-                                            "x__class__": "SegmentNum", 
+                                            "x__class__": "SegmentNum",
                                             "x__module__": "Sweeps"
                                             }
                                           }
@@ -210,6 +219,8 @@ class QubitExpFactory(object):
         experiment.run_in_notebook = notebook
         experiment.name = expname
 
+        experiment.qubit_to_writer = qubit_to_writer
+
         QubitExpFactory.load_instruments(experiment)
         QubitExpFactory.load_segment_sweeps(experiment)
         QubitExpFactory.load_filters(experiment)
@@ -269,7 +280,7 @@ class QubitExpFactory(object):
 
                 # See if there are multiple partitions, and therefore metadata
                 if len(par['meta_info']['axis_descriptor']) > 1:
-                    
+
                     meta_axis = par['meta_info']['axis_descriptor'][1]
 
                     # There should be metadata for each cal describing what it is
@@ -399,16 +410,11 @@ class QubitExpFactory(object):
             filt_type = settings['x__class__']
 
             if filt_type in module_map:
-                if filt_type == "KernelIntegrator":
-                    if 'np.' in settings['kernel']:
-                        settings['kernel'] = eval(settings['kernel'].encode('unicode_escape'))
-                    else:
-                        settings['kernel'] = np.fromstring( base64.b64decode(settings['kernel']), dtype=np.complex128)
                 filt = module_map[filt_type](**settings)
                 filt.name = name
                 filters[name] = filt
                 if filt_type == 'Plotter':
-                    filt.run_in_notebook = experiment.run_in_notebook 
+                    filt.run_in_notebook = experiment.run_in_notebook
                 logger.debug("Found filter class %s for '%s' when loading experiment settings.", filt_type, name)
             else:
                 logger.error("Could not find filter class %s for '%s' when loading experiment settings.", filt_type, name)
@@ -419,23 +425,28 @@ class QubitExpFactory(object):
 
         for name, filt in filters.items():
 
+            # Multiple data sources are comma separated, with optional whitespace.
             # If there is a colon in the name, then we are to hook up to a specific connector
             # Otherwise we can safely assume that the name is "source"
-            source = experiment.measurement_settings['filterDict'][name]['data_source'].split(":")
-            node_name = source[0]
-            conn_name = "source"
-            if len(source) == 2:
-                conn_name = source[1]
 
-            if node_name in filters:
-                source = filters[node_name].output_connectors[conn_name]
-            elif node_name in experiment.output_connectors:
-                source = experiment.output_connectors[node_name]
-            else:
-                raise ValueError("Couldn't find anywhere to attach the source of the specified filter {}".format(name))
+            data_sources = [s.strip() for s in experiment.measurement_settings['filterDict'][name]['data_source'].split(",")]
 
-            logger.debug("Connecting %s@%s ---> %s", node_name, conn_name, filt)
-            graph.append([source, filt.sink])
+            for data_source in data_sources:
+                source = data_source.split(":")
+                node_name = source[0]
+                conn_name = "source"
+                if len(source) == 2:
+                    conn_name = source[1]
+
+                if node_name in filters:
+                    source = filters[node_name].output_connectors[conn_name]
+                elif node_name in experiment.output_connectors:
+                    source = experiment.output_connectors[node_name]
+                else:
+                    raise ValueError("Couldn't find anywhere to attach the source of the specified filter {}".format(name))
+
+                logger.debug("Connecting %s@%s ---> %s", node_name, conn_name, filt)
+                graph.append([source, filt.sink])
 
         experiment.chan_to_oc  = chan_to_oc
         experiment.chan_to_dig = chan_to_dig

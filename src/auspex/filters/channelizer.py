@@ -9,29 +9,31 @@
 import os
 import platform
 from copy import deepcopy
-import asyncio, concurrent
 
 import numpy as np
 import scipy.signal
-import scipy.fftpack
 
 from auspex.parameter import Parameter, IntParameter, FloatParameter
 from auspex.filters.filter import Filter, InputConnector, OutputConnector
 from auspex.stream import  DataStreamDescriptor
 from auspex.log import logger
 
-# load libchannelizer to access Intel IPP filtering functions
-import numpy.ctypeslib as npct
-from ctypes import c_int, c_size_t
-np_float  = npct.ndpointer(dtype=np.float32, flags='C_CONTIGUOUS')
-#On Windows add build path to system path to pick up DLL mingw dependencies
-libchannelizer_path = os.path.abspath(os.path.join( os.path.dirname(__file__), "libchannelizer"))
-if "Windows" in platform.platform():
-    os.environ["PATH"] += ";" + libchannelizer_path
-libipp = npct.load_library("libchannelizer",  libchannelizer_path)
-libipp.filter_records_fir.argtypes = [np_float, c_size_t, c_int, np_float, c_size_t, c_size_t, np_float]
-libipp.filter_records_iir.argtypes = [np_float, c_size_t, np_float, c_size_t, c_size_t, np_float]
-libipp.init()
+try:
+    # load libchannelizer to access Intel IPP filtering functions
+    import numpy.ctypeslib as npct
+    from ctypes import c_int, c_size_t
+    np_float  = npct.ndpointer(dtype=np.float32, flags='C_CONTIGUOUS')
+    libchannelizer_path = os.path.abspath(os.path.join( os.path.dirname(__file__), "libchannelizer"))
+    if "Windows" in platform.platform():
+        os.environ["PATH"] += ";" + libchannelizer_path
+    libipp = npct.load_library("libchannelizer",  libchannelizer_path)
+    libipp.filter_records_fir.argtypes = [np_float, c_size_t, c_int, np_float, c_size_t, c_size_t, np_float]
+    libipp.filter_records_iir.argtypes = [np_float, c_size_t, np_float, c_size_t, c_size_t, np_float]
+    libipp.init()
+    load_fallback = False
+except:
+    logger.warning("Could not load channelizer library; falling back to python methods.")
+    load_fallback = True
 
 class Channelizer(Filter):
     """Digital demodulation and filtering to select a particular frequency multiplexed channel"""
@@ -67,7 +69,7 @@ class Channelizer(Filter):
 
         # arbitrarily decide on three stage filter pipeline
         # 1. first stage decimating filter on real data
-        # 2. decond stage decimating filter on mixed product to boost n_bandwidth
+        # 2. second stage decimating filter on mixed product to boost n_bandwidth
         # 3. final channel selecting filter at n_bandwidth/2
 
         # anecdotally don't decimate more than a factor of eight for stability
@@ -190,3 +192,35 @@ class Channelizer(Filter):
         # push to ouptut connectors
         for os in self.source.output_streams:
             await os.push(filtered)
+
+class LibChannelizerFallback(object):
+    @staticmethod
+    def filter_records_fir(coeffs,
+                           num_taps, # ignored
+                           decim_factor,
+                           recs,
+                           record_length, # ignored (uses shape of recs)
+                           num_records, # ignored (uses shape of recs)
+                           result):
+        # split out a, b coefficients
+        b = coeffs[:len(coeffs)//2]
+        a = coeffs[len(coeffs)//2:]
+
+        filtered_signal = scipy.signal.lfilter(b, a, recs)
+        result[:] = np.copy(filtered_signal[:, ::decim_factor], order="C")
+
+    @staticmethod
+    def filter_records_iir(coeffs,
+                           order, # ignored
+                           recs,
+                           record_length, # ignored (uses shape of recs)
+                           num_records, # ignored (uses shape of recs)
+                           result):
+        # split out a, b coefficients
+        b = coeffs[:len(coeffs)//2]
+        a = coeffs[len(coeffs)//2:]
+
+        result[:] = scipy.signal.lfilter(b, a, recs)
+
+if load_fallback:
+    libipp = LibChannelizerFallback()

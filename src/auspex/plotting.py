@@ -11,33 +11,63 @@ import subprocess
 import psutil
 import os
 import sys
+import tempfile
+import time
 
 from auspex.log import logger
 
-class BokehServerThread(threading.Thread):
+class BokehServerProcess(object):
     def __init__(self, notebook=False):
-        super(BokehServerThread, self).__init__()
-        self.daemon = True
+        super(BokehServerProcess, self).__init__()
         self.run_in_notebook = notebook
-
-    def __del__(self):
-        self.join()
+        self.pid_filename = os.path.join(tempfile.gettempdir(), "auspex_bokeh.pid")
 
     def run(self):
+        # start a Bokeh server if one is not already running
+        pid = self.read_session_pid()
+        if pid:
+            self.p = psutil.Process(pid)
+            logger.info("Using existing Bokeh server")
+            return
+        logger.info("Starting Bokeh server")
         args = ["bokeh", "serve", "--port", "5006"]
         if self.run_in_notebook:
             args.append("--allow-websocket-origin=localhost:8888")
         self.p = subprocess.Popen(args, env=os.environ.copy())
+        self.write_session_pid()
+        # sleep to give the Bokeh server a chance to start
+        # TODO replace this with some bokeh client API call that
+        # verifies that the server is running
+        time.sleep(3)
 
-    def join(self, timeout=None):
+    def terminate(self):
         if self.p:
-            print("Killing bokeh server thread {}".format(self.p.pid))
+            print("Killing bokeh server process {}".format(self.p.pid))
             try:
                 for child_proc in psutil.Process(self.p.pid).children():
                     print("Killing child process {}".format(child_proc.pid))
-                    child_proc.kill()
+                    child_proc.terminate()
             except:
                 print("Couldn't kill child processes.")
-            self.p.kill()
+            self.p.terminate()
             self.p = None
-            super(BokehServerThread, self).join(timeout=timeout)
+            os.remove(self.pid_filename)
+
+    def write_session_pid(self):
+        with open(self.pid_filename, "w") as f:
+            f.write("{}\n".format(self.p.pid))
+
+    def read_session_pid(self):
+        # check if pid file exists
+        if not os.path.isfile(self.pid_filename):
+            return None
+        with open(self.pid_filename) as f:
+            pid = int(f.readline())
+        # check that a process is running on that PID
+        if not psutil.pid_exists(pid):
+            return None
+        # check that the process is a Bokeh server
+        cmd = psutil.Process(pid).cmdline()
+        if any('bokeh' in item for item in cmd):
+            return pid
+        return None
