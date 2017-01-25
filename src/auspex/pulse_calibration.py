@@ -63,9 +63,9 @@ class PulseCalibration(object):
         filename = wrs[0].filename.value
         groupname = wrs[0].groupname.value
 
-        dataset, descriptor = load_from_HDF5(filename, groupname=groupname)
+        dataset, descriptor = load_from_HDF5(filename)
         # TODO: get the name of the relevant data from the graph
-        data, var = dataset['Data'], dataset['Variance']
+        data, var = dataset[self.qubit_name]['Data'], dataset[self.qubit_name]['Variance']
 
         # Return data and variance of the mean
         return data, var/descriptor.metadata["num_averages"]

@@ -110,7 +110,11 @@ class QubitExpFactory(object):
 
                 # For now we assume a single qubit
                 # TODO: have meta info give the relationships of qubits to receivers so we don't need to dig in the channel lib
-                qubit_to_writer["q1"] = writers[0]
+                with open(config.channelLibFile, 'r') as FID:
+                    chan_settings = json.load(FID)
+                for chan in chan_settings['channelDict']:
+                    if 'receiverChan' in chan_settings['channelDict'][chan] and  chan_settings['channelDict'][chan]['receiverChan'] == receiver_text:
+                        qubit_to_writer[chan.strip('M-')] = writers[0]
 
                 # Trace back our ancestors
                 writer_ancestors = nx.ancestors(dag, writers[0])
@@ -129,6 +133,8 @@ class QubitExpFactory(object):
 
                 filt_to_enable.extend(set().union(writers, writer_ancestors, plotters, plotter_ancestors))
 
+            writer_to_qubit = {v: k for k, v in qubit_to_writer.items()}
+
             # Disable digitizers and APSs and then build ourself back up with the relevant nodes
             for instr_name in instrument_settings['instrDict'].keys():
                 if instrument_settings['instrDict'][instr_name]["x__module__"] in ['instruments.Digitizers', 'instruments.APS', 'instruments.APS2']:
@@ -140,6 +146,9 @@ class QubitExpFactory(object):
                 measurement_settings['filterDict'][meas_name]['enabled'] = False
             for meas_name in filt_to_enable:
                 measurement_settings['filterDict'][meas_name]['enabled'] = True
+                #label measurement with qubit name (assuming the convention "M-"+qubit_name)
+                if measurement_settings['filterDict'][meas_name]["x__class__"] == "WriteToHDF5":
+                    measurement_settings['filterDict'][meas_name]['groupname'] = writer_to_qubit[meas_name].strip('M-')
 
             # First enable any instruments and set the sequence files
             for instr_name, seq_file in meta_info['instruments'].items():
