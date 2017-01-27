@@ -385,3 +385,17 @@ class XYPlotter(Filter):
     #         for mapping_function, data_source in zip(i,j):
     #             data_source.data["y"] = np.copy(mapping_function(self.plot_buffer))
     #     time.sleep(0.1)
+
+class ManualPlotter(object):
+    """Establish a figure, then give the user complete control over plot creation and data."""
+    def __init__(self,  name="", x_label='X', y_label="y", notebook=False,):
+        self.plot_height  = 600
+        self.plot_width   = 800
+        self.webgl        = False
+        self.x_label      = x_label
+        self.y_label      = y_label
+        self.name         = name
+
+        self.run_in_notebook = notebook
+        self.fig = Figure(plot_width=self.plot_height, plot_height=self.plot_height,
+                          webgl=self.webgl, x_axis_label=x_label, y_axis_label=y_label)
