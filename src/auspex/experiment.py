@@ -26,7 +26,7 @@ from auspex.instruments.instrument import Instrument
 from auspex.parameter import ParameterGroup, FloatParameter, IntParameter, Parameter
 from auspex.sweep import Sweeper
 from auspex.stream import DataStream, DataAxis, SweepAxis, DataStreamDescriptor, InputConnector, OutputConnector
-from auspex.filters.plot import Plotter, XYPlotter, MeshPlotter
+from auspex.filters.plot import Plotter, XYPlotter, MeshPlotter, ManualPlotter
 from auspex.filters.io import WriteToHDF5
 from auspex.log import logger
 
@@ -188,8 +188,10 @@ class Experiment(metaclass=MetaExperiment):
         self.bokeh_server = None
 
         # Also keep references to all of the plot filters
-        self.plotters = []
-        self.extra_plotters = []
+        self.plotters = [] # Standard pipeline plotters using streams
+        self.extra_plotters = [] # Plotters using streams, but not the pipeline
+        self.manual_plotters = [] # Plotters using neither streams nor the pipeline
+        self.manual_plotter_callbacks = [] # These are called at the end of run
         self._extra_plots_to_streams = {}
 
         # Furthermore, keep references to all of the file writers.
@@ -375,6 +377,9 @@ class Experiment(metaclass=MetaExperiment):
         # The asyncio filter pipeline
         self.plotters.extend(self.extra_plotters)
 
+        # These use neither streams nor the filter pipeline
+        self.plotters.extend(self.manual_plotters)
+
         # Call any final initialization on the filter pipeline
         for n in self.nodes + self.extra_plotters:
             n.experiment = self
@@ -448,6 +453,7 @@ class Experiment(metaclass=MetaExperiment):
                 try:
                     logger.debug("Closing %s", f)
                     f.close()
+                    del f
                 except:
                     logger.debug("File probably already closed...")
             self.shutdown_instruments()
@@ -471,6 +477,10 @@ class Experiment(metaclass=MetaExperiment):
 
         tasks.append(self.sweep())
         self.loop.run_until_complete(asyncio.gather(*tasks))
+
+        for plot, callback in zip(self.manual_plotters, self.manual_plotter_callbacks):
+            callback(plot.fig)
+
         shutdown()
 
     def add_sweep(self, parameters, sweep_list, refine_func=None, callback_func=None, metadata=None):
@@ -495,6 +505,10 @@ class Experiment(metaclass=MetaExperiment):
         plotter.sink.add_input_stream(plotter_stream)
         self.extra_plotters.append(plotter)
         self._extra_plots_to_streams[plotter] = plotter_stream
+
+    def add_manual_plotter(self, plotter, callback):
+        self.manual_plotters.append(plotter)
+        self.manual_plotter_callbacks.append(callback)
 
     async def push_to_plot(self, plotter, data):
         """Push data to a direct plotter."""

@@ -163,7 +163,7 @@ class WriteToHDF5(Filter):
 
             dtype = a.data_type(with_metadata=True)
             self.group.create_dataset(name, (a.num_points(),), dtype=dtype, maxshape=(None,) )
-            
+
             if a.unstructured:
                 for j, (col_name, col_unit) in enumerate(zip(a.name, a.unit)):
                     self.group[name][col_name,:] = a.points[:,j]
@@ -210,7 +210,7 @@ class WriteToHDF5(Filter):
                     raise ValueError("Writer received concurrent messages with different message types {}".format([m['type'] for m in messages]))
             except:
                 import ipdb; ipdb.set_trace()
-                
+
             # Infer the type from the first message
             message_type = messages[0]['type']
 
@@ -298,7 +298,7 @@ class DataBuffer(Filter):
             # Create a new buffer and paste the old buffer into it
             old_buffer = self.buffer
             new_size = self.descriptor.num_points()
-            self.buffer = np.empty(num_points(), dtype=self.descriptor.dtype)
+            self.buffer = np.empty(self.descriptor.num_points(), dtype=self.descriptor.dtype)
             self.buffer[:old_buffer.size] = old_buffer
 
         self.buffer[self.w_idx:self.w_idx+data.size] = data
