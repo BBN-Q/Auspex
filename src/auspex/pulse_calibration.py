@@ -65,10 +65,13 @@ class PulseCalibration(object):
 
         dataset, descriptor = load_from_HDF5(filename)
         # TODO: get the name of the relevant data from the graph
-        data, var = np.real(dataset[self.qubit_name]['Data']), dataset[self.qubit_name]['Variance']
-
+        data = np.real(dataset[self.qubit_name]['Data'])
+        if 'Variance' in dataset[self.qubit_name]:
+            var = dataset[self.qubit_name]['Variance']/descriptor.metadata["num_averages"]
+        else:
+            var = None
         # Return data and variance of the mean
-        return data, var/descriptor.metadata["num_averages"]
+        return data, var
 
     def calibrate(self):
         """Runs the actual calibration routine, must be overridden"""
@@ -99,7 +102,7 @@ class RamseyCalibration(PulseCalibration):
         self.axis_descriptor = [time_descriptor(self.delays)]
 
     def sequence(self):
-        return [[X90(self.qubit), Id(self.qubit, delay), MEAS(self.qubit)] for delay in self.delays]
+        return [[X90(self.qubit), Id(self.qubit, delay), X90(self.qubit), MEAS(self.qubit)] for delay in self.delays]
 
     def calibrate(self):
 
@@ -110,28 +113,27 @@ class RamseyCalibration(PulseCalibration):
             chan_settings = json.load(FID)
         qubit_source = chan_settings['channelDict'][chan_settings['channelDict'][self.qubit_name]['physChan']]['generator']
         orig_freq = instr_settings['instrDict'][qubit_source]['frequency']
-        set_freq = orig_freq + self.added_detuning/1e9
+        set_freq = round(orig_freq + self.added_detuning/1e9, 10)
         instr_to_set = {'instr': qubit_source, 'method': 'set_frequency', 'value': set_freq}
         self.set([instr_to_set])
         data, _ = self.run()
 
         #TODO: fit Ramsey and find new detuning. Finally, set source or qubit channel frequency
         fit_freqs, fit_errs = fit_ramsey(self.delays, data, two_freqs = self.two_freqs)
-        fit_freq_A = mean(fit_freqs) #the fit result can be one or two frequencies
+        fit_freq_A = np.mean(fit_freqs) #the fit result can be one or two frequencies
         #TODO: set conditions for success
-        set_freq = orig_freq + added_detuning + fit_freq_A/2
-        set_freq = orig_freq + self.added_detuning/1e9
+        set_freq = round(orig_freq + self.added_detuning/1e9 + fit_freq_A/2/1e9, 10)
         instr_to_set['value'] = set_freq
         self.set([instr_to_set])
         data, _ = self.run()
 
         fit_freqs, fit_errs = fit_ramsey(self.delays, data, two_freqs = self.two_freqs)
-        fit_freq_B = mean(fit_freqs)
+        fit_freq_B = np.mean(fit_freqs)
 
         if fit_freq_B < fit_freq_A:
-            fit_freq = orig_freq + self.added_detuning + 0.5*(fit_freq_A + 0.5*fit_freq_A + fit_freq_B)
+            fit_freq = round(orig_freq + self.added_detuning/1e9 + 0.5*(fit_freq_A + 0.5*fit_freq_A + fit_freq_B)/1e9, 10)
         else:
-            fit_freq = orig_freq + self.added_detuning + 0.5*(fit_freq_A - 0.5*fit_freq_A + fit_freq_B)
+            fit_freq = round(orig_freq + self.added_detuning/1e9 + 0.5*(fit_freq_A - 0.5*fit_freq_A + fit_freq_B)/1e9, 10)
         if self.set_source:
             instr_settings['instrDict'][qubit_source]['frequency'] = fit_freq
             self.update_libraries([instr_settings], [config.instrumentLibFile])
