@@ -35,8 +35,6 @@ class Correlator(Filter):
         # Sometimes not all of the input descriptors have been updated... pause here until they are:
         if None in [ss.descriptor for ss in self.sink.input_streams]:
             logger.debug('Correlator "%s" waiting for all input streams to be updated.', self.name)
-            print([ss.descriptor for ss in self.sink.input_streams])
-            # time.sleep(0.01)
             return
 
         descriptor = self.sink.descriptor.copy()
@@ -71,29 +69,27 @@ class Correlator(Filter):
                 for stream in streams
             }
 
-            responses, _ = await asyncio.wait(futures)
+            # Deal with non-equal number of messages using timeout
+            responses, pending = await asyncio.wait(futures, timeout=0.1)
 
             # Construct the inverse lookup
-            response_for_stream = {futures[res]: res for res in list(responses)}
-            messages = [response_for_stream[stream].result() for stream in streams]
+            response_for_stream = {futures[res]: res.result() for res in list(responses)}
+
+            # Add dummy data when tasks didn't complete (this just means they are done already)
+            pending = list(pending)
+            if len(pending) > 0:
+                for pend in pending:
+                    response_for_stream[futures[pend]] = {'type': 'data', 'compression': False, 'data': np.array([])}
+                    pend.cancel()
+
+            messages = [response_for_stream[stream] for stream in streams]
 
             # Allow different message types since data may arrive out of order.
             message_types = [m['type'] for m in messages]
-
-            # all_done = list(set(message_types)) == ['event']
-            # if 'data' not in mess
-            # try:
-            #     if len(set(message_types)) > 1:
-            #         raise ValueError("Correlator received concurrent messages with different message types {}".format([m['type'] for m in messages]))
-            # except:
-            #     import ipdb; ipdb.set_trace()
-
-            # Infer the type from the first message
-            # message_type = messages[0]['type']
-            message_data = [message['data'] for message in messages]
-            message_comp = [message['compression'] for message in messages]
-            message_data = [pickle.loads(zlib.decompress(dat)) if comp == 'zlib' else dat for comp, dat in zip(message_comp, message_data)]
-            message_data = [dat if hasattr(dat, 'size') else np.array([dat]) for dat in message_data]  # Convert single values to arrays
+            message_data  = [message['data'] for message in messages]
+            message_comp  = [message['compression'] for message in messages]
+            message_data  = [pickle.loads(zlib.decompress(dat)) if comp == 'zlib' else dat for comp, dat in zip(message_comp, message_data)]
+            message_data  = [dat if hasattr(dat, 'size') else np.array([dat]) for dat in message_data]  # Convert single values to arrays
 
             # Record doneness and set anything done to have a blank array as data.
             if 'event' in message_types:
@@ -103,7 +99,6 @@ class Correlator(Filter):
                         message_data[ii] = np.array([])
 
                 # Propagate doneness along the graph when all streams complete
-                print("===============", streams_done)
                 if False not in streams_done:
                     for oc in self.output_connectors.values():
                         for os in oc.output_streams:
@@ -128,7 +123,8 @@ class Correlator(Filter):
                 # Construct the product up the greatest common index
                 for data in message_data:
                     product = product*data[:smallest_length]
-                await self.source.push(product)
+                if product.size > 0:
+                    await self.source.push(product)
 
                 # Add data to carry_data if necessary
                 for ii in range(len(streams)):

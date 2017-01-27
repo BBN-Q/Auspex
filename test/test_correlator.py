@@ -41,8 +41,6 @@ class CorrelatorExperiment(Experiment):
             new_1 = np.random.randint(1,5)
             new_2 = np.random.randint(1,5)
 
-            await asyncio.sleep(0.02)
-
             if self.chan1.points_taken < self.chan1.num_points():
                 if self.chan1.points_taken + new_1 > self.chan1.num_points():
                     new_1 = self.chan1.num_points() - self.chan1.points_taken
@@ -54,8 +52,9 @@ class CorrelatorExperiment(Experiment):
                 await self.chan2.push(self.vals[self.idx_2:self.idx_2+new_2])
                 self.idx_2 += new_2
 
+            await asyncio.sleep(0.02)
             logger.debug("Idx_1: %d, Idx_2: %d", self.idx_1, self.idx_2)
-            
+
 class ExperimentTestCase(unittest.TestCase):
 
     def test_correlator(self):
@@ -70,11 +69,10 @@ class ExperimentTestCase(unittest.TestCase):
         exp.set_graph(edges)
         exp.run_sweeps()
 
-        corr_data = buff.get_data()['Correlator']
-        import ipdb; ipdb.set_trace()
-        #
-        # self.assertTrue(np.abs(np.sum(mean_data - np.mean(orig_data, axis=0))) <= 1e-7)
-        # self.assertTrue(np.abs(np.sum(corr_data - np.var(orig_data, axis=0, ddof=1))) <= 1e-7)
+        corr_data     = buff.get_data()['Correlator']
+        expected_data = exp.vals*exp.vals
+        self.assertTrue(np.abs(np.sum(corr_data - expected_data)) <= 1e-4)
+
 
 if __name__ == '__main__':
     unittest.main()
