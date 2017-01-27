@@ -138,7 +138,7 @@ class RamseyCalibration(PulseCalibration):
             instr_settings['instrDict'][qubit_source]['frequency'] = fit_freq
             self.update_libraries([instr_settings], [config.instrumentLibFile])
         else:
-            chan_settings['channelDict'][qubit_source]['frequency'] += (fit_freq - orig_freq)*1e9
+            chan_settings['channelDict'][self.qubit_name]['frequency'] += (fit_freq - orig_freq)*1e9
             self.update_libraries([chan_settings], [config.channelLibFile])
 
         print('Frequency', fit_freq)
