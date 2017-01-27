@@ -453,6 +453,7 @@ class Experiment(metaclass=MetaExperiment):
                 try:
                     logger.debug("Closing %s", f)
                     f.close()
+                    del f
                 except:
                     logger.debug("File probably already closed...")
             self.shutdown_instruments()
