@@ -32,7 +32,7 @@ def calibrate(calibrations):
 
 class PulseCalibration(object):
     """Base class for calibration of qubit control pulses."""
-    def __init__(self, qubit_name):
+    def __init__(self, qubit_name, notebook=True):
         super(PulseCalibration, self).__init__()
         self.qubit_name = qubit_name
         self.qubit      = QubitFactory(qubit_name)
@@ -40,6 +40,7 @@ class PulseCalibration(object):
         self.exp        = None
         self.axis_descriptor = None
         self.init_plot()
+        self.notebook   = notebook
 
     def sequence(self):
         """Returns the sequence for the given calibration, must be overridden"""
@@ -48,7 +49,7 @@ class PulseCalibration(object):
     def set(self, instrs_to_set = []):
         seq_files = compile_to_hardware(self.sequence(), fileName=self.filename, axis_descriptor=self.axis_descriptor)
         metafileName = os.path.join(QGLconfig.AWGDir, self.filename + '-meta.json')
-        self.exp = QubitExpFactory.create(meta_file=metafileName)
+        self.exp = QubitExpFactory.create(meta_file=metafileName, notebook=self.notebook)
         self.exp.connect_instruments()
         #set instruments for calibration
         for instr_to_set in instrs_to_set:
@@ -59,17 +60,20 @@ class PulseCalibration(object):
 
     def run(self):
         self.exp.run_sweeps()
-        # TODO: there should be no need for saving the calibration data
+        #TODO: there should be no need for saving the calibration data
         wrs = [w for w in self.exp.writers if w.name == self.exp.qubit_to_writer[self.qubit_name]]
         filename = wrs[0].filename.value
         groupname = wrs[0].groupname.value
 
         dataset, descriptor = load_from_HDF5(filename)
         # TODO: get the name of the relevant data from the graph
-        data, var = np.real(dataset[self.qubit_name]['Data']), dataset[self.qubit_name]['Variance']
-
+        data = np.real(dataset[self.qubit_name]['Data'])
+        if 'Variance' in dataset[self.qubit_name].dtype.names:
+            var = dataset[self.qubit_name]['Variance']/descriptor.metadata["num_averages"]
+        else:
+            var = None
         # Return data and variance of the mean
-        return data, var/descriptor.metadata["num_averages"]
+        return data, var
 
     def init_plot(self):
         """Setup an ArbitraryPlotter object so we can plot calibrations"""
@@ -109,7 +113,7 @@ class RamseyCalibration(PulseCalibration):
         self.axis_descriptor = [time_descriptor(self.delays)]
 
     def sequence(self):
-        return [[X90(self.qubit), Id(self.qubit, delay), MEAS(self.qubit)] for delay in self.delays]
+        return [[X90(self.qubit), Id(self.qubit, delay), X90(self.qubit), MEAS(self.qubit)] for delay in self.delays]
 
     def calibrate(self):
 
@@ -120,33 +124,32 @@ class RamseyCalibration(PulseCalibration):
             chan_settings = json.load(FID)
         qubit_source = chan_settings['channelDict'][chan_settings['channelDict'][self.qubit_name]['physChan']]['generator']
         orig_freq = instr_settings['instrDict'][qubit_source]['frequency']
-        set_freq = orig_freq + self.added_detuning/1e9
+        set_freq = round(orig_freq + self.added_detuning/1e9, 10)
         instr_to_set = {'instr': qubit_source, 'method': 'set_frequency', 'value': set_freq}
         self.set([instr_to_set])
         data, _ = self.run()
 
         #TODO: fit Ramsey and find new detuning. Finally, set source or qubit channel frequency
         fit_freqs, fit_errs = fit_ramsey(self.delays, data, two_freqs = self.two_freqs)
-        fit_freq_A = mean(fit_freqs) #the fit result can be one or two frequencies
+        fit_freq_A = np.mean(fit_freqs) #the fit result can be one or two frequencies
         #TODO: set conditions for success
-        set_freq = orig_freq + added_detuning + fit_freq_A/2
-        set_freq = orig_freq + self.added_detuning/1e9
+        set_freq = round(orig_freq + self.added_detuning/1e9 + fit_freq_A/2/1e9, 10)
         instr_to_set['value'] = set_freq
         self.set([instr_to_set])
         data, _ = self.run()
 
         fit_freqs, fit_errs = fit_ramsey(self.delays, data, two_freqs = self.two_freqs)
-        fit_freq_B = mean(fit_freqs)
+        fit_freq_B = np.mean(fit_freqs)
 
         if fit_freq_B < fit_freq_A:
-            fit_freq = orig_freq + self.added_detuning + 0.5*(fit_freq_A + 0.5*fit_freq_A + fit_freq_B)
+            fit_freq = round(orig_freq + self.added_detuning/1e9 + 0.5*(fit_freq_A + 0.5*fit_freq_A + fit_freq_B)/1e9, 10)
         else:
-            fit_freq = orig_freq + self.added_detuning + 0.5*(fit_freq_A - 0.5*fit_freq_A + fit_freq_B)
+            fit_freq = round(orig_freq + self.added_detuning/1e9 + 0.5*(fit_freq_A - 0.5*fit_freq_A + fit_freq_B)/1e9, 10)
         if self.set_source:
             instr_settings['instrDict'][qubit_source]['frequency'] = fit_freq
             self.update_libraries([instr_settings], [config.instrumentLibFile])
         else:
-            chan_settings['channelDict'][qubit_source]['frequency'] += (fit_freq - orig_freq)*1e9
+            chan_settings['channelDict'][self.qubit_name]['frequency'] += (fit_freq - orig_freq)*1e9
             self.update_libraries([chan_settings], [config.channelLibFile])
 
         print('Frequency', fit_freq)
@@ -188,6 +191,7 @@ class PhaseEstimation(PulseCalibration):
         ct = 1
         amp = self.amplitude
         self.set()
+        #TODO: add writers for variance if not existing
         while True:
             [phase, sigma] = phase_estimation(*self.run())
             print("Phase: %.4f Sigma: %.4f"%(phase,sigma))
