@@ -49,6 +49,8 @@ class VisaInterface(Interface):
         return self._resource.query(query_string)
     def write_binary_values(self, query_string, values, **kwargs):
         return self._resource.write_binary_values(query_string, values, **kwargs)
+    def query_ascii_values(self, query_string, **kwargs):
+        return self._resource.query_ascii_values(query_string, **kwargs)
     def query_binary_values(self, query_string, container=np.array, datatype=u'h',
                 is_big_endian=False):
         return self._resource.query_binary_values(query_string, container=container, datatype=datatype,

@@ -10,7 +10,140 @@ from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand,
 from auspex.log import logger
 import socket
 import time
+import re
 import numpy as np
+
+class Agilent34970A(SCPIInstrument):
+    """Agilent 34970A MUX"""
+
+# Allowed value arrays
+
+    RES_VALUES      = [1E2, 1E3, 1E4, 1E5, 1E6, 1E7, 1E8]
+    PLC_VALUES      = [0.02, 0.2, 1, 10, 20, 100, 200]
+    ONOFF_VALUES    = ['ON', 'OFF']
+    TRIGSOUR_VALUES = ['BUS','IMM','EXT','TIM']
+    ADVSOUR_VALUES  = ['EXT','BUS','IMM']
+
+# Commands needed to configure MUX for measurement with an external instrument
+
+    dmm            = StringCommand(scpi_string="INST:DMM",value_map={'ON': '1', 'OFF': '0'})
+    trigger_source = StringCommand(scpi_string="TRIG:SOUR",allowed_values=TRIGSOUR_VALUES)
+    advance_source = StringCommand(scpi_string="ROUT:CHAN:ADV:SOUR",allowed_values=ADVSOUR_VALUES)
+
+# Generic init and connect methods
+
+    def __init__(self, resource_name=None, *args, **kwargs):
+        super(Agilent34970A, self).__init__(resource_name, *args, **kwargs)
+        self.name = "Agilent 34970A MUX"
+
+    def connect(self, resource_name=None, interface_type=None):
+        if resource_name is not None:
+            self.resource_name = resource_name
+        super(Agilent34970A, self).connect(resource_name=self.resource_name, interface_type=interface_type)
+        self.interface._resource.read_termination = u"\n"
+
+#Channel to String helper function converts int array to channel list string
+
+    def ch_to_str(self, ch_list):
+        return ("(@"+','.join(['{:d}']*len(ch_list))+")").format(*ch_list)
+
+#Setup Scan List
+
+    @property
+    def scanlist(self):
+        slist = re.findall('\d{3}(?=[,)])',self.interface.query("ROUT:SCAN?"))
+        return [int(i) for i in slist]
+
+    @scanlist.setter
+    def scanlist(self, ch_list):
+        self.interface.write("ROUT:SCAN "+self.ch_to_str(ch_list))
+
+#Start Scan 
+    def scan(self):
+        self.interface.write("INIT")
+
+#Read Values
+    def read(self):
+        if self.dmm=="ON":
+            return self.interface.query_ascii_values("FETC?", converter=u'e')
+        else:
+            raise Exception("Cannot issue command when DMM is disabled. Enable DMM")
+
+# Commands that configure resistance measurement type, 2 or 4 wire
+
+    def set_resistance_chan(self, ch_list, fw=False):
+        if self.dmm=="ON":
+            fw_char = "F" if fw else "" 
+            self.interface.write(("CONF:{}RES "+self.ch_to_str(ch_list)).format(fw_char))
+        else:
+            fw_char = "ON," if fw else "OFF," 
+            self.interface.write(("ROUT:CHAN:FWIR {}"+self.ch_to_str(ch_list)).format(fw_char))
+
+    def get_resistance_chan(self, ch_list):
+        if self.dmm=="ON":
+            query_str = "SENS:FUNC? "+self.ch_to_str(ch_list)
+            output = self.interface.query_ascii_values(query_str, converter=u's')
+        else:
+            query_str = "ROUT:CHAN:FWIR? "+self.ch_to_str(ch_list)
+            output = self.interface.query_ascii_values(query_str, converter=u'd')
+        return {ch: val for ch, val in zip(ch_list, output) }
+          
+
+# Commands that configure resistance measurements with internal DMM
+
+    def set_resistance_range(self, val, ch_list, fw=False):
+        fw_char = "F" if fw else "" 
+        if val not in self.RES_VALUES:
+            raise ValueError(("Resistance range must be "+'|'.join(['{:E}']*len(self.RES_VALUES))+" Ohms").format(*self.RES_VALUES))
+        if self.dmm=="OFF":
+            raise Exception("Cannot issue command when DMM is disabled. Enable DMM")
+        else: 
+            self.interface.write(("SENS:{}RES:RANG {:E},"+self.ch_to_str(ch_list)).format(fw_char,val))       
+
+    def get_resistance_range(self, ch_list, fw=False):
+        fw_char = "F" if fw else ""
+        if self.dmm=="OFF":
+            raise Exception("Cannot issue command when DMM is disabled. Enable DMM")
+        else: 
+            query_str = ("SENS:{}RES:RANG? "+self.ch_to_str(ch_list)).format(fw_char)
+            output = self.interface.query_ascii_values(query_str, converter=u'e')   
+            return {ch: val for ch, val in zip(ch_list, output) }
+
+    def set_resistance_resolution(self, val, ch_list, fw=False):
+        fw_char = "F" if fw else ""
+        if val not in self.PLC_VALUES:
+            raise ValueError(("PLC integration times must be "+'|'.join(['{:E}']*len(self.PLC_VALUES))+" cycles").format(*self.PLC_VALUES))
+        if self.dmm=="OFF":
+            raise Exception("Cannot issue command when DMM is disabled. Enable DMM") 
+        else: 
+            self.interface.write(("SENS:{}RES:NPLC {:E},"+self.ch_to_str(ch_list)).format(fw_char,val))       
+
+    def get_resistance_resolution(self, ch_list, fw=False):
+        fw_char = "F" if fw else ""
+        if self.dmm=="OFF":
+            raise Exception("Cannot issue command when DMM is disabled. Enable DMM") 
+        else:
+            query_str = ("SENS:{}RES:NPLC? "+self.ch_to_str(ch_list)).format(fw_char)
+            output = self.interface.query_ascii_values(query_str, converter=u'e') 
+            return {ch: val for ch, val in zip(ch_list, output) }
+
+    def set_resistance_zcomp(self, val, ch_list, fw=False):
+        fw_char = "F" if fw else ""
+        if val not in self.ONOFF_VALUES:
+            raise ValueError("Zero compensation must be ON or OFF. Only valid for resistance range less than 100 kOhm")
+        if self.dmm=="OFF":
+            raise Exception("Cannot issue command when DMM is disabled. Enable DMM") 
+        else: 
+            self.interface.write(("SENS:{}RES:OCOM {:s},"+self.ch_to_str(ch_list)).format(fw_char,val))
+
+    def get_resistance_zcomp(self, ch_list, fw=False):
+        fw_char = "F" if fw else ""
+        if self.dmm=="OFF":
+            raise Exception("Cannot issue command when DMM is disabled. Enable DMM") 
+        else: 
+            query_str = ("SENS:{}RES:OCOM? "+self.ch_to_str(ch_list)).format(fw_char)
+            output = self.interface.query_ascii_values(query_str, converter=u'd')
+            return {ch: val for ch, val in zip(ch_list, output) }
 
 class AgilentN5183A(SCPIInstrument):
     """AgilentN5183A microwave source"""
