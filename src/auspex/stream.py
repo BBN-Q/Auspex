@@ -128,6 +128,7 @@ class SweepAxis(DataAxis):
             self.step += 1
             self.done = False
 
+    async def check_for_refinement(self):
         if not self.done and self.step==self.num_points():
             # Check to see if we need to perform any refinements
             await asyncio.sleep(0.1)

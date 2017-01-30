@@ -317,6 +317,9 @@ class Experiment(metaclass=MetaExperiment):
             logger.debug("Starting a new run.")
             await self.run()
 
+            # See if the axes want to extend themselves
+            await self.sweeper.check_for_refinement()
+
             # Update progress bars
             if self.progressbar is not None:
                 self.progressbar.update()

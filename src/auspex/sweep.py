@@ -38,6 +38,18 @@ class Sweeper(object):
             for j in range(i,-1,-1):
                 await self.axes[j].update()
 
+    async def check_for_refinement(self):
+        imax = len(self.axes)-1
+        if imax < 0:
+            return True
+        else:
+            i=0
+            while i<imax and self.axes[i].step==0:
+                i += 1
+            # Need to update parameters from outer --> inner axis
+            for j in range(i,-1,-1):
+                await self.axes[j].check_for_refinement()
+
     def done(self):
         return np.all([a.done for a in self.axes])
 
