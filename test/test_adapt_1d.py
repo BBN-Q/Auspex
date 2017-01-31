@@ -22,7 +22,7 @@ from auspex.log import logger
 from auspex.analysis.io import load_from_HDF5
 
 import logging
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 
 
 

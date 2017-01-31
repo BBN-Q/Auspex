@@ -12,7 +12,7 @@ from auspex.filters.debug import Print, Passthrough
 from auspex.filters.correlator import Correlator
 from auspex.filters.io import DataBuffer
 from auspex.log import logger, logging
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 
 class CorrelatorExperiment(Experiment):
 

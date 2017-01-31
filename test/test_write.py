@@ -21,7 +21,7 @@ from auspex.filters.io import WriteToHDF5
 from auspex.log import logger
 
 import logging
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 
 class TestInstrument1(SCPIInstrument):
     frequency = FloatCommand(get_string="frequency?", set_string="frequency {:g}", value_range=(0.1, 10))
