@@ -299,10 +299,6 @@ class Experiment(metaclass=MetaExperiment):
             await stream.push_event("done")
 
     async def sweep(self):
-        # Set any static parameters
-        for p in self._parameters.values():
-            p.push()
-
         # Keep track of the previous values
         logger.debug("Waiting for filters.")
         await asyncio.sleep(1.0)
