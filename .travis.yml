@@ -10,7 +10,7 @@ python:
 before_install:
   # - sudo apt-get update
   - pip install -r requirements.txt
-  - git clone https://github.com/BBN-Q/Adapt.git && cd Adapt && pip install -e .
+  - git clone https://github.com/BBN-Q/Adapt.git && cd Adapt && pip install -e . && cd ..
 
 install:
   - export PYTHONPATH=$PYTHONPATH:$PWD/src
