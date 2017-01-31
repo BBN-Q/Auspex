@@ -10,10 +10,10 @@ import asyncio, concurrent
 import time
 import numpy as np
 
-from .filter import Filter
+from auspex.filters import Filter, InputConnector, OutputConnector
 from auspex.log import logger
 from auspex.parameter import Parameter
-from auspex.stream import DataStreamDescriptor, DataAxis, InputConnector, OutputConnector
+from auspex.stream import DataStreamDescriptor, DataAxis
 
 class Averager(Filter):
     """Takes data and collapses along the specified axis."""

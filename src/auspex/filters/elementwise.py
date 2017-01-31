@@ -18,7 +18,7 @@ import time
 from auspex.parameter import Parameter, FilenameParameter
 from auspex.stream import DataStreamDescriptor
 from auspex.log import logger
-from auspex.filters.filter import Filter, InputConnector, OutputConnector
+from auspex.filters import Filter, InputConnector, OutputConnector
 
 
 class ElementwiseFilter(Filter):

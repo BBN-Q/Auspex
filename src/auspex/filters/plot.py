@@ -17,10 +17,10 @@ from bokeh.models.renderers import GlyphRenderer
 from bokeh.palettes import Viridis256, d3
 import matplotlib.pyplot as plt
 
-from .filter import Filter
+from auspex.filters import Filter, InputConnector, OutputConnector
 from auspex.parameter import Parameter, IntParameter
 from auspex.log import logger
-from auspex.stream import DataStreamDescriptor, InputConnector, OutputConnector
+from auspex.stream import DataStreamDescriptor
 
 class Plotter(Filter):
     sink      = InputConnector()
