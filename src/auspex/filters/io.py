@@ -291,33 +291,91 @@ class DataBuffer(Filter):
     def __init__(self, **kwargs):
         super(DataBuffer, self).__init__(**kwargs)
         self.quince_parameters = []
+        self.sink.max_input_streams = 100
 
     def final_init(self):
-        self.descriptor = self.sink.input_streams[0].descriptor
-        self.buffer = np.empty(self.descriptor.num_points(), dtype=self.sink.input_streams[0].descriptor.dtype)
-        self.w_idx = 0
+        self.buffers = {s: np.empty(s.num_points(), dtype=s.descriptor.dtype) for s in self.sink.input_streams}
+        self.w_idxs  = {s: 0 for s in self.sink.input_streams}
 
-    async def process_data(self, data):
-        if self.w_idx + data.size > self.buffer.size:
-            # Create a new buffer and paste the old buffer into it
-            old_buffer = self.buffer
-            new_size = self.descriptor.num_points()
-            self.buffer = np.empty(self.descriptor.num_points(), dtype=self.descriptor.dtype)
-            self.buffer[:old_buffer.size] = old_buffer
+    async def run(self):
+        streams = self.sink.input_streams
 
-        self.buffer[self.w_idx:self.w_idx+data.size] = data
-        self.w_idx += data.size
+        for s in streams[1:]:
+            if not np.all(s.descriptor.tuples() == streams[0].descriptor.tuples()):
+                raise ValueError("Multiple streams connected to DataBuffer must have matching descriptors.")
+
+        self.descriptor = streams[0].descriptor
+
+        # Buffers for stream data
+        stream_data = {s: np.zeros(0, dtype=self.sink.descriptor.dtype) for s in streams}
+
+        # Store whether streams are done
+        stream_done = {s: False for s in streams}
+
+        while True:
+
+            futures = {
+                asyncio.ensure_future(stream.queue.get()): stream
+                for stream in streams
+            }
+
+            # Deal with non-equal number of messages using timeout
+            responses, pending = await asyncio.wait(futures, return_when=asyncio.FIRST_COMPLETED, timeout=2.0)
+
+            # Construct the inverse lookup, results in {stream: result}
+            stream_results = {futures[res]: res.result() for res in list(responses)}
+
+            # Cancel the futures
+            for pend in list(pending):
+                pend.cancel()
+
+            # Add any new data to the
+            for stream, message in stream_results.items():
+                message_type = message['type']
+                message_data = message['data']
+                message_comp = message['compression']
+                message_data = pickle.loads(zlib.decompress(message_data)) if message_comp == 'zlib' else message_data
+                message_data = message_data if hasattr(message_data, 'size') else np.array([message_data])
+                if message_type == 'event' and message_data == 'done':
+                    stream_done[stream] = True
+                elif message_type == 'data':
+                    stream_data[stream] = message_data.flatten()
+
+            if False not in stream_done.values():
+                logger.debug('%s "%s" is done', self.__class__.__name__, self.name)
+                break
+
+            for stream in stream_results.keys():
+                data =  stream_data[stream]
+                if self.w_idxs[stream] + data.size > self.buffers[stream].size:
+                    # Create a new buffer and paste the old buffer into it
+                    old_buffer = self.buffers[stream]
+                    new_size = stream.descriptor.num_points()
+                    self.buffers[stream] = np.empty(stream.descriptor.num_points(), dtype=stream.descriptor.dtype)
+                    self.buffers[stream][:old_buffer.size] = old_buffer
+                self.buffers[stream][self.w_idxs[stream]:self.w_idxs[stream]+data.size] = data
+                self.w_idxs[stream] += data.size
 
     def get_data(self):
-        dtype = self.descriptor.axis_data_type(with_metadata=True)
-        dtype.append((self.descriptor.data_name, self.descriptor.dtype))
-        data = np.empty(self.buffer.size, dtype=dtype)
+        streams = self.sink.input_streams
+        desc = streams[0].descriptor
+        # Set the dtype for the parameter columns
+        dtype = desc.axis_data_type(with_metadata=True)
 
-        tuples = self.descriptor.tuples(with_metadata=True, as_structured_array=True)
-        for a in self.descriptor.axis_names(with_metadata=True):
+        # Extend the dtypes for each data column
+        for stream in streams:
+            dtype.append((stream.descriptor.data_name, stream.descriptor.dtype))
+        data = np.empty(self.buffers[streams[0]].size, dtype=dtype)
+
+        tuples = desc.tuples(with_metadata=True, as_structured_array=True)
+        for a in desc.axis_names(with_metadata=True):
             data[a] = tuples[a]
-        data[self.descriptor.data_name] = self.buffer
+        for stream in streams:
+            data[stream.descriptor.data_name] = self.buffers[stream]
         return data
+
+    def get_descriptor(self):
+        return self.sink.input_streams[0].descriptor
 
 class ProgressBar(Filter):
     """ Display progress bar(s) on the terminal/notebook.

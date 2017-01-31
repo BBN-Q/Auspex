@@ -43,12 +43,12 @@ class QubitExpFactory(object):
     will override the defaulty JSON."""
 
     @staticmethod
-    def run(notebook=False, expname=None):
-        exp = QubitExpFactory.create(notebook=notebook, expname=expname)
+    def run(notebook=False, expname=None, calibration=False):
+        exp = QubitExpFactory.create(notebook=notebook, expname=expname, calibration=calibration)
         exp.run_sweeps()
 
     @staticmethod
-    def create(meta_file=None, notebook=False, expname=None):
+    def create(meta_file=None, notebook=False, expname=None, calibration=False):
         with open(config.instrumentLibFile, 'r') as FID:
             instrument_settings = json.load(FID)
 
@@ -108,6 +108,26 @@ class QubitExpFactory(object):
                 if len(writers) == 0:
                     raise Exception("No viable data writer was found for receiver channel {}. Please enabled only one!".format(receiver_text))
 
+                # If we are calibrating we don't care about storing data, use buffers instead
+                if calibration:
+                    buffers = []
+                    for w in writers:
+                        label = measurement_settings["filterDict"][w]["label"]
+                        buff = {
+                                "data_source": measurement_settings["filterDict"][w]["data_source"],
+                                "enabled": True,
+                                "label": label,
+                                "x__class__": "DataBuffer",
+                                "x__module__": "MeasFilters"
+                                }
+                        # Remove the writer
+                        measurement_settings["filterDict"].pop(measurement_settings["filterDict"][w]["label"])
+                        # Substitute the buffer
+                        measurement_settings["filterDict"][label] = buff
+                        # Store buffer name for local use
+                        buffers.append(label)
+                    writers = buffers
+
                 # For now we assume a single qubit
                 # TODO: have meta info give the relationships of qubits to receivers so we don't need to dig in the channel lib
                 with open(config.channelLibFile, 'r') as FID:
@@ -147,7 +167,7 @@ class QubitExpFactory(object):
             for meas_name in filt_to_enable:
                 measurement_settings['filterDict'][meas_name]['enabled'] = True
                 #label measurement with qubit name (assuming the convention "M-"+qubit_name)
-                if measurement_settings['filterDict'][meas_name]["x__class__"] == "WriteToHDF5":
+                if not calibration and measurement_settings['filterDict'][meas_name]["x__class__"] == "WriteToHDF5":
                     measurement_settings['filterDict'][meas_name]['groupname'] = writer_to_qubit[meas_name].strip('M-')
 
             # First enable any instruments and set the sequence files

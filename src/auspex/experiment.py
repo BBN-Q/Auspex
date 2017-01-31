@@ -27,7 +27,7 @@ from auspex.parameter import ParameterGroup, FloatParameter, IntParameter, Param
 from auspex.sweep import Sweeper
 from auspex.stream import DataStream, DataAxis, SweepAxis, DataStreamDescriptor, InputConnector, OutputConnector
 from auspex.filters.plot import Plotter, XYPlotter, MeshPlotter, ManualPlotter
-from auspex.filters.io import WriteToHDF5
+from auspex.filters.io import WriteToHDF5, DataBuffer
 from auspex.log import logger
 
 class ExpProgressBar(object):
@@ -199,7 +199,8 @@ class Experiment(metaclass=MetaExperiment):
         # should share the same file object and write in separate
         # hdf5 groups.
         self.writers = []
-
+        self.buffers = []
+        
         # ExpProgressBar object to display progress bars
         self.progressbar = None
 
@@ -351,6 +352,7 @@ class Experiment(metaclass=MetaExperiment):
 
         # Go find any writers
         self.writers = [n for n in self.nodes if isinstance(n, WriteToHDF5)]
+        self.buffers = [n for n in self.nodes if isinstance(n, DataBuffer)]
         if self.name:
             for w in self.writers:
                 w.filename.value = os.path.join(os.path.dirname(w.filename.value), self.name)

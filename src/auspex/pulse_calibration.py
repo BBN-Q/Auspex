@@ -49,7 +49,7 @@ class PulseCalibration(object):
     def set(self, instrs_to_set = []):
         seq_files = compile_to_hardware(self.sequence(), fileName=self.filename, axis_descriptor=self.axis_descriptor)
         metafileName = os.path.join(QGLconfig.AWGDir, self.filename + '-meta.json')
-        self.exp = QubitExpFactory.create(meta_file=metafileName, notebook=self.notebook)
+        self.exp = QubitExpFactory.create(meta_file=metafileName, notebook=self.notebook, calibration=True)
         self.exp.connect_instruments()
         #set instruments for calibration
         for instr_to_set in instrs_to_set:
@@ -60,16 +60,16 @@ class PulseCalibration(object):
 
     def run(self):
         self.exp.run_sweeps()
-        #TODO: there should be no need for saving the calibration data
-        wrs = [w for w in self.exp.writers if w.name == self.exp.qubit_to_writer[self.qubit_name]]
-        filename = wrs[0].filename.value
-        groupname = wrs[0].groupname.value
 
-        dataset, descriptor = load_from_HDF5(filename)
+        data_buffers = [b for b in self.exp.buffers if b.name == self.exp.qubit_to_writer[self.qubit_name]]
+        # We only want the first one...
+        buff = data_buffers[0]
+
+        dataset, descriptor = buff.get_data(), buff.get_descriptor()
         # TODO: get the name of the relevant data from the graph
-        data = np.real(dataset[self.qubit_name]['Data'])
-        if 'Variance' in dataset[self.qubit_name].dtype.names:
-            var = dataset[self.qubit_name]['Variance']/descriptor.metadata["num_averages"]
+        data = np.real(dataset['Data'])
+        if 'Variance' in dataset.dtype.names:
+            var = dataset['Variance']/descriptor.metadata["num_averages"]
         else:
             var = None
         # Return data and variance of the mean
