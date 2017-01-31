@@ -6,8 +6,8 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-from auspex.instruments.agilent import Agilent34970A
-from auspex.instruments.lakeshore import LakeShore335
+from auspex.instruments import Agilent34970A
+from auspex.instruments import LakeShore335
 
 from auspex.experiment import FloatParameter, IntParameter, Experiment
 from auspex.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector

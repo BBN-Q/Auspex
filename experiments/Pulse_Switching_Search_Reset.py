@@ -6,11 +6,11 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-from auspex.instruments.keysight import *
-from auspex.instruments.stanford import SR865
-from auspex.instruments.keithley import Keithley2400
-from auspex.instruments.ami import AMI430
-from auspex.instruments.rfmd import Attenuator
+from auspex.instruments import M8190A, Scenario, Sequence
+from auspex.instruments import SR865
+from auspex.instruments import Keithley2400
+from auspex.instruments import AMI430
+from auspex.instruments import Attenuator
 
 from PyDAQmx import *
 
