@@ -49,7 +49,7 @@ class PulseCalibration(object):
     def set(self, instrs_to_set = []):
         seq_files = compile_to_hardware(self.sequence(), fileName=self.filename, axis_descriptor=self.axis_descriptor)
         metafileName = os.path.join(QGLconfig.AWGDir, self.filename + '-meta.json')
-        self.exp = QubitExpFactory.create(meta_file=metafileName, notebook=self.notebook)
+        self.exp = QubitExpFactory.create(meta_file=metafileName, notebook=self.notebook, calibration=True)
         self.exp.connect_instruments()
         #set instruments for calibration
         for instr_to_set in instrs_to_set:
@@ -60,9 +60,8 @@ class PulseCalibration(object):
 
     def run(self):
         self.exp.run_sweeps()
-        
-        # Despite the terminology, these "writers" are actually DataBuffers
-        data_buffers = [b for b in self.exp.writers if b.name == self.exp.qubit_to_writer[self.qubit_name]]
+
+        data_buffers = [b for b in self.exp.buffers if b.name == self.exp.qubit_to_writer[self.qubit_name]]
         # We only want the first one...
         buff = data_buffers[0]
 

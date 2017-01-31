@@ -112,12 +112,12 @@ class QubitExpFactory(object):
                 if calibration:
                     buffers = []
                     for w in writers:
-                        label = "Bufferized" + measurement_settings["filterDict"][w]["label"]
+                        label = measurement_settings["filterDict"][w]["label"]
                         buff = {
-                                "data_source": measurement_settings["filterDict"][w]["source"],
-                                "enabled": True, 
-                                "label": label
-                                "x__class__": measurement_settings["filterDict"][w]["x__class__"], 
+                                "data_source": measurement_settings["filterDict"][w]["data_source"],
+                                "enabled": True,
+                                "label": label,
+                                "x__class__": "DataBuffer",
                                 "x__module__": "MeasFilters"
                                 }
                         # Remove the writer

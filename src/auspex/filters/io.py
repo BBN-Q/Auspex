@@ -342,15 +342,15 @@ class DataBuffer(Filter):
             if False not in stream_done.values():
                 logger.debug('%s "%s" is done', self.__class__.__name__, self.name)
                 break
-            
-            for stream, data in stream_data.items():
+
+            for stream in stream_results.keys():
+                data =  stream_data[stream]
                 if self.w_idxs[stream] + data.size > self.buffers[stream].size:
                     # Create a new buffer and paste the old buffer into it
-                    old_buffer = self.buffers[stream].size
+                    old_buffer = self.buffers[stream]
                     new_size = stream.descriptor.num_points()
-                    self.buffers[stream].size = np.empty(stream.descriptor.num_points(), dtype=stream.descriptor.dtype)
-                    self.buffers[stream].size[:old_buffer.size] = old_buffer
-
+                    self.buffers[stream] = np.empty(stream.descriptor.num_points(), dtype=stream.descriptor.dtype)
+                    self.buffers[stream][:old_buffer.size] = old_buffer
                 self.buffers[stream][self.w_idxs[stream]:self.w_idxs[stream]+data.size] = data
                 self.w_idxs[stream] += data.size
 
