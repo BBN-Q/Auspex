@@ -293,7 +293,7 @@ class SweepTestCase(unittest.TestCase):
             self.assertTrue("Here the run loop merely spews" in f.attrs['exp_src'])
             self.assertTrue(f['main']['data'].attrs['time_val'] == 0)
             self.assertTrue(f['main']['data'].attrs['unit_freq'] == "Hz")
-            print(f['main']['data']['voltage'])
+            self.assertTrue(len(f['main']['field+freq']) == 12)
 
         os.remove("test_writehdf5_metadata_unstructured_adaptive-0000.h5")
 
@@ -401,6 +401,9 @@ class SweepTestCase(unittest.TestCase):
         exp.run_sweeps()
         self.assertTrue(os.path.exists("test_writehdf5_adaptive-0000.h5"))
         self.assertTrue(wr.points_taken == 5*11*5)
+        with h5py.File("test_writehdf5_adaptive-0000.h5", 'r') as f:
+            self.assertTrue(len(f['main']['freq']) == 5)
+
         os.remove("test_writehdf5_adaptive-0000.h5")
 
     def test_writehdf5_unstructured_sweep(self):
