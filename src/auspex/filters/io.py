@@ -302,7 +302,7 @@ class DataBuffer(Filter):
 
         for s in streams[1:]:
             if not np.all(s.descriptor.tuples() == streams[0].descriptor.tuples()):
-                raise ValueError("Multiple streams connected to correlator must have matching descriptors.")
+                raise ValueError("Multiple streams connected to DataBuffer must have matching descriptors.")
 
         # Buffers for stream data
         stream_data = {s: np.zeros(0, dtype=self.sink.descriptor.dtype) for s in streams}

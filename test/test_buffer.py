@@ -55,6 +55,7 @@ class SweptTestExperiment(Experiment):
     def init_streams(self):
         # Add a "base" data axis: say we are averaging 5 samples per trigger
         self.voltage.add_axis(DataAxis("samples", list(range(self.samples))))
+        self.current.add_axis(DataAxis("samples", list(range(self.samples))))
 
     def __repr__(self):
         return "<SweptTestExperiment>"
@@ -66,7 +67,7 @@ class SweptTestExperiment(Experiment):
         data_row = np.sin(2*np.pi*self.time_val)*np.ones(5) + 0.1*np.random.random(5)
         self.time_val += time_step
         await self.voltage.push(data_row)
-        await self.current.push(np.sin(2*np.pi*self.time_val) + 0.1*np.random.random(1))
+        await self.current.push(data_row*2.0)
         logger.debug("Stream pushed points {}.".format(data_row))
         logger.debug("Stream has filled {} of {} points".format(self.voltage.points_taken, self.voltage.num_points() ))
 
@@ -127,6 +128,23 @@ class BufferTestCase(unittest.TestCase):
 
         data = db.get_data()
         self.assertTrue(len(data) == 4*3*5)
+        self.assertTrue(len(data['field']) == 4*3*5)
+
+    def test_buffer_multi(self):
+        exp = SweptTestExperiment()
+        db  = DataBuffer()
+
+        edges = [(exp.voltage, db.sink), (exp.current, db.sink)]
+        exp.set_graph(edges)
+
+        exp.add_sweep(exp.field, np.linspace(0,100.0,4))
+        exp.add_sweep(exp.freq, np.linspace(0,10.0,3))
+        exp.run_sweeps()
+
+        data = db.get_data()
+        self.assertTrue(len(data) == 4*3*5)
+        self.assertTrue(len(data['current']) == 4*3*5)
+        self.assertTrue(len(data['voltage']) == 4*3*5)
         self.assertTrue(len(data['field']) == 4*3*5)
 
     def test_buffer_metadata(self):
