@@ -261,6 +261,10 @@ class WriteToHDF5(Filter):
                                 self.group[name].resize((a.num_points(),))
                                 for j, col_name in enumerate(a.name):
                                     self.group[name][col_name,:] = a.points[:,j]
+                        else:
+                            if a.num_points() > self.group[a.name].len():
+                                self.group[a.name].resize((a.num_points(),))
+                                self.group[a.name][:] = a.points
 
                 for s, d in zip(streams, message_data):
                     self.data[s.descriptor.data_name, w_idx:w_idx+d.size] = d
