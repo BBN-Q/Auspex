@@ -4,11 +4,13 @@
 language: python
 python:
   - "3.5"
+  - "3.6"
 
 # Setup anaconda
 before_install:
   # - sudo apt-get update
   - pip install -r requirements.txt
+  - git clone git@github.com:BBN-Q/Adapt.git && cd clone && pip install -e .
 
 install:
   - export PYTHONPATH=$PYTHONPATH:$PWD/src
