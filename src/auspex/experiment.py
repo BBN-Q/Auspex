@@ -200,7 +200,7 @@ class Experiment(metaclass=MetaExperiment):
         # hdf5 groups.
         self.writers = []
         self.buffers = []
-        
+
         # ExpProgressBar object to display progress bars
         self.progressbar = None
 
@@ -430,8 +430,9 @@ class Experiment(metaclass=MetaExperiment):
                 logger.info("Displaying in iPython notebook")
                 from bokeh.embed import autoload_server, components
                 from bokeh.io import output_notebook
-                from IPython.display import display, HTML
+                from IPython.display import display, HTML, clear_output
 
+                clear_output()
                 output_notebook()
                 script = autoload_server(model=None, session_id=session.id)
                 html = \
