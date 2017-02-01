@@ -21,7 +21,7 @@ logger = logging.getLogger('auspex')
 
 if in_jupyter():
     importlib.reload(logging)
-    logger.handlers = [logging.StreamHandler(sys.stderr)]
+    logger.handlers = [logging.StreamHandler(sys.stdout)]
     formatter = logging.Formatter('%(name)s-%(levelname)s: %(asctime)s ----> %(message)s')
     logger.handlers[0].setFormatter(formatter)
 else:
