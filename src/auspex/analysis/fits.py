@@ -15,7 +15,7 @@ def fit_ramsey(xdata, ydata, two_freqs = False):
     perr = np.sqrt(np.diag(pcov))
     fopt = popt[:two_freqs+1]
     ferr = perr[:two_freqs+1]
-    return fopt, ferr
+    return fopt, ferr, popt
 
 def ramsey_1f(x, f, A, tau, phi, y0):
     return A*np.exp(-x/tau)*np.cos(2*np.pi*f*x + phi) + y0

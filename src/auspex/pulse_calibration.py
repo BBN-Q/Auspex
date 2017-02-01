@@ -17,6 +17,7 @@ import json
 from auspex.exp_factory import QubitExpFactory
 from auspex.analysis.io import load_from_HDF5
 from auspex.parameter import FloatParameter
+from auspex.filters.plot import ManualPlotter
 from auspex.analysis.fits import *
 from auspex.analysis.helpers import normalize_data
 
@@ -39,7 +40,7 @@ class PulseCalibration(object):
         self.filename   = 'None'
         self.exp        = None
         self.axis_descriptor = None
-        self.init_plot()
+        self.plot       = self.init_plot()
         self.notebook   = notebook
 
     def sequence(self):
@@ -50,6 +51,9 @@ class PulseCalibration(object):
         seq_files = compile_to_hardware(self.sequence(), fileName=self.filename, axis_descriptor=self.axis_descriptor)
         metafileName = os.path.join(QGLconfig.AWGDir, self.filename + '-meta.json')
         self.exp = QubitExpFactory.create(meta_file=metafileName, notebook=self.notebook, calibration=True)
+        if self.plot:
+            # Add the manual plotter and the update method to the experiment
+            self.exp.add_manual_plotter(self.plot)
         self.exp.connect_instruments()
         #set instruments for calibration
         for instr_to_set in instrs_to_set:
@@ -76,12 +80,9 @@ class PulseCalibration(object):
         return data, var
 
     def init_plot(self):
-        """Setup an ArbitraryPlotter object so we can plot calibrations"""
-        pass
-
-    def update_plot(self):
-        """Push data to the plot, once per execution of run"""
-        pass
+        """Return a ManualPlotter object so we can plot calibrations. All
+        plot lines, glyphs, etc. must be declared up front!"""
+        return None
 
     def calibrate(self):
         """Runs the actual calibration routine, must be overridden.
@@ -115,6 +116,12 @@ class RamseyCalibration(PulseCalibration):
     def sequence(self):
         return [[X90(self.qubit), Id(self.qubit, delay), X90(self.qubit), MEAS(self.qubit)] for delay in self.delays]
 
+    def init_plot(self):
+        plot = ManualPlotter("Ramsey Fit", x_label='Time (us)', y_label='Amplitude (Arb. Units)')
+        self.dat_line = plot.fig.line([],[], line_width=1.0, legend="Data", color='navy')
+        self.fit_line = plot.fig.line([],[], line_width=2.5, legend="Fit", color='firebrick')
+        return plot
+
     def calibrate(self):
 
         #find qubit control source (from config)
@@ -130,16 +137,29 @@ class RamseyCalibration(PulseCalibration):
         data, _ = self.run()
 
         #TODO: fit Ramsey and find new detuning. Finally, set source or qubit channel frequency
-        fit_freqs, fit_errs = fit_ramsey(self.delays, data, two_freqs = self.two_freqs)
+        fit_freqs, fit_errs, all_params = fit_ramsey(self.delays, data, two_freqs = self.two_freqs)
         fit_freq_A = np.mean(fit_freqs) #the fit result can be one or two frequencies
         #TODO: set conditions for success
         set_freq = round(orig_freq + self.added_detuning/1e9 + fit_freq_A/2/1e9, 10)
         instr_to_set['value'] = set_freq
         self.set([instr_to_set])
+
+        # Plot the results
+        self.dat_line.data_source.data = dict(x=self.delays, y=data)
+        ramsey_f = ramsey_2f if self.two_freqs else ramsey_1f
+        finer_delays = np.linspace(np.min(self.delays), np.max(self.delays), 4*len(self.delays))
+        self.fit_line.data_source.data = dict(x=finer_delays, y=ramsey_f(finer_delays, *all_params))
+
         data, _ = self.run()
 
-        fit_freqs, fit_errs = fit_ramsey(self.delays, data, two_freqs = self.two_freqs)
+        fit_freqs, fit_errs, all_params = fit_ramsey(self.delays, data, two_freqs = self.two_freqs)
         fit_freq_B = np.mean(fit_freqs)
+
+        # Plot the results
+        self.dat_line.data_source.data = dict(x=self.delays, y=data)
+        ramsey_f = ramsey_2f if self.two_freqs else ramsey_1f
+        finer_delays = np.linspace(np.min(self.delays), np.max(self.delays), 4*len(self.delays))
+        self.fit_line.data_source.data = dict(x=finer_delays, y=ramsey_f(finer_delays, *all_params))
 
         if fit_freq_B < fit_freq_A:
             fit_freq = round(orig_freq + self.added_detuning/1e9 + 0.5*(fit_freq_A + 0.5*fit_freq_A + fit_freq_B)/1e9, 10)

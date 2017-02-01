@@ -393,12 +393,13 @@ class ManualPlotter(object):
     """Establish a figure, then give the user complete control over plot creation and data."""
     def __init__(self,  name="", x_label='X', y_label="y", notebook=False,):
         self.plot_height  = 600
-        self.plot_width   = 800
         self.webgl        = False
         self.x_label      = x_label
         self.y_label      = y_label
         self.name         = name
 
         self.run_in_notebook = notebook
+        if self.run_in_notebook:
+            self.plot_height = round(self.plot_height*0.5)
         self.fig = Figure(plot_width=self.plot_height, plot_height=self.plot_height,
                           webgl=self.webgl, x_axis_label=x_label, y_axis_label=y_label)
