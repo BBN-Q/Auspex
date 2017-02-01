@@ -241,18 +241,25 @@ def main():
 
 	#Define Measurement Channels and sample names
 	CHANLIST 	= [101,102,103,104]
-	SAMPLEMAP	= {101:'TOX_14',102:'TOX_15',103:'TOX_18',104:'TOX_19'} 
+	SAMPLEMAP	= {101:'TOX14',102:'TOX15',103:'TOX18',104:'TOX19'} 
 
-	# Define data file name and path
-	sample_name		= "TOX_14_15_18_19"
-	date        	= datetime.datetime.today().strftime('%Y-%m-%d')
-	path 			= "Tc_data\{date:}".format(date=date)
-
-	# Define Base Temp, Temp resolution, Resistance noise and max points for Tc refinement
+	# Define Base Temp, Mas Temp, Temp resolution, Resistance noise and max points for Tc refinement
 	BASETEMP  = 5	  #Kelvin
-	MAXPOINTS = 50
+	MAXTEMP	  = 20 	  #Kelvin	
 	TRES      = 0.05  #Kelvin
 	RNOISE    = 0.009 #Ohms 
+	MAXPOINTS = 50
+
+	#--------------------------User shouldn't need to edit below here--------------------------------
+
+	names = []
+	for i in CHANLIST:
+		names.append(SAMPLEMAP[i])
+
+	# Define data file name and path
+	sample_name		= ("SAMPLES"+'_'.join(['{}'])*len(names)).format(*names)
+	date        	= datetime.datetime.today().strftime('%Y-%m-%d')
+	path 			= "\Users\qlab\Documents\Tc_Data\{date:}".format(date=date)
 
 	# Check if already at Base temp
 	ls	= LakeShore335("GPIB0::2::INSTR")
@@ -323,7 +330,7 @@ def main():
 		return True
 
 	# Defines index as sweep axis where transition function determines end condition
-	sweep_axis = tc_exp.add_sweep(tc_exp.temp_set, range(BASETEMP,20,2), refine_func=transition)
+	sweep_axis = tc_exp.add_sweep(tc_exp.temp_set, range(BASETEMP,MAXTEMP,2), refine_func=transition)
 
 	# Run the experiment
 	print("Running Tc Experiment...")
