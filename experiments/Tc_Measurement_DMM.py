@@ -12,7 +12,7 @@ from auspex.instruments.lakeshore import LakeShore335
 from auspex.experiment import FloatParameter, IntParameter, Experiment
 from auspex.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector
 from auspex.filters.io import WriteToHDF5
-from auspex.filters.plot import Plotter
+from auspex.filters.plot import XYPlotter, Plotter
 from auspex.filters.average import Averager
 from auspex.analysis.io import load_from_HDF5
 
@@ -232,14 +232,12 @@ def load_tc_meas(filename):
 
 	return t_pts, r_pts
 
- # def analysis(filename):
-
-
+ #def analysis(filename):
 
 
 def main():
 
-	#Define Measurement Channels and sample names
+	# Define Measurement Channels and sample names
 	CHANLIST 	= [101,102,103,104]
 	SAMPLEMAP	= {101:'TOX14',102:'TOX15',103:'TOX18',104:'TOX19'} 
 
@@ -257,7 +255,7 @@ def main():
 		names.append(SAMPLEMAP[i])
 
 	# Define data file name and path
-	sample_name		= ("SAMPLES"+'_'.join(['{}'])*len(names)).format(*names)
+	sample_name		= ("SAMPLES"+'_'.join(['{}']*len(names))).format(*names)
 	date        	= datetime.datetime.today().strftime('%Y-%m-%d')
 	path 			= "\Users\qlab\Documents\Tc_Data\{date:}".format(date=date)
 
@@ -270,17 +268,27 @@ def main():
 	if BASETEMP < t_check:
 
 		cd_exp  = Cooldown()
+		cd_exp.chan_list = CHANLIST
 
 		# Setup datafile and define which data to write, plot ect.
 		cd_file	= "{path:}\{samp:}-Cooldown_{date:}.h5".format(path=path, samp=sample_name, date=date)
 		wr = WriteToHDF5(cd_file)
-		edges = [(cd_exp.sheet_res, wr.sink),(cd_exp.temp_A, wr.sink),(cd_exp.temp_B, wr.sink),(cd_exp.sys_time, wr.sink)]
+
+		# Create plots for monitoring. 
+		plt_Avt  = XYPlotter(name="Temperature Sense A", x_series=True, series="inner")
+		plt_Bvt  = XYPlotter(name="Temperature Sense B", x_series=True, series="inner")
+    	plt_RvT  = XYPlotter(name="Sample Resistance", x_series=True, series="inner")
+
+		edges = [(cd_exp.sheet_res, wr.sink), (cd_exp.temp_A, wr.sink), (cd_exp.temp_B, wr.sink), (cd_exp.sys_time, wr.sink), 
+					(cd_exp.sys_time, plt_Avt.sink_x), (cd_exp.sys_time, plt_Bvt.sink_x), (cd_exp.temp_A, plt_Avt.sink_y), (cd_exp.temp_B, plt_Bvt.sink_y), 
+					(cd_exp.sheet_res, plt_RvT.sink_y), (cd_exp.temp_B, plt_RvT.sink_x)]
 		cd_exp.set_graph(edges)
 
 		# Add points 10 at a time until base temp is reached
 		async def while_temp(sweep_axis, experiment):
 
-			if experiment.lakeshore.Temp("B") < 5: 
+			if experiment.lakeshore.Temp("B") < BASETEMP: 
+				print("Base Temperature Reached...")
 				return False
 
 			print("Running refinement loop: Temp %f, Num_points: %d, last i %d" % (experiment.lakeshore.Temp("B"), sweep_axis.num_points(), sweep_axis.points[-1]))
@@ -304,6 +312,7 @@ def main():
 
 
 	tc_exp  = TcMeas()
+	tc_exp.chan_list = CHANLIST
 	tc_file	= "{path:}\{samp:}-Tc_{date:}.h5".format(path=path, samp=sample_name, date=date)
 
 	# Setup datafile and define which data to write, plot ect.
