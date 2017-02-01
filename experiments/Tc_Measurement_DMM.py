@@ -14,14 +14,17 @@ from auspex.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConn
 from auspex.filters.io import WriteToHDF5
 from auspex.filters.plot import Plotter
 from auspex.filters.average import Averager
+from auspex.analysis.io import load_from_HDF5
 
 import asyncio
 import numpy as np
+import matplotlib.pyplot as plt
 import time
 import datetime
 import h5py
 
 from adapt.refine import refine_1D
+
 
 # from auspex.log import logger
 # import logging
@@ -211,46 +214,53 @@ class TcMeas(Experiment):
 	def shutdown_instruments(self):
 
 		print("Turning heaters off")
-		self.range_htr_1 = 0
-		self.range_htr_2 = 0
+		self.lakeshore.range_htr_1 = 0
+		self.lakeshore.range_htr_2 = 0
 
 def load_tc_meas(filename):
 
-	# from auspex.analysis.io import load_hdf5
-	# data, desc = load_hdf5("filename")
-	# data['sheet_res'].reshape(desc.data_dims())
-	# mean = data.mean(axis=1)
+	# load data and descriptors with convenience function 
+	data, desc = load_from_HDF5(filename)
 
-	with h5py.File(filename, 'r') as f:
-		data = f['main']['data'][:]
+	# reshape data along sweep axes
+	t_pts = data['main']['temp_set'].reshape(desc.data_dims())
+	r_pts = data['main']['sheet_res'].reshape(desc.data_dims())
 
-	T_points = data['temp_set']
-	mean     = []
+	# take the mean of the data over channel number
+	t_pts = t_pts.mean(axis=1)
+	r_pts = r_pts.mean(axis=1)
 
-	for t in T_points: 
-		mean.append(np.average(data[data['temp_set']==t]['sheet_res']))
+	return t_pts, r_pts
 
-	return T_points, mean
+ # def analysis(filename):
+
+
 
 
 def main():
+
+	#Define Measurement Channels and sample names
+	CHANLIST 	= [101,102,103,104]
+	SAMPLEMAP	= {101:'TOX_14',102:'TOX_15',103:'TOX_18',104:'TOX_19'} 
 
 	# Define data file name and path
 	sample_name		= "TOX_14_15_18_19"
 	date        	= datetime.datetime.today().strftime('%Y-%m-%d')
 	path 			= "Tc_data\{date:}".format(date=date)
 
-	# Define Temp resolution, Resistance noise and max points for Tc refinement
+	# Define Base Temp, Temp resolution, Resistance noise and max points for Tc refinement
+	BASETEMP  = 5	  #Kelvin
 	MAXPOINTS = 50
-	TRES      = 0.1  #Kelvin
-	RNOISE    = 0.01 #Ohms 
+	TRES      = 0.05  #Kelvin
+	RNOISE    = 0.009 #Ohms 
 
+	# Check if already at Base temp
 	ls	= LakeShore335("GPIB0::2::INSTR")
 	ls.connect()
 	t_check = ls.Temp('B')
 	ls.disconnect()
 
-	if 5 < t_check:
+	if BASETEMP < t_check:
 
 		cd_exp  = Cooldown()
 
@@ -307,18 +317,23 @@ def main():
 			print("Tc Refinement complete... Exiting")
 			return False
 
-		# Always remeasure 5 K to ensure lack of thermal hysterysis
-		sweep_axis.add_points(np.insert(newpoints,0,5.3))
+		# Always remeasure BASETEMP to ensure lack of thermal hysterysis
+		print("Refining Tc Measurement...")
+		sweep_axis.add_points(np.insert(newpoints,0,BASETEMP))
 		return True
 
 	# Defines index as sweep axis where transition function determines end condition
-	sweep_axis = tc_exp.add_sweep(tc_exp.temp_set, range(6,20,10), refine_func=transition)
+	sweep_axis = tc_exp.add_sweep(tc_exp.temp_set, range(BASETEMP,20,2), refine_func=transition)
 
 	# Run the experiment
 	print("Running Tc Experiment...")
 	print("Writing Tc Data to file: {}".format(wr.filename.value))
 	tc_exp.run_sweeps()
 	print("Tc Experiment Complete")
+
+
+
+
 
 
 if __name__ == '__main__':
