@@ -85,6 +85,9 @@ class Plotter(Filter):
             self.mapping_functions = [[np.abs, lambda x: np.angle(x, deg=1)],[np.real, np.imag]]
             plot_height = 450
 
+        if self.run_in_notebook:
+            plot_height = round(plot_height*0.6)
+
         if self.plot_mode.value == "quad":
             self.y_labels = [["amp", "phase"], ["real", "imag"]]
         elif len(self.mapping_functions[0]) == 1:
