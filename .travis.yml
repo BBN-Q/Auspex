@@ -10,6 +10,7 @@ python:
 before_install:
   # - sudo apt-get update
   - pip install -r requirements.txt
+  - pip install sklearn
   - git clone https://github.com/BBN-Q/Adapt.git && cd Adapt && pip install -e . && cd ..
 
 install:
