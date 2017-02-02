@@ -302,7 +302,7 @@ class Experiment(metaclass=MetaExperiment):
     async def sweep(self):
         # Keep track of the previous values
         logger.debug("Waiting for filters.")
-        await asyncio.sleep(1.0)
+        await asyncio.sleep(0.1)
         last_param_values = None
         logger.debug("Starting experiment sweep.")
 
