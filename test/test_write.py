@@ -142,7 +142,7 @@ class SweptTestExperiment2(Experiment):
         logger.debug("Stream has filled {} of {} points".format(self.voltage.points_taken, self.voltage.num_points() ))
 
 
-class SweepTestCase(unittest.TestCase):
+class WriteTestCase(unittest.TestCase):
 
     def test_writehdf5(self):
         exp = SweptTestExperiment()

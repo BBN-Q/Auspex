@@ -48,7 +48,7 @@ class TestExperiment(Experiment):
     async def run(self):
         logger.debug("Data taker running (inner loop)")
         time_step = 0.1
-        await asyncio.sleep(0.2)
+        await asyncio.sleep(0.002)
         data_row = np.ones(self.samples*self.num_trials) + 0.1*np.random.random(self.samples*self.num_trials)
         self.time_val += time_step
         await self.chan1.push(data_row)
@@ -76,14 +76,14 @@ class VarianceExperiment(Experiment):
 
     async def run(self):
         logger.debug("Data taker running (inner loop)")
-        await asyncio.sleep(0.05)
+        await asyncio.sleep(0.002)
         data_row = self.vals[self.idx:self.idx+(self.samples*self.trials*self.repeats)]
         self.idx += (self.samples*self.trials*self.repeats)
         await self.chan1.push(data_row)
         logger.debug("Stream pushed points {}.".format(data_row))
         logger.debug("Stream has filled {} of {} points".format(self.chan1.points_taken, self.chan1.num_points() ))
 
-class ExperimentTestCase(unittest.TestCase):
+class AverageTestCase(unittest.TestCase):
 
     def test_final_average_runs(self):
         exp             = TestExperiment()

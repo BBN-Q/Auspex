@@ -52,10 +52,10 @@ class CorrelatorExperiment(Experiment):
                 await self.chan2.push(self.vals[self.idx_2:self.idx_2+new_2])
                 self.idx_2 += new_2
 
-            await asyncio.sleep(0.02)
+            await asyncio.sleep(0.002)
             logger.debug("Idx_1: %d, Idx_2: %d", self.idx_1, self.idx_2)
 
-class ExperimentTestCase(unittest.TestCase):
+class CorrelatorTestCase(unittest.TestCase):
 
     def test_correlator(self):
         exp   = CorrelatorExperiment()
