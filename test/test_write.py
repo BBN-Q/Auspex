@@ -23,16 +23,8 @@ from auspex.log import logger
 import logging
 logger.setLevel(logging.INFO)
 
-class TestInstrument1(SCPIInstrument):
-    frequency = FloatCommand(get_string="frequency?", set_string="frequency {:g}", value_range=(0.1, 10))
-    serial_number = IntCommand(get_string="serial?")
-    mode = StringCommand(scpi_string=":mode", allowed_values=["A", "B", "C"])
-
 class SweptTestExperiment(Experiment):
     """Here the run loop merely spews data until it fills up the stream. """
-
-    # Create instances of instruments
-    fake_instr_1 = TestInstrument1("FAKE::RESOURE::NAME")
 
     # Parameters
     field = FloatParameter(unit="Oe")
@@ -73,9 +65,6 @@ class SweptTestExperiment(Experiment):
 class SweptTestExperimentMetadata(Experiment):
     """Here the run loop merely spews data until it fills up the stream. """
 
-    # Create instances of instruments
-    fake_instr_1 = TestInstrument1("FAKE::RESOURE::NAME")
-
     # Parameters
     field = FloatParameter(unit="Oe")
     freq  = FloatParameter(unit="Hz")
@@ -114,9 +103,6 @@ class SweptTestExperimentMetadata(Experiment):
 
 class SweptTestExperiment2(Experiment):
     """Here the run loop merely spews data until it fills up the stream. """
-
-    # Create instances of instruments
-    fake_instr_1 = TestInstrument1("FAKE::RESOURE::NAME")
 
     # Parameters
     field = FloatParameter(unit="Oe")
@@ -179,7 +165,6 @@ class SweepTestCase(unittest.TestCase):
             self.assertTrue("Here the run loop merely spews" in f.attrs['exp_src'])
             self.assertTrue(f['main']['data'].attrs['time_val'] == 0)
             self.assertTrue(f['main']['data'].attrs['unit_freq'] == "Hz")
-            print(f['main']['data']['voltage'])
 
         os.remove("test_writehdf5-0000.h5")
 
@@ -205,7 +190,6 @@ class SweepTestCase(unittest.TestCase):
             self.assertTrue("Here the run loop merely spews" in f.attrs['exp_src'])
             self.assertTrue(f['main']['data'].attrs['time_val'] == 0)
             self.assertTrue(f['main']['data'].attrs['unit_freq'] == "Hz")
-            print(f['main']['data']['voltage'])
 
         os.remove("test_writehdf5_metadata-0000.h5")
 
@@ -244,7 +228,6 @@ class SweepTestCase(unittest.TestCase):
             self.assertTrue("Here the run loop merely spews" in f.attrs['exp_src'])
             self.assertTrue(f['main']['data'].attrs['time_val'] == 0)
             self.assertTrue(f['main']['data'].attrs['unit_freq'] == "Hz")
-            print(f['main']['data']['voltage'])
 
         os.remove("test_writehdf5_metadata_unstructured-0000.h5")
 
@@ -325,7 +308,6 @@ class SweepTestCase(unittest.TestCase):
             self.assertTrue("Here the run loop merely spews" in f.attrs['exp_src'])
             self.assertTrue(f['group2']['data'].attrs['time_val'] == 0)
             self.assertTrue(f['group2']['data'].attrs['unit_freq'] == "Hz")
-            print(f['group2']['data']['current'])
 
         os.remove("test_samefile_writehdf5-0000.h5")
 
@@ -350,7 +332,6 @@ class SweepTestCase(unittest.TestCase):
             self.assertTrue(np.sum(f['main']['data']['samples']) == 3*4*np.sum(np.linspace(0,4,5)) )
             self.assertTrue(f['main']['data'].attrs['time_val'] == 0)
             self.assertTrue(f['main']['data'].attrs['unit_freq'] == "Hz")
-            print(f['main']['data']['voltage'])
 
         os.remove("test_writehdf5_complex-0000.h5")
 
@@ -374,7 +355,6 @@ class SweepTestCase(unittest.TestCase):
             self.assertTrue(np.sum(f['main']['data']['samples']) == 3*4*np.sum(np.linspace(0,4,5)) )
             self.assertTrue(f['main']['data'].attrs['time_val'] == 0)
             self.assertTrue(f['main']['data'].attrs['unit_freq'] == "Hz")
-            print(f['main']['data']['voltage'])
 
         os.remove("test_writehdf5_mult-0000.h5")
 

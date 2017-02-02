@@ -214,7 +214,7 @@ class SCPIInstrument(Instrument):
 
         try:
             if interface_type is None:
-                logger.warning("Instrument {} is using a generic instrument " +
+                logger.debug("Instrument {} is using a generic instrument " +
                     "interface as none was provided.".format(self.name))
                 self.interface = Interface()
             elif interface_type == "VISA":

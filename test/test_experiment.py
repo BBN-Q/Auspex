@@ -58,8 +58,8 @@ class TestExperiment(Experiment):
     time_val   = 0.0
 
     def init_instruments(self):
-        self.freq_1.assign_method(lambda x: print("Set: {}".format(x)))
-        self.freq_2.assign_method(lambda x: print("Set: {}".format(x)))
+        self.freq_1.assign_method(lambda x: logger.debug("Set: {}".format(x)))
+        self.freq_2.assign_method(lambda x: logger.debug("Set: {}".format(x)))
 
     def init_streams(self):
         # Add "base" data axes

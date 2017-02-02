@@ -11,7 +11,6 @@ import asyncio
 import time
 import numpy as np
 
-from auspex.instruments.instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand
 from auspex.experiment import Experiment
 from auspex.parameter import FloatParameter
 from auspex.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector
@@ -21,27 +20,7 @@ from auspex.filters.average import Averager
 from auspex.log import logger, logging
 logger.setLevel(logging.INFO)
 
-class TestInstrument1(SCPIInstrument):
-    frequency = FloatCommand(get_string="frequency?", set_string="frequency {:g}", value_range=(0.1, 10))
-    serial_number = IntCommand(get_string="serial?")
-    mode = StringCommand(scpi_string=":mode", allowed_values=["A", "B", "C"])
-
-class TestInstrument2(SCPIInstrument):
-    frequency = FloatCommand(get_string="frequency?", set_string="frequency {:g}", value_range=(0.1, 10))
-    serial_number = IntCommand(get_string="serial?")
-    mode = StringCommand(scpi_string=":mode", allowed_values=["A", "B", "C"])
-
-class TestInstrument3(SCPIInstrument):
-    power = FloatCommand(get_string="power?")
-    serial_number = IntCommand(get_string="serial?")
-    mode = StringCommand(scpi_string=":mode", allowed_values=["A", "B", "C"])
-
 class TestExperiment(Experiment):
-
-    # Create instances of instruments
-    fake_instr_1 = TestInstrument1("FAKE::RESOURE::NAME")
-    fake_instr_2 = TestInstrument2("FAKE::RESOURE::NAME")
-    fake_instr_3 = TestInstrument3("FAKE::RESOURE::NAME")
 
     # Parameters
     freq_1 = FloatParameter(unit="Hz")
@@ -57,8 +36,8 @@ class TestExperiment(Experiment):
     time_val   = 0.0
 
     def init_instruments(self):
-        self.freq_1.assign_method(lambda x: print("Set: {}".format(x)))
-        self.freq_2.assign_method(lambda x: print("Set: {}".format(x)))
+        self.freq_1.assign_method(lambda x: logger.debug("Set: {}".format(x)))
+        self.freq_2.assign_method(lambda x: logger.debug("Set: {}".format(x)))
 
     def init_streams(self):
         self.chan1.add_axis(DataAxis("samples", list(range(self.samples))))
