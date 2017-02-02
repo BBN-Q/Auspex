@@ -200,7 +200,7 @@ class Experiment(metaclass=MetaExperiment):
         # hdf5 groups.
         self.writers = []
         self.buffers = []
-        
+
         # ExpProgressBar object to display progress bars
         self.progressbar = None
 
@@ -345,7 +345,7 @@ class Experiment(metaclass=MetaExperiment):
             instrument.disconnect()
         self.instrs_connected = False
 
-    def run_sweeps(self):
+    def run_sweeps(self, ):
         #connect all instruments
         if not self.instrs_connected:
             self.connect_instruments()
@@ -430,8 +430,9 @@ class Experiment(metaclass=MetaExperiment):
                 logger.info("Displaying in iPython notebook")
                 from bokeh.embed import autoload_server, components
                 from bokeh.io import output_notebook
-                from IPython.display import display, HTML
+                from IPython.display import display, HTML, clear_output
 
+                clear_output()
                 output_notebook()
                 script = autoload_server(model=None, session_id=session.id)
                 html = \
@@ -480,7 +481,8 @@ class Experiment(metaclass=MetaExperiment):
         self.loop.run_until_complete(asyncio.gather(*tasks))
 
         for plot, callback in zip(self.manual_plotters, self.manual_plotter_callbacks):
-            callback(plot.fig)
+            if callback:
+                callback(plot.fig)
 
         shutdown()
 
@@ -507,7 +509,7 @@ class Experiment(metaclass=MetaExperiment):
         self.extra_plotters.append(plotter)
         self._extra_plots_to_streams[plotter] = plotter_stream
 
-    def add_manual_plotter(self, plotter, callback):
+    def add_manual_plotter(self, plotter, callback=None):
         self.manual_plotters.append(plotter)
         self.manual_plotter_callbacks.append(callback)
 

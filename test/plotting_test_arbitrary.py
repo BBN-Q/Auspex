@@ -63,10 +63,14 @@ if __name__ == '__main__':
         ys = buff.get_data()['voltage']
         xs = buff.descriptor.axes[0].points
         data_pts.data_source.data = dict(x=xs, y=ys)
-        fit_line.data_source.data = dict(x=xs, y=xs*xs)
+        fit_line.data_source.data = dict(x=xs, y=xs)
 
-
-    exp.add_manual_plotter(plt, plot_me)
+    exp.add_manual_plotter(plt, callback=plot_me)
 
     exp.add_sweep(exp.amplitude, np.linspace(-5.0, 5.0, 100))
     exp.run_sweeps()
+
+    ys = buff.get_data()['voltage']
+    xs = buff.descriptor.axes[0].points
+    data_pts.data_source.data = dict(x=xs, y=ys)
+    fit_line.data_source.data = dict(x=xs, y=xs*xs)
