@@ -190,7 +190,6 @@ class LakeShore335(SCPIInstrument):
 	def  temp_htr_1(self):
 		return self.interface.query_ascii_values("SETP? 1",converter=u'e')
 	   
-
 	@temp_htr_1.setter
 	def temp_htr_1(self, val):
 		self.interface.write("SETP 1,{:.3f}".format(val)) 
@@ -221,4 +220,24 @@ class LakeShore335(SCPIInstrument):
 	def range_htr_2(self,val):
 		self.check_range_msg(val)
 		self.interface.write("RANGE 2,{:d}".format(val))
+
+	@property
+	def mout_htr_1(self):
+		return self.interface.query_ascii_values("MOUT? 1",converter=u'e')
+
+	@mout_htr_1.setter
+	def mout_htr_1(self,val):
+		if val<0 or 100<val: 
+			raise Exception("Manual Heater output must be 0 - 100 %")
+		self.interface.write("MOUT 1,{:.2f}".format(val))
+
+	@property
+	def mout_htr_2(self):
+		return self.interface.query_ascii_values("MOUT? 2",converter=u'e')
+
+	@mout_htr_2.setter
+	def mout_htr_2(self,val):
+		if val<0 or 100<val: 
+			raise Exception("Manual Heater output must be 0 - 100 %")
+		self.interface.write("MOUT 2,{:.2f}".format(val))
 

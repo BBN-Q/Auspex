@@ -43,16 +43,16 @@ class Cooldown(Experiment):
 	#chan_num	= IntParameter(default=101,unit="channel")
 
 	# Setup Output Connectors (Measurements)
-	sheet_res	= OutputConnector()
-	temp_A		= OutputConnector()
-	temp_B		= OutputConnector()
-	sys_time	= OutputConnector()
+	sheet_res	= OutputConnector(unit="Ohm/sq")
+	temp_A		= OutputConnector(unit="Kelvin")
+	temp_B		= OutputConnector(unit="Kelvin")
+	sys_time	= OutputConnector(unit="seconds")
 
 	# Constants (instrument parameters ect.)
 
 	# Configure channels 101:104 for 4 wire resistance measurements
 	# 100 Ohm range, 10 PLC integration time, 0 Compenstaion ON
-	chan_list	= [101,102,103,104]
+	chan_list	= [101,102,103]
 	res_range	= 100
 	plc			= 10
 	zcomp		= "ON"
@@ -125,7 +125,7 @@ class TcMeas(Experiment):
 
 	# Configure channels 101:104 for 4 wire resistance measurements
 	# 100 Ohm range, 100 PLC integration time, 0 Compenstaion ON
-	chan_list	= [101,102,103,104]
+	chan_list	= [101,102,103]
 	res_range	= 100
 	plc			= 100
 	zcomp		= "ON"
@@ -238,8 +238,8 @@ def load_tc_meas(filename):
 def main():
 
 	# Define Measurement Channels and sample names
-	CHANLIST 	= [101,102,103,104]
-	SAMPLEMAP	= {101:'TOX14',102:'TOX15',103:'TOX18',104:'TOX19'} 
+	CHANLIST 	= [101,102,103]
+	SAMPLEMAP	= {101:'TOX21',102:'TOX22',103:'RF_Nb_2mT'} 
 
 	# Define Base Temp, Mas Temp, Temp resolution, Resistance noise and max points for Tc refinement
 	BASETEMP  = 5	  #Kelvin
@@ -257,7 +257,7 @@ def main():
 	# Define data file name and path
 	sample_name		= ("SAMPLES"+'_'.join(['{}']*len(names))).format(*names)
 	date        	= datetime.datetime.today().strftime('%Y-%m-%d')
-	path 			= "\Users\qlab\Documents\Tc_Data\{date:}".format(date=date)
+	path 			= "Tc_Data\{date:}".format(date=date)
 
 	# Check if already at Base temp
 	ls	= LakeShore335("GPIB0::2::INSTR")
@@ -275,14 +275,14 @@ def main():
 		wr = WriteToHDF5(cd_file)
 
 		# Create plots for monitoring. 
-		plt_Avt  = XYPlotter(name="Temperature Sense A", x_series=True, series="inner")
-		plt_Bvt  = XYPlotter(name="Temperature Sense B", x_series=True, series="inner")
-    	plt_RvT  = XYPlotter(name="Sample Resistance", x_series=True, series="inner")
+		#plt_Avt  = XYPlotter(name="Temperature Sense A", x_series=True, series="inner")
+		#plt_Bvt  = XYPlotter(name="Temperature Sense B", x_series=True, series="inner")
+		#plt_RvT  = XYPlotter(name="Sample Resistance", x_series=True, series="inner")
 
-		edges = [(cd_exp.sheet_res, wr.sink), (cd_exp.temp_A, wr.sink), (cd_exp.temp_B, wr.sink), (cd_exp.sys_time, wr.sink), 
-					(cd_exp.sys_time, plt_Avt.sink_x), (cd_exp.sys_time, plt_Bvt.sink_x), (cd_exp.temp_A, plt_Avt.sink_y), (cd_exp.temp_B, plt_Bvt.sink_y), 
-					(cd_exp.sheet_res, plt_RvT.sink_y), (cd_exp.temp_B, plt_RvT.sink_x)]
+		edges = [(cd_exp.sheet_res, wr.sink), (cd_exp.temp_A, wr.sink), (cd_exp.temp_B, wr.sink), (cd_exp.sys_time, wr.sink)]
 		cd_exp.set_graph(edges)
+
+		#
 
 		# Add points 10 at a time until base temp is reached
 		async def while_temp(sweep_axis, experiment):
@@ -299,7 +299,7 @@ def main():
 			return True
 
 		# Defines index as sweep axis where while_temp function determines end condition
-		sweep_axis = cd_exp.add_sweep(cd_exp.index, range(2), refine_func=while_temp)
+		sweep_axis = cd_exp.add_sweep(cd_exp.index, range(3), refine_func=while_temp)
 
 		# Run the experiment
 		print("Running Cooldown Log starting from {} K".format(t_check))
@@ -346,9 +346,6 @@ def main():
 	print("Writing Tc Data to file: {}".format(wr.filename.value))
 	tc_exp.run_sweeps()
 	print("Tc Experiment Complete")
-
-
-
 
 
 
