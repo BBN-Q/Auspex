@@ -6,12 +6,11 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-from auspex.filters import Filter, InputConnector, OutputConnector
 from auspex.log import logger
 from auspex.instruments import *
 from auspex.parameter import Parameter, IntParameter
-from auspex.filters.filter import Filter, InputConnector, OutputConnector
-from auspex.stream import DataStreamDescriptor, DataAxis
+from .filter import Filter
+from auspex.stream import DataStreamDescriptor, DataAxis, InputConnector, OutputConnector
 
 import numpy as np
 

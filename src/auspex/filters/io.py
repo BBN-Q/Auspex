@@ -15,9 +15,9 @@ import numpy as np
 import os.path
 import time
 
-from auspex.filters import Filter, InputConnector, OutputConnector
+from .filter import Filter
 from auspex.parameter import Parameter, FilenameParameter
-from auspex.stream import DataStreamDescriptor
+from auspex.stream import DataStreamDescriptor, InputConnector, OutputConnector
 from auspex.log import logger
 
 from tqdm import tqdm, tqdm_notebook

@@ -9,7 +9,8 @@
 import asyncio, concurrent
 import numpy as np
 
-from auspex.filters import Filter, InputConnector, OutputConnector
+from .filter import Filter
+from auspex.stream import InputConnector, OutputConnector
 from auspex.log import logger
 
 class Print(Filter):

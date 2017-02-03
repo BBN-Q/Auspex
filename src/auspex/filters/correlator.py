@@ -16,9 +16,9 @@ import os.path
 import time
 
 from auspex.parameter import Parameter, FilenameParameter
-from auspex.stream import DataStreamDescriptor
+from auspex.stream import DataStreamDescriptor, InputConnector, OutputConnector
 from auspex.log import logger
-from auspex.filters import Filter, ElementwiseFilter, InputConnector, OutputConnector
+from .elementwise import ElementwiseFilter
 
 class Correlator(ElementwiseFilter):
     sink   = InputConnector()

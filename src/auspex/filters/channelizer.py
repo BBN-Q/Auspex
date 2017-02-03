@@ -13,9 +13,9 @@ from copy import deepcopy
 import numpy as np
 import scipy.signal
 
-from auspex.filters import Filter, InputConnector, OutputConnector
+from .filter import Filter
 from auspex.parameter import Parameter, IntParameter, FloatParameter
-from auspex.stream import  DataStreamDescriptor
+from auspex.stream import  DataStreamDescriptor, InputConnector, OutputConnector
 from auspex.log import logger
 
 try:
