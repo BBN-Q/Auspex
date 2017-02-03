@@ -164,7 +164,7 @@ class RamseyCalibration(PulseCalibration):
         if fit_freq_B < fit_freq_A:
             fit_freq = round(orig_freq + self.added_detuning/1e9 + 0.5*(fit_freq_A + 0.5*fit_freq_A + fit_freq_B)/1e9, 10)
         else:
-            fit_freq = round(orig_freq + self.added_detuning/1e9 + 0.5*(fit_freq_A - 0.5*fit_freq_A + fit_freq_B)/1e9, 10)
+            fit_freq = round(orig_freq + self.added_detuning/1e9 - 0.5*(fit_freq_A - 0.5*fit_freq_A + fit_freq_B)/1e9, 10)
         if self.set_source:
             instr_settings['instrDict'][qubit_source]['frequency'] = fit_freq
             self.update_libraries([instr_settings], [config.instrumentLibFile])
