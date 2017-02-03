@@ -11,12 +11,19 @@ from auspex.log import logger
 
 from types import MethodType
 from unittest.mock import MagicMock
-try:
-    import aps2
-    fake_aps2 = False
-except:
-    logger.warning("Could not find APS2 python driver.")
+import auspex.globals
+
+# Dirty trick to avoid loading libraries when scraping
+# This code using quince.
+if auspex.globals.auspex_dummy_mode:
     fake_aps2 = True
+else:
+    try:
+        import aps2
+        fake_aps2 = False
+    except:
+        logger.warning("Could not find APS2 python driver.")
+        fake_aps2 = True
 
 class DigitalAttenuator(SCPIInstrument):
     """BBN 3 Channel Instrument"""

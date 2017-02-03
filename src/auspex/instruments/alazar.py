@@ -6,6 +6,7 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
+import re
 import socket
 import struct
 import datetime
@@ -14,17 +15,21 @@ import numpy as np
 
 from .instrument import Instrument, DigitizerChannel
 from auspex.log import logger
+import auspex.globals
 
 from unittest.mock import MagicMock
 
-try:
-    from libalazar import ATS9870
-    fake_alazar = False
-except:
-    logger.warning("Could not load alazar library")
+# Dirty trick to avoid loading libraries when scraping
+# This code using quince.
+if auspex.globals.auspex_dummy_mode:
     fake_alazar = True
-
-import re
+else:
+    try:
+        from libalazar import ATS9870
+        fake_alazar = False
+    except:
+        logger.warning("Could not load alazar library")
+        fake_alazar = True
 
 # Convert from pep8 back to camelCase labels
 # http://stackoverflow.com/questions/1175208/elegant-python-function-to-convert-camelcase-to-snake-case

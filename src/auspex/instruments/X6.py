@@ -12,16 +12,22 @@ import datetime
 import asyncio
 import numpy as np
 
+import auspex.globals
 from auspex.log import logger
 from .instrument import Instrument, DigitizerChannel
 from unittest.mock import MagicMock
 
-try:
-    import libx6
-    fake_x6 = False
-except:
-    logger.warning("Could not load x6 library")
+# Dirty trick to avoid loading libraries when scraping
+# This code using quince.
+if auspex.globals.auspex_dummy_mode:
     fake_x6 = True
+else:
+    try:
+        import libx6
+        fake_x6 = False
+    except:
+        logger.warning("Could not load x6 library")
+        fake_x6 = True
 
 class X6Channel(DigitizerChannel):
     """Channel for an X6"""

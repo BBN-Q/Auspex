@@ -1,5 +1,6 @@
 __all__ = ['libchannelizer']
 
+from .filter import Filter
 from .average import Averager
 from .channelizer import Channelizer
 from .correlator import ElementwiseFilter, Correlator
