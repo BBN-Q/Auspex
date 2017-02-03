@@ -210,9 +210,10 @@ class PhaseEstimation(PulseCalibration):
 
         ct = 1
         amp = self.amplitude
-        self.set()
+        set_amp = 'pi2Amp' if isinstance(self, Pi2Calibration) else 'piAmp'
         #TODO: add writers for variance if not existing
         while True:
+            self.set()
             [phase, sigma] = phase_estimation(*self.run())
             print("Phase: %.4f Sigma: %.4f"%(phase,sigma))
             # correct for some errors related to 2pi uncertainties
@@ -242,22 +243,22 @@ class PhaseEstimation(PulseCalibration):
             self.amplitude = amp
         print('Amp',amp)
 
-        set_amp = 'pi2Amp' if isinstance(self, Pi2Calibration) else 'piAmp'
+
         with open(config.channelLibFile, 'r') as FID:
             chan_settings = json.load(FID)
-        chan_settings['channelDict'][self.qubit_name]['pulseParams'][set_amp] = amp
+        chan_settings['channelDict'][self.qubit_name]['pulseParams'][set_amp] = round(amp, 5)
         self.update_libraries([chan_settings], [config.channelLibFile])
         return amp
 
 class Pi2Calibration(PhaseEstimation):
     def __init__(self, qubit_name, num_pulses= 9):
-        super(Pi2Calibration, self).__init__(qubit_name)
+        super(Pi2Calibration, self).__init__(qubit_name, num_pulses = num_pulses)
         self.amplitude = self.qubit.pulseParams['pi2Amp']
         self.target    = np.pi/2.0
 
 class PiCalibration(PhaseEstimation):
     def __init__(self, qubit_name, num_pulses= 9):
-        super(PiCalibration, self).__init__(qubit_name)
+        super(PiCalibration, self).__init__(qubit_name, num_pulses = num_pulses)
         self.amplitude = self.qubit.pulseParams['piAmp']
         self.target    = np.pi
 
