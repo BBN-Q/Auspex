@@ -125,7 +125,7 @@ class Channelizer(Filter):
 
         # final channel selection filter
         if n_bandwidth < 0.1:
-            raise(ValueError, "Insufficient decimation to achieve stable filter")
+            raise ValueError("Insufficient decimation to achieve stable filter")
 
         b,a = scipy.signal.cheby1(4, 3, n_bandwidth/2)
         b = np.float32(b)
