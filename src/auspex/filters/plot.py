@@ -205,8 +205,8 @@ class MeshPlotter(Filter):
         ys = [list(el) for el in ys]
         vals   -= vals.min()
         vals   /= vals.max()
-        colors = [tuple(el)[:3] for el in plt.cm.RdGy(vals)]
-        colors = ["#%02x%02x%02x" % (int(255*color[0]), int(255*color[1]), int(255*color[2])) for color in colors]
+        rgb_tuples = (255*plt.cm.RdGy(vals)[:,:3]).astype(np.int)
+        colors = ["#%02x%02x%02x" % tuple(color) for color in rgb_tuples]
         self.fig.x_range.start = np.min(xs)
         self.fig.x_range.end   = np.max(xs)
         self.fig.y_range.start = np.min(ys)
