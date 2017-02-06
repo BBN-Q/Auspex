@@ -11,7 +11,7 @@ from .bbn import DigitalAttenuator
 from .yokogawa import GS200
 from .holzworth import HolzworthHS9000
 from .keithley import Keithley2400
-from .keysight import M8190A
+from .keysight import M8190A, Scenario, Sequence
 from .picosecond import Picosecond10070A
 from .instrument import SCPIInstrument
 from .stanford import SR830, SR865
