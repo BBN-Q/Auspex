@@ -8,6 +8,9 @@
 
 import unittest
 
+import auspex.globals
+auspex.globals.auspex_dummy_mode = True
+
 from auspex.instruments.binutils import BitField, BitFieldUnion
 
 class TestBitFieldUnion(BitFieldUnion):
