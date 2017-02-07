@@ -39,7 +39,7 @@ def arb_pulse(amplitude, duration, sample_rate=12e9):
     return wf
 
 if __name__ == '__main__':
-    arb  = M8190A("192.168.5.108")
+    arb  = KeysightM8190A("192.168.5.108")
     # lock = SR830("GPIB0::9::INSTR")
     lock = SR865("USB0::0xB506::0x2000::002638::INSTR")
     bop  = BOP2020M("GPIB0::1::INSTR")
@@ -73,7 +73,7 @@ if __name__ == '__main__':
 
     #rough guess at reset
     reset_wf    = arb_pulse(0.75, 3.0/12e9)
-    wf_data     = M8190A.create_binary_wf_data(reset_wf)
+    wf_data     = KeysightM8190A.create_binary_wf_data(reset_wf)
     rst_segment_id  = arb.define_waveform(len(wf_data))
     arb.upload_waveform(wf_data, rst_segment_id)
 
@@ -85,13 +85,13 @@ if __name__ == '__main__':
     duration = 3.0/12e9
     for amp in amps:
         waveform   = arb_pulse(amp, duration)
-        wf_data    = M8190A.create_binary_wf_data(waveform)
+        wf_data    = KeysightM8190A.create_binary_wf_data(waveform)
         segment_id = arb.define_waveform(len(wf_data))
         segment_ids.append(segment_id)
         arb.upload_waveform(wf_data, segment_id)
 
     # NI-DAQ trigger waveform
-    trig_wf = M8190A.create_binary_wf_data(np.zeros(3200), sync_mkr=1)
+    trig_wf = KeysightM8190A.create_binary_wf_data(np.zeros(3200), sync_mkr=1)
     trig_segment_id = arb.define_waveform(len(trig_wf))
     arb.upload_waveform(trig_wf, trig_segment_id)
 

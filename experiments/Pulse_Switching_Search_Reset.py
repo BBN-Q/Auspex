@@ -6,7 +6,7 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-from auspex.instruments import M8190A, Scenario, Sequence
+from auspex.instruments import KeysightM8190A, Scenario, Sequence
 from auspex.instruments import SR865
 from auspex.instruments import Keithley2400
 from auspex.instruments import AMI430
@@ -52,7 +52,7 @@ class ResetSearchExperiment(Experiment):
     measure_current = 3e-6
 
     # Instruments
-    arb   = M8190A("192.168.5.108")
+    arb   = KeysightM8190A("192.168.5.108")
     mag   = AMI430("192.168.5.109")
     keith = Keithley2400("GPIB0::25::INSTR")
     lock  = SR865("USB0::0xB506::0x2000::002638::INSTR")
@@ -124,13 +124,13 @@ class ResetSearchExperiment(Experiment):
         arb_voltage = arb_voltage_lookup()
         for amp in self.amplitudes:
             waveform   = arb_pulse(np.sign(amp)*arb_voltage(abs(amp)))
-            wf_data    = M8190A.create_binary_wf_data(waveform)
+            wf_data    = KeysightM8190A.create_binary_wf_data(waveform)
             segment_id = self.arb.define_waveform(len(wf_data))
             segment_ids.append(segment_id)
             self.arb.upload_waveform(wf_data, segment_id)
 
         # NIDAQ trigger waveform
-        nidaq_trig_wf = M8190A.create_binary_wf_data(np.zeros(3200), sync_mkr=1)
+        nidaq_trig_wf = KeysightM8190A.create_binary_wf_data(np.zeros(3200), sync_mkr=1)
         nidaq_trig_segment_id = self.arb.define_waveform(len(nidaq_trig_wf))
         self.arb.upload_waveform(nidaq_trig_wf, nidaq_trig_segment_id)
 

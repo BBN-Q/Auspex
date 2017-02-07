@@ -9,7 +9,7 @@ from .holzworth import HolzworthHS9000
 from .instrument import CLibInstrument
 from .keithley import Keithley2400
 from .kepco import BOP2020M
-from .keysight import M8190A, Scenario, Sequence
+from .keysight import KeysightM8190A, Scenario, Sequence
 from .picosecond import Picosecond10070A
 from .stanford import SR830, SR865
 from .tektronix import DPO72004C

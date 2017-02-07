@@ -6,7 +6,7 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-from auspex.instruments import M8190A, Scenario, Sequence
+from auspex.instruments import KeysightM8190A, Scenario, Sequence
 from auspex.instruments import Picosecond10070A
 from auspex.instruments import SR865
 from auspex.instruments import Keithley2400
@@ -85,7 +85,7 @@ class SWRExperiment(Experiment):
     mag   = AMI430("192.168.5.109")
     lock  = SR865("USB0::0xB506::0x2000::002638::INSTR")
     pspl  = Picosecond10070A("GPIB0::24::INSTR")
-    arb   = M8190A("192.168.5.108")
+    arb   = KeysightM8190A("192.168.5.108")
     keith = Keithley2400("GPIB0::25::INSTR")
 
     def init_streams(self):
@@ -157,18 +157,18 @@ class SWRExperiment(Experiment):
 
         # Reset waveform
         reset_wf    = arb_pulse(-self.polarity*self.reset_amplitude, self.reset_duration)
-        wf_data     = M8190A.create_binary_wf_data(reset_wf)
+        wf_data     = KeysightM8190A.create_binary_wf_data(reset_wf)
         rst_segment_id  = self.arb.define_waveform(len(wf_data))
         self.arb.upload_waveform(wf_data, rst_segment_id)
 
         # Switching waveform
         switch_wf    = arb_pulse(self.polarity*volt, self.pulse_duration.value)
-        wf_data     = M8190A.create_binary_wf_data(switch_wf)
+        wf_data     = KeysightM8190A.create_binary_wf_data(switch_wf)
         sw_segment_id  = self.arb.define_waveform(len(wf_data))
         self.arb.upload_waveform(wf_data, sw_segment_id)
 
         # NIDAQ trigger waveform
-        nidaq_trig_wf = M8190A.create_binary_wf_data(np.zeros(3200), sync_mkr=1)
+        nidaq_trig_wf = KeysightM8190A.create_binary_wf_data(np.zeros(3200), sync_mkr=1)
         nidaq_trig_segment_id = self.arb.define_waveform(len(nidaq_trig_wf))
         self.arb.upload_waveform(nidaq_trig_wf, nidaq_trig_segment_id)
 
