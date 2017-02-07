@@ -91,6 +91,8 @@ class Cooldown(Experiment):
 		self.lakeshore.config_sense_B	= self.B_config
 		self.lakeshore.range_htr_1		= 0
 		self.lakeshore.range_htr_2		= 0
+		self.lakeshore.mout_htr_1		= 0
+		self.lakeshore.mout_htr_2		= 0
 
 		self.index.assign_method(int)
 
@@ -172,8 +174,11 @@ class TcMeas(Experiment):
 		self.lakeshore.config_sense_B	= self.B_config
 		self.lakeshore.config_htr_1		= self.Htr_config
 		self.lakeshore.control_htr_1	= self.Htr_ctrl
+		self.lakeshore.mout_htr_1		= 0
+		self.lakeshore.mout_htr_2		= 0
 		self.lakeshore.pid_htr_1		= self.Htr_pid
 		self.lakeshore.range_htr_1		= self.Htr_rng
+
 
 		self.temp_set.assign_method(self.set_temp)
 
@@ -238,8 +243,8 @@ def load_tc_meas(filename):
 def main():
 
 	# Define Measurement Channels and sample names
-	CHANLIST 	= [101,102,103]
-	SAMPLEMAP	= {101:'TOX21',102:'TOX22',103:'RF_Nb_2mT'} 
+	CHANLIST 	= [101,102,103,104]
+	SAMPLEMAP	= {101:'TOX23_NbN',102:'TOX24_NbN',103:'TOX25_NbN',104:'TOX-23_Nb'} 
 
 	# Define Base Temp, Mas Temp, Temp resolution, Resistance noise and max points for Tc refinement
 	BASETEMP  = 5	  #Kelvin
@@ -255,7 +260,7 @@ def main():
 		names.append(SAMPLEMAP[i])
 
 	# Define data file name and path
-	sample_name		= ("SAMPLES"+'_'.join(['{}']*len(names))).format(*names)
+	sample_name		= ("SAMPLES_"+'_'.join(['{}']*len(names))).format(*names)
 	date        	= datetime.datetime.today().strftime('%Y-%m-%d')
 	path 			= "Tc_Data\{date:}".format(date=date)
 
