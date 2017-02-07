@@ -6,6 +6,8 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
+import numpy as np
+
 from auspex.stream import InputConnector, OutputConnector
 from auspex.log import logger
 from .elementwise import ElementwiseFilter
