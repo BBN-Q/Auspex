@@ -6,7 +6,6 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-import asyncio, concurrent
 import time
 
 import numpy as np
@@ -20,7 +19,7 @@ import matplotlib.pyplot as plt
 from .filter import Filter
 from auspex.parameter import Parameter, IntParameter
 from auspex.log import logger
-from auspex.stream import DataStreamDescriptor, InputConnector, OutputConnector
+from auspex.stream import InputConnector, OutputConnector
 
 class Plotter(Filter):
     sink      = InputConnector()

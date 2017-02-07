@@ -6,7 +6,6 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-import asyncio, concurrent
 import numpy as np
 
 from .filter import Filter

@@ -17,7 +17,7 @@ import time
 
 from .filter import Filter
 from auspex.parameter import Parameter, FilenameParameter
-from auspex.stream import DataStreamDescriptor, InputConnector, OutputConnector
+from auspex.stream import InputConnector, OutputConnector
 from auspex.log import logger
 
 from tqdm import tqdm, tqdm_notebook

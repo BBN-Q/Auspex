@@ -6,17 +6,7 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-import asyncio, concurrent
-import h5py
-import itertools
-import numpy as np
-import os.path
-import pickle
-import time
-import zlib
-
-from auspex.parameter import Parameter, FilenameParameter
-from auspex.stream import DataStreamDescriptor, InputConnector, OutputConnector
+from auspex.stream import InputConnector, OutputConnector
 from auspex.log import logger
 from .elementwise import ElementwiseFilter
 

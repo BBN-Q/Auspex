@@ -6,14 +6,13 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-import asyncio, concurrent
 import time
 import numpy as np
 
 from .filter import Filter
 from auspex.log import logger
 from auspex.parameter import Parameter
-from auspex.stream import DataStreamDescriptor, DataAxis, InputConnector, OutputConnector
+from auspex.stream import InputConnector, OutputConnector
 
 class Averager(Filter):
     """Takes data and collapses along the specified axis."""
@@ -137,12 +136,12 @@ class Averager(Filter):
                 reshaped   = data[idx:idx+new_points].reshape(self.reshape_dims)
                 averaged   = reshaped.mean(axis=self.mean_axis)
                 idx       += new_points
- 
+
                 for os in self.final_average.output_streams:
                     await os.push(averaged)
 
                 for os in self.final_variance.output_streams:
-                    await os.push(reshaped.var(axis=self.mean_axis, ddof=1)) # N-1 in the denominator 
+                    await os.push(reshaped.var(axis=self.mean_axis, ddof=1)) # N-1 in the denominator
 
                 for os in self.partial_average.output_streams:
                     await os.push(averaged)
@@ -174,11 +173,11 @@ class Averager(Filter):
                     for os in self.final_average.output_streams + self.partial_average.output_streams:
                         await os.push(reshaped.mean(axis=self.mean_axis))
                     for os in self.final_variance.output_streams:
-                        await os.push(reshaped.var(axis=self.mean_axis, ddof=1)) # N-1 in the denominator 
+                        await os.push(reshaped.var(axis=self.mean_axis, ddof=1)) # N-1 in the denominator
                     self.sum_so_far[:]        = 0.0
                     self.current_avg_frame[:] = 0.0
                     self.completed_averages   = 0
-                    self.idx_frame            = 0 
+                    self.idx_frame            = 0
                 else:
                     # Emit a partial average since we've accumulated enough data
                     if (time.time() - self.last_update >= self.update_interval):
