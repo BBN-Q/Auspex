@@ -53,7 +53,7 @@ class Agilent34970A(SCPIInstrument):
 #Helper function to sort channels by resistance measurement type
 
     def r_lists(self):
-        fres_list, res_list = []
+        fres_list, res_list = [], []
         res_map = self.resistance_wire 
 
         for ch in self.CONFIG_LIST:

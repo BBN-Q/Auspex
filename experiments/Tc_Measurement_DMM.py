@@ -36,6 +36,33 @@ from adapt.refine import refine_1D
 # MUX Output -> Sheet resistance of 4 channels
 # System time Output -> time of measurement
 
+#Global instrument configuration variables
+
+
+# Configure channels 101:104 for 4 wire resistance measurements
+# 100 Ohm range, 10 PLC integration time, 0 Compenstaion ON
+CHAN_LIST	= [101,102,103,104]
+RES_RANGE	= "AUTO"
+PLC			= 10
+ZCOMP		= "ON"
+
+# Configure Tsense A: Diode,2.5V,Kelvin units
+# Configure Tsense B: NTC RTD,30 Ohm,Compensation ON,Kelvin units
+# This configuration will change with measurement setup
+A_CONFIG	= [1,0,0,0,1]
+B_CONFIG	= [3,1,0,1,1]
+
+# Configure Heater 1 as 
+# Configure Heater 1 output for Closed Loop PID, Sensor B control, Powerup enable off
+# Configure Heater 1 range as Medium
+# P = 156.7, I = 17.9, D = 100
+# This configuration will change with measurement setup
+
+HTR_CONFIG	= [0,2,2,0,2]
+HTR_CTRL	= [1,2,0]
+HTR_RNG		= 2
+HTR_PID 	= [156.7,17.9,100]
+
 class Cooldown(Experiment):
 
 	# Define Experiment Axis
@@ -47,21 +74,6 @@ class Cooldown(Experiment):
 	temp_A		= OutputConnector(unit="Kelvin")
 	temp_B		= OutputConnector(unit="Kelvin")
 	sys_time	= OutputConnector(unit="seconds")
-
-	# Constants (instrument parameters ect.)
-
-	# Configure channels 101:104 for 4 wire resistance measurements
-	# 100 Ohm range, 10 PLC integration time, 0 Compenstaion ON
-	chan_list	= [101,102,103]
-	res_range	= 100
-	plc			= 10
-	zcomp		= "ON"
-
-	# Configure Tsense A: Diode,2.5V,Kelvin units
-	# Configure Tsense B: NTC RTD,30 Ohm,Compensation ON,Kelvin units
-	# This configuration will change with measurement setup
-	A_config	= [1,0,0,0,1]
-	B_config	= [3,1,0,1,1]
 
 	#Instrument Resources
 	mux			= Agilent34970A("GPIB0::10::INSTR")
@@ -79,16 +91,17 @@ class Cooldown(Experiment):
 
 		print("Initializing Instrument: {}".format(self.mux.interface.IDN()))
 
-		self.mux.scanlist = self.chan_list
-		self.mux.set_resistance_chan(self.chan_list,True)
-		self.mux.set_resistance_range(self.res_range,self.chan_list,True)
-		self.mux.set_resistance_resolution(self.plc,self.chan_list,True)
-		self.mux.set_resistance_zcomp(self.zcomp,self.chan_list,True)
+		self.mux.scanlist = CHAN_LIST
+		self.mux.configlist = self.mux.scanlist
+		self.mux.resistance_wire = 4
+		self.mux.resistance_range = RES_RANGE
+		self.mux.resistance_resolution = PLC
+		self.mux.resistance_zcomp = ZCOMP
 
 		print("Initializing Instrument: {}".format(self.lakeshore.interface.IDN()))
 
-		self.lakeshore.config_sense_A	= self.A_config
-		self.lakeshore.config_sense_B	= self.B_config
+		self.lakeshore.config_sense_A	= A_CONFIG
+		self.lakeshore.config_sense_B	= B_CONFIG
 		self.lakeshore.range_htr_1		= 0
 		self.lakeshore.range_htr_2		= 0
 		self.lakeshore.mout_htr_1		= 0
@@ -102,12 +115,11 @@ class Cooldown(Experiment):
 		self.mux.scan()
 
 		# Everything needs len(chan_list) copies since sheet_res is read in len(chan_list) at a time. This preserves the dimensionality of the data
-		await self.temp_A.push([self.lakeshore.Temp("A")]*len(self.chan_list))
-		await self.temp_B.push([self.lakeshore.Temp("B")]*len(self.chan_list))
-		await self.sys_time.push([time.time()]*len(self.chan_list))
+		await self.temp_A.push([self.lakeshore.Temp("A")]*len(CHAN_LIST))
+		await self.temp_B.push([self.lakeshore.Temp("B")]*len(CHAN_LIST))
+		await self.sys_time.push([time.time()]*len(CHAN_LIST))
 
-		while self.mux.interface.OPC() == 0:
-			await asyncio.sleep(len(self.chan_list)*self.plc/60)
+		await asyncio.sleep(4*len(CHAN_LIST)*PLC/60)
 		await self.sheet_res.push(self.mux.read())
 
 # Experimental Topology
@@ -123,28 +135,6 @@ class TcMeas(Experiment):
 	sheet_res	= OutputConnector(unit="Ohm/sq")
 	temp_meas	= OutputConnector(unit="Kelvin")
 
-	# Constants (instrument parameters ect.)
-
-	# Configure channels 101:104 for 4 wire resistance measurements
-	# 100 Ohm range, 100 PLC integration time, 0 Compenstaion ON
-	chan_list	= [101,102,103]
-	res_range	= 100
-	plc			= 100
-	zcomp		= "ON"
-
-	# Configure Tsense B: NTC RTD,30 Ohm,Compensation ON,Kelvin units, See Lakeshore Driver
-	# Configure Heater 1 as 
-	# Configure Heater 1 output for Closed Loop PID, Sensor B control, Powerup enable off
-	# Configure Heater 1 range as Medium
-	# P = 156.7, I = 17.9, D = 100
-	# This configuration will change with measurement setup
-
-	B_config	= [3,1,0,1,1]
-	Htr_config	= [0,2,2,0,2]
-	Htr_ctrl	= [1,2,0]
-	Htr_rng		= 2
-	Htr_pid 	= [156.7,17.9,100]
-
 	# Thermal wait time and timeout in seconds, resolution in Kelvin
 	T_delta		= 60
 	T_res		= 0.05
@@ -156,28 +146,29 @@ class TcMeas(Experiment):
 	def init_streams(self):
 
 		# Since Mux sweeps over channels itself, channel number must be added explicitly as a data axis to each measurement
-		self.temp_meas.add_axis(DataAxis("channel",self.chan_list))
-		self.sheet_res.add_axis(DataAxis("channel",self.chan_list))
+		self.temp_meas.add_axis(DataAxis("channel",CHAN_LIST))
+		self.sheet_res.add_axis(DataAxis("channel",CHAN_LIST))
 
 	def init_instruments(self):
 
 		print("Initializing Instrument: {}".format(self.mux.interface.IDN()))
 
-		self.mux.scanlist = self.chan_list
-		self.mux.set_resistance_chan(self.chan_list,True)
-		self.mux.set_resistance_range(self.res_range,self.chan_list,True)
-		self.mux.set_resistance_resolution(self.plc,self.chan_list,True)
-		self.mux.set_resistance_zcomp(self.zcomp,self.chan_list,True)
+		self.mux.scanlist = CHAN_LIST
+		self.mux.configlist = self.mux.scanlist
+		self.mux.resistance_wire = 4
+		self.mux.resistance_range = RES_RANGE
+		self.mux.resistance_resolution = PLC
+		self.mux.resistance_zcomp = ZCOMP
 
 		print("Initializing Instrument: {}".format(self.lakeshore.interface.IDN()))
 
-		self.lakeshore.config_sense_B	= self.B_config
-		self.lakeshore.config_htr_1		= self.Htr_config
-		self.lakeshore.control_htr_1	= self.Htr_ctrl
+		self.lakeshore.config_sense_B	= B_CONFIG
+		self.lakeshore.config_htr_1		= HTR_CONFIG
+		self.lakeshore.control_htr_1	= HTR_CTRL
 		self.lakeshore.mout_htr_1		= 0
 		self.lakeshore.mout_htr_2		= 0
-		self.lakeshore.pid_htr_1		= self.Htr_pid
-		self.lakeshore.range_htr_1		= self.Htr_rng
+		self.lakeshore.pid_htr_1		= HTR_PID
+		self.lakeshore.range_htr_1		= HTR_RNG
 
 
 		self.temp_set.assign_method(self.set_temp)
@@ -208,11 +199,11 @@ class TcMeas(Experiment):
 		print("Measuring ...")
 
 		# Everything needs len(chan_list) copies since sheet_res is read in len(chan_list) at a time. This preserves the dimensionality of the data
-		await self.temp_meas.push([self.lakeshore.Temp("B")]*len(self.chan_list))
+		await self.temp_meas.push([self.lakeshore.Temp("B")]*len(CHAN_LIST))
 
 		# Wait for the expected integration time and read. OPC hangs while measuring we have to do it this way.
 		# For some reason integration seems to take 2x what I expect, could use investigation
-		await asyncio.sleep(4*len(self.chan_list)*self.plc/60)
+		await asyncio.sleep(4*len(CHAN_LIST)*PLC/60)
 
 		await self.sheet_res.push(self.mux.read())
 
@@ -243,7 +234,10 @@ def load_tc_meas(filename):
 def main():
 
 	# Define Measurement Channels and sample names
-	CHANLIST 	= [101,102,103,104]
+	CHAN_LIST 	= [101,102,103,104]
+	RES_RANGE	= 1000
+	CDPLC		= 10
+	TcPLC		= 100
 	SAMPLEMAP	= {101:'TOX23_NbN',102:'TOX24_NbN',103:'TOX25_NbN',104:'TOX-23_Nb'} 
 
 	# Define Base Temp, Mas Temp, Temp resolution, Resistance noise and max points for Tc refinement
@@ -272,8 +266,11 @@ def main():
 
 	if BASETEMP < t_check:
 
+		# Reset Global config variables
+		PLC = CDPLC
+
+		# Create Experiment Object
 		cd_exp  = Cooldown()
-		cd_exp.chan_list = CHANLIST
 
 		# Setup datafile and define which data to write, plot ect.
 		cd_file	= "{path:}\{samp:}-Cooldown_{date:}.h5".format(path=path, samp=sample_name, date=date)
@@ -315,14 +312,15 @@ def main():
 	else: 
 		print("Experiment at base temperature {:.3f} K, skipping Cooldown Log...".format(t_check))
 
+	# Reset Global config variables
+	PLC = TcPLC
 
+	# Create Experiment Object
 	tc_exp  = TcMeas()
-	tc_exp.chan_list = CHANLIST
-	tc_file	= "{path:}\{samp:}-Tc_{date:}.h5".format(path=path, samp=sample_name, date=date)
 
 	# Setup datafile and define which data to write, plot ect.
+	tc_file	= "{path:}\{samp:}-Tc_{date:}.h5".format(path=path, samp=sample_name, date=date)
 	wr = WriteToHDF5(tc_file)
-
 	edges = [(tc_exp.sheet_res, wr.sink),(tc_exp.temp_meas, wr.sink)]
 	tc_exp.set_graph(edges)
 
