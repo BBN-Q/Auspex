@@ -36,12 +36,19 @@ from adapt.refine import refine_1D
 # MUX Output -> Sheet resistance of 4 channels
 # System time Output -> time of measurement
 
-#Global instrument configuration variables
+#Global and instrument configuration variables
 
+# Define Base Temp, Mas Temp, Temp resolution, Resistance noise and max points for Tc refinement
+BASETEMP  = 5	  #Kelvin
+MAXTEMP	  = 20 	  #Kelvin	
+TRES      = 0.05  #Kelvin
+RNOISE    = 0.009 #Ohms 
+MAXPOINTS = 50
 
 # Configure channels 101:104 for 4 wire resistance measurements
 # 100 Ohm range, 10 PLC integration time, 0 Compenstaion ON
-CHAN_LIST	= [101,102,103,104]
+CHAN_LIST	= []
+SAMPLE_MAP  = {}
 RES_RANGE	= "AUTO"
 PLC			= 10
 ZCOMP		= "ON"
@@ -228,8 +235,41 @@ def load_tc_meas(filename):
 
 	return t_pts, r_pts
 
- #def analysis(filename):
+ def tc_analysis(filename):
 
+ 	print("Analyzing transition data...")
+
+ 	data, desc = load_from_HDF5(filename)
+ 	torder_data = np.sort(data['main'],order='temp_meas')
+
+ 	key = ""
+
+ 	for ch in CHAN_LIST: 
+ 		ch_data = torder_data[torder_data['channel']==ch]
+
+ 		# Calc transition temperature as max positive derivative
+ 		dT = np.diff(ch_data['temp_meas'][ch_data['temp_set']>BASETEMP])
+ 		dR = np.diff(ch_data['sheet_res'][ch_data['temp_set']>BASETEMP])
+
+ 		tran 	   = np.amax(np.divide(dR,dT))
+ 		tran_index = np.argmax(np.divide(dR,dT))
+ 		temps 	   = ch_data['temp_meas'][ch_data['temp_set']>BASETEMP]
+ 		Tc         = (temps[tran_index]+temps[tran_index+1])/2
+
+ 		if 0<tran: 
+ 			print("Transition in {} measured at {:.2f} K".format(SAMPLE_MAP[ch],Tc))
+ 			key = "{}, Tc = {:.2f}".format(SAMPLE_MAP[ch],Tc)
+ 		else:
+ 			print("No transition detected in {}".format(SAMPLE_MAP[ch])) 
+ 			key = "{}, No transition".format(SAMPLE_MAP[ch])
+
+ 		plt.xlabel("Temperature (K)")
+ 		plt.ylabel("Sheet Resistance (Ohms/sq)")
+ 		plt.title(key)
+ 		plt.plot(ch_data['temp_meas'],ch_data['sheet_res'],'bo')
+ 		plt.savefig("{}.png".format(SAMPLE_MAP[ch]), bbox_inches='tight')
+
+ 	print("Analysis complete")
 
 def main():
 
@@ -238,11 +278,11 @@ def main():
 	RES_RANGE	= 1000
 	CDPLC		= 10
 	TcPLC		= 100
-	SAMPLEMAP	= {101:'TOX23_NbN',102:'TOX24_NbN',103:'TOX25_NbN',104:'TOX-23_Nb'} 
+	SAMPLE_MAP	= {101:'TOX23_NbN',102:'TOX24_NbN',103:'TOX25_NbN',104:'TOX-23_Nb'} 
 
 	# Define Base Temp, Mas Temp, Temp resolution, Resistance noise and max points for Tc refinement
-	BASETEMP  = 5	  #Kelvin
-	MAXTEMP	  = 20 	  #Kelvin	
+	BASETEMP  = 4	  #Kelvin
+	MAXTEMP	  = 25 	  #Kelvin	
 	TRES      = 0.05  #Kelvin
 	RNOISE    = 0.009 #Ohms 
 	MAXPOINTS = 50
@@ -250,8 +290,8 @@ def main():
 	#--------------------------User shouldn't need to edit below here--------------------------------
 
 	names = []
-	for i in CHANLIST:
-		names.append(SAMPLEMAP[i])
+	for i in CHAN_LIST:
+		names.append(SAMPLE_MAP[i])
 
 	# Define data file name and path
 	sample_name		= ("SAMPLES_"+'_'.join(['{}']*len(names))).format(*names)
@@ -281,7 +321,7 @@ def main():
 		#plt_Bvt  = XYPlotter(name="Temperature Sense B", x_series=True, series="inner")
 		#plt_RvT  = XYPlotter(name="Sample Resistance", x_series=True, series="inner")
 
-		edges = [(cd_exp.sheet_res, wr.sink), (cd_exp.temp_A, wr.sink), (cd_exp.temp_B, wr.sink), (cd_exp.sys_time, wr.sink)]
+		#edges = [(cd_exp.sheet_res, wr.sink), (cd_exp.temp_A, wr.sink), (cd_exp.temp_B, wr.sink), (cd_exp.sys_time, wr.sink)]
 		cd_exp.set_graph(edges)
 
 		#
@@ -349,6 +389,9 @@ def main():
 	print("Writing Tc Data to file: {}".format(wr.filename.value))
 	tc_exp.run_sweeps()
 	print("Tc Experiment Complete")
+
+	#Run post processing analysis
+	tc_anlaysis(wr.filename.value)
 
 
 
