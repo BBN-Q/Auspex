@@ -242,7 +242,7 @@ def tc_analysis(filename):
  	data, desc = load_from_HDF5(filename)
  	torder_data = np.sort(data['main'],order='temp_meas')
 
- 	key = ""
+ 	title = ""
 
  	for ch in CHAN_LIST: 
  		ch_data = torder_data[torder_data['channel']==ch]
@@ -257,14 +257,14 @@ def tc_analysis(filename):
 
  		if RNOISE<dR[tran_index]: 
  			print("Transition in {} measured at {:.2f} K".format(SAMPLE_MAP[ch],Tc))
- 			key = "{}, Tc = {:.2f}".format(SAMPLE_MAP[ch],Tc)
+ 			title = "{}, Tc = {:.2f}".format(SAMPLE_MAP[ch],Tc)
  		else:
  			print("No transition detected in {}".format(SAMPLE_MAP[ch])) 
- 			key = "{}, No transition".format(SAMPLE_MAP[ch])
+ 			title = "{}, No transition".format(SAMPLE_MAP[ch])
 
  		plt.xlabel("Temperature (K)")
  		plt.ylabel("Sheet Resistance (Ohms/sq)")
- 		plt.title(key)
+ 		plt.title(title)
  		plt.plot(ch_data['temp_meas'],ch_data['sheet_res'],'bo')
  		plt.savefig("{}.png".format(SAMPLE_MAP[ch]), bbox_inches='tight')
 
@@ -272,10 +272,20 @@ def tc_analysis(filename):
 
 def main():
 
+	#Tell main which globals to modify
+	global CHAN_LIST
+	global RES_RANGE
+	global PLC
+	global SAMPLE_MAP
+	global BASETEMP
+	global MAXTEMP
+	global RNOISE
+	global MAXPOINTS
+
 	# Define Measurement Channels and sample names
 	CHAN_LIST 	= [101,102,103,104]
 	RES_RANGE	= 1000
-	CDPLC		= 10
+	cdPLC		= 10
 	TcPLC		= 100
 	SAMPLE_MAP	= {101:'TOX23_NbN',102:'TOX24_NbN',103:'TOX25_NbN',104:'TOX-23_Nb'} 
 
@@ -306,7 +316,7 @@ def main():
 	if BASETEMP < t_check:
 
 		# Reset Global config variables
-		PLC = CDPLC
+		PLC = cdPLC
 
 		# Create Experiment Object
 		cd_exp  = Cooldown()
@@ -325,13 +335,13 @@ def main():
 
 
 		# Add points 10 at a time until base temp is reached
-		async def while_temp(sweep_axis, experiment):
+		async def while_temp(sweep_axis, exp):
 
-			if experiment.lakeshore.Temp("B") < BASETEMP: 
+			if exp.lakeshore.Temp("B") < BASETEMP: 
 				print("Base Temperature Reached...")
 				return False
 
-			print("Running refinement loop: Temp %f, Num_points: %d, last i %d" % (experiment.lakeshore.Temp("B"), sweep_axis.num_points(), sweep_axis.points[-1]))
+			print("Running refinement loop: Temp %f, Num_points: %d, last i %d" % (exp.lakeshore.Temp("B"), sweep_axis.num_points(), sweep_axis.points[-1]))
 
 			last_i = sweep_axis.points[-1]
 			sweep_axis.add_points(range(last_i+1,last_i+10))
