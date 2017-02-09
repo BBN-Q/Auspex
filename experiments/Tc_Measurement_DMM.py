@@ -235,6 +235,7 @@ def load_tc_meas(filename):
 
 	return t_pts, r_pts
 
+
 def tc_analysis(filename):
 
  	print("Analyzing transition data...")
@@ -304,10 +305,17 @@ def main():
 	ls.disconnect()
 
 	if BASETEMP < t_check:
+<<<<<<< HEAD
 
 		# Reset Global config variables
 		PLC = CDPLC
 
+=======
+
+		# Reset Global config variables
+		PLC = CDPLC
+
+>>>>>>> d44f0311807ad014dd928023f08557b06fd5bbf5
 		# Create Experiment Object
 		cd_exp  = Cooldown()
 
@@ -320,7 +328,11 @@ def main():
 		#plt_Bvt  = XYPlotter(name="Temperature Sense B", x_series=True, series="inner")
 		#plt_RvT  = XYPlotter(name="Sample Resistance", x_series=True, series="inner")
 
+<<<<<<< HEAD
 		edges = [(cd_exp.sheet_res, wr.sink), (cd_exp.temp_A, wr.sink), (cd_exp.temp_B, wr.sink), (cd_exp.sys_time, wr.sink)]
+=======
+		#edges = [(cd_exp.sheet_res, wr.sink), (cd_exp.temp_A, wr.sink), (cd_exp.temp_B, wr.sink), (cd_exp.sys_time, wr.sink)]
+>>>>>>> d44f0311807ad014dd928023f08557b06fd5bbf5
 		cd_exp.set_graph(edges)
 
 		#
