@@ -89,10 +89,10 @@ class Cooldown(Experiment):
 	def init_streams(self):
 
 		# Since Mux sweeps over channels itself, channel number must be added explicitly as a data axis to each measurement
-		self.sheet_res.add_axis(DataAxis("channel",self.chan_list))
-		self.temp_A.add_axis(DataAxis("channel",self.chan_list))
-		self.temp_B.add_axis(DataAxis("channel",self.chan_list))
-		self.sys_time.add_axis(DataAxis("channel",self.chan_list))
+		self.sheet_res.add_axis(DataAxis("channel",CHAN_LIST))
+		self.temp_A.add_axis(DataAxis("channel",CHAN_LIST))
+		self.temp_B.add_axis(DataAxis("channel",CHAN_LIST))
+		self.sys_time.add_axis(DataAxis("channel",CHAN_LIST))
 
 	def init_instruments(self):
 
@@ -235,7 +235,7 @@ def load_tc_meas(filename):
 
 	return t_pts, r_pts
 
- def tc_analysis(filename):
+def tc_analysis(filename):
 
  	print("Analyzing transition data...")
 
@@ -251,12 +251,11 @@ def load_tc_meas(filename):
  		dT = np.diff(ch_data['temp_meas'][ch_data['temp_set']>BASETEMP])
  		dR = np.diff(ch_data['sheet_res'][ch_data['temp_set']>BASETEMP])
 
- 		tran 	   = np.amax(np.divide(dR,dT))
  		tran_index = np.argmax(np.divide(dR,dT))
  		temps 	   = ch_data['temp_meas'][ch_data['temp_set']>BASETEMP]
  		Tc         = (temps[tran_index]+temps[tran_index+1])/2
 
- 		if 0<tran: 
+ 		if RNOISE<dR[tran_index]: 
  			print("Transition in {} measured at {:.2f} K".format(SAMPLE_MAP[ch],Tc))
  			key = "{}, Tc = {:.2f}".format(SAMPLE_MAP[ch],Tc)
  		else:
@@ -321,7 +320,7 @@ def main():
 		#plt_Bvt  = XYPlotter(name="Temperature Sense B", x_series=True, series="inner")
 		#plt_RvT  = XYPlotter(name="Sample Resistance", x_series=True, series="inner")
 
-		#edges = [(cd_exp.sheet_res, wr.sink), (cd_exp.temp_A, wr.sink), (cd_exp.temp_B, wr.sink), (cd_exp.sys_time, wr.sink)]
+		edges = [(cd_exp.sheet_res, wr.sink), (cd_exp.temp_A, wr.sink), (cd_exp.temp_B, wr.sink), (cd_exp.sys_time, wr.sink)]
 		cd_exp.set_graph(edges)
 
 		#
