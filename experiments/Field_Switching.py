@@ -6,8 +6,8 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-from auspex.instruments.keithley import Keithley2400
-from auspex.instruments.ami import AMI430
+from auspex.instruments import Keithley2400
+from auspex.instruments import AMI430
 from auspex.experiment import Experiment
 from auspex.parameter import FloatParameter
 from auspex.stream import OutputConnector

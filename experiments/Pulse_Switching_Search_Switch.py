@@ -6,12 +6,12 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-from auspex.instruments.keysight import *
-from auspex.instruments.picosecond import Picosecond10070A
-from auspex.instruments.stanford import SR865
-from auspex.instruments.keithley import Keithley2400
-from auspex.instruments.ami import AMI430
-from auspex.instruments.rfmd import Attenuator
+from auspex.instruments import KeysightM8190A, Scenario, Sequence
+from auspex.instruments import Picosecond10070A
+from auspex.instruments import SR865
+from auspex.instruments import Keithley2400
+from auspex.instruments import AMI430
+from auspex.instruments import Attenuator
 
 from auspex.experiment import FloatParameter, IntParameter, Experiment
 from auspex.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector
@@ -53,7 +53,7 @@ class SwitchSearchExperiment(Experiment):
     samps_per_trig = 5 # Samples per trigger
 
     # Instruments
-    arb   = M8190A("192.168.5.108")
+    arb   = KeysightM8190A("192.168.5.108")
     pspl  = Picosecond10070A("GPIB0::24::INSTR")
     mag   = AMI430("192.168.5.109")
     keith = Keithley2400("GPIB0::25::INSTR")
@@ -124,12 +124,12 @@ class SwitchSearchExperiment(Experiment):
         self.arb.reset_sequence_table()
 
         # Picosecond trigger waveform
-        pspl_trig_wf = M8190A.create_binary_wf_data(np.zeros(3200), samp_mkr=1)
+        pspl_trig_wf = KeysightM8190A.create_binary_wf_data(np.zeros(3200), samp_mkr=1)
         pspl_trig_segment_id = self.arb.define_waveform(len(pspl_trig_wf))
         self.arb.upload_waveform(pspl_trig_wf, pspl_trig_segment_id)
 
         # NIDAQ trigger waveform
-        nidaq_trig_wf = M8190A.create_binary_wf_data(np.zeros(3200), sync_mkr=1)
+        nidaq_trig_wf = KeysightM8190A.create_binary_wf_data(np.zeros(3200), sync_mkr=1)
         nidaq_trig_segment_id = self.arb.define_waveform(len(nidaq_trig_wf))
         self.arb.upload_waveform(nidaq_trig_wf, nidaq_trig_segment_id)
 

@@ -6,6 +6,9 @@ import asyncio
 import time
 import numpy as np
 
+import auspex.globals
+auspex.globals.auspex_dummy_mode = True
+
 from auspex.experiment import Experiment
 from auspex.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector
 from auspex.filters.debug import Print, Passthrough

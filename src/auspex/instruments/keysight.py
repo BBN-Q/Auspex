@@ -6,6 +6,7 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
+from auspex.log import logger
 from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand
 from .binutils import BitField, BitFieldUnion
 
@@ -161,8 +162,8 @@ class Scenario(object):
 
         return table
 
-class M8190A(SCPIInstrument):
-    """M8190A arbitrary waveform generator"""
+class KeysightM8190A(SCPIInstrument):
+    """Keysight M8190A arbitrary waveform generator"""
 
     ref_source         = StringCommand(scpi_string=":ROSC:SOUR",
                           allowed_values=("EXTERNAL", "AXI", "INTERNAL"))
@@ -202,8 +203,8 @@ class M8190A(SCPIInstrument):
 
     def __init__(self, resource_name, *args, **kwargs):
         resource_name += "::inst0::INSTR" #user guide recommends HiSLIP protocol
-        super(M8190A, self).__init__(resource_name, *args, **kwargs)
-        self.name = "M8190A AWG"
+        super(KeysightM8190A, self).__init__(resource_name, *args, **kwargs)
+        self.name = "KeysightM8190A AWG"
 
         #Aliases for run/stop
         self._unfreeze()
@@ -212,7 +213,7 @@ class M8190A(SCPIInstrument):
         self._freeze()
 
     def connect(self, resource_name=None, interface_type=None):
-        super(M8190A, self).connect(resource_name=resource_name, interface_type=interface_type)
+        super(KeysightM8190A, self).connect(resource_name=resource_name, interface_type=interface_type)
         self.interface._resource.read_termination = u"\n"
 
     def abort(self, channel=None):
@@ -240,7 +241,7 @@ class M8190A(SCPIInstrument):
             try:
                 segment_id = int(r)
             except:
-                raise ValueError("M8190A did not return a reasonable segment ID, but rather {}".format(r))
+                raise ValueError("KeysightM8190A did not return a reasonable segment ID, but rather {}".format(r))
         return segment_id
 
     def upload_waveform(self, wf_data, segment_id, channel=1, binary=True):

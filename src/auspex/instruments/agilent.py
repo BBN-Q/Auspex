@@ -6,12 +6,12 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand, is_valid_ipv4
-from auspex.log import logger
 import socket
 import time
 import re
 import numpy as np
+from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand, is_valid_ipv4
+from auspex.log import logger
 
 class Agilent34970A(SCPIInstrument):
     """Agilent 34970A MUX"""
@@ -58,7 +58,7 @@ class Agilent34970A(SCPIInstrument):
     def scanlist(self, ch_list):
         self.interface.write("ROUT:SCAN "+self.ch_to_str(ch_list))
 
-#Start Scan 
+#Start Scan
     def scan(self):
         self.interface.write("INIT")
 
@@ -73,10 +73,10 @@ class Agilent34970A(SCPIInstrument):
 
     def set_resistance_chan(self, ch_list, fw=False):
         if self.dmm=="ON":
-            fw_char = "F" if fw else "" 
+            fw_char = "F" if fw else ""
             self.interface.write(("CONF:{}RES "+self.ch_to_str(ch_list)).format(fw_char))
         else:
-            fw_char = "ON," if fw else "OFF," 
+            fw_char = "ON," if fw else "OFF,"
             self.interface.write(("ROUT:CHAN:FWIR {}"+self.ch_to_str(ch_list)).format(fw_char))
 
     def get_resistance_chan(self, ch_list):
@@ -87,26 +87,26 @@ class Agilent34970A(SCPIInstrument):
             query_str = "ROUT:CHAN:FWIR? "+self.ch_to_str(ch_list)
             output = self.interface.query_ascii_values(query_str, converter=u'd')
         return {ch: val for ch, val in zip(ch_list, output) }
-          
+
 
 # Commands that configure resistance measurements with internal DMM
 
     def set_resistance_range(self, val, ch_list, fw=False):
-        fw_char = "F" if fw else "" 
+        fw_char = "F" if fw else ""
         if val not in self.RES_VALUES:
             raise ValueError(("Resistance range must be "+'|'.join(['{:E}']*len(self.RES_VALUES))+" Ohms").format(*self.RES_VALUES))
         if self.dmm=="OFF":
             raise Exception("Cannot issue command when DMM is disabled. Enable DMM")
-        else: 
-            self.interface.write(("SENS:{}RES:RANG {:E},"+self.ch_to_str(ch_list)).format(fw_char,val))       
+        else:
+            self.interface.write(("SENS:{}RES:RANG {:E},"+self.ch_to_str(ch_list)).format(fw_char,val))
 
     def get_resistance_range(self, ch_list, fw=False):
         fw_char = "F" if fw else ""
         if self.dmm=="OFF":
             raise Exception("Cannot issue command when DMM is disabled. Enable DMM")
-        else: 
+        else:
             query_str = ("SENS:{}RES:RANG? "+self.ch_to_str(ch_list)).format(fw_char)
-            output = self.interface.query_ascii_values(query_str, converter=u'e')   
+            output = self.interface.query_ascii_values(query_str, converter=u'e')
             return {ch: val for ch, val in zip(ch_list, output) }
 
     def set_resistance_resolution(self, val, ch_list, fw=False):
@@ -114,17 +114,17 @@ class Agilent34970A(SCPIInstrument):
         if val not in self.PLC_VALUES:
             raise ValueError(("PLC integration times must be "+'|'.join(['{:E}']*len(self.PLC_VALUES))+" cycles").format(*self.PLC_VALUES))
         if self.dmm=="OFF":
-            raise Exception("Cannot issue command when DMM is disabled. Enable DMM") 
-        else: 
-            self.interface.write(("SENS:{}RES:NPLC {:E},"+self.ch_to_str(ch_list)).format(fw_char,val))       
+            raise Exception("Cannot issue command when DMM is disabled. Enable DMM")
+        else:
+            self.interface.write(("SENS:{}RES:NPLC {:E},"+self.ch_to_str(ch_list)).format(fw_char,val))
 
     def get_resistance_resolution(self, ch_list, fw=False):
         fw_char = "F" if fw else ""
         if self.dmm=="OFF":
-            raise Exception("Cannot issue command when DMM is disabled. Enable DMM") 
+            raise Exception("Cannot issue command when DMM is disabled. Enable DMM")
         else:
             query_str = ("SENS:{}RES:NPLC? "+self.ch_to_str(ch_list)).format(fw_char)
-            output = self.interface.query_ascii_values(query_str, converter=u'e') 
+            output = self.interface.query_ascii_values(query_str, converter=u'e')
             return {ch: val for ch, val in zip(ch_list, output) }
 
     def set_resistance_zcomp(self, val, ch_list, fw=False):
@@ -132,15 +132,15 @@ class Agilent34970A(SCPIInstrument):
         if val not in self.ONOFF_VALUES:
             raise ValueError("Zero compensation must be ON or OFF. Only valid for resistance range less than 100 kOhm")
         if self.dmm=="OFF":
-            raise Exception("Cannot issue command when DMM is disabled. Enable DMM") 
-        else: 
+            raise Exception("Cannot issue command when DMM is disabled. Enable DMM")
+        else:
             self.interface.write(("SENS:{}RES:OCOM {:s},"+self.ch_to_str(ch_list)).format(fw_char,val))
 
     def get_resistance_zcomp(self, ch_list, fw=False):
         fw_char = "F" if fw else ""
         if self.dmm=="OFF":
-            raise Exception("Cannot issue command when DMM is disabled. Enable DMM") 
-        else: 
+            raise Exception("Cannot issue command when DMM is disabled. Enable DMM")
+        else:
             query_str = ("SENS:{}RES:OCOM? "+self.ch_to_str(ch_list)).format(fw_char)
             output = self.interface.query_ascii_values(query_str, converter=u'd')
             return {ch: val for ch, val in zip(ch_list, output) }

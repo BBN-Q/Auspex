@@ -4,8 +4,8 @@ import time
 import socket
 from unittest.mock import MagicMock
 
-from auspex.instruments.interface import Interface, VisaInterface
 from auspex.log import logger
+from .interface import Interface, VisaInterface
 
 #Helper function to check for IPv4 address
 #See http://stackoverflow.com/a/11264379

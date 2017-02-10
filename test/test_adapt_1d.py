@@ -13,6 +13,9 @@ import numpy as np
 import h5py
 from adapt.refine import refine_1D
 
+import auspex.globals
+auspex.globals.auspex_dummy_mode = True
+
 from auspex.experiment import Experiment
 from auspex.parameter import FloatParameter
 from auspex.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector

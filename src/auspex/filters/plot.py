@@ -6,7 +6,6 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-import asyncio, concurrent
 import time
 
 import numpy as np
@@ -15,11 +14,12 @@ from bokeh.plotting import Figure
 from bokeh.layouts import gridplot
 from bokeh.models.renderers import GlyphRenderer
 from bokeh.palettes import Viridis256, d3
+import matplotlib.pyplot as plt
 
+from .filter import Filter
 from auspex.parameter import Parameter, IntParameter
 from auspex.log import logger
-from auspex.filters.filter import Filter, InputConnector
-import matplotlib.pyplot as plt
+from auspex.stream import InputConnector, OutputConnector
 
 class Plotter(Filter):
     sink      = InputConnector()

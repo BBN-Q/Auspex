@@ -12,6 +12,9 @@ import os
 import numpy as np
 import h5py
 
+import auspex.globals
+auspex.globals.auspex_dummy_mode = True
+
 from auspex.instruments.instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand
 from auspex.experiment import Experiment
 from auspex.parameter import FloatParameter

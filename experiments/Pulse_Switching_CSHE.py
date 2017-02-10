@@ -6,12 +6,12 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-from auspex.instruments.keysight import *
-from auspex.instruments.picosecond import Picosecond10070A
-from auspex.instruments.stanford import SR865
-from auspex.instruments.keithley import Keithley2400
-from auspex.instruments.ami import AMI430
-from auspex.instruments.rfmd import Attenuator
+from auspex.instruments import KeysightM8190A, Scenario, Sequence
+from auspex.instruments import Picosecond10070A
+from auspex.instruments import SR865
+from auspex.instruments import Keithley2400
+from auspex.instruments import AMI430
+from auspex.instruments import Attenuator
 
 from PyDAQmx import *
 
@@ -76,7 +76,7 @@ class SwitchingExperiment(Experiment):
     lock  = SR865("USB0::0xB506::0x2000::002638::INSTR")
     pspl  = Picosecond10070A("GPIB0::24::INSTR")
     atten = Attenuator("calibration/RFSA2113SB_HPD_20160901.csv", lock.set_ao2, lock.set_ao3)
-    arb   = M8190A("192.168.5.108")
+    arb   = KeysightM8190A("192.168.5.108")
     keith = Keithley2400("GPIB0::25::INSTR")
 
     def init_streams(self):
@@ -119,22 +119,22 @@ class SwitchingExperiment(Experiment):
             return wf
 
         reset_wf    = arb_pulse(-self.polarity*self.reset_amplitude, self.reset_duration)
-        wf_data     = M8190A.create_binary_wf_data(reset_wf)
+        wf_data     = KeysightM8190A.create_binary_wf_data(reset_wf)
         rst_segment_id  = self.arb.define_waveform(len(wf_data))
         self.arb.upload_waveform(wf_data, rst_segment_id)
 
         # no_reset_wf = arb_pulse(0.0, 3.0/12e9)
-        # wf_data     = M8190A.create_binary_wf_data(no_reset_wf)
+        # wf_data     = KeysightM8190A.create_binary_wf_data(no_reset_wf)
         # no_rst_segment_id  = self.arb.define_waveform(len(wf_data))
         # self.arb.upload_waveform(wf_data, no_rst_segment_id)
 
         # Picosecond trigger waveform
-        pspl_trig_wf = M8190A.create_binary_wf_data(np.zeros(3200), samp_mkr=1)
+        pspl_trig_wf = KeysightM8190A.create_binary_wf_data(np.zeros(3200), samp_mkr=1)
         pspl_trig_segment_id = self.arb.define_waveform(len(pspl_trig_wf))
         self.arb.upload_waveform(pspl_trig_wf, pspl_trig_segment_id)
 
         # NIDAQ trigger waveform
-        nidaq_trig_wf = M8190A.create_binary_wf_data(np.zeros(3200), sync_mkr=1)
+        nidaq_trig_wf = KeysightM8190A.create_binary_wf_data(np.zeros(3200), sync_mkr=1)
         nidaq_trig_segment_id = self.arb.define_waveform(len(nidaq_trig_wf))
         self.arb.upload_waveform(nidaq_trig_wf, nidaq_trig_segment_id)
 

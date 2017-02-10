@@ -6,20 +6,11 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-import asyncio, concurrent
-import itertools
-import h5py
-import pickle
-import zlib
 import numpy as np
-import os.path
-import time
 
-from auspex.parameter import Parameter, FilenameParameter
-from auspex.stream import DataStreamDescriptor
+from auspex.stream import InputConnector, OutputConnector
 from auspex.log import logger
-from auspex.filters.filter import Filter, InputConnector, OutputConnector
-from auspex.filters.elementwise import ElementwiseFilter
+from .elementwise import ElementwiseFilter
 
 class Correlator(ElementwiseFilter):
     sink   = InputConnector()
