@@ -69,7 +69,7 @@ def clusterer(data, num_clusters=2):
     #         import seaborn as sns
     #         sns.distplot(all_vals[state == ct], kde=False, norm_hist=False)
 
-def count_matrices(data, start_state=None, threshold=None):
+def count_matrices(data, start_state=None, threshold=None, display=None):
     num_clusters = 2
     if threshold is None:
         clust = clusterer(data)
@@ -207,23 +207,23 @@ def crossover_pairs(points, values, threshold):
                 pairs.append([k,nb])
     return np.array(pairs)
 
-# def load_switching_data(filename, start_state=None, failure=False,
-#                         threshold=None, display=False,
-#                         voltage_scale_factor=1.0, duration_scale_factor=1.0):
-#     with h5py.File(filename, 'r') as f:
-#         logger.debug("Read data from file: %s" % filename)
-#         durations = duration_scale_factor*np.array([f['axes'][k].value for k in f['axes'].keys() if "duration-data" in k])
-#         voltages  = voltage_scale_factor*np.array([f['axes'][k].value for k in f['axes'].keys() if "voltage-data" in k])
-#         dsets     = np.array([f[k].value for k in f.keys() if "data" in k])
-#         data      = np.concatenate(dsets, axis=0)
-#         voltages  = np.concatenate(voltages, axis=0)
-#         durations = np.concatenate(durations, axis=0)
-#     data_mean = np.mean(data, axis=-1)
-#     points = np.array([durations, voltages]).transpose()
-#     if failure:
-#         return points, reset_failure(data_mean,start_state=start_state, display=display)
-#     else:
-#         return points, switching_phase(data_mean,start_state=start_state,threshold=threshold, display=display)
+def load_refined_switching_data(filename, start_state=None, failure=False,
+                        threshold=None, display=False,
+                        voltage_scale_factor=1.0, duration_scale_factor=1.0):
+    with h5py.File(filename, 'r') as f:
+        logger.debug("Read data from file: %s" % filename)
+        durations = duration_scale_factor*np.array([f['axes'][k].value for k in f['axes'].keys() if "duration-data" in k])
+        voltages  = voltage_scale_factor*np.array([f['axes'][k].value for k in f['axes'].keys() if "voltage-data" in k])
+        dsets     = np.array([f[k].value for k in f.keys() if "data" in k])
+        data      = np.concatenate(dsets, axis=0)
+        voltages  = np.concatenate(voltages, axis=0)
+        durations = np.concatenate(durations, axis=0)
+    data_mean = np.mean(data, axis=-1)
+    points = np.array([durations, voltages]).transpose()
+    if failure:
+        return points, reset_failure(data_mean,start_state=start_state, display=display)
+    else:
+        return points, switching_phase(data_mean,start_state=start_state,threshold=threshold, display=display)
 
 def load_BER_data(filename):
     with h5py.File(filename, 'r') as f:
