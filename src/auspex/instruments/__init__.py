@@ -1,7 +1,7 @@
 from .instrument import Instrument, SCPIInstrument, CLibInstrument
 
 from .agilent import Agilent34970A, AgilentE8363C, AgilentE9010A, AgilentN5183A
-from .alazar import AlazarATS9870
+from .alazar import AlazarATS9870, AlazarChannel
 from .ami import AMI430
 from .bbn import APS2, DigitalAttenuator
 from .bnc import BNC845
@@ -13,5 +13,5 @@ from .keysight import KeysightM8190A, Scenario, Sequence
 from .picosecond import Picosecond10070A
 from .stanford import SR830, SR865
 from .tektronix import DPO72004C
-from .X6 import X6
+from .X6 import X6, X6Channel
 from .yokogawa import GS200
