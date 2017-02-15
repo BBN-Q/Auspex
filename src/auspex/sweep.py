@@ -29,7 +29,7 @@ class Sweeper(object):
         imax = len(self.axes)-1
         if imax < 0:
             logger.debug("There are no sweep axis, only data axes.")
-            return True
+            return None
         else:
             i=0
             while i<imax and self.axes[i].step==0:
@@ -37,6 +37,10 @@ class Sweeper(object):
             # Need to update parameters from outer --> inner axis
             for j in range(i,-1,-1):
                 await self.axes[j].update()
+        
+        # At this point all of the updates should have happened
+        # return the current coordinates of the sweep.
+        return [a.value for a in self.axes]
 
     async def check_for_refinement(self):
         for a in self.axes:

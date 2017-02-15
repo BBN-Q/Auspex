@@ -308,7 +308,20 @@ class Experiment(metaclass=MetaExperiment):
 
         done = True
         while True:
-            await self.sweeper.update()
+            # Increment the sweeper and get the current set of values
+            sweep_values = await self.sweeper.update()
+
+            # Add the new tuples to the stream descriptors
+            for oc in self.output_connectors.values():
+                vals = [a for a in oc.descriptor.data_axis_values()] # Make sure they are lists
+                if sweep_values:
+                    vals  = [[(v,)] for v in sweep_values] + vals
+                nested_list    = list(itertools.product(*vals))
+                try:
+                    flattened_list = [tuple((val for sublist in line for val in sublist)) for line in nested_list]
+                except:
+                    import ipdb; ipdb.set_trace()
+                oc.descriptor.visited_tuples = oc.descriptor.visited_tuples + flattened_list
 
             # Run the procedure
             logger.debug("Starting a new run.")
