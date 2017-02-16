@@ -41,7 +41,14 @@ class Sweeper(object):
         # At this point all of the updates should have happened
         # return the current coordinates of the sweep. Return the 
         # reversed list since we store "innermost" axes last.
-        return [a.value for a in self.axes[::-1]]
+        values = []
+        for a in self.axes[::-1]:
+            if type(a.value) in [np.ndarray, list]:
+                values.append(tuple(a.value)) 
+            else:
+                values.append((a.value,))
+        # print("Sweeper returning values:", values)
+        return values
 
     async def check_for_refinement(self):
         refined_axes = []

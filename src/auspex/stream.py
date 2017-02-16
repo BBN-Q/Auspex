@@ -83,15 +83,14 @@ class DataAxis(object):
         if self.unstructured and len(self.parameter) != len(points[0]):
             raise ValueError("Parameter value tuples must be the same length as the number of parameters.")
 
-        if not isinstance(points, np.ndarray):
-            if isinstance(points, list):
-                points = np.array(points)
-            else:
-                # Somebody gave one point to the "add_points" method...
-                points = np.array([points])
+        if type(points) in [list, np.ndarray]:
+            points = np.array(points)
+        else:
+            # Somebody gave one point to the "add_points" method...
+            points = np.array([points])
 
         self.num_new_points = len(points)
-        self.points = np.append(self.points, points)
+        self.points = np.append(self.points, points, axis=0)
         self.has_been_extended = True
 
     def reset(self):
@@ -146,6 +145,7 @@ class SweepAxis(DataAxis):
         if self.step < self.num_points():
             if self.callback_func:
                 self.callback_func(self, self.experiment)
+            # print(f"Axis {self.name} being set to {self.points[self.step]} of {self.points}")
             self.value = self.points[self.step]
             logger.debug("Sweep Axis '{}' at step {} takes value: {}.".format(self.name,
                                                                                self.step,self.value))
@@ -331,32 +331,28 @@ class DataStreamDescriptor(object):
             raise Exception("Couldn't pop axis {} from descriptor, it probably doesn't exist.".format(axis_name))
         return self.axes.pop(names.index(axis_name))
 
-    def num_points_through_axis(self, axis_name_or_num):
-        a_n = axis_name_or_num
-        if type(axis_name_or_num) == str:
-            a_n = self.axis_num(axis_name_or_num)
+    def num_points_through_axis(self, axis_name):
+        axis_num = self.axis_num(axis_name)
 
-        if False in [a.refine_func is None for a in self.axes[a_n:]]:
+        if False in [a.refine_func is None for a in self.axes[axis_num:]]:
             raise Exception("Cannot call num_points_through_axis with interior adaptive sweeps.")
 
-        if a_n >= len(self.axes):
+        if axis_num >= len(self.axes):
             return 0
         elif len(self.axes) == 1:
             return self.axes[0].num_points()
         else:
-            return reduce(lambda x,y: x*y, [a.num_points() for a in self.axes[a_n:]])
+            return reduce(lambda x,y: x*y, [a.num_points() for a in self.axes[axis_num:]])
 
-    def num_new_points_through_axis(self, axis_name_or_num):
-        a_n = axis_name_or_num
-        if type(axis_name_or_num) == str:
-            a_n = self.axis_num(axis_name_or_num)
+    def num_new_points_through_axis(self, axis_name):
+        axis_num = self.axis_num(axis_name)
 
-        if a_n >= len(self.axes):
+        if axis_num >= len(self.axes):
             return 0
         elif len(self.axes) == 1:
             return self.axes[0].num_new_points
         else:
-            return self.axes[a_n].num_new_points * reduce(lambda x,y: x*y, [a.num_points() for a in self.axes[a_n+1:]])
+            return self.axes[axis_num].num_new_points * reduce(lambda x,y: x*y, [a.num_points() for a in self.axes[axis_num+1:]])
 
     def __repr__(self):
         return "<DataStreamDescriptor(num_dims={}, num_points={})>".format(

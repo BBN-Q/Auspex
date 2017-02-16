@@ -310,12 +310,13 @@ class Experiment(metaclass=MetaExperiment):
         while True:
             # Increment the sweeper and get the current set of values
             sweep_values = await self.sweeper.update()
-            
             # Add the new tuples to the stream descriptors
             for oc in self.output_connectors.values():
                 vals = [a for a in oc.descriptor.data_axis_values()] # Make sure they are lists
                 if sweep_values:
-                    vals  = [[(v,)] for v in sweep_values] + vals
+                    vals  = [[v] for v in sweep_values] + vals
+
+                # vals = sweep_values + vals
                 nested_list    = list(itertools.product(*vals))
                 flattened_list = [tuple((val for sublist in line for val in sublist)) for line in nested_list]
                 oc.descriptor.visited_tuples = oc.descriptor.visited_tuples + flattened_list

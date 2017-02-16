@@ -388,7 +388,7 @@ class WriteTestCase(unittest.TestCase):
         with h5py.File("test_writehdf5_adaptive-0000.h5", 'r') as f:
             self.assertTrue(f['main']['data']['freq'].sum() == (55*(1+2+4+8+16)))
 
-        # os.remove("test_writehdf5_adaptive-0000.h5")
+        os.remove("test_wsritehdf5_adaptive-0000.h5")
 
     def test_writehdf5_unstructured_sweep(self):
         exp = SweptTestExperiment()
