@@ -103,7 +103,7 @@ class WriteToHDF5(Filter):
         stream     = streams[0]
 
         for s in streams[1:]:
-            if not np.all(s.descriptor.tuples() == streams[0].descriptor.tuples()):
+            if not np.all(s.descriptor.expected_tuples() == streams[0].descriptor.expected_tuples()):
                 raise ValueError("Multiple streams connected to writer must have matching descriptors.")
 
         desc       = stream.descriptor
@@ -128,7 +128,7 @@ class WriteToHDF5(Filter):
 
         # Extend the dtypes for each data column
         for stream in streams:
-            dtype.append((desc.data_name, desc.dtype))
+            dtype.append((stream.descriptor.data_name, desc.dtype))
 
         logger.debug("Data type for HDF5: %s", dtype)
         if self.compress:

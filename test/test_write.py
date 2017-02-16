@@ -346,7 +346,6 @@ class WriteTestCase(unittest.TestCase):
 
         edges = [(exp.voltage, wr.sink), (exp.current, wr.sink)]
         exp.set_graph(edges)
-
         exp.add_sweep(exp.field, np.linspace(0,100.0,4))
         exp.add_sweep(exp.freq, np.linspace(0,10.0,3))
         exp.run_sweeps()
@@ -388,7 +387,7 @@ class WriteTestCase(unittest.TestCase):
         with h5py.File("test_writehdf5_adaptive-0000.h5", 'r') as f:
             self.assertTrue(f['main']['data']['freq'].sum() == (55*(1+2+4+8+16)))
 
-        os.remove("test_wsritehdf5_adaptive-0000.h5")
+        os.remove("test_writehdf5_adaptive-0000.h5")
 
     def test_writehdf5_unstructured_sweep(self):
         exp = SweptTestExperiment()

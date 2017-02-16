@@ -130,9 +130,9 @@ class SweepAxis(DataAxis):
         self.metadata    = metadata
         self.experiment  = None # Should be explicitly set by the experiment
 
-        # Pathological case here — I hope nobody requests this
-        if self.metadata and self.refine_func:
-            raise Exception("Pathological use case! Please do not attempt to use adaptive sweeps with metadata.")
+        # # Pathological case here — I hope nobody requests this
+        # if self.metadata and self.refine_func:
+        #     raise Exception("Pathological use case! Please do not attempt to use adaptive sweeps with metadata.")
 
         if self.unstructured and len(parameter) != len(points[0]):
             raise ValueError("Parameter value tuples must be the same length as the number of parameters.")
