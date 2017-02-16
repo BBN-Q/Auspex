@@ -328,7 +328,10 @@ class Experiment(metaclass=MetaExperiment):
             await self.run()
 
             # See if the axes want to extend themselves
-            await self.sweeper.check_for_refinement()
+            refined_axes = await self.sweeper.check_for_refinement()
+            for oc in self.output_connectors.values():
+                if len(refined_axes) > 0:
+                     await oc.push_event("refined", refined_axes)
 
             # Update progress bars
             if self.progressbar is not None:

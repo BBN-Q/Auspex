@@ -224,7 +224,7 @@ class WriteToHDF5(Filter):
             # If we receive a message
             if message_type == 'event':
                 logger.debug('%s "%s" received event "%s"', self.__class__.__name__, self.name, message_data)
-                if messages[0]['data'] == 'done':
+                if messages[0]['event_type'] == 'done':
                     break
 
             elif message_type == 'data':
@@ -276,13 +276,6 @@ class WriteToHDF5(Filter):
 
                 logger.debug("HDF5: Write index at %d", w_idx)
                 logger.debug("HDF5: %s has written %d points", stream.name, w_idx)
-
-        # try:
-        #     self.file.close()
-        #     self.file = None
-        # except:
-        #     # This doesn't seem to happen when we don't used named columns
-        #     logger.debug("Ignoring 'dictionary changed sized during iteration' error.")
 
 class DataBuffer(Filter):
     """Writes data to file."""

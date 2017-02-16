@@ -43,8 +43,11 @@ class Sweeper(object):
         return [a.value for a in self.axes]
 
     async def check_for_refinement(self):
+        refined_axes = []
         for a in self.axes:
-            await a.check_for_refinement()
+            if await a.check_for_refinement():
+                refined_axes.append(a.name)
+        return refined_axes
 
     def done(self):
         return np.all([a.done for a in self.axes])

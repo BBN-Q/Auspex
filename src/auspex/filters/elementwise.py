@@ -82,7 +82,7 @@ class ElementwiseFilter(Filter):
                 message_comp = message['compression']
                 message_data = pickle.loads(zlib.decompress(message_data)) if message_comp == 'zlib' else message_data
                 message_data = message_data if hasattr(message_data, 'size') else np.array([message_data])
-                if message_type == 'event' and message_data == 'done':
+                if message_type == 'event' and message['event_type'] == 'done':
                     stream_done[stream] = True
 
                 elif message_type == 'data':

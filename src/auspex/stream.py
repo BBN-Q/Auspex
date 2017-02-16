@@ -162,10 +162,13 @@ class SweepAxis(DataAxis):
                     self.done = True
                     self.reset()
                     logger.debug("Sweep Axis '{}' complete.".format(self.name))
+                    return False
+                return True
             else:
                 self.step = 0
                 self.done = True
                 logger.debug("Sweep Axis '{}' complete.".format(self.name))
+                return False
 
     def push(self):
         """ Push parameter value(s) """
@@ -404,8 +407,8 @@ class DataStream(object):
         # and also should support sending via zmq.
         await self.queue.put(message)
 
-    async def push_event(self, event):
-        message = {"type": "event", "compression": "none", "data": event}
+    async def push_event(self, event_type, data=None):
+        message = {"type": "event", "compression": "none", "event_type": event_type, "data": data}
         await self.queue.put(message)
 
     async def push_direct(self, data):
@@ -502,6 +505,10 @@ class OutputConnector(object):
             self.points_taken += len(data)
         for stream in self.output_streams:
             await stream.push(data)
+
+    async def push_event(self, event_type, data=None):
+        for stream in self.output_streams:
+            await stream.push_event(event_type, data)
 
     def __repr__(self):
         return "<OutputConnector(name={})>".format(self.name)

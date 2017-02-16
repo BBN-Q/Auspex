@@ -124,9 +124,12 @@ class Filter(metaclass=MetaFilter):
                         await os.queue.put(message)
 
                 # Check to see if we're done
-                if message['data'] == 'done':
+                if message['event_type'] == 'done':
                     await self.on_done()
                     break
+                elif message['event_type'] == 'refined':
+                    print("Filter got refine", message_data)
+                    await self.refine(message_data)
 
             elif message['type'] == 'data':
                 if not hasattr(message_data, 'size'):
@@ -144,4 +147,8 @@ class Filter(metaclass=MetaFilter):
 
     async def process_direct(self, data):
         """Process direct data, ignore things like the data descriptors."""
+        pass
+
+    async def refine(self, axes):
+        """Try to deal with a refinement along the given axes."""
         pass
