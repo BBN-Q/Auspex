@@ -43,11 +43,16 @@ class Sweeper(object):
         # reversed list since we store "innermost" axes last.
         values = []
         for a in self.axes[::-1]:
-            if type(a.value) in [np.ndarray, list]:
-                values.append(tuple(a.value)) 
+            if a.metadata:
+                if type(a.value) in [np.ndarray, list]:
+                    values.append(tuple(list(a.value) + [a.metadata_value])) 
+                else:
+                    values.append((a.value, a.metadata_value))
             else:
-                values.append((a.value,))
-        # print("Sweeper returning values:", values)
+                if type(a.value) in [np.ndarray, list]:
+                    values.append(tuple(a.value)) 
+                else:
+                    values.append((a.value,))
         return values
 
     async def check_for_refinement(self):

@@ -279,7 +279,6 @@ class WriteTestCase(unittest.TestCase):
             self.assertTrue("Here the run loop merely spews" in f.attrs['exp_src'])
             self.assertTrue(f['main']['data'].attrs['time_val'] == 0)
             self.assertTrue(f['main']['data'].attrs['unit_freq'] == "Hz")
-            self.assertTrue(len(f['main']['field+freq']) == 12)
 
         os.remove("test_writehdf5_metadata_unstructured_adaptive-0000.h5")
 

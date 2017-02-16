@@ -117,6 +117,10 @@ class SweepAxis(DataAxis):
             super(SweepAxis, self).__init__(parameter.name, points, unit=parameter.unit)
             self.value     = points[0]
 
+        # Current value of the metadata
+        if self.metadata:
+            self.metadata_value = self.metadata[0]
+
         # This is run at the end of this sweep axis
         # Refine_func receives the sweep axis and the experiment as arguments
         self.refine_func = refine_func
@@ -130,10 +134,6 @@ class SweepAxis(DataAxis):
         self.metadata    = metadata
         self.experiment  = None # Should be explicitly set by the experiment
 
-        # # Pathological case here — I hope nobody requests this
-        # if self.metadata and self.refine_func:
-        #     raise Exception("Pathological use case! Please do not attempt to use adaptive sweeps with metadata.")
-
         if self.unstructured and len(parameter) != len(points[0]):
             raise ValueError("Parameter value tuples must be the same length as the number of parameters.")
 
@@ -145,8 +145,9 @@ class SweepAxis(DataAxis):
         if self.step < self.num_points():
             if self.callback_func:
                 self.callback_func(self, self.experiment)
-            # print(f"Axis {self.name} being set to {self.points[self.step]} of {self.points}")
             self.value = self.points[self.step]
+            if self.metadata:
+                self.metadata_value = self.metadata[self.step]
             logger.debug("Sweep Axis '{}' at step {} takes value: {}.".format(self.name,
                                                                                self.step,self.value))
             self.push()

@@ -128,7 +128,6 @@ class Filter(metaclass=MetaFilter):
                     await self.on_done()
                     break
                 elif message['event_type'] == 'refined':
-                    print("Filter got refine", message_data)
                     await self.refine(message_data)
 
             elif message['type'] == 'data':
