@@ -149,6 +149,6 @@ class Filter(metaclass=MetaFilter):
         """Process direct data, ignore things like the data descriptors."""
         pass
 
-    async def refine(self, axes):
+    async def refine(self, axis):
         """Try to deal with a refinement along the given axes."""
         pass

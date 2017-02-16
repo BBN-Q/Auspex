@@ -310,17 +310,14 @@ class Experiment(metaclass=MetaExperiment):
         while True:
             # Increment the sweeper and get the current set of values
             sweep_values = await self.sweeper.update()
-
+            
             # Add the new tuples to the stream descriptors
             for oc in self.output_connectors.values():
                 vals = [a for a in oc.descriptor.data_axis_values()] # Make sure they are lists
                 if sweep_values:
                     vals  = [[(v,)] for v in sweep_values] + vals
                 nested_list    = list(itertools.product(*vals))
-                try:
-                    flattened_list = [tuple((val for sublist in line for val in sublist)) for line in nested_list]
-                except:
-                    import ipdb; ipdb.set_trace()
+                flattened_list = [tuple((val for sublist in line for val in sublist)) for line in nested_list]
                 oc.descriptor.visited_tuples = oc.descriptor.visited_tuples + flattened_list
 
             # Run the procedure
@@ -328,10 +325,10 @@ class Experiment(metaclass=MetaExperiment):
             await self.run()
 
             # See if the axes want to extend themselves
-            refined_axes = await self.sweeper.check_for_refinement()
-            for oc in self.output_connectors.values():
-                if len(refined_axes) > 0:
-                     await oc.push_event("refined", refined_axes)
+            refined_axis = await self.sweeper.check_for_refinement()
+            if refined_axis is not None:
+                for oc in self.output_connectors.values():
+                     await oc.push_event("refined", refined_axis)
 
             # Update progress bars
             if self.progressbar is not None:

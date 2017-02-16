@@ -39,15 +39,21 @@ class Sweeper(object):
                 await self.axes[j].update()
         
         # At this point all of the updates should have happened
-        # return the current coordinates of the sweep.
-        return [a.value for a in self.axes]
+        # return the current coordinates of the sweep. Return the 
+        # reversed list since we store "innermost" axes last.
+        return [a.value for a in self.axes[::-1]]
 
     async def check_for_refinement(self):
         refined_axes = []
         for a in self.axes:
             if await a.check_for_refinement():
                 refined_axes.append(a.name)
-        return refined_axes
+        if len(refined_axes) > 1:
+            raise Exception("More than one axis trying to refine simultaneously. This cannot be tolerated.")
+        elif len(refined_axes) == 1:
+            return refined_axes[0]
+        else:
+            return None
 
     def done(self):
         return np.all([a.done for a in self.axes])

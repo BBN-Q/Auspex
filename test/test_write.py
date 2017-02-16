@@ -384,10 +384,11 @@ class WriteTestCase(unittest.TestCase):
         exp.run_sweeps()
         self.assertTrue(os.path.exists("test_writehdf5_adaptive-0000.h5"))
         self.assertTrue(wr.points_taken == 5*11*5)
+        
         with h5py.File("test_writehdf5_adaptive-0000.h5", 'r') as f:
-            self.assertTrue(len(f['main']['freq']) == 5)
+            self.assertTrue(f['main']['data']['freq'].sum() == (55*(1+2+4+8+16)))
 
-        os.remove("test_writehdf5_adaptive-0000.h5")
+        # os.remove("test_writehdf5_adaptive-0000.h5")
 
     def test_writehdf5_unstructured_sweep(self):
         exp = SweptTestExperiment()

@@ -107,15 +107,16 @@ class WriteToHDF5(Filter):
                 raise ValueError("Multiple streams connected to writer must have matching descriptors.")
 
         desc       = stream.descriptor
-        axes       = stream.descriptor.axes
-        params     = stream.descriptor.params
+        axes       = desc.axes
+        params     = desc.params
         axis_names = desc.axis_names(with_metadata=True)
 
-        self.file.attrs['exp_src'] = stream.descriptor.exp_src
+        self.file.attrs['exp_src'] = desc.exp_src
         num_axes   = len(axes)
 
         # All of the combinations for the present values of the sweep parameters only
-        tuples     = stream.descriptor.tuples(with_metadata=True, as_structured_array=True)
+        # tuples          = desc.expected_tuples(with_metadata=True, as_structured_array=True)
+        expected_length = desc.expected_num_points()
 
         # If desired, create the group in which the dataset and axes will reside
         if self.create_group:
@@ -123,22 +124,21 @@ class WriteToHDF5(Filter):
         else:
             self.group = self.file
 
-
         dtype = desc.axis_data_type(with_metadata=True)
 
         # Extend the dtypes for each data column
         for stream in streams:
-            dtype.append((stream.descriptor.data_name, stream.descriptor.dtype))
+            dtype.append((desc.data_name, desc.dtype))
 
         logger.debug("Data type for HDF5: %s", dtype)
         if self.compress:
-            self.data = self.group.create_dataset('data', (len(tuples),), dtype=dtype,
+            self.data = self.group.create_dataset('data', (expected_length,), dtype=dtype,
                                         chunks=True, maxshape=(None,),
                                         compression='gzip')
             # TODO: use single writer multiple reader when HDF5 libraries are updated in h5py
             # self.file.swmr_mode = True
         else:
-            self.data = self.group.create_dataset('data', (len(tuples),), dtype=dtype,
+            self.data = self.group.create_dataset('data', (expected_length,), dtype=dtype,
                                         chunks=True, maxshape=(None,))
             # TODO: use single writer multiple reader when HDF5 libraries are updated in h5py
             # self.file.swmr_mode = True
@@ -164,6 +164,7 @@ class WriteToHDF5(Filter):
 
             dtype = a.data_type(with_metadata=True)
             self.group.create_dataset(name, (a.num_points(),), dtype=dtype, maxshape=(None,) )
+            self.group[name].attrs['was_refined'] = False
 
             if a.unstructured:
                 for j, (col_name, col_unit) in enumerate(zip(a.name, a.unit)):
@@ -180,10 +181,6 @@ class WriteToHDF5(Filter):
             self.data.dims.create_scale(self.group[name], name)
             self.data.dims[0].attach_scale(self.group[name])
             self.descriptor[i] = self.group[name].ref
-
-        # Write the initial coordinate tuples
-        for i, a in enumerate(axis_names):
-            self.data[a,:] = tuples[a]
 
         # Write pointer
         w_idx = 0
@@ -214,20 +211,31 @@ class WriteToHDF5(Filter):
 
             # Infer the type from the first message
             message_type = messages[0]['type']
-
-            message_data = [message['data'] for message in messages]
-            message_comp = [message['compression'] for message in messages]
-            message_data = [pickle.loads(zlib.decompress(dat)) if comp == 'zlib' else dat for comp, dat in zip(message_comp, message_data)]
-            message_data = [dat if hasattr(dat, 'size') else np.array([dat]) for dat in message_data]  # Convert single values to arrays
-
-
+            
             # If we receive a message
             if message_type == 'event':
                 logger.debug('%s "%s" received event "%s"', self.__class__.__name__, self.name, message_data)
                 if messages[0]['event_type'] == 'done':
                     break
+                elif messages[0]['event_type'] == 'refined':
+                    refined_axis = messages[0]['data']
+                    
+                    # Resize the data set
+                    num_new_points = desc.num_new_points_through_axis(refined_axis)
+                    self.data.resize((len(self.data)+num_new_points,))
 
+                    # Generally speaking the descriptors are now insufficient to reconstruct
+                    # the full set of tuples. The user should know this, so let's mark the
+                    # descriptor axes accordingly.
+                    self.group[name].attrs['was_refined'] = True
+
+            
             elif message_type == 'data':
+                message_data = [message['data'] for message in messages]
+                message_comp = [message['compression'] for message in messages]
+                message_data = [pickle.loads(zlib.decompress(dat)) if comp == 'zlib' else dat for comp, dat in zip(message_comp, message_data)]
+                message_data = [dat if hasattr(dat, 'size') else np.array([dat]) for dat in message_data]  # Convert single values to arrays
+
                 for ii in range(1, len(message_data)):
                     if not hasattr(message_data[ii], 'size'):
                         message_data[ii] = np.array([message_data[ii]])
@@ -243,32 +251,14 @@ class WriteToHDF5(Filter):
                 except:
                     import ipdb; ipdb.set_trace()
 
-                # Resize if necessary, also get the new set of sweep tuples since the axes must have changed
-                if w_idx + message_data[0].size > self.data.len():
-                    # Get new data size
-                    num_points = stream.descriptor.num_points()
-                    self.data.resize((num_points,))
-                    logger.debug("HDF5 stream was resized to %d points", w_idx + message_data[0].size)
-
-                    # Get and write new coordinate tuples to the main
-                    # data set as well as the individual axis tables.
-                    tuples = stream.descriptor.tuples(with_metadata=True, as_structured_array=True)
-                    for axis_name in axis_names:
-                        self.data[axis_name, w_idx:num_points] = tuples[axis_name][w_idx:num_points]
-                    for i, a in enumerate(axes):
-                        if a.unstructured:
-                            name = "+".join(a.name)
-                            if a.num_points() > self.group[name].len():
-                                self.group[name].resize((a.num_points(),))
-                                for j, col_name in enumerate(a.name):
-                                    self.group[name][col_name,:] = a.points[:,j]
-                        else:
-                            if a.num_points() > self.group[a.name].len():
-                                self.group[a.name].resize((a.num_points(),))
-                                self.group[a.name][:] = a.points
-
+                # Write the data
                 for s, d in zip(streams, message_data):
                     self.data[s.descriptor.data_name, w_idx:w_idx+d.size] = d
+                
+                # Write the coordinate tuples
+                tuples = desc.tuples()
+                for axis_name in axis_names:
+                    self.data[axis_name, w_idx:w_idx+d.size] = tuples[axis_name][w_idx:w_idx+d.size]
 
                 self.file.flush()
                 w_idx += message_data[0].size
