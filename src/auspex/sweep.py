@@ -55,6 +55,9 @@ class Sweeper(object):
                     values.append((a.value,))
         return values
 
+    def is_adaptive(self):
+        return True in [a.refine_func is not None for a in self.axes]
+
     async def check_for_refinement(self):
         refined_axes = []
         for a in self.axes:

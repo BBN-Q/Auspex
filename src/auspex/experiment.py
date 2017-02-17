@@ -287,9 +287,11 @@ class Experiment(metaclass=MetaExperiment):
                 if hasattr(self,k):
                     v = getattr(self,k)
                     oc.descriptor.add_param(k, v)
+            if not self.sweeper.is_adaptive():
+                oc.descriptor.visited_tuples = oc.descriptor.expected_tuples(with_metadata=True, as_structured_array=False)
+            else:
+                oc.descriptor.visited_tuples = []
             oc.update_descriptors()
-        # TODO: have this push any changes to JSON file
-        # if we're using Quince to define connections.
 
     async def declare_done(self):
         for oc in self.output_connectors.values():
@@ -310,16 +312,18 @@ class Experiment(metaclass=MetaExperiment):
         while True:
             # Increment the sweeper and get the current set of values
             sweep_values = await self.sweeper.update()
-            # Add the new tuples to the stream descriptors
-            for oc in self.output_connectors.values():
-                vals = [a for a in oc.descriptor.data_axis_values()] # Make sure they are lists
-                if sweep_values:
-                    vals  = [[v] for v in sweep_values] + vals
 
-                # vals = sweep_values + vals
-                nested_list    = list(itertools.product(*vals))
-                flattened_list = [tuple((val for sublist in line for val in sublist)) for line in nested_list]
-                oc.descriptor.visited_tuples = oc.descriptor.visited_tuples + flattened_list
+            if self.sweeper.is_adaptive():
+                # Add the new tuples to the stream descriptors
+                for oc in self.output_connectors.values():
+                    vals = [a for a in oc.descriptor.data_axis_values()] # Make sure they are lists
+                    if sweep_values:
+                        vals  = [[v] for v in sweep_values] + vals
+
+                    # vals = sweep_values + vals
+                    nested_list    = list(itertools.product(*vals))
+                    flattened_list = [tuple((val for sublist in line for val in sublist)) for line in nested_list]
+                    oc.descriptor.visited_tuples = oc.descriptor.visited_tuples + flattened_list
 
             # Run the procedure
             logger.debug("Starting a new run.")

@@ -115,7 +115,7 @@ class WriteToHDF5(Filter):
         num_axes   = len(axes)
 
         # All of the combinations for the present values of the sweep parameters only
-        # tuples          = desc.expected_tuples(with_metadata=True, as_structured_array=True)
+        tuples          = desc.expected_tuples(with_metadata=True, as_structured_array=True)
         expected_length = desc.expected_num_points()
 
         # If desired, create the group in which the dataset and axes will reside
@@ -181,6 +181,11 @@ class WriteToHDF5(Filter):
             self.data.dims.create_scale(self.group[name], name)
             self.data.dims[0].attach_scale(self.group[name])
             self.descriptor[i] = self.group[name].ref
+
+        # Write all the tuples if this isn't adaptive
+        if not desc.is_adaptive():
+            for i, a in enumerate(axis_names):
+                self.data[a,:] = tuples[a]
 
         # Write pointer
         w_idx = 0
@@ -256,9 +261,10 @@ class WriteToHDF5(Filter):
                     self.data[s.descriptor.data_name, w_idx:w_idx+d.size] = d
                 
                 # Write the coordinate tuples
-                tuples = desc.tuples()
-                for axis_name in axis_names:
-                    self.data[axis_name, w_idx:w_idx+d.size] = tuples[axis_name][w_idx:w_idx+d.size]
+                if desc.is_adaptive():
+                    tuples = desc.tuples()
+                    for axis_name in axis_names:
+                        self.data[axis_name, w_idx:w_idx+d.size] = tuples[axis_name][w_idx:w_idx+d.size]
 
                 self.file.flush()
                 w_idx += message_data[0].size
