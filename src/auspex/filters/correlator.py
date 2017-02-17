@@ -19,17 +19,8 @@ class Correlator(ElementwiseFilter):
     def operation(self):
         return np.multiply
 
-    def update_descriptors(self):
-        logger.debug('Updating correlator "%s" descriptors based on input descriptor: %s.', self.name, self.sink.descriptor)
+    def filter_name(self):
+        return "Correlator"
 
-        # Sometimes not all of the input descriptors have been updated... pause here until they are:
-        if None in [ss.descriptor for ss in self.sink.input_streams]:
-            logger.debug('Correlator "%s" waiting for all input streams to be updated.', self.name)
-            return
-
-        descriptor = self.sink.descriptor.copy()
-        descriptor.data_name = "Correlator"
-        if descriptor.unit:
-            descriptor.unit = descriptor.unit + "^{}".format(len(self.sink.input_streams))
-        self.source.descriptor = descriptor
-        self.source.update_descriptors()
+    def unit(self, base_unit):
+        return base_unit + "^{}".format(len(self.sink.input_streams))
