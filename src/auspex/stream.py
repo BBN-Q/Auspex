@@ -36,6 +36,7 @@ class DataAxis(object):
         self.points       = np.array(points)
         self.unit         = unit
         self.metadata     = metadata
+        self.refine_func  = None
 
         # By definition data axes will be done after every experiment.run() call
         self.done         = True
@@ -205,6 +206,9 @@ class DataStreamDescriptor(object):
         # Keep track of the parameter permutations we have actually used...
         self.visited_tuples = []
 
+    def is_adaptive(self):
+        return True in [a.refine_func is not None for a in self.axes]
+
     def add_axis(self, axis):
         # Check if axis is DataAxis or SweepAxis (which inherits from DataAxis)
         if isinstance(axis, DataAxis):
@@ -261,15 +265,18 @@ class DataStreamDescriptor(object):
             logger.warning("DataStreamDescriptor has no pure DataAxis. Return None.")
             return None
 
-    def axis_data_type(self, with_metadata=False):
+    def axis_data_type(self, with_metadata=False, excluding_axis=None):
         dtype = []
         for a in self.axes:
-            dtype.extend(a.data_type(with_metadata=with_metadata))
-        # dtype.append((self.data_name, self.dtype))
+            if a.name != excluding_axis:
+                dtype.extend(a.data_type(with_metadata=with_metadata))
         return dtype
 
     def tuples(self, as_structured_array=True):
         if as_structured_array:
+            # If we already have a structured array
+            if type(self.visited_tuples) is np.ndarray and type(self.visited_tuples.dtype.names) is tuple:
+                return self.visited_tuples
             return np.core.records.fromrecords(self.visited_tuples, dtype=self.axis_data_type(with_metadata=True))
         return self.visited_tuples
 
@@ -333,10 +340,13 @@ class DataStreamDescriptor(object):
         return self.axes.pop(names.index(axis_name))
 
     def num_points_through_axis(self, axis_name):
-        axis_num = self.axis_num(axis_name)
+        if type(axis_name) is int:
+            axis_num = axis_name
+        else:
+            axis_num = self.axis_num(axis_name)
 
-        if False in [a.refine_func is None for a in self.axes[axis_num:]]:
-            raise Exception("Cannot call num_points_through_axis with interior adaptive sweeps.")
+        # if False in [a.refine_func is None for a in self.axes[axis_num:]]:
+        #     raise Exception("Cannot call num_points_through_axis with interior adaptive sweeps.")
 
         if axis_num >= len(self.axes):
             return 0
@@ -346,7 +356,10 @@ class DataStreamDescriptor(object):
             return reduce(lambda x,y: x*y, [a.num_points() for a in self.axes[axis_num:]])
 
     def num_new_points_through_axis(self, axis_name):
-        axis_num = self.axis_num(axis_name)
+        if type(axis_name) is int:
+            axis_num = axis_name
+        else:
+            axis_num = self.axis_num(axis_name)
 
         if axis_num >= len(self.axes):
             return 0
@@ -489,6 +502,9 @@ class OutputConnector(object):
             self.descriptor.data_name = self.data_name
             self.descriptor.unit = self.unit
         self.add_axis   = self.descriptor.add_axis
+
+        # Determine whether we need to deal with adaptive sweeps
+        self.has_adaptive_sweeps = False
 
     # We allow the connectors itself to posess
     # a descriptor, that it may pass

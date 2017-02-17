@@ -278,14 +278,14 @@ class DataBuffer(Filter):
         self.sink.max_input_streams = 100
 
     def final_init(self):
-        self.buffers = {s: np.empty(s.num_points(), dtype=s.descriptor.dtype) for s in self.sink.input_streams}
+        self.buffers = {s: np.empty(s.descriptor.expected_num_points(), dtype=s.descriptor.dtype) for s in self.sink.input_streams}
         self.w_idxs  = {s: 0 for s in self.sink.input_streams}
 
     async def run(self):
         streams = self.sink.input_streams
 
         for s in streams[1:]:
-            if not np.all(s.descriptor.tuples() == streams[0].descriptor.tuples()):
+            if not np.all(s.descriptor.expected_tuples() == streams[0].descriptor.expected_tuples()):
                 raise ValueError("Multiple streams connected to DataBuffer must have matching descriptors.")
 
         self.descriptor = streams[0].descriptor
@@ -320,8 +320,17 @@ class DataBuffer(Filter):
                 message_comp = message['compression']
                 message_data = pickle.loads(zlib.decompress(message_data)) if message_comp == 'zlib' else message_data
                 message_data = message_data if hasattr(message_data, 'size') else np.array([message_data])
-                if message_type == 'event' and message_data == 'done':
-                    stream_done[stream] = True
+                if message_type == 'event':
+                    if message['event_type'] == 'done':
+                        stream_done[stream] = True
+                    elif message['event_type'] == 'refined':
+                        # Single we don't have much structure here we simply
+                        # create a new buffer and paste the old buffer into it
+                        old_buffer = self.buffers[stream]
+                        new_size   = stream.descriptor.num_points()
+                        self.buffers[stream] = np.empty(stream.descriptor.num_points(), dtype=stream.descriptor.dtype)
+                        self.buffers[stream][:old_buffer.size] = old_buffer
+
                 elif message_type == 'data':
                     stream_data[stream] = message_data.flatten()
 
@@ -330,13 +339,8 @@ class DataBuffer(Filter):
                 break
 
             for stream in stream_results.keys():
-                data =  stream_data[stream]
-                if self.w_idxs[stream] + data.size > self.buffers[stream].size:
-                    # Create a new buffer and paste the old buffer into it
-                    old_buffer = self.buffers[stream]
-                    new_size = stream.descriptor.num_points()
-                    self.buffers[stream] = np.empty(stream.descriptor.num_points(), dtype=stream.descriptor.dtype)
-                    self.buffers[stream][:old_buffer.size] = old_buffer
+                data = stream_data[stream]
+                
                 self.buffers[stream][self.w_idxs[stream]:self.w_idxs[stream]+data.size] = data
                 self.w_idxs[stream] += data.size
 
@@ -351,7 +355,7 @@ class DataBuffer(Filter):
             dtype.append((stream.descriptor.data_name, stream.descriptor.dtype))
         data = np.empty(self.buffers[streams[0]].size, dtype=dtype)
 
-        tuples = desc.tuples(with_metadata=True, as_structured_array=True)
+        tuples = desc.tuples(as_structured_array=True)
         for a in desc.axis_names(with_metadata=True):
             data[a] = tuples[a]
         for stream in streams:
