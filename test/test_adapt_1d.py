@@ -24,10 +24,6 @@ from auspex.filters.io import WriteToHDF5
 from auspex.log import logger
 from auspex.analysis.io import load_from_HDF5
 
-import logging
-logger.setLevel(logging.INFO)
-
-
 
 class SweptTestExperiment(Experiment):
     """Here the run loop merely spews data until it fills up the stream. """

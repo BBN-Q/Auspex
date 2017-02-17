@@ -22,8 +22,7 @@ from auspex.parameter import FloatParameter
 from auspex.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector
 from auspex.filters.debug import Print, Passthrough
 from auspex.filters.average import Averager
-from auspex.log import logger, logging
-logger.setLevel(logging.INFO)
+from auspex.log import logger
 
 class TestInstrument1(SCPIInstrument):
     frequency = FloatCommand(get_string="frequency?", set_string="frequency {:g}", value_range=(0.1, 10))
