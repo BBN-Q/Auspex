@@ -267,6 +267,7 @@ def tc_analysis(filename):
  		plt.title(title)
  		plt.plot(ch_data['temp_meas'],ch_data['sheet_res'],'bo')
  		plt.savefig("{}.png".format(SAMPLE_MAP[ch]), bbox_inches='tight')
+ 		plt.clf()
 
  	print("Analysis complete")
 
@@ -283,15 +284,18 @@ def main():
 	global MAXPOINTS
 
 	# Define Measurement Channels and sample names
-	CHAN_LIST 	= [101,102,103,104]
-	RES_RANGE	= 1000
+	# CHAN_LIST 	= [101,102,103,104]
+	CHAN_LIST 	= [104]
+	RES_RANGE	= 100
 	cdPLC		= 10
 	TcPLC		= 100
-	SAMPLE_MAP	= {101:'TOX23_NbN',102:'TOX24_NbN',103:'TOX25_NbN',104:'TOX-23_Nb'} 
+	#SAMPLE_MAP	= {101:'TOX23_NbN',102:'TOX24_NbN',103:'TOX25_NbN',104:'TOX-23_Nb'}
+	#SAMPLE_MAP	= {101:'TOX23_NbN',102:'TOX24_NbN',103:'TOX25_NbN'} 
+	SAMPLE_MAP	= {104:'TOX-23_Nb'}
 
 	# Define Base Temp, Mas Temp, Temp resolution, Resistance noise and max points for Tc refinement
-	BASETEMP  = 4	  #Kelvin
-	MAXTEMP	  = 25 	  #Kelvin	
+	BASETEMP  = 3.2	  #Kelvin
+	MAXTEMP	  = 20 	  #Kelvin	
 	TRES      = 0.05  #Kelvin
 	RNOISE    = 0.009 #Ohms 
 	MAXPOINTS = 50
@@ -390,7 +394,7 @@ def main():
 		return True
 
 	# Defines index as sweep axis where transition function determines end condition
-	sweep_axis = tc_exp.add_sweep(tc_exp.temp_set, range(BASETEMP,MAXTEMP,2), refine_func=transition)
+	sweep_axis = tc_exp.add_sweep(tc_exp.temp_set, range(int(BASETEMP),int(MAXTEMP),2), refine_func=transition)
 
 	# Run the experiment
 	print("Running Tc Experiment...")
@@ -399,7 +403,7 @@ def main():
 	print("Tc Experiment Complete")
 
 	#Run post processing analysis
-	tc_anlaysis(wr.filename.value)
+	tc_analysis(wr.filename.value)
 
 
 
