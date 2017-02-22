@@ -209,7 +209,7 @@ class SCPIInstrument(Instrument):
 
         if interface_type is None:
             # Load the dummy interface, unless we see that GPIB is in the resource string
-            if any([x in self.resource_name for x in ["GPIB", "USB", "SOCKET", "hislip", "inst0"]]):
+            if any([x in self.resource_name for x in ["GPIB", "USB", "SOCKET", "hislip", "inst0", "COM"]]):
                 interface_type = "VISA"
 
         try:
