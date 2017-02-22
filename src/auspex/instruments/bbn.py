@@ -30,7 +30,7 @@ class DigitalAttenuator(SCPIInstrument):
 
     NUM_CHANNELS = 3
 
-    def __init__(self, resource_name, name='Unlabeled Digital Attenuator'):
+    def __init__(self, resource_name=None, name='Unlabeled Digital Attenuator'):
         super(DigitalAttenuator, self).__init__(resource_name=resource_name,
             name=name)
 
