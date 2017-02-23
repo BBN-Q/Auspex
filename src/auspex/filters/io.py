@@ -118,35 +118,29 @@ class WriteToHDF5(Filter):
         tuples          = desc.expected_tuples(with_metadata=True, as_structured_array=True)
         expected_length = desc.expected_num_points()
 
+        compression = 'gzip' if self.compress else None
+
         # If desired, create the group in which the dataset and axes will reside
         if self.create_group:
             self.group = self.file.create_group(self.groupname.value)
         else:
             self.group = self.file
 
-        dtype = desc.axis_data_type(with_metadata=True)
-
-        # Extend the dtypes for each data column
+        self.data_group = self.group.create_group("data")
+        
+        # Create datasets for each stream
+        dset_for_streams = {}
         for stream in streams:
-            dtype.append((stream.descriptor.data_name, desc.dtype))
-
-        logger.debug("Data type for HDF5: %s", dtype)
-        if self.compress:
-            self.data = self.group.create_dataset('data', (expected_length,), dtype=dtype,
+            dset = self.data_group.create_dataset(stream.descriptor.data_name, (expected_length,),
+                                        dtype=stream.descriptor.dtype,
                                         chunks=True, maxshape=(None,),
-                                        compression='gzip')
-            # TODO: use single writer multiple reader when HDF5 libraries are updated in h5py
-            # self.file.swmr_mode = True
-        else:
-            self.data = self.group.create_dataset('data', (expected_length,), dtype=dtype,
-                                        chunks=True, maxshape=(None,))
-            # TODO: use single writer multiple reader when HDF5 libraries are updated in h5py
-            # self.file.swmr_mode = True
+                                        compression=compression)
+            dset_for_streams[stream] = dset
 
         # Write params into attrs
         for k,v in params.items():
             if k not in axis_names:
-                self.data.attrs[k] = v
+                self.data_group.attrs[k] = v
 
         # Create a table for the DataStreamDescriptor
         ref_dtype = h5py.special_dtype(ref=h5py.Reference)
@@ -154,38 +148,68 @@ class WriteToHDF5(Filter):
         for k,v in desc.metadata.items():
             self.descriptor.attrs[k] = v
 
-        # Associated axis dimensions with the data and add
+        # Create axis data sets for storing the base axes as well as the
+        # full set of tuples. For the former we add 
         # references to the descriptor.
+        tuple_dset_for_axis_name = {}
         for i, a in enumerate(axes):
             if a.unstructured:
                 name = "+".join(a.name)
             else:
                 name = a.name
 
-            dtype = a.data_type(with_metadata=True)
-            self.group.create_dataset(name, (a.num_points(),), dtype=dtype, maxshape=(None,) )
-            self.group[name].attrs['was_refined'] = False
-
             if a.unstructured:
+                # Create another reference table to refer to the constituent axes
+                joint_name = "+".join(a.name)
+                unstruc_ref_dset = self.group.create_dataset(joint_name, (len(a.name),), dtype=ref_dtype)
+
                 for j, (col_name, col_unit) in enumerate(zip(a.name, a.unit)):
-                    self.group[name][col_name,:] = a.points[:,j]
-                    self.group[name].attrs['unit_'+col_name] = col_unit
+                    # Create table to store the axis value independently for each column
+                    unstruc_dset = self.group.create_dataset(col_name, (a.num_points(),), dtype=a.dtype)
+                    unstruc_ref_dset[j] = unstruc_dset.ref
+                    unstruc_dset[:] = a.points[:,j]
+                    unstruc_dset.attrs['unit'] = col_unit
+
+                    # This stores the values taking during the experiment sweeps
+                    dset = self.data_group.create_dataset(col_name, (expected_length,), dtype=a.dtype, 
+                                                         chunks=True, compression=compression, maxshape=(None,) )
+                    dset.attrs['unit'] = col_unit
+                    tuple_dset_for_axis_name[col_name] = dset
+
+                self.descriptor[i] = self.group[joint_name].ref
             else:
+                # This stores the axis values
+                self.group.create_dataset(name, (a.num_points(),), dtype=a.dtype, maxshape=(None,) )
+
                 self.group[name][:] = a.points
                 self.group[name].attrs['unit'] = "None" if a.unit is None else a.unit
+                self.descriptor[i] = self.group[name].ref
+
+                # This stores the values taking during the experiment sweeps
+                dset = self.data_group.create_dataset(name, (expected_length,), dtype=a.dtype,
+                                                      chunks=True, compression=compression, maxshape=(None,) )
+                dset.attrs['unit'] = "None" if a.unit is None else a.unit
+                tuple_dset_for_axis_name[name] = dset
+
+            # Give the reader some warning about the usefulness of these axes
+            self.group[name].attrs['was_refined'] = False
 
             if a.metadata:
+                # Create the axis table for the metadata
                 self.group[name + "_metadata"] = np.string_(a.metadata)
-                self.group[name][name + "_metadata",:] = np.string_(a.metadata)
 
-            self.data.dims.create_scale(self.group[name], name)
-            self.data.dims[0].attach_scale(self.group[name])
-            self.descriptor[i] = self.group[name].ref
+                # Associate the metadata with the data axis
+                self.group[name].attrs['metadata'] = self.group[name + "_metadata"].ref
+
+                # Create the dataset that stores the individual tuple values
+                dset = self.data_group.create_dataset(name + "_metadata" , (expected_length,),
+                                                      dtype=h5py.special_dtype(vlen=str), maxshape=(None,) )
+                tuple_dset_for_axis_name[name + "_metadata"] = dset
 
         # Write all the tuples if this isn't adaptive
         if not desc.is_adaptive():
             for i, a in enumerate(axis_names):
-                self.data[a,:] = tuples[a]
+                tuple_dset_for_axis_name[a][:] = tuples[a]
 
         # Write pointer
         w_idx = 0
@@ -227,7 +251,11 @@ class WriteToHDF5(Filter):
                     
                     # Resize the data set
                     num_new_points = desc.num_new_points_through_axis(refined_axis)
-                    self.data.resize((len(self.data)+num_new_points,))
+                    for stream in streams:
+                        dset_for_streams[stream].resize((len(dset_for_streams[streams[0]])+num_new_points,))
+
+                    for an in axis_names:
+                        tuple_dset_for_axis_name[an].resize((len(tuple_dset_for_axis_name[an])+num_new_points,))
 
                     # Generally speaking the descriptors are now insufficient to reconstruct
                     # the full set of tuples. The user should know this, so let's mark the
@@ -251,20 +279,17 @@ class WriteToHDF5(Filter):
                 logger.debug('%s "%s" received %d points', self.__class__.__name__, self.name, message_data[0].size)
                 logger.debug("Now has %d of %d points.", stream.points_taken, stream.num_points())
 
-                try:
-                    self.up_to_date = (w_idx == self.data.len())
-                except:
-                    import ipdb; ipdb.set_trace()
+                self.up_to_date = (w_idx == dset_for_streams[streams[0]].len())
 
                 # Write the data
                 for s, d in zip(streams, message_data):
-                    self.data[s.descriptor.data_name, w_idx:w_idx+d.size] = d
+                    dset_for_streams[s][w_idx:w_idx+d.size] = d
                 
                 # Write the coordinate tuples
                 if desc.is_adaptive():
                     tuples = desc.tuples()
                     for axis_name in axis_names:
-                        self.data[axis_name, w_idx:w_idx+d.size] = tuples[axis_name][w_idx:w_idx+d.size]
+                        tuple_dset_for_axis_name[axis_name][w_idx:w_idx+d.size] = tuples[axis_name][w_idx:w_idx+d.size]
 
                 self.file.flush()
                 w_idx += message_data[0].size

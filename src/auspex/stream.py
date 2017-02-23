@@ -22,7 +22,7 @@ from auspex.log import logger
 
 class DataAxis(object):
     """An axis in a data stream"""
-    def __init__(self, name, points=[], unit=None, metadata=None):
+    def __init__(self, name, points=[], unit=None, metadata=None, dtype=np.float32):
         super(DataAxis, self).__init__()
         if isinstance(name, list):
             self.unstructured = True
@@ -45,6 +45,7 @@ class DataAxis(object):
         self.original_points = self.points
         self.has_been_extended = False
         self.num_new_points = 0
+        self.dtype         = dtype
 
         if self.unstructured:
             if unit is not None and len(name) != len(unit):
