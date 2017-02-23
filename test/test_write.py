@@ -21,6 +21,7 @@ from auspex.parameter import FloatParameter
 from auspex.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector
 from auspex.filters.debug import Print
 from auspex.filters.io import WriteToHDF5
+from auspex.analysis.io import load_from_HDF5
 from auspex.log import logger
 
 class SweptTestExperiment(Experiment):
@@ -421,6 +422,9 @@ class WriteTestCase(unittest.TestCase):
         with h5py.File("test_writehdf5_unstructured-0000.h5", 'r') as f:
             self.assertTrue(f[f['main']['field+freq'][0]] == f['main']['field'])
             self.assertTrue(f[f['main']['field+freq'][1]] == f['main']['freq'])
+
+        data, desc = load_from_HDF5("test_writehdf5_unstructured-0000.h5")
+        self.assertTrue(data['main']['field'][-5:].sum() == 5*68)
 
         os.remove("test_writehdf5_unstructured-0000.h5")
 

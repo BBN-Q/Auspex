@@ -135,6 +135,8 @@ class WriteToHDF5(Filter):
                                         dtype=stream.descriptor.dtype,
                                         chunks=True, maxshape=(None,),
                                         compression=compression)
+            dset.attrs['is_data'] = True
+            dset.attrs['name'] = stream.descriptor.data_name
             dset_for_streams[stream] = dset
 
         # Write params into attrs
@@ -160,8 +162,8 @@ class WriteToHDF5(Filter):
 
             if a.unstructured:
                 # Create another reference table to refer to the constituent axes
-                joint_name = "+".join(a.name)
-                unstruc_ref_dset = self.group.create_dataset(joint_name, (len(a.name),), dtype=ref_dtype)
+                unstruc_ref_dset = self.group.create_dataset(name, (len(a.name),), dtype=ref_dtype)
+                unstruc_ref_dset.attrs['unstructured'] = True
 
                 for j, (col_name, col_unit) in enumerate(zip(a.name, a.unit)):
                     # Create table to store the axis value independently for each column
@@ -169,26 +171,32 @@ class WriteToHDF5(Filter):
                     unstruc_ref_dset[j] = unstruc_dset.ref
                     unstruc_dset[:] = a.points[:,j]
                     unstruc_dset.attrs['unit'] = col_unit
+                    unstruc_dset.attrs['name'] = col_name
 
                     # This stores the values taking during the experiment sweeps
                     dset = self.data_group.create_dataset(col_name, (expected_length,), dtype=a.dtype, 
                                                          chunks=True, compression=compression, maxshape=(None,) )
                     dset.attrs['unit'] = col_unit
+                    dset.attrs['is_data'] = False
+                    dset.attrs['name'] = col_name
                     tuple_dset_for_axis_name[col_name] = dset
 
-                self.descriptor[i] = self.group[joint_name].ref
+                self.descriptor[i] = self.group[name].ref
             else:
                 # This stores the axis values
                 self.group.create_dataset(name, (a.num_points(),), dtype=a.dtype, maxshape=(None,) )
-
+                self.group[name].attrs['unstructured'] = False
                 self.group[name][:] = a.points
                 self.group[name].attrs['unit'] = "None" if a.unit is None else a.unit
+                self.group[name].attrs['name'] = a.name
                 self.descriptor[i] = self.group[name].ref
 
                 # This stores the values taking during the experiment sweeps
                 dset = self.data_group.create_dataset(name, (expected_length,), dtype=a.dtype,
                                                       chunks=True, compression=compression, maxshape=(None,) )
                 dset.attrs['unit'] = "None" if a.unit is None else a.unit
+                dset.attrs['is_data'] = False
+                dset.attrs['name'] = name
                 tuple_dset_for_axis_name[name] = dset
 
             # Give the reader some warning about the usefulness of these axes
@@ -200,10 +208,12 @@ class WriteToHDF5(Filter):
 
                 # Associate the metadata with the data axis
                 self.group[name].attrs['metadata'] = self.group[name + "_metadata"].ref
+                self.group[name].attrs['name'] = name + "_metadata"
 
                 # Create the dataset that stores the individual tuple values
                 dset = self.data_group.create_dataset(name + "_metadata" , (expected_length,),
                                                       dtype=h5py.special_dtype(vlen=str), maxshape=(None,) )
+                dset.attrs['name'] = name + "_metadata"
                 tuple_dset_for_axis_name[name + "_metadata"] = dset
 
         # Write all the tuples if this isn't adaptive
