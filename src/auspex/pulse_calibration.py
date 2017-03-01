@@ -40,7 +40,7 @@ class PulseCalibration(object):
         self.filename   = 'None'
         self.exp        = None
         self.axis_descriptor = None
-        self.plot       = self.init_plot()
+        self.plots      = self.init_plots()
         self.notebook   = notebook
 
     def sequence(self):
@@ -51,9 +51,8 @@ class PulseCalibration(object):
         seq_files = compile_to_hardware(self.sequence(), fileName=self.filename, axis_descriptor=self.axis_descriptor)
         metafileName = os.path.join(QGLconfig.AWGDir, self.filename + '-meta.json')
         self.exp = QubitExpFactory.create(meta_file=metafileName, notebook=self.notebook, calibration=True)
-        if self.plot:
-            # Add the manual plotter and the update method to the experiment
-            self.exp.add_manual_plotter(self.plot)
+        # Add the manual plotters to the experiment, if any
+        [self.exp.add_manual_plotter(plot) for plot in self.plots or []]
         self.exp.connect_instruments()
         #set instruments for calibration
         for instr_to_set in instrs_to_set:
@@ -79,8 +78,8 @@ class PulseCalibration(object):
         # Return data and variance of the mean
         return data, var
 
-    def init_plot(self):
-        """Return a ManualPlotter object so we can plot calibrations. All
+    def init_plots(self):
+        """Return a list of ManualPlotter objects so we can plot calibrations. All
         plot lines, glyphs, etc. must be declared up front!"""
         return None
 
@@ -116,11 +115,11 @@ class RamseyCalibration(PulseCalibration):
     def sequence(self):
         return [[X90(self.qubit), Id(self.qubit, delay), X90(self.qubit), MEAS(self.qubit)] for delay in self.delays]
 
-    def init_plot(self):
+    def init_plots(self):
         plot = ManualPlotter("Ramsey Fit", x_label='Time (us)', y_label='Amplitude (Arb. Units)')
         self.dat_line = plot.fig.line([],[], line_width=1.0, legend="Data", color='navy')
         self.fit_line = plot.fig.line([],[], line_width=2.5, legend="Fit", color='firebrick')
-        return plot
+        return [plot]
 
     def calibrate(self):
 
