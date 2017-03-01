@@ -13,14 +13,12 @@ from auspex.log import logger
 from .elementwise import ElementwiseFilter
 
 class Correlator(ElementwiseFilter):
-    sink   = InputConnector()
-    source = OutputConnector()
+    sink        = InputConnector()
+    source      = OutputConnector()
+    filter_name = "Correlator"
 
     def operation(self):
         return np.multiply
-
-    def filter_name(self):
-        return "Correlator"
 
     def unit(self, base_unit):
         return base_unit + "^{}".format(len(self.sink.input_streams))

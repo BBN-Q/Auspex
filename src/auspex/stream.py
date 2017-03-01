@@ -274,6 +274,8 @@ class DataStreamDescriptor(object):
         return dtype
 
     def tuples(self, as_structured_array=True):
+        """Returns a list of all tuples visited by the sweeper. Should only
+        be used with adaptive sweeps."""
         if as_structured_array:
             # If we already have a structured array
             if type(self.visited_tuples) is np.ndarray and type(self.visited_tuples.dtype.names) is tuple:
@@ -282,8 +284,10 @@ class DataStreamDescriptor(object):
         return self.visited_tuples
 
     def expected_tuples(self, with_metadata=False, as_structured_array=True):
+        """Returns a list of tuples representing the cartesian product of the axis values. Should only
+        be used with non-adaptive sweeps."""
         vals           = [a.points_with_metadata() for a in self.axes]
-        nested_list    = list(itertools.product(*vals))
+        nested_list    = itertools.product(*vals)
         flattened_list = [tuple((val for sublist in line for val in sublist)) for line in nested_list]
         if as_structured_array:
             return np.core.records.fromrecords(flattened_list, dtype=self.axis_data_type(with_metadata=True))

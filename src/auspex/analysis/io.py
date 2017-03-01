@@ -27,7 +27,10 @@ def load_from_HDF5(filename_or_fileobject, return_structured_array=True):
             ax = g[ref]
             if ax.attrs['unstructured']:
                 # The entry for the main unstructured axis contains
-                # references to the constituent axes
+                # references to the constituent axes.
+                
+                # The DataAxis expects points as tuples coordinates 
+                # in the form [(x1, y1), (x2, y2), ...].
                 points = np.vstack([g[e] for e in ax[:]]).T
                 names = [g[e].attrs["name"] for e in ax[:]]
                 units = [g[e].attrs["unit"] for e in ax[:]]

@@ -186,7 +186,6 @@ class Averager(Filter):
                 idx       += new_points
 
                 if self.sink.descriptor.is_adaptive():
-                    import ipdb; ipdb.set_trace()
                     new_tuples = self.sink.descriptor.tuples()[self.idx_global:self.idx_global + len(reshaped)]
                     new_tuples_stripped = remove_fields(new_tuples, self.axis.value)
                     take_axis = -1 if self.axis_num > 0 else 0 
