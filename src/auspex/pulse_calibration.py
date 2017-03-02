@@ -275,34 +275,54 @@ class DRAGCalibration(PulseCalibration):
         seqs += create_cal_seqs((q,),2)
         return seqs
 
+    def init_plots(self):
+        cal_plot = ManualPlotter("DRAG Fit", x_label='DRAG parameter', y_label='Amplitude (Arb. Units)')
+        self.dat_line = cal_plot.fig.line([],[], line_width=1.0, legend="Data", color='navy')
+        self.fit_line = cal_plot.fig.line([],[], line_width=2.5, legend="Fit", color='firebrick')
+        result_plot = ManualPlotter("DRAG Result", x_label = "Number of pulses", y_label = "Fit DRAG parameter")
+        self.DRAG_line = result_plot.fig.line([],[], line_width=1.0, legend="Fit_result", color='navy')
+        self.DRAG_points = result_plot.fig.square([],[], legend="Fit_result", color='navy')
+        return [cal_plot, result_plot]
+
     def calibrate(self):
         #generate sequence
         self.set()
         #first run
         data, _ = self.run()
         #fit and analyze
-        opt_drag, error_drag = fit_drag(self.deltas, self.num_pulses, norm_data)
+        opt_drag, error_drag, popt_mat = fit_drag(self.deltas, self.num_pulses, norm_data)
+
+        # Plot the results
+        self.dat_line.data_source.data = dict(x=self.deltas, y=data)
+        finer_deltas = np.linspace(np.min(self.deltas), np.max(self.deltas), 4*len(self.deltas))
+        #self.fit_line.data_source.data = dict(x=finer_deltas, y=fit_drag(finer_deltas, popt_mat)) #do we need a separate dat_line per curve? I hope not
+        self.DRAG_line.data_source.data = dict(x=self.num_pulses, y=opt_drag)
+        self.DRAG_points.data_source.data = dict(x=self.num_pulses, y=opt_drag)
+        #TODO: add error bars
 
         #generate sequence with new pulses and drag parameters
         new_drag_step = 0.25*(max(self.deltas) - min(self.deltas))
-        self.deltas = np.range(opt_drag - new_drag_step, opt_drag + new_drag_step, len(self.deltas))
+        self.deltas = np.range(opt_drag[-1] - new_drag_step, opt_drag[-1] + new_drag_step, len(self.deltas))
         new_pulse_step = 2*(max(self.num_pulses)-min(self.num_pulses))/len(self.num_pulses)
         self.num_pulses = np.arange(max(self.num_pulses) - new_pulse_step, max(self.num_pulses) + new_pulse_step*(len(self.num_pulses)-1), new_pulse_step)
         self.set()
 
         #second run, finer range
         data, _ = self.run()
-        opt_drag, error_drag = fit_drag(data)
+        opt_drag, error_drag, popt_mat = fit_drag(data)
+
+        #TODO: plot results 2nd round
+
         #TODO: success condition
 
         print("DRAG", opt_drag)
 
         with open(config.channelLibFile, 'r') as FID:
             chan_settings = json.load(FID)
-        chan_settings['channelDict'][self.qubit_name]['pulseParams']['dragScaling'] = fitted_drag
+        chan_settings['channelDict'][self.qubit_name]['pulseParams']['dragScaling'] = opt_drag[-1]
         self.update_libraries([chan_settings], [config.channelLibFile])
 
-        return fitted_drag
+        return opt_drag[-1]
 
 def restrict(phase):
     out = np.mod( phase + np.pi, 2*np.pi, ) - np.pi
