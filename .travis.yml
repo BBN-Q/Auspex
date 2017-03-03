@@ -23,6 +23,7 @@ install:
   - source activate test-environment
   - pip install git+https://github.com/BBN-Q/Adapt.git
   - pip install tqdm pyvisa coveralls
+  - export PYTHONPATH=$PYTHONPATH:$PWD/src
 
 script:
   - coverage run -m unittest discover -v test
