@@ -14,8 +14,7 @@ from auspex.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConn
 from auspex.filters.debug import Print, Passthrough
 from auspex.filters.correlator import Correlator
 from auspex.filters.io import DataBuffer
-from auspex.log import logger, logging
-logger.setLevel(logging.INFO)
+from auspex.log import logger
 
 class CorrelatorExperiment(Experiment):
 

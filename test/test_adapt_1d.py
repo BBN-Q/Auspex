@@ -24,10 +24,6 @@ from auspex.filters.io import WriteToHDF5
 from auspex.log import logger
 from auspex.analysis.io import load_from_HDF5
 
-import logging
-logger.setLevel(logging.INFO)
-
-
 
 class SweptTestExperiment(Experiment):
     """Here the run loop merely spews data until it fills up the stream. """
@@ -68,12 +64,9 @@ class Adapt1DTestCase(unittest.TestCase):
         exp.set_graph(edges)
 
         async def rf(sweep_axis, exp):
-            # logger.debug("Waiting for writer to catch up...")
-            # await asyncio.sleep(0.5)
-            # return False
             logger.debug("Running refinement function.")
-            temps = wr.data['temperature']
-            ress  = wr.data['resistance']
+            temps = wr.group['data']['temperature'][:]
+            ress  = wr.group['data']['resistance'][:]
             logger.debug("Temps: {}".format(temps))
             logger.debug("Ress: {}".format(ress))
 

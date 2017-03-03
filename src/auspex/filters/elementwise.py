@@ -25,8 +25,9 @@ class ElementwiseFilter(Filter):
     """Asynchronously perform elementwise operations on multiple streams:
     e.g. multiply or add all streams element-by-element"""
 
-    sink   = InputConnector()
-    source = OutputConnector()
+    sink        = InputConnector()
+    source      = OutputConnector()
+    filter_name = "GenericElementwise" # To identify subclasses when naming data streams
 
     def __init__(self, **kwargs):
         super(ElementwiseFilter, self).__init__(**kwargs)
@@ -37,15 +38,32 @@ class ElementwiseFilter(Filter):
         """Must be overridden with the desired mathematical function"""
         pass
 
+    def unit(self, base_unit):
+        """Must be overridden accoriding the desired mathematical function
+        e.g. return base_unit + "^{}".format(len(self.sink.input_streams))"""
+        pass
+
     def update_descriptors(self):
         """Must be overridden depending on the desired mathematical function"""
-        pass
+        logger.debug('Updating %s "%s" descriptors based on input descriptor: %s.', self.filter_name, self.name, self.sink.descriptor)
+
+        # Sometimes not all of the input descriptors have been updated... pause here until they are:
+        if None in [ss.descriptor for ss in self.sink.input_streams]:
+            logger.debug('%s "%s" waiting for all input streams to be updated.', self.filter_name, self.name)
+            return
+
+        self.descriptor = self.sink.descriptor.copy()
+        self.descriptor.data_name = self.filter_name
+        if self.descriptor.unit:
+            self.descriptor.unit = self.descriptor.unit + "^{}".format(len(self.sink.input_streams))
+        self.source.descriptor = self.descriptor
+        self.source.update_descriptors()
 
     async def run(self):
         streams = self.sink.input_streams
 
         for s in streams[1:]:
-            if not np.all(s.descriptor.tuples() == streams[0].descriptor.tuples()):
+            if not np.all(s.descriptor.expected_tuples() == streams[0].descriptor.expected_tuples()):
                 raise ValueError("Multiple streams connected to correlator must have matching descriptors.")
 
         # Buffers for stream data
@@ -82,8 +100,11 @@ class ElementwiseFilter(Filter):
                 message_comp = message['compression']
                 message_data = pickle.loads(zlib.decompress(message_data)) if message_comp == 'zlib' else message_data
                 message_data = message_data if hasattr(message_data, 'size') else np.array([message_data])
-                if message_type == 'event' and message_data == 'done':
-                    stream_done[stream] = True
+                if message_type == 'event':
+                    if message['event_type'] == 'done':
+                        stream_done[stream] = True
+                    elif message['event_type'] == 'refine':
+                        logger.warning("Correlator doesn't handle refinement yet!")
 
                 elif message_type == 'data':
                     stream_data[stream] = np.concatenate((stream_data[stream], message_data.flatten()))
