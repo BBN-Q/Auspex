@@ -6,19 +6,34 @@ python:
   - "3.5"
   - "3.6"
 
-# Setup anaconda
-before_install:
-  # - sudo apt-get update
-  - pip install -r requirements.txt
-  - pip install sklearn
-  - git clone https://github.com/BBN-Q/Adapt.git && cd Adapt && pip install -e . && cd ..
-
 install:
-  - export PYTHONPATH=$PYTHONPATH:$PWD/src
+  # Setup anaconda. See http://conda.pydata.org/docs/travis.html
 
-# execute scripts
+  - wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh
+  - bash miniconda.sh -b -p $HOME/miniconda
+  - export PATH="$HOME/miniconda/bin:$PATH"
+  - hash -r
+  - conda config --set always_yes yes --set changeps1 no
+  - conda update -q conda
+  # Useful for debugging any issues with conda
+  - conda info -a
+
+  # Create conda environment with dependencies
+  - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION numpy scipy bokeh h5py pandas networkx
+  - source activate test-environment
+  - pip install git+https://github.com/BBN-Q/Adapt.git
+  - pip install tqdm pyvisa coveralls
+
 script:
-  - python -m unittest discover -v test
+  - coverage run -m unittest discover -v test
+
+after_script:
+  - coveralls
 
 # necessary to run on new container-based infrastructure
 sudo: false
+
+cache:
+  directories:
+    - $HOME/download
+    - $HOME/.cache/pip
