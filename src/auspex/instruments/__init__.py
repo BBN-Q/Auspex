@@ -11,6 +11,7 @@ from .keithley import Keithley2400
 from .kepco import BOP2020M
 from .keysight import KeysightM8190A, Scenario, Sequence
 from .picosecond import Picosecond10070A
+from .rfmd import Attenuator
 from .stanford import SR830, SR865
 from .tektronix import DPO72004C
 from .X6 import X6, X6Channel
