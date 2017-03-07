@@ -16,9 +16,7 @@ from PyDAQmx import *
 
 from auspex.experiment import FloatParameter, Experiment
 from auspex.stream import DataAxis, OutputConnector, DataStreamDescriptor
-from auspex.filters.io import WriteToHDF5
-from auspex.filters.average import Averager
-from auspex.filters.plot import Plotter
+from auspex.filters import WriteToHDF5, Averager, Plotter
 from auspex.log import logger
 
 import asyncio
@@ -180,7 +178,7 @@ class ResetSearchExperiment(Experiment):
         self.arb.stop()
         self.keith.current = 0.0
         self.mag.disconnect()
-        del self.mag
+        # del self.mag
         # mag.zero()
 
 if __name__ == "__main__":

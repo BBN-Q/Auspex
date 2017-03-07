@@ -15,8 +15,7 @@ from auspex.instruments import Attenuator
 
 from auspex.experiment import FloatParameter, IntParameter, Experiment
 from auspex.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector
-from auspex.filters.debug import Print
-from auspex.filters.io import WriteToHDF5, ProgressBar
+from auspex.filters import WriteToHDF5, ProgressBar
 
 from PyDAQmx import *
 
@@ -24,7 +23,7 @@ import asyncio
 import numpy as np
 import time
 import matplotlib.pyplot as plt
-from analysis.h5shell import h5shell
+from auspex.analysis.h5shell import h5shell
 
 from auspex.log import logger
 
@@ -36,7 +35,7 @@ from auspex.log import logger
 # AWG Samp. Marker Out -> PSPL Trigger
 
 class SwitchSearchExperiment(Experiment):
-    daq_buffer = OutputConnector()
+    voltage = OutputConnector()
 
     sample = "CSHE2"
     comment = "Search PSPL Switch Voltage"
@@ -58,7 +57,7 @@ class SwitchSearchExperiment(Experiment):
     mag   = AMI430("192.168.5.109")
     keith = Keithley2400("GPIB0::25::INSTR")
     lock  = SR865("USB0::0xB506::0x2000::002638::INSTR")
-    atten = Attenuator("calibration/RFSA2113SB_HPD_20160706.csv", lock.set_ao2, lock.set_ao3)
+    atten = Attenuator("calibration/RFSA2113SB_HPD_20160901.csv", lock.set_ao2, lock.set_ao3)
 
     min_daq_voltage = 0.0
     max_daq_voltage = 0.4
@@ -164,9 +163,9 @@ class SwitchSearchExperiment(Experiment):
     def init_streams(self):
         # Baked in data axes
         descrip = DataStreamDescriptor()
-        descrip.add_axis(DataAxis("samples", range(self.samps_per_trig)))
+        descrip.add_axis(DataAxis("sample", range(self.samps_per_trig)))
         descrip.add_axis(DataAxis("attempts", range(self.attempts)))
-        self.daq_buffer.set_descriptor(descrip)
+        self.voltage.set_descriptor(descrip)
 
     async def run(self):
         self.arb.advance()
@@ -175,10 +174,10 @@ class SwitchSearchExperiment(Experiment):
         self.analog_input.ReadAnalogF64(self.buf_points, -1, DAQmx_Val_GroupByChannel,
                                         buf, self.buf_points, byref(self.read), None)
         logger.debug("Read a buffer of {} points".format(buf.size))
-        await self.daq_buffer.push(buf)
+        await self.voltage.push(buf)
         # Seemingly we need to give the filters some time to catch up here...
         await asyncio.sleep(0.02)
-        logger.debug("Stream has filled {} of {} points".format(self.daq_buffer.points_taken, self.daq_buffer.num_points()))
+        logger.debug("Stream has filled {} of {} points".format(self.voltage.points_taken, self.voltage.num_points()))
 
     def shutdown_instruments(self):
         try:
@@ -207,8 +206,8 @@ if __name__=='__main__':
     # Set up measurement network
     wr = WriteToHDF5("data\CSHE-Switching\CSHE-Die2-C4R2\CSHE2-C4R2-Search_Switch_2016-06-30.h5")
     # pbar = ProgressBar(num=2)
-    # edges = [(exp.daq_buffer, wr.data), (exp.daq_buffer, pbar.data)]
-    edges = [(exp.daq_buffer, wr.data)]
+    # edges = [(exp.voltage, wr.data), (exp.voltage, pbar.data)]
+    edges = [(exp.voltage, wr.data)]
     exp.set_graph(edges)
     exp.init_instruments()
 
