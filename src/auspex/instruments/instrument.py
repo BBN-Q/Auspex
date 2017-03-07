@@ -175,6 +175,7 @@ class Instrument(metaclass=MetaInstrument):
 
     def __del__(self):
         self.disconnect()
+        super(Instrument, self).__del__()
 
     def set_all(self, settings_dict):
         """Accept a settings dictionary and attempt to set all of the instrument
@@ -206,6 +207,7 @@ class SCPIInstrument(Instrument):
             raise Exception("Must supply a resource name to 'connect' if the instrument was initialized without one.")
         elif resource_name is not None:
             self.resource_name = resource_name
+        self.full_resource_name = self.resource_name
 
         if interface_type is None:
             # Load the dummy interface, unless we see that GPIB is in the resource string
@@ -218,16 +220,16 @@ class SCPIInstrument(Instrument):
                     "interface as none was provided.".format(self.name))
                 self.interface = Interface()
             elif interface_type == "VISA":
-                if any(is_valid_ipv4(substr) for substr in self.resource_name.split("::")):
+                if any(is_valid_ipv4(substr) for substr in self.full_resource_name.split("::")) and "TCPIP" not in self.full_resource_name:
                     ## assume single NIC for now
-                    self.resource_name = "TCPIP0::" + self.resource_name
-                self.interface = VisaInterface(self.resource_name)
+                    self.full_resource_name = "TCPIP0::" + self.full_resource_name
+                self.interface = VisaInterface(self.full_resource_name)
                 print(self.interface._resource)
                 logger.debug("A pyVISA interface {} was created for instrument {}.".format(str(self.interface._resource), self.name))
             else:
                 raise ValueError("That interface type is not yet recognized.")
         except:
-            logger.error("Could not initialize interface for %s.", self.resource_name)
+            logger.error("Could not initialize interface for %s.", self.full_resource_name)
             self.interface = MagicMock()
         self._freeze()
 
@@ -253,6 +255,8 @@ class SCPIInstrument(Instrument):
         if hasattr(self, 'interface') and hasattr(self.interface, "_resource"):
             logger.debug("VISA Interface for {} @ {} closed.".format(self.name, self.resource_name))
             self.interface._resource.close()
+        super(SCPIInstrument, self).__del__()
+
 
     def __repr__(self):
         return "{} @ {}".format(self.name, self.resource_name)
