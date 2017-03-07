@@ -19,6 +19,15 @@ class Sweeper(object):
         self.axes = []
         logger.debug("Generate Sweeper.")
 
+    def swept_parameters(self):
+        swept_axes = []
+        for a in self.axes:
+            if a.unstructured:
+                swept_axes.extend(a.parameter)
+            else:
+                swept_axes.append(a.parameter)
+        return swept_axes
+
     def add_sweep(self, axis):
         self.axes.append(axis)
         logger.debug("Add sweep axis to sweeper object: {}".format(axis))
