@@ -14,9 +14,54 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 import h5py
 
+from auspex.analysis.io import load_from_HDF5
 from auspex.log import logger
 
-def load_switching_data(filename, start_state=None, failure=False,
+def load_switching_data(filename_or_fileobject, start_state=None, group="main", failure=False, threshold=None,
+                        voltage_scale_factor=1.0, duration_scale_factor=1.0, data_filter=None):
+    data, desc = load_from_HDF5(filename_or_fileobject)
+    # Regular axes
+    states = desc[group].axis("state").points
+    reps   = desc[group].axis("attempt").points
+    # Main data array, possibly unstructured
+    dat = data[group][:].reshape((-1, reps.size, states.size))
+    # Filter data if desired
+    # e.g. filter_func = lambda dat: np.logical_and(dat['field'] == 0.04, dat['temperature'] == 4.0)
+    if data_filter:
+        dat = dat[np.where(data_filter(dat))]
+
+    Vs     = dat['voltage']
+    durs   = dat['pulse_duration'][:,0,0]
+    amps   = dat['pulse_voltage'][:,0,0]
+    points = np.array([durs, amps]).transpose()
+
+    if failure:
+        return points, reset_failure(Vs, start_state=start_state)
+    else:
+        return points, switching_phase(Vs, start_state=start_state, threshold=threshold)
+
+def load_switching_data_legacy(filename, start_state=None, failure=False,
+                        threshold=None,
+                        voltage_scale_factor=1.0, duration_scale_factor=1.0):
+    with h5py.File(filename, 'r') as f:
+        # Regular axes
+        states = f['state'][:]
+        reps   = f['attempt'][:]
+        # Unstructured axes
+        dat = f['data'][:].reshape((-1, reps.size, states.size))
+        Vs  = dat['voltage']
+        # Get the point tuples
+        durs   = dat[:,0,0]['pulse_duration']
+        amps   = dat[:,0,0]['pulse_voltage']
+        points = np.array([durs, amps]).transpose()
+
+    if failure:
+        return points, reset_failure(Vs, start_state=start_state)
+    else:
+        return points, switching_phase(Vs, start_state=start_state, threshold=threshold)
+
+
+def load_switching_data_legacy(filename, start_state=None, failure=False,
                         threshold=None,
                         voltage_scale_factor=1.0, duration_scale_factor=1.0):
     with h5py.File(filename, 'r') as f:
@@ -170,7 +215,7 @@ def phase_diagram_mesh(points, values,
                                 ylabel="Pulse Amplitude (V)",
                                 shading="flat",
                                 voronoi=False, **kwargs):
-    fig = plt.figure()
+    # fig = plt.figure()
     if voronoi:
         from scipy.spatial import Voronoi, voronoi_plot_2d
         points[:,0] *= 1e9
