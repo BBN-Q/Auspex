@@ -117,7 +117,7 @@ class Averager(Filter):
         self.partial_average.descriptor = descriptor
         self.final_average.descriptor   = descriptor
 
-        # We can update the visited_tuples upfront if none 
+        # We can update the visited_tuples upfront if none
         # of the sweeps are adaptive...
         desc_out_dtype = descriptor_in.axis_data_type(with_metadata=True, excluding_axis=self.axis.value)
         if not descriptor_in.is_adaptive():
@@ -126,7 +126,7 @@ class Averager(Filter):
             flattened_list = [tuple((val for sublist in line for val in sublist)) for line in nested_list]
             descriptor.visited_tuples = np.core.records.fromrecords(flattened_list, dtype=desc_out_dtype)
         else:
-            descriptor.visited_tuples = np.empty(dtype=desc_out_dtype)
+            descriptor.visited_tuples = np.empty((0), dtype=desc_out_dtype)
 
         for stream in self.partial_average.output_streams + self.final_average.output_streams:
             stream.set_descriptor(descriptor)
@@ -144,7 +144,7 @@ class Averager(Filter):
         if not descriptor_in.is_adaptive():
             descriptor_var.visited_tuples = np.core.records.fromrecords(flattened_list, dtype=desc_out_dtype)
         else:
-            descriptor_var.visited_tuples = np.empty(dtype=desc_out_dtype)
+            descriptor_var.visited_tuples = np.empty((0), dtype=desc_out_dtype)
 
         for stream in self.final_variance.output_streams:
             stream.set_descriptor(descriptor_var)
@@ -186,10 +186,11 @@ class Averager(Filter):
                 idx       += new_points
 
                 if self.sink.descriptor.is_adaptive():
-                    new_tuples = self.sink.descriptor.tuples()[self.idx_global:self.idx_global + len(reshaped)]
+                    new_tuples = self.sink.descriptor.tuples()[self.idx_global:self.idx_global + new_points]
                     new_tuples_stripped = remove_fields(new_tuples, self.axis.value)
-                    take_axis = -1 if self.axis_num > 0 else 0 
+                    take_axis = -1 if self.axis_num > 0 else 0
                     reduced_tuples = new_tuples_stripped.reshape(self.reshape_dims).take((0,), axis=take_axis)
+                    self.idx_global += new_points
 
                 # Add to Visited tuples
                 if self.sink.descriptor.is_adaptive():
