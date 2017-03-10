@@ -14,6 +14,7 @@ import numpy as np
 
 def load_from_HDF5(filename_or_fileobject, return_structured_array=True):
     data = {}
+    descriptors = {}
     if isinstance(filename_or_fileobject, h5py.File):
         f = filename_or_fileobject
     else:
@@ -28,8 +29,8 @@ def load_from_HDF5(filename_or_fileobject, return_structured_array=True):
             if ax.attrs['unstructured']:
                 # The entry for the main unstructured axis contains
                 # references to the constituent axes.
-                
-                # The DataAxis expects points as tuples coordinates 
+
+                # The DataAxis expects points as tuples coordinates
                 # in the form [(x1, y1), (x2, y2), ...].
                 points = np.vstack([g[e] for e in ax[:]]).T
                 names = [g[e].attrs["name"] for e in ax[:]]
@@ -48,17 +49,18 @@ def load_from_HDF5(filename_or_fileobject, return_structured_array=True):
         if return_structured_array:
             dtype = [(g['data'][n].attrs['name'], g['data'][n].dtype.char) for n in col_names]
             length = g['data'][col_names[0]].shape[0]
-            group_data = np.empty((length,), dtype=dtype) 
+            group_data = np.empty((length,), dtype=dtype)
             for cn in col_names:
                 group_data[cn] = g['data'][cn]
         else:
             group_data = {n: g['data'][n][:] for n in col_names}
-        
+
 
         data[groupname] = group_data
-
-    f.close()
-    return data, descriptor
+        descriptors[groupname] = descriptor
+    if not isinstance(filename_or_fileobject, h5py.File):
+        f.close()
+    return data, descriptors
 
 def load_from_HDF5_legacy(filename_or_fileobject):
     data = {}
