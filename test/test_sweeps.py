@@ -12,15 +12,15 @@ import os
 import numpy as np
 import h5py
 
+import auspex.globals
+auspex.globals.auspex_dummy_mode = True
+
 from auspex.experiment import Experiment
 from auspex.parameter import FloatParameter
 from auspex.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector
 from auspex.filters.debug import Print
 from auspex.filters.io import WriteToHDF5
 from auspex.log import logger
-
-import logging
-logger.setLevel(logging.INFO)
 
 class SweptTestExperiment(Experiment):
     """Here the run loop merely spews data until it fills up the stream. """

@@ -6,6 +6,7 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
+from auspex.log import logger
 from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand
 
 class GS200(SCPIInstrument):

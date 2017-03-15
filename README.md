@@ -18,7 +18,7 @@ Full documentation can be found at [readthedocs](http://auspex.readthedocs.io/en
 This software is based in part upon work supported by the Office of the Director
 of National Intelligence (ODNI), Intelligence Advanced Research Projects
 Activity (IARPA), via contract W911NF-14-C0089 and Army Research Office contract
-No. W911NF-14-1-0124. The views and conclusions contained herein are those of
+No. W911NF-14-1-0114. The views and conclusions contained herein are those of
 the authors and should not be interpreted as necessarily representing the
 official policies or endorsements, either expressed or implied, of the ODNI,
 IARPA, or the U.S. Government.

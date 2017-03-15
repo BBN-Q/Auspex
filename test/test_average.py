@@ -11,14 +11,16 @@ import asyncio
 import time
 import numpy as np
 
+import auspex.globals
+auspex.globals.auspex_dummy_mode = True
+
 from auspex.experiment import Experiment
 from auspex.parameter import FloatParameter
 from auspex.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector
 from auspex.filters.debug import Print, Passthrough
 from auspex.filters.io import DataBuffer
 from auspex.filters.average import Averager
-from auspex.log import logger, logging
-logger.setLevel(logging.INFO)
+from auspex.log import logger
 
 class TestExperiment(Experiment):
 

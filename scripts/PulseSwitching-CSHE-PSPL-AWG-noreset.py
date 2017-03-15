@@ -88,7 +88,7 @@ def mk_dataset(f, dsetname, data):
     return f.create_dataset(dname, data=data)
 
 if __name__ == '__main__':
-    arb   = M8190A("192.168.5.108")
+    arb   = KeysightM8190A("192.168.5.108")
     pspl  = Picosecond10070A("GPIB0::24::INSTR")
     mag   = AMI430("192.168.5.109")
     keith = Keithley2400("GPIB0::25::INSTR")
@@ -125,17 +125,17 @@ if __name__ == '__main__':
 
     # define waveform
     no_reset_wf = arb_pulse(0.0, 3.0/12e9)
-    wf_data     = M8190A.create_binary_wf_data(no_reset_wf)
+    wf_data     = KeysightM8190A.create_binary_wf_data(no_reset_wf)
     no_rst_segment_id  = arb.define_waveform(len(wf_data))
     arb.upload_waveform(wf_data, no_rst_segment_id)
 
     # Picosecond trigger waveform
-    pspl_trig_wf = M8190A.create_binary_wf_data(np.zeros(3200), samp_mkr=1)
+    pspl_trig_wf = KeysightM8190A.create_binary_wf_data(np.zeros(3200), samp_mkr=1)
     pspl_trig_segment_id = arb.define_waveform(len(pspl_trig_wf))
     arb.upload_waveform(pspl_trig_wf, pspl_trig_segment_id)
 
     # NIDAQ trigger waveform
-    nidaq_trig_wf = M8190A.create_binary_wf_data(np.zeros(3200), sync_mkr=1)
+    nidaq_trig_wf = KeysightM8190A.create_binary_wf_data(np.zeros(3200), sync_mkr=1)
     nidaq_trig_segment_id = arb.define_waveform(len(nidaq_trig_wf))
     arb.upload_waveform(nidaq_trig_wf, nidaq_trig_segment_id)
 

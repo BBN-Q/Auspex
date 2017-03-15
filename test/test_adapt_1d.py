@@ -13,6 +13,9 @@ import numpy as np
 import h5py
 from adapt.refine import refine_1D
 
+import auspex.globals
+auspex.globals.auspex_dummy_mode = True
+
 from auspex.experiment import Experiment
 from auspex.parameter import FloatParameter
 from auspex.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector
@@ -20,10 +23,6 @@ from auspex.filters.debug import Print
 from auspex.filters.io import WriteToHDF5
 from auspex.log import logger
 from auspex.analysis.io import load_from_HDF5
-
-import logging
-logger.setLevel(logging.INFO)
-
 
 
 class SweptTestExperiment(Experiment):
@@ -65,12 +64,9 @@ class Adapt1DTestCase(unittest.TestCase):
         exp.set_graph(edges)
 
         async def rf(sweep_axis, exp):
-            # logger.debug("Waiting for writer to catch up...")
-            # await asyncio.sleep(0.5)
-            # return False
             logger.debug("Running refinement function.")
-            temps = wr.data['temperature']
-            ress  = wr.data['resistance']
+            temps = wr.group['data']['temperature'][:]
+            ress  = wr.group['data']['resistance'][:]
             logger.debug("Temps: {}".format(temps))
             logger.debug("Ress: {}".format(ress))
 

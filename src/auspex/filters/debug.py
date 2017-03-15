@@ -8,7 +8,8 @@
 
 import asyncio, concurrent
 import numpy as np
-from auspex.filters.filter import Filter
+
+from .filter import Filter
 from auspex.stream import InputConnector, OutputConnector
 from auspex.log import logger
 

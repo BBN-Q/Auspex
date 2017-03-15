@@ -287,9 +287,11 @@ class Experiment(metaclass=MetaExperiment):
                 if hasattr(self,k):
                     v = getattr(self,k)
                     oc.descriptor.add_param(k, v)
+            if not self.sweeper.is_adaptive():
+                oc.descriptor.visited_tuples = oc.descriptor.expected_tuples(with_metadata=True, as_structured_array=False)
+            else:
+                oc.descriptor.visited_tuples = []
             oc.update_descriptors()
-        # TODO: have this push any changes to JSON file
-        # if we're using Quince to define connections.
 
     async def declare_done(self):
         for oc in self.output_connectors.values():
@@ -300,6 +302,11 @@ class Experiment(metaclass=MetaExperiment):
             await stream.push_event("done")
 
     async def sweep(self):
+        # Set any static parameters
+        static_params = [p for p in self._parameters.values() if p not in self.sweeper.swept_parameters()]
+        for p in static_params:
+            p.push()
+
         # Keep track of the previous values
         logger.debug("Waiting for filters.")
         await asyncio.sleep(0.1)
@@ -308,14 +315,35 @@ class Experiment(metaclass=MetaExperiment):
 
         done = True
         while True:
-            await self.sweeper.update()
+            # Increment the sweeper, which returns a list of the current
+            # values of the SweepAxes (no DataAxes).
+            sweep_values = await self.sweeper.update()
+
+            if self.sweeper.is_adaptive():
+                # Add the new tuples to the stream descriptors
+                for oc in self.output_connectors.values():
+                    # Obtain the lists of values for any fixed
+                    # DataAxes and append them to them to the sweep_values
+                    # in preperation for finding all combinations. 
+                    vals = [a for a in oc.descriptor.data_axis_values()]
+                    if sweep_values:
+                        vals  = [[v] for v in sweep_values] + vals
+
+                    # Find all coordinate tuples and update the list of 
+                    # tuples that the experiment has probed.
+                    nested_list    = list(itertools.product(*vals))
+                    flattened_list = [tuple((val for sublist in line for val in sublist)) for line in nested_list]
+                    oc.descriptor.visited_tuples = oc.descriptor.visited_tuples + flattened_list
 
             # Run the procedure
             logger.debug("Starting a new run.")
             await self.run()
 
             # See if the axes want to extend themselves
-            await self.sweeper.check_for_refinement()
+            refined_axis = await self.sweeper.check_for_refinement()
+            if refined_axis is not None:
+                for oc in self.output_connectors.values():
+                     await oc.push_event("refined", refined_axis)
 
             # Update progress bars
             if self.progressbar is not None:
@@ -486,14 +514,17 @@ class Experiment(metaclass=MetaExperiment):
 
         shutdown()
 
+    def add_axis(self, axis):
+        for oc in self.output_connectors.values():
+            logger.debug("Adding axis %s to connector %s.", axis, oc.name)
+            oc.descriptor.add_axis(axis)
+        self.update_descriptors()
+
     def add_sweep(self, parameters, sweep_list, refine_func=None, callback_func=None, metadata=None):
         ax = SweepAxis(parameters, sweep_list, refine_func=refine_func, callback_func=callback_func, metadata=metadata)
         ax.experiment = self
         self.sweeper.add_sweep(ax)
-        for oc in self.output_connectors.values():
-            logger.debug("Adding sweep axis %s to connector %s.", ax, oc.name)
-            oc.descriptor.add_axis(ax)
-        self.update_descriptors()
+        self.add_axis(ax)
         if ax.unstructured:
             for p, v in zip(parameters, sweep_list[0]):
                 p.value = v

@@ -6,16 +6,24 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-from auspex.instruments.instrument import Instrument, SCPIInstrument, VisaInterface, MetaInstrument
+from .instrument import Instrument, SCPIInstrument, VisaInterface, MetaInstrument
+from auspex.log import logger
+
 from types import MethodType
 from unittest.mock import MagicMock
-from auspex.log import logger
-try:
-    import aps2
-    fake_aps2 = False
-except:
-    logger.error("Could not find APS2 python driver.")
+import auspex.globals
+
+# Dirty trick to avoid loading libraries when scraping
+# This code using quince.
+if auspex.globals.auspex_dummy_mode:
     fake_aps2 = True
+else:
+    try:
+        import aps2
+        fake_aps2 = False
+    except:
+        logger.warning("Could not find APS2 python driver.")
+        fake_aps2 = True
 
 class DigitalAttenuator(SCPIInstrument):
     """BBN 3 Channel Instrument"""

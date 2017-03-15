@@ -8,6 +8,9 @@
 
 import unittest
 
+import auspex.globals
+auspex.globals.auspex_dummy_mode = True
+
 from auspex.instruments.instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand
 
 class TestInstrument(SCPIInstrument):

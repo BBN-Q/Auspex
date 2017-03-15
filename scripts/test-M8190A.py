@@ -16,7 +16,7 @@ def waveform(time, delay=1.5e-9, rise_time=150e-12, fall_time=2.0e-9):
         return np.exp(-(time-delay)/fall_time)
 
 if __name__ == '__main__':
-    arb = M8190A("192.168.5.108")
+    arb = KeysightM8190A("192.168.5.108")
     print(arb.interface.query("*IDN?"))
 
     arb.set_output(True, channel=1)

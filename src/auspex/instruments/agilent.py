@@ -6,12 +6,12 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand, is_valid_ipv4
-from auspex.log import logger
 import socket
 import time
 import re
 import numpy as np
+from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand, is_valid_ipv4
+from auspex.log import logger
 
 class Agilent34970A(SCPIInstrument):
     """Agilent 34970A MUX"""
@@ -85,7 +85,7 @@ class Agilent34970A(SCPIInstrument):
     def configlist(self, ch_list):
         self.CONFIG_LIST = ch_list
 
-#Start Scan 
+#Start Scan
     def scan(self):
         self.interface.write("INIT")
 
@@ -116,7 +116,6 @@ class Agilent34970A(SCPIInstrument):
         else:
             fw_char = "ON," if fw == 4 else "OFF," 
             self.interface.write(("ROUT:CHAN:FWIR {}"+self.ch_to_str(self.CONFIG_LIST)).format(fw_char))
-
 
 # Commands that configure resistance measurements with internal DMM
 
@@ -325,6 +324,13 @@ class AgilentE9010A(SCPIInstrument):
     resolution_bandwidth = FloatCommand(scpi_string=":BANDwidth")
     sweep_time = FloatCommand(scpi_string=":SWEep:TIME")
 
+    mode = StringCommand(scpi_string=":INSTrument", allowed_values=["SA", "BASIC", "PULSE", "PNOISE"])
+
+    # phase noise application commands
+    pn_offset_start = FloatCommand(scpi_string=":LPLot:FREQuency:OFFSet:STARt")
+    pn_offset_stop  = FloatCommand(scpi_string=":LPLot:FREQuency:OFFSet:STOP")
+    pn_carrier_freq = FloatCommand(scpi_string=":FREQuency:CARRier")
+
     def __init__(self, resource_name=None, *args, **kwargs):
         super(AgilentE9010A, self).__init__(resource_name, *args, **kwargs)
 
@@ -346,6 +352,15 @@ class AgilentE9010A(SCPIInstrument):
         self.interface.write(':FORM:DATA REAL,32')
         return self.interface.query_binary_values(":TRACE:DATA? TRACE{:d}".format(num),
             datatype="f", is_big_endian=True)
+
+    def get_pn_trace(self, num=3):
+        # num = 3 is raw data
+        # num = 4 is smoothed data
+        # returns a tuple of (freqs, dBc/Hz)
+        self.interface.write(":FORM:DATA ASCII")
+        response = self.interface.query(":FETCH:LPLot{:d}?".format(num))
+        xypts = np.array([float(x) for x in response.split(',')])
+        return xypts[::2], xypts[1::2]
 
     def restart_sweep(self):
         """ Aborts current sweep and restarts. """
