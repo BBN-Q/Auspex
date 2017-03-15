@@ -175,7 +175,6 @@ class Instrument(metaclass=MetaInstrument):
 
     def __del__(self):
         self.disconnect()
-        super(Instrument, self).__del__()
 
     def set_all(self, settings_dict):
         """Accept a settings dictionary and attempt to set all of the instrument
