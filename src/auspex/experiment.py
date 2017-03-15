@@ -514,14 +514,17 @@ class Experiment(metaclass=MetaExperiment):
 
         shutdown()
 
+    def add_axis(self, axis):
+        for oc in self.output_connectors.values():
+            logger.debug("Adding axis %s to connector %s.", axis, oc.name)
+            oc.descriptor.add_axis(axis)
+        self.update_descriptors()
+
     def add_sweep(self, parameters, sweep_list, refine_func=None, callback_func=None, metadata=None):
         ax = SweepAxis(parameters, sweep_list, refine_func=refine_func, callback_func=callback_func, metadata=metadata)
         ax.experiment = self
         self.sweeper.add_sweep(ax)
-        for oc in self.output_connectors.values():
-            logger.debug("Adding sweep axis %s to connector %s.", ax, oc.name)
-            oc.descriptor.add_axis(ax)
-        self.update_descriptors()
+        self.add_axis(ax)
         if ax.unstructured:
             for p, v in zip(parameters, sweep_list[0]):
                 p.value = v
