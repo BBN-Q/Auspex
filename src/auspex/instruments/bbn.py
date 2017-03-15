@@ -30,20 +30,24 @@ class DigitalAttenuator(SCPIInstrument):
 
     NUM_CHANNELS = 3
 
-    def __init__(self, resource_name):
-        super(DigitalAttenuator, self).__init__(resource_name, interface_type="VISA")
-        self.name = "BBN Digital Attenuator"
+    def __init__(self, resource_name=None, name='Unlabeled Digital Attenuator'):
+        super(DigitalAttenuator, self).__init__(resource_name=resource_name,
+            name=name)
+
+    def connect(self, resource_name=None, interface_type=None):
+        if resource_name is not None:
+            self.resource_name = resource_name
+        super(DigitalAttenuator, self).connect(resource_name=self.resource_name,
+            interface_type=interface_type)
         self.interface._resource.baud_rate = 115200
         self.interface._resource.read_termination = u"\r\n"
         self.interface._resource.write_termination = u"\n"
-
         #Override query to look for ``end``
         def query(self, query_string):
             val = self._resource.query(query_string)
             assert self.read() == "END"
             return val
-
-        self.interface.query = MethodType(query, self.interface, VisaInterface)
+        self.interface.query = MethodType(query, self.interface)
 
     @classmethod
     def channel_check(cls, chan):
