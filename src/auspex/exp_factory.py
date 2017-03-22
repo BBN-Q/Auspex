@@ -60,7 +60,8 @@ class QubitExpFactory(object):
 
         # Create a mapping from qubits to data writers
         qubit_to_writer = {}
-
+        writer_to_qubit = {}
+        
         if meta_file:
             # Use the meta info to modify the other JSON
             with open(meta_file, 'r') as FID:
@@ -249,6 +250,7 @@ class QubitExpFactory(object):
         experiment.name = expname
 
         experiment.qubit_to_writer = qubit_to_writer
+        experiment.writer_to_qubit = writer_to_qubit
 
         QubitExpFactory.load_instruments(experiment)
         QubitExpFactory.load_segment_sweeps(experiment)

@@ -33,15 +33,17 @@ def calibrate(calibrations):
 
 class PulseCalibration(object):
     """Base class for calibration of qubit control pulses."""
-    def __init__(self, qubit_name, notebook=True):
+    def __init__(self, qubit_names, notebook=True):
         super(PulseCalibration, self).__init__()
-        self.qubit_name = qubit_name
-        self.qubit      = QubitFactory(qubit_name)
+        self.qubit_names = qubit_names if instance(qubit_names, list) else [qubit_names]
+        self.qubit     = [QubitFactory(qubit_name) for qubit_name in qubit_names] if isinstance(qubit_names, list) else QubitFactory(qubit_names)
         self.filename   = 'None'
         self.exp        = None
         self.axis_descriptor = None
         self.plot       = self.init_plot()
         self.notebook   = notebook
+        with open(config.channelLibFile, 'r') as FID:
+            self.chan_settings = json.load(FID)
 
     def sequence(self):
         """Returns the sequence for the given calibration, must be overridden"""
@@ -64,19 +66,24 @@ class PulseCalibration(object):
 
     def run(self):
         self.exp.run_sweeps()
+        data = {}
+        var = {}
+        data_buffers = [b for b in self.exp.buffers if b.name in self.exp.qubit_to_writer[self.qubit_names]]
 
-        data_buffers = [b for b in self.exp.buffers if b.name == self.exp.qubit_to_writer[self.qubit_name]]
-        # We only want the first one...
-        buff = data_buffers[0]
+        for buff in self.exp.buffers:
+            if self.exp.writer_to_qubit[buff.name] in self.qubit_names:
+                dataset, descriptor = buff.get_data(), buff.get_descriptor()
+                data[self.exp.writer_to_qubit[buff.name]] = np.real(dataset['Data'])
+                if 'Variance' in dataset.dtype.names:
+                    var[self.exp.writer_to_qubit[buff.name]] = dataset['Variance']/descriptor.metadata["num_averages"]
+                else:
+                    var[self.exp.writer_to_qubit[buff.name]] = None
 
-        dataset, descriptor = buff.get_data(), buff.get_descriptor()
-        # TODO: get the name of the relevant data from the graph
-        data = np.real(dataset['Data'])
-        if 'Variance' in dataset.dtype.names:
-            var = dataset['Variance']/descriptor.metadata["num_averages"]
-        else:
-            var = None
         # Return data and variance of the mean
+        if len(data) == 1:
+            # if single qubit, get rid of dictionary
+            data = list(data.values())[0]
+            var = list(var.values())[0]
         return data, var
 
     def init_plot(self):
@@ -127,9 +134,7 @@ class RamseyCalibration(PulseCalibration):
         #find qubit control source (from config)
         with open(config.instrumentLibFile, 'r') as FID:
             instr_settings = json.load(FID)
-        with open(config.channelLibFile, 'r') as FID:
-            chan_settings = json.load(FID)
-        qubit_source = chan_settings['channelDict'][chan_settings['channelDict'][self.qubit_name]['physChan']]['generator']
+        qubit_source = self.chan_settings['channelDict'][self.chan_settings['channelDict'][self.qubit_names[0]]['physChan']]['generator']
         orig_freq = instr_settings['instrDict'][qubit_source]['frequency']
         set_freq = round(orig_freq + self.added_detuning/1e9, 10)
         instr_to_set = {'instr': qubit_source, 'method': 'set_frequency', 'value': set_freq}
@@ -169,8 +174,8 @@ class RamseyCalibration(PulseCalibration):
             instr_settings['instrDict'][qubit_source]['frequency'] = fit_freq
             self.update_libraries([instr_settings], [config.instrumentLibFile])
         else:
-            chan_settings['channelDict'][self.qubit_name]['frequency'] += (fit_freq - orig_freq)*1e9
-            self.update_libraries([chan_settings], [config.channelLibFile])
+            self.chan_settings['channelDict'][self.qubit_names[0]]['frequency'] += (fit_freq - orig_freq)*1e9
+            self.update_libraries([self.chan_settings], [config.channelLibFile])
 
         print('Frequency', fit_freq)
         return fit_freq
@@ -243,11 +248,8 @@ class PhaseEstimation(PulseCalibration):
             self.amplitude = amp
         print('Amp',amp)
 
-
-        with open(config.channelLibFile, 'r') as FID:
-            chan_settings = json.load(FID)
-        chan_settings['channelDict'][self.qubit_name]['pulseParams'][set_amp] = round(amp, 5)
-        self.update_libraries([chan_settings], [config.channelLibFile])
+        self.chan_settings['channelDict'][self.qubit_names[0]]['pulseParams'][set_amp] = round(amp, 5)
+        self.update_libraries([self.chan_settings], [config.channelLibFile])
         return amp
 
 class Pi2Calibration(PhaseEstimation):
@@ -298,12 +300,135 @@ class DRAGCalibration(PulseCalibration):
 
         print("DRAG", opt_drag)
 
-        with open(config.channelLibFile, 'r') as FID:
-            chan_settings = json.load(FID)
-        chan_settings['channelDict'][self.qubit_name]['pulseParams']['dragScaling'] = fitted_drag
-        self.update_libraries([chan_settings], [config.channelLibFile])
+        self.chan_settings['channelDict'][self.qubit_names[0]]['pulseParams']['dragScaling'] = fitted_drag
+        self.update_libraries([self.chan_settings], [config.channelLibFile])
 
         return fitted_drag
+
+'''Two-qubit gate calibrations'''
+class CRLenCalibration(PulseCalibration):
+    def __init__(self, qubit_names, lengths=np.linspace(20, 1020, 21)*1e-9, phase = 0, amp = 0.8, rise_fall = 40e-9):
+        super(CRLenCalibration, self).__init__(qubit_names)
+        self.lengths = lengths
+        self.phase = phase
+        self.amp = amp
+        self.rise_fall = rise_fall
+
+    def sequence(self):
+        qc, qt = self.qubits[:]
+        seqs = [[Id(qc)] + echoCR(qc, qt, length=l, phase = self.phase, amp=self.amp, riseFall=self.rise_fall) + [Id(qc), MEAS(qt)*MEAS(qc)]
+        for l in self.lengths]+ [[X(qc)] + echoCR(qc, qt, length=l, phase= self.phase, amp=self.amp, riseFall=self.rise_fall) + [X(qc), MEAS(qt)*MEAS(qc)]
+        for l in self.lengths] + create_cal_seqs((qt,qc), calRepeats=2, measChans=(qt,qc))
+
+        self.axis_descriptor=[
+            time_descriptor(np.concatenate((lengths, lengths))),
+            cal_descriptor((qc, qt), 2)
+        ])
+
+        return seqs
+
+    def init_plot(self):
+        #TODO
+
+    def calibrate(self):
+        #generate sequence
+        self.set()
+        #run
+        data, _ = self.run()
+        data_t = data[qt]
+        opt_len = fit_CR(self.lengths, data_t, 1)
+
+        #update CR channel
+        CRchan = ChannelLibrary.EdgeFactory(qc, qt)
+        self.chan_settings['channelDict'][CRchan]['length'] = opt_len
+        self.update_libraries([self.chan_settings], [config.channelLibFile])
+
+class CRPhaseCalibration(PulseCalibration):
+    def __init__(self, qubit_names, phases = np.linspace(0,2*np.pi,21), amp = 0.8, rise_fall = 40e-9):
+        super(CRPhaseCalibration, self).__init__(qubit_names)
+        self.phases = phases
+        self.amp = amp
+        self.rise_fall = rise_fall
+
+    def sequence(self):
+        qc, qt = self.qubits[:]
+        CRchan = ChannelLibrary.EdgeFactory(qc, qt)
+        length = self.chan_settings['channelDict'][CRchan]['length']
+        seqs = [[Id(qc)] + echoCR(qc, qt, length=length, phase=ph, amp=self.amp, riseFall=self.rise_fall) + [X90(qt)*Id(qc), MEAS(qt)*MEAS(qc)]
+        for ph in self.phases]+ [[X(qc)] + echoCR(qc, qt, length=length, phase= ph, amp=self.amp, riseFall=self.rise_fall) + [X90(qt)*X(qc), MEAS(qt)*MEAS(qc)]
+        for ph in self.phases] + create_cal_seqs((qt,qc), calRepeats=2, measChans=(qt,qc))
+
+        self.axis_descriptor = [
+            {
+                'name': 'phase',
+                'unit': 'radians',
+                'points': list(phases)+list(phases),
+                'partition': 1
+            },
+            cal_descriptor((controlQ, targetQ), calRepeats)
+        ]
+
+        return seqs
+
+    def init_plot(self):
+        #TODO
+
+    def calibrate(self):
+        #generate sequence
+        self.set()
+        #run
+        data, _ = self.run()
+        data_t = data[qt]
+        opt_phase = fit_CR(self.phases, data_t, 2)
+
+        #update CR channel
+        CRchan = ChannelLibrary.EdgeFactory(qc, qt)
+        self.chan_settings['channelDict'][CRchan]['phase'] = opt_phase
+        self.update_libraries([self.chan_settings], [config.channelLibFile])
+
+class CRAmpCalibration(PulseCalibration):
+    def __init__(self, qubit_names, range = 0.2, amp = 0.8, rise_fall = 40e-9):
+        super(CRAmpCalibration, self).__init__(qubit_names)
+        self.rise_fall = rise_fall
+        amp = self.chan_settings['channelDict'][CRchan]['amp']
+        self.amplitudes = np.linspace(0.8*amp, 1.2*amp, 21)
+        self.length = self.chan_settings['channelDict'][CRchan]['length']
+        self.phase = self.chan_settings['channelDict'][CRchan]['phase']
+
+    def sequence(self):
+        qc, qt = self.qubits[:]
+        CRchan = ChannelLibrary.EdgeFactory(qc, qt)
+        seqs = [[Id(qc)] + echoCR(qc, qt, length=self.length, phase=self.phase, amp=a, riseFall=self.rise_fall) + [Id(qc), MEAS(qt)*MEAS(qc)]
+        for a in self.amplitudes]+ [[X(qc)] + echoCR(qc, qt, length=length, phase= self.phase, amp=a, riseFall=self.rise_fall) + [X(qc), MEAS(qt)*MEAS(qc)]
+        for a in self.amplitudes] + create_cal_seqs((qt,qc), calRepeats=2, measChans=(qt,qc))
+
+        self.axis_descriptor = [
+            {
+                'name': 'amplitude',
+                'unit': None,
+                'points': list(amps)+list(amps),
+                'partition': 1
+            },
+            cal_descriptor((controlQ, targetQ), calRepeats)
+        ]
+
+        return seqs
+
+    def init_plot(self):
+        #TODO
+
+    def calibrate(self):
+        #generate sequence
+        self.set()
+        #run
+        data, _ = self.run()
+        data_t = data[qt]
+        opt_amp = fit_CR(self.lengths, data_t, 3)
+
+        #update CR channel
+        CRchan = ChannelLibrary.EdgeFactory(qc, qt)
+        self.chan_settings['channelDict'][CRchan]['amp'] = opt_amp
+        self.update_libraries([self.chan_settings], [config.channelLibFile])
 
 def restrict(phase):
     out = np.mod( phase + np.pi, 2*np.pi, ) - np.pi

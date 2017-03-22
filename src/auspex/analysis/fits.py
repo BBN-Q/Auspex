@@ -30,7 +30,7 @@ def fit_drag(data, DRAG_vec, pulse_vec):
     data = norm_data(data).reshape(num_DRAG, len(data)/num_DRAG)
     #first fit sine to lowest n, for the full range
     data_n = data[:, 1]
-    T0 = 2*(DRAG_vec[np.argmax(data_n)] - DRAGL_list[np.argmin(data_n)]) #rough estimate of period
+    T0 = 2*(DRAG_vec[np.argmax(data_n)] - DRAG_vec[np.argmin(data_n)]) #rough estimate of period
 
     p0 = [0, 1, T0, 0]
     popt, pcov = curve_fit(sinf, DRAG_vec, data_n, p0 = p0)
@@ -42,7 +42,7 @@ def fit_drag(data, DRAG_vec, pulse_vec):
         data_n = data[:, ct]
         p0 = [1, xopt_vec[ct-1], 0]
         #recenter for next fit
-        closest_ind =np.argmin(abs(DRAGL_list - x0))
+        closest_ind =np.argmin(abs(DRAG_vec - x0))
         fit_range = np.round(0.5*num_DRAG*pulse_vec[0]/pulse_vec[ct])
         curr_DRAG_vec = DRAG_vec[max(0, closest_ind - fit_range) : min(num_DRAG-1, closest_ind + fit_range)]
         reduced_data_n = data_n[max(0, closest_ind - fit_range) : min(num_DRAG-1, closest_ind + fit_range)]
@@ -58,3 +58,35 @@ def sinf(x, f, A, phi, y0):
 
 def quadf(x, A, x0, b):
     return A*(x-x0)**2+b
+
+def fit_CR(xpoints, data, cal_type):
+    data0 = data[0:len(data)/2]
+    data1 = data[len(data)/2:]
+    x_fine = np.linspace(min(xpoints), max(xpoints), 1001)
+    if cal_type == 1:
+        p0 = [1, 2*xpoints[-1], -np.pi/2, 0]
+        popt0, _ = curve_fit(sinf, xpoints, data0, p0 = p0)
+        popt1, _ = curve_fit(sinf, xpoints, data1, p0 = p0)
+        #find the first zero crossing
+        yfit0 = sinf(x_fine[1:min(round(abs(popt0[1])/2/(xpoints[1]-xpoints[0])))], *popt0)
+        yfit1 = sinf(x_fine[1:min(round(abs(popt1[1])/2/(xpoints[1]-xpoints[0])))], *popt1)
+        #average between the two qc states, rounded to 10 ns
+        xopt = round((x_fine[np.argmin(abs(yfit0)] + x_fine[np.argmin(abs(yfit1)])/2/10e-9)*10e-9
+        print('CR length = %f ns'%xopt*1e9))
+    elif cal_type == 2:
+        p0 = [1, xpoints[-1], np.pi, 0]
+        popt0, _ = curve_fit(sinf, x_fine, data0, p0 = p0)
+        popt1, _ = curve_fit(sinf, x_fine, data1, p0 = p0)
+        #find the phase for maximum contrast
+        contrast = (sinf(x_fine, *popt0) - sinf(x_fine, *popt1))/2
+        print('CR contrast = %f'%max(contrast))
+        xopt = x_fine[np.argmax(contrast)] - np.pi
+    elif cal_type == 3:
+        popt0 = np.polyfit(xpoints, data0, 1)
+        popt1 = np.polyfit(xpoints, data1, 1)
+        yfit0 = popt0[0]+popt1[1]*x_fine
+        yfit1 = popt1[0]+popt1[1]*x_fine
+        #average between optimum amplitudes
+        xopt = -(popt0[1]/popt0[0] + popt1[1]/popt1[0])/2
+        print('CR amplitude = %f'%xopt)
+    return xopt
