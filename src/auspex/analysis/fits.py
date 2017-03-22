@@ -60,7 +60,7 @@ def quadf(x, A, x0, b):
     return A*(x-x0)**2+b
 
 def fit_CR(xpoints, data, cal_type):
-    data0 = data[0:len(data)/2]
+    data0 = data[:len(data)/2]
     data1 = data[len(data)/2:]
     x_fine = np.linspace(min(xpoints), max(xpoints), 1001)
     if cal_type == 1:
@@ -68,8 +68,8 @@ def fit_CR(xpoints, data, cal_type):
         popt0, _ = curve_fit(sinf, xpoints, data0, p0 = p0)
         popt1, _ = curve_fit(sinf, xpoints, data1, p0 = p0)
         #find the first zero crossing
-        yfit0 = sinf(x_fine[1:min(round(abs(popt0[1])/2/(xpoints[1]-xpoints[0])))], *popt0)
-        yfit1 = sinf(x_fine[1:min(round(abs(popt1[1])/2/(xpoints[1]-xpoints[0])))], *popt1)
+        yfit0 = sinf(x_fine[:round(abs(popt0[1])/2/(xpoints[1]-xpoints[0]))], *popt0)
+        yfit1 = sinf(x_fine[:round(abs(popt1[1])/2/(xpoints[1]-xpoints[0]))], *popt1)
         #average between the two qc states, rounded to 10 ns
         xopt = round((x_fine[np.argmin(abs(yfit0)] + x_fine[np.argmin(abs(yfit1)])/2/10e-9)*10e-9
         print('CR length = %f ns'%xopt*1e9))
@@ -84,9 +84,9 @@ def fit_CR(xpoints, data, cal_type):
     elif cal_type == 3:
         popt0 = np.polyfit(xpoints, data0, 1)
         popt1 = np.polyfit(xpoints, data1, 1)
-        yfit0 = popt0[0]+popt1[1]*x_fine
-        yfit1 = popt1[0]+popt1[1]*x_fine
+        yfit0 = popt0[0]*x_fine+popt0[1]
+        yfit1 = popt1[0]*x_fine+popt1[1]
         #average between optimum amplitudes
         xopt = -(popt0[1]/popt0[0] + popt1[1]/popt1[0])/2
         print('CR amplitude = %f'%xopt)
-    return xopt
+    return xopt, popt0, popt1
