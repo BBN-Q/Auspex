@@ -306,29 +306,16 @@ class DRAGCalibration(PulseCalibration):
         return fitted_drag
 
 '''Two-qubit gate calibrations'''
-class CRLenCalibration(PulseCalibration):
+class CRCalibration(PulseCalibration):
     def __init__(self, qubit_names, lengths=np.linspace(20, 1020, 21)*1e-9, phase = 0, amp = 0.8, rise_fall = 40e-9):
-        super(CRLenCalibration, self).__init__(qubit_names)
+        super(CRCalibration, self).__init__(qubit_names)
         self.lengths = lengths
-        self.phase = phase
-        self.amp = amp
+        self.phases = phase
+        self.amps = amp
         self.rise_fall = rise_fall
 
-    def sequence(self):
-        qc, qt = self.qubits[:]
-        seqs = [[Id(qc)] + echoCR(qc, qt, length=l, phase = self.phase, amp=self.amp, riseFall=self.rise_fall) + [Id(qc), MEAS(qt)*MEAS(qc)]
-        for l in self.lengths]+ [[X(qc)] + echoCR(qc, qt, length=l, phase= self.phase, amp=self.amp, riseFall=self.rise_fall) + [X(qc), MEAS(qt)*MEAS(qc)]
-        for l in self.lengths] + create_cal_seqs((qt,qc), calRepeats=2, measChans=(qt,qc))
-
-        self.axis_descriptor=[
-            time_descriptor(np.concatenate((lengths, lengths))),
-            cal_descriptor((qc, qt), 2)
-        ])
-
-        return seqs
-
     def init_plot(self):
-        cal_plot = ManualPlotter("CR Length Fit", x_label='Length', y_label='$<Z_{'+self.qubit_names[1]+'}>$')
+        cal_plot = ManualPlotter("CR"+str.lower(self.cal_type.name)+"Fit", x_label=str.lower(self.cal_type.name), y_label='$<Z_{'+self.qubit_names[1]+'}>$')
         self.dat_line_0 = cal_plot.fig.line([],[], line_width=1.0, legend="Data_0", color='navy') #change to markers
         self.fit_line_0 = cal_plot.fig.line([],[], line_width=2.5, legend="Fit_0", color='firebrick')
         self.dat_line_1 = cal_plot.fig.line([],[], line_width=1.0, legend="Data_1", color='navy') #change to markers
@@ -341,31 +328,50 @@ class CRLenCalibration(PulseCalibration):
         #run
         data, _ = self.run()
         data_t = data[qt]
-        opt_len, all_params_0, all_params_1 = fit_CR(self.lengths, data_t, 1)
+        opt_par, all_params_0, all_params_1 = fit_CR(self.lengths, data_t, self.cal_type)
 
         #update CR channel
         CRchan = ChannelLibrary.EdgeFactory(qc, qt)
-        self.chan_settings['channelDict'][CRchan]['length'] = opt_len
+        self.chan_settings['channelDict'][CRchan][str.lower(self.cal_type.name)] = opt_par
         self.update_libraries([self.chan_settings], [config.channelLibFile])
 
         # Plot the results
-        finer_lengths = np.linspace(np.min(self.lengths), np.max(self.lengths), 4*len(self.lengths))
-        self.dat_line_0.data_source.data = dict(x=self.lengths, y=data_t[:len(data_t)/2])
-        self.fit_line_0.data_source.data = dict(x=finer_lengths, y=sin_f(finer_lengths, *all_params_0))
-        self.dat_line_1.data_source.data = dict(x=self.lengths, y=data_t[len(data_t)/2:])
-        self.fit_line_1.data_source.data = dict(x=finer_lengths, y=sin_f(finer_lengths, *all_params_1))
+        xaxis = self.lengths if self.cal_type==CR_cal_type.LENGTH else self.phases if self.cal_type==CR_cal_type.PHASE else self.amps
+        finer_xaxis = np.linspace(np.min(xaxis), np.max(xaxis), 4*len(xaxis))
+        self.dat_line_0.data_source.data = dict(x=xaxis, y=data_t[:len(data_t)/2])
+        self.fit_line_0.data_source.data = dict(x=finer_xaxis, y=sin_f(finer_lengths, *all_params_0))
+        self.dat_line_1.data_source.data = dict(x=xaxis, y=data_t[len(data_t)/2:])
+        self.fit_line_1.data_source.data = dict(x=finer_xaxis, y=sin_f(finer_lengths, *all_params_1))
 
-class CRPhaseCalibration(PulseCalibration):
-    def __init__(self, qubit_names, phases = np.linspace(0,2*np.pi,21), amp = 0.8, rise_fall = 40e-9):
-        super(CRPhaseCalibration, self).__init__(qubit_names)
-        self.phases = phases
-        self.amp = amp
-        self.rise_fall = rise_fall
+class CRLenCalibration(CRCalibration):
+    def __init__(self, qubit_names, lengths=np.linspace(20, 1020, 21)*1e-9, phase = 0, amp = 0.8, rise_fall = 40e-9, cal_type = CR_cal_type.LENGTH):
+        super(CRLenCalibration, self).__init__(qubit_names, lengths, phases, amps, rise_fall)
+        self.cal_type = cal_type
 
     def sequence(self):
         qc, qt = self.qubits[:]
+        seqs = [[Id(qc)] + echoCR(qc, qt, length=l, phase = self.phases, amp=self.amps, riseFall=self.rise_fall) + [Id(qc), MEAS(qt)*MEAS(qc)]
+        for l in self.lengths]+ [[X(qc)] + echoCR(qc, qt, length=l, phase= self.phases, amp=self.amps, riseFall=self.rise_fall) + [X(qc), MEAS(qt)*MEAS(qc)]
+        for l in self.lengths] + create_cal_seqs((qt,qc), calRepeats=2, measChans=(qt,qc))
+
+        self.axis_descriptor=[
+            time_descriptor(np.concatenate((lengths, lengths))),
+            cal_descriptor((qc, qt), 2)
+        ])
+
+        return seqs
+
+class CRPhaseCalibration(PulseCalibration):
+    def __init__(self, qubit_names, phases = np.linspace(0,2*np.pi,21), amp = 0.8, rise_fall = 40e-9, cal_type = CR_cal_type.PHASE):
+        super(CRPhaseCalibration, self).__init__(qubit_names, lengths, phases, amps, rise_fall)
+        self.phases = phases
+        self.amps = amp
+        self.rise_fall = rise_fall
+        qc, qt = self.qubits[:]
         CRchan = ChannelLibrary.EdgeFactory(qc, qt)
         length = self.chan_settings['channelDict'][CRchan]['length']
+
+    def sequence(self):
         seqs = [[Id(qc)] + echoCR(qc, qt, length=length, phase=ph, amp=self.amp, riseFall=self.rise_fall) + [X90(qt)*Id(qc), MEAS(qt)*MEAS(qc)]
         for ph in self.phases]+ [[X(qc)] + echoCR(qc, qt, length=length, phase= ph, amp=self.amp, riseFall=self.rise_fall) + [X90(qt)*X(qc), MEAS(qt)*MEAS(qc)]
         for ph in self.phases] + create_cal_seqs((qt,qc), calRepeats=2, measChans=(qt,qc))
@@ -382,51 +388,23 @@ class CRPhaseCalibration(PulseCalibration):
 
         return seqs
 
-    def init_plot(self):
-        cal_plot = ManualPlotter("CR Phase Fit", x_label='Phase', y_label='$<Z_{'+self.qubit_names[1]+'}>$')
-        self.dat_line_0 = cal_plot.fig.line([],[], line_width=1.0, legend="Data_0", color='navy') #change to markers
-        self.fit_line_0 = cal_plot.fig.line([],[], line_width=2.5, legend="Fit_0", color='firebrick')
-        self.dat_line_1 = cal_plot.fig.line([],[], line_width=1.0, legend="Data_1", color='navy') #change to markers
-        self.fit_line_1 = cal_plot.fig.line([],[], line_width=2.5, legend="Fit_1", color='firebrick')
-        return
-
-    def calibrate(self):
-        #generate sequence
-        self.set()
-        #run
-        data, _ = self.run()
-        data_t = data[qt]
-        opt_phase = fit_CR(self.phases, data_t, 2)
-
-        #update CR channel
-        CRchan = ChannelLibrary.EdgeFactory(qc, qt)
-        self.chan_settings['channelDict'][CRchan]['phase'] = opt_phase
-        self.update_libraries([self.chan_settings], [config.channelLibFile])
-
-        # Plot the results
-        finer_phases = np.linspace(np.min(self.phases), np.max(self.phases), 4*len(self.phases))
-        self.dat_line_0.data_source.data = dict(x=self.phases, y=data_t[:len(data_t)/2])
-        self.fit_line_0.data_source.data = dict(x=finer_phases, y=sin_f(finer_phases, *all_params_0))
-        self.dat_line_1.data_source.data = dict(x=self.phases, y=data_t[len(data_t)/2:])
-        self.fit_line_1.data_source.data = dict(x=finer_phases, y=sin_f(finer_phases, *all_params_1))
-
 class CRAmpCalibration(PulseCalibration):
-    def __init__(self, qubit_names, range = 0.2, amp = 0.8, rise_fall = 40e-9, num_CR = 1):
-        super(CRAmpCalibration, self).__init__(qubit_names)
+    def __init__(self, qubit_names, range = 0.2, amp = 0.8, rise_fall = 40e-9, num_CR = 1, cal_type = CR_cal_type.AMPLITUDE):
+        super(CRAmpCalibration, self).__init__(qubit_names, lengths, phases, amps, rise_fall)
         if mod(num_CR, 2) == 0:
             logger.error('The number of ZX90 must be odd')
         self.rise_fall = rise_fall
         amp = self.chan_settings['channelDict'][CRchan]['amp']
-        self.amplitudes = np.linspace(0.8*amp, 1.2*amp, 21)
-        self.length = self.chan_settings['channelDict'][CRchan]['length']
-        self.phase = self.chan_settings['channelDict'][CRchan]['phase']
+        self.amps = np.linspace(0.8*amp, 1.2*amp, 21)
+        self.lengths = self.chan_settings['channelDict'][CRchan]['length']
+        self.phases = self.chan_settings['channelDict'][CRchan]['phase']
 
     def sequence(self):
         qc, qt = self.qubits[:]
         CRchan = ChannelLibrary.EdgeFactory(qc, qt)
         seqs = [[Id(qc)] + num_CR*echoCR(qc, qt, length=self.length, phase=self.phase, amp=a, riseFall=self.rise_fall) + [Id(qc), MEAS(qt)*MEAS(qc)]
-        for a in self.amplitudes]+ [[X(qc)] + num_CR*echoCR(qc, qt, length=length, phase= self.phase, amp=a, riseFall=self.rise_fall) + [X(qc), MEAS(qt)*MEAS(qc)]
-        for a in self.amplitudes] + create_cal_seqs((qt,qc), calRepeats=2, measChans=(qt,qc))
+        for a in self.amps]+ [[X(qc)] + num_CR*echoCR(qc, qt, length=length, phase= self.phase, amp=a, riseFall=self.rise_fall) + [X(qc), MEAS(qt)*MEAS(qc)]
+        for a in self.amps] + create_cal_seqs((qt,qc), calRepeats=2, measChans=(qt,qc))
 
         self.axis_descriptor = [
             {
@@ -439,34 +417,6 @@ class CRAmpCalibration(PulseCalibration):
         ]
 
         return seqs
-
-    def init_plot(self):
-        cal_plot = ManualPlotter("CR Amplitude Fit", x_label='Amplitude', y_label='$<Z_{'+self.qubit_names[1]+'}>$')
-        self.dat_line_0 = cal_plot.fig.line([],[], line_width=1.0, legend="Data_0", color='navy') #change to markers
-        self.fit_line_0 = cal_plot.fig.line([],[], line_width=2.5, legend="Fit_0", color='firebrick')
-        self.dat_line_1 = cal_plot.fig.line([],[], line_width=1.0, legend="Data_1", color='navy') #change to markers
-        self.fit_line_1 = cal_plot.fig.line([],[], line_width=2.5, legend="Fit_1", color='firebrick')
-        return
-
-    def calibrate(self):
-        #generate sequence
-        self.set()
-        #run
-        data, _ = self.run()
-        data_t = data[qt]
-        opt_amp = fit_CR(self.amplitudes, data_t, 3)
-
-        #update CR channel
-        CRchan = ChannelLibrary.EdgeFactory(qc, qt)
-        self.chan_settings['channelDict'][CRchan]['amp'] = opt_amp
-        self.update_libraries([self.chan_settings], [config.channelLibFile])
-
-        # Plot the results
-        finer_amps = np.linspace(np.min(self.amplitudes), np.max(self.amplitudes), 4*len(self.amplitudes))
-        self.dat_line_0.data_source.data = dict(x=self.amplitudes, y=data_t[:len(data_t)/2])
-        self.fit_line_0.data_source.data = dict(x=finer_amps, y=all_params_0[0]*finer_amps + all_params_0[1])
-        self.dat_line_1.data_source.data = dict(x=self.phases, y=data_t[len(data_t)/2:])
-        self.fit_line_1.data_source.data = dict(x=finer_amps, y=all_params_1[0]*finer_amps + all_params_1[1])
 
 def restrict(phase):
     out = np.mod( phase + np.pi, 2*np.pi, ) - np.pi
