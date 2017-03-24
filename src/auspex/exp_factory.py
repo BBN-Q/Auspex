@@ -58,10 +58,10 @@ class QubitExpFactory(object):
         with open(config.sweepLibFile, 'r') as FID:
             sweep_settings = json.load(FID)
 
-        # Create a mapping from qubits to data writers
+        # Create a mapping from qubits to data writers and inverse
         qubit_to_writer = {}
         writer_to_qubit = {}
-        
+
         if meta_file:
             # Use the meta info to modify the other JSON
             with open(meta_file, 'r') as FID:
