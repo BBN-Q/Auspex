@@ -331,7 +331,7 @@ class CRCalibration(PulseCalibration):
         opt_par, all_params_0, all_params_1 = fit_CR(self.lengths, data_t, self.cal_type)
 
         #update CR channel
-        CRchan = ChannelLibrary.EdgeFactory(qc, qt)
+        CRchan = ChannelLibrary.EdgeFactory(*self.qubits)
         self.chan_settings['channelDict'][CRchan][str.lower(self.cal_type.name)] = opt_par
         self.update_libraries([self.chan_settings], [config.channelLibFile])
 
@@ -367,11 +367,11 @@ class CRPhaseCalibration(PulseCalibration):
         self.phases = phases
         self.amps = amp
         self.rise_fall = rise_fall
-        qc, qt = self.qubits[:]
-        CRchan = ChannelLibrary.EdgeFactory(qc, qt)
+        CRchan = ChannelLibrary.EdgeFactory(*self.qubits)
         length = self.chan_settings['channelDict'][CRchan]['length']
 
     def sequence(self):
+        qc, qt = self.qubits[:]
         seqs = [[Id(qc)] + echoCR(qc, qt, length=length, phase=ph, amp=self.amp, riseFall=self.rise_fall) + [X90(qt)*Id(qc), MEAS(qt)*MEAS(qc)]
         for ph in self.phases]+ [[X(qc)] + echoCR(qc, qt, length=length, phase= ph, amp=self.amp, riseFall=self.rise_fall) + [X90(qt)*X(qc), MEAS(qt)*MEAS(qc)]
         for ph in self.phases] + create_cal_seqs((qt,qc), calRepeats=2, measChans=(qt,qc))
@@ -383,7 +383,7 @@ class CRPhaseCalibration(PulseCalibration):
                 'points': list(phases)+list(phases),
                 'partition': 1
             },
-            cal_descriptor((controlQ, targetQ), calRepeats)
+            cal_descriptor((qc, qt), calRepeats)
         ]
 
         return seqs
@@ -413,7 +413,7 @@ class CRAmpCalibration(PulseCalibration):
                 'points': list(amps)+list(amps),
                 'partition': 1
             },
-            cal_descriptor((controlQ, targetQ), calRepeats)
+            cal_descriptor((qc, qt), calRepeats)
         ]
 
         return seqs
