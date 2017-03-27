@@ -368,7 +368,7 @@ class CRPhaseCalibration(PulseCalibration):
         self.amps = amp
         self.rise_fall = rise_fall
         CRchan = ChannelLibrary.EdgeFactory(*self.qubits)
-        length = self.chan_settings['channelDict'][CRchan]['length']
+        length = CRchan.pulseParams['length']
 
     def sequence(self):
         qc, qt = self.qubits[:]
@@ -394,10 +394,10 @@ class CRAmpCalibration(PulseCalibration):
         if mod(num_CR, 2) == 0:
             logger.error('The number of ZX90 must be odd')
         self.rise_fall = rise_fall
-        amp = self.chan_settings['channelDict'][CRchan]['amp']
+        amp = CRchan.pulseParams['amp']
         self.amps = np.linspace(0.8*amp, 1.2*amp, 21)
-        self.lengths = self.chan_settings['channelDict'][CRchan]['length']
-        self.phases = self.chan_settings['channelDict'][CRchan]['phase']
+        self.lengths = CRchan.pulseParams['length']
+        self.phases = CRchan.pulseParams['phase']
 
     def sequence(self):
         qc, qt = self.qubits[:]
