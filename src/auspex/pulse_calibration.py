@@ -200,13 +200,20 @@ class PhaseEstimation(PulseCalibration):
         self.iteration_limit = 5
 
     def sequence(self):
+        # Determine whether it is a single- or a two-qubit pulse calibration
+        if isinstance(self.qubits, list):
+            cal_pulse = ZX90_CR(*self.qubits, amp=self.amplitude)
+            qubit = self.qubits[1] # qt
+        else:
+            cal_pulse = [Xtheta(self.qubit, amp=self.amplitude)]
+            qubit = self.qubit
         # Exponentially growing repetitions of the target pulse, e.g.
         # (1, 2, 4, 8, 16, 32, 64, 128, ...) x X90
-        seqs = [[Xtheta(self.qubit, amp=self.amplitude)]*n for n in 2**np.arange(self.num_pulses+1)]
+        seqs = cal_pulse*n for n in 2**np.arange(self.num_pulses+1)]
         # measure each along Z or Y
-        seqs = [s + m for s in seqs for m in [ [MEAS(self.qubit)], [X90m(self.qubit), MEAS(self.qubit)] ]]
+        seqs = [s + m for s in seqs for m in [ [MEAS(qubit)], [X90m(qubit), MEAS(qubit)] ]]
         # tack on calibrations to the beginning
-        seqs = [[Id(self.qubit), MEAS(self.qubit)], [X(self.qubit), MEAS(self.qubit)]] + seqs
+        seqs = [[Id(qubit), MEAS(qubit)], [X(qubit), MEAS(qubit)]] + seqs
         # repeat each
         return [copy(s) for s in seqs for _ in range(2)]
 
@@ -215,7 +222,7 @@ class PhaseEstimation(PulseCalibration):
 
         ct = 1
         amp = self.amplitude
-        set_amp = 'pi2Amp' if isinstance(self, Pi2Calibration) else 'piAmp'
+        set_amp = 'pi2Amp' if isinstance(self, Pi2Calibration) else 'piAmp' if isinstance(self, PiCalibration) else 'amp'
         #TODO: add writers for variance if not existing
         while True:
             self.set()
@@ -248,7 +255,8 @@ class PhaseEstimation(PulseCalibration):
             self.amplitude = amp
         print('Amp',amp)
 
-        self.chan_settings['channelDict'][self.qubit_names[0]]['pulseParams'][set_amp] = round(amp, 5)
+        set_chan = self.qubit_names[0] if len(self.qubit_names) == 1 else ChannelLibrary.EdgeFactory(*self.qubits).label
+        self.chan_settings['channelDict'][set_chan]['pulseParams'][set_amp] = round(amp, 5)
         self.update_libraries([self.chan_settings], [config.channelLibFile])
         return amp
 
@@ -263,6 +271,13 @@ class PiCalibration(PhaseEstimation):
         super(PiCalibration, self).__init__(qubit_name, num_pulses = num_pulses)
         self.amplitude = self.qubit.pulseParams['piAmp']
         self.target    = np.pi
+
+class CRAmpCalibration_PhEst(PhaseEstimation):
+    def __init__(self, qubit_names, num_pulses= 9):
+        super(CRAmpCalibration_PhEst, self).__init__(qubit_names, num_pulses = num_pulses)
+        CRchan = ChannelLibrary.EdgeFactory(*self.qubits)
+        self.amplitude = CRchan.pulseParams['amp']
+        self.target    = np.pi/2
 
 class DRAGCalibration(PulseCalibration):
     def __init__(self, qubit_name, deltas = np.linspace(-1,1,11), num_pulses = np.arange(16, 64, 4)):
