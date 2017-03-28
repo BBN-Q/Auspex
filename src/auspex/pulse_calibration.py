@@ -47,8 +47,8 @@ class PulseCalibration(object):
         """Returns the sequence for the given calibration, must be overridden"""
         return [[Id(self.qubit), MEAS(self.qubit)]]
 
-    def set(self, instrs_to_set = []):
-        seq_files = compile_to_hardware(self.sequence(), fileName=self.filename, axis_descriptor=self.axis_descriptor)
+    def set(self, instrs_to_set = [], **params):
+        seq_files = compile_to_hardware(self.sequence(**params), fileName=self.filename, axis_descriptor=self.axis_descriptor)
         metafileName = os.path.join(QGLconfig.AWGDir, self.filename + '-meta.json')
         self.exp = QubitExpFactory.create(meta_file=metafileName, notebook=self.notebook, calibration=True)
         if self.plot:
@@ -304,6 +304,90 @@ class DRAGCalibration(PulseCalibration):
         self.update_libraries([chan_settings], [config.channelLibFile])
 
         return fitted_drag
+
+class MeasCalibration(PulseCalibration):
+    def __init__(self, qubit_name):
+        super(MeasCalibration, self).__init__(qubit_name)
+
+class CLEARCalibration(MeasCalibration):
+    ''' Calibration of cavity reset pulse
+    meas_qubit: auxiliary qubit used for CLEAR pulse
+    kappa: cavity linewidth (1/s)
+    chi: half of the dispershive shift (1/s)
+    t_empty: time allowed to deplete the cavity (s)
+    alpha: scaling factor
+    T1factor: T1 decay before Ramsey
+    nsteps: calibration steps/sweep
+    note: kappa, chi are angular frequencies (1/time)
+    cal_steps: choose ranges for calibration steps. 1: +-100%; 0: skip step
+    '''
+    def __init__(self, qubit_name, meas_qubit, kappa = 2e6, chi = 1e6, t_empty = 200e-9, ramsey_delays=np.linspace(0.0, 50.0, 51)*1e-6, ramsey_freq = 100e3, meas_delay = 0, tau = 200e-9, \
+    phase = 0, alpha = 1, T1factor = 1, T2 = 30e-6, nsteps = 11, eps1 = None, eps2 = None, cal_steps = (1,1,1)):
+        super(CLEARCalibration, self).__init__(qubit_name)
+        self.filename = 'CLEAR/CLEAR'
+        self.meas_qubit = meas_qubit
+        self.kappa = kappa
+        self.chi = chi
+        self.ramsey_delays = ramsey_delays
+        self.ramsey_freq = ramsey_freq
+        self.meas_delay = meas_delay
+        self.tau = tau
+        self.alpha = alpha
+        self.T1factor = T1factor
+        self.T2 = T2
+        self.nsteps = nsteps
+        if not self.eps1:
+            # theoretical values as default
+            self.eps1 = (1 - 2*exp(kappa*t_empty/4)*cos(chi*t_empty/2))/(1+exp(kappa*t_empty/2)-2*exp(kappa*t_empty/4)*cos(chi*t_empty/2))
+            self.eps2 = 1/(1+exp(kappa*t_empty/2)-2*exp(kappa*t_empty/4)*cos(chi*t_empty/2))
+        self.cal_steps = cal_steps
+
+    def sequence(self, **params):
+        qM = QubitFactory(self.meas_qubit)
+        prep = X(q) if self.state else Id(q)
+
+        seqs = [[prep, MEAS(qM, amp1 = params['eps1'], amp2 =  params['eps2'], step_length = self.tau), X90(self.qubit), Id(self.qubit,d), U90(self.qubit,phase = self.ramsey_freq*d,\
+        self.t_empty/2,  params['state']),
+        Id(self.qubit, self.meas_delay), MEAS(self.qubit)] for d in self.ramsey_delays]
+        seqs += create_cal_seqs((self.qubit,), 2, delay = self.meas_delay)
+    return seqs
+
+    def calibrate(self):
+        for ct = range(3):
+            #generate sequence
+            xpoints = linspace(1-self.cal_steps[ct], 1+self.cal_steps[ct], nsteps)
+            n0vec = np.zeros(nsteps)
+            err0vec = np.zeros(nsteps)
+            n1vec = np.zeros(nsteps)
+            err1vec = np.zeros(nsteps)
+            for k = range(nsteps):
+                eps1 = self.eps1 if k==1 else xpoints[k]*self.eps1
+                eps2 = self.eps2 if k==2 else xpoints[k]*self.eps2
+                #run for qubit in 0
+                self.set(eps1 = eps1, eps2 = eps2, state = 0)
+                #analyze
+                data, _ = self.run()
+                n0vec[k], err0vec[k] = fit_photon_number(self.xpoints, data, [self.kappa, self.ramsey_freq, 2*self.chi, self.T2, self.T1factor, 0])
+                #qubit in 1
+                self.set(eps1 = eps1, eps2 = eps2, state = 1)
+                #analyze
+                data, _ = self.run()
+                n1vec[k], err1vec[k] = fit_photon_number(self.xpoints, data, [self.kappa, self.ramsey_freq, 2*self.chi, self.T2, self.T1factor, 1])
+                #print("CLEAR", opt_CLEAR)
+            #fit for minimum photon number
+            x0 = min(n0vec)
+            x1 = min(n1vec)
+            opt_scaling = fit_CLEAR(xpoints, n0vec, n1vec, [x0 x1])
+            if ct==1 or ct==2:
+                self.eps1*=opt_scaling
+            if ct==1 or ct==3:
+                self.eps2*=opt_scaling
+
+        ###TODO: update pulse parameters
+        # measChan =
+        # chan_settings['channelDict'][measChan]['pulseParams']['eps1'] = opt_CLEAR[0]
+        # self.update_libraries([chan_settings], [config.channelLibFile])
+        # return opt_CLEAR
 
 def restrict(phase):
     out = np.mod( phase + np.pi, 2*np.pi, ) - np.pi

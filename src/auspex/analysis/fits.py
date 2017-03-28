@@ -58,3 +58,20 @@ def sinf(x, f, A, phi, y0):
 
 def quadf(x, A, x0, b):
     return A*(x-x0)**2+b
+def fit_photon_number(xdata, ydata, params):
+    ''' Fit number of measurement photons before a Ramsey. See McClure et al., Phys. Rev. App. 2016
+    input params:
+	1 - cavity decay rate kappa (MHz)
+	2 - detuning Delta (MHz)
+	3 - dispersive shift 2Chi (MHz)
+	4 - Ramsey decay time T2* (us)
+	5 - exp(-t_meas/T1) (us), only if starting from |1> (to include relaxation during the 1st msm't)
+	6 - initial qubit state (0/1)
+    '''
+	params[:2]*=2*pi # convert to angular frequencies
+	model_0(t, p) = (-imag(exp(-(1/params[3]+params[1]*1j).*t + (p[0]-p[1]*params[2]*(1-exp(-((params[0] + params[2]*1j).*t)))/(params[0]+params[2]*1j))*1j)))
+	if params[5] == 1:
+	       model(t, p) = params[4]*model_0(t, p) + (1-params[4])*model_0(t, [p[0]+np.pi; p[1:]]) if params[5] == 1  else model_0(t, p)
+	popt, pcov = curve_fit(model, xdata, ydata, p0 = [0, 1])
+    perr = np.sqrt(np.diag(pcov))
+	return popt[1], perr[1]
