@@ -175,7 +175,6 @@ class Instrument(metaclass=MetaInstrument):
 
     def __del__(self):
         self.disconnect()
-        super(Instrument, self).__del__()
 
     def set_all(self, settings_dict):
         """Accept a settings dictionary and attempt to set all of the instrument
@@ -211,7 +210,7 @@ class SCPIInstrument(Instrument):
 
         if interface_type is None:
             # Load the dummy interface, unless we see that GPIB is in the resource string
-            if any([x in self.resource_name for x in ["GPIB", "USB", "SOCKET", "hislip", "inst0"]]):
+            if any([x in self.resource_name for x in ["GPIB", "USB", "SOCKET", "hislip", "inst0", "COM"]]):
                 interface_type = "VISA"
 
         try:

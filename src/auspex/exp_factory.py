@@ -43,8 +43,8 @@ class QubitExpFactory(object):
     will override the defaulty JSON."""
 
     @staticmethod
-    def run(notebook=False, expname=None, calibration=False):
-        exp = QubitExpFactory.create(notebook=notebook, expname=expname, calibration=calibration)
+    def run(notebook=False, expname=None, meta_file=None, calibration=False):
+        exp = QubitExpFactory.create(meta_file=meta_file, notebook=notebook, expname=expname, calibration=calibration)
         exp.run_sweeps()
 
     @staticmethod

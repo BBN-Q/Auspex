@@ -30,7 +30,7 @@ def fit_drag(data, DRAG_vec, pulse_vec):
     data = norm_data(data).reshape(num_DRAG, len(data)/num_DRAG)
     #first fit sine to lowest n, for the full range
     data_n = data[:, 1]
-    T0 = 2*(DRAG_vec[np.argmax(data_n)] - DRAGL_list[np.argmin(data_n)]) #rough estimate of period
+    T0 = 2*(DRAG_vec[np.argmax(data_n)] - DRAG_vec[np.argmin(data_n)]) #rough estimate of period
 
     p0 = [0, 1, T0, 0]
     popt, pcov = curve_fit(sinf, DRAG_vec, data_n, p0 = p0)
@@ -42,7 +42,7 @@ def fit_drag(data, DRAG_vec, pulse_vec):
         data_n = data[:, ct]
         p0 = [1, xopt_vec[ct-1], 0]
         #recenter for next fit
-        closest_ind =np.argmin(abs(DRAGL_list - x0))
+        closest_ind =np.argmin(abs(DRAG_vec - x0))
         fit_range = np.round(0.5*num_DRAG*pulse_vec[0]/pulse_vec[ct])
         curr_DRAG_vec = DRAG_vec[max(0, closest_ind - fit_range) : min(num_DRAG-1, closest_ind + fit_range)]
         reduced_data_n = data_n[max(0, closest_ind - fit_range) : min(num_DRAG-1, closest_ind + fit_range)]

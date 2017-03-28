@@ -51,7 +51,11 @@ class X6Channel(DigitizerChannel):
 
     def set_all(self, settings_dict):
         for name, value in settings_dict.items():
-            if hasattr(self, name):
+            if name == "kernel" and isinstance(value, str) and value:
+                self.kernel = eval(value)
+            elif name == "kernel_bias" and isinstance(value, str) and value:
+                self.kernel_bias = eval(value)
+            elif hasattr(self, name):
                 setattr(self, name, value)
 
         if self.stream_type == "Integrated":
@@ -132,7 +136,7 @@ class X6(Instrument):
         elif channel.stream_type == "Demodulated":
             self._lib.set_nco_frequency(a, b, channel.if_freq)
         elif channel.stream_type == "Integrated":
-            if not channel.kernel:
+            if not channel.kernel is None:
                 logger.error("Integrated streams must specify a kernel")
                 return
             self._lib.write_kernel(a, b, c, channel.kernel)
