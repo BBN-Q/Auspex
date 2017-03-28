@@ -72,6 +72,7 @@ class Sweeper(object):
         for a in self.axes:
             if await a.check_for_refinement():
                 refined_axes.append(a.name)
+                break
         if len(refined_axes) > 1:
             raise Exception("More than one axis trying to refine simultaneously. This cannot be tolerated.")
         elif len(refined_axes) == 1:
