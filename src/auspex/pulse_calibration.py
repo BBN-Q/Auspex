@@ -313,17 +313,17 @@ class MeasCalibration(PulseCalibration):
 class CLEARCalibration(MeasCalibration):
     ''' Calibration of cavity reset pulse
     aux_qubit: auxiliary qubit used for CLEAR pulse
-    kappa: cavity linewidth (1/s)
-    chi: half of the dispershive shift (1/s)
-    t_empty: time allowed to deplete the cavity (s)
+    kappa: cavity linewidth (angular frequency: 1/s)
+    chi: half of the dispershive shift (angular frequency: 1/s)
+    tau: duration of each of the 2 depletion steps (s)
     alpha: scaling factor
-    T1factor: T1 decay before Ramsey
+    T1factor: decay due to T1 between end of msm't and start of Ramsey
+    T2: measured T2*
     nsteps: calibration steps/sweep
-    note: kappa, chi are angular frequencies (1/time)
     cal_steps: choose ranges for calibration steps. 1: +-100%; 0: skip step
     '''
     def __init__(self, qubit_name, aux_qubit, kappa = 2e6, chi = 1e6, t_empty = 200e-9, ramsey_delays=np.linspace(0.0, 50.0, 51)*1e-6, ramsey_freq = 100e3, meas_delay = 0, tau = 200e-9, \
-    phase = 0, alpha = 1, T1factor = 1, T2 = 30e-6, nsteps = 11, eps1 = None, eps2 = None, cal_steps = (1,1,1)):
+    alpha = 1, T1factor = 1, T2 = 30e-6, nsteps = 11, eps1 = None, eps2 = None, cal_steps = (1,1,1)):
         super(CLEARCalibration, self).__init__(qubit_name)
         self.filename = 'CLEAR/CLEAR'
         self.aux_qubit = aux_qubit
@@ -353,6 +353,10 @@ class CLEARCalibration(MeasCalibration):
         seqs += create_cal_seqs((self.qubit,), 2, delay = self.meas_delay)
     return seqs
 
+    def init_plot(self):
+        #TODO: see feature/DRAGcal-plots
+        pass
+
     def calibrate(self):
         for ct = range(3):
             #generate sequence
@@ -374,7 +378,6 @@ class CLEARCalibration(MeasCalibration):
                 #analyze
                 data, _ = self.run()
                 n1vec[k], err1vec[k] = fit_photon_number(self.xpoints, data, [self.kappa, self.ramsey_freq, 2*self.chi, self.T2, self.T1factor, 1])
-                #print("CLEAR", opt_CLEAR)
             #fit for minimum photon number
             x0 = min(n0vec)
             x1 = min(n1vec)
@@ -384,7 +387,7 @@ class CLEARCalibration(MeasCalibration):
             if ct==1 or ct==3:
                 self.eps2*=opt_scaling
 
-        #update library (default eps1, eps2 for MEAS)
+        #update library (default amp1, amp2 for MEAS)
         chan_settings['channelDict'][self.meas_name]['pulseParams']['amp1'] = self.eps1
         chan_settings['channelDict'][self.meas_name]['pulseParams']['amp2'] = self.eps2
         chan_settings['channelDict'][self.meas_name]['pulseParams']['step_length'] = self.tau
