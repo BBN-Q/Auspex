@@ -308,10 +308,11 @@ class DRAGCalibration(PulseCalibration):
 class MeasCalibration(PulseCalibration):
     def __init__(self, qubit_name):
         super(MeasCalibration, self).__init__(qubit_name)
+        self.meas_name = = "M-" + qubit.name
 
 class CLEARCalibration(MeasCalibration):
     ''' Calibration of cavity reset pulse
-    meas_qubit: auxiliary qubit used for CLEAR pulse
+    aux_qubit: auxiliary qubit used for CLEAR pulse
     kappa: cavity linewidth (1/s)
     chi: half of the dispershive shift (1/s)
     t_empty: time allowed to deplete the cavity (s)
@@ -321,11 +322,11 @@ class CLEARCalibration(MeasCalibration):
     note: kappa, chi are angular frequencies (1/time)
     cal_steps: choose ranges for calibration steps. 1: +-100%; 0: skip step
     '''
-    def __init__(self, qubit_name, meas_qubit, kappa = 2e6, chi = 1e6, t_empty = 200e-9, ramsey_delays=np.linspace(0.0, 50.0, 51)*1e-6, ramsey_freq = 100e3, meas_delay = 0, tau = 200e-9, \
+    def __init__(self, qubit_name, aux_qubit, kappa = 2e6, chi = 1e6, t_empty = 200e-9, ramsey_delays=np.linspace(0.0, 50.0, 51)*1e-6, ramsey_freq = 100e3, meas_delay = 0, tau = 200e-9, \
     phase = 0, alpha = 1, T1factor = 1, T2 = 30e-6, nsteps = 11, eps1 = None, eps2 = None, cal_steps = (1,1,1)):
         super(CLEARCalibration, self).__init__(qubit_name)
         self.filename = 'CLEAR/CLEAR'
-        self.meas_qubit = meas_qubit
+        self.aux_qubit = aux_qubit
         self.kappa = kappa
         self.chi = chi
         self.ramsey_delays = ramsey_delays
@@ -343,7 +344,7 @@ class CLEARCalibration(MeasCalibration):
         self.cal_steps = cal_steps
 
     def sequence(self, **params):
-        qM = QubitFactory(self.meas_qubit)
+        qM = QubitFactory(self.aux_qubit) #TODO: replace with MEAS(q) devoid of digitizer trigger
         prep = X(q) if self.state else Id(q)
 
         seqs = [[prep, MEAS(qM, amp1 = params['eps1'], amp2 =  params['eps2'], step_length = self.tau), X90(self.qubit), Id(self.qubit,d), U90(self.qubit,phase = self.ramsey_freq*d,\
@@ -383,11 +384,11 @@ class CLEARCalibration(MeasCalibration):
             if ct==1 or ct==3:
                 self.eps2*=opt_scaling
 
-        ###TODO: update pulse parameters
-        # measChan =
-        # chan_settings['channelDict'][measChan]['pulseParams']['eps1'] = opt_CLEAR[0]
-        # self.update_libraries([chan_settings], [config.channelLibFile])
-        # return opt_CLEAR
+        #update library (default eps1, eps2 for MEAS)
+        chan_settings['channelDict'][self.meas_name]['pulseParams']['amp1'] = self.eps1
+        chan_settings['channelDict'][self.meas_name]['pulseParams']['amp2'] = self.eps2
+        chan_settings['channelDict'][self.meas_name]['pulseParams']['step_length'] = self.tau
+        self.update_libraries([chan_settings], [config.channelLibFile])
 
 def restrict(phase):
     out = np.mod( phase + np.pi, 2*np.pi, ) - np.pi
