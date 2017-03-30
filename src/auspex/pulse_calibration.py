@@ -328,6 +328,7 @@ class CRCalibration(PulseCalibration):
         self.phases = phase
         self.amps = amp
         self.rise_fall = rise_fall
+        self.filename = 'CR/CR'
 
     def init_plot(self):
         cal_plot = ManualPlotter("CR"+str.lower(self.cal_type.name)+"Fit", x_label=str.lower(self.cal_type.name), y_label='$<Z_{'+self.qubit_names[1]+'}>$')
