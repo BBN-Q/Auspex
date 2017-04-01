@@ -138,7 +138,7 @@ class SR865(SCPIInstrument):
     CHANNEL1_MAP = indexed_map_chan(CHANNEL1_VALUES)
     CHANNEL2_MAP = indexed_map_chan(CHANNEL2_VALUES)
 
-    amplitude = FloatCommand(get_string="SLVL?", set_string="SLVL {:f}")
+    amplitude = FloatCommand(get_string="SLVL?", set_string="SLVL {:f}", aliases=["amp"])
     frequency = FloatCommand(get_string="FREQ?", set_string="FREQ {:f}", aliases=['freq'])
     phase = FloatCommand(get_string="PHAS?", set_string="PHAS {:g}")
     offset = FloatCommand(get_string="SOFF?", set_string="SOFF {:f}", aliases=['dc', 'DC'])
