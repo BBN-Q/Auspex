@@ -8,6 +8,7 @@
 
 from auspex.log import logger
 from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand
+from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand, Command
 import numpy as np
 import time
 
@@ -153,6 +154,9 @@ class SR865(SCPIInstrument):
     sensitivity = StringCommand(get_string="SCAL?;", set_string="SCAL {:s}", value_map=SENSITIVITY_MAP)
     time_constant = StringCommand(get_string="OFLT?;", set_string="OFLT{:s}", value_map=TIME_CONSTANT_MAP, aliases=['tc', 'TC'])
     filter_slope = StringCommand(get_string="OFSL?;", set_string="OFSL{:s}", value_map=FILTER_SLOPE_MAP)
+    sensitivity = Command(get_string="SCAL?;", set_string="SCAL {:s}", value_map=SENSITIVITY_MAP)
+    time_constant = Command(get_string="OFLT?;", set_string="OFLT{:s}", value_map=TIME_CONSTANT_MAP, aliases=['tc', 'TC'])
+    filter_slope = Command(get_string="OFSL?;", set_string="OFSL{:s}", value_map=FILTER_SLOPE_MAP)
 
     capture_quants = StringCommand(scpi_string="CAPTURECFG", value_map={"X": "0", "XY": "1", "RT": "2", "XYRT": "3"})
     max_capture_rate = StringCommand(get_string="CAPTURERATEMAX?")
