@@ -122,7 +122,7 @@ class SR830(SCPIInstrument):
 
 class SR865(SCPIInstrument):
     """The SR865 lock-in amplifier."""
-    TIME_CONSTANT_VALUES = [1e-6, 3e-9, 10e-6, 30e-6, 100e-6, 300e-6, 1e-3, 3e-3, 10e-3,
+    TIME_CONSTANT_VALUES = [1e-6, 3e-6, 10e-6, 30e-6, 100e-6, 300e-6, 1e-3, 3e-3, 10e-3,
                             30e-3, 100e-3, 300e-3, 1, 3, 10, 3, 100, 300, 1e3,
                             3e3, 10e3, 30e3]
     SENSITIVITY_VALUES = [ 1, 5e-1, 2e-1, 1e-1, 5e-2, 2e-2, 1e-2, 5e-3, 2e-3, 1e-3,
