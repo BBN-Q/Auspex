@@ -68,6 +68,14 @@ class Command(object):
         else:
             return self.python_to_instr[set_value_python]
 
+    def convert_get(self, get_value_instrument):
+        """Convert the instrument's returned values to something conveniently accessed
+        through python."""
+        if self.python_to_instr is None:
+            return get_value_instrument
+        else:
+            return self.instr_to_python[get_value_instrument]
+
 class SCPICommand(Command):
     def parse(self):
         super(SCPICommand, self).parse()

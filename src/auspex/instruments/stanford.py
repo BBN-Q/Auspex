@@ -7,7 +7,6 @@
 #    http://www.apache.org/licenses/LICENSE-2.0
 
 from auspex.log import logger
-from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand
 from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand, Command
 import numpy as np
 import time
@@ -151,12 +150,21 @@ class SR865(SCPIInstrument):
 
     channel_1_type = StringCommand(get_string="DDEF?1;", set_string="DDEF1,{:s}", value_map=CHANNEL1_MAP)
     channel_2_type = StringCommand(get_string="DDEF?2;", set_string="DDEF2,{:s}", value_map=CHANNEL2_MAP)
-    sensitivity = StringCommand(get_string="SCAL?;", set_string="SCAL {:s}", value_map=SENSITIVITY_MAP)
-    time_constant = StringCommand(get_string="OFLT?;", set_string="OFLT{:s}", value_map=TIME_CONSTANT_MAP, aliases=['tc', 'TC'])
-    filter_slope = StringCommand(get_string="OFSL?;", set_string="OFSL{:s}", value_map=FILTER_SLOPE_MAP)
     sensitivity = Command(get_string="SCAL?;", set_string="SCAL {:s}", value_map=SENSITIVITY_MAP)
     time_constant = Command(get_string="OFLT?;", set_string="OFLT{:s}", value_map=TIME_CONSTANT_MAP, aliases=['tc', 'TC'])
     filter_slope = Command(get_string="OFSL?;", set_string="OFSL{:s}", value_map=FILTER_SLOPE_MAP)
+
+    channel_1_output = Command(get_string="COUT? OCH1;", set_string="COUT OCH1, {:s}", value_map={"XY": "0", "RTheta": "1"})
+    channel_2_output = Command(get_string="COUT? OCH2;", set_string="COUT OCH2, {:s}", value_map={"XY": "0", "RTheta": "1"})
+    x_expand = Command(get_string="CEXP? X;", set_string="CEXP X, {:s}", value_map={1: "0", 10: "1", 100: "2"})
+    y_expand = Command(get_string="CEXP? Y;", set_string="CEXP Y, {:s}", value_map={1: "0", 10: "1", 100: "2"})
+    r_expand = Command(get_string="CEXP? R;", set_string="CEXP R, {:s}", value_map={1: "0", 10: "1", 100: "2"})
+    x_offset_enable = Command(get_string="COFA? X;", set_string="COFA X, {:s}", value_map={True: "1", False: "0"})
+    y_offset_enable = Command(get_string="COFA? Y;", set_string="COFA Y, {:s}", value_map={True: "1", False: "0"})
+    r_offset_enable = Command(get_string="COFA? R;", set_string="COFA R, {:s}", value_map={True: "1", False: "0"})
+    x_offset = FloatCommand(get_string="COFP? X;", set_string="COFP X, {:g}")
+    y_offset = FloatCommand(get_string="COFP? Y;", set_string="COFP Y, {:g}")
+    r_offset = FloatCommand(get_string="COFP? R;", set_string="COFP R, {:g}")
 
     capture_quants = StringCommand(scpi_string="CAPTURECFG", value_map={"X": "0", "XY": "1", "RT": "2", "XYRT": "3"})
     max_capture_rate = StringCommand(get_string="CAPTURERATEMAX?")
@@ -179,6 +187,12 @@ class SR865(SCPIInstrument):
     def connect(self, resource_name=None, interface_type=None):
         super(SR865, self).connect(resource_name=resource_name, interface_type=interface_type)
         self.interface._resource.read_termination = u"\n"
+
+    def auto_offset(self, channel):
+        if channel not in ["X", "Y", "R"]:
+            raise ValueError("Must specific valid channel, either X, Y, or R")
+        else:
+            self.interface.write("OAUT {:}".format(channel))
 
     @property
     def capture_length(self):
