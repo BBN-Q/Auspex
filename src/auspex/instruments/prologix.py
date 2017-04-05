@@ -36,6 +36,9 @@ class PrologixError(Exception):
 class PrologixSocketResource(object):
     """A resource representing a GPIB instrument controlled through a PrologixError
     GPIB-ETHERNET controller. Mimics the functionality of a pyVISA resource object.
+    
+    See http://prologix.biz/gpib-ethernet-controller.html for more details
+    and a utility that will discover all prologix instruments on the network.
 
     Attributes:
         timeout: Timeout duration for TCP comms. Default 5s.
@@ -80,7 +83,7 @@ class PrologixSocketResource(object):
         if ipaddr is not None:
             self.ipaddr = ipaddr
         if gpib is not None:
-            self.gpib = gpib
+            self.gpib = gpib     
         try:
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM,
                 socket.IPPROTO_TCP)
@@ -88,15 +91,16 @@ class PrologixSocketResource(object):
             self.sock.connect((self.ipaddr, 1234)) #Prologix communicates on port 1234
         except socket.error as err:
             logger.error("Cannot open socket to Prologix at {}: {}".format(self.ipaddr,
-                err.message))
+                err.msg))
             raise PrologixError(self.ipaddr) from err
-        whoami = self.query('++ver')
+        self.sock.send("++ver\n".encode())
+        whoami = self.sock.recv(128).decode()
         if "Prologix" not in whoami:
             logger.error("The device at {} does not appear to be a Prologix; got {}.".format(whoami))
             raise PrologixError(whoami)
-        self.write("++mode 1") #set to controller mode
-        self.write("++auto 1") #enable read-after-write
-
+        self.sock.send("++mode 1\n".encode()) #set to controller mode
+        self.sock.send("++auto 1\n".encode()) #enable read-after-write
+        self._addr()
         idn = self.query(self.idn_string)
         if idn is '':
             logger.error("Did not receive response to GPIB command {} " +
@@ -117,12 +121,6 @@ class PrologixSocketResource(object):
         """Set PROLOGIX to address of instrument we want to control."""
         self.sock.send(('++addr %d\n' % self.gpib).encode())
 
-    def _strip(self, text):
-        """Strip read termination character from a string."""
-        if not text.endswith(self.read_termination):
-            return text
-        return text[:len(text)-len(self.read_termination)]
-
     def read(self):
         """Read an ASCII value from the instrument.
 
@@ -135,7 +133,7 @@ class PrologixSocketResource(object):
         ans = self.sock.recv(self.bufsize)
         return self._strip(ans.decode())
 
-    def query(self):
+    def query(self, command):
         """Query instrument with ASCII command then read response.
 
         Args:
@@ -250,7 +248,7 @@ class PrologixSocketResource(object):
         data = bytes(header, 'ascii') + struct.pack(fullft, *values)
         return self.write_raw(command.encode()+data)
 
-    def query_binary_values(self, command, datatype=u'h', container=array
+    def query_binary_values(self, command, datatype=u'h', container=np.array,
         is_big_endian=False, delay=0.1):
         """Write a string message to device and read binary values, which are
         returned as iterable. Again pilfered from pyvisa.
