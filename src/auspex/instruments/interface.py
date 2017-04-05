@@ -2,6 +2,7 @@ import os
 import visa
 import numpy as np
 from auspex.log import logger
+from .prologix import PrologixSocketResource
 
 class Interface(object):
     """Currently just a dummy interface for testing."""
@@ -79,3 +80,14 @@ class VisaInterface(Interface):
         return self._resource.query("*TST?") # Self-Test Query
     def WAI(self):
         self._resource.write("*WAI") # Wait-to-Continue Command
+        
+class PrologixInterface(VisaInterface):
+    """PyVISA interface for communicating with instruments."""
+    def __init__(self, resource_name):
+        Interface.__init__(self)
+        try:
+            if len(resource_name.split("::")) != 2:
+                    raise Exception("Resource name for Prologix-Ethernet adapter must be of form IPv4_ADDR::GPIB_ADDR")
+            self._resource = PrologixSocketResource(ipaddr=resource_name.split("::")[0], gpib=int(resource_name.split("::")[1]))
+        except:
+            raise Exception("Unable to create the resource '%s'" % resource_name)

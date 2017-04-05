@@ -10,8 +10,6 @@ import os
 import numpy as np
 import socket
 import functools
-from .instrument import is_valid_ipv4
-from .interface import Interface
 from auspex.log import logger
 
 _converters = {
@@ -96,7 +94,7 @@ class PrologixSocketResource(object):
         self.sock.send("++ver\r\n".encode())
         whoami = self.sock.recv(128).decode()
         if "Prologix" not in whoami:
-            logger.error("The device at {0} does not appear to be a Prologix; got {1}.".format(whoami))
+            logger.error("The device at {0} does not appear to be a Prologix; got {1}.".format(self.ipaddr, whoami))
             raise PrologixError(whoami)
         self.sock.send("++mode 1\r\n".encode()) #set to controller mode
         self.sock.send("++auto 1\r\n".encode()) #enable read-after-write
@@ -104,13 +102,13 @@ class PrologixSocketResource(object):
         self.sock.send("++clr\r\n".encode())
         idn = self.query(self.idn_string)
         if idn is '':
-            logger.error("Did not receive response to GPIB command {0} " +
-                "from GPIB device {1} on Prologix at {2}.".format(self.idn_string,
+            logger.error(("Did not receive response to GPIB command {0} " +
+                "from GPIB device {1} on Prologix at {2}.").format(self.idn_string,
                 self.gpib, self.ipaddr))
             raise PrologixError(idn)
         else:
-            logger.info("Succesfully connected to device {0} at GPIB port {1} on" +
-                " Prologix controller at {2}.".format(idn, self.gpib, self.ipaddr))
+            logger.debug(("Succesfully connected to device {0} at GPIB port {1} on" +
+                " Prologix controller at {2}.").format(idn, self.gpib, self.ipaddr))
 
     def close(self):
         """Close the connection to the Prologix."""
