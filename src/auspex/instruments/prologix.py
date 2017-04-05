@@ -36,7 +36,7 @@ class PrologixError(Exception):
 class PrologixSocketResource(object):
     """A resource representing a GPIB instrument controlled through a PrologixError
     GPIB-ETHERNET controller. Mimics the functionality of a pyVISA resource object.
-    
+
     See http://prologix.biz/gpib-ethernet-controller.html for more details
     and a utility that will discover all prologix instruments on the network.
 
@@ -55,8 +55,8 @@ class PrologixSocketResource(object):
             self.gpib = gpib
         self.sock = None
         self._timeout = 5
-        self.read_termination = u'\n'
-        self.write_termination = u'\n'
+        self.read_termination = "\r\n"
+        self.write_termination = "\r\n"
         self.idn_string = "*IDN?"
         self.bufsize = 4096
 
@@ -83,33 +83,34 @@ class PrologixSocketResource(object):
         if ipaddr is not None:
             self.ipaddr = ipaddr
         if gpib is not None:
-            self.gpib = gpib     
+            self.gpib = gpib
         try:
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM,
                 socket.IPPROTO_TCP)
             self.sock.settimeout(self._timeout)
             self.sock.connect((self.ipaddr, 1234)) #Prologix communicates on port 1234
         except socket.error as err:
-            logger.error("Cannot open socket to Prologix at {}: {}".format(self.ipaddr,
+            logger.error("Cannot open socket to Prologix at {0}: {1}".format(self.ipaddr,
                 err.msg))
             raise PrologixError(self.ipaddr) from err
-        self.sock.send("++ver\n".encode())
+        self.sock.send("++ver\r\n".encode())
         whoami = self.sock.recv(128).decode()
         if "Prologix" not in whoami:
-            logger.error("The device at {} does not appear to be a Prologix; got {}.".format(whoami))
+            logger.error("The device at {0} does not appear to be a Prologix; got {1}.".format(whoami))
             raise PrologixError(whoami)
-        self.sock.send("++mode 1\n".encode()) #set to controller mode
-        self.sock.send("++auto 1\n".encode()) #enable read-after-write
+        self.sock.send("++mode 1\r\n".encode()) #set to controller mode
+        self.sock.send("++auto 1\r\n".encode()) #enable read-after-write
         self._addr()
+        self.sock.send("++clr\r\n".encode())
         idn = self.query(self.idn_string)
         if idn is '':
-            logger.error("Did not receive response to GPIB command {} " +
-                "from GPIB device {} on Prologix at {}.".format(self.idn_string,
+            logger.error("Did not receive response to GPIB command {0} " +
+                "from GPIB device {1} on Prologix at {2}.".format(self.idn_string,
                 self.gpib, self.ipaddr))
             raise PrologixError(idn)
         else:
-            logger.info("Succesfully connected to device {} at GPIB port {} on" +
-                " Prologix controller at {}.".format(idn, self.gpib, self.ipaddr))
+            logger.info("Succesfully connected to device {0} at GPIB port {1} on" +
+                " Prologix controller at {2}.".format(idn, self.gpib, self.ipaddr))
 
     def close(self):
         """Close the connection to the Prologix."""
@@ -130,8 +131,8 @@ class PrologixSocketResource(object):
             The instrument data with termination character stripped.
         """
         self._addr()
-        ans = self.sock.recv(self.bufsize)
-        return self._strip(ans.decode())
+        ans = self.sock.recv(self.bufsize).decode()
+        return ans.rstrip(self.read_termination)
 
     def query(self, command):
         """Query instrument with ASCII command then read response.
@@ -143,8 +144,8 @@ class PrologixSocketResource(object):
         """
         self._addr()
         self.sock.send((command + self.write_termination).encode())
-        ans = self.sock.recv(self.bufsize)
-        return self._strip(ans.decode())
+        ans = self.sock.recv(self.bufsize).decode()
+        return ans.rstrip(self.read_termination)
 
     def write(self, command):
         """Write a string message to device in ASCII format.
