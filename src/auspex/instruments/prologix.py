@@ -11,7 +11,7 @@ import numpy as np
 import socket
 import functools
 from auspex.log import logger
-from pyvisa.util import _converters, from_ascii_block, to_ascii_block, to_ieee_block
+from pyvisa.util import _converters, from_ascii_block, to_ascii_block, to_ieee_block, from_binary_block
 
 class PrologixError(Exception):
     """Error interacting with the Prologix GPIB-ETHERNET controller."""
