@@ -82,7 +82,7 @@ class VisaInterface(Interface):
         self._resource.write("*WAI") # Wait-to-Continue Command
         
 class PrologixInterface(VisaInterface):
-    """PyVISA interface for communicating with instruments."""
+    """Prologix-Ethernet interface for communicating with remote GPIB instruments."""
     def __init__(self, resource_name):
         Interface.__init__(self)
         try:

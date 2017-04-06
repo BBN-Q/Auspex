@@ -1,4 +1,4 @@
-# Copyright 2016 Raytheon BBN Technologies
+# Copyright 2017 Raytheon BBN Technologies
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -91,15 +91,15 @@ class PrologixSocketResource(object):
             logger.error("Cannot open socket to Prologix at {0}: {1}".format(self.ipaddr,
                 err.msg))
             raise PrologixError(self.ipaddr) from err
-        self.sock.send("++ver\r\n".encode())
+        self.sock.send(b"++ver\r\n")
         whoami = self.sock.recv(128).decode()
         if "Prologix" not in whoami:
             logger.error("The device at {0} does not appear to be a Prologix; got {1}.".format(self.ipaddr, whoami))
             raise PrologixError(whoami)
-        self.sock.send("++mode 1\r\n".encode()) #set to controller mode
-        self.sock.send("++auto 1\r\n".encode()) #enable read-after-write
+        self.sock.send(b"++mode 1\r\n") #set to controller mode
+        self.sock.send(b"++auto 1\r\n") #enable read-after-write
         self._addr()
-        self.sock.send("++clr\r\n".encode())
+        self.sock.send(b"++clr\r\n")
         idn = self.query(self.idn_string)
         if idn is '':
             logger.error(("Did not receive response to GPIB command {0} " +
