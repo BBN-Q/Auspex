@@ -89,5 +89,6 @@ class PrologixInterface(VisaInterface):
             if len(resource_name.split("::")) != 2:
                     raise Exception("Resource name for Prologix-Ethernet adapter must be of form IPv4_ADDR::GPIB_ADDR")
             self._resource = PrologixSocketResource(ipaddr=resource_name.split("::")[0], gpib=int(resource_name.split("::")[1]))
+            self._resource.connect()
         except:
             raise Exception("Unable to create the resource '%s'" % resource_name)
