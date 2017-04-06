@@ -11,22 +11,7 @@ import numpy as np
 import socket
 import functools
 from auspex.log import logger
-
-_converters = {
-    's': str,
-    'b': functools.partial(int, base=2),
-    'c': chr,
-    'd': int,
-    'o': functools.partial(int, base=8),
-    'x': functools.partial(int, base=16),
-    'X': functools.partial(int, base=16),
-    'e': float,
-    'E': float,
-    'f': float,
-    'F': float,
-    'g': float,
-    'G': float,
-}
+from pyvisa.util import _converters, from_ascii_block, to_ascii_block, to_ieee_block
 
 class PrologixError(Exception):
     """Error interacting with the Prologix GPIB-ETHERNET controller."""
@@ -196,8 +181,7 @@ class PrologixSocketResource(object):
         Returns:
             Total number of bytes sent to instrument.
         """
-        converter = '%' + converter
-        ascii_vals = separator.join(converter % v for v in values)
+        ascii_vals = to_ascii_block(values, converter, separator)
         return self.write(command + ascii_vals + self.write_termination)
 
     def query_ascii_values(self, command, converter='f', separator=',',
@@ -215,13 +199,10 @@ class PrologixSocketResource(object):
         Returns:
             Iterable of values converted from instrument response.
         """
-        try:
-            converter = _converters[converter]
-        except KeyError as err:
-            raise ValueError("Invalid string converter: {0}".format(converter)) from err
-
+        if bufsize is None:
+            bufsize = self.bufsize
         ascii = self.query(command, bufsize=bufsize)
-        return container([converter(v) for v in ascii.split(separator)])
+        return from_ascii_block(ascii, convereter, separator, container)
 
     def write_binary_values(self, command, values, datatype='f',
         is_big_endian=False):
@@ -237,18 +218,11 @@ class PrologixSocketResource(object):
         Returns:
             Number of bytes written to instrument.
         """
-        array_len = len(values)
-        elem_len = struct.calcsize(datatype)
-        length = array_len * elem_len
-        header = '%d' % length
-        header = '#%d%s'%(len(header),header)
-        endian = '>' if is_big_endian else '<'
-        fullfmt = '%s%d%s'(endian, array_len, datatype)
-        data = bytes(header, 'ascii') + struct.pack(fullft, *values)
+        data = to_ieee_block(values, datatype=datatype, is_big_endian=is_big_endian)
         return self.write_raw(command.encode()+data)
 
-    def query_binary_values(self, command, datatype=u'h', container=np.array,
-        is_big_endian=False, delay=0.1):
+    def query_binary_values(self, command, datatype='f', container=np.array,
+        is_big_endian=False, bufsize=None):
         """Write a string message to device and read binary values, which are
         returned as iterable. Again pilfered from pyvisa.
 
@@ -262,31 +236,9 @@ class PrologixSocketResource(object):
         Returns:
             Iterable of data values to be retuned
         """
-        self.write(command)
+        if bufsize is None:
+            bufsize = self.bufsize
+        self.write(command, bufsize=bufsize)
         block = self.read_raw()
-
-        #parse IEEE data block
-        begin = block.find(b'#')
-        if begin < 0:
-            raise ValueError("Cound not find (#) in data received from "+
-                "instrument indicating start of IEEE block.")
-        try:
-            header_len = int(block[begin+1:begin+2])
-        except ValueError:
-            header_len = 0
-        offset = begin + 2 + header_len
-        if header_len > 0:
-            data_len = int(block[begin+2:offset])
-        else:
-            data_len = len(block) - offset - 1
-        expected_len = data+len + offset
-        while len(block) < expected_len:
-            block += self.read_raw()
-        elem_len = struct.calcsize(datatype)
-        array_len = int(data_len / elem_len)
-        endian = '>' if is_big_endian else '<'
-        fullfmt = '%s%d%s'(endian, array_len, datatype)
-        try:
-            return container(struct.unpack_from(fullfmt, block, offset))
-        except struct.error:
-            raise ValueError("Could not unpack binary data from instrument.")
+        return from_binary_block(block, datatype=datatype, 
+            is_big_endian=is_big_endian, container=container)
