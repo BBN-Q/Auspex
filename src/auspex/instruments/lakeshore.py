@@ -6,8 +6,138 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand
+from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand, Command
 import numpy as np
+
+def indexed_map(values):
+    return {v: '%d' % i for i, v in enumerate(values)}
+
+class Lakeshore370(SCPIInstrument):
+    """Lakeshore 370 AC Resistance Bridge"""
+
+# Allowed values
+    SENS_CHAN = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+    RAMP_MIN = 0.001
+    RAMP_MAX = 10
+    P_MIN = 0.001
+    P_MAX = 1000
+    I_MAX = 10000
+    D_MAX = 2500
+    MAX_TEMP = 0.3 #for safety, since this is most likely connected to a DR, do not let user set a very high temperature setpoint
+    HEATER_VALUES = [0, 31.6e-6, 100e-6, 316e-6, 1e-3, 3.16e-3, 10e-3, 31.6e-3, 100e-3] #amperes
+    
+    HEATER_RANGE_MAP = indexed_map(HEATER_VALUES)
+    
+# Generic init and connect methods
+	def __init__(self, resource_name=None, *args, **kwargs):
+		super(LakeShore370, self).__init__(resource_name, *args, **kwargs)
+		self.name = "LakeShore 370 Resistance Bridge"
+
+	def connect(self, resource_name=None, interface_type=None):
+		if resource_name is not None:
+			self.resource_name = resource_name
+		super(LakeShore335, self).connect(resource_name=self.resource_name, interface_type=interface_type)
+		self.interface._resource.read_termination = u"\r\n"
+
+# Input validation
+    def check_channel(self, chan):
+        if chan not in self.SENS_CHAN:
+            raise Exception("Channel {} is not in the allowed channel list.".format(chan))
+    
+    def check_ramp_rate(self, rate):
+        if rate < self.RAMP_MIN or rate > self.RAMP_MAX:
+            raise Exception("Ramp rate {} is outside of allowed range: [{}, {}]".format(rate, self.RAMP_MIN, self.RAMP_MAX))
+    
+    def check_pid(self, P, I, D):
+        if abs(P) < self.P_MIN or abs(P) > self.P_MAX:
+            raise Exception("PID P value {} is outside of allowed range.".format(P))
+        if abs(I) > I_MAX:
+            raise Exception("PID I value {} is outside of allowed range.".format(I))
+        if abs(D) > D_MAX:
+            raise Exception("PID D value {} is outside of allowed range.".format(D)) 
+    
+    def check_setp(self, T):
+        if T > self.MAX_TEMP
+            raise Exception("Setpoint temperature is greater than allowed maximum. Change MAX_TEMP if you really want to do this.")
+
+# Commands
+
+    heater_range = Command(get_string="HTRRNG?", set_string="HTRRNG {:s}", value_map=HEATER_RANGE_MAP)
+    heater_status = IntCommand(get_string="HTRST?")
+    heater_output = FloatCommand(get_string="HTR?")
+    
+    def temp(self, chan):
+        """Get Lakshore temperature reading for a specific channel.
+        
+        Args:
+            chan: Channel to be queried.
+        Returns:
+            temp: Channel temperature in Kelvin.
+        """
+        self.check_channel(chan)
+        return float(elf.interface.query("RDGK? %d"%chan))
+        
+=    def resistance(self, chan):
+        """Get Lakshore resistance reading for a specific channel.
+        
+        Args:
+            chan: Channel to be queried.
+        Returns:
+            temp: Channel resistance in Ohms.
+        """
+        self.check_channel(chan)
+        return float(self.interface.query("RDGR? %d"%chan))
+    
+    @property 
+    def setpoint(self):
+        """Get current temperature setpoint."""
+        return float(self.interface.query("SETP?"))
+    
+    @setpoint.setter
+    def setpoint(self, T):
+        """Set temperature control setpoint."""
+        self.check_setp(T)
+        self.interface.write("SETP %f"%T)
+    
+    @property
+    def ramp_state(self):
+        """Check if ramping to temperature setpoint."""
+        return bool(int(self.interface.query("RAMPST?")))
+    
+    @property
+    def ramp(self):
+        """Get setpoint ramp status or value. Returns 0 if ramping is off."""
+        ans = self.interface.query("RAMP?").split(",")
+        if int(ans[0]) == 0:
+            return 0
+        else:
+            return float(ans[1])
+    
+    @ramp.setter
+    def ramp(self, rate):
+        """Set temperature setpoint ramp rate.
+        
+        Args:
+            rate: Setpoint ramp rate, in Kelvin/minute. Set to 0 to turn off ramping.
+        """
+        if rate == 0:
+            self.interface.write("RAMP 0, %f"%self.RAMP_MIN)
+        else:
+            self.check_ramp_rate(rate)
+            self.interface.write("RAMP 1, %f"%rate)
+    
+    @property
+    def pid(self):
+        """Get PID values. Returns tuple (P,I,D)."""
+        return tuple(map(int, self.interface.query("PID").split(",")))
+    
+    @pid.setter
+    def pid(self, P, I, D):
+        """Set PID parameters."""
+        self.check_pid(P, I, D)
+        self.interface.write("PID %f, %f, %f"%(P, I, D))
+        
+    
 
 class LakeShore335(SCPIInstrument):
 	"""LakeShore 335 Temperature Controller"""
