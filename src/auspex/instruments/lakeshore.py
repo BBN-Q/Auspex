@@ -25,8 +25,12 @@ class Lakeshore370(SCPIInstrument):
     D_MAX = 2500
     MAX_TEMP = 0.3 #for safety, since this is most likely connected to a DR, do not let user set a very high temperature setpoint
     HEATER_VALUES = [0, 31.6e-6, 100e-6, 316e-6, 1e-3, 3.16e-3, 10e-3, 31.6e-3, 100e-3] #amperes
+    HEATER_RES_MIN = 1 #ohms
+    HEATER_RES_MAX = 100000 #ohms
     
     HEATER_RANGE_MAP = indexed_map(HEATER_VALUES)
+    HEATER_UNITS_MAP = {'Kelvin': 1, 'Ohms': 2}
+    HEATER_DISPLAY_MAP = {'Current': 1, 'Power': 2}
     
 # Generic init and connect methods
 	def __init__(self, resource_name=None, *args, **kwargs):
@@ -59,7 +63,11 @@ class Lakeshore370(SCPIInstrument):
     def check_setp(self, T):
         if T > self.MAX_TEMP
             raise Exception("Setpoint temperature is greater than allowed maximum. Change MAX_TEMP if you really want to do this.")
-
+    
+    def check_resistance(self, R):
+        if R < HEATER_RES_MIN or R > HEATER_RES_MAX:
+            raise Exception('Heater resistance is outside of allowed range: (%d, %d)'%(HEATER_RES_MIN, HEATER_RES_MAX))
+    
 # Commands
 
     heater_range = Command(get_string="HTRRNG?", set_string="HTRRNG {:s}", value_map=HEATER_RANGE_MAP)
@@ -136,6 +144,64 @@ class Lakeshore370(SCPIInstrument):
         """Set PID parameters."""
         self.check_pid(P, I, D)
         self.interface.write("PID %f, %f, %f"%(P, I, D))
+     
+    @property
+    def control_setup(self):
+        """Get current temperature control setup.
+        Args:
+            None.
+        Returns:
+            setup: (Channel, Filtered or Unfiltered, Setpoint units, 
+                autoscan delay (seconds), display units, current limit, resistance)
+        """
+        
+        ans = self.interface.query("CSET?").split(',')
+        channel = int(ans[0])
+        filter = bool(ans[1])
+        units = dict(map(reversed, HEATER_UNITS_MAP))[int(ans[2])]
+        delay = int(ans[3])
+        display = dict(map(reversed, HEATER_DISPLAY_MAP))[int(ans[4])]
+        limit = dict(map(reversed, HEATER_RANGE_MAP))[int(ans[5])]
+        resistance = float(ans[6])
+        return (channel, filter, units, delay, display, limit, resistance)
+    
+    @control_setup.setter
+    def control_setup(channel, limit, resistance, units='Kelvin', delay=10., 
+        filter=True, display='Power'):
+        """Set up the heater control parameters.
+        
+        Args:
+            channel: Channel to control, 1-16.
+            limit: Heater output current limit.
+            resistance: Heater resistance.
+            units: Heater setpoint units. Kelvin or Ohms.
+            delay: Delay in seconds for setpoint change during autoscanning: 1-255 seconds.
+            filter: Control on filtered or unfilitered readings.
+            display: Heater output display. Power or Current.
+        Returns:
+            None.
+        """       
+        self.check_channel(channel)
+        self.check_resistance(resistance)
+        if limit not in HEATER_RANGE_MAP.keys():
+            raise Exception('Allowed heater limit currents: %s.'%list(HEATER_RANGE_MAP.keys()))
+        if units not in HEATER_UNITS_MAP.keys():
+            raise Exception('Allowed output units: Kelvin or Ohms.')
+        if display not in HEATER_DISPLAY_MAP.keys():
+            raise Exception('Allowed heater scale units: Power or Current.')
+        if delay < 1 or delay > 255:
+            raise Exception('Setpoint autoscan delay must be tween 1-255 seconds.')
+            
+        self.interface.write("CSET %d, %d, %d, %d, %d, %d, %3.3f"%(
+            channel,
+            int(filter),
+            HEATER_UNITS_MAP[units],
+            delay,
+            HEATER_DISPLAY_MAP[display],
+            HEATER_RANGE_MAP[limit],
+            resistance))
+            
+        
         
     
 
