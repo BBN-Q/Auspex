@@ -301,7 +301,9 @@ class AgilentE8363C(SCPIInstrument):
         #wait for the measurement to finish, with a temporary long timeout
         tmout = self.interface._resource.timeout 
         self.interface._resource.timeout = self.AVERAGE_TIMEOUT
-        self.interface.OPC()
+        self.interface.WAI()
+        while not self.averaging_complete:
+            time.sleep(0.1) #TODO: Asynchronous check of SRQ 
         self.interface._resource.timeout = tmout
 
     def get_trace(self, measurement=None):
