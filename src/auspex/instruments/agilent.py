@@ -252,6 +252,8 @@ class AgilentN5183A(SCPIInstrument):
 class AgilentE8363C(SCPIInstrument):
     """Agilent E8363C VNA"""
     instrument_type = "Vector Network Analyzer"
+    
+    AVERAGE_TIMEOUT = 12. * 60. * 60. * 1000. #milliseconds
 
     power              = FloatCommand(scpi_string=":SOURce:POWer:LEVel:IMMediate:AMPLitude", value_range=(-27, 20))
     frequency_center   = FloatCommand(scpi_string=":SENSe:FREQuency:CENTer")
@@ -262,7 +264,9 @@ class AgilentE8363C(SCPIInstrument):
     averaging_factor   = IntCommand(scpi_string=":SENSe1:AVERage:COUNt")
     averaging_enable   = StringCommand(get_string=":SENSe1:AVERage:STATe?", set_string=":SENSe1:AVERage:STATe {:c}", value_map={False:"0", True:"1"})
     averaging_complete = StringCommand(get_string=":STATus:OPERation:AVERaging1:CONDition?", value_map={False:"+0", True:"+2"})
-
+    if_bandwidth       = FloatCommand(scpi_string=":SENSe1:BANDwidth")
+    sweep_time         = FloatCommand(get_string=":SENSe:SWEep:TIME?")
+    
     def __init__(self, resource_name=None, *args, **kwargs):
         #If we only have an IP address then tack on the raw socket port to the VISA resource string
         super(AgilentE8363C, self).__init__(resource_name, *args, **kwargs)
@@ -286,10 +290,19 @@ class AgilentE8363C(SCPIInstrument):
 
     def reaverage(self):
         """ Restart averaging and block until complete """
-        self.averaging_restart()
-        while not self.averaging_complete:
-            #TODO with Python 3.5 turn into coroutine and use await asyncio.sleep()
-            time.sleep(0.1)
+        if self.averaging_enable:
+            self.averaging_restart()
+            #trigger after the requested number of points has been averaged 
+            self.interface.write("SENSe1:SWEep:GROups:COUNt %d"%self.averaging_factor)
+            self.interface.write("ABORT;SENSe1:SWEep:MODE GRO")
+        else:
+            #restart current sweep and send a trigger
+            self.interface.write("ABORT;SENS:SWE:MODE SING")        
+        #wait for the measurement to finish, with a temporary long timeout
+        tmout = self.interface._resource.timeout 
+        self.interface._resource.timeout = self.AVERAGE_TIMEOUT
+        self.interface.OPC()
+        self.interface._resource.timeout = tmout
 
     def get_trace(self, measurement=None):
         """ Return a tupple of the trace frequencies and corrected complex points """
@@ -301,14 +314,11 @@ class AgilentE8363C(SCPIInstrument):
             measurement = traces.split(",")[0][1:]
         #Select the measurment
         self.interface.write(":CALCulate:PARameter:SELect '{}'".format(measurement))
-
         #Take the data as interleaved complex values
         interleaved_vals = self.interface.values(":CALCulate:DATA? SDATA")
         vals = interleaved_vals[::2] + 1j*interleaved_vals[1::2]
-
         #Get the associated frequencies
         freqs = np.linspace(self.frequency_start, self.frequency_stop, self.sweep_num_points)
-
         return (freqs, vals)
 
 class AgilentE9010A(SCPIInstrument):
