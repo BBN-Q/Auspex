@@ -73,7 +73,7 @@ class LakeShore370(SCPIInstrument):
     heater_range = Command(get_string="HTRRNG?", set_string="HTRRNG {:s}", value_map=HEATER_RANGE_MAP)
     heater_status = IntCommand(get_string="HTRST?")
     heater_output = FloatCommand(get_string="HTR?")
-    control_mode = StringCommand(get_string("CMODE?"), set_string="CMODE {:s}",
+    control_mode = StringCommand(get_string="CMODE?", set_string="CMODE {:s}",
         value_map={"PID": 1, "Zone": 2, "OpenLoop": 3, "Off": 4})
     
     def temp(self, chan):
