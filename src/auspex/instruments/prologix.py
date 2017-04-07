@@ -207,8 +207,7 @@ class PrologixSocketResource(object):
     def write_binary_values(self, command, values, datatype='f',
         is_big_endian=False):
         """Write a string message to device followed by values in binary IEEE
-        format, same as equivalent pyvisa function (which this code is more or
-        less copied from.)
+        format using a pyvisa utility function.)
 
         Args:
             command: String command sent to instrument.
@@ -224,7 +223,7 @@ class PrologixSocketResource(object):
     def query_binary_values(self, command, datatype='f', container=np.array,
         is_big_endian=False, bufsize=None):
         """Write a string message to device and read binary values, which are
-        returned as iterable. Again pilfered from pyvisa.
+        returned as iterable. Uses a pyvisa utility function.
 
         Args:
             command: String command sent to instrument.
@@ -240,5 +239,5 @@ class PrologixSocketResource(object):
             bufsize = self.bufsize
         self.write(command, bufsize=bufsize)
         block = self.read_raw()
-        return from_binary_block(block, datatype=datatype, 
+        return from_binary_block(block, datatype=datatype,
             is_big_endian=is_big_endian, container=container)
