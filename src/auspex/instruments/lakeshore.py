@@ -65,7 +65,7 @@ class LakeShore370(SCPIInstrument):
             raise Exception("Setpoint temperature is greater than allowed maximum. Change MAX_TEMP if you really want to do this.")
     
     def check_resistance(self, R):
-        if R < HEATER_RES_MIN or R > HEATER_RES_MAX:
+        if R < self.HEATER_RES_MIN or R > self.HEATER_RES_MAX:
             raise Exception('Heater resistance is outside of allowed range: (%d, %d)'%(HEATER_RES_MIN, HEATER_RES_MAX))
     
 # Commands
@@ -74,8 +74,18 @@ class LakeShore370(SCPIInstrument):
     heater_status = IntCommand(get_string="HTRST?")
     heater_output = FloatCommand(get_string="HTR?")
     control_mode = StringCommand(get_string="CMODE?", set_string="CMODE {:s}",
-        value_map={"PID": 1, "Zone": 2, "OpenLoop": 3, "Off": 4})
+        value_map={"PID": '1', "Zone": '2', "OpenLoop": '3', "Off": '4'})
     heater_setting = FloatCommand(scpi_string="MOUT")
+
+    def heater_off(self):
+        """Turn off heater.
+        Args:
+            None.
+        Returns:
+            None.
+        """
+        self.heater_range = 0
+
     
     def temp(self, chan):
         """Get Lakshore temperature reading for a specific channel.
@@ -138,9 +148,10 @@ class LakeShore370(SCPIInstrument):
             self.interface.write("RAMP 1, %f"%rate)
     
     @property
+
     def pid(self):
         """Get PID values. Returns tuple (P,I,D)."""
-        return tuple(map(int, self.interface.query("PID").split(",")))
+        return tuple(map(float, self.interface.query("PID?").split(",")))
     
     def set_pid(self, P, I, D):
         """Set PID parameters."""
@@ -160,14 +171,14 @@ class LakeShore370(SCPIInstrument):
         ans = self.interface.query("CSET?").split(',')
         channel = int(ans[0])
         filter = bool(ans[1])
-        units = dict(map(reversed, self.HEATER_UNITS_MAP))[int(ans[2])]
+        units = {v: k for k, v in self.HEATER_UNITS_MAP.items()}[int(ans[2])]
         delay = int(ans[3])
-        display = dict(map(reversed, self.HEATER_DISPLAY_MAP))[int(ans[4])]
-        limit = dict(map(reversed, self.HEATER_RANGE_MAP))[int(ans[5])]
+        display = {v: k for k, v in self.HEATER_DISPLAY_MAP.items()}[int(ans[4])]
+        limit = {v: k for k, v in self.HEATER_RANGE_MAP.items()}[ans[5]]
         resistance = float(ans[6])
         return (channel, filter, units, delay, display, limit, resistance)
     
-    def set_control_setup(channel, limit, resistance, units='Kelvin', delay=10., 
+    def set_control_setup(self, channel, limit, resistance, units='Kelvin', delay=10., 
         filter=True, display='Power'):
         """Set up the heater control parameters.
         
@@ -199,7 +210,7 @@ class LakeShore370(SCPIInstrument):
             self.HEATER_UNITS_MAP[units],
             delay,
             self.HEATER_DISPLAY_MAP[display],
-            self.HEATER_RANGE_MAP[limit],
+            int(self.HEATER_RANGE_MAP[limit]),
             resistance))
             
         
