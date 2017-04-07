@@ -75,6 +75,7 @@ class LakeShore370(SCPIInstrument):
     heater_output = FloatCommand(get_string="HTR?")
     control_mode = StringCommand(get_string="CMODE?", set_string="CMODE {:s}",
         value_map={"PID": 1, "Zone": 2, "OpenLoop": 3, "Off": 4})
+    heater_setting = FloatCommand(scpi_string="MOUT")
     
     def temp(self, chan):
         """Get Lakshore temperature reading for a specific channel.
