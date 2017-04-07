@@ -5,7 +5,7 @@ import socket
 from unittest.mock import MagicMock
 
 from auspex.log import logger
-from .interface import Interface, VisaInterface
+from .interface import Interface, VisaInterface, PrologixInterface
 
 #Helper function to check for IPv4 address
 #See http://stackoverflow.com/a/11264379
@@ -220,7 +220,7 @@ class SCPIInstrument(Instrument):
             # Load the dummy interface, unless we see that GPIB is in the resource string
             if any([x in self.resource_name for x in ["GPIB", "USB", "SOCKET", "hislip", "inst0", "COM"]]):
                 interface_type = "VISA"
-
+                
         try:
             if interface_type is None:
                 logger.debug("Instrument {} is using a generic instrument " +
@@ -228,11 +228,14 @@ class SCPIInstrument(Instrument):
                 self.interface = Interface()
             elif interface_type == "VISA":
                 if any(is_valid_ipv4(substr) for substr in self.full_resource_name.split("::")) and "TCPIP" not in self.full_resource_name:
-                    ## assume single NIC for now
+                    # assume single NIC for now
                     self.full_resource_name = "TCPIP0::" + self.full_resource_name
                 self.interface = VisaInterface(self.full_resource_name)
                 print(self.interface._resource)
                 logger.debug("A pyVISA interface {} was created for instrument {}.".format(str(self.interface._resource), self.name))
+            elif interface_type == "Prologix":                
+                self.interface = PrologixInterface(self.full_resource_name)
+                    
             else:
                 raise ValueError("That interface type is not yet recognized.")
         except:
