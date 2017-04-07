@@ -1,10 +1,26 @@
 import numpy as np
 import os
 import time
+import socket
 from unittest.mock import MagicMock
 
-from auspex.instruments.interface import Interface, VisaInterface
 from auspex.log import logger
+from .interface import Interface, VisaInterface, PrologixInterface
+
+#Helper function to check for IPv4 address
+#See http://stackoverflow.com/a/11264379
+def is_valid_ipv4(ipv4_address):
+    try:
+        socket.inet_aton(ipv4_address)
+        if ipv4_address.count(".") != 3:
+            logger.warning("User-provided IP {} is a valid IP address but does" +
+                " not appear to be in human-readable format.".format(ipv4_address))
+            return False
+        return True
+    except socket.error:
+        return False
+    except:
+        raise
 
 class Command(object):
     """Store the arguments and keywords, so that we may later dispatch
@@ -51,6 +67,14 @@ class Command(object):
             return set_value_python
         else:
             return self.python_to_instr[set_value_python]
+
+    def convert_get(self, get_value_instrument):
+        """Convert the instrument's returned values to something conveniently accessed
+        through python."""
+        if self.python_to_instr is None:
+            return get_value_instrument
+        else:
+            return self.instr_to_python[get_value_instrument]
 
 class SCPICommand(Command):
     def parse(self):
@@ -176,7 +200,8 @@ class SCPIInstrument(Instrument):
     def __init__(self, resource_name=None, name="Yet-to-be-named SCPI Instrument"):
         self.name            = name
         self.resource_name   = resource_name
-        self.instrument_type = None # This can be AWG, Digitizer, etc.
+        if not hasattr(self, "instrument_type"):
+            self.instrument_type = None # This can be AWG, Digitizer, etc.
         self.interface       = None
         self._freeze()
 
@@ -189,24 +214,32 @@ class SCPIInstrument(Instrument):
             raise Exception("Must supply a resource name to 'connect' if the instrument was initialized without one.")
         elif resource_name is not None:
             self.resource_name = resource_name
+        self.full_resource_name = self.resource_name
 
         if interface_type is None:
             # Load the dummy interface, unless we see that GPIB is in the resource string
-            if any([x in self.resource_name for x in ["GPIB", "USB", "SOCKET", "hislip", "inst0"]]):
+            if any([x in self.resource_name for x in ["GPIB", "USB", "SOCKET", "hislip", "inst0", "COM"]]):
                 interface_type = "VISA"
-
+                
         try:
             if interface_type is None:
+                logger.debug("Instrument {} is using a generic instrument " +
+                    "interface as none was provided.".format(self.name))
                 self.interface = Interface()
             elif interface_type == "VISA":
-                if "SOCKET" in self.resource_name or "hislip" in self.resource_name or "inst0" in self.resource_name:
-                    ## assume single NIC for now
-                    self.resource_name = "TCPIP0::" + self.resource_name
-                self.interface = VisaInterface(self.resource_name)
+                if any(is_valid_ipv4(substr) for substr in self.full_resource_name.split("::")) and "TCPIP" not in self.full_resource_name:
+                    # assume single NIC for now
+                    self.full_resource_name = "TCPIP0::" + self.full_resource_name
+                self.interface = VisaInterface(self.full_resource_name)
+                print(self.interface._resource)
+                logger.debug("A pyVISA interface {} was created for instrument {}.".format(str(self.interface._resource), self.name))
+            elif interface_type == "Prologix":                
+                self.interface = PrologixInterface(self.full_resource_name)
+                    
             else:
                 raise ValueError("That interface type is not yet recognized.")
         except:
-            logger.error("Could not initialize interface for %s.", self.resource_name)
+            logger.error("Could not initialize interface for %s.", self.full_resource_name)
             self.interface = MagicMock()
         self._freeze()
 
@@ -230,7 +263,10 @@ class SCPIInstrument(Instrument):
     def __del__(self):
         #close the VISA resource
         if hasattr(self, 'interface') and hasattr(self.interface, "_resource"):
+            logger.debug("VISA Interface for {} @ {} closed.".format(self.name, self.resource_name))
             self.interface._resource.close()
+        super(SCPIInstrument, self).__del__()
+
 
     def __repr__(self):
         return "{} @ {}".format(self.name, self.resource_name)

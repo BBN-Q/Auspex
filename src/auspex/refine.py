@@ -12,7 +12,7 @@ import numpy as np
 import time
 
 def delaunay_refine_from_file(writer, x_name, y_name, z_name, max_points=500, criterion="integral", threshold = "one_sigma", plotter=None):
-    async def refine_func(sweep_axis):
+    async def refine_func(sweep_axis, experiment):
         zs = writer.data.value[z_name]
         ys = writer.data.value[y_name]
         xs = writer.data.value[x_name]

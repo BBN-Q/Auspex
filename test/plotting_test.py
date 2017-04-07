@@ -39,7 +39,7 @@ class TestExperiment(Experiment):
     freq  = FloatParameter(unit="Hz")
 
     # DataStreams
-    voltage = OutputConnector()
+    voltage = OutputConnector(unit="V")
 
     # Constants
     num_samples     = 1024
@@ -70,7 +70,7 @@ class TestExperiment(Experiment):
         for _ in range(self.round_robins):
             for delay in self.delays:
                 if idx == 0:
-                    records = np.zeros((5, self.num_samples))
+                    records = np.zeros((5, self.num_samples), dtype=np.float32)
                 await asyncio.sleep(0.01)
                 records[idx,pulse_start:pulse_start+pulse_width] = np.exp(-0.5*(self.freq.value/2e6)**2) * \
                                                               np.exp(-delay/self.T2) * \

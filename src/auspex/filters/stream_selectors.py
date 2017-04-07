@@ -6,11 +6,12 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
+from auspex.log import logger
+from auspex.instruments import *
 from auspex.parameter import Parameter, IntParameter
-from auspex.filters.filter import Filter, InputConnector, OutputConnector
-from auspex.instruments.alazar import AlazarChannel
-from auspex.instruments.X6 import X6Channel
-from auspex.stream import DataStreamDescriptor, DataAxis
+from .filter import Filter
+from auspex.stream import DataStreamDescriptor, DataAxis, InputConnector, OutputConnector
+
 import numpy as np
 
 class AlazarStreamSelector(Filter):
@@ -58,6 +59,7 @@ class X6StreamSelector(Filter):
         if channel_settings['stream_type'] == 'Raw':
             samp_time = 4.0e-9
             descrip.add_axis(DataAxis("time", samp_time*np.arange(source_instr_settings['record_length']//4)))
+            descrip.dtype = np.float64
         elif channel_settings['stream_type'] == 'Demodulated':
             samp_time = 32.0e-9
             descrip.add_axis(DataAxis("time", samp_time*np.arange(source_instr_settings['record_length']//32)))

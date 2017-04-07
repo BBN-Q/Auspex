@@ -56,7 +56,7 @@ def arb_pulse(amplitude, duration, sample_rate=12e9):
     return wf
 
 if __name__ == '__main__':
-    arb  = M8190A("192.168.5.108")
+    arb  = KeysightM8190A("192.168.5.108")
     lock = SR865("USB0::0xB506::0x2000::002638::INSTR")
     bop  = BOP2020M("GPIB0::1::INSTR")
     hp   = HallProbe("calibration/HallProbe.cal", lock.set_ao1, lock.get_ai1)
@@ -89,19 +89,19 @@ if __name__ == '__main__':
     fall_times = np.arange(1e-9, 3.50e-9, 0.25e-9)
     for fall_time in fall_times:
         waveform   = ntron_pulse(amplitude=amplitude, fall_time=fall_time)
-        wf_data    = M8190A.create_binary_wf_data(waveform)
+        wf_data    = KeysightM8190A.create_binary_wf_data(waveform)
         segment_id = arb.define_waveform(len(wf_data))
         segment_ids.append(segment_id)
         arb.upload_waveform(wf_data, segment_id)
 
     # Reset waveform
     reset_wf    = arb_pulse(0.7, 0.6e-9)
-    wf_data     = M8190A.create_binary_wf_data(reset_wf)
+    wf_data     = KeysightM8190A.create_binary_wf_data(reset_wf)
     rst_segment_id  = arb.define_waveform(len(wf_data))
     arb.upload_waveform(wf_data, rst_segment_id)
 
     # NIDAQ Trigger waveform
-    nidaq_trig_wf = M8190A.create_binary_wf_data(np.zeros(3200), sync_mkr=1)
+    nidaq_trig_wf = KeysightM8190A.create_binary_wf_data(np.zeros(3200), sync_mkr=1)
     nidaq_trig_segment_id = arb.define_waveform(len(nidaq_trig_wf))
     arb.upload_waveform(nidaq_trig_wf, nidaq_trig_segment_id)
 

@@ -12,27 +12,20 @@ import os
 import numpy as np
 import h5py
 
+import auspex.globals
+auspex.globals.auspex_dummy_mode = True
+
 from auspex.instruments.instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand
 from auspex.experiment import Experiment
 from auspex.parameter import FloatParameter
 from auspex.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector
 from auspex.filters.debug import Print
 from auspex.filters.io import WriteToHDF5
+from auspex.analysis.io import load_from_HDF5
 from auspex.log import logger
-
-import logging
-logger.setLevel(logging.DEBUG)
-
-class TestInstrument1(SCPIInstrument):
-    frequency = FloatCommand(get_string="frequency?", set_string="frequency {:g}", value_range=(0.1, 10))
-    serial_number = IntCommand(get_string="serial?")
-    mode = StringCommand(scpi_string=":mode", allowed_values=["A", "B", "C"])
 
 class SweptTestExperiment(Experiment):
     """Here the run loop merely spews data until it fills up the stream. """
-
-    # Create instances of instruments
-    fake_instr_1 = TestInstrument1("FAKE::RESOURE::NAME")
 
     # Parameters
     field = FloatParameter(unit="Oe")
@@ -46,6 +39,9 @@ class SweptTestExperiment(Experiment):
     # Constants
     samples = 5
     time_val = 0
+
+    # Complex?
+    is_complex = False
 
     def init_instruments(self):
         self.field.assign_method(lambda x: logger.debug("Field got value " + str(x)))
@@ -65,16 +61,17 @@ class SweptTestExperiment(Experiment):
         await asyncio.sleep(0.002)
         data_row = np.sin(2*np.pi*self.time_val)*np.ones(5) + 0.1*np.random.random(5)
         self.time_val += time_step
-        await self.voltage.push(data_row)
-        await self.current.push(np.sin(2*np.pi*self.time_val) + 0.1*np.random.random(1))
+        if self.is_complex:
+            await self.voltage.push(np.array(data_row + 0.5j*data_row, dtype=np.complex128))
+            await self.current.push(np.array(np.sin(2*np.pi*self.time_val) + 0.1*np.random.random(1) + 0.5j*np.random.random(1), dtype=np.complex128))
+        else:
+            await self.voltage.push(data_row)
+            await self.current.push(np.sin(2*np.pi*self.time_val) + 0.1*np.random.random(1))
         logger.debug("Stream pushed points {}.".format(data_row))
         logger.debug("Stream has filled {} of {} points".format(self.voltage.points_taken, self.voltage.num_points() ))
 
 class SweptTestExperimentMetadata(Experiment):
     """Here the run loop merely spews data until it fills up the stream. """
-
-    # Create instances of instruments
-    fake_instr_1 = TestInstrument1("FAKE::RESOURE::NAME")
 
     # Parameters
     field = FloatParameter(unit="Oe")
@@ -112,7 +109,48 @@ class SweptTestExperimentMetadata(Experiment):
         logger.debug("Stream pushed points {}.".format(data_row))
         logger.debug("Stream has filled {} of {} points".format(self.voltage.points_taken, self.voltage.num_points() ))
 
-class SweepTestCase(unittest.TestCase):
+class SweptTestExperiment2(Experiment):
+    """Here the run loop merely spews data until it fills up the stream. """
+
+    # Parameters
+    field = FloatParameter(unit="Oe")
+    freq  = FloatParameter(unit="Hz")
+    dur   = FloatParameter(default=5,unit="ns")
+
+    # DataStreams
+    voltage = OutputConnector()
+    current = OutputConnector()
+
+    # Constants
+    samples = 5
+    time_val = 0
+
+    def init_instruments(self):
+        self.field.assign_method(lambda x: logger.debug("Field got value " + str(x)))
+        self.freq.assign_method(lambda x: logger.debug("Freq got value " + str(x)))
+        self.dur.assign_method(lambda x: logger.debug("Duration got value " + str(x)))
+
+    def init_streams(self):
+        # Add a "base" data axis: say we are averaging 5 samples per trigger
+        self.voltage.add_axis(DataAxis("samples", list(range(self.samples))))
+        self.current.add_axis(DataAxis("samples", list(range(self.samples))))
+
+    def __repr__(self):
+        return "<SweptTestExperiment2>"
+
+    async def run(self):
+        logger.debug("Data taker running (inner loop)")
+        time_step = 0.1
+        await asyncio.sleep(0.002)
+        data_row = np.sin(2*np.pi*self.time_val)*np.ones(5) + 0.1*np.random.random(5)
+        self.time_val += time_step
+        await self.voltage.push(data_row)
+        await self.current.push(-0.1*data_row)
+        logger.debug("Stream pushed points {}.".format(data_row))
+        logger.debug("Stream has filled {} of {} points".format(self.voltage.points_taken, self.voltage.num_points() ))
+
+
+class WriteTestCase(unittest.TestCase):
 
     def test_writehdf5(self):
         exp = SweptTestExperiment()
@@ -128,14 +166,13 @@ class SweepTestCase(unittest.TestCase):
         exp.run_sweeps()
         self.assertTrue(os.path.exists("test_writehdf5-0000.h5"))
         with h5py.File("test_writehdf5-0000.h5", 'r') as f:
-            self.assertTrue(0.0 not in f['main']['data']['voltage'])
-            self.assertTrue(np.sum(f['main']['data']['field']) == 5*3*np.sum(np.linspace(0,100.0,4)) )
-            self.assertTrue(np.sum(f['main']['data']['freq']) == 5*4*np.sum(np.linspace(0,10.0,3)) )
-            self.assertTrue(np.sum(f['main']['data']['samples']) == 3*4*np.sum(np.linspace(0,4,5)) )
+            self.assertTrue(0.0 not in f['main/data/voltage'])
+            self.assertTrue(np.sum(f['main/data/field']) == 5*3*np.sum(np.linspace(0,100.0,4)) )
+            self.assertTrue(np.sum(f['main/data/freq']) == 5*4*np.sum(np.linspace(0,10.0,3)) )
+            self.assertTrue(np.sum(f['main/data/samples']) == 3*4*np.sum(np.linspace(0,4,5)) )
             self.assertTrue("Here the run loop merely spews" in f.attrs['exp_src'])
-            self.assertTrue(f['main']['data'].attrs['time_val'] == 0)
-            self.assertTrue(f['main']['data'].attrs['unit_freq'] == "Hz")
-            print(f['main']['data']['voltage'])
+            self.assertTrue(f['main/data'].attrs['time_val'] == 0)
+            self.assertTrue(f['main/data'].attrs['unit_freq'] == "Hz")
 
         os.remove("test_writehdf5-0000.h5")
 
@@ -153,16 +190,16 @@ class SweepTestCase(unittest.TestCase):
         exp.run_sweeps()
         self.assertTrue(os.path.exists("test_writehdf5_metadata-0000.h5"))
         with h5py.File("test_writehdf5_metadata-0000.h5", 'r') as f:
-            self.assertTrue(0.0 not in f['main']['data']['voltage'])
-            self.assertTrue(np.sum(f['main']['data']['field']) == 5*3*np.sum(np.linspace(0,100.0,4)) )
-            self.assertTrue(np.sum(f['main']['data']['freq']) == 5*4*np.sum(np.linspace(0,10.0,3)) )
-            self.assertTrue(np.sum(np.isnan(f['main']['data']['samples'])) == 3*4*2 )
-            self.assertTrue(np.sum(f['main']['data']['samples_metadata'] == b'data') == 4*3*3)
+            self.assertTrue(0.0 not in f['main/data']['voltage'])
+            self.assertTrue(np.sum(f['main/data/field']) == 5*3*np.sum(np.linspace(0,100.0,4)) )
+            self.assertTrue(np.sum(f['main/data/freq']) == 5*4*np.sum(np.linspace(0,10.0,3)) )
+            self.assertTrue(np.sum(np.isnan(f['main/data/samples'])) == 3*4*2 )
+            self.assertTrue(np.sum(f['main/data/samples_metadata'][:] == 'data') == 4*3*3)
             self.assertTrue("Here the run loop merely spews" in f.attrs['exp_src'])
-            self.assertTrue(f['main']['data'].attrs['time_val'] == 0)
-            self.assertTrue(f['main']['data'].attrs['unit_freq'] == "Hz")
-            print(f['main']['data']['voltage'])
-
+            self.assertTrue(f['main/data'].attrs['time_val'] == 0)
+            self.assertTrue(f['main/data'].attrs['unit_freq'] == "Hz")
+            self.assertTrue('metadata' in f['main/samples'].attrs)
+            self.assertTrue(f[f['main/samples'].attrs['metadata']] == f['main/samples_metadata'])
         os.remove("test_writehdf5_metadata-0000.h5")
 
     def test_writehdf5_metadata_unstructured(self):
@@ -190,17 +227,16 @@ class SweepTestCase(unittest.TestCase):
         exp.run_sweeps()
         self.assertTrue(os.path.exists("test_writehdf5_metadata_unstructured-0000.h5"))
         with h5py.File("test_writehdf5_metadata_unstructured-0000.h5", 'r') as f:
-            self.assertTrue(0.0 not in f['main']['data']['voltage'])
-            self.assertTrue(np.sum(np.isnan(f['main']['data']['field'])) == 3*5 )
-            self.assertTrue(np.sum(np.isnan(f['main']['data']['freq'])) == 3*5 )
-            self.assertTrue(np.sum(np.isnan(f['main']['data']['samples'])) == 3*4*2 )
-            self.assertTrue(np.sum(f['main']['data']['field+freq_metadata'] == b'a') == 5)
-            self.assertTrue(np.sum(f['main']['data']['field+freq_metadata'] == b'b') == 5)
-            self.assertTrue(np.sum(f['main']['data']['field+freq_metadata'] == b'c') == 5)
+            self.assertTrue(0.0 not in f['main/data/voltage'])
+            self.assertTrue(np.sum(np.isnan(f['main/data/field'])) == 3*5 )
+            self.assertTrue(np.sum(np.isnan(f['main/data/freq'])) == 3*5 )
+            self.assertTrue(np.sum(np.isnan(f['main/data/samples'])) == 3*4*2 )
+            self.assertTrue(np.sum(f['main/data/field+freq_metadata'][:] == 'a') == 5)
+            self.assertTrue(np.sum(f['main/data/field+freq_metadata'][:] == 'b') == 5)
+            self.assertTrue(np.sum(f['main/data/field+freq_metadata'][:] == 'c') == 5)
             self.assertTrue("Here the run loop merely spews" in f.attrs['exp_src'])
-            self.assertTrue(f['main']['data'].attrs['time_val'] == 0)
-            self.assertTrue(f['main']['data'].attrs['unit_freq'] == "Hz")
-            print(f['main']['data']['voltage'])
+            self.assertTrue(f['main/data'].attrs['time_val'] == 0)
+            self.assertTrue(f['main/data'].attrs['unit_freq'] == "Hz")
 
         os.remove("test_writehdf5_metadata_unstructured-0000.h5")
 
@@ -239,17 +275,16 @@ class SweepTestCase(unittest.TestCase):
         exp.run_sweeps()
         self.assertTrue(os.path.exists("test_writehdf5_metadata_unstructured_adaptive-0000.h5"))
         with h5py.File("test_writehdf5_metadata_unstructured_adaptive-0000.h5", 'r') as f:
-            self.assertTrue(0.0 not in f['main']['data']['voltage'])
-            self.assertTrue(np.sum(np.isnan(f['main']['data']['field'])) == 3*5 )
-            self.assertTrue(np.sum(np.isnan(f['main']['data']['freq'])) == 3*5 )
-            self.assertTrue(np.sum(np.isnan(f['main']['data']['samples'])) == 3*4*2 )
-            self.assertTrue(np.sum(f['main']['data']['field+freq_metadata'] == b'a') == 5)
-            self.assertTrue(np.sum(f['main']['data']['field+freq_metadata'] == b'b') == 5)
-            self.assertTrue(np.sum(f['main']['data']['field+freq_metadata'] == b'c') == 5)
+            self.assertTrue(0.0 not in f['main/data']['voltage'])
+            self.assertTrue(np.sum(np.isnan(f['main/data/field'])) == 3*5 )
+            self.assertTrue(np.sum(np.isnan(f['main/data/freq'])) == 3*5 )
+            self.assertTrue(np.sum(np.isnan(f['main/data/samples'])) == 3*4*2 )
+            self.assertTrue(np.sum(f['main/data/field+freq_metadata'][:] == 'a') == 5)
+            self.assertTrue(np.sum(f['main/data/field+freq_metadata'][:] == 'b') == 5)
+            self.assertTrue(np.sum(f['main/data/field+freq_metadata'][:] == 'c') == 5)
             self.assertTrue("Here the run loop merely spews" in f.attrs['exp_src'])
-            self.assertTrue(f['main']['data'].attrs['time_val'] == 0)
-            self.assertTrue(f['main']['data'].attrs['unit_freq'] == "Hz")
-            print(f['main']['data']['voltage'])
+            self.assertTrue(f['main/data'].attrs['time_val'] == 0)
+            self.assertTrue(f['main/data'].attrs['unit_freq'] == "Hz")
 
         os.remove("test_writehdf5_metadata_unstructured_adaptive-0000.h5")
 
@@ -269,21 +304,67 @@ class SweepTestCase(unittest.TestCase):
         self.assertTrue(os.path.exists("test_samefile_writehdf5-0000.h5"))
         with h5py.File("test_samefile_writehdf5-0000.h5", 'r') as f:
             self.assertTrue(0.0 not in f['group1']['data']['voltage'])
-            self.assertTrue(np.sum(f['group1']['data']['field']) == 5*3*np.sum(np.linspace(0,100.0,4)) )
-            self.assertTrue(np.sum(f['group1']['data']['freq']) == 5*4*np.sum(np.linspace(0,10.0,3)) )
-            self.assertTrue(np.sum(f['group1']['data']['samples']) == 3*4*np.sum(np.linspace(0,4,5)) )
+            self.assertTrue(np.sum(f['group1/data/field']) == 5*3*np.sum(np.linspace(0,100.0,4)) )
+            self.assertTrue(np.sum(f['group1/data/freq']) == 5*4*np.sum(np.linspace(0,10.0,3)) )
+            self.assertTrue(np.sum(f['group1/data/samples']) == 3*4*np.sum(np.linspace(0,4,5)) )
             self.assertTrue("Here the run loop merely spews" in f.attrs['exp_src'])
-            self.assertTrue(f['group1']['data'].attrs['time_val'] == 0)
-            self.assertTrue(f['group1']['data'].attrs['unit_freq'] == "Hz")
-            self.assertTrue(0.0 not in f['group2']['data']['current'])
-            self.assertTrue(np.sum(f['group2']['data']['field']) == 3*np.sum(np.linspace(0,100.0,4)) )
-            self.assertTrue(np.sum(f['group2']['data']['freq']) == 4*np.sum(np.linspace(0,10.0,3)) )
+            self.assertTrue(f['group1/data'].attrs['time_val'] == 0)
+            self.assertTrue(f['group1/data'].attrs['unit_freq'] == "Hz")
+            self.assertTrue(0.0 not in f['group2/data/current'])
+            self.assertTrue(np.sum(f['group2/data/field']) == 3*np.sum(np.linspace(0,100.0,4)) )
+            self.assertTrue(np.sum(f['group2/data/freq']) == 4*np.sum(np.linspace(0,10.0,3)) )
             self.assertTrue("Here the run loop merely spews" in f.attrs['exp_src'])
-            self.assertTrue(f['group2']['data'].attrs['time_val'] == 0)
-            self.assertTrue(f['group2']['data'].attrs['unit_freq'] == "Hz")
-            print(f['group2']['data']['current'])
+            self.assertTrue(f['group2/data'].attrs['time_val'] == 0)
+            self.assertTrue(f['group2/data'].attrs['unit_freq'] == "Hz")
 
         os.remove("test_samefile_writehdf5-0000.h5")
+
+    def test_writehdf5_complex(self):
+        exp = SweptTestExperiment()
+        exp.is_complex = True
+        if os.path.exists("test_writehdf5_complex-0000.h5"):
+            os.remove("test_writehdf5_complex-0000.h5")
+        wr = WriteToHDF5("test_writehdf5_complex.h5")
+
+        edges = [(exp.voltage, wr.sink)]
+        exp.set_graph(edges)
+        exp.voltage.descriptor.dtype = np.complex128
+        exp.update_descriptors()
+        exp.add_sweep(exp.field, np.linspace(0,100.0,4))
+        exp.add_sweep(exp.freq, np.linspace(0,10.0,3))
+        exp.run_sweeps()
+        self.assertTrue(os.path.exists("test_writehdf5_complex-0000.h5"))
+        with h5py.File("test_writehdf5_complex-0000.h5", 'r') as f:
+            self.assertTrue(0.0 not in f['main/data/voltage'])
+            self.assertTrue(np.sum(f['main/data/field']) == 5*3*np.sum(np.linspace(0,100.0,4)) )
+            self.assertTrue(np.sum(f['main/data/freq']) == 5*4*np.sum(np.linspace(0,10.0,3)) )
+            self.assertTrue(np.sum(f['main/data/samples']) == 3*4*np.sum(np.linspace(0,4,5)) )
+            self.assertTrue(f['main/data'].attrs['time_val'] == 0)
+            self.assertTrue(f['main/data'].attrs['unit_freq'] == "Hz")
+
+        os.remove("test_writehdf5_complex-0000.h5")
+
+    def test_writehdf5_multiple_streams(self):
+        exp = SweptTestExperiment2()
+        if os.path.exists("test_writehdf5_mult-0000.h5"):
+            os.remove("test_writehdf5_mult-0000.h5")
+        wr = WriteToHDF5("test_writehdf5_mult.h5")
+
+        edges = [(exp.voltage, wr.sink), (exp.current, wr.sink)]
+        exp.set_graph(edges)
+        exp.add_sweep(exp.field, np.linspace(0,100.0,4))
+        exp.add_sweep(exp.freq, np.linspace(0,10.0,3))
+        exp.run_sweeps()
+        self.assertTrue(os.path.exists("test_writehdf5_mult-0000.h5"))
+        with h5py.File("test_writehdf5_mult-0000.h5", 'r') as f:
+            self.assertTrue(0.0 not in f['main/data/voltage'])
+            self.assertTrue(np.sum(f['main/data/field']) == 5*3*np.sum(np.linspace(0,100.0,4)) )
+            self.assertTrue(np.sum(f['main/data/freq']) == 5*4*np.sum(np.linspace(0,10.0,3)) )
+            self.assertTrue(np.sum(f['main/data/samples']) == 3*4*np.sum(np.linspace(0,4,5)) )
+            self.assertTrue(f['main/data'].attrs['time_val'] == 0)
+            self.assertTrue(f['main/data'].attrs['unit_freq'] == "Hz")
+
+        os.remove("test_writehdf5_mult-0000.h5")
 
     def test_writehdf5_adaptive_sweep(self):
         exp = SweptTestExperiment()
@@ -308,6 +389,10 @@ class SweepTestCase(unittest.TestCase):
         exp.run_sweeps()
         self.assertTrue(os.path.exists("test_writehdf5_adaptive-0000.h5"))
         self.assertTrue(wr.points_taken == 5*11*5)
+
+        with h5py.File("test_writehdf5_adaptive-0000.h5", 'r') as f:
+            self.assertTrue(f['main/data/freq'][:].sum() == (55*(1+2+4+8+16)))
+
         os.remove("test_writehdf5_adaptive-0000.h5")
 
     def test_writehdf5_unstructured_sweep(self):
@@ -333,6 +418,13 @@ class SweepTestCase(unittest.TestCase):
         exp.run_sweeps()
         self.assertTrue(os.path.exists("test_writehdf5_unstructured-0000.h5"))
         self.assertTrue(wr.points_taken == 10*5)
+
+        with h5py.File("test_writehdf5_unstructured-0000.h5", 'r') as f:
+            self.assertTrue(f[f['main/field+freq'][0]] == f['main/field'])
+            self.assertTrue(f[f['main/field+freq'][1]] == f['main/freq'])
+
+        data, desc = load_from_HDF5("test_writehdf5_unstructured-0000.h5")
+        self.assertTrue(data['main']['field'][-5:].sum() == 5*68)
 
         os.remove("test_writehdf5_unstructured-0000.h5")
 

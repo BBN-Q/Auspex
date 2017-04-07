@@ -4,18 +4,37 @@
 language: python
 python:
   - "3.5"
-
-# Setup anaconda
-before_install:
-  # - sudo apt-get update
-  - pip install -r requirements.txt
+  - "3.6"
 
 install:
+  # Setup anaconda. See http://conda.pydata.org/docs/travis.html
+
+  - wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh
+  - bash miniconda.sh -b -p $HOME/miniconda
+  - export PATH="$HOME/miniconda/bin:$PATH"
+  - hash -r
+  - conda config --set always_yes yes --set changeps1 no
+  - conda update -q conda
+  # Useful for debugging any issues with conda
+  - conda info -a
+
+  # Create conda environment with dependencies
+  - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION numpy scipy bokeh matplotlib h5py pandas networkx
+  - source activate test-environment
+  - pip install git+https://github.com/BBN-Q/Adapt.git
+  - pip install tqdm pyvisa coveralls
   - export PYTHONPATH=$PYTHONPATH:$PWD/src
 
-# execute scripts
 script:
-  - python -m unittest discover -v test
+  - coverage run -m unittest discover -v test
+
+after_script:
+  - coveralls
 
 # necessary to run on new container-based infrastructure
 sudo: false
+
+cache:
+  directories:
+    - $HOME/download
+    - $HOME/.cache/pip

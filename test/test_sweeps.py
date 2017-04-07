@@ -12,7 +12,9 @@ import os
 import numpy as np
 import h5py
 
-from auspex.instruments.instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand
+import auspex.globals
+auspex.globals.auspex_dummy_mode = True
+
 from auspex.experiment import Experiment
 from auspex.parameter import FloatParameter
 from auspex.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector
@@ -20,19 +22,8 @@ from auspex.filters.debug import Print
 from auspex.filters.io import WriteToHDF5
 from auspex.log import logger
 
-import logging
-logger.setLevel(logging.DEBUG)
-
-class TestInstrument1(SCPIInstrument):
-    frequency = FloatCommand(get_string="frequency?", set_string="frequency {:g}", value_range=(0.1, 10))
-    serial_number = IntCommand(get_string="serial?")
-    mode = StringCommand(scpi_string=":mode", allowed_values=["A", "B", "C"])
-
 class SweptTestExperiment(Experiment):
     """Here the run loop merely spews data until it fills up the stream. """
-
-    # Create instances of instruments
-    fake_instr_1 = TestInstrument1("FAKE::RESOURE::NAME")
 
     # Parameters
     field = FloatParameter(unit="Oe")
@@ -77,7 +68,6 @@ class SweepTestCase(unittest.TestCase):
         self.assertTrue(len(exp.voltage.descriptor.axes) == 2)
         exp.add_sweep(exp.freq, np.linspace(0,10.0,3))
         self.assertTrue(len(exp.voltage.descriptor.axes) == 3)
-        print(exp.voltage.descriptor.axes)
 
     def test_run(self):
         exp = SweptTestExperiment()

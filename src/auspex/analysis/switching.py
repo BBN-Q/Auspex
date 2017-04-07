@@ -14,10 +14,54 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 import h5py
 
-# from auspex.log import logger
+from auspex.analysis.io import load_from_HDF5
 from auspex.log import logger
 
-def load_switching_data(filename, start_state=None, failure=False,
+def load_switching_data(filename_or_fileobject, start_state=None, group="main", failure=False, threshold=None,
+                        voltage_scale_factor=1.0, duration_scale_factor=1.0, data_filter=None):
+    data, desc = load_from_HDF5(filename_or_fileobject)
+    # Regular axes
+    states = desc[group].axis("state").points
+    reps   = desc[group].axis("attempt").points
+    # Main data array, possibly unstructured
+    dat = data[group][:].reshape((-1, reps.size, states.size))
+    # Filter data if desired
+    # e.g. filter_func = lambda dat: np.logical_and(dat['field'] == 0.04, dat['temperature'] == 4.0)
+    if data_filter:
+        dat = dat[np.where(data_filter(dat))]
+
+    Vs     = dat['Data']
+    durs   = dat['pulse_duration'][:,0,0]
+    amps   = dat['pulse_voltage'][:,0,0]
+    points = np.array([durs, amps]).transpose()
+
+    if failure:
+        return points, reset_failure(Vs, start_state=start_state)
+    else:
+        return points, switching_phase(Vs, start_state=start_state, threshold=threshold)
+
+def load_switching_data_legacy(filename, start_state=None, failure=False,
+                        threshold=None,
+                        voltage_scale_factor=1.0, duration_scale_factor=1.0):
+    with h5py.File(filename, 'r') as f:
+        # Regular axes
+        states = f['state'][:]
+        reps   = f['attempt'][:]
+        # Unstructured axes
+        dat = f['data'][:].reshape((-1, reps.size, states.size))
+        Vs  = dat['voltage']
+        # Get the point tuples
+        durs   = dat[:,0,0]['pulse_duration']
+        amps   = dat[:,0,0]['pulse_voltage']
+        points = np.array([durs, amps]).transpose()
+
+    if failure:
+        return points, reset_failure(Vs, start_state=start_state)
+    else:
+        return points, switching_phase(Vs, start_state=start_state, threshold=threshold)
+
+
+def load_switching_data_legacy(filename, start_state=None, failure=False,
                         threshold=None,
                         voltage_scale_factor=1.0, duration_scale_factor=1.0):
     with h5py.File(filename, 'r') as f:
@@ -49,7 +93,7 @@ def switching_phase(data, **kwargs):
 def clusterer(data, num_clusters=2):
     all_vals = data.flatten()
     all_vals.resize((all_vals.size,1))
-    logger.info("Number of clusters: %d" % num_clusters)
+    logger.debug("Number of clusters: %d" % num_clusters)
 
     init_guess = np.linspace(np.min(all_vals), np.max(all_vals), num_clusters)
     init_guess[[1,-1]] = init_guess[[-1,1]]
@@ -59,7 +103,7 @@ def clusterer(data, num_clusters=2):
     state = clust.fit_predict(all_vals)
 
     for ct in range(num_clusters):
-        logger.info("Cluster {}: {} +/- {}".format(ct, all_vals[state==ct].mean(), all_vals[state==ct].std()))
+        logger.debug("Cluster {}: {} +/- {}".format(ct, all_vals[state==ct].mean(), all_vals[state==ct].std()))
     return clust
 
 # def average_data(data, avg_points):
@@ -70,7 +114,7 @@ def clusterer(data, num_clusters=2):
     #         import seaborn as sns
     #         sns.distplot(all_vals[state == ct], kde=False, norm_hist=False)
 
-def count_matrices(data, start_state=None, threshold=None):
+def count_matrices(data, start_state=None, threshold=None, display=None):
     num_clusters = 2
     if threshold is None:
         clust = clusterer(data)
@@ -85,14 +129,14 @@ def count_matrices(data, start_state=None, threshold=None):
 
     init_state_frac = [np.mean(init_state == ct) for ct in range(num_clusters)]
     for ct, fraction in enumerate(init_state_frac):
-        logger.info("Initial fraction of state %d: %f" %(ct, fraction))
+        logger.debug("Initial fraction of state %d: %f" %(ct, fraction))
 
     if start_state is not None and start_state in range(num_clusters):
         start_stt = start_state
     else:
         start_stt = np.argmax(init_state_frac)
-    logger.info("Start state set to state: {}".format(start_stt))
-    logger.info("Switched state is state: {}".format(1-start_stt))
+    logger.debug("Start state set to state: {}".format(start_stt))
+    logger.debug("Switched state is state: {}".format(1-start_stt))
 
     # This array contains a 2x2 count_matrix for each coordinate tuple
     count_mat = np.zeros((init_state.shape[0], 2, 2))
@@ -105,42 +149,47 @@ def count_matrices(data, start_state=None, threshold=None):
 
     return count_mat, start_stt
 
+def count_matrices_ber(data, start_state=None, threshold=None, display=None):
+    num_clusters = 2
+    if threshold is None:
+        clust = clusterer(data)
+        state = clust.fit_predict(data.reshape(-1, 1)).reshape((-1,2))
+    else:
+        logger.debug("Cluster data based on threshold = {}".format(threshold))
+        state = data > threshold
+        state = state.reshape((-1,2))
+
+    init_state  = state[:,0]
+    final_state = state[:,1]
+    switched    = np.logical_xor(init_state, final_state)
+
+    init_state_frac = [np.mean(init_state == ct) for ct in range(num_clusters)]
+    for ct, fraction in enumerate(init_state_frac):
+        logger.debug("Initial fraction of state %d: %f" %(ct, fraction))
+
+    if start_state is not None and start_state in range(num_clusters):
+        start_stt = start_state
+    else:
+        start_stt = np.argmax(init_state_frac)
+    logger.debug("Start state set to state: {}".format(start_stt))
+    logger.debug("Switched state is state: {}".format(1-start_stt))
+
+    # This array contains a 2x2 count_matrix for each coordinate tuple
+    count_mat = np.zeros((2, 2))
+
+    # count_mat      = np.zeros((2,2), dtype=np.int)
+    count_mat[0,0] = np.logical_and(init_state == 0, np.logical_not(switched)).sum()
+    count_mat[0,1] = np.logical_and(init_state == 0, switched).sum()
+    count_mat[1,0] = np.logical_and(init_state == 1, switched).sum()
+    count_mat[1,1] = np.logical_and(init_state == 1, np.logical_not(switched)).sum()
+
+    return count_mat, start_stt
+
 def reset_failure(data, **kwargs):
     counts, start_stt = count_matrices(data, **kwargs)
     switched_stt = int(1 - start_stt)
     num_failed = np.array([c[switched_stt,switched_stt] + c[switched_stt, start_stt] for c in counts])
     return num_failed
-
-def switching_BER(data, **kwargs):
-    """ Process data for BER experiment. """
-    counts, start_stt = count_matrices(data, **kwargs)
-    count_mat = counts[0]
-    switched_stt = int(1 - start_stt)
-    mean = beta.mean(1+count_mat[start_stt,switched_stt],1+count_mat[start_stt,start_stt])
-    limit = beta.mean(1+count_mat[start_stt,switched_stt]+count_mat[start_stt,start_stt], 1)
-    ci68 = beta.interval(0.68, 1+count_mat[start_stt,switched_stt],1+count_mat[start_stt,start_stt])
-    ci95 = beta.interval(0.95, 1+count_mat[start_stt,switched_stt],1+count_mat[start_stt,start_stt])
-    return mean, limit, ci68, ci95
-
-def plot_BER(volts, multidata, **kwargs):
-    ber_dat = [switching_BER(data, **kwargs) for data in multidata]
-    mean = []; limit = []; ci68 = []; ci95 = []
-    for datum in ber_dat:
-        mean.append(datum[0])
-        limit.append(datum[1])
-        ci68.append(datum[2])
-        ci95.append(datum[3])
-    mean = np.array(mean)
-    limit = np.array(limit)
-    fig = plt.figure()
-    plt.semilogy(volts, 1-mean, '-o')
-    plt.semilogy(volts, 1-limit, linestyle="--")
-    plt.fill_between(volts, [1-ci[0] for ci in ci68], [1-ci[1] for ci in ci68],  alpha=0.2, edgecolor="none")
-    plt.fill_between(volts, [1-ci[0] for ci in ci95], [1-ci[1] for ci in ci95],  alpha=0.2, edgecolor="none")
-    plt.ylabel("Switching Error Rate", size=14)
-    plt.xlabel("Pulse Voltage (V)", size=14)
-    plt.title("Bit Error Rate", size=16)
-    return fig
 
 def phase_diagram_grid(x_vals, y_vals, data,
                             title="Phase diagram",
@@ -171,7 +220,7 @@ def phase_diagram_mesh(points, values,
                                 ylabel="Pulse Amplitude (V)",
                                 shading="flat",
                                 voronoi=False, **kwargs):
-    fig = plt.figure()
+    # fig = plt.figure()
     if voronoi:
         from scipy.spatial import Voronoi, voronoi_plot_2d
         points[:,0] *= 1e9
@@ -194,7 +243,7 @@ def phase_diagram_mesh(points, values,
     plt.xlabel(xlabel, size=16)
     plt.ylabel(ylabel, size=16)
     plt.colorbar()
-    return fig
+    # return fig
 
 def crossover_pairs(points, values, threshold):
     """ Find all pairs of points whose values are on the two sides of threshold """
@@ -208,27 +257,103 @@ def crossover_pairs(points, values, threshold):
                 pairs.append([k,nb])
     return np.array(pairs)
 
-# def load_switching_data(filename, start_state=None, failure=False,
-#                         threshold=None, display=False,
-#                         voltage_scale_factor=1.0, duration_scale_factor=1.0):
-#     with h5py.File(filename, 'r') as f:
-#         logger.debug("Read data from file: %s" % filename)
-#         durations = duration_scale_factor*np.array([f['axes'][k].value for k in f['axes'].keys() if "duration-data" in k])
-#         voltages  = voltage_scale_factor*np.array([f['axes'][k].value for k in f['axes'].keys() if "voltage-data" in k])
-#         dsets     = np.array([f[k].value for k in f.keys() if "data" in k])
-#         data      = np.concatenate(dsets, axis=0)
-#         voltages  = np.concatenate(voltages, axis=0)
-#         durations = np.concatenate(durations, axis=0)
-#     data_mean = np.mean(data, axis=-1)
-#     points = np.array([durations, voltages]).transpose()
-#     if failure:
-#         return points, reset_failure(data_mean,start_state=start_state, display=display)
-#     else:
-#         return points, switching_phase(data_mean,start_state=start_state,threshold=threshold, display=display)
-
-def load_BER_data(filename):
+def load_refined_switching_data(filename, start_state=None, failure=False,
+                        threshold=None, display=False,
+                        voltage_scale_factor=1.0, duration_scale_factor=1.0):
     with h5py.File(filename, 'r') as f:
-        dsets = [f[k] for k in f.keys() if "data" in k]
-        data_mean = [np.mean(dset.value, axis=-1) for dset in dsets]
-        volts = [float(dset.attrs['pulse_voltage']) for dset in dsets]
-    return volts, data_mean
+        logger.debug("Read data from file: %s" % filename)
+        durations = duration_scale_factor*np.array([f['axes'][k].value for k in f['axes'].keys() if "duration-data" in k])
+        voltages  = voltage_scale_factor*np.array([f['axes'][k].value for k in f['axes'].keys() if "voltage-data" in k])
+        dsets     = np.array([f[k].value for k in f.keys() if "data" in k])
+        data      = np.concatenate(dsets, axis=0)
+        voltages  = np.concatenate(voltages, axis=0)
+        durations = np.concatenate(durations, axis=0)
+    data_mean = np.mean(data, axis=-1)
+    points = np.array([durations, voltages]).transpose()
+    if failure:
+        return points, reset_failure(data_mean,start_state=start_state, display=display)
+    else:
+        return points, switching_phase(data_mean,start_state=start_state,threshold=threshold, display=display)
+
+def switching_BER(data, **kwargs):
+    """ Process data for BER experiment. """
+    count_mat, start_stt = count_matrices_ber(data, **kwargs)
+    switched_stt = int(1 - start_stt)
+    mean = beta.mean(1+count_mat[start_stt,switched_stt],1+count_mat[start_stt,start_stt])
+    limit = beta.mean(1+count_mat[start_stt,switched_stt]+count_mat[start_stt,start_stt], 1)
+    ci68 = beta.interval(0.68, 1+count_mat[start_stt,switched_stt],1+count_mat[start_stt,start_stt])
+    ci95 = beta.interval(0.95, 1+count_mat[start_stt,switched_stt],1+count_mat[start_stt,start_stt])
+    return mean, limit, ci68, ci95
+
+def load_BER_data(filename_or_fileobject, start_state=None, group="main",
+                  threshold=None, voltage=None, data_filter=None, SBER=False):
+    # Load data from HDF5 object or filename
+    data, desc = load_from_HDF5(filename_or_fileobject)
+    # Regular data axes
+    states = desc[group].axis("state").points
+    reps   = desc[group].axis("attempt").points
+
+    # Select group
+    dat = data[group]
+
+    # Filter data if desired
+    # e.g. filter_func = lambda dat: np.logical_and(dat['field'] == 0.04, dat['temperature'] == 4.0)
+    if data_filter:
+        dat = dat[np.where(data_filter(dat))]
+
+    # Either return data for a specific voltage or all voltages
+    if voltage:
+        dat = dat[np.where(dat['pulse_voltage'] == voltage)]
+        voltages = np.array([voltage])
+    else:
+        # Get unique voltage values
+        voltages = np.unique(dat['pulse_voltage'])
+
+    # Select and process the relevant data
+    means = []
+    limits = []
+    ci68s = []
+    ci95s = []
+    for v in voltages:
+        # logger.info(f"There are {dat.shape} observations for voltage {v}")
+        d = dat[np.where(dat['pulse_voltage'] == v)].reshape((-1, reps.size, states.size))
+        mean, limit, ci68, ci95 = switching_BER(d['Data'], start_state=start_state, threshold=threshold)
+        if SBER:
+            means.append(mean)
+            limits.append(limit)
+            ci68s.append(np.array(ci68))
+            ci95s.append(np.array(ci95))
+        else:
+            means.append(1-mean)
+            limits.append(1-limit)
+            ci68s.append(1-np.array(ci68))
+            ci95s.append(1-np.array(ci95))
+
+    return voltages, means, limits, ci68s, ci95s
+
+# def plot_BER(volts, multidata, **kwargs):
+#     ber_dat = [switching_BER(data, **kwargs) for data in multidata]
+#     mean = []; limit = []; ci68 = []; ci95 = []
+#     for datum in ber_dat:
+#         mean.append(datum[0])
+#         limit.append(datum[1])
+#         ci68.append(datum[2])
+#         ci95.append(datum[3])
+#     mean = np.array(mean)
+#     limit = np.array(limit)
+#     fig = plt.figure()
+#     plt.semilogy(volts, 1-mean, '-o')
+#     plt.semilogy(volts, 1-limit, linestyle="--")
+#     plt.fill_between(volts, [1-ci[0] for ci in ci68], [1-ci[1] for ci in ci68],  alpha=0.2, edgecolor="none")
+#     plt.fill_between(volts, [1-ci[0] for ci in ci95], [1-ci[1] for ci in ci95],  alpha=0.2, edgecolor="none")
+#     plt.ylabel("Switching Error Rate", size=14)
+#     plt.xlabel("Pulse Voltage (V)", size=14)
+#     plt.title("Bit Error Rate", size=16)
+#     return fig
+
+# def load_BER_data_legacy(filename):
+#     with h5py.File(filename, 'r') as f:
+#         dsets = [f[k] for k in f.keys() if "data" in k]
+#         data_mean = [np.mean(dset.value, axis=-1) for dset in dsets]
+#         volts = [float(dset.attrs['pulse_voltage']) for dset in dsets]
+#     return volts, data_mean

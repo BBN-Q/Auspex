@@ -2,6 +2,7 @@ import os
 import visa
 import numpy as np
 from auspex.log import logger
+from .prologix import PrologixSocketResource
 
 class Interface(object):
     """Currently just a dummy interface for testing."""
@@ -49,6 +50,8 @@ class VisaInterface(Interface):
         return self._resource.query(query_string)
     def write_binary_values(self, query_string, values, **kwargs):
         return self._resource.write_binary_values(query_string, values, **kwargs)
+    def query_ascii_values(self, query_string, **kwargs):
+        return self._resource.query_ascii_values(query_string, **kwargs)
     def query_binary_values(self, query_string, container=np.array, datatype=u'h',
                 is_big_endian=False):
         return self._resource.query_binary_values(query_string, container=container, datatype=datatype,
@@ -77,3 +80,15 @@ class VisaInterface(Interface):
         return self._resource.query("*TST?") # Self-Test Query
     def WAI(self):
         self._resource.write("*WAI") # Wait-to-Continue Command
+        
+class PrologixInterface(VisaInterface):
+    """Prologix-Ethernet interface for communicating with remote GPIB instruments."""
+    def __init__(self, resource_name):
+        Interface.__init__(self)
+        try:
+            if len(resource_name.split("::")) != 2:
+                    raise Exception("Resource name for Prologix-Ethernet adapter must be of form IPv4_ADDR::GPIB_ADDR")
+            self._resource = PrologixSocketResource(ipaddr=resource_name.split("::")[0], gpib=int(resource_name.split("::")[1]))
+            self._resource.connect()
+        except:
+            raise Exception("Unable to create the resource '%s'" % resource_name)

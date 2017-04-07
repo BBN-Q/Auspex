@@ -84,7 +84,7 @@ def mk_dataset(f, dsetname, data):
     return f.create_dataset(dname, data=data)
 
 if __name__ == '__main__':
-    arb   = M8190A("192.168.5.108")
+    arb   = KeysightM8190A("192.168.5.108")
     mag   = AMI430("192.168.5.109")
     keith = Keithley2400("GPIB0::25::INSTR")
     lock  = SR865("USB0::0xB506::0x2000::002638::INSTR")
@@ -122,13 +122,13 @@ if __name__ == '__main__':
     segment_ids = []
     for amp in amps:
         waveform   = arb_pulse(amp, duration)
-        wf_data    = M8190A.create_binary_wf_data(waveform)
+        wf_data    = KeysightM8190A.create_binary_wf_data(waveform)
         segment_id = arb.define_waveform(len(wf_data))
         segment_ids.append(segment_id)
         arb.upload_waveform(wf_data, segment_id)
 
     # NIDAQ trigger waveform
-    nidaq_trig_wf = M8190A.create_binary_wf_data(np.zeros(3200), sync_mkr=1)
+    nidaq_trig_wf = KeysightM8190A.create_binary_wf_data(np.zeros(3200), sync_mkr=1)
     nidaq_trig_segment_id = arb.define_waveform(len(nidaq_trig_wf))
     arb.upload_waveform(nidaq_trig_wf, nidaq_trig_segment_id)
 
