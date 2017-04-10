@@ -58,8 +58,9 @@ class QubitExpFactory(object):
         with open(config.sweepLibFile, 'r') as FID:
             sweep_settings = json.load(FID)
 
-        # Create a mapping from qubits to data writers
+        # Create a mapping from qubits to data writers and inverse
         qubit_to_writer = {}
+        writer_to_qubit = {}
 
         if meta_file:
             # Use the meta info to modify the other JSON
@@ -249,6 +250,7 @@ class QubitExpFactory(object):
         experiment.name = expname
 
         experiment.qubit_to_writer = qubit_to_writer
+        experiment.writer_to_qubit = writer_to_qubit
 
         QubitExpFactory.load_instruments(experiment)
         QubitExpFactory.load_segment_sweeps(experiment)
