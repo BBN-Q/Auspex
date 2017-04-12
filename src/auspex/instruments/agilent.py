@@ -13,6 +13,50 @@ import numpy as np
 from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand, is_valid_ipv4
 from auspex.log import logger
 
+class Agilent33220A(SCPIInstrument):
+    """Agilent 33220A Function Generator"""
+    
+    FUNCTION_MAP = {"Sine": "SIN",
+                    "Square": "SQU",
+                    "Ramp": "RAMP",
+                    "Pulse": "PUL",
+                    "Noise": "NOIS",
+                    "DC": "DC",
+                    "User": "USER"}
+    
+    frequency = FloatCommand(scpi_string="FREQ")
+    function = StringCommand(get_string="FUNCtion?", set_string="FUNCTION {:s}", 
+                                value_map = FUNCTION_MAP)
+    
+    #Voltage
+    dc_offset = FloatCommand(scpi_string="VOLT:OFFSET")
+    output = StringCommand(get_string="OUTP?", set_string="OUTP {:s}", 
+                                value_map = {True: "1", False: "0"})
+    load_resistance = FloatCommand(scpi_string="OUTPut:LOAD")
+    amplitude = FloatCommand(scpi_string="VOLT")
+    low_voltage = FloatCommand(scpi_string="VOLTage:LOW")
+    high_voltage = FloatCommand(scpi_string="VOLTage:HIGH")
+    output_units = StringCommand(get_string="VOLTage:UNIT?", set_string="VOLTage:UNIT {:s}", 
+                            value_map={"Vpp" : "VPP", "Vrms" : "VRMS", "dBm" : "DBM"})
+                            
+    #Trigger, Burst, etc...
+    output_sync = StringCommand(get_string="OUTPut:SYNC?", set_string="OUTPut:SYNC {:s}", 
+                                value_map = {True: "OFF", False: "ON"})
+    burst_state = StringCommand(get_string="BURSt:STATE?", set_string="BURSt:STATE {:s}", 
+                                value_map = {True: "ON", False: "OFF"})
+    burst_cycles = IntCommand(scpi_string="BURSt:NCYCles")
+    burst_mode = StringCommand(get_string="BURSt:MODE?", set_string="BURSt:MODE {:s}", 
+                                value_map = {"Triggered": "TRIG", "Gated": "GAT"})
+    trigger_source = StringCommand(get_string="TRIGger:SOURce?", set_string="TRIGger:SOURce {:s}",
+                        value_map = {"Internal": "IMM", "External": "EXT", "Bus": "BUS"})
+    trigger_slope = StringCommand(get_string="TRIGger:SLOPe?", set_string="TRIGger:SLOPe {:s}", 
+                                value_map = {"Positive": "POS", "Negative": "NEG"})
+    
+    def trigger(self):
+        self.interface.write("*TRG")
+        
+                            
+
 class Agilent34970A(SCPIInstrument):
     """Agilent 34970A MUX"""
 
