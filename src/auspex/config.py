@@ -36,9 +36,14 @@ else:
 
 # pull out the variables
 # abspath allows the use of relative file names in the config file
-AWGDir             = os.path.abspath(cfg['AWGDir'])
+try:
+	import QGL.config
+	AWGDir = QGL.config.AWGDir
+	channelLibFile = QGL.config.channelLibFile
+except:
+	AWGDir = None
+	channelLibFile = None
+
 instrumentLibFile  = os.path.abspath(cfg['InstrumentLibraryFile'])
-channelLibFile     = os.path.abspath(cfg['ChannelLibraryFile'])
 sweepLibFile       = os.path.abspath(cfg['SweepLibraryFile'])
 measurementLibFile = os.path.abspath(cfg['MeasurementLibraryFile'])
-# expSettingsFile    = os.path.abspath(cfg['ExpSettingsFile'])

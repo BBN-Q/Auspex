@@ -1,5 +1,6 @@
 from scipy.optimize import curve_fit
 import numpy as np
+from enum import Enum
 
 def fit_ramsey(xdata, ydata, two_freqs = False):
     #initial estimate
@@ -24,6 +25,7 @@ def ramsey_2f(x, f1, f2, A1, A2, tau1, tau2, phi1, phi2, y0):
     return ramsey_1f(x, f1, A1, tau1, phi1) + ramsey_1f(x, f2, A2, tau2, phi2)
 
 def fit_drag(data, DRAG_vec, pulse_vec):
+    """Fit calibration curves vs DRAG parameter, for variable number of pulses"""
     num_DRAG = len(DRAG_vec)
     num_seqs = len(pulse_vec)
     xopt_vec = np.zeros(num_seqs)
@@ -58,3 +60,41 @@ def sinf(x, f, A, phi, y0):
 
 def quadf(x, A, x0, b):
     return A*(x-x0)**2+b
+
+class CR_cal_type(Enum):
+    LENGTH = 1
+    PHASE = 2
+    AMPLITUDE = 3
+
+def fit_CR(xpoints, data, cal_type):
+    """Fit CR calibration curves for variable pulse length, phase, or amplitude"""
+    data0 = data[:len(data)/2]
+    data1 = data[len(data)/2:]
+    x_fine = np.linspace(min(xpoints), max(xpoints), 1001)
+    if cal_type == CR_cal_type.LENGTH:
+        p0 = [1, 2*xpoints[-1], -np.pi/2, 0]
+        popt0, _ = curve_fit(sinf, xpoints, data0, p0 = p0)
+        popt1, _ = curve_fit(sinf, xpoints, data1, p0 = p0)
+        #find the first zero crossing
+        yfit0 = sinf(x_fine[:round(abs(popt0[1])/2/(xpoints[1]-xpoints[0]))], *popt0)
+        yfit1 = sinf(x_fine[:round(abs(popt1[1])/2/(xpoints[1]-xpoints[0]))], *popt1)
+        #average between the two qc states, rounded to 10 ns
+        xopt = round((x_fine[np.argmin(abs(yfit0)] + x_fine[np.argmin(abs(yfit1)])/2/10e-9)*10e-9
+        print('CR length = %f ns'%xopt*1e9))
+    elif cal_type == CR_cal_type.PHASE:
+        p0 = [1, xpoints[-1], np.pi, 0]
+        popt0, _ = curve_fit(sinf, x_fine, data0, p0 = p0)
+        popt1, _ = curve_fit(sinf, x_fine, data1, p0 = p0)
+        #find the phase for maximum contrast
+        contrast = (sinf(x_fine, *popt0) - sinf(x_fine, *popt1))/2
+        print('CR contrast = %f'%max(contrast))
+        xopt = x_fine[np.argmax(contrast)] - np.pi
+    elif cal_type == CR_cal_type.AMPLITUDE:
+        popt0 = np.polyfit(xpoints, data0, 1)
+        popt1 = np.polyfit(xpoints, data1, 1)
+        yfit0 = popt0[0]*x_fine+popt0[1]
+        yfit1 = popt1[0]*x_fine+popt1[1]
+        #average between optimum amplitudes
+        xopt = -(popt0[1]/popt0[0] + popt1[1]/popt1[0])/2
+        print('CR amplitude = %f'%xopt)
+    return xopt, popt0, popt1

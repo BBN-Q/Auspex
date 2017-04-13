@@ -10,6 +10,7 @@ from .instrument import CLibInstrument
 from .keithley import Keithley2400
 from .kepco import BOP2020M
 from .keysight import KeysightM8190A, Scenario, Sequence
+from .lakeshore import LakeShore370
 from .picosecond import Picosecond10070A
 from .rfmd import Attenuator
 from .stanford import SR830, SR865
