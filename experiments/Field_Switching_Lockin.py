@@ -27,28 +27,30 @@ class FieldSwitchingLockinExperiment(Experiment):
     resistance      = OutputConnector(unit="Ohm")
 
     res_reference = 1e3
-    vout  = 10e-3
+    vsource  = 10e-3
     mag   = AMI430("192.168.5.109")
     # keith = Keithley2400("GPIB0::25::INSTR")
     lock  = SR865("USB0::0xB506::0x2000::002638::INSTR")
 
     def init_instruments(self):
         # Initialize lockin
-        self.lock.amp = self.vout
+        self.lock.amp = self.vsource
+        self.lock.tc = 3
         self.mag.ramp()
-        self.tc_delay = self.lock.measure_delay()
-
+        self.delay = self.lock.measure_delay()
         self.field.assign_method(self.mag.set_field)
+        self.field.add_post_push_hook(lambda: time.sleep(0.1)) # Field set delay
+        time.sleep(self.delay)
 
     async def run(self):
         """This is run for each step in a sweep."""
 
-        await asyncio.sleep(self.tc_delay)
-        await self.resistance.push(self.res_reference/((self.vout/self.lock.mag)-1.0))
-        await asyncio.sleep(0.02) # Give the filters some time to catch up?
+        await asyncio.sleep(self.delay)
+        await self.resistance.push(self.res_reference/((self.lock.amp/self.lock.mag)-1.0))
 
     def shutdown_instruments(self):
         self.mag.zero()
+        self.lock.amp = 0
 
 if __name__ == '__main__':
     sample_name = "Hypress_3_2_COSTM3"

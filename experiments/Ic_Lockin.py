@@ -27,8 +27,7 @@ class IcLockinExperiment(Experiment):
 	resistance   = OutputConnector(unit="Ohm")
 
 	R_ref = 1e3
-	integration_time = 3
-	sense = 10e-6
+	sense = 5e-6
 
 	lock  = SR865("USB0::0xB506::0x2000::002638::INSTR")
 
@@ -49,7 +48,7 @@ class IcLockinExperiment(Experiment):
 	def set_source(self,source):
 
 		self.lock.dc = source
-		time.sleep(4*self.integration_time)
+		time.sleep(self.lock.measure_delay())
 
 
 	async def run(self):
@@ -67,6 +66,7 @@ class IcLockinExperiment(Experiment):
 
 	def shutdown_instruments(self):
 		self.lock.dc = 0
+		self.lock.amp = 0
 
 if __name__ == '__main__':
 	sample_name = "Hypress_3_2_500nm_wire"
