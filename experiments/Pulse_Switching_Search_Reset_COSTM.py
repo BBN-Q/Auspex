@@ -31,7 +31,9 @@ import h5py
 # Experimental Topology
 # lockin AO 3 -> Analog Attenuator Vc (Control Voltages)
 # Locking across 1kOhm ref resistor -> DAQmx AI0
-# PSPL Trigger -> DAQmx PFI0
+#
+# Using HP 33150A bias tee to pass 1 MHZ lockin baseband
+# Note that PSPL 5575A bias-tees can't pass more than 1-10 kHz
 
 def arb_voltage_lookup(arb_calib="calibration/AWG_20160901.csv"):
     df_arb = pd.read_csv(arb_calib, sep=",")
@@ -47,7 +49,12 @@ class ResetSearchLockinExperiment(Experiment):
     amplitudes      = np.arange(-0.01, 0.011, 0.01) # Reset amplitudes
     samps_per_trig  = 5
     settle_delay    = 50e-6
+    circuit_attenuation = 20.0
     measure_current = 3e-6
+    tc = 50e-6
+
+    # Avoid bit depoth problems by scaling here...
+    # arb_scale = 0.1
 
     # Instruments
     arb   = KeysightM8190A("192.168.5.108")
@@ -67,13 +74,7 @@ class ResetSearchLockinExperiment(Experiment):
         self.voltage.set_descriptor(descrip)
 
     def init_instruments(self):
-        # Set up Keithley
-        # self.keith.triad()
-        # self.keith.conf_meas_res(res_range=1e6)
-        # self.keith.conf_src_curr(comp_voltage=0.6, curr_range=1.0e-5)
-        # self.keith.current = self.measure_current
-
-        self.lock.tc = 3.0e-6
+        self.lock.tc = self.tc
 
         self.mag.ramp()
 
@@ -103,7 +104,7 @@ class ResetSearchLockinExperiment(Experiment):
         self.arb.reset_sequence_table()
 
         self.arb.set_output_route("DC", channel=1)
-        self.arb.voltage_amplitude = 1.0
+        # self.arb.voltage_amplitude = self.arb_scale
 
         self.arb.set_marker_level_low(0.0, channel=1, marker_type="sync")
         self.arb.set_marker_level_high(1.5, channel=1, marker_type="sync")
@@ -123,7 +124,9 @@ class ResetSearchLockinExperiment(Experiment):
 
         segment_ids = []
         arb_voltage = arb_voltage_lookup()
-        for amp in self.amplitudes:
+
+        scaled_amps = self.amplitudes * np.power(10.0, self.circuit_attenuation/20.0)#self.amplitudes
+        for amp in scaled_amps:
             waveform   = arb_pulse(np.sign(amp)*arb_voltage(abs(amp)))
             wf_data    = KeysightM8190A.create_binary_wf_data(waveform)
             segment_id = self.arb.define_waveform(len(wf_data))
