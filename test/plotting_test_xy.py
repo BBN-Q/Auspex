@@ -50,7 +50,7 @@ class TestExperiment(Experiment):
     async def run(self):
         logger.debug("Data taker running (inner loop)")
         time_step = 0.02
-        await asyncio.sleep(0.1)
+        await asyncio.sleep(0.02)
         self.time_val += time_step
         await self.voltage.push(self.amp.value*np.cos(2*np.pi*self.time_val) + 0.01*np.random.random())
         await self.current.push(self.amp.value*np.sin(2*np.pi*self.time_val) + 0.01*np.random.random())
@@ -62,11 +62,14 @@ if __name__ == '__main__':
     exp = TestExperiment()
     plt = Plotter(name="Normal Plotter")
     plt_xy = XYPlotter(name="XY Test", x_series=True, series="inner")
+    # plt_xy = XYPlotter(name="XY Test")
 
-    edges = [(exp.current, plt_xy.sink_x), (exp.voltage, plt_xy.sink_y),
+    edges = [(exp.current, plt_xy.sink_x),
+             (exp.voltage, plt_xy.sink_y),
              (exp.voltage, plt.sink)]
 
     exp.set_graph(edges)
     exp.add_sweep(exp.amp, [1,1.2,1.3])
+    # exp.amp.value = 1.0
     exp.add_sweep(exp.field, np.linspace(0,100.0,10))
     exp.run_sweeps()

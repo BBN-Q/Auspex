@@ -250,14 +250,18 @@ class XYPlotter(Filter):
             if self.desc_x.axes[-2].num_points() != self.desc_y.axes[-2].num_points():
                 raise ValueError("XYPlotter x and y second-to-last axis lengths must match when plotting series.")
 
-        if self.series == "inner":
-            series_axis = -2
-            data_axis = -1
-        elif self.series == "outer":
+        if len(self.desc_x.axes) == 1 and len(self.desc_y.axes) == 1:
             series_axis = 0
-            data_axis = 1
+            data_axis = 0
         else:
-            raise ValueError("series must be either inner or outer")
+            if self.series == "inner":
+                series_axis = -2
+                data_axis = -1
+            elif self.series == "outer":
+                series_axis = 0
+                data_axis = 1
+            else:
+                raise ValueError("series must be either inner or outer")
 
         # How many points before clear
         self.points_before_clear_y = self.desc_y.axes[data_axis].num_points()
