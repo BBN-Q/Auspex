@@ -151,8 +151,8 @@ class SR865(SCPIInstrument):
     channel_1_type = StringCommand(get_string="DDEF?1;", set_string="DDEF1,{:s}", value_map=CHANNEL1_MAP)
     channel_2_type = StringCommand(get_string="DDEF?2;", set_string="DDEF2,{:s}", value_map=CHANNEL2_MAP)
     sensitivity = Command(get_string="SCAL?;", set_string="SCAL {:s}", value_map=SENSITIVITY_MAP)
-    time_constant = Command(get_string="OFLT?;", set_string="OFLT{:s}", value_map=TIME_CONSTANT_MAP, aliases=['tc', 'TC'])
-    filter_slope = Command(get_string="OFSL?;", set_string="OFSL{:s}", value_map=FILTER_SLOPE_MAP)
+    time_constant = Command(get_string="OFLT?;", set_string="OFLT {:s}", value_map=TIME_CONSTANT_MAP, aliases=['tc', 'TC'])
+    filter_slope = Command(get_string="OFSL?;", set_string="OFSL {:s}", value_map=FILTER_SLOPE_MAP)
 
     channel_1_output = Command(get_string="COUT? OCH1;", set_string="COUT OCH1, {:s}", value_map={"XY": "0", "RTheta": "1"})
     channel_2_output = Command(get_string="COUT? OCH2;", set_string="COUT OCH2, {:s}", value_map={"XY": "0", "RTheta": "1"})
