@@ -1,6 +1,6 @@
 from .instrument import Instrument, SCPIInstrument, CLibInstrument
 
-from .agilent import Agilent34970A, AgilentE8363C, AgilentE9010A, AgilentN5183A
+from .agilent import Agilent34970A, AgilentE8363C, AgilentE9010A, AgilentN5183A, Agilent33220A
 from .alazar import AlazarATS9870, AlazarChannel
 from .ami import AMI430
 from .bbn import APS2, DigitalAttenuator
