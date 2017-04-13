@@ -18,7 +18,7 @@ from auspex.analysis.io import load_from_HDF5
 from auspex.log import logger
 
 def load_switching_data(filename_or_fileobject, start_state=None, group="main", failure=False, threshold=None,
-                        voltage_scale_factor=1.0, duration_scale_factor=1.0, data_filter=None):
+                        voltage_scale_factor=1.0, duration_scale_factor=1.0, data_name='voltage', data_filter=None):
     data, desc = load_from_HDF5(filename_or_fileobject)
     # Regular axes
     states = desc[group].axis("state").points
@@ -30,51 +30,10 @@ def load_switching_data(filename_or_fileobject, start_state=None, group="main", 
     if data_filter:
         dat = dat[np.where(data_filter(dat))]
 
-    Vs     = dat['Data']
+    Vs     = dat[data_name]
     durs   = dat['pulse_duration'][:,0,0]
     amps   = dat['pulse_voltage'][:,0,0]
     points = np.array([durs, amps]).transpose()
-
-    if failure:
-        return points, reset_failure(Vs, start_state=start_state)
-    else:
-        return points, switching_phase(Vs, start_state=start_state, threshold=threshold)
-
-def load_switching_data_legacy(filename, start_state=None, failure=False,
-                        threshold=None,
-                        voltage_scale_factor=1.0, duration_scale_factor=1.0):
-    with h5py.File(filename, 'r') as f:
-        # Regular axes
-        states = f['state'][:]
-        reps   = f['attempt'][:]
-        # Unstructured axes
-        dat = f['data'][:].reshape((-1, reps.size, states.size))
-        Vs  = dat['voltage']
-        # Get the point tuples
-        durs   = dat[:,0,0]['pulse_duration']
-        amps   = dat[:,0,0]['pulse_voltage']
-        points = np.array([durs, amps]).transpose()
-
-    if failure:
-        return points, reset_failure(Vs, start_state=start_state)
-    else:
-        return points, switching_phase(Vs, start_state=start_state, threshold=threshold)
-
-
-def load_switching_data_legacy(filename, start_state=None, failure=False,
-                        threshold=None,
-                        voltage_scale_factor=1.0, duration_scale_factor=1.0):
-    with h5py.File(filename, 'r') as f:
-        # Regular axes
-        states = f['state'][:]
-        reps   = f['attempt'][:]
-        # Unstructured axes
-        dat = f['data'][:].reshape((-1, reps.size, states.size))
-        Vs  = dat['voltage']
-        # Get the point tuples
-        durs   = dat['pulse_duration'][:,0,0]
-        amps   = dat['pulse_voltage'][:,0,0]
-        points = np.array([durs, amps]).transpose()
 
     if failure:
         return points, reset_failure(Vs, start_state=start_state)
@@ -105,14 +64,6 @@ def clusterer(data, num_clusters=2):
     for ct in range(num_clusters):
         logger.debug("Cluster {}: {} +/- {}".format(ct, all_vals[state==ct].mean(), all_vals[state==ct].std()))
     return clust
-
-# def average_data(data, avg_points):
-#     return np.array([np.mean(d.reshape(avg_points, -1, order="F"), axis=0) for d in data])
-    # if display:
-    #     plt.figure()
-    #     for ct in range(num_clusters):
-    #         import seaborn as sns
-    #         sns.distplot(all_vals[state == ct], kde=False, norm_hist=False)
 
 def count_matrices(data, start_state=None, threshold=None, display=None):
     num_clusters = 2
@@ -212,7 +163,9 @@ def scaled_Delaunay(points):
     	scale_factors.append(1.0/np.mean(points[:,i]))
     	points[:,i] = points[:,i]*scale_factors[-1]
     mesh = Delaunay(points)
-    return mesh, scale_factors
+    for i in range(points.shape[1]):
+        mesh.points[:,i] = mesh.points[:,i]/scale_factors[i]
+    return mesh
 
 def phase_diagram_mesh(points, values,
                                 title="Phase diagram",
@@ -233,9 +186,9 @@ def phase_diagram_mesh(points, values,
                 polygon = [vor.vertices[i] for i in region]
                 plt.fill(*zip(*polygon), color=cmap(v))
     else:
-        mesh, scale_factors = scaled_Delaunay(points)
-        xs = mesh.points[:,0]/scale_factors[0]
-        ys = mesh.points[:,1]/scale_factors[1]
+        mesh = scaled_Delaunay(points)
+        xs = mesh.points[:,0]
+        ys = mesh.points[:,1]
         plt.tripcolor(xs,ys,mesh.simplices.copy(),values, cmap="RdGy",shading=shading,**kwargs)
     plt.xlim(min(xs),max(xs))
     plt.ylim(min(ys),max(ys))
@@ -247,7 +200,7 @@ def phase_diagram_mesh(points, values,
 
 def crossover_pairs(points, values, threshold):
     """ Find all pairs of points whose values are on the two sides of threshold """
-    mesh, scale_factors = scaled_Delaunay(points)
+    mesh = scaled_Delaunay(points)
     nb_indices, indptr = mesh.vertex_neighbor_vertices
     pairs = []
     for k, value in enumerate(values):
@@ -256,6 +209,111 @@ def crossover_pairs(points, values, threshold):
             if (value-threshold)*(values[nb]-threshold) < 0:
                 pairs.append([k,nb])
     return np.array(pairs)
+
+# Functions for finding boundary points
+def find_cross(point1, point2, cut = 0):
+    """ Estimate by interpolation to find intersection between \
+    y=cut line and the line connecting two given points
+    """
+    return point1[0] + (point2[0]-point1[0])*(cut-point1[1])/(point2[1]-point1[1])
+
+def find_boundary(mesh,vals,threshold=0.5):
+    """ Find boundary points on the phase diagram where the switching probability = threshold """
+    boundary_points = []
+    durs = mesh.points[:,0]
+    volts = mesh.points[:,1]
+    indices, indptr = mesh.vertex_neighbor_vertices
+    for k in range(len(vals)):
+        for k_nb in indptr[indices[k]:indices[k+1]]:
+            if (vals[k]-threshold)*(vals[k_nb]-threshold)<0:
+                x0 = find_cross([durs[k],vals[k]],[durs[k_nb],vals[k_nb]],cut=threshold)
+                y0 = find_cross([volts[k],vals[k]],[volts[k_nb],vals[k_nb]],cut=threshold)
+                boundary_points.append([x0,y0])
+
+    boundary_points = np.array(boundary_points)
+    if len(boundary_points) > 0:
+        b = np.ascontiguousarray(boundary_points).view(np.dtype((np.void,
+                            boundary_points.dtype.itemsize * boundary_points.shape[1])))
+        _, idx = np.unique(b, return_index=True)
+        boundary_points = boundary_points[idx]
+        # Sort the boundary_points by x-axis
+        boundary_points = sorted(boundary_points, key=itemgetter(0))
+    return np.array(boundary_points)
+
+def f_macrospin(t_data, t0, v0):
+    return v0*(1.0 + t0/t_data)
+
+def fit_macrospin(points, p0=(0.0,0.0)):
+    """ Fit to the macrospin model """
+    # For best results, first need to normalize the data points
+    points = np.array(points)
+    xscale = np.max(points[:,0])
+    yscale = np.max(points[:,1])
+    xnorm = points[:,0]/xscale
+    ynorm = points[:,1]/yscale
+    params, pcov = curve_fit(f_macrospin, xnorm, ynorm, p0=p0)
+    perrs = np.sqrt(np.diag(pcov))
+    # Rescale back to original scale
+    params[0] = params[0]*xscale
+    params[1] = params[1]*yscale
+    perrs[0] = perrs[0]*xscale
+    perrs[1] = perrs[1]*yscale
+    return params, perrs
+
+def find_closest(t, v, t0, v0):
+    """ Find the closest point on the curve f = a + b/x
+    to the given point (t,v)
+    """
+    a = v0
+    b = v0*t0
+    # Solve for intersection points
+    eqn_coefs = [1/b, -t/b, 0, v-a, -b]
+    tis = np.roots(eqn_coefs)
+    tis = tis[abs(tis.imag/tis.real)<0.01].real # We care only real solutions
+    tis = tis[tis>0] # and positive ones
+    # Choose the shortest among solutions
+    ds = abs(tis-t)*np.sqrt(1 + np.power(tis,4)/(b*b)) # Distance from solutions to given point (t,v)
+    idx = np.argmin(ds)
+    ti = tis[idx]
+    vi = a + b/ti
+    return ti, vi
+def dX(x,b):
+    """ dX = sqrt(1 + df^2)*dx for f = a + b/x"""
+    return np.sqrt(1 + b**2/x**4)
+def x2X(x,xo,b):
+    """Convert from original x to new X
+    xo: The coordinates of the new origin (xo,yo).
+        Here we need xo only
+    """
+    return integrate.quad(dX,xo,x,args=(b))[0]
+def y2Y(y0,yi,a,b):
+    """Convert from original y0 to new Y
+    yi: The y-coordinate of the point (xi,yi) on the f=a+b/x curve
+    that is closest to the given point (x0,y0)"""
+    return (y0-yi)*np.sqrt(1+np.power(yi-a,4)/(b*b))
+
+def perp_fit(ts, vs):
+
+    def lsq_macrospin(p, ts, vs):
+        t0 = p[0]
+        v0 = p[1]
+        a = v0
+        b = t0*v0
+        to = 1
+        vo = a + b/to
+
+        # Here is what we expect
+        vs_ideal = v0*(1.0 + t0/ts)
+        Xs = []
+        Ys = []
+        for t,v in zip(ts,vs):
+            ti,vi = find_closest(t,v,t0,v0)
+            Xs.append(x2X(ti,to,b))
+            Ys.append(y2Y(v,vi,a,b))
+        return np.power(Ys,2)
+    p0 = [0.2, 100]
+    p, flag = leastsq(lsq_macrospin, p0, args=(ts, vs))
+    return p
 
 def load_refined_switching_data(filename, start_state=None, failure=False,
                         threshold=None, display=False,
