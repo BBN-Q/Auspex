@@ -282,7 +282,7 @@ class XYPlotter(Filter):
         x_label = "{} ({})".format(self.desc_x.data_name, self.desc_x.data_unit)
         y_label = "{} ({})".format(self.desc_y.data_name, self.desc_y.data_unit)
 
-        self.fig = Figure(plot_width=self.plot_height, plot_height=self.plot_height, webgl=False,
+        self.fig = Figure(plot_width=self.plot_height, plot_height=self.plot_height, webgl=self.webgl,
                           x_axis_label=x_label, y_axis_label=y_label)
 
         if self.desc_y.axes[series_axis].num_points() <= 10:
