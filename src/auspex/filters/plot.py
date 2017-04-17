@@ -220,7 +220,7 @@ class XYPlotter(Filter):
     sink_x = InputConnector()
     sink_y = InputConnector()
 
-    def __init__(self, *args, name="", x_series=False, y_series=False, series="inner", notebook=False, **plot_args):
+    def __init__(self, *args, name="", x_series=False, y_series=False, series="inner", notebook=False, webgl=False, **plot_args):
         """Theyintent is to let someone plot this vs. that from different streams."""
         super(XYPlotter, self).__init__(*args, name=name)
 
@@ -232,6 +232,7 @@ class XYPlotter(Filter):
         self.y_series        = y_series or self.x_series
         self.plot_height     = 600
         self.series          = series
+        self.webgl           = webgl
 
         self.quince_parameters = []
 
@@ -310,7 +311,7 @@ class XYPlotter(Filter):
             # Wait for all of the acquisition to complete, avoid asyncio.wait because of random return order...
             message_x = await self.stream_x.queue.get()
             message_y = await self.stream_y.queue.get()
-            messages = [message_x, message_y] # Returns a set for some stupid reason
+            messages = [message_x, message_y]
 
             # Ensure we aren't getting different types of messages at the same time.
             message_types = [m['type'] for m in messages]
@@ -325,8 +326,8 @@ class XYPlotter(Filter):
 
             # If we receive a message
             if message_type == 'event':
-                logger.debug('%s "%s" received event "%s"', self.__class__.__name__, self.name, message_data)
-                if messages[0]['data'] == 'done':
+                logger.debug('%s "%s" received event "%s"', self.__class__.__name__, self.name, message_type)
+                if messages[0]['event_type'] == 'done':
                     break
 
             elif message_type == 'data':
