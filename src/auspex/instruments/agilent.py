@@ -10,12 +10,27 @@ import socket
 import time
 import re
 import numpy as np
-from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand, is_valid_ipv4
+from .instrument import SCPIInstrument, Command, StringCommand, FloatCommand, IntCommand, is_valid_ipv4
 from auspex.log import logger
 
 class Agilent33220A(SCPIInstrument):
     """Agilent 33220A Function Generator"""
-    
+
+    def __init__(self, resource_name=None, *args, **kwargs):
+        super(Agilent33220A, self).__init__(resource_name, *args, **kwargs)
+        self.name = "Agilent 33220A AWG"
+
+    def connect(self, resource_name=None, interface_type=None):
+        if resource_name is not None:
+            self.resource_name = resource_name
+        #If we only have an IP address then tack on the raw socket port to the VISA resource string
+        if is_valid_ipv4(self.resource_name):
+            self.resource_name += "::5025::SOCKET"
+        super(Agilent33220A, self).connect(resource_name=self.resource_name, interface_type=interface_type)
+        self.interface._resource.read_termination = u"\n"
+        self.interface._resource.write_termination = u"\n"
+        self.interface._resource.timeout = 3000 #seem to have trouble timing out on first query sometimes
+
     FUNCTION_MAP = {"Sine": "SIN",
                     "Square": "SQU",
                     "Ramp": "RAMP",
@@ -30,26 +45,26 @@ class Agilent33220A(SCPIInstrument):
     
     #Voltage
     dc_offset = FloatCommand(scpi_string="VOLT:OFFSET")
-    output = StringCommand(get_string="OUTP?", set_string="OUTP {:s}", 
+    output = Command(get_string="OUTP?", set_string="OUTP {:s}",
                                 value_map = {True: "1", False: "0"})
     load_resistance = FloatCommand(scpi_string="OUTPut:LOAD")
     amplitude = FloatCommand(scpi_string="VOLT")
     low_voltage = FloatCommand(scpi_string="VOLTage:LOW")
     high_voltage = FloatCommand(scpi_string="VOLTage:HIGH")
-    output_units = StringCommand(get_string="VOLTage:UNIT?", set_string="VOLTage:UNIT {:s}", 
+    output_units = Command(get_string="VOLTage:UNIT?", set_string="VOLTage:UNIT {:s}",
                             value_map={"Vpp" : "VPP", "Vrms" : "VRMS", "dBm" : "DBM"})
                             
     #Trigger, Burst, etc...
-    output_sync = StringCommand(get_string="OUTPut:SYNC?", set_string="OUTPut:SYNC {:s}", 
+    output_sync = Command(get_string="OUTPut:SYNC?", set_string="OUTPut:SYNC {:s}",
                                 value_map = {True: "OFF", False: "ON"})
-    burst_state = StringCommand(get_string="BURSt:STATE?", set_string="BURSt:STATE {:s}", 
-                                value_map = {True: "ON", False: "OFF"})
-    burst_cycles = IntCommand(scpi_string="BURSt:NCYCles")
-    burst_mode = StringCommand(get_string="BURSt:MODE?", set_string="BURSt:MODE {:s}", 
+    burst_state = Command(get_string="BURSt:STATE?", set_string="BURSt:STATE {:s}",
+                                value_map = {True: "1", False: "0"})
+    burst_cycles = FloatCommand(scpi_string="BURSt:NCYCles")
+    burst_mode = Command(get_string="BURSt:MODE?", set_string="BURSt:MODE {:s}",
                                 value_map = {"Triggered": "TRIG", "Gated": "GAT"})
-    trigger_source = StringCommand(get_string="TRIGger:SOURce?", set_string="TRIGger:SOURce {:s}",
+    trigger_source = Command(get_string="TRIGger:SOURce?", set_string="TRIGger:SOURce {:s}",
                         value_map = {"Internal": "IMM", "External": "EXT", "Bus": "BUS"})
-    trigger_slope = StringCommand(get_string="TRIGger:SLOPe?", set_string="TRIGger:SLOPe {:s}", 
+    trigger_slope = Command(get_string="TRIGger:SLOPe?", set_string="TRIGger:SLOPe {:s}",
                                 value_map = {"Positive": "POS", "Negative": "NEG"})
     
     def trigger(self):
