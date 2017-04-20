@@ -28,25 +28,26 @@ import time, sys
 # import auspex.analysis.switching as sw
 from adapt import refine
 
-def switching_pulse(amplitude, duration, waveform_duration=500e-09, sample_rate=12e9):
-    # total_points = int(waveform_duration*sample_rate)
+def switching_pulse(amplitude, duration, waveform_duration=300e-09, sample_rate=12e9):
+    total_points = int(waveform_duration*sample_rate)
     pulse_points = int(duration*sample_rate)
     if pulse_points < 320:
         wf = np.zeros(320)
     else:
-        wf = np.zeros(64*np.ceil(pulse_points/64.0))
+        wf = np.zeros(64*np.ceil(total_points/64.0))
     wf[:pulse_points] = amplitude
     wf = np.append(np.zeros(1<<12), wf)
     wf = np.append(wf, np.zeros(1<<12))
     # wf = np.append(wf, np.zeros(12000-len(wf)))
     return wf
 
-def measure_pulse(amplitude, duration, frequency, sample_rate=12e9):
+def measure_pulse(amplitude, duration, frequency, waveform_duration=300e-09, sample_rate=12e9):
+    total_points = int(waveform_duration*sample_rate)
     pulse_points = int(duration*sample_rate)
     if pulse_points < 320:
         wf = np.zeros(320)
     else:
-        wf = np.zeros(64*np.ceil(pulse_points/64.0))
+        wf = np.zeros(64*np.ceil(total_points/64.0))
     wf[:pulse_points] = amplitude*np.sin(2.0*np.pi*frequency*np.arange(pulse_points)/sample_rate)
     wf = np.append(np.zeros(1<<13), wf)
     # wf = np.append(wf, np.zeros(12000-len(wf)))
@@ -57,7 +58,7 @@ class nTronSwitchingExperiment(Experiment):
     # Parameters
     channel_bias         = FloatParameter(default=0.2,  unit="V") # On the 33220A
     gate_bias            = FloatParameter(default=0.0,  unit="V") # On the M8190A
-    gate_pulse_amplitude = FloatParameter(default=0.0,  unit="V") # On the M8190A
+    gate_pulse_amplitude = FloatParameter(default=0.2,  unit="V") # On the M8190A
     gate_pulse_duration  = FloatParameter(default=250e-9, unit="s") # On the M8190A
 
     gate_pulse_durations   = [0]
@@ -72,8 +73,8 @@ class nTronSwitchingExperiment(Experiment):
     measure_frequency  = 100e6
 
     # Sweep axes
-    gate_amps = np.linspace(0.01, 0.02, 25)
-    gate_durs = np.linspace(100.0e-9, 500e-9, 3)
+    gate_amps = np.linspace(0.0, 0.2, 10)
+    # gate_durs = [250.0e-9, 250e-9] #np.linspace(100.0e-9, 300e-9, 5)
 
     # Things coming back
     voltage     = OutputConnector()
@@ -87,7 +88,7 @@ class nTronSwitchingExperiment(Experiment):
 
         self.awg.function       = 'Pulse'
         self.awg.frequency      = 500e3
-        self.awg.pulse_width    = 1200e-9
+        self.awg.pulse_width    = 800e-9
         self.awg.low_voltage    = 0.0
         self.awg.high_voltage   = self.channel_bias.value
         self.awg.burst_state    = True
@@ -105,7 +106,7 @@ class nTronSwitchingExperiment(Experiment):
             'enabled': True,
             'label': "Alazar",
             'record_length': self.samples,
-            'nbr_segments': len(self.gate_amps), #*len(self.gate_durs),
+            'nbr_segments': len(self.gate_amps),#*len(self.gate_durs),
             'nbr_waveforms': self.attempts,
             'nbr_round_robins': 1,
             'sampling_rate': 1e9,
@@ -160,7 +161,7 @@ class nTronSwitchingExperiment(Experiment):
 
         for amp in self.gate_amps:
             # for dur in self.gate_durs:
-                # For the measurements pulses along the channel
+            # For the measurements pulses along the channel
             wf      = measure_pulse(amplitude=self.measure_amplitude, duration=self.measure_duration, frequency=self.measure_frequency)
             wf_data = KeysightM8190A.create_binary_wf_data(wf)
             seg_id  = self.arb.define_waveform(len(wf_data), channel=1)
