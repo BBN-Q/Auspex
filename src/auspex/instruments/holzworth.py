@@ -73,7 +73,13 @@ class HolzworthHS9000(Instrument, metaclass=MakeSettersGetters):
         return float(v.split()[0])*1e-3
     @frequency.setter
     def frequency(self, value):
-        self.ch_query(":FREQ:{} GHz".format(value))
+        fmin = float((self.ch_query(":FREQ:MIN?")).split()[0])
+        fmax = float((self.ch_query(":FREQ:MAX?")).split()[0])
+        if fmin*1e-3 <= value <= fmax*1e-3:
+            self.ch_query(":FREQ:{} GHz".format(value))
+        else:
+            err_msg = "The value {} GHz is outside of the allowable range {}-{} GHz specified for instrument '{}'.".format(value, fmin*1e-3, fmax*1e-3, self.name)
+            raise ValueError(err_msg)
 
     @property
     def power(self):
@@ -81,7 +87,13 @@ class HolzworthHS9000(Instrument, metaclass=MakeSettersGetters):
         return float(v.split()[0])
     @power.setter
     def power(self, value):
-        self.ch_query(":PWR:{} dBm".format(value))
+        pmin = float((self.ch_query(":PWR:MIN?")).split()[0])
+        pmax = float((self.ch_query(":PWR:MAX?")).split()[0])
+        if pmin <= value <= pmax:
+            self.ch_query(":PWR:{} dBm".format(value))
+        else:
+            err_msg = "The value {} dBm is outside of the allowable range {}-{} dBm specified for instrument '{}'.".format(value, pmin, pmax, self.name)
+            raise ValueError(err_msg)
 
     @property
     def phase(self):
@@ -89,7 +101,7 @@ class HolzworthHS9000(Instrument, metaclass=MakeSettersGetters):
         return float(v.split()[0])
     @phase.setter
     def phase(self, value):
-        self.ch_query(":PHASE:{} deg".format(value))
+        self.ch_query(":PHASE:{} deg".format(value % 360))
 
     @property
     def output(self):
