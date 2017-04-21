@@ -75,6 +75,15 @@ class DataAxis(object):
             return [tuple(self.original_points[i]) for i in range(len(self.original_points))]
         return [(self.original_points[i],) for i in range(len(self.original_points))]
 
+    def tuple_width(self):
+        if self.unstructured:
+            width = len(name)
+        else:
+            width = 1
+        if self.metadata:
+            width += 1
+        return width
+
     def num_points(self):
         if self.has_been_extended:
             return len(self.points)
@@ -236,6 +245,16 @@ class DataStreamDescriptor(object):
                 dims.append(len(a.points))
         return dims
 
+    def tuple_width(self):
+        return sum([a.tuple_width() for a in self.axes])
+
+    def dims(self):
+        dims = []
+
+        for a in self.axes:
+                dims.append(len(a.points))
+        return [a.num_points() for a in self.axes]
+
     def axes_done(self):
         # The axis is considered done when all of the sub-axes are done
         # This can happen mulitple times for a single axis
@@ -280,6 +299,8 @@ class DataStreamDescriptor(object):
             # If we already have a structured array
             if type(self.visited_tuples) is np.ndarray and type(self.visited_tuples.dtype.names) is tuple:
                 return self.visited_tuples
+            elif type(self.visited_tuples) is np.ndarray:
+                return np.rec.fromarrays(self.visited_tuples.T, dtype=self.axis_data_type(with_metadata=True))
             return np.core.records.fromrecords(self.visited_tuples, dtype=self.axis_data_type(with_metadata=True))
         return self.visited_tuples
 
@@ -288,9 +309,21 @@ class DataStreamDescriptor(object):
         be used with non-adaptive sweeps."""
         vals           = [a.points_with_metadata() for a in self.axes]
         nested_list    = itertools.product(*vals)
-        flattened_list = [tuple((val for sublist in line for val in sublist)) for line in nested_list]
+        # TODO: avoid this slow list comprehension
+        simple = False
+        if True in [a.unstructured for a in self.axes]:
+            flattened_list = [tuple((val for sublist in line for val in sublist)) for line in nested_list]
+        elif True in [a.metadata is not None for a in self.axes]:
+            flattened_list = [tuple((val for sublist in line for val in sublist)) for line in nested_list]
+        elif self.axes == []:
+            flattened_list = [tuple((val for sublist in line for val in sublist)) for line in nested_list]
+        else:
+            simple = True
+            flattened_list = np.array(list(nested_list)).reshape(-1, self.tuple_width())
         if as_structured_array:
-            return np.core.records.fromrecords(flattened_list, dtype=self.axis_data_type(with_metadata=True))
+            if simple:
+                return np.rec.fromarrays(flattened_list.T, dtype=self.axis_data_type(with_metadata=True))
+            return np.rec.fromrecords(flattened_list, dtype=self.axis_data_type(with_metadata=True))
         return flattened_list
 
     def axis_names(self, with_metadata=False):
