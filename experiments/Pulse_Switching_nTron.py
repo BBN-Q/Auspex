@@ -28,28 +28,33 @@ import time, sys, datetime
 # import auspex.analysis.switching as sw
 from adapt import refine
 
-def switching_pulse(amplitude, duration, waveform_duration=300e-09, sample_rate=10e9):
-    total_points = int(waveform_duration*sample_rate)
+def switching_pulse(amplitude, duration, delay=25e-9, holdoff=750e-9, total_duration=1000e-09, sample_rate=10e9):
+    total_points = int(total_duration*sample_rate)
     pulse_points = int(duration*sample_rate)
-    if pulse_points < 320:
+    delay_points = int(delay*sample_rate)
+    hold_points  = int(holdoff*sample_rate)
+
+    pad_points = hold_points - delay_points - pulse_points
+    if total_points < 320:
         wf = np.zeros(320)
     else:
         wf = np.zeros(64*np.ceil(total_points/64.0))
-    wf[:pulse_points] = amplitude
-    wf = np.append(np.zeros(1<<12), wf)
-    wf = np.append(wf, np.zeros(1<<12))
+    wf[pad_points:pad_points+pulse_points] = amplitude
+    # wf = np.append(np.zeros(1<<12), wf)
+    # wf = np.append(wf, np.zeros(1<<12))
     # wf = np.append(wf, np.zeros(12000-len(wf)))
     return wf
 
-def measure_pulse(amplitude, duration, frequency, waveform_duration=300e-09, sample_rate=10e9):
-    total_points = int(waveform_duration*sample_rate)
+def measure_pulse(amplitude, duration, frequency, holdoff=750e-9, total_duration=1000e-09, sample_rate=10e9):
+    total_points = int(total_duration*sample_rate)
     pulse_points = int(duration*sample_rate)
-    if pulse_points < 320:
+    hold_points  = int(holdoff*sample_rate)
+    if total_points < 320:
         wf = np.zeros(320)
     else:
         wf = np.zeros(64*np.ceil(total_points/64.0))
-    wf[:pulse_points] = amplitude*np.sin(2.0*np.pi*frequency*np.arange(pulse_points)/sample_rate)
-    wf = np.append(np.zeros(1<<13), wf)
+    wf[hold_points:hold_points+pulse_points] = amplitude*np.sin(2.0*np.pi*frequency*np.arange(pulse_points)/sample_rate)
+    # wf = np.append(np.zeros(1<<13), wf)
     # wf = np.append(wf, np.zeros(12000-len(wf)))
     return wf
 
@@ -73,7 +78,7 @@ class nTronSwitchingExperiment(Experiment):
     measure_frequency  = 100e6
 
     # Sweep axes
-    gate_amps = np.linspace(0.0, 0.25, 20)
+    gate_amps = np.linspace(0.0, 0.3, 20)
     # gate_durs = np.linspace(100.0e-9, 250e-9, 5)
 
     # Things coming back
@@ -87,8 +92,8 @@ class nTronSwitchingExperiment(Experiment):
     def init_instruments(self):
 
         self.awg.function       = 'Pulse'
-        self.awg.frequency      = 500e3
-        self.awg.pulse_width    = 800e-9
+        self.awg.frequency      = 0.5e6
+        self.awg.pulse_width    = 1e-6
         self.awg.low_voltage    = 0.0
         self.awg.high_voltage   = self.channel_bias.value
         self.awg.burst_state    = True
@@ -133,6 +138,8 @@ class nTronSwitchingExperiment(Experiment):
         self.arb.voltage_amplitude = 1.0
         self.arb.continuous_mode = False
         self.arb.gate_mode = False
+        self.arb.set_marker_level_low(0.0, channel=1, marker_type="sync")
+        self.arb.set_marker_level_high(1.5, channel=1, marker_type="sync")
         self.arb.set_marker_level_low(0.0, channel=2, marker_type="sync")
         self.arb.set_marker_level_high(1.5, channel=2, marker_type="sync")
 
@@ -161,7 +168,7 @@ class nTronSwitchingExperiment(Experiment):
 
         # For the measurements pulses along the channel
         wf      = measure_pulse(amplitude=self.measure_amplitude, duration=self.measure_duration, frequency=self.measure_frequency)
-        wf_data = KeysightM8190A.create_binary_wf_data(wf)
+        wf_data = KeysightM8190A.create_binary_wf_data(wf, sync_mkr=1)
         seg_id  = self.arb.define_waveform(len(wf_data), channel=1)
         self.arb.upload_waveform(wf_data, seg_id, channel=1)
         seg_ids_ch1.append(seg_id)
@@ -171,7 +178,7 @@ class nTronSwitchingExperiment(Experiment):
             # For the switching pulses along the gate
             print(self.gate_pulse_duration)
             wf      = switching_pulse(amplitude=amp, duration=self.gate_pulse_duration.value)
-            wf_data = KeysightM8190A.create_binary_wf_data(wf, sync_mkr=1)
+            wf_data = KeysightM8190A.create_binary_wf_data(wf)
             seg_id  = self.arb.define_waveform(len(wf_data), channel=2)
             self.arb.upload_waveform(wf_data, seg_id, channel=2)
             seg_ids_ch2.append(seg_id)
@@ -254,8 +261,8 @@ if __name__ == '__main__':
     kernel_params['kernel'] = 0
     kernel_params['bias'] = 0
     kernel_params['simple_kernel'] = True
-    kernel_params['box_car_start'] = 8e-7
-    kernel_params['box_car_stop']  = 10.5e-7
+    kernel_params['box_car_start'] =  9.0e-7
+    kernel_params['box_car_stop']  = 11.5e-7
     kernel_params['frequency'] = 0.0
 
     ki = KernelIntegrator(**kernel_params)
