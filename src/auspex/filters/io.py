@@ -214,7 +214,8 @@ class WriteToHDF5(Filter):
                 # Create the axis table for the metadata
                 dset = self.group.create_dataset(name + "_metadata", (a.metadata.size,), dtype=np.uint8, maxshape=(None,) )
                 dset[:] = a.metadata
-                self.group[name + "_metadata_enum"] = np.string_(a.metadata_enum)
+                dset = self.group.create_dataset(name + "_metadata_enum", (a.metadata_enum.size,), dtype='S128', maxshape=(None,) )
+                dset[:] = np.asarray(a.metadata_enum, dtype='S128')
 
                 # Associate the metadata with the data axis
                 self.group[name].attrs['metadata'] = self.group[name + "_metadata"].ref
