@@ -210,18 +210,21 @@ class WriteToHDF5(Filter):
             # Give the reader some warning about the usefulness of these axes
             self.group[name].attrs['was_refined'] = False
 
-            if a.metadata:
+            if a.metadata is not None:
                 # Create the axis table for the metadata
-                self.group[name + "_metadata"] = np.string_(a.metadata)
+                dset = self.group.create_dataset(name + "_metadata", (a.metadata.size,), dtype=np.uint8, maxshape=(None,) )
+                dset[:] = a.metadata
+                self.group[name + "_metadata_enum"] = np.string_(a.metadata_enum)
 
                 # Associate the metadata with the data axis
                 self.group[name].attrs['metadata'] = self.group[name + "_metadata"].ref
+                self.group[name].attrs['metadata_enum'] = self.group[name + "_metadata_enum"].ref
                 self.group[name].attrs['name'] = name + "_metadata"
 
                 # Create the dataset that stores the individual tuple values
                 if self.write_tuples:
                     dset = self.data_group.create_dataset(name + "_metadata" , (expected_length,),
-                                                          dtype=h5py.special_dtype(vlen=str), maxshape=(None,) )
+                                                          dtype=np.uint8, maxshape=(None,) )
                     dset.attrs['name'] = name + "_metadata"
                     tuple_dset_for_axis_name[name + "_metadata"] = dset
 
