@@ -14,6 +14,7 @@ import zlib
 import numpy as np
 import os.path
 import time
+import re
 
 from .filter import Filter
 from auspex.parameter import Parameter, FilenameParameter
@@ -70,8 +71,10 @@ class WriteToHDF5(Filter):
             if not os.path.exists(fulldir):
                 os.mkdir(fulldir)
             filename = os.path.join(fulldir, basename)
-        while os.path.exists("{}-{:04d}.h5".format(filename,i)):
-            i += 1
+            i = max([int(re.findall('\d{4}', f)[0]) for f in os.listdir(fulldir)]) + 1
+        else:
+            while os.path.exists("{}-{:04d}.h5".format(filename,i)):
+                i += 1
         return "{}-{:04d}.h5".format(filename,i)
 
     def new_file(self):
