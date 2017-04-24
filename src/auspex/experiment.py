@@ -287,10 +287,10 @@ class Experiment(metaclass=MetaExperiment):
                 if hasattr(self,k):
                     v = getattr(self,k)
                     oc.descriptor.add_param(k, v)
-            if not self.sweeper.is_adaptive():
-                oc.descriptor.visited_tuples = oc.descriptor.expected_tuples(with_metadata=True, as_structured_array=False)
-            else:
-                oc.descriptor.visited_tuples = []
+            # if not self.sweeper.is_adaptive():
+            #     oc.descriptor.visited_tuples = oc.descriptor.expected_tuples(with_metadata=True, as_structured_array=False)
+            # else:
+            oc.descriptor.visited_tuples = []
             oc.update_descriptors()
 
     async def declare_done(self):

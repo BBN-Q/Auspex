@@ -295,6 +295,9 @@ class DataStreamDescriptor(object):
     def tuples(self, as_structured_array=True):
         """Returns a list of all tuples visited by the sweeper. Should only
         be used with adaptive sweeps."""
+        if self.visited_tuples == []:
+            self.visited_tuples = self.expected_tuples(with_metadata=True)
+
         if as_structured_array:
             # If we already have a structured array
             if type(self.visited_tuples) is np.ndarray and type(self.visited_tuples.dtype.names) is tuple:

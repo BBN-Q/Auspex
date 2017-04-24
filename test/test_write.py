@@ -176,6 +176,30 @@ class WriteTestCase(unittest.TestCase):
 
         os.remove("test_writehdf5-0000.h5")
 
+    def test_writehdf5_no_tuples(self):
+        exp = SweptTestExperiment()
+        if os.path.exists("test_writehdf5_no_tuples-0000.h5"):
+            os.remove("test_writehdf5_no_tuples-0000.h5")
+        wr = WriteToHDF5("test_writehdf5_no_tuples.h5", write_tuples=False)
+
+        edges = [(exp.voltage, wr.sink)]
+        exp.set_graph(edges)
+
+        exp.add_sweep(exp.field, np.linspace(0,100.0,40))
+        exp.add_sweep(exp.freq, np.linspace(0,10.0,30))
+        exp.run_sweeps()
+        self.assertTrue(os.path.exists("test_writehdf5_no_tuples-0000.h5"))
+        # with h5py.File("test_writehdf5_no_tuples-0000.h5", 'r') as f:
+        #     self.assertTrue(0.0 not in f['main/data/voltage'])
+        #     self.assertTrue(np.sum(f['main/data/field']) == 5*3*np.sum(np.linspace(0,100.0,4)) )
+        #     self.assertTrue(np.sum(f['main/data/freq']) == 5*4*np.sum(np.linspace(0,10.0,3)) )
+        #     self.assertTrue(np.sum(f['main/data/samples']) == 3*4*np.sum(np.linspace(0,4,5)) )
+        #     self.assertTrue("Here the run loop merely spews" in f.attrs['exp_src'])
+        #     self.assertTrue(f['main/data'].attrs['time_val'] == 0)
+        #     self.assertTrue(f['main/data'].attrs['unit_freq'] == "Hz")
+
+        # os.remove("test_writehdf5_no_tuples-0000.h5")
+
     def test_writehdf5_metadata(self):
         exp = SweptTestExperimentMetadata()
         if os.path.exists("test_writehdf5_metadata-0000.h5"):
