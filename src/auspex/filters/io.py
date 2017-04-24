@@ -31,7 +31,7 @@ class WriteToHDF5(Filter):
     filename = FilenameParameter()
     groupname = Parameter(default='main')
 
-    def __init__(self, filename=None, groupname=None, add_date=False, save_settings=True, compress=True, **kwargs):
+    def __init__(self, filename=None, groupname=None, add_date=False, save_settings=False, compress=True, **kwargs):
         super(WriteToHDF5, self).__init__(**kwargs)
         self.compress = compress
         if filename:
