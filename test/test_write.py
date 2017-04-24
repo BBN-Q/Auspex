@@ -179,7 +179,7 @@ class WriteTestCase(unittest.TestCase):
 
         if os.path.exists("test_writehdf5_no_tuples-0000.h5"):
             os.remove("test_writehdf5_no_tuples-0000.h5")
-        wr = WriteToHDF5("test_writehdf5_no_tuples.h5", write_tuples=False)
+        wr = WriteToHDF5("test_writehdf5_no_tuples.h5", store_tuples=False)
 
         edges = [(exp.voltage, wr.sink)]
         exp.set_graph(edges)

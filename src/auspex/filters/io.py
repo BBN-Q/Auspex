@@ -29,7 +29,7 @@ class WriteToHDF5(Filter):
     filename = FilenameParameter()
     groupname = Parameter(default='main')
 
-    def __init__(self, filename=None, groupname=None, add_date=False, compress=True, write_tuples=True, **kwargs):
+    def __init__(self, filename=None, groupname=None, add_date=False, compress=True, store_tuples=True, **kwargs):
         super(WriteToHDF5, self).__init__(**kwargs)
         self.compress = compress
         if filename:
@@ -39,7 +39,7 @@ class WriteToHDF5(Filter):
         self.points_taken = 0
         self.file = None
         self.group = None
-        self.write_tuples = write_tuples
+        self.store_tuples = store_tuples
         self.create_group = True
         self.up_to_date = False
         self.sink.max_input_streams = 100
@@ -115,10 +115,10 @@ class WriteToHDF5(Filter):
         self.file.attrs['exp_src'] = desc.exp_src
         num_axes   = len(axes)
 
-        if desc.is_adaptive() and not self.write_tuples:
-            raise Exception("Cannot omit writing tuples with an adaptive sweep... please enabled write_tuples.")
+        if desc.is_adaptive() and not self.store_tuples:
+            raise Exception("Cannot omit writing tuples with an adaptive sweep... please enabled store_tuples.")
 
-        if self.write_tuples:
+        if self.store_tuples:
             # All of the combinations for the present values of the sweep parameters only
             tuples          = desc.expected_tuples(with_metadata=True, as_structured_array=True)
         expected_length = desc.expected_num_points()
@@ -141,7 +141,7 @@ class WriteToHDF5(Filter):
                                         chunks=True, maxshape=(None,),
                                         compression=compression)
             dset.attrs['is_data'] = True
-            dset.attrs['write_tuples'] = self.write_tuples
+            dset.attrs['store_tuples'] = self.store_tuples
             dset.attrs['name'] = stream.descriptor.data_name
             dset_for_streams[stream] = dset
 
@@ -180,7 +180,7 @@ class WriteToHDF5(Filter):
                     unstruc_dset.attrs['name'] = col_name
 
                     # This stores the values taking during the experiment sweeps
-                    if self.write_tuples:
+                    if self.store_tuples:
                         dset = self.data_group.create_dataset(col_name, (expected_length,), dtype=a.dtype, 
                                                              chunks=True, compression=compression, maxshape=(None,) )
                         dset.attrs['unit'] = col_unit
@@ -199,7 +199,7 @@ class WriteToHDF5(Filter):
                 self.descriptor[i] = self.group[name].ref
 
                 # This stores the values taking during the experiment sweeps
-                if self.write_tuples:
+                if self.store_tuples:
                     dset = self.data_group.create_dataset(name, (expected_length,), dtype=a.dtype,
                                                           chunks=True, compression=compression, maxshape=(None,) )
                     dset.attrs['unit'] = "None" if a.unit is None else a.unit
@@ -222,14 +222,14 @@ class WriteToHDF5(Filter):
                 self.group[name].attrs['name'] = name + "_metadata"
 
                 # Create the dataset that stores the individual tuple values
-                if self.write_tuples:
+                if self.store_tuples:
                     dset = self.data_group.create_dataset(name + "_metadata" , (expected_length,),
                                                           dtype=np.uint8, maxshape=(None,) )
                     dset.attrs['name'] = name + "_metadata"
                     tuple_dset_for_axis_name[name + "_metadata"] = dset
 
         # Write all the tuples if this isn't adaptive
-        if self.write_tuples:
+        if self.store_tuples:
             if not desc.is_adaptive():
                 for i, a in enumerate(axis_names):
                     tuple_dset_for_axis_name[a][:] = tuples[a]
@@ -277,7 +277,7 @@ class WriteToHDF5(Filter):
                     for stream in streams:
                         dset_for_streams[stream].resize((len(dset_for_streams[streams[0]])+num_new_points,))
 
-                    if self.write_tuples:
+                    if self.store_tuples:
                         for an in axis_names:
                             tuple_dset_for_axis_name[an].resize((len(tuple_dset_for_axis_name[an])+num_new_points,))
 
@@ -310,7 +310,7 @@ class WriteToHDF5(Filter):
                     dset_for_streams[s][w_idx:w_idx+d.size] = d
                 
                 # Write the coordinate tuples
-                if self.write_tuples:
+                if self.store_tuples:
                     if desc.is_adaptive():
                         tuples = desc.tuples()
                         for axis_name in axis_names:
