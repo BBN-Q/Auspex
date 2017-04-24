@@ -57,6 +57,11 @@ class HolzworthHS9000(Instrument, metaclass=MakeSettersGetters):
         success = self._lib.openDevice(self.serial.encode('ascii'))
         if success != 0:
             logger.info("Could not open Holzworth at address: {}, might already be open on another channel.".format(self.serial))
+        # read frequency and power ranges
+        self.fmin = float((self.ch_query(":FREQ:MIN?")).split()[0]) #MHz
+        self.fmax = float((self.ch_query(":FREQ:MAX?")).split()[0]) #MHz
+        self.pmin = float((self.ch_query(":PWR:MIN?")).split()[0]) #dBm
+        self.pmax = float((self.ch_query(":PWR:MAX?")).split()[0]) #dBm
 
     def ref_query(self, scpi_string):
         serial = self.serial + '-R'
@@ -73,7 +78,11 @@ class HolzworthHS9000(Instrument, metaclass=MakeSettersGetters):
         return float(v.split()[0])*1e-3
     @frequency.setter
     def frequency(self, value):
-        self.ch_query(":FREQ:{} GHz".format(value))
+        if self.fmin*1e-3 <= value <= self.fmax*1e-3:
+            self.ch_query(":FREQ:{} GHz".format(value))
+        else:
+            err_msg = "The value {} GHz is outside of the allowable range {}-{} GHz specified for instrument '{}'.".format(value, self.fmin*1e-3, self.fmax*1e-3, self.name)
+            raise ValueError(err_msg)
 
     @property
     def power(self):
@@ -81,7 +90,11 @@ class HolzworthHS9000(Instrument, metaclass=MakeSettersGetters):
         return float(v.split()[0])
     @power.setter
     def power(self, value):
-        self.ch_query(":PWR:{} dBm".format(value))
+        if self.pmin <= value <= self.pmax:
+            self.ch_query(":PWR:{} dBm".format(value))
+        else:
+            err_msg = "The value {} dBm is outside of the allowable range {}-{} dBm specified for instrument '{}'.".format(value, self.pmin, self.pmax, self.name)
+            raise ValueError(err_msg)
 
     @property
     def phase(self):
@@ -89,7 +102,7 @@ class HolzworthHS9000(Instrument, metaclass=MakeSettersGetters):
         return float(v.split()[0])
     @phase.setter
     def phase(self, value):
-        self.ch_query(":PHASE:{} deg".format(value))
+        self.ch_query(":PHASE:{} deg".format(value % 360))
 
     @property
     def output(self):
