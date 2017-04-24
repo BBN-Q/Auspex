@@ -50,16 +50,19 @@ class SweptTestExperiment(Experiment):
 
     def init_streams(self):
         # Add a "base" data axis: say we are averaging 5 samples per trigger
-        self.voltage.add_axis(DataAxis("samples", list(range(self.samples))))
+        descrip = DataStreamDescriptor()
+        descrip.data_name='voltage'
+        descrip.add_axis(DataAxis("samples", list(range(self.samples))))
+        self.voltage.set_descriptor(descrip)
 
     def __repr__(self):
         return "<SweptTestExperiment>"
 
     async def run(self):
-        logger.debug("Data taker running (inner loop)")
+        # logger.debug("Data taker running (inner loop)")
         time_step = 0.1
-        await asyncio.sleep(0.002)
-        data_row = np.sin(2*np.pi*self.time_val)*np.ones(5) + 0.1*np.random.random(5)
+        await asyncio.sleep(0.001)
+        data_row = np.sin(2*np.pi*self.time_val)*np.ones(self.samples) + 0.1*np.random.random(self.samples)
         self.time_val += time_step
         if self.is_complex:
             await self.voltage.push(np.array(data_row + 0.5j*data_row, dtype=np.complex128))
@@ -67,8 +70,8 @@ class SweptTestExperiment(Experiment):
         else:
             await self.voltage.push(data_row)
             await self.current.push(np.sin(2*np.pi*self.time_val) + 0.1*np.random.random(1))
-        logger.debug("Stream pushed points {}.".format(data_row))
-        logger.debug("Stream has filled {} of {} points".format(self.voltage.points_taken, self.voltage.num_points() ))
+        # logger.debug("Stream pushed points {}.".format(data_row))
+        # logger.debug("Stream has filled {} of {} points".format(self.voltage.points_taken, self.voltage.num_points() ))
 
 class SweptTestExperimentMetadata(Experiment):
     """Here the run loop merely spews data until it fills up the stream. """
@@ -99,15 +102,12 @@ class SweptTestExperimentMetadata(Experiment):
         return "<SweptTestExperimentMetadata>"
 
     async def run(self):
-        logger.debug("Data taker running (inner loop)")
         time_step = 0.1
         await asyncio.sleep(0.002)
-        data_row = np.sin(2*np.pi*self.time_val)*np.ones(5) + 0.1*np.random.random(5)
+        data_row = np.sin(2*np.pi*self.time_val)*np.ones(self.samples) + 0.1*np.random.random(self.samples)
         self.time_val += time_step
         await self.voltage.push(data_row)
         await self.current.push(np.sin(2*np.pi*self.time_val) + 0.1*np.random.random(1))
-        logger.debug("Stream pushed points {}.".format(data_row))
-        logger.debug("Stream has filled {} of {} points".format(self.voltage.points_taken, self.voltage.num_points() ))
 
 class SweptTestExperiment2(Experiment):
     """Here the run loop merely spews data until it fills up the stream. """
@@ -139,16 +139,12 @@ class SweptTestExperiment2(Experiment):
         return "<SweptTestExperiment2>"
 
     async def run(self):
-        logger.debug("Data taker running (inner loop)")
         time_step = 0.1
         await asyncio.sleep(0.002)
-        data_row = np.sin(2*np.pi*self.time_val)*np.ones(5) + 0.1*np.random.random(5)
+        data_row = np.sin(2*np.pi*self.time_val)*np.ones(self.samples) + 0.1*np.random.random(self.samples)
         self.time_val += time_step
         await self.voltage.push(data_row)
         await self.current.push(-0.1*data_row)
-        logger.debug("Stream pushed points {}.".format(data_row))
-        logger.debug("Stream has filled {} of {} points".format(self.voltage.points_taken, self.voltage.num_points() ))
-
 
 class WriteTestCase(unittest.TestCase):
 
@@ -178,6 +174,9 @@ class WriteTestCase(unittest.TestCase):
 
     def test_writehdf5_no_tuples(self):
         exp = SweptTestExperiment()
+        exp.samples = 1024
+        exp.init_streams()
+
         if os.path.exists("test_writehdf5_no_tuples-0000.h5"):
             os.remove("test_writehdf5_no_tuples-0000.h5")
         wr = WriteToHDF5("test_writehdf5_no_tuples.h5", write_tuples=False)
@@ -185,20 +184,16 @@ class WriteTestCase(unittest.TestCase):
         edges = [(exp.voltage, wr.sink)]
         exp.set_graph(edges)
 
-        exp.add_sweep(exp.field, np.linspace(0,100.0,40))
-        exp.add_sweep(exp.freq, np.linspace(0,10.0,30))
+        exp.add_sweep(exp.field, np.linspace(0,100.0,5))
+        exp.add_sweep(exp.freq, np.linspace(0,10.0,4))
         exp.run_sweeps()
         self.assertTrue(os.path.exists("test_writehdf5_no_tuples-0000.h5"))
-        # with h5py.File("test_writehdf5_no_tuples-0000.h5", 'r') as f:
-        #     self.assertTrue(0.0 not in f['main/data/voltage'])
-        #     self.assertTrue(np.sum(f['main/data/field']) == 5*3*np.sum(np.linspace(0,100.0,4)) )
-        #     self.assertTrue(np.sum(f['main/data/freq']) == 5*4*np.sum(np.linspace(0,10.0,3)) )
-        #     self.assertTrue(np.sum(f['main/data/samples']) == 3*4*np.sum(np.linspace(0,4,5)) )
-        #     self.assertTrue("Here the run loop merely spews" in f.attrs['exp_src'])
-        #     self.assertTrue(f['main/data'].attrs['time_val'] == 0)
-        #     self.assertTrue(f['main/data'].attrs['unit_freq'] == "Hz")
-
-        # os.remove("test_writehdf5_no_tuples-0000.h5")
+        with h5py.File("test_writehdf5_no_tuples-0000.h5", 'r') as f:
+            self.assertTrue(0.0 not in f['main/data/voltage'])
+            self.assertTrue("Here the run loop merely spews" in f.attrs['exp_src'])
+            self.assertTrue(f['main/data'].attrs['time_val'] == 0)
+            self.assertTrue(f['main/data'].attrs['unit_freq'] == "Hz")
+        os.remove("test_writehdf5_no_tuples-0000.h5")
 
     def test_writehdf5_metadata(self):
         exp = SweptTestExperimentMetadata()

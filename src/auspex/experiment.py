@@ -336,7 +336,7 @@ class Experiment(metaclass=MetaExperiment):
                     oc.descriptor.visited_tuples = oc.descriptor.visited_tuples + flattened_list
 
             # Run the procedure
-            logger.debug("Starting a new run.")
+            # logger.debug("Starting a new run.")
             await self.run()
 
             # See if the axes want to extend themselves
