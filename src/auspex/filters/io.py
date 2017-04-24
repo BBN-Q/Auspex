@@ -14,11 +14,13 @@ import zlib
 import numpy as np
 import os.path
 import time
+from shutil import copyfile
 
 from .filter import Filter
 from auspex.parameter import Parameter, FilenameParameter
 from auspex.stream import InputConnector, OutputConnector
 from auspex.log import logger
+import auspex.config as config
 
 from tqdm import tqdm, tqdm_notebook
 
@@ -29,7 +31,7 @@ class WriteToHDF5(Filter):
     filename = FilenameParameter()
     groupname = Parameter(default='main')
 
-    def __init__(self, filename=None, groupname=None, add_date=False, compress=True, **kwargs):
+    def __init__(self, filename=None, groupname=None, add_date=False, save_settings=True, compress=True, **kwargs):
         super(WriteToHDF5, self).__init__(**kwargs)
         self.compress = compress
         if filename:
@@ -43,7 +45,7 @@ class WriteToHDF5(Filter):
         self.up_to_date = False
         self.sink.max_input_streams = 100
         self.add_date = add_date
-
+        self.save_settings = save_settings
         self.quince_parameters = [self.filename, self.groupname]
 
     def final_init(self):
@@ -96,7 +98,20 @@ class WriteToHDF5(Filter):
                 logger.debug("Create new directory: {}.".format(fulldir))
                 os.mkdir(fulldir)
         logger.debug("Create new data file: %s." % self.filename.value)
+        # Copy current settings to a folder with the file name
+        if self.save_settings:
+            self.save_json()
         return h5py.File(self.filename.value, 'w', libver='latest')
+
+    def save_json(self):
+        """ Save a copy of current experiment settings """
+        head = os.path.dirname(self.filename.value)
+        fulldir = os.path.splitext(self.filename.value)[0]
+        if not os.path.exists(fulldir):
+            os.mkdir(fulldir)
+        copyfile(config.instrumentLibFile, os.path.join(fulldir, os.path.split(config.instrumentLibFile)[1]))
+        copyfile(config.measurementLibFile, os.path.join(fulldir, os.path.split(config.measurementLibFile)[1]))
+        copyfile(config.sweepLibFile, os.path.join(fulldir, os.path.split(config.sweepLibFile)[1]))
 
     async def run(self):
         streams    = self.sink.input_streams
