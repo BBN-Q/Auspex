@@ -34,7 +34,7 @@ class Agilent33220A(SCPIInstrument):
     FUNCTION_MAP = {"Sine": "SIN",
                     "Square": "SQU",
                     "Ramp": "RAMP",
-                    "Pulse": "PUL",
+                    "Pulse": "PULS",
                     "Noise": "NOIS",
                     "DC": "DC",
                     "User": "USER"}
@@ -47,6 +47,7 @@ class Agilent33220A(SCPIInstrument):
     dc_offset = FloatCommand(scpi_string="VOLT:OFFSET")
     output = Command(get_string="OUTP?", set_string="OUTP {:s}",
                                 value_map = {True: "1", False: "0"})
+    auto_range = Command(scpi_string="VOLTage:RANGe:AUTO", value_map={True: "1", False: "0"})
     load_resistance = FloatCommand(scpi_string="OUTPut:LOAD")
     amplitude = FloatCommand(scpi_string="VOLT")
     low_voltage = FloatCommand(scpi_string="VOLTage:LOW")
@@ -66,7 +67,10 @@ class Agilent33220A(SCPIInstrument):
                         value_map = {"Internal": "IMM", "External": "EXT", "Bus": "BUS"})
     trigger_slope = Command(get_string="TRIGger:SLOPe?", set_string="TRIGger:SLOPe {:s}",
                                 value_map = {"Positive": "POS", "Negative": "NEG"})
-    
+
+    # Pulse characteristics
+    pulse_width = FloatCommand(scpi_string="FUNCtion:PULSe:WIDTh")
+
     def trigger(self):
         self.interface.write("*TRG")
         

@@ -20,6 +20,24 @@ from functools import reduce
 
 from auspex.log import logger
 
+def cartesian(arrays, out=None, dtype='f'):
+    """http://stackoverflow.com/questions/28684492/numpy-equivalent-of-itertools-product"""
+
+    arrays = [np.asarray(x) for x in arrays]
+    # dtype = arrays[0].dtype
+
+    n = np.prod([x.size for x in arrays])
+    if out is None:
+        out = np.zeros([n, len(arrays)], dtype=dtype)
+
+    m = int(n / arrays[0].size)
+    out[:,0] = np.repeat(arrays[0], m)
+    if arrays[1:]:
+        cartesian(arrays[1:], out=out[0:m,1:])
+        for j in range(1, arrays[0].size):
+            out[j*m:(j+1)*m,1:] = out[0:m,1:]
+    return out
+
 class DataAxis(object):
     """An axis in a data stream"""
     def __init__(self, name, points=[], unit=None, metadata=None, dtype=np.float32):
@@ -32,11 +50,14 @@ class DataAxis(object):
             self.name         = str(name)
 
         # self.points holds the CURRENT set of points. During adaptive sweeps
-        # this will hold the most recently added points of the axis. 
-        self.points       = np.array(points)
-        self.unit         = unit
-        self.metadata     = metadata
-        self.refine_func  = None
+        # this will hold the most recently added points of the axis.
+        self.points        = np.array(points)
+        self.unit          = unit
+        self.refine_func   = None
+        self.metadata      = None
+        self.metadata_enum = None
+        if metadata is not None:
+            self.set_metadata(metadata)
 
         # By definition data axes will be done after every experiment.run() call
         self.done         = True
@@ -53,6 +74,10 @@ class DataAxis(object):
         if self.unstructured and len(name) != len(points[0]):
             raise ValueError("DataAxis points length {} and names length {} must match.".format(len(points[0]), len(name)))
 
+    def set_metadata(self, metadata):
+        # Convert the metadata to an enum
+        self.metadata_enum, self.metadata = np.unique(metadata, return_inverse=True)
+
     def data_type(self, with_metadata=False):
         dtype = []
         if self.unstructured:
@@ -62,18 +87,27 @@ class DataAxis(object):
             name = self.name
             dtype.append((name, 'f'))
 
-        if with_metadata and self.metadata:
-            dtype.append((name + "_metadata", 'S128'))
+        if with_metadata and self.metadata is not None:
+            dtype.append((name + "_metadata", 'f'))
         return dtype
 
     def points_with_metadata(self):
-        if self.metadata:
+        if self.metadata is not None:
             if self.unstructured:
                 return [list(self.original_points[i]) + [self.metadata[i]] for i in range(len(self.original_points))]
             return [(self.original_points[i], self.metadata[i], ) for i in range(len(self.original_points))]
         if self.unstructured:
             return [tuple(self.original_points[i]) for i in range(len(self.original_points))]
         return [(self.original_points[i],) for i in range(len(self.original_points))]
+
+    def tuple_width(self):
+        if self.unstructured:
+            width = len(name)
+        else:
+            width = 1
+        if self.metadata:
+            width += 1
+        return width
 
     def num_points(self):
         if self.has_been_extended:
@@ -113,14 +147,14 @@ class SweepAxis(DataAxis):
         self.parameter    = parameter
         if self.unstructured:
             unit = [p.unit for p in parameter]
-            super(SweepAxis, self).__init__([p.name for p in parameter], points=points, unit=unit)
+            super(SweepAxis, self).__init__([p.name for p in parameter], points=points, unit=unit, metadata=metadata)
             self.value = points[0]
         else:
-            super(SweepAxis, self).__init__(parameter.name, points, unit=parameter.unit)
+            super(SweepAxis, self).__init__(parameter.name, points, unit=parameter.unit, metadata=metadata)
             self.value     = points[0]
 
         # Current value of the metadata
-        if self.metadata:
+        if self.metadata is not None:
             self.metadata_value = self.metadata[0]
 
         # This is run at the end of this sweep axis
@@ -133,7 +167,6 @@ class SweepAxis(DataAxis):
 
         self.step        = 0
         self.done        = False
-        self.metadata    = metadata
         self.experiment  = None # Should be explicitly set by the experiment
 
         if self.unstructured and len(parameter) != len(points[0]):
@@ -148,7 +181,7 @@ class SweepAxis(DataAxis):
             if self.callback_func:
                 self.callback_func(self, self.experiment)
             self.value = self.points[self.step]
-            if self.metadata:
+            if self.metadata is not None:
                 self.metadata_value = self.metadata[self.step]
             logger.debug("Sweep Axis '{}' at step {} takes value: {}.".format(self.name,
                                                                                self.step,self.value))
@@ -236,6 +269,16 @@ class DataStreamDescriptor(object):
                 dims.append(len(a.points))
         return dims
 
+    def tuple_width(self):
+        return sum([a.tuple_width() for a in self.axes])
+
+    def dims(self):
+        dims = []
+
+        for a in self.axes:
+                dims.append(len(a.points))
+        return [a.num_points() for a in self.axes]
+
     def axes_done(self):
         # The axis is considered done when all of the sub-axes are done
         # This can happen mulitple times for a single axis
@@ -276,10 +319,15 @@ class DataStreamDescriptor(object):
     def tuples(self, as_structured_array=True):
         """Returns a list of all tuples visited by the sweeper. Should only
         be used with adaptive sweeps."""
+        if len(self.visited_tuples) == 0:
+            self.visited_tuples = self.expected_tuples(with_metadata=True)
+
         if as_structured_array:
             # If we already have a structured array
             if type(self.visited_tuples) is np.ndarray and type(self.visited_tuples.dtype.names) is tuple:
                 return self.visited_tuples
+            elif type(self.visited_tuples) is np.ndarray:
+                return np.rec.fromarrays(self.visited_tuples.T, dtype=self.axis_data_type(with_metadata=True))
             return np.core.records.fromrecords(self.visited_tuples, dtype=self.axis_data_type(with_metadata=True))
         return self.visited_tuples
 
@@ -287,10 +335,29 @@ class DataStreamDescriptor(object):
         """Returns a list of tuples representing the cartesian product of the axis values. Should only
         be used with non-adaptive sweeps."""
         vals           = [a.points_with_metadata() for a in self.axes]
-        nested_list    = itertools.product(*vals)
-        flattened_list = [tuple((val for sublist in line for val in sublist)) for line in nested_list]
+
+        #
+        # TODO: avoid this slow list comprehension
+        simple = True
+        if True in [a.unstructured for a in self.axes]:
+            simple = False
+        if True in [a.metadata is not None for a in self.axes]:
+            simple = False
+        if self.axes == []:
+            simple = False
+
+        if simple:
+            # flattened_list = [tuple((val for sublist in line for val in sublist)) for line in nested_list]
+            flattened_list = cartesian(vals)
+        else:
+            nested_list    = itertools.product(*vals)
+            flattened_list = [tuple((val for sublist in line for val in sublist)) for line in nested_list]
+            # flattened_list = np.array(list(nested_list)).reshape(-1, self.tuple_width())
+
         if as_structured_array:
-            return np.core.records.fromrecords(flattened_list, dtype=self.axis_data_type(with_metadata=True))
+            if simple:
+                return np.rec.fromarrays(flattened_list.T, dtype=self.axis_data_type(with_metadata=True))
+            return np.rec.fromrecords(flattened_list, dtype=self.axis_data_type(with_metadata=True))
         return flattened_list
 
     def axis_names(self, with_metadata=False):
@@ -302,7 +369,7 @@ class DataStreamDescriptor(object):
                     vals.append(p.name)
             else:
                 vals.append(a.name)
-            if with_metadata and a.metadata:
+            if with_metadata and a.metadata is not None:
                 if a.unstructured:
                     vals.append("+".join(a.name) + "_metadata")
                 else:
