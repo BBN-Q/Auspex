@@ -173,14 +173,14 @@ class KeysightM8190A(SCPIInstrument):
     sample_freq_source = StringCommand(scpi_string=":FREQ:RAST:SOUR", # sample frequency source
                           allowed_values=("INTERNAL", "EXTERNAL"))
 
-    waveform_output_mode  = StringCommand(scpi_string=":TRAC:DWID",
+    waveform_output_mode  = StringCommand(scpi_string=":TRAC{channel:d}:DWID", additional_args=['channel'],
                              allowed_values=("WSPEED", "WPRECISION", "INTX3", "INTX12", "INTX24", "INT48"))
-    sequence_mode         = StringCommand(scpi_string=":FUNC:MODE",
-                             value_map={"ARBITRARY":"ARB", "SEQUENCE":"STS", "SCENARIO":"STSC"})
-    scenario_loop_ct      = IntCommand(scpi_string=":STAB:SCEN:COUN")
-    scenario_advance_mode = StringCommand(scpi_string=":STAB:SCEN:ADV",
+    sequence_mode         = StringCommand(scpi_string=":FUNC{channel:d}:MODE", additional_args=['channel'],
+                                          value_map={"ARBITRARY":"ARB", "SEQUENCE":"STS", "SCENARIO":"STSC"})
+    scenario_loop_ct      = IntCommand(scpi_string=":STAB{channel:d}:SCEN:COUN", additional_args=['channel'])
+    scenario_advance_mode = StringCommand(scpi_string=":STAB{channel:d}:SCEN:ADV", additional_args=['channel'],
                              value_map={"AUTOMATIC":"AUTO", "CONDITIONAL":"COND", "REPEAT":"REP", "SINGLE":"SING"})
-    scenario_start_index  = IntCommand(scpi_string=":STAB:SCEN:SEL")
+    scenario_start_index  = IntCommand(scpi_string=":STAB{channel:d}:SCEN:SEL", additional_args=['channel'])
 
     output            = StringCommand(scpi_string=":OUTP{channel:d}:NORM",
                          value_map={False:"0", True:"1"}, additional_args=['channel'])
@@ -310,8 +310,8 @@ class KeysightM8190A(SCPIInstrument):
 
         return bin_data
 
-    def reset_sequence_table(self):
-        self.interface.write(":STAB:RES")
+    def reset_sequence_table(self, channel=1):
+        self.interface.write(":STAB:RES{:d}.format(channel)")
 
     def upload_scenario(self, scenario, channel=1, start_idx=0, binary=True):
         if binary:

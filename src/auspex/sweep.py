@@ -52,7 +52,7 @@ class Sweeper(object):
         # reversed list since we store "innermost" axes last.
         values = []
         for a in self.axes[::-1]:
-            if a.metadata:
+            if a.metadata is not None:
                 if type(a.value) in [np.ndarray, list]:
                     values.append(tuple(list(a.value) + [a.metadata_value])) 
                 else:
