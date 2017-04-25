@@ -75,7 +75,7 @@ class WriteToHDF5(Filter):
         if os.path.exists(dirname):
             for f in os.listdir(dirname):
                 filenums += [int(re.findall('-\d{4}', f)[0][1:])] if os.path.isfile(os.path.join(dirname, f)) else []
-        i = max(filenums) + 1 if filenums else 1
+        i = max(filenums) + 1 if filenums else 0
         return "{}-{:04d}.h5".format(filename,i)
 
     def new_file(self):
