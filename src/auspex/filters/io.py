@@ -57,24 +57,18 @@ class WriteToHDF5(Filter):
             self.file = self.new_file()
 
     def new_filename(self):
-        # Increment the filename until we find one we want.
-        i = 0
         filename = self.filename.value
         ext = filename.find('.h5')
         if ext > -1:
             filename = filename[:ext]
+        dirname = os.path.dirname(filename)
         if self.add_date:
             date = time.strftime("%y%m%d")
-            dirname = os.path.dirname(filename)
             basename = os.path.basename(filename)
-            fulldir = os.path.join(dirname, date)
-            if not os.path.exists(fulldir):
-                os.mkdir(fulldir)
-            filename = os.path.join(fulldir, basename)
-            i = max([int(re.findall('\d{4}', f)[0]) for f in os.listdir(fulldir)]) + 1
-        else:
-            while os.path.exists("{}-{:04d}.h5".format(filename,i)):
-                i += 1
+            dirname = os.path.join(dirname, date)
+            if not os.path.exists(dirname):
+                os.mkdir(dirname)
+            filename = os.path.join(dirname, basename)
         return "{}-{:04d}.h5".format(filename,i)
 
     def new_file(self):
