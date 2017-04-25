@@ -104,10 +104,11 @@ class WriteToHDF5(Filter):
         """ Save a copy of current experiment settings """
         head = os.path.dirname(self.filename.value)
         fulldir = os.path.splitext(self.filename.value)[0]
-        os.makedirs(fulldir, exist_ok=True)
-        copyfile(config.instrumentLibFile, os.path.join(fulldir, os.path.split(config.instrumentLibFile)[1]))
-        copyfile(config.measurementLibFile, os.path.join(fulldir, os.path.split(config.measurementLibFile)[1]))
-        copyfile(config.sweepLibFile, os.path.join(fulldir, os.path.split(config.sweepLibFile)[1]))
+        if not os.path.exist(fulldir):
+            os.makedirs(fulldir)
+            copyfile(config.instrumentLibFile, os.path.join(fulldir, os.path.split(config.instrumentLibFile)[1]))
+            copyfile(config.measurementLibFile, os.path.join(fulldir, os.path.split(config.measurementLibFile)[1]))
+            copyfile(config.sweepLibFile, os.path.join(fulldir, os.path.split(config.sweepLibFile)[1]))
 
     async def run(self):
         streams    = self.sink.input_streams
