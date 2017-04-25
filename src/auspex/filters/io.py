@@ -104,7 +104,7 @@ class WriteToHDF5(Filter):
         """ Save a copy of current experiment settings """
         head = os.path.dirname(self.filename.value)
         fulldir = os.path.splitext(self.filename.value)[0]
-        if not os.path.exist(fulldir):
+        if not os.path.exists(fulldir):
             os.makedirs(fulldir)
             copyfile(config.instrumentLibFile, os.path.join(fulldir, os.path.split(config.instrumentLibFile)[1]))
             copyfile(config.measurementLibFile, os.path.join(fulldir, os.path.split(config.measurementLibFile)[1]))
