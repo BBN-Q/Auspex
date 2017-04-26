@@ -319,7 +319,7 @@ class QubitExpFactory(object):
 
                     # Pad the data axis with dummy equidistant x-points for the extra calibration points
                     avg_step = (data_axis['points'][-1] - data_axis['points'][0])/(len(data_axis['points'])-1)
-                    points = np.append(data_axis['points'], data_axis['points'][-1] + (np.arange(len(meta_axis))+1)*avg_step)
+                    points = np.append(data_axis['points'], data_axis['points'][-1] + (np.arange(len(meta_axis['points']))+1)*avg_step)
 
                     experiment.segment_axis = DataAxis(data_axis['name'], points, unit=data_axis['unit'], metadata=metadata)
 
