@@ -282,7 +282,7 @@ class WriteToHDF5(Filter):
             
             # If we receive a message
             if message_type == 'event':
-                logger.debug('%s "%s" received event "%s"', self.__class__.__name__, self.name, message_data)
+                logger.debug('%s "%s" received event of type "%s"', self.__class__.__name__, self.name, message_type)
                 if messages[0]['event_type'] == 'done':
                     break
                 elif messages[0]['event_type'] == 'refined':
