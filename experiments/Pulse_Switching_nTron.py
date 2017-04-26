@@ -28,7 +28,7 @@ import time, sys, datetime
 # import auspex.analysis.switching as sw
 from adapt import refine
 
-def switching_pulse(amplitude, duration, delay=25e-9, holdoff=750e-9, total_duration=1000e-09, sample_rate=10e9):
+def switching_pulse(amplitude, duration, delay=25e-9, holdoff=800e-9, total_duration=1200e-09, sample_rate=12e9):
     total_points = int(total_duration*sample_rate)
     pulse_points = int(duration*sample_rate)
     delay_points = int(delay*sample_rate)
@@ -40,12 +40,9 @@ def switching_pulse(amplitude, duration, delay=25e-9, holdoff=750e-9, total_dura
     else:
         wf = np.zeros(64*np.ceil(total_points/64.0))
     wf[pad_points:pad_points+pulse_points] = amplitude
-    # wf = np.append(np.zeros(1<<12), wf)
-    # wf = np.append(wf, np.zeros(1<<12))
-    # wf = np.append(wf, np.zeros(12000-len(wf)))
     return wf
 
-def measure_pulse(amplitude, duration, frequency, holdoff=750e-9, total_duration=1000e-09, sample_rate=10e9):
+def measure_pulse(amplitude, duration, frequency, holdoff=800e-9, total_duration=1200e-09, sample_rate=12e9):
     total_points = int(total_duration*sample_rate)
     pulse_points = int(duration*sample_rate)
     hold_points  = int(holdoff*sample_rate)
@@ -54,8 +51,6 @@ def measure_pulse(amplitude, duration, frequency, holdoff=750e-9, total_duration
     else:
         wf = np.zeros(64*np.ceil(total_points/64.0))
     wf[hold_points:hold_points+pulse_points] = amplitude*np.sin(2.0*np.pi*frequency*np.arange(pulse_points)/sample_rate)
-    # wf = np.append(np.zeros(1<<13), wf)
-    # wf = np.append(wf, np.zeros(12000-len(wf)))
     return wf
 
 class nTronSwitchingExperiment(Experiment):
@@ -71,15 +66,19 @@ class nTronSwitchingExperiment(Experiment):
     gate_biases            = [0]
 
     # Constants (set with attribute access if you want to change these!)
-    attempts           = 128 #1 << 8
-    samples            = 1024 + 16*20
+    attempts           = 256 #1 << 8
+    samples            = 384 #1024 + 16*20
     measure_amplitude  = 0.2
     measure_duration   = 250.0e-9
     measure_frequency  = 100e6
 
+    # arb
+    sample_rate = 12e9
+    repeat_time = 4*2.4e-6 # Picked very carefully for 100ns alignment
+
     # Sweep axes
-    gate_amps = np.linspace(0.0, 0.3, 20)
-    # gate_durs = np.linspace(100.0e-9, 250e-9, 5)
+    gate_amps = np.linspace(0.14, 0.4, 124) #np.linspace(0.14, 0.4, 40)#
+    gate_durs = np.arange(160e-12, 10e-9, 80e-12) #np.linspace(160e-12, 10e-9, 40)#
 
     # Things coming back
     voltage     = OutputConnector()
@@ -107,16 +106,16 @@ class nTronSwitchingExperiment(Experiment):
             'acquire_mode': 'digitizer',
             'bandwidth': 'Full',
             'clock_type': 'ref',
-            'delay': 0.0,
+            'delay': 850e-9,
             'enabled': True,
             'label': "Alazar",
             'record_length': self.samples,
-            'nbr_segments': len(self.gate_amps),#*len(self.gate_durs),
-            'nbr_waveforms': self.attempts,
-            'nbr_round_robins': 1,
+            'nbr_segments': len(self.gate_amps)*len(self.gate_durs),
+            'nbr_waveforms': 1,
+            'nbr_round_robins': self.attempts,
             'sampling_rate': 1e9,
             'trigger_coupling': 'DC',
-            'trigger_level': 250,
+            'trigger_level': 125,
             'trigger_slope': 'rising',
             'trigger_source': 'Ext',
             'vertical_coupling': 'AC',
@@ -128,14 +127,15 @@ class nTronSwitchingExperiment(Experiment):
 
         self.arb.set_output(True, channel=2)
         self.arb.set_output(True, channel=1)
-        self.arb.sample_freq = 10.0e9
+        self.arb.sample_freq = self.sample_rate
         self.arb.set_waveform_output_mode("WSPEED", channel=1)
         self.arb.set_waveform_output_mode("WSPEED", channel=2)
         self.arb.set_output_route("DC", channel=1)
         self.arb.set_output_route("DC", channel=2)
         self.arb.set_output_complement(False, channel=1)
         self.arb.set_output_complement(False, channel=2)
-        self.arb.voltage_amplitude = 1.0
+        self.arb.set_voltage_amplitude(1.0, channel=1)
+        self.arb.set_voltage_amplitude(1.0, channel=2)
         self.arb.continuous_mode = False
         self.arb.gate_mode = False
         self.arb.set_marker_level_low(0.0, channel=1, marker_type="sync")
@@ -143,20 +143,7 @@ class nTronSwitchingExperiment(Experiment):
         self.arb.set_marker_level_low(0.0, channel=2, marker_type="sync")
         self.arb.set_marker_level_high(1.5, channel=2, marker_type="sync")
 
-        # self.gate_bias.assign_method(self.setup_arb_gate_bias)
-        # self.gate_pulse_amplitude.assign_method(self.setup_arb_gate_pulse_amplitude)
-        # self.gate_pulse_duration.assign_method(self.setup_arb_gate_pulse_duration)
-
         self.setup_arb(self.gate_bias.value, self.gate_pulse_amplitude.value, self.gate_pulse_duration.value) # Sequencing goes here
-
-    # def setup_arb_gate_bias(self, gate_bias):
-    #     self.setup_arb(gate_bias, self.gate_pulse_amplitude.value, self.gate_pulse_duration.value)
-    #
-    # def setup_arb_gate_pulse_amplitude(self, gate_pulse_amplitude):
-    #     self.setup_arb(self.gate_bias.value, gate_pulse_amplitude, self.gate_pulse_duration.value)
-    #
-    # def setup_arb_gate_pulse_duration(self, gate_pulse_duration):
-    #     self.setup_arb(self.gate_bias.value, self.gate_pulse_amplitude.value, gate_pulse_duration)
 
     def setup_arb(self, gate_bias, gate_pulse_amplitude, gate_pulse_duration):
         self.arb.abort()
@@ -174,21 +161,19 @@ class nTronSwitchingExperiment(Experiment):
         seg_ids_ch1.append(seg_id)
 
         for amp in self.gate_amps:
-            # for dur in self.gate_durs:
-            # For the switching pulses along the gate
-            print(self.gate_pulse_duration)
-            wf      = switching_pulse(amplitude=amp, duration=self.gate_pulse_duration.value)
-            wf_data = KeysightM8190A.create_binary_wf_data(wf)
-            seg_id  = self.arb.define_waveform(len(wf_data), channel=2)
-            self.arb.upload_waveform(wf_data, seg_id, channel=2)
-            seg_ids_ch2.append(seg_id)
+            for dur in self.gate_durs:
+                # For the switching pulses along the gate
+                wf      = switching_pulse(amplitude=amp, duration=dur)#self.gate_pulse_duration.value)
+                wf_data = KeysightM8190A.create_binary_wf_data(wf)
+                seg_id  = self.arb.define_waveform(len(wf_data), channel=2)
+                self.arb.upload_waveform(wf_data, seg_id, channel=2)
+                seg_ids_ch2.append(seg_id)
 
         # Build in a delay between sequences
-        settle_pts = int(640*np.ceil(2e-6 * 10e9 / 640))
-
+        settle_pts = int(640*np.ceil(self.repeat_time * self.sample_rate / 640))
 
         scenario = Scenario()
-        seq = Sequence(sequence_loop_ct=self.attempts*len(self.gate_amps))#*len(self.gate_durs))
+        seq = Sequence(sequence_loop_ct=self.attempts*len(self.gate_amps)*len(self.gate_durs))
         for si in seg_ids_ch1:
             seq.add_waveform(si)
             seq.add_idle(settle_pts, 0.0)
@@ -217,7 +202,7 @@ class nTronSwitchingExperiment(Experiment):
         # Baked in data axes
         descrip = DataStreamDescriptor()
         descrip.add_axis(DataAxis("time", 1e-9*np.arange(self.samples)))
-        # descrip.add_axis(DataAxis("gate_pulse_duration", self.gate_durs))
+        descrip.add_axis(DataAxis("gate_pulse_duration", self.gate_durs))
         descrip.add_axis(DataAxis("gate_pulse_amplitude", self.gate_amps))
         descrip.add_axis(DataAxis("attempt", range(self.attempts)))
 
@@ -228,11 +213,12 @@ class nTronSwitchingExperiment(Experiment):
         self.arb.set_scenario_start_index(0, channel=1)
         self.arb.set_scenario_start_index(0, channel=2)
         self.arb.advance()
+        await asyncio.sleep(0.3)
         self.alz.acquire()
-        await asyncio.sleep(0.2)
+        await asyncio.sleep(0.3)
         self.arb.trigger()
-        await self.alz.wait_for_acquisition(100.0)
-        await asyncio.sleep(0.4)
+        await self.alz.wait_for_acquisition(10.0)
+        await asyncio.sleep(0.8)
         self.alz.stop()
         # Seemingly we need to give the filters some time to catch up here...
         await asyncio.sleep(0.02)
@@ -251,8 +237,8 @@ class nTronSwitchingExperiment(Experiment):
 
 if __name__ == '__main__':
     exp = nTronSwitchingExperiment()
-    plot = Plotter(name="Demod!", plot_mode="real", plot_dims=2)
-    plot_ki = Plotter(name="Ki!", plot_mode="real", plot_dims=2)
+    plot = Plotter(name="Demod!", plot_mode="real", plot_dims=1)
+    plot_ki = Plotter(name="Ki!", plot_mode="real", plot_dims=1)
     plot_avg = Plotter(name="Avg!", plot_mode="real")
     plot_raw1 = Plotter(name="Raw!", plot_mode="real", plot_dims=1)
     plot_raw2 = Plotter(name="Raw!", plot_mode="real", plot_dims=2)
@@ -261,29 +247,31 @@ if __name__ == '__main__':
     kernel_params['kernel'] = 0
     kernel_params['bias'] = 0
     kernel_params['simple_kernel'] = True
-    kernel_params['box_car_start'] =  9.0e-7
-    kernel_params['box_car_stop']  = 11.5e-7
+    kernel_params['box_car_start'] = 1e-7
+    kernel_params['box_car_stop']  = 3.8e-7
     kernel_params['frequency'] = 0.0
 
     ki = KernelIntegrator(**kernel_params)
     avg = Averager(axis="attempt")
 
     samp      = "c1r4"
-    file_path = f"data\\nTron-Switching\\{samp}\\{samp}-PulseSwitching-{datetime.datetime.today().strftime('%Y-%m-%d')}.h5"
+    file_path = f"data\\nTron-Switching\\{samp}\\{samp}-PulseSwitchingShort-{datetime.datetime.today().strftime('%Y-%m-%d')}.h5"
     # file_path = f"data\\nTron-Switching\\{samp}\\{samp}-PulseSwitching-{datetime.datetime.today().strftime('%Y-%m-%d-%H-%M')}.h5"
-    wr_int    = WriteToHDF5(file_path, groupname="Integrated")
-    wr_raw    = WriteToHDF5(file_path, groupname="Raw")
+    wr_int    = WriteToHDF5(file_path, groupname="Integrated", store_tuples=False)
+    wr_final  = WriteToHDF5(file_path, groupname="Final", store_tuples=False)
+    wr_raw    = WriteToHDF5(file_path, groupname="Raw", store_tuples=False)
 
     edges = [(exp.voltage, demod.sink),
-            (exp.voltage, wr_raw.sink),
-            (exp.voltage, plot_raw1.sink),
-            (exp.voltage, plot_raw2.sink),
+            # (exp.voltage, wr_raw.sink),
+            # (exp.voltage, plot_raw1.sink),
+            # (exp.voltage, plot_raw2.sink),
             (demod.source, ki.sink),
-            (ki.source, plot_ki.sink),
-            (ki.source, avg.sink),
+            # (ki.source, plot_ki.sink),
+            # (ki.source, avg.sink),
             (ki.source, wr_int.sink),
-            (avg.final_average, plot_avg.sink),
-            (demod.source, plot.sink)]
+            # (avg.final_average, plot_avg.sink),
+            # (demod.source, plot.sink),
+            ]
     exp.set_graph(edges)
 
     exp.run_sweeps()
