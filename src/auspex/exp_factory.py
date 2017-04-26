@@ -150,8 +150,6 @@ class QubitExpFactory(object):
 
                 instrument_settings['instrDict'][dig_name]['nbr_segments'] = num_segments
 
-                plotters = [e for e in endpoints if measurement_settings["filterDict"][e]["x__class__"] == "Plotter" and
-                                                   measurement_settings["filterDict"][e]["enabled"]]
                 if plotters:
                     plotter_ancestors = set().union(*[nx.ancestors(dag, pl) for pl in plotters])
                     plotter_ancestors.remove(dig_name)
