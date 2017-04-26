@@ -189,9 +189,9 @@ class KeysightM8190A(SCPIInstrument):
     output_route      = StringCommand(scpi_string=":OUTP{channel:d}:ROUT", allowed_values=["DAC","AC","DC"],
                          additional_args=["channel"])
 
-    voltage_amplitude = FloatCommand(scpi_string=":VOLT:AMPL")
+    voltage_amplitude = FloatCommand(scpi_string=":VOLT{channel:d}:AMPL", additional_args=['channel'])
     #TODO: voltage_amplitude for the different output routes
-    voltage_offset    = FloatCommand(scpi_string=":VOLT:OFFS")
+    voltage_offset    = FloatCommand(scpi_string=":VOLT{channel:d}:OFFS", additional_args=['channel'])
 
     marker_level_low  = FloatCommand(scpi_string=":MARK{channel:d}:{marker_type:s}:VOLT:LOW",
                          additional_args=["channel", "marker_type"]) # marker (sync/samp) low
