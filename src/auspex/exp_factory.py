@@ -94,14 +94,20 @@ class QubitExpFactory(object):
 
                 # Set number of segments in the digitizer
                 instrument_settings['instrDict'][dig_name]['nbr_segments'] = num_segments
-                # Find descendants of the channel selector
-                chan_descendants = nx.descendants(dag, chan_name)
-                # Find endpoints within the descendants
-                endpoints = [n for n in chan_descendants if dag.in_degree(n) == 1 and dag.out_degree(n) == 0]
-                # Find endpoints which are enabled writers
-                writers = [e for e in endpoints if measurement_settings["filterDict"][e]["x__class__"] == "WriteToHDF5" and
+                # Find other endpoints for the same X6 physical channel (but different streams)
+                if measurement_settings["filterDict"][chan_name]["x__class__"] == "X6StreamSelector":
+                    writers = []
+                    plotters = []
+                    for ch_name, ch in measurement_settings["filterDict"].items():
+                        if ch["data_source"] == measurement_settings["filterDict"][chan_name]["data_source"] and ch["phys_channel"] == measurement_settings["filterDict"][chan_name]["phys_channel"]:
+                            # Find descendants of the channel selector
+                            chan_descendants = nx.descendants(dag, ch_name)
+                            # Find endpoints within the descendants
+                            endpoints = [n for n in chan_descendants if dag.in_degree(n) == 1 and dag.out_degree(n) == 0]
+                            # Find endpoints which are enabled writers
+                            writers += [e for e in endpoints if measurement_settings["filterDict"][e]["x__class__"] == "WriteToHDF5" and
                                                    measurement_settings["filterDict"][e]["enabled"]]
-                plotters = [e for e in endpoints if measurement_settings["filterDict"][e]["x__class__"] == "Plotter" and
+                            plotters += [e for e in endpoints if measurement_settings["filterDict"][e]["x__class__"] == "Plotter" and
                                                    measurement_settings["filterDict"][e]["enabled"]]
                 # The user should only have one writer enabled, otherwise we will be confused.
                 if len(writers) > 1:
