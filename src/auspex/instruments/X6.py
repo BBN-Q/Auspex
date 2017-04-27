@@ -136,7 +136,7 @@ class X6(Instrument):
         elif channel.stream_type == "Demodulated":
             self._lib.set_nco_frequency(a, b, channel.if_freq)
         elif channel.stream_type == "Integrated":
-            if not channel.kernel is None:
+            if channel.kernel is None:
                 logger.error("Integrated streams must specify a kernel")
                 return
             self._lib.write_kernel(a, b, c, channel.kernel)
