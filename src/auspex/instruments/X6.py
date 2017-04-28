@@ -141,8 +141,8 @@ class X6(Instrument):
                 return
             self._lib.write_kernel(a, b, c, channel.kernel)
             self._lib.set_kernel_bias(a, b, c, channel.kernel_bias)
-            self._lib.set_threshold(a, b, channel.threshold)
-            self._lib.set_threshold_invert(a, b, channel.threshold_invert)
+            self._lib.set_threshold(a, c, channel.threshold)
+            self._lib.set_threshold_invert(a, c, channel.threshold_invert)
         else:
             logger.error("Unrecognized stream type %s" % channel.stream_type)
 
