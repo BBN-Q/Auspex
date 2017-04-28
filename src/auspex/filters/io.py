@@ -14,6 +14,7 @@ import zlib
 import numpy as np
 import os.path
 import time
+import re
 from shutil import copyfile
 
 from .filter import Filter
@@ -59,22 +60,22 @@ class WriteToHDF5(Filter):
             self.file = self.new_file()
 
     def new_filename(self):
-        # Increment the filename until we find one we want.
-        i = 0
         filename = self.filename.value
         ext = filename.find('.h5')
         if ext > -1:
             filename = filename[:ext]
+        dirname = os.path.dirname(filename)
         if self.add_date:
             date = time.strftime("%y%m%d")
-            dirname = os.path.dirname(filename)
             basename = os.path.basename(filename)
-            fulldir = os.path.join(dirname, date)
-            if not os.path.exists(fulldir):
-                os.mkdir(fulldir)
-            filename = os.path.join(fulldir, basename)
-        while os.path.exists("{}-{:04d}.h5".format(filename,i)):
-            i += 1
+            dirname = os.path.join(dirname, date)
+            filename = os.path.join(dirname, basename)
+        # Set the file number to the maximum in the current folder + 1
+        filenums = []
+        if os.path.exists(dirname):
+            for f in os.listdir(dirname):
+                filenums += [int(re.findall('-\d{4}', f)[0][1:])] if os.path.isfile(os.path.join(dirname, f)) else []
+        i = max(filenums) + 1 if filenums else 0
         return "{}-{:04d}.h5".format(filename,i)
 
     def new_file(self):
@@ -92,12 +93,7 @@ class WriteToHDF5(Filter):
         head = os.path.normpath(head)
         dirs = head.split(os.sep)
         # Check if path exists. If not, create new one(s).
-        fulldir = ''
-        for d in dirs:
-            fulldir = os.path.join(fulldir, d)
-            if not os.path.exists(fulldir):
-                logger.debug("Create new directory: {}.".format(fulldir))
-                os.mkdir(fulldir)
+        os.makedirs(head, exist_ok=True)
         logger.debug("Create new data file: %s." % self.filename.value)
         # Copy current settings to a folder with the file name
         if self.save_settings:
@@ -109,10 +105,10 @@ class WriteToHDF5(Filter):
         head = os.path.dirname(self.filename.value)
         fulldir = os.path.splitext(self.filename.value)[0]
         if not os.path.exists(fulldir):
-            os.mkdir(fulldir)
-        copyfile(config.instrumentLibFile, os.path.join(fulldir, os.path.split(config.instrumentLibFile)[1]))
-        copyfile(config.measurementLibFile, os.path.join(fulldir, os.path.split(config.measurementLibFile)[1]))
-        copyfile(config.sweepLibFile, os.path.join(fulldir, os.path.split(config.sweepLibFile)[1]))
+            os.makedirs(fulldir)
+            copyfile(config.instrumentLibFile, os.path.join(fulldir, os.path.split(config.instrumentLibFile)[1]))
+            copyfile(config.measurementLibFile, os.path.join(fulldir, os.path.split(config.measurementLibFile)[1]))
+            copyfile(config.sweepLibFile, os.path.join(fulldir, os.path.split(config.sweepLibFile)[1]))
 
     async def run(self):
         streams    = self.sink.input_streams
