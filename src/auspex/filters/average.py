@@ -56,9 +56,9 @@ class Averager(Filter):
     final_variance  = OutputConnector()
     axis            = Parameter(allowed_values=["round_robins", "segments", "time"])
 
-    def __init__(self, averaging_axis=None, **kwargs):
-        super(Averager, self).__init__(**kwargs)
-        self.axis.value = averaging_axis
+    def __init__(self, axis=None, **kwargs):
+        super(Averager, self).__init__(axis,**kwargs)
+        self.axis.value = axis
         self.points_before_final_average   = None
         self.points_before_partial_average = None
         self.sum_so_far = None
