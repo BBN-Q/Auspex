@@ -57,7 +57,7 @@ class Averager(Filter):
     axis            = Parameter()
 
     def __init__(self, axis=None, **kwargs):
-        super(Averager, self).__init__(axis,**kwargs)
+        super(Averager, self).__init__(**kwargs)
         self.axis.value = axis
         self.points_before_final_average   = None
         self.points_before_partial_average = None
