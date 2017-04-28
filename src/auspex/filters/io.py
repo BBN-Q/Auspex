@@ -305,7 +305,7 @@ class WriteToHDF5(Filter):
                 message_data = [pickle.loads(zlib.decompress(dat)) if comp == 'zlib' else dat for comp, dat in zip(message_comp, message_data)]
                 message_data = [dat if hasattr(dat, 'size') else np.array([dat]) for dat in message_data]  # Convert single values to arrays
 
-                for ii in range(1, len(message_data)):
+                for ii in range(len(message_data)):
                     if not hasattr(message_data[ii], 'size'):
                         message_data[ii] = np.array([message_data[ii]])
                     message_data[ii] = message_data[ii].flatten()
