@@ -109,6 +109,7 @@ class WriteToHDF5(Filter):
             copyfile(config.instrumentLibFile, os.path.join(fulldir, os.path.split(config.instrumentLibFile)[1]))
             copyfile(config.measurementLibFile, os.path.join(fulldir, os.path.split(config.measurementLibFile)[1]))
             copyfile(config.sweepLibFile, os.path.join(fulldir, os.path.split(config.sweepLibFile)[1]))
+            copyfile(config.channelLibFile, os.path.join(fulldir, os.path.split(config.channelLibFile)[1]))
 
     async def run(self):
         streams    = self.sink.input_streams
