@@ -8,7 +8,7 @@
 
 from QGL import *
 from QGL import config as QGLconfig
-from QGL.BasicSequences.helpers import create_cal_seqs, time_descriptor, cal_descriptor
+# from QGL.BasicSequences.helpers import create_cal_seqs, time_descriptor, cal_descriptor
 import auspex.config as config
 from copy import copy
 import os
@@ -113,7 +113,7 @@ class CavitySearch(PulseCalibration):
     def __init__(self, qubit_name, frequencies=np.linspace(4e9, 5e9, 1000)):
         super(CavitySearch, self).__init__(qubit_name)
         self.frequencies = frequencies
-        
+
     def sequence(self):
         return [[Id(self.qubit), MEAS(self.qubit)]]
 
@@ -138,7 +138,7 @@ class QubitSearch(PulseCalibration):
     def __init__(self, qubit_name, frequencies=np.linspace(4e9, 5e9, 1000)):
         super(QubitSearch, self).__init__(qubit_name)
         self.frequencies = frequencies
-        
+
     def sequence(self):
         return [[X(self.qubit), MEAS(self.qubit)]]
 
@@ -263,7 +263,7 @@ class PhaseEstimation(PulseCalibration):
             qubit = self.qubit
         # Exponentially growing repetitions of the target pulse, e.g.
         # (1, 2, 4, 8, 16, 32, 64, 128, ...) x X90
-        seqs = cal_pulse*n for n in 2**np.arange(self.num_pulses+1)]
+        seqs = [cal_pulse*n for n in 2**np.arange(self.num_pulses+1)]
         # measure each along Z or Y
         seqs = [s + m for s in seqs for m in [ [MEAS(qubit)], [X90m(qubit), MEAS(qubit)] ]]
         # tack on calibrations to the beginning
@@ -427,7 +427,7 @@ class CRLenCalibration(CRCalibration):
         self.axis_descriptor=[
             time_descriptor(np.concatenate((lengths, lengths))),
             cal_descriptor((qc, qt), 2)
-        ])
+        ]
 
         return seqs
 

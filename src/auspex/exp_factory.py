@@ -97,9 +97,9 @@ class QubitExpFactory(object):
                 writers = []
                 plotters = []
                 for ch_name, ch in measurement_settings["filterDict"].items():
-                    if ch_name == chan_name or measurement_settings["filterDict"][chan_name]["x__class__"] == "X6StreamSelector"
-                    and ch["data_source"] == measurement_settings["filterDict"][chan_name]["data_source"]
-                    and ch["phys_channel"] == measurement_settings["filterDict"][chan_name]["phys_channel"]:
+                    if ch_name == chan_name or measurement_settings["filterDict"][chan_name]["x__class__"] == "X6StreamSelector" \
+                        and ch["data_source"] == measurement_settings["filterDict"][chan_name]["data_source"] \
+                        and ch["phys_channel"] == measurement_settings["filterDict"][chan_name]["phys_channel"]:
                         # Find descendants of the channel selector
                         chan_descendants = nx.descendants(dag, ch_name)
                         # Find endpoints within the descendants
