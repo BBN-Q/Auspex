@@ -15,5 +15,6 @@ from .picosecond import Picosecond10070A
 from .rfmd import Attenuator
 from .stanford import SR830, SR865
 from .tektronix import DPO72004C
+from .vaunix import LabBrick
 from .X6 import X6, X6Channel
 from .yokogawa import GS200
