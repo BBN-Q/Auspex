@@ -35,13 +35,13 @@ class PulseCalibration(object):
     """Base class for calibration of qubit control pulses."""
     def __init__(self, qubit_names, notebook=True):
         super(PulseCalibration, self).__init__()
-        self.qubit_names = qubit_names if instance(qubit_names, list) else [qubit_names]
+        self.qubit_names = qubit_names if isinstance(qubit_names, list) else [qubit_names]
         self.qubit     = [QubitFactory(qubit_name) for qubit_name in qubit_names] if isinstance(qubit_names, list) else QubitFactory(qubit_names)
         self.filename   = 'None'
         self.exp        = None
         self.axis_descriptor = None
-        self.plot       = self.init_plot()
         self.notebook   = notebook
+        self.plot       = self.init_plot()
         with open(config.channelLibFile, 'r') as FID:
             self.chan_settings = json.load(FID)
         with open(config.instrumentLibFile, 'r') as FID:
@@ -75,7 +75,8 @@ class PulseCalibration(object):
         self.exp.run_sweeps()
         data = {}
         var = {}
-        data_buffers = [b for b in self.exp.buffers if b.name in self.exp.qubit_to_writer[self.qubit_names]]
+        writers = [self.exp.qubit_to_writer[qn] for qn in self.qubit_names]
+        data_buffers = [b for b in self.exp.buffers if b.name in writers]
 
         for buff in self.exp.buffers:
             if self.exp.writer_to_qubit[buff.name] in self.qubit_names:
@@ -110,7 +111,7 @@ class PulseCalibration(object):
                 json.dump(library, FID, cls=LibraryCoders.LibraryEncoder, indent=2, sort_keys=True)
 
 class CavitySearch(PulseCalibration):
-    def __init__(self, qubit_name, frequencies=np.linspace(4e9, 5e9, 1000)):
+    def __init__(self, qubit_name, frequencies=np.linspace(4, 5, 100)):
         super(CavitySearch, self).__init__(qubit_name)
         self.frequencies = frequencies
 
@@ -129,14 +130,13 @@ class CavitySearch(PulseCalibration):
         self.dat_line.data_source.data = dict(x=self.frequencies, y=data)
 
     def init_plot(self):
-        plot = ManualPlotter("Cavity Search", x_label='Frequency (GHz)', y_label='Amplitude (Arb. Units)')
         plot = ManualPlotter("Cavity Search", x_label='Frequency (GHz)', y_label='Amplitude (Arb. Units)', notebook=self.notebook)
         self.dat_line = plot.fig.line([],[], line_width=1.0, legend="Data", color='navy')
         self.fit_line = plot.fig.line([],[], line_width=2.5, legend="Fit", color='firebrick')
         return plot
 
 class QubitSearch(PulseCalibration):
-    def __init__(self, qubit_name, frequencies=np.linspace(4e9, 5e9, 1000)):
+    def __init__(self, qubit_name, frequencies=np.linspace(4, 5, 100)):
         super(QubitSearch, self).__init__(qubit_name)
         self.frequencies = frequencies
 
