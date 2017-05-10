@@ -455,12 +455,12 @@ class Experiment(metaclass=MetaExperiment):
                 p.session = session
 
             if run_in_notebook:
-                logger.info("Displaying in iPython notebook")
+                logger.debug("Displaying in iPython notebook")
                 from bokeh.embed import autoload_server, components
                 from bokeh.io import output_notebook
                 from IPython.display import display, HTML, clear_output
 
-                clear_output()
+                # clear_output()
                 output_notebook()
                 script = autoload_server(model=None, session_id=session.id)
                 html = \
