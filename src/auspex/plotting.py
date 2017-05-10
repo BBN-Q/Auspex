@@ -30,7 +30,7 @@ class BokehServerProcess(object):
             logger.info("Using existing Bokeh server")
             return
         logger.info("Starting Bokeh server")
-        args = ["bokeh", "serve", "--port", "5006", "--allow-websocket-origin=localhost:8888"]
+        args = ["bokeh", "serve", "--port", "5006", "--allow-websocket-origin=localhost:8888", "--allow-websocket-origin=localhost:8889", "--allow-websocket-origin=localhost:8890"]
         self.p = subprocess.Popen(args, env=os.environ.copy())
         self.write_session_pid()
         # sleep to give the Bokeh server a chance to start
