@@ -79,8 +79,8 @@ def fit_CR(xpoints, data, cal_type):
         yfit0 = sinf(x_fine[:round(abs(popt0[1])/2/(xpoints[1]-xpoints[0]))], *popt0)
         yfit1 = sinf(x_fine[:round(abs(popt1[1])/2/(xpoints[1]-xpoints[0]))], *popt1)
         #average between the two qc states, rounded to 10 ns
-        xopt = round((x_fine[np.argmin(abs(yfit0)] + x_fine[np.argmin(abs(yfit1)])/2/10e-9)*10e-9
-        print('CR length = %f ns'%xopt*1e9))
+        xopt = round((x_fine[np.argmin(abs(yfit0))] + x_fine[np.argmin(abs(yfit1))])/2/10e-9)*10e-9
+        print('CR length = %f ns'%xopt*1e9)
     elif cal_type == CR_cal_type.PHASE:
         p0 = [1, xpoints[-1], np.pi, 0]
         popt0, _ = curve_fit(sinf, x_fine, data0, p0 = p0)
