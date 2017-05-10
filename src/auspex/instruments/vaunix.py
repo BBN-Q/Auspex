@@ -21,11 +21,11 @@ class MakeSettersGetters(MetaInstrument):
 
         for k,v in dct.items():
             if isinstance(v, property):
-                logger.debug("Adding '%s' command to Holzworth", k)
+                logger.debug("Adding '%s' command to Labbrick", k)
                 setattr(self, 'set_'+k, v.fset)
                 setattr(self, 'get_'+k, v.fget)
 
-class LabBrick(Instrument, metaclass=MakeSettersGetters):
+class Labbrick(Instrument, metaclass=MakeSettersGetters):
     """Vaunix Lab Brick microwave source"""
     instrument_type = "Microwave Source"
 
