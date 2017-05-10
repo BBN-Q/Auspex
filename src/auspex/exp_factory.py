@@ -325,10 +325,13 @@ class QubitExpFactory(object):
                     avg_step = (data_axis['points'][-1] - data_axis['points'][0])/(len(data_axis['points'])-1)
                     points = np.append(data_axis['points'], data_axis['points'][-1] + (np.arange(len(meta_axis['points']))+1)*avg_step)
 
-                    experiment.segment_axis = DataAxis(data_axis['name'], points, unit=data_axis['unit'], metadata=metadata)
+                    # If there's only one segment we can probabluy ignore this axis
+                    if len(points) > 1:
+                        experiment.segment_axis = DataAxis(data_axis['name'], points, unit=data_axis['unit'], metadata=metadata)
 
                 else:
-                    experiment.segment_axis = DataAxis(data_axis['name'], data_axis['points'], unit=data_axis['unit'])
+                    if len(data_axis['points']) > 1:
+                        experiment.segment_axis = DataAxis(data_axis['name'], data_axis['points'], unit=data_axis['unit'])
 
     @staticmethod
     def load_parameter_sweeps(experiment):
@@ -425,7 +428,9 @@ class QubitExpFactory(object):
                 descrip.add_axis(experiment.segment_axis)
             else:
                 # This is the generic axis based on the instrument parameters
-                descrip.add_axis(DataAxis("segments",     range(source_instr_settings['nbr_segments'])))
+                # If there is only one segement, we should omit this axis.
+                if source_instr_settings['nbr_segments'] > 1:
+                    descrip.add_axis(DataAxis("segments", range(source_instr_settings['nbr_segments'])))
 
             # Digitizer mode preserves round_robins, averager mode collapsing along them:
             if source_instr_settings['acquire_mode'] == 'digitizer':
