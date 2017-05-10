@@ -19,7 +19,7 @@ install:
   - conda info -a
 
   # Create conda environment with dependencies
-  - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION numpy scipy bokeh matplotlib h5py pandas networkx cffi
+  - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION numpy scipy bokeh matplotlib h5py pandas networkx
   - source activate test-environment
   - pip install git+https://github.com/BBN-Q/Adapt.git
   - pip install tqdm pyvisa coveralls

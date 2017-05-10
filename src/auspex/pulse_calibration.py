@@ -35,7 +35,7 @@ class PulseCalibration(object):
     """Base class for calibration of qubit control pulses."""
     def __init__(self, qubit_names, notebook=True):
         super(PulseCalibration, self).__init__()
-        self.qubit_names = qubit_names if isinstance(qubit_names, list) else [qubit_names]
+        self.qubit_names = qubit_names if instance(qubit_names, list) else [qubit_names]
         self.qubit     = [QubitFactory(qubit_name) for qubit_name in qubit_names] if isinstance(qubit_names, list) else QubitFactory(qubit_names)
         self.filename   = 'None'
         self.exp        = None
