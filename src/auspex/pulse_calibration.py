@@ -130,6 +130,7 @@ class CavitySearch(PulseCalibration):
 
     def init_plot(self):
         plot = ManualPlotter("Cavity Search", x_label='Frequency (GHz)', y_label='Amplitude (Arb. Units)')
+        plot = ManualPlotter("Cavity Search", x_label='Frequency (GHz)', y_label='Amplitude (Arb. Units)', notebook=self.notebook)
         self.dat_line = plot.fig.line([],[], line_width=1.0, legend="Data", color='navy')
         self.fit_line = plot.fig.line([],[], line_width=2.5, legend="Fit", color='firebrick')
         return plot
@@ -154,7 +155,7 @@ class QubitSearch(PulseCalibration):
         self.dat_line.data_source.data = dict(x=self.frequencies, y=data)
 
     def init_plot(self):
-        plot = ManualPlotter("Qubit Search", x_label='Frequency (GHz)', y_label='Amplitude (Arb. Units)')
+        plot = ManualPlotter("Qubit Search", x_label='Frequency (GHz)', y_label='Amplitude (Arb. Units)', notebook=self.notebook)
         self.dat_line = plot.fig.line([],[], line_width=1.0, legend="Data", color='navy')
         self.fit_line = plot.fig.line([],[], line_width=2.5, legend="Fit", color='firebrick')
         return plot

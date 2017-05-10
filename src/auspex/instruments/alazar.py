@@ -158,7 +158,7 @@ class AlazarATS9870(Instrument):
                 break
             await asyncio.sleep(0.2)
 
-        logger.info("Digitizer %s finished getting data.", self.name)
+        logger.debug("Digitizer %s finished getting data.", self.name)
 
     def set_all(self, settings_dict):
         # Flatten the dict and then pass to super
