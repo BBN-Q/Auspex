@@ -6,6 +6,8 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
+__all__ = ['Channelizer']
+
 import os
 import platform
 from copy import deepcopy

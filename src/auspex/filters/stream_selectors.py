@@ -6,6 +6,8 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
+__all__ = ['AlazarStreamSelector', 'X6StreamSelector']
+
 from auspex.log import logger
 from auspex.instruments import *
 from auspex.parameter import Parameter, IntParameter
