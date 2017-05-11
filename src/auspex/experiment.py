@@ -476,22 +476,9 @@ class Experiment(metaclass=MetaExperiment):
             else:
                 session.show(container)
 
-        def shutdown():
-            logger.debug("Shutting Down!")
-
-            for f in self.files:
-                try:
-                    logger.debug("Closing %s", f)
-                    f.close()
-                    del f
-                except:
-                    logger.debug("File probably already closed...")
-            self.shutdown_instruments()
-            self.disconnect_instruments()
-
         def catch_ctrl_c(signum, frame):
             logger.info("Caught SIGINT. Shutting down.")
-            shutdown()
+            self.shutdown()
             raise NameError("Shutting down.")
             sys.exit(0)
 
@@ -512,7 +499,20 @@ class Experiment(metaclass=MetaExperiment):
             if callback:
                 callback(plot.fig)
 
-        shutdown()
+        self.shutdown()
+
+    def shutdown(self):
+        logger.debug("Shutting Down!")
+
+        for f in self.files:
+            try:
+                logger.debug("Closing %s", f)
+                f.close()
+                del f
+            except:
+                logger.debug("File probably already closed...")
+        self.shutdown_instruments()
+        self.disconnect_instruments()
 
     def add_axis(self, axis):
         for oc in self.output_connectors.values():

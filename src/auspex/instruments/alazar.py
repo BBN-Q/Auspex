@@ -155,7 +155,7 @@ class AlazarATS9870(Instrument):
         while not self.done():
             if (datetime.datetime.now() - self.last_timestamp).seconds > timeout:
                 logger.error("Digitizer %s timed out.", self.name)
-                break
+                raise Exception("Alazar timed out.")
             await asyncio.sleep(0.2)
 
         logger.debug("Digitizer %s finished getting data.", self.name)

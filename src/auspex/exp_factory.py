@@ -43,7 +43,7 @@ class QubitExpFactory(object):
     will override the defaulty JSON."""
 
     @staticmethod
-    def run(notebook=False, expname=None, meta_file=None, calibration=False):
+    def run(meta_file=None, notebook=False, expname=None, calibration=False):
         exp = QubitExpFactory.create(meta_file=meta_file, notebook=notebook, expname=expname, calibration=calibration)
         exp.run_sweeps()
 
@@ -235,8 +235,12 @@ class QubitExpFactory(object):
 
                 # Wait for all of the acquisitions to complete
                 timeout = 10
-                await asyncio.wait([dig.wait_for_acquisition(timeout)
-                    for dig in self.digitizers])
+                try:
+                    await asyncio.gather(*[dig.wait_for_acquisition(timeout) for dig in self.digitizers])
+                except Exception as e:
+                    logger.error("Received exception %s in run loop. Bailing", repr(e))
+                    self.shutdown()
+                    sys.exit(0)
 
                 for dig in self.digitizers:
                     dig.stop()
