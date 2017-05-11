@@ -173,6 +173,7 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
 
     def disconnect(self):
         if self.resource_name and self.connected:
+            self.stop()
             self.wrapper.disconnect()
             self.connected = False
 
