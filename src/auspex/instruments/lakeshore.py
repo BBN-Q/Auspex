@@ -6,6 +6,8 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
+__all__ = ['LakeShore370', 'LakeShore335']
+
 from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand, Command
 import numpy as np
 

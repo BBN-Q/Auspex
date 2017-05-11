@@ -6,6 +6,8 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
+__all__ = ['Labbrick']
+
 from .instrument import Instrument, MetaInstrument
 from auspex.log import logger
 import time

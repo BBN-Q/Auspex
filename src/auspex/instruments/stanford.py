@@ -6,6 +6,8 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
+__all__ = ['SR830', 'SR865']
+
 from auspex.log import logger
 from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand, Command
 import numpy as np

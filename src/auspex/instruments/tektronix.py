@@ -6,6 +6,8 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
+__all__ = ['DPO72004C']
+
 from auspex.log import logger
 from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand
 import numpy as np
