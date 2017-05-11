@@ -209,6 +209,7 @@ class AlazarATS9870(Instrument):
             socket.close()
         self._chan_to_rsocket.clear()
         self._chan_to_wsocket.clear()
+        self._lib.unregister_sockets()
 
     def __del__(self):
         self.disconnect()
