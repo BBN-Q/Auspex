@@ -43,12 +43,13 @@ class QubitExpFactory(object):
     will override the defaulty JSON."""
 
     @staticmethod
-    def run(meta_file=None, notebook=False, expname=None, calibration=False):
-        exp = QubitExpFactory.create(meta_file=meta_file, notebook=notebook, expname=expname, calibration=calibration)
+    def run(meta_file=None, notebook=False, expname=None, calibration=False, cw_mode=False):
+        exp = QubitExpFactory.create(meta_file=meta_file, notebook=notebook, expname=expname,
+                                     calibration=calibration, cw_mode=cw_mode)
         exp.run_sweeps()
 
     @staticmethod
-    def create(meta_file=None, notebook=False, expname=None, calibration=False):
+    def create(meta_file=None, notebook=False, expname=None, calibration=False, cw_mode=False):
         with open(config.instrumentLibFile, 'r') as FID:
             instrument_settings = json.load(FID)
 
@@ -218,8 +219,15 @@ class QubitExpFactory(object):
                     oc = self.chan_to_oc[chan]
                     self.loop.add_reader(socket, dig.receive_data, chan, oc)
 
+                if self.cw_mode:
+                    for awg in self.awgs:
+                        awg.run()
+
             def shutdown_instruments(self):
                 # remove socket readers
+                if self.cw_mode:
+                    for awg in self.awgs:
+                        awg.stop()
                 for chan, dig in self.chan_to_dig.items():
                     socket = dig.get_socket(chan)
                     self.loop.remove_reader(socket)
@@ -230,8 +238,9 @@ class QubitExpFactory(object):
                 """This is run for each step in a sweep."""
                 for dig in self.digitizers:
                     dig.acquire()
-                for awg in self.awgs:
-                    awg.run()
+                if not self.cw_mode:
+                    for awg in self.awgs:
+                        awg.run()
 
                 # Wait for all of the acquisitions to complete
                 timeout = 10
@@ -244,11 +253,9 @@ class QubitExpFactory(object):
 
                 for dig in self.digitizers:
                     dig.stop()
-                for awg in self.awgs:
-                    awg.stop()
-
-                # hack to try to get plots to finish updating before we exit
-                await asyncio.sleep(2)
+                if not self.cw_mode:
+                    for awg in self.awgs:
+                        awg.stop()
 
         experiment = QubitExperiment()
         experiment.instrument_settings  = instrument_settings
@@ -256,6 +263,7 @@ class QubitExpFactory(object):
         experiment.sweep_settings       = sweep_settings
         experiment.run_in_notebook = notebook
         experiment.name = expname
+        experiment.cw_mode = cw_mode
 
         experiment.qubit_to_writer = qubit_to_writer
         experiment.writer_to_qubit = writer_to_qubit

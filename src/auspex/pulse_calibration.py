@@ -42,6 +42,7 @@ class PulseCalibration(object):
         self.axis_descriptor = None
         self.notebook   = notebook
         self.plot       = self.init_plot()
+        self.cw_mode    = False
         with open(config.channelLibFile, 'r') as FID:
             self.chan_settings = json.load(FID)
         with open(config.instrumentLibFile, 'r') as FID:
@@ -54,7 +55,7 @@ class PulseCalibration(object):
     def set(self, instrs_to_set = []):
         seq_files = compile_to_hardware(self.sequence(), fileName=self.filename, axis_descriptor=self.axis_descriptor)
         metafileName = os.path.join(QGLconfig.AWGDir, self.filename + '-meta.json')
-        self.exp = QubitExpFactory.create(meta_file=metafileName, notebook=self.notebook, calibration=True)
+        self.exp = QubitExpFactory.create(meta_file=metafileName, notebook=self.notebook, calibration=True, cw_mode=self.cw_mode)
         if self.plot:
             # Add the manual plotter and the update method to the experiment
             self.exp.add_manual_plotter(self.plot)
@@ -114,6 +115,7 @@ class CavitySearch(PulseCalibration):
     def __init__(self, qubit_name, frequencies=np.linspace(4, 5, 100)):
         super(CavitySearch, self).__init__(qubit_name)
         self.frequencies = frequencies
+        self.cw_mode = True
 
     def sequence(self):
         return [[Id(self.qubit), MEAS(self.qubit)]]
@@ -139,7 +141,8 @@ class QubitSearch(PulseCalibration):
     def __init__(self, qubit_name, frequencies=np.linspace(4, 5, 100)):
         super(QubitSearch, self).__init__(qubit_name)
         self.frequencies = frequencies
-
+        self.cw_mode = True
+        
     def sequence(self):
         return [[X(self.qubit), MEAS(self.qubit)]]
 

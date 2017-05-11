@@ -374,6 +374,7 @@ class Experiment(metaclass=MetaExperiment):
         self.instrs_connected = False
 
     def run_sweeps(self, ):
+    def run_sweeps(self):
         #connect all instruments
         if not self.instrs_connected:
             self.connect_instruments()
@@ -494,6 +495,7 @@ class Experiment(metaclass=MetaExperiment):
 
         tasks.append(self.sweep())
         self.loop.run_until_complete(asyncio.gather(*tasks))
+        self.loop.run_until_complete(asyncio.sleep(1))
 
         for plot, callback in zip(self.manual_plotters, self.manual_plotter_callbacks):
             if callback:
