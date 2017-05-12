@@ -373,7 +373,6 @@ class Experiment(metaclass=MetaExperiment):
             instrument.disconnect()
         self.instrs_connected = False
 
-    def run_sweeps(self, ):
     def run_sweeps(self):
         #connect all instruments
         if not self.instrs_connected:
