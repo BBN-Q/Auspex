@@ -8,7 +8,7 @@
 
 from QGL import *
 from QGL import config as QGLconfig
-from QGL.BasicSequences.helpers import create_cal_seqs, time_descriptor, cal_descriptor
+# from QGL.BasicSequences.helpers import create_cal_seqs, time_descriptor, cal_descriptor
 import auspex.config as config
 from copy import copy
 import os
@@ -35,15 +35,18 @@ class PulseCalibration(object):
     """Base class for calibration of qubit control pulses."""
     def __init__(self, qubit_names, notebook=True):
         super(PulseCalibration, self).__init__()
-        self.qubit_names = qubit_names if instance(qubit_names, list) else [qubit_names]
+        self.qubit_names = qubit_names if isinstance(qubit_names, list) else [qubit_names]
         self.qubit     = [QubitFactory(qubit_name) for qubit_name in qubit_names] if isinstance(qubit_names, list) else QubitFactory(qubit_names)
         self.filename   = 'None'
         self.exp        = None
         self.axis_descriptor = None
-        self.plot       = self.init_plot()
         self.notebook   = notebook
+        self.plot       = self.init_plot()
+        self.cw_mode    = False
         with open(config.channelLibFile, 'r') as FID:
             self.chan_settings = json.load(FID)
+        with open(config.instrumentLibFile, 'r') as FID:
+            self.instr_settings = json.load(FID)
 
     def sequence(self):
         """Returns the sequence for the given calibration, must be overridden"""
@@ -52,7 +55,7 @@ class PulseCalibration(object):
     def set(self, instrs_to_set = []):
         seq_files = compile_to_hardware(self.sequence(), fileName=self.filename, axis_descriptor=self.axis_descriptor)
         metafileName = os.path.join(QGLconfig.AWGDir, self.filename + '-meta.json')
-        self.exp = QubitExpFactory.create(meta_file=metafileName, notebook=self.notebook, calibration=True)
+        self.exp = QubitExpFactory.create(meta_file=metafileName, notebook=self.notebook, calibration=True, cw_mode=self.cw_mode)
         if self.plot:
             # Add the manual plotter and the update method to the experiment
             self.exp.add_manual_plotter(self.plot)
@@ -61,14 +64,20 @@ class PulseCalibration(object):
         for instr_to_set in instrs_to_set:
             par = FloatParameter()
             par.assign_method(getattr(self.exp._instruments[instr_to_set['instr']], instr_to_set['method']))
-            par.value = instr_to_set['value']
-            par.push()
+            # Either sweep or set single value
+            if 'sweep_values' in instr_to_set.keys():
+                par.value = instr_to_set['sweep_values'][0]
+                self.exp.add_sweep(par, instr_to_set['sweep_values'])
+            else:
+                par.value = instr_to_set['value']
+                par.push()
 
     def run(self):
         self.exp.run_sweeps()
         data = {}
         var = {}
-        data_buffers = [b for b in self.exp.buffers if b.name in self.exp.qubit_to_writer[self.qubit_names]]
+        writers = [self.exp.qubit_to_writer[qn] for qn in self.qubit_names]
+        data_buffers = [b for b in self.exp.buffers if b.name in writers]
 
         for buff in self.exp.buffers:
             if self.exp.writer_to_qubit[buff.name] in self.qubit_names:
@@ -102,6 +111,58 @@ class PulseCalibration(object):
             with open(filename, 'w') as FID:
                 json.dump(library, FID, cls=LibraryCoders.LibraryEncoder, indent=2, sort_keys=True)
 
+class CavitySearch(PulseCalibration):
+    def __init__(self, qubit_name, frequencies=np.linspace(4, 5, 100)):
+        super(CavitySearch, self).__init__(qubit_name)
+        self.frequencies = frequencies
+        self.cw_mode = True
+
+    def sequence(self):
+        return [[Id(self.qubit), MEAS(self.qubit)]]
+
+    def calibrate(self):
+        #find cavity source from config
+        cavity_source = self.chan_settings['channelDict'][self.chan_settings['channelDict']['M-'+self.qubit_names[0]]['physChan']]['generator']
+        orig_freq = self.instr_settings['instrDict'][cavity_source]['frequency']
+        instr_to_set = {'instr': cavity_source, 'method': 'set_frequency', 'sweep_values': self.frequencies}
+        self.set([instr_to_set])
+        data, _ = self.run()
+
+        # Plot the results
+        self.dat_line.data_source.data = dict(x=self.frequencies, y=data)
+
+    def init_plot(self):
+        plot = ManualPlotter("Cavity Search", x_label='Frequency (GHz)', y_label='Amplitude (Arb. Units)', notebook=self.notebook)
+        self.dat_line = plot.fig.line([],[], line_width=1.0, legend="Data", color='navy')
+        self.fit_line = plot.fig.line([],[], line_width=2.5, legend="Fit", color='firebrick')
+        return plot
+
+class QubitSearch(PulseCalibration):
+    def __init__(self, qubit_name, frequencies=np.linspace(4, 5, 100)):
+        super(QubitSearch, self).__init__(qubit_name)
+        self.frequencies = frequencies
+        self.cw_mode = True
+        
+    def sequence(self):
+        return [[X(self.qubit), MEAS(self.qubit)]]
+
+    def calibrate(self):
+        #find qubit control source from config
+        qubit_source = self.chan_settings['channelDict'][self.chan_settings['channelDict'][self.qubit_names[0]]['physChan']]['generator']
+        orig_freq = self.instr_settings['instrDict'][qubit_source]['frequency']
+        instr_to_set = {'instr': qubit_source, 'method': 'set_frequency', 'sweep_values': self.frequencies}
+        self.set([instr_to_set])
+        data, _ = self.run()
+
+        # Plot the results
+        self.dat_line.data_source.data = dict(x=self.frequencies, y=data)
+
+    def init_plot(self):
+        plot = ManualPlotter("Qubit Search", x_label='Frequency (GHz)', y_label='Amplitude (Arb. Units)', notebook=self.notebook)
+        self.dat_line = plot.fig.line([],[], line_width=1.0, legend="Data", color='navy')
+        self.fit_line = plot.fig.line([],[], line_width=2.5, legend="Fit", color='firebrick')
+        return plot
+
 class RabiAmpCalibration(PulseCalibration):
     def __init__(self, qubit_name, amps=np.linspace(0.0, 1.0, 51)):
         super(RabiAmpCalibration, self).__init__(qubit_name)
@@ -130,12 +191,9 @@ class RamseyCalibration(PulseCalibration):
         return plot
 
     def calibrate(self):
-
         #find qubit control source (from config)
-        with open(config.instrumentLibFile, 'r') as FID:
-            instr_settings = json.load(FID)
         qubit_source = self.chan_settings['channelDict'][self.chan_settings['channelDict'][self.qubit_names[0]]['physChan']]['generator']
-        orig_freq = instr_settings['instrDict'][qubit_source]['frequency']
+        orig_freq = self.instr_settings['instrDict'][qubit_source]['frequency']
         set_freq = round(orig_freq + self.added_detuning/1e9, 10)
         instr_to_set = {'instr': qubit_source, 'method': 'set_frequency', 'value': set_freq}
         self.set([instr_to_set])
@@ -171,8 +229,8 @@ class RamseyCalibration(PulseCalibration):
         else:
             fit_freq = round(orig_freq + self.added_detuning/1e9 - 0.5*(fit_freq_A - 0.5*fit_freq_A + fit_freq_B)/1e9, 10)
         if self.set_source:
-            instr_settings['instrDict'][qubit_source]['frequency'] = fit_freq
-            self.update_libraries([instr_settings], [config.instrumentLibFile])
+            self.instr_settings['instrDict'][qubit_source]['frequency'] = fit_freq
+            self.update_libraries([self.instr_settings], [config.instrumentLibFile])
         else:
             self.chan_settings['channelDict'][self.qubit_names[0]]['frequency'] += (fit_freq - orig_freq)*1e9
             self.update_libraries([self.chan_settings], [config.channelLibFile])
@@ -209,7 +267,7 @@ class PhaseEstimation(PulseCalibration):
             qubit = self.qubit
         # Exponentially growing repetitions of the target pulse, e.g.
         # (1, 2, 4, 8, 16, 32, 64, 128, ...) x X90
-        seqs = cal_pulse*n for n in 2**np.arange(self.num_pulses+1)]
+        seqs = [cal_pulse*n for n in 2**np.arange(self.num_pulses+1)]
         # measure each along Z or Y
         seqs = [s + m for s in seqs for m in [ [MEAS(qubit)], [X90m(qubit), MEAS(qubit)] ]]
         # tack on calibrations to the beginning
@@ -373,7 +431,7 @@ class CRLenCalibration(CRCalibration):
         self.axis_descriptor=[
             time_descriptor(np.concatenate((lengths, lengths))),
             cal_descriptor((qc, qt), 2)
-        ])
+        ]
 
         return seqs
 

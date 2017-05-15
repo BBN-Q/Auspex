@@ -6,7 +6,7 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-
+__all__ = ['APS2', 'DigitalAttenuator']
 
 from .instrument import Instrument, SCPIInstrument, VisaInterface, MetaInstrument
 from auspex.log import logger
@@ -173,6 +173,7 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
 
     def disconnect(self):
         if self.resource_name and self.connected:
+            self.stop()
             self.wrapper.disconnect()
             self.connected = False
 

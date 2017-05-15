@@ -6,6 +6,8 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
+__all__ = ['KeysightM8190A', 'Sequence', 'Scenario']
+
 from auspex.log import logger
 from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand
 from .binutils import BitField, BitFieldUnion

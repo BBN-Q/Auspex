@@ -6,6 +6,8 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
+__all__ = ['Electromagnet']
+
 import numpy as np
 import time
 from auspex.log import logger

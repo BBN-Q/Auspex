@@ -373,7 +373,7 @@ class Experiment(metaclass=MetaExperiment):
             instrument.disconnect()
         self.instrs_connected = False
 
-    def run_sweeps(self, ):
+    def run_sweeps(self):
         #connect all instruments
         if not self.instrs_connected:
             self.connect_instruments()
@@ -455,12 +455,12 @@ class Experiment(metaclass=MetaExperiment):
                 p.session = session
 
             if run_in_notebook:
-                logger.info("Displaying in iPython notebook")
+                logger.debug("Displaying in iPython notebook")
                 from bokeh.embed import autoload_server, components
                 from bokeh.io import output_notebook
                 from IPython.display import display, HTML, clear_output
 
-                clear_output()
+                # clear_output()
                 output_notebook()
                 script = autoload_server(model=None, session_id=session.id)
                 html = \
@@ -476,22 +476,9 @@ class Experiment(metaclass=MetaExperiment):
             else:
                 session.show(container)
 
-        def shutdown():
-            logger.debug("Shutting Down!")
-
-            for f in self.files:
-                try:
-                    logger.debug("Closing %s", f)
-                    f.close()
-                    del f
-                except:
-                    logger.debug("File probably already closed...")
-            self.shutdown_instruments()
-            self.disconnect_instruments()
-
         def catch_ctrl_c(signum, frame):
             logger.info("Caught SIGINT. Shutting down.")
-            shutdown()
+            self.shutdown()
             raise NameError("Shutting down.")
             sys.exit(0)
 
@@ -507,12 +494,26 @@ class Experiment(metaclass=MetaExperiment):
 
         tasks.append(self.sweep())
         self.loop.run_until_complete(asyncio.gather(*tasks))
+        self.loop.run_until_complete(asyncio.sleep(1))
 
         for plot, callback in zip(self.manual_plotters, self.manual_plotter_callbacks):
             if callback:
                 callback(plot.fig)
 
-        shutdown()
+        self.shutdown()
+
+    def shutdown(self):
+        logger.debug("Shutting Down!")
+
+        for f in self.files:
+            try:
+                logger.debug("Closing %s", f)
+                f.close()
+                del f
+            except:
+                logger.debug("File probably already closed...")
+        self.shutdown_instruments()
+        self.disconnect_instruments()
 
     def add_axis(self, axis):
         for oc in self.output_connectors.values():

@@ -6,6 +6,8 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
+__all__ = ['Plotter', 'ManualPlotter', 'XYPlotter', 'MeshPlotter']
+
 import time
 
 import numpy as np
@@ -396,7 +398,7 @@ class XYPlotter(Filter):
 
 class ManualPlotter(object):
     """Establish a figure, then give the user complete control over plot creation and data."""
-    def __init__(self,  name="", x_label='X', y_label="y", notebook=False,):
+    def __init__(self,  name="", x_label='X', y_label="y", notebook=False):
         self.plot_height  = 600
         self.webgl        = False
         self.x_label      = x_label
