@@ -389,6 +389,24 @@ def load_BER_data(filename_or_fileobject, start_state=None, group="main",
 
     return voltages, means, limits, ci68s, ci95s
 
+def nTron_IQ(data, desc, rotate=True):
+    iq_vals = data['Integrated']['Data']
+    iq_vals -= iq_vals.mean()
+    if rotate:
+        slope, offset = np.polyfit(iq_vals.real, iq_vals.imag, 1)
+        angle = np.arctan(slope)
+        iq_vals *= np.exp(-1j*angle)
+    return iq_vals
+
+def nTron_IQ_plot(iq_vals, desc, threshold=0.0):
+    iq_vals = iq_vals.real < threshold
+    iqr = iq_vals.reshape(desc['Integrated'].dims(), order='C')
+    iqrm = np.mean(iqr, axis=0)
+    extent = (0.18, 10, 0.14, 0.40)
+    aspect = 9.84/0.34
+    plt.imshow(iqrm, origin='lower', cmap='RdGy', extent=extent, aspect=aspect)
+
+
 # def plot_BER(volts, multidata, **kwargs):
 #     ber_dat = [switching_BER(data, **kwargs) for data in multidata]
 #     mean = []; limit = []; ci68 = []; ci95 = []
