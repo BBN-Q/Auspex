@@ -61,7 +61,7 @@ class IVExperiment(Experiment):
         # self.frequency.assign_method(self.awg.set_frequency)
 
         # Setup the NIDAQ
-        max_voltage = 10.0 #self.amplitude.value*2.0
+        max_voltage = 2.0 #self.amplitude.value*2.0
         self.num_samples_total = int(self.sample_rate*(self.num_bursts+2)/self.frequency)
         self.num_samples_trimmed = int(self.sample_rate*(self.num_bursts)/self.frequency)
         self.trim_len = int(self.sample_rate/self.frequency)
@@ -80,7 +80,7 @@ class IVExperiment(Experiment):
 
     def shutdown_instruments(self):
         self.awg.output     = False
-        self.awg.auto_range = True
+        # self.awg.auto_range = True
         try:
             self.analog_input.StopTask()
             self.analog_input.ClearTask()

@@ -38,8 +38,9 @@ class IcLockinExperiment(Experiment):
 		# self.keith.current = self.measure_current.value
 
 		# Initialize lockin
-		self.lock.amp = self.sense
+		self.lock.amp = self.sense*self.R_ref
 		#self.lock.tc  = self.integration_time
+		self.delay = self.lock.measure_delay()
 
 		# Define source method
 		self.source.assign_method(self.set_source)
@@ -54,6 +55,7 @@ class IcLockinExperiment(Experiment):
 	async def run(self):
 		"""This is run for each step in a sweep."""
 
+		await asyncio.sleep(self.delay)
 		R_load = self.lock.mag/(self.sense - self.lock.mag)*self.R_ref
 		await self.resistance.push(R_load)
 		await self.current.push(self.lock.dc/(self.R_ref+R_load))
