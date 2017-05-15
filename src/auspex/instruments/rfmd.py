@@ -6,17 +6,19 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
+__all__ = ['RFMDAttenuator']
+
 import numpy as np
 import pandas as pd
 from scipy.interpolate import interp1d
 from auspex.log import logger
 
-class Attenuator(object):
+class RFMDAttenuator(object):
     """Simple wrapper for using the RFMD voltage controller attenuator.
     Remember that the calibration values for attenuation will be referenced
     to a certain point in the circuit."""
     def __init__(self, calibration_file, voltage_supply_method, voltage_control_method):
-        super(Attenuator, self).__init__()
+        super(RFMDAttenuator, self).__init__()
         self.name = "RFMD VC Attenuator"
         df = pd.read_csv(calibration_file, sep=",")
         attenuator_interp = interp1d(df["Attenuation"], df["Control Voltage"])

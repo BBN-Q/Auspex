@@ -1,12 +1,9 @@
 __all__ = ['libchannelizer']
 
-from .average import Averager
-from .channelizer import Channelizer
-from .correlator import ElementwiseFilter, Correlator
-from .debug import Print, Passthrough
-from .elementwise import ElementwiseFilter
-from .filter import Filter
-from .integrator import KernelIntegrator
-from .io import WriteToHDF5, DataBuffer, ProgressBar
-from .plot import Plotter, MeshPlotter, XYPlotter
-from .stream_selectors import AlazarStreamSelector, X6StreamSelector
+import pkgutil
+import importlib
+
+for loader, name, is_pkg in pkgutil.iter_modules(__path__):
+	module = importlib.import_module('auspex.filters.' + name)
+	if hasattr(module, "__all__"):
+		globals().update((name, getattr(module, name)) for name in module.__all__)

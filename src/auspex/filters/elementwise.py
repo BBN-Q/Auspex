@@ -6,6 +6,8 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
+__all__ = ['ElementwiseFilter']
+
 import asyncio, concurrent
 import h5py
 import itertools

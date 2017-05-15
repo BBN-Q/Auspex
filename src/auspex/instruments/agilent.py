@@ -6,6 +6,8 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
+__all__ = ['Agilent33220A', 'Agilent34970A', 'AgilentE8363C', 'AgilentN5183A', 'AgilentE9010A']
+
 import socket
 import time
 import re

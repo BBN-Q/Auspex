@@ -6,6 +6,8 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
+__all__ = ['PrologixSocketResource']
+
 import os
 import numpy as np
 import socket

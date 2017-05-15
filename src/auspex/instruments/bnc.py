@@ -6,6 +6,8 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
+__all__ = ['BNC845']
+
 from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand, is_valid_ipv4
 from auspex.log import logger
 import time

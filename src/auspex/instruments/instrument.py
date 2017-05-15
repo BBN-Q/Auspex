@@ -1,3 +1,8 @@
+# __all__ = ['Command', 'FloatCommand', 'StringCommand', 'IntCommand', 'RampCommand', 
+#             'SCPICommand', 
+#             'DigitizerChannel', 
+__all__ = ['Instrument'] # 'SCPIInstrument', 'CLibInstrument', 'MetaInstrument']
+
 import numpy as np
 import os
 import time

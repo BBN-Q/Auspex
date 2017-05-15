@@ -6,6 +6,8 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
+__all__ = ['AlazarATS9870', 'AlazarChannel']
+
 import re
 import socket
 import struct

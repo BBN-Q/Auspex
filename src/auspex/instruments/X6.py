@@ -6,6 +6,8 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
+__all__ = ['X6Channel', 'X6']
+
 import socket
 import struct
 import datetime
