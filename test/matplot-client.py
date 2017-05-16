@@ -41,18 +41,18 @@ class ZeroMQ_Listener(QtCore.QObject):
 
     message = QtCore.pyqtSignal(tuple)
     
-    def __init__(self, session_name):
+    def __init__(self, session_name, port=5556):
         QtCore.QObject.__init__(self)
         context = zmq.Context()
         self.socket = context.socket(zmq.SUB)
-        self.socket.connect ("tcp://localhost:5556")
+        self.socket.connect (f"tcp://localhost:{port}")
         self.socket.setsockopt_string(zmq.SUBSCRIBE, session_name)
         self.running = True
     
     def loop(self):
         while self.running:
-            session, array = recv_array(self.socket)
-            self.message.emit((session, array))
+            mesg = recv_array(self.socket)
+            self.message.emit(mesg)
 
 class MplCanvas(FigureCanvas):
     """Ultimately, this is a QWidget (as well as a FigureCanvasAgg, etc.)."""
@@ -76,37 +76,18 @@ class MplCanvas(FigureCanvas):
 
 
 class StaticMplCanvas(MplCanvas):
-    """Simple canvas with a sine plot."""
-
     def compute_initial_figure(self):
         t = np.arange(0.0, 3.0, 0.01)
         s = np.sin(2*np.pi*t)
-        self.axes.plot(t, s)
+        self.plt, = self.axes.plot(t, s)
 
     def update_figure(self, data):
-        self.axes.cla()
-        self.axes.plot(np.arange(len(data)), data, 'b')
+        self.plt.set_xdata(np.arange(len(data)))
+        self.plt.set_ydata(data)
+        self.axes.relim()
+        self.axes.autoscale_view()
         self.draw()
-
-# class DynamicMplCanvas(MplCanvas):
-#     """A canvas that updates itself every second with a new plot."""
-
-#     def __init__(self, *args, **kwargs):
-#         MplCanvas.__init__(self, *args, **kwargs)
-#         timer = QtCore.QTimer(self)
-#         timer.timeout.connect(self.update_figure)
-#         timer.start(1000)
-
-#     def compute_initial_figure(self):
-#         self.axes.plot(np.arange(40)/40.0, [np.random.randint(0, 10) for i in range(40)], 'r')
-
-#     def update_figure(self):
-#         # Build a list of 4 random integers between 0 and 10 (both inclusive)
-#         l = [np.random.randint(0, 10) for i in range(40)]
-#         self.axes.cla()
-#         self.axes.plot(np.arange(40)/40.0, l, 'r')
-#         self.draw()
-
+        self.flush_events()
 
 class ApplicationWindow(QtWidgets.QMainWindow):
     def __init__(self):
