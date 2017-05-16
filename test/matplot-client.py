@@ -28,6 +28,8 @@ progversion = "0.1"
 
 import zmq
 
+context = zmq.Context()
+
 def recv_array(socket, flags=0, copy=False, track=False):
     """recv a numpy array"""
     session = socket.recv_string()
@@ -37,15 +39,15 @@ def recv_array(socket, flags=0, copy=False, track=False):
     A = np.frombuffer(msg, dtype=md['dtype'])
     return session, A.reshape(md['shape'])
 
-class ZeroMQ_Listener(QtCore.QObject):
+class DataListener(QtCore.QObject):
 
     message = QtCore.pyqtSignal(tuple)
     
     def __init__(self, session_name, port=5556):
         QtCore.QObject.__init__(self)
-        context = zmq.Context()
+        
         self.socket = context.socket(zmq.SUB)
-        self.socket.connect (f"tcp://localhost:{port}")
+        self.socket.connect(f"tcp://localhost:{port}")
         self.socket.setsockopt_string(zmq.SUBSCRIBE, session_name)
         self.running = True
     
@@ -53,6 +55,25 @@ class ZeroMQ_Listener(QtCore.QObject):
         while self.running:
             mesg = recv_array(self.socket)
             self.message.emit(mesg)
+
+class SessionListener(QtCore.QObject):
+
+    message = QtCore.pyqtSignal(str)
+    
+    def __init__(self, port=5557):
+        QtCore.QObject.__init__(self)
+
+        self.socket = context.socket(zmq.SUB)
+        self.socket.connect(f"tcp://localhost:{port}")
+        self.running = True
+    
+    def loop(self):
+        while self.running:
+            print("listerning")
+            self.socket.setsockopt_string(zmq.SUBSCRIBE, "session")
+            thing = self.socket.recv_string()
+            print(thing)
+            self.message.emit(thing)
 
 class MplCanvas(FigureCanvas):
     """Ultimately, this is a QWidget (as well as a FigureCanvasAgg, etc.)."""
@@ -100,6 +121,9 @@ class ApplicationWindow(QtWidgets.QMainWindow):
                                  QtCore.Qt.CTRL + QtCore.Qt.Key_Q)
         self.menuBar().addMenu(self.file_menu)
 
+        self.session_menu = self.menuBar().addMenu('Session')
+        self.session_actions = {}        
+
         self.main_widget = QtWidgets.QWidget(self)
 
         self.layout = QtWidgets.QVBoxLayout(self.main_widget)
@@ -110,15 +134,12 @@ class ApplicationWindow(QtWidgets.QMainWindow):
 
         for i in range(3):
             sc = StaticMplCanvas(self.main_widget, width=5, height=4, dpi=100)
-            # dc = DynamicMplCanvas(self.main_widget, width=5, height=4, dpi=100)
             snav = NavigationToolbar(sc, self)
-            # dnav = NavigationToolbar(dc, self)
             self.toolbars.extend([snav]) #, dnav])
             self.tabs.addTab(sc, f"Plot{i}")
-            # self.tabs.addTab(dc, "Dynamic")
             self.layout.addWidget(snav)
-            # self.layout.addWidget(dnav)
             self.canvas_by_name[f"Plot{i}"] = sc
+
         self.layout.addWidget(self.tabs)
         self.switch_toolbar()
         self.tabs.currentChanged.connect(self.switch_toolbar)
@@ -126,21 +147,39 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         self.main_widget.setFocus()
         self.setCentralWidget(self.main_widget)
 
+        # Actual data listener
         self.thread = QtCore.QThread()
-        self.zeromq_listener = ZeroMQ_Listener("buq123")
-        self.zeromq_listener.moveToThread(self.thread)
-        
-        self.thread.started.connect(self.zeromq_listener.loop)
-        self.zeromq_listener.message.connect(self.signal_received)
+        self.Datalistener = DataListener("buq123")
+        self.Datalistener.moveToThread(self.thread)
+        self.thread.started.connect(self.Datalistener.loop)
+        self.Datalistener.message.connect(self.data_signal_received)
+
+        # Actual data listener
+        self.session_thread = QtCore.QThread()
+        self.Sessionlistener = SessionListener()
+        self.Sessionlistener.moveToThread(self.session_thread)
+        self.session_thread.started.connect(self.Sessionlistener.loop)
+        self.Sessionlistener.message.connect(self.session_signal_received)
         
         QtCore.QTimer.singleShot(0, self.thread.start)
+        QtCore.QTimer.singleShot(0, self.session_thread.start)
 
-        # self.statusBar().showMessage("All hail matplotlib!", 2000)
-    def signal_received(self, stuff): #message):
+    def data_signal_received(self, stuff):
         message, data = stuff
         session, plot_name, subplot = message.split()
-        self.statusBar().showMessage(message, 500)
         self.canvas_by_name[plot_name].update_figure(data)
+
+    def session_signal_received(self, message):
+        self.statusBar().showMessage("Received new session "+message, 2000)
+        print(message)
+        _, session_name, session_action = message.split()
+        if session_action == "started":
+            def msg(message=message):
+                self.statusBar().showMessage("Received new session "+session_name, 2000)
+            act = self.session_menu.addAction(f'&{session_name}', msg)
+            self.session_actions[session_name] = act
+        elif session_action == "stopped":
+            self.session_menu.removeAction(self.session_actions[session_name])
 
     def switch_toolbar(self):
         for toolbar in self.toolbars:
@@ -151,9 +190,12 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         self.close()
 
     def closeEvent(self, ce):
-        self.zeromq_listener.running = False
+        self.Datalistener.running = False
         self.thread.quit()
         self.thread.wait()
+        self.Sessionlistener.running = False
+        self.session_thread.quit()
+        self.session_thread.wait()
         self.fileQuit()
 
 qApp = QtWidgets.QApplication(sys.argv)
