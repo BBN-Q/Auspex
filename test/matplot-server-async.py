@@ -8,14 +8,6 @@ from threading import Thread
 import signal
 signal.signal(signal.SIGINT, signal.SIG_DFL)
 
-context = zmq.Context()
-socket = context.socket(zmq.PUB)
-socket.bind("tcp://*:5556")
-
-context2 = zmq.Context()
-socket_sessions = context2.socket(zmq.PUB)
-socket_sessions.bind("tcp://*:5557")
-
 class AsyncMatplotServer(Thread):
 
     def __init__(self, status_port = 7771, data_port = 7772):
@@ -23,10 +15,11 @@ class AsyncMatplotServer(Thread):
         self.status_port = status_port
         self.data_port = data_port
         self.daemon = True
+        self.stopped = False
         self.start()
 
     async def poll_sockets(self):
-        while True:
+        while not self.stopped:
             evts = dict(await self.poller.poll(1000))
             if self.status_sock in evts and evts[self.status_sock] == zmq.POLLIN:
                 ident, msg = await self.status_sock.recv_multipart()
@@ -40,6 +33,20 @@ class AsyncMatplotServer(Thread):
 
     def send(self, data):
         self._loop.create_task(self._send(data))
+
+    def stop(self):
+        self.stopped = True
+        pending = asyncio.Task.all_tasks(loop=self._loop)
+        self._loop.stop()
+        time.sleep(1)
+        for task in pending:
+            task.cancel()
+            try:
+                self._loop.run_until_complete(task)
+            except asyncio.CancelledError:
+                pass
+        self._loop.close()
+
 
     def run(self):
             self._loop = zmq.asyncio.ZMQEventLoop()
@@ -59,14 +66,12 @@ class AsyncMatplotServer(Thread):
             try:
                 self._loop.run_forever()
             finally:
-                self._loop.stop()
-                pending = asyncio.Task.all_tasks()
-                self._loop.run_until_complete(asyncio.gather(*pending))
-                self._loop.close()
+                self.stop()
+
 
 if __name__ == "__main__":
     s = AsyncMatplotServer()
     time.sleep(1)
-    for j in range(20):
+    for j in range(3):
         s.send(randrange(1,10))
         time.sleep(1)
