@@ -1,5 +1,5 @@
 import zmq
-
+import json
 
 class SimpleMatplotClient(object):
 
@@ -24,8 +24,10 @@ class SimpleMatplotClient(object):
         print("polling...")
         evts = dict(self.poller.poll(self.TIMEOUT))
         if self.status_socket in evts:
-            reply = self.status_socket.recv()
-            print("Got {} from server.".format(reply.decode()))
+            reply, desc = [e.decode() for e in self.status_socket.recv_multipart()]
+            desc = json.loads(desc)
+            print(f"Got response {reply} from server.")
+            print(desc)
         else:
             print("Server is dead!")
 

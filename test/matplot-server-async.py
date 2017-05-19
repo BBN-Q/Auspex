@@ -3,6 +3,7 @@ import zmq.asyncio
 from random import randrange
 import time
 import numpy as np
+import json
 from threading import Thread
 
 import signal
@@ -10,8 +11,9 @@ signal.signal(signal.SIGINT, signal.SIG_DFL)
 
 class AsyncMatplotServer(Thread):
 
-    def __init__(self, status_port = 7771, data_port = 7772):
+    def __init__(self, plot_desc={}, status_port = 7771, data_port = 7772):
         super(AsyncMatplotServer, self).__init__()
+        self.plot_desc = plot_desc
         self.status_port = status_port
         self.data_port = data_port
         self.daemon = True
@@ -25,7 +27,7 @@ class AsyncMatplotServer(Thread):
                 ident, msg = await self.status_sock.recv_multipart()
                 print("Got {} from {}".format(msg.decode(), ident.decode()))
                 if msg == b"WHATSUP":
-                    await self.status_sock.send_multipart([ident, b"HI!"])
+                    await self.status_sock.send_multipart([ident, b"HI!", json.dumps(self.plot_desc).encode('utf8')])
             await asyncio.sleep(0)
 
     async def _send(self, data):
@@ -70,8 +72,31 @@ class AsyncMatplotServer(Thread):
 
 
 if __name__ == "__main__":
-    s = AsyncMatplotServer()
-    time.sleep(1)
-    for j in range(3):
-        s.send(randrange(1,10))
+    plot_desc_1 = {
+        'Population': {
+            'plot_mode': 'real',
+            'plot_dims': 1,
+            'xlabel': 'Rabbits',
+            'ylabel': 'Foxes',
+            },
+        'Junk': {
+            'plot_mode': 'imag',
+            'plot_dims': 1,
+            'xlabel': 'Length of Curve',
+            'ylabel': 'Height of Curve',
+            },
+        'Image': {
+            'plot_mode': 'real',
+            'plot_dims': 2,
+            'xlabel': 'Bottom Axis',
+            'ylabel': 'Side Axis',
+            },
+    }
+
+    s = AsyncMatplotServer(plot_desc_1)
+    while True:
         time.sleep(1)
+    # time.sleep(1)
+    # for j in range(3):
+    #     s.send(randrange(1,10))
+    #     time.sleep(1)

@@ -13,6 +13,7 @@ from __future__ import unicode_literals
 import sys
 import os
 import random
+import json
 import matplotlib
 # Make sure that we are using QT5
 matplotlib.use('Qt5Agg')
@@ -27,8 +28,6 @@ progname = os.path.basename(sys.argv[0])
 progversion = "0.1"
 
 import zmq
-
-context = zmq.Context()
 
 def recv_array(socket, flags=0, copy=False, track=False):
     """recv a numpy array"""
@@ -46,7 +45,8 @@ class DataListener(QtCore.QObject):
     def __init__(self, session_name, port=5556):
         QtCore.QObject.__init__(self)
         
-        self.socket = context.socket(zmq.SUB)
+        self.context = zmq.Context()
+        self.socket = self.context.socket(zmq.SUB)
         self.socket.connect(f"tcp://localhost:{port}")
         self.socket.setsockopt_string(zmq.SUBSCRIBE, session_name)
         self.running = True
@@ -63,6 +63,7 @@ class SessionListener(QtCore.QObject):
     def __init__(self, port=5557):
         QtCore.QObject.__init__(self)
 
+        self.context = zmq.Context()
         self.socket = context.socket(zmq.SUB)
         self.socket.connect(f"tcp://localhost:{port}")
         self.running = True
@@ -111,15 +112,19 @@ class StaticMplCanvas(MplCanvas):
         self.flush_events()
 
 class ApplicationWindow(QtWidgets.QMainWindow):
-    def __init__(self):
+    def __init__(self, hostname=None):
         QtWidgets.QMainWindow.__init__(self)
         self.setAttribute(QtCore.Qt.WA_DeleteOnClose)
         self.setWindowTitle("Auspex Plotting")
 
-        self.file_menu = QtWidgets.QMenu('&File', self)
+        # self.file_menu = QtWidgets.QMenu('&File', self)
+        self.file_menu = self.menuBar().addMenu('&File')
         self.file_menu.addAction('&Quit', self.fileQuit,
                                  QtCore.Qt.CTRL + QtCore.Qt.Key_Q)
-        self.menuBar().addMenu(self.file_menu)
+        self.file_menu.addAction('&Open', self.open_connection_dialog,
+                                 QtCore.Qt.CTRL + QtCore.Qt.Key_O)
+        self.recent = self.file_menu.addMenu("Open Recent")
+        # self.menuBar().addMenu(self.file_menu)
 
         self.session_menu = self.menuBar().addMenu('Session')
         self.session_actions = {}        
@@ -147,22 +152,49 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         self.main_widget.setFocus()
         self.setCentralWidget(self.main_widget)
 
+        self.context = zmq.Context()
+
         # Actual data listener
         self.thread = QtCore.QThread()
         self.Datalistener = DataListener("buq123")
         self.Datalistener.moveToThread(self.thread)
         self.thread.started.connect(self.Datalistener.loop)
         self.Datalistener.message.connect(self.data_signal_received)
-
-        # Actual data listener
-        self.session_thread = QtCore.QThread()
-        self.Sessionlistener = SessionListener()
-        self.Sessionlistener.moveToThread(self.session_thread)
-        self.session_thread.started.connect(self.Sessionlistener.loop)
-        self.Sessionlistener.message.connect(self.session_signal_received)
         
-        QtCore.QTimer.singleShot(0, self.thread.start)
-        QtCore.QTimer.singleShot(0, self.session_thread.start)
+        # QtCore.QTimer.singleShot(0, self.thread.start)
+
+        if hostname:
+            self.open_connection(hostname)
+
+    def open_connection(self, address):
+        port = 7771
+        self.statusBar().showMessage("Open session to {}:{}".format(address, port), 2000)
+        socket = self.context.socket(zmq.DEALER)
+        socket.identity = "Matplotlib_Qt_Client".encode()
+        socket.connect("tcp://{}:{}".format(address, port))
+        socket.send(b"WHATSUP")
+
+        poller = zmq.Poller()
+        poller.register(socket)
+
+        evts = dict(poller.poll(2000))
+        if socket in evts:
+            reply, desc = [e.decode() for e in socket.recv_multipart()]
+            desc = json.loads(desc)
+            self.statusBar().showMessage("Connection established. Pulling plot information.", 2000)
+            print(f"Got response {reply} from server.")
+            print(desc)
+        else:
+            self.statusBar().showMessage("Server did not respond.", 2000)
+
+        socket.close()
+
+    def open_connection_dialog(self):
+        address, ok = QtWidgets.QInputDialog.getText(self, 'Open Connection', 
+            'Resource Name:')
+        if ok:
+            self.open_connection(address)
+            
 
     def data_signal_received(self, stuff):
         message, data = stuff
@@ -193,9 +225,9 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         self.Datalistener.running = False
         self.thread.quit()
         self.thread.wait()
-        self.Sessionlistener.running = False
-        self.session_thread.quit()
-        self.session_thread.wait()
+        # self.Sessionlistener.running = False
+        # self.session_thread.quit()
+        # self.session_thread.wait()
         self.fileQuit()
 
 qApp = QtWidgets.QApplication(sys.argv)
