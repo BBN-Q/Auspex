@@ -41,6 +41,20 @@ class Plotter(Filter):
 
         self.quince_parameters = [self.plot_dims, self.plot_mode]
 
+        # This will hold the matplot server
+        self.plot_server = None
+
+    def desc(self):
+        return  {'plot_mode': self.plot_mode.value,
+                'plot_dims': self.plot_dims.value,
+                'data_name': self.descriptor.data_name,
+                'data_unit': self.descriptor.data_unit,
+                'xmin': min(self.x_values),
+                'xmax': max(self.x_values),
+                'xlabel': 'Rabbits',
+                'ylabel': 'Foxes'}
+                    
+
     def update_descriptors(self):
         logger.debug("Updating Plotter %s descriptors based on input descriptor %s", self.name, self.sink.descriptor)
         self.stream = self.sink.input_streams[0]
@@ -67,61 +81,61 @@ class Plotter(Filter):
         logger.info("Plot will clear after every %d points.", self.points_before_clear)
 
         self.x_values = self.descriptor.axes[-1].points
-        xmax = max(self.x_values)
-        xmin = min(self.x_values)
+        # xmax = max(self.x_values)
+        # xmin = min(self.x_values)
 
-        # Establish how the data will be mapped to multiple subplots. Each
-        # top level list element will become a row, and subelements will
-        # become columns. A single plot_buffer is used to store data, and it
-        # will be cast according to these functions.
-        plot_height = 600
-        if self.plot_mode.value == "real":
-            self.mapping_functions = [[np.real]]
-        elif self.plot_mode.value == "imag":
-            self.mapping_functions = [[np.imag]]
-        elif self.plot_mode.value == "real/imag":
-            self.mapping_functions = [[np.real, np.imag]]
-        elif self.plot_mode.value == "amp/phase":
-            self.mapping_functions = [[np.abs, lambda x: np.angle(x, deg=1)]]
-        elif self.plot_mode.value =="quad":
-            self.mapping_functions = [[np.abs, lambda x: np.angle(x, deg=1)],[np.real, np.imag]]
-            plot_height = 450
+        # # Establish how the data will be mapped to multiple subplots. Each
+        # # top level list element will become a row, and subelements will
+        # # become columns. A single plot_buffer is used to store data, and it
+        # # will be cast according to these functions.
+        # plot_height = 600
+        # if self.plot_mode.value == "real":
+        #     self.mapping_functions = [[np.real]]
+        # elif self.plot_mode.value == "imag":
+        #     self.mapping_functions = [[np.imag]]
+        # elif self.plot_mode.value == "real/imag":
+        #     self.mapping_functions = [[np.real, np.imag]]
+        # elif self.plot_mode.value == "amp/phase":
+        #     self.mapping_functions = [[np.abs, lambda x: np.angle(x, deg=1)]]
+        # elif self.plot_mode.value =="quad":
+        #     self.mapping_functions = [[np.abs, lambda x: np.angle(x, deg=1)],[np.real, np.imag]]
+        #     plot_height = 450
 
-        if self.run_in_notebook:
-            plot_height = round(plot_height*0.6)
+        # if self.run_in_notebook:
+        #     plot_height = round(plot_height*0.6)
 
-        if self.plot_mode.value == "quad":
-            self.y_labels = [["amp", "phase"], ["real", "imag"]]
-        elif len(self.mapping_functions[0]) == 1:
-            self.y_labels = [[self.plot_mode.value]]
-        elif len(self.mapping_functions[0]) == 2:
-            self.y_labels = [self.plot_mode.value.split('/')]
-        else:
-            self.y_labels = [['' for col in row] for row in self.mapping_functions]
+        # if self.plot_mode.value == "quad":
+        #     self.y_labels = [["amp", "phase"], ["real", "imag"]]
+        # elif len(self.mapping_functions[0]) == 1:
+        #     self.y_labels = [[self.plot_mode.value]]
+        # elif len(self.mapping_functions[0]) == 2:
+        #     self.y_labels = [self.plot_mode.value.split('/')]
+        # else:
+        #     self.y_labels = [['' for col in row] for row in self.mapping_functions]
 
-        data_name = self.descriptor.data_name
-        data_unit = self.descriptor.data_unit
-        self.y_labels = [["{} ({}) [{}]".format(data_name,data_unit,col) for col in row] for row in self.y_labels]
+        # data_name = self.descriptor.data_name
+        # data_unit = self.descriptor.data_unit
+        # self.y_labels = [["{} ({}) [{}]".format(data_name,data_unit,col) for col in row] for row in self.y_labels]
 
-        if self.plot_dims.value == 1:
-            self.figures = [[Figure(x_range=[xmin, xmax], plot_width=plot_height, plot_height=plot_height, webgl=False, x_axis_label=self.axis_label(-1),\
-            y_axis_label=y_lab) for (col, y_lab) in zip(row, y_label)] for (row, y_label) in zip(self.mapping_functions, self.y_labels)]
-            self.plots = [[fig.line(np.copy(self.x_values), np.nan*np.ones(self.points_before_clear), name=self.name) for fig in row] for row in self.figures]
-        else:
-            self.y_values = self.descriptor.axes[-2].points
-            self.x_mesh, self.y_mesh = np.meshgrid(self.x_values, self.y_values)
-            self.z_data = np.zeros_like(self.x_mesh)
-            ymax = max(self.y_values)
-            ymin = min(self.y_values)
-            self.figures = [[Figure(x_range=[xmin, xmax], y_range=[ymin, ymax], plot_width=plot_height, plot_height=plot_height, webgl=False, x_axis_label=self.axis_label(-1),\
-            y_axis_label=self.axis_label(-2)) for col in row] for row in self.mapping_functions]
-            self.plots = [[fig.image(image=[self.z_data], x=[xmin], y=[ymin],
-                                          dw=[xmax-xmin], dh=[ymax-ymin], name=self.name, palette="Spectral11") for fig in row] for row in self.figures]
+        # if self.plot_dims.value == 1:
+        #     self.figures = [[Figure(x_range=[xmin, xmax], plot_width=plot_height, plot_height=plot_height, webgl=False, x_axis_label=self.axis_label(-1),\
+        #     y_axis_label=y_lab) for (col, y_lab) in zip(row, y_label)] for (row, y_label) in zip(self.mapping_functions, self.y_labels)]
+        #     self.plots = [[fig.line(np.copy(self.x_values), np.nan*np.ones(self.points_before_clear), name=self.name) for fig in row] for row in self.figures]
+        # else:
+        #     self.y_values = self.descriptor.axes[-2].points
+        #     self.x_mesh, self.y_mesh = np.meshgrid(self.x_values, self.y_values)
+        #     self.z_data = np.zeros_like(self.x_mesh)
+        #     ymax = max(self.y_values)
+        #     ymin = min(self.y_values)
+        #     self.figures = [[Figure(x_range=[xmin, xmax], y_range=[ymin, ymax], plot_width=plot_height, plot_height=plot_height, webgl=False, x_axis_label=self.axis_label(-1),\
+        #     y_axis_label=self.axis_label(-2)) for col in row] for row in self.mapping_functions]
+        #     self.plots = [[fig.image(image=[self.z_data], x=[xmin], y=[ymin],
+        #                                   dw=[xmax-xmin], dh=[ymax-ymin], name=self.name, palette="Spectral11") for fig in row] for row in self.figures]
 
-        # Construct the master gridplot
-        self.fig = gridplot(self.figures)
+        # # Construct the master gridplot
+        # self.fig = gridplot(self.figures)
 
-        self.data_sources = [[plot.data_source for plot in row] for row in self.plots]
+        # self.data_sources = [[plot.data_source for plot in row] for row in self.plots]
         self.plot_buffer = np.nan*np.ones(self.points_before_clear, dtype=self.descriptor.dtype)
         self.idx = 0
 
@@ -140,23 +154,26 @@ class Plotter(Filter):
             self.idx += data.size
 
         if (time.time() - self.last_update >= self.update_interval):
-            for i,j in zip(self.mapping_functions, self.data_sources):
-                for mapping_function, data_source in zip(i,j):
-                    if self.plot_dims.value == 1:
-                        data_source.data["y"] = np.copy(mapping_function(self.plot_buffer))
-                    else:
-                        data_source.data["image"] = [np.reshape(mapping_function(self.plot_buffer), self.z_data.shape)]
+            # for i,j in zip(self.mapping_functions, self.data_sources):
+            #     for mapping_function, data_source in zip(i,j):
+            self.plot_server.send(self.name, self.plot_buffer)
+            # if self.plot_dims.value == 1:
+                
+            # else:
+            #     data_source.data["image"] = [np.reshape(mapping_function(self.plot_buffer), self.z_data.shape)]
             self.last_update = time.time()
 
     async def on_done(self):
-        for i,j in zip(self.mapping_functions, self.data_sources):
-            for mapping_function, data_source in zip(i,j):
-                if self.plot_dims.value == 1:
-                    data_source.data["y"] = np.copy(mapping_function(self.plot_buffer))
-                else:
-                    data_source.data["image"] = [np.reshape(mapping_function(self.plot_buffer), self.z_data.shape)]
+        self.plot_server.send(self.name, np.array([]), msg="done")
 
-        time.sleep(0.1)
+        # for i,j in zip(self.mapping_functions, self.data_sources):
+        #     for mapping_function, data_source in zip(i,j):
+        #         if self.plot_dims.value == 1:
+        #             data_source.data["y"] = np.copy(mapping_function(self.plot_buffer))
+        #         else:
+        #             data_source.data["image"] = [np.reshape(mapping_function(self.plot_buffer), self.z_data.shape)]
+
+        # time.sleep(0.1)
 
     def axis_label(self, index):
         unit_str = " ({})".format(self.descriptor.axes[index].unit) if self.descriptor.axes[index].unit else ''
