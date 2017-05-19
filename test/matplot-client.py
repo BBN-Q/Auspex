@@ -32,7 +32,8 @@ import zmq
 class DataListener(QtCore.QObject):
 
     message = QtCore.pyqtSignal(tuple)
-    
+    finished = QtCore.pyqtSignal(bool)
+
     def __init__(self, host, port=7772):
         QtCore.QObject.__init__(self)
         
@@ -40,15 +41,22 @@ class DataListener(QtCore.QObject):
         self.socket = self.context.socket(zmq.SUB)
         self.socket.connect("tcp://{}:{}".format(host, port))
         self.socket.setsockopt_string(zmq.SUBSCRIBE, "data")
+        self.poller = zmq.Poller()
+        self.poller.register(self.socket, zmq.POLLIN)
         self.running = True
 
     def loop(self):
         while self.running:
-            msg_type, name, md, data = self.socket.recv_multipart()
-            name = name.decode()
-            md   = json.loads(md.decode())
-            A    = np.frombuffer(data, dtype=md['dtype'])
-            self.message.emit((name, A.reshape(md['shape'])))
+            evts = dict(self.poller.poll(100))
+            if self.socket in evts and evts[self.socket] == zmq.POLLIN:
+                msg_type, name, md, data = self.socket.recv_multipart()
+                if msg_type.decode() == "done":
+                    self.finished.emit(True)
+                else:
+                    name = name.decode()
+                    md   = json.loads(md.decode())
+                    A    = np.frombuffer(data, dtype=md['dtype'])
+                    self.message.emit((name, A.reshape(md['shape'])))
         self.socket.close()
 
 class MplCanvas(FigureCanvas):
@@ -89,7 +97,7 @@ class StaticMplCanvas(MplCanvas):
         if 'ylabel' in desc.keys():
             self.axes.set_ylabel(desc['ylabel'])
 
-class ApplicationWindow(QtWidgets.QMainWindow):
+class MatplotClientWindow(QtWidgets.QMainWindow):
     def __init__(self, hostname=None):
         QtWidgets.QMainWindow.__init__(self)
         self.setAttribute(QtCore.Qt.WA_DeleteOnClose)
@@ -152,6 +160,7 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         self.Datalistener.moveToThread(self.listener_thread)
         self.listener_thread.started.connect(self.Datalistener.loop)
         self.Datalistener.message.connect(self.data_signal_received)
+        self.Datalistener.finished.connect(self.stop_listening)
         
         QtCore.QTimer.singleShot(0, self.listener_thread.start)
 
@@ -200,16 +209,23 @@ class ApplicationWindow(QtWidgets.QMainWindow):
     def fileQuit(self):
         self.close()
 
+    def stop_listening(self, _):
+        self.statusBar().showMessage("Disconnecting from server.", 10000)
+        self.Datalistener.running = False
+        self.listener_thread.quit()
+        self.listener_thread.wait()
+
     def closeEvent(self, ce):
         if self.listener_thread:
-            self.Datalistener.running = False
-            self.listener_thread.quit()
-            self.listener_thread.wait()
+            self.stop_listening(True)
         self.fileQuit()
 
-qApp = QtWidgets.QApplication(sys.argv)
-
-aw = ApplicationWindow()
-aw.setWindowTitle("%s" % progname)
-aw.show()
-sys.exit(qApp.exec_())
+if __name__ == '__main__':
+    qApp = QtWidgets.QApplication(sys.argv)
+    if len(sys.argv) > 1:
+        aw = MatplotClientWindow(hostname=sys.argv[1])
+    else:
+        aw = MatplotClientWindow()
+    aw.setWindowTitle("%s" % progname)
+    aw.show()
+    sys.exit(qApp.exec_())

@@ -81,8 +81,6 @@ class Plotter(Filter):
         logger.info("Plot will clear after every %d points.", self.points_before_clear)
 
         self.x_values = self.descriptor.axes[-1].points
-        # xmax = max(self.x_values)
-        # xmin = min(self.x_values)
 
         # # Establish how the data will be mapped to multiple subplots. Each
         # # top level list element will become a row, and subelements will
@@ -154,26 +152,11 @@ class Plotter(Filter):
             self.idx += data.size
 
         if (time.time() - self.last_update >= self.update_interval):
-            # for i,j in zip(self.mapping_functions, self.data_sources):
-            #     for mapping_function, data_source in zip(i,j):
             self.plot_server.send(self.name, self.plot_buffer)
-            # if self.plot_dims.value == 1:
-                
-            # else:
-            #     data_source.data["image"] = [np.reshape(mapping_function(self.plot_buffer), self.z_data.shape)]
             self.last_update = time.time()
 
     async def on_done(self):
         self.plot_server.send(self.name, np.array([]), msg="done")
-
-        # for i,j in zip(self.mapping_functions, self.data_sources):
-        #     for mapping_function, data_source in zip(i,j):
-        #         if self.plot_dims.value == 1:
-        #             data_source.data["y"] = np.copy(mapping_function(self.plot_buffer))
-        #         else:
-        #             data_source.data["image"] = [np.reshape(mapping_function(self.plot_buffer), self.z_data.shape)]
-
-        # time.sleep(0.1)
 
     def axis_label(self, index):
         unit_str = " ({})".format(self.descriptor.axes[index].unit) if self.descriptor.axes[index].unit else ''

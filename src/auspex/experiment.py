@@ -430,62 +430,6 @@ class Experiment(metaclass=MetaExperiment):
                 plotter.plot_server = self.plot_server
             time.sleep(0.5)
             subprocess.Popen(['python','test/matplot-client.py', 'localhost'], env=os.environ.copy())
-            # os.spawnv(os.P_NOWAIT, 'python test/matplot-client.py'.split())
-            # from .plotting import BokehServerProcess
-            # from bokeh.client import push_session
-            # from bokeh.layouts import row, gridplot
-            # from bokeh.io import curdoc
-            # from bokeh.models.widgets import Panel, Tabs
-
-            # If anybody has requested notebook plots, show them all in notebook
-            # run_in_notebook = True in [p.run_in_notebook for p in self.plotters]
-
-
-            # bokeh_process = BokehServerProcess(notebook=run_in_notebook)
-            # bokeh_process.run()
-
-            # tabs = True #not run_in_notebook # Tabs seem a bit sluggish in jupyter notebooks...
-            # if tabs:
-            #     container = Tabs(tabs=[Panel(child=p.fig, title=p.name) for p in self.plotters])
-            # else:
-            #     if len(self.plotters) <= 2:
-            #         container = row(*[p.fig for p in self.plotters])
-            #     else:
-            #         padded_list = self.plotters[:]
-            #         if len(padded_list)%2 != 0:
-            #             padded_list.append(None)
-            #         grid = list(zip(*[iter(padded_list)]*2))
-            #         container = gridplot(grid)
-
-            # doc = curdoc()
-            # doc.clear()
-            # doc.add_root(container)
-            # session = push_session(doc)
-
-            # for p in self.plotters:
-            #     p.session = session
-
-            # if run_in_notebook:
-            #     logger.debug("Displaying in iPython notebook")
-            #     from bokeh.embed import autoload_server, components
-            #     from bokeh.io import output_notebook
-            #     from IPython.display import display, HTML, clear_output
-
-            #     # clear_output()
-            #     output_notebook()
-            #     script = autoload_server(model=None, session_id=session.id)
-            #     html = \
-            #             """
-            #             <html>
-            #             <head></head>
-            #             <body>
-            #             {}
-            #             </body>
-            #             </html>
-            #             """.format(script)
-            #     display(HTML(html))
-            # else:
-            #     session.show(container)
 
         def catch_ctrl_c(signum, frame):
             logger.info("Caught SIGINT. Shutting down.")
