@@ -45,7 +45,7 @@ class Plotter(Filter):
         self.plot_server = None
 
     def desc(self):
-        return  {'plot_mode': self.plot_mode.value,
+        d =    {'plot_mode': self.plot_mode.value,
                 'plot_dims': self.plot_dims.value,
                 'data_name': self.descriptor.data_name,
                 'data_unit': self.descriptor.data_unit,
@@ -53,6 +53,12 @@ class Plotter(Filter):
                 'xmax': max(self.x_values),
                 'xlabel': 'Rabbits',
                 'ylabel': 'Foxes'}
+        if self.plot_dims.value == 2:
+            d['ymin'] = min(self.y_values)
+            d['ymax'] = max(self.y_values)
+            d['xlen'] = self.descriptor.axes[-1].num_points()
+            d['ylen'] = self.descriptor.axes[-2].num_points()
+        return d
                     
 
     def update_descriptors(self):
@@ -81,6 +87,9 @@ class Plotter(Filter):
         logger.info("Plot will clear after every %d points.", self.points_before_clear)
 
         self.x_values = self.descriptor.axes[-1].points
+
+        if self.plot_dims.value == 2:
+            self.y_values = self.descriptor.axes[-2].points
 
         # # Establish how the data will be mapped to multiple subplots. Each
         # # top level list element will become a row, and subelements will

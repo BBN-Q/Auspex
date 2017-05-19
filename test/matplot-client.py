@@ -77,7 +77,7 @@ class MplCanvas(FigureCanvas):
         pass
 
 
-class StaticMplCanvas(MplCanvas):
+class Canvas1D(MplCanvas):
     def compute_initial_figure(self):
         t = np.arange(0.0, 3.0, 0.01)
         s = np.sin(2*np.pi*t)
@@ -96,6 +96,28 @@ class StaticMplCanvas(MplCanvas):
             self.axes.set_xlabel(desc['xlabel'])
         if 'ylabel' in desc.keys():
             self.axes.set_ylabel(desc['ylabel'])
+
+class Canvas2D(MplCanvas):
+    def compute_initial_figure(self):
+        self.plt = self.axes.imshow(np.random.random((10,10)))
+
+    def update_figure(self, data):
+        self.plt.set_data(data.real.reshape((self.xlen, self.ylen)))
+        self.axes.relim()
+        self.draw()
+        self.flush_events()
+
+    def set_desc(self, desc):
+        if 'xlabel' in desc.keys():
+            self.axes.set_xlabel(desc['xlabel'])
+        if 'ylabel' in desc.keys():
+            self.axes.set_ylabel(desc['ylabel'])
+        self.aspect = (desc['xmax']-desc['xmin'])/(desc['ymax']-desc['ymin'])
+        self.extent = (desc['xmin'], desc['xmax'], desc['ymin'], desc['ymax'])
+        self.xlen = desc['xlen']
+        self.ylen = desc['ylen']
+        self.plt = self.axes.imshow(np.random.random((10,10)),
+            aspect=self.aspect, extent=self.extent, origin="lower")
 
 class MatplotClientWindow(QtWidgets.QMainWindow):
     def __init__(self, hostname=None):
@@ -183,7 +205,10 @@ class MatplotClientWindow(QtWidgets.QMainWindow):
         self.tabs  = QtWidgets.QTabWidget(self.main_widget)
 
         for name, desc in plot_desc.items():
-            canvas = StaticMplCanvas(self.main_widget, width=5, height=4, dpi=100)
+            if desc['plot_dims'] == 1:
+                canvas = Canvas1D(self.main_widget, width=5, height=4, dpi=100)
+            if desc['plot_dims'] == 2:
+                canvas = Canvas2D(self.main_widget, width=5, height=4, dpi=100)
             nav    = NavigationToolbar(canvas, self)
             
             canvas.set_desc(desc)
