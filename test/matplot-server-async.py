@@ -30,11 +30,15 @@ class AsyncMatplotServer(Thread):
                     await self.status_sock.send_multipart([ident, b"HI!", json.dumps(self.plot_desc).encode('utf8')])
             await asyncio.sleep(0)
 
-    async def _send(self, data):
-        await self.data_sock.send(("server %d"%data).encode())
+    async def _send(self, name, data):
+        md = dict(
+            dtype = str(data.dtype),
+            shape = data.shape,
+        )
+        await self.data_sock.send_multipart(["data".encode(), name.encode(), json.dumps(md).encode(), data])
 
-    def send(self, data):
-        self._loop.create_task(self._send(data))
+    def send(self, name, data):
+        self._loop.create_task(self._send(name, data))
 
     def stop(self):
         self.stopped = True
@@ -49,7 +53,6 @@ class AsyncMatplotServer(Thread):
                 pass
         self._loop.close()
 
-
     def run(self):
             self._loop = zmq.asyncio.ZMQEventLoop()
             asyncio.set_event_loop(self._loop)
@@ -58,11 +61,8 @@ class AsyncMatplotServer(Thread):
             self.data_sock = self.context.socket(zmq.PUB)
             self.status_sock.bind("tcp://*:%s" % self.status_port)
             self.data_sock.bind("tcp://*:%s" % self.data_port)
-
             self.poller = zmq.asyncio.Poller()
             self.poller.register(self.status_sock, zmq.POLLIN)
-
-            print("starting...")
 
             self._loop.create_task(self.poll_sockets())
             try:
@@ -70,8 +70,8 @@ class AsyncMatplotServer(Thread):
             finally:
                 self.stop()
 
-
 if __name__ == "__main__":
+
     plot_desc_1 = {
         'Population': {
             'plot_mode': 'real',
@@ -95,8 +95,6 @@ if __name__ == "__main__":
 
     s = AsyncMatplotServer(plot_desc_1)
     while True:
-        time.sleep(1)
-    # time.sleep(1)
-    # for j in range(3):
-    #     s.send(randrange(1,10))
-    #     time.sleep(1)
+        time.sleep(0.1)
+        name = ["Population", "Junk", "Image"][randrange(0,3)]
+        s.send(name, np.random.random(50))

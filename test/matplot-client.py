@@ -29,52 +29,27 @@ progversion = "0.1"
 
 import zmq
 
-def recv_array(socket, flags=0, copy=False, track=False):
-    """recv a numpy array"""
-    session = socket.recv_string()
-    md      = socket.recv_json(flags=flags)
-    msg     = socket.recv(flags=flags, copy=copy, track=track)
-    
-    A = np.frombuffer(msg, dtype=md['dtype'])
-    return session, A.reshape(md['shape'])
-
 class DataListener(QtCore.QObject):
 
     message = QtCore.pyqtSignal(tuple)
     
-    def __init__(self, session_name, port=5556):
+    def __init__(self, host, port=7772):
         QtCore.QObject.__init__(self)
         
         self.context = zmq.Context()
         self.socket = self.context.socket(zmq.SUB)
-        self.socket.connect(f"tcp://localhost:{port}")
-        self.socket.setsockopt_string(zmq.SUBSCRIBE, session_name)
+        self.socket.connect("tcp://{}:{}".format(host, port))
+        self.socket.setsockopt_string(zmq.SUBSCRIBE, "data")
         self.running = True
-    
+
     def loop(self):
         while self.running:
-            mesg = recv_array(self.socket)
-            self.message.emit(mesg)
-
-class SessionListener(QtCore.QObject):
-
-    message = QtCore.pyqtSignal(str)
-    
-    def __init__(self, port=5557):
-        QtCore.QObject.__init__(self)
-
-        self.context = zmq.Context()
-        self.socket = context.socket(zmq.SUB)
-        self.socket.connect(f"tcp://localhost:{port}")
-        self.running = True
-    
-    def loop(self):
-        while self.running:
-            print("listerning")
-            self.socket.setsockopt_string(zmq.SUBSCRIBE, "session")
-            thing = self.socket.recv_string()
-            print(thing)
-            self.message.emit(thing)
+            msg_type, name, md, data = self.socket.recv_multipart()
+            name = name.decode()
+            md   = json.loads(md.decode())
+            A    = np.frombuffer(data, dtype=md['dtype'])
+            self.message.emit((name, A.reshape(md['shape'])))
+        self.socket.close()
 
 class MplCanvas(FigureCanvas):
     """Ultimately, this is a QWidget (as well as a FigureCanvasAgg, etc.)."""
@@ -82,12 +57,9 @@ class MplCanvas(FigureCanvas):
     def __init__(self, parent=None, width=5, height=4, dpi=100):
         fig = Figure(figsize=(width, height), dpi=dpi)
         self.axes = fig.add_subplot(111)
-
         self.compute_initial_figure()
-
         FigureCanvas.__init__(self, fig)
         self.setParent(parent)
-
         FigureCanvas.setSizePolicy(self,
                                    QtWidgets.QSizePolicy.Expanding,
                                    QtWidgets.QSizePolicy.Expanding)
@@ -132,9 +104,6 @@ class ApplicationWindow(QtWidgets.QMainWindow):
                                  QtCore.Qt.SHIFT + QtCore.Qt.CTRL + QtCore.Qt.Key_O)
         self.recent = self.file_menu.addMenu("Open Recent")
 
-        self.session_menu = self.menuBar().addMenu('Session')
-        self.session_actions = {}        
-
         self.main_widget = QtWidgets.QWidget(self)
         self.main_widget.setMinimumWidth(800)
         self.main_widget.setMinimumHeight(600)
@@ -145,14 +114,7 @@ class ApplicationWindow(QtWidgets.QMainWindow):
 
         self.context = zmq.Context()
 
-        # Actual data listener
-        self.thread = QtCore.QThread()
-        self.Datalistener = DataListener("buq123")
-        self.Datalistener.moveToThread(self.thread)
-        self.thread.started.connect(self.Datalistener.loop)
-        self.Datalistener.message.connect(self.data_signal_received)
-        
-        # QtCore.QTimer.singleShot(0, self.thread.start)
+        self.listener_thread = None
 
         if hostname:
             self.open_connection(hostname)
@@ -173,13 +135,25 @@ class ApplicationWindow(QtWidgets.QMainWindow):
             reply, desc = [e.decode() for e in socket.recv_multipart()]
             desc = json.loads(desc)
             self.statusBar().showMessage("Connection established. Pulling plot information.", 2000)
-            print(f"Got response {reply} from server.")
-            print(desc)
         else:
             self.statusBar().showMessage("Server did not respond.", 2000)
 
         socket.close()
         self.construct_plots(desc)
+
+        # Actual data listener
+        if self.listener_thread:
+            self.Datalistener.running = False
+            self.listener_thread.quit()
+            self.listener_thread.wait()
+
+        self.listener_thread = QtCore.QThread()
+        self.Datalistener = DataListener(address)
+        self.Datalistener.moveToThread(self.listener_thread)
+        self.listener_thread.started.connect(self.Datalistener.loop)
+        self.Datalistener.message.connect(self.data_signal_received)
+        
+        QtCore.QTimer.singleShot(0, self.listener_thread.start)
 
     def open_connection_dialog(self):
         address, ok = QtWidgets.QInputDialog.getText(self, 'Open Connection', 
@@ -214,22 +188,9 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         self.switch_toolbar()
         self.tabs.currentChanged.connect(self.switch_toolbar)
 
-    def data_signal_received(self, stuff):
-        message, data = stuff
-        session, plot_name, subplot = message.split()
+    def data_signal_received(self, message):
+        plot_name, data = message
         self.canvas_by_name[plot_name].update_figure(data)
-
-    def session_signal_received(self, message):
-        self.statusBar().showMessage("Received new session "+message, 2000)
-        print(message)
-        _, session_name, session_action = message.split()
-        if session_action == "started":
-            def msg(message=message):
-                self.statusBar().showMessage("Received new session "+session_name, 2000)
-            act = self.session_menu.addAction(f'&{session_name}', msg)
-            self.session_actions[session_name] = act
-        elif session_action == "stopped":
-            self.session_menu.removeAction(self.session_actions[session_name])
 
     def switch_toolbar(self):
         for toolbar in self.toolbars:
@@ -240,12 +201,10 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         self.close()
 
     def closeEvent(self, ce):
-        self.Datalistener.running = False
-        self.thread.quit()
-        self.thread.wait()
-        # self.Sessionlistener.running = False
-        # self.session_thread.quit()
-        # self.session_thread.wait()
+        if self.listener_thread:
+            self.Datalistener.running = False
+            self.listener_thread.quit()
+            self.listener_thread.wait()
         self.fileQuit()
 
 qApp = QtWidgets.QApplication(sys.argv)
