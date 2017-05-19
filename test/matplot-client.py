@@ -111,43 +111,34 @@ class StaticMplCanvas(MplCanvas):
         self.draw()
         self.flush_events()
 
+    def set_desc(self, desc):
+        if 'xlabel' in desc.keys():
+            self.axes.set_xlabel(desc['xlabel'])
+        if 'ylabel' in desc.keys():
+            self.axes.set_ylabel(desc['ylabel'])
+
 class ApplicationWindow(QtWidgets.QMainWindow):
     def __init__(self, hostname=None):
         QtWidgets.QMainWindow.__init__(self)
         self.setAttribute(QtCore.Qt.WA_DeleteOnClose)
         self.setWindowTitle("Auspex Plotting")
 
-        # self.file_menu = QtWidgets.QMenu('&File', self)
         self.file_menu = self.menuBar().addMenu('&File')
         self.file_menu.addAction('&Quit', self.fileQuit,
                                  QtCore.Qt.CTRL + QtCore.Qt.Key_Q)
         self.file_menu.addAction('&Open', self.open_connection_dialog,
                                  QtCore.Qt.CTRL + QtCore.Qt.Key_O)
+        self.file_menu.addAction('&Open Localhost', lambda: self.open_connection("localhost"),
+                                 QtCore.Qt.SHIFT + QtCore.Qt.CTRL + QtCore.Qt.Key_O)
         self.recent = self.file_menu.addMenu("Open Recent")
-        # self.menuBar().addMenu(self.file_menu)
 
         self.session_menu = self.menuBar().addMenu('Session')
         self.session_actions = {}        
 
         self.main_widget = QtWidgets.QWidget(self)
-
+        self.main_widget.setMinimumWidth(800)
+        self.main_widget.setMinimumHeight(600)
         self.layout = QtWidgets.QVBoxLayout(self.main_widget)
-        self.tabs   = QtWidgets.QTabWidget(self.main_widget)
-        self.toolbars = []
-
-        self.canvas_by_name = {}
-
-        for i in range(3):
-            sc = StaticMplCanvas(self.main_widget, width=5, height=4, dpi=100)
-            snav = NavigationToolbar(sc, self)
-            self.toolbars.extend([snav]) #, dnav])
-            self.tabs.addTab(sc, f"Plot{i}")
-            self.layout.addWidget(snav)
-            self.canvas_by_name[f"Plot{i}"] = sc
-
-        self.layout.addWidget(self.tabs)
-        self.switch_toolbar()
-        self.tabs.currentChanged.connect(self.switch_toolbar)
 
         self.main_widget.setFocus()
         self.setCentralWidget(self.main_widget)
@@ -188,13 +179,40 @@ class ApplicationWindow(QtWidgets.QMainWindow):
             self.statusBar().showMessage("Server did not respond.", 2000)
 
         socket.close()
+        self.construct_plots(desc)
 
     def open_connection_dialog(self):
         address, ok = QtWidgets.QInputDialog.getText(self, 'Open Connection', 
             'Resource Name:')
         if ok:
             self.open_connection(address)
+    
+    def construct_plots(self, plot_desc):
+        self.toolbars = []
+        self.canvas_by_name = {}
+
+        # Purge everything in the layout
+        for i in reversed(range(self.layout.count())): 
+            widgetToRemove = self.layout.itemAt( i ).widget()
+            self.layout.removeWidget( widgetToRemove )
+            widgetToRemove.setParent( None )
+
+        self.tabs  = QtWidgets.QTabWidget(self.main_widget)
+
+        for name, desc in plot_desc.items():
+            canvas = StaticMplCanvas(self.main_widget, width=5, height=4, dpi=100)
+            nav    = NavigationToolbar(canvas, self)
             
+            canvas.set_desc(desc)
+            self.toolbars.append(nav)
+            self.tabs.addTab(canvas, name)
+            self.layout.addWidget(nav)
+            
+            self.canvas_by_name[name] = canvas
+
+        self.layout.addWidget(self.tabs)
+        self.switch_toolbar()
+        self.tabs.currentChanged.connect(self.switch_toolbar)
 
     def data_signal_received(self, stuff):
         message, data = stuff

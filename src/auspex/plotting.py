@@ -6,7 +6,7 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-import threading
+from threading import Thread
 import subprocess
 import psutil
 import os
@@ -15,6 +15,67 @@ import tempfile
 import time
 
 from auspex.log import logger
+
+class MatplotServerThread(Thread):
+
+    def __init__(self, plot_desc={}, status_port = 7771, data_port = 7772):
+        super(MatplotServerThread, self).__init__()
+        self.plot_desc = plot_desc
+        self.status_port = status_port
+        self.data_port = data_port
+        self.daemon = True
+        self.stopped = False
+        self.start()
+
+    async def poll_sockets(self):
+        while not self.stopped:
+            evts = dict(await self.poller.poll(1000))
+            if self.status_sock in evts and evts[self.status_sock] == zmq.POLLIN:
+                ident, msg = await self.status_sock.recv_multipart()
+                logger.info("Matplot server thread got {} from {}".format(msg.decode(), ident.decode()))
+                if msg == b"WHATSUP":
+                    await self.status_sock.send_multipart([ident, b"HI!", self.plot_desc])
+            await asyncio.sleep(0)
+
+    async def _send(self, data):
+        await self.data_sock.send(("server %d"%data).encode())
+
+    def send(self, data):
+        self._loop.create_task(self._send(data))
+
+    def stop(self):
+        self.stopped = True
+        pending = asyncio.Task.all_tasks(loop=self._loop)
+        self._loop.stop()
+        time.sleep(1)
+        for task in pending:
+            task.cancel()
+            try:
+                self._loop.run_until_complete(task)
+            except asyncio.CancelledError:
+                pass
+        self._loop.close()
+
+
+    def run(self):
+            self._loop = zmq.asyncio.ZMQEventLoop()
+            asyncio.set_event_loop(self._loop)
+            self.context = zmq.asyncio.Context()
+            self.status_sock = self.context.socket(zmq.ROUTER)
+            self.data_sock = self.context.socket(zmq.PUB)
+            self.status_sock.bind("tcp://*:%s" % self.status_port)
+            self.data_sock.bind("tcp://*:%s" % self.data_port)
+
+            self.poller = zmq.asyncio.Poller()
+            self.poller.register(self.status_sock, zmq.POLLIN)
+
+            print("starting...")
+
+            self._loop.create_task(self.poll_sockets())
+            try:
+                self._loop.run_forever()
+            finally:
+                self.stop()
 
 class BokehServerProcess(object):
     def __init__(self, notebook=False):
