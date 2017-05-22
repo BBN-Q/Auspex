@@ -58,7 +58,7 @@ class TestExperiment(Experiment):
             await asyncio.sleep(0.01)
             data = np.zeros((100,100))
             data[25:75, 25:75] = 1.0 
-            data = data + 5*np.random.random((100,100))
+            data = data + 25*np.random.random((100,100))
             await self.voltage.push(data.flatten())
 
 if __name__ == '__main__':
