@@ -47,7 +47,7 @@ class DataListener(QtCore.QObject):
 
     def loop(self):
         while self.running:
-            evts = dict(self.poller.poll(100))
+            evts = dict(self.poller.poll(50))
             if self.socket in evts and evts[self.socket] == zmq.POLLIN:
                 msg_type, name, md, data = self.socket.recv_multipart()
                 if msg_type.decode() == "done":
@@ -92,32 +92,33 @@ class Canvas1D(MplCanvas):
         self.flush_events()
 
     def set_desc(self, desc):
-        if 'xlabel' in desc.keys():
-            self.axes.set_xlabel(desc['xlabel'])
-        if 'ylabel' in desc.keys():
-            self.axes.set_ylabel(desc['ylabel'])
+        if 'x_label' in desc.keys():
+            self.axes.set_xlabel(desc['x_label'])
+        if 'y_label' in desc.keys():
+            self.axes.set_ylabel(desc['y_label'])
 
 class Canvas2D(MplCanvas):
     def compute_initial_figure(self):
-        self.plt = self.axes.imshow(np.random.random((10,10)))
+        self.plt = self.axes.imshow(np.zeros((10,10)))
 
     def update_figure(self, data):
         self.plt.set_data(data.real.reshape((self.xlen, self.ylen)))
-        self.axes.relim()
+        self.plt.autoscale()
         self.draw()
         self.flush_events()
 
     def set_desc(self, desc):
-        if 'xlabel' in desc.keys():
-            self.axes.set_xlabel(desc['xlabel'])
-        if 'ylabel' in desc.keys():
-            self.axes.set_ylabel(desc['ylabel'])
-        self.aspect = (desc['xmax']-desc['xmin'])/(desc['ymax']-desc['ymin'])
-        self.extent = (desc['xmin'], desc['xmax'], desc['ymin'], desc['ymax'])
-        self.xlen = desc['xlen']
-        self.ylen = desc['ylen']
-        self.plt = self.axes.imshow(np.random.random((10,10)),
-            aspect=self.aspect, extent=self.extent, origin="lower")
+        self.axes.clear()
+        if 'x_label' in desc.keys():
+            self.axes.set_xlabel(desc['x_label'])
+        if 'y_label' in desc.keys():
+            self.axes.set_ylabel(desc['y_label'])
+        self.aspect = (desc['x_max']-desc['x_min'])/(desc['y_max']-desc['y_min'])
+        self.extent = (desc['x_min'], desc['x_max'], desc['y_min'], desc['y_max'])
+        self.xlen = desc['x_len']
+        self.ylen = desc['y_len']
+        self.plt = self.axes.imshow(np.zeros((self.xlen, self.ylen)),
+            animated=True, aspect=self.aspect, extent=self.extent, origin="lower")
 
 class MatplotClientWindow(QtWidgets.QMainWindow):
     def __init__(self, hostname=None):
@@ -160,7 +161,7 @@ class MatplotClientWindow(QtWidgets.QMainWindow):
         poller = zmq.Poller()
         poller.register(socket)
 
-        evts = dict(poller.poll(2000))
+        evts = dict(poller.poll(500))
         if socket in evts:
             reply, desc = [e.decode() for e in socket.recv_multipart()]
             desc = json.loads(desc)

@@ -32,13 +32,13 @@ class MatplotServerThread(Thread):
 
     async def poll_sockets(self):
         while not self.stopped:
-            evts = dict(await self.poller.poll(1000))
+            evts = dict(await self.poller.poll(50))
             if self.status_sock in evts and evts[self.status_sock] == zmq.POLLIN:
                 ident, msg = await self.status_sock.recv_multipart()
                 print("Got {} from {}".format(msg.decode(), ident.decode()))
                 if msg == b"WHATSUP":
                     await self.status_sock.send_multipart([ident, b"HI!", json.dumps(self.plot_desc).encode('utf8')])
-            await asyncio.sleep(0)
+            await asyncio.sleep(0.010)
 
     async def _send(self, name, data, msg):
         md = dict(
@@ -79,57 +79,3 @@ class MatplotServerThread(Thread):
                 self._loop.run_forever()
             finally:
                 self.stop()
-
-# class BokehServerProcess(object):
-#     def __init__(self, notebook=False):
-#         super(BokehServerProcess, self).__init__()
-#         self.run_in_notebook = notebook
-#         self.pid_filename = os.path.join(tempfile.gettempdir(), "auspex_bokeh.pid")
-
-#     def run(self):
-#         # start a Bokeh server if one is not already running
-#         pid = self.read_session_pid()
-#         if pid:
-#             self.p = psutil.Process(pid)
-#             logger.info("Using existing Bokeh server")
-#             return
-#         logger.info("Starting Bokeh server")
-#         args = ["bokeh", "serve", "--port", "5006", "--allow-websocket-origin=localhost:8888", "--allow-websocket-origin=localhost:8889", "--allow-websocket-origin=localhost:8890"]
-#         self.p = subprocess.Popen(args, env=os.environ.copy())
-#         self.write_session_pid()
-#         # sleep to give the Bokeh server a chance to start
-#         # TODO replace this with some bokeh client API call that
-#         # verifies that the server is running
-#         time.sleep(3)
-
-#     def terminate(self):
-#         if self.p:
-#             print("Killing bokeh server process {}".format(self.p.pid))
-#             try:
-#                 for child_proc in psutil.Process(self.p.pid).children():
-#                     print("Killing child process {}".format(child_proc.pid))
-#                     child_proc.terminate()
-#             except:
-#                 print("Couldn't kill child processes.")
-#             self.p.terminate()
-#             self.p = None
-#             os.remove(self.pid_filename)
-
-#     def write_session_pid(self):
-#         with open(self.pid_filename, "w") as f:
-#             f.write("{}\n".format(self.p.pid))
-
-#     def read_session_pid(self):
-#         # check if pid file exists
-#         if not os.path.isfile(self.pid_filename):
-#             return None
-#         with open(self.pid_filename) as f:
-#             pid = int(f.readline())
-#         # check that a process is running on that PID
-#         if not psutil.pid_exists(pid):
-#             return None
-#         # check that the process is a Bokeh server
-#         cmd = psutil.Process(pid).cmdline()
-#         if any('bokeh' in item for item in cmd):
-#             return pid
-#         return None
