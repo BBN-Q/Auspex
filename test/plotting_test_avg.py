@@ -74,9 +74,9 @@ if __name__ == '__main__':
             (avg.final_average, pl2.sink)
             ]
 
-    avg.update_interval = 0.05
-    pl1.update_interval = 0.05
-    pl2.update_interval = 0.05
+    avg.update_interval = 0.2
+    pl1.update_interval = 0.2
+    pl2.update_interval = 0.2
 
     exp.set_graph(edges)
     exp.init_instruments()

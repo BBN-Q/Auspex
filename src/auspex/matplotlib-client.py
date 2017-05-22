@@ -63,10 +63,19 @@ class MplCanvas(FigureCanvas):
     """Ultimately, this is a QWidget (as well as a FigureCanvasAgg, etc.)."""
 
     def __init__(self, parent=None, width=5, height=4, dpi=100):
-        fig = Figure(figsize=(width, height), dpi=dpi)
-        self.axes = fig.add_subplot(111)
+        self.fig = Figure(figsize=(width, height), dpi=dpi)
+        self.plots = []
+
+        self.real_axis  = self.fig.add_subplot(221)
+        self.imag_axis  = self.fig.add_subplot(222)
+        self.abs_axis   = self.fig.add_subplot(223)
+        self.phase_axis = self.fig.add_subplot(224)
+        
+        self.axes = [self.real_axis, self.imag_axis, self.abs_axis, self.phase_axis]
+        self.func_names = ["Real", "Imag", "Abs", "Phase"]
+        self.plot_funcs = [np.real, np.imag, np.abs, np.angle]
         self.compute_initial_figure()
-        FigureCanvas.__init__(self, fig)
+        FigureCanvas.__init__(self, self.fig)
         self.setParent(parent)
         FigureCanvas.setSizePolicy(self,
                                    QtWidgets.QSizePolicy.Expanding,
@@ -76,49 +85,65 @@ class MplCanvas(FigureCanvas):
     def compute_initial_figure(self):
         pass
 
-
 class Canvas1D(MplCanvas):
     def compute_initial_figure(self):
-        t = np.arange(0.0, 3.0, 0.01)
-        s = np.sin(2*np.pi*t)
-        self.plt, = self.axes.plot(t, s)
+        # t = np.arange(0.0, 3.0, 0.01)
+        # s = np.sin(2*np.pi*t)
+        for ax in self.axes:
+            plt, = ax.plot([0,0,0])
+            self.plots.append(plt)
 
     def update_figure(self, data):
-        self.plt.set_xdata(np.arange(len(data)))
-        self.plt.set_ydata(data)
-        self.axes.relim()
-        self.axes.autoscale_view()
-        self.draw()
-        self.flush_events()
+        for plt, ax, f in zip(self.plots, self.axes, self.plot_funcs):
+            plt.set_ydata(f(data))
+            ax.relim()
+            ax.autoscale_view()
+            self.draw()
+            self.flush_events()
 
     def set_desc(self, desc):
-        if 'x_label' in desc.keys():
-            self.axes.set_xlabel(desc['x_label'])
-        if 'y_label' in desc.keys():
-            self.axes.set_ylabel(desc['y_label'])
+        for ax, name in zip(self.axes, self.func_names):
+            if 'x_label' in desc.keys():
+                ax.set_xlabel(desc['x_label'])
+            if 'y_label' in desc.keys():
+                ax.set_ylabel(name + " " + desc['y_label'])
+        for plt in self.plots:
+            plt.set_xdata(np.linspace(desc['x_min'], desc['x_max'], desc['x_len']))
+            plt.set_ydata(np.nan*np.linspace(desc['x_min'], desc['x_max'], desc['x_len']))
+        self.fig.tight_layout()
 
 class Canvas2D(MplCanvas):
     def compute_initial_figure(self):
-        self.plt = self.axes.imshow(np.zeros((10,10)))
+        for ax in self.axes:
+            plt = ax.imshow(np.zeros((10,10)))
+            self.plots.append(plt)
 
     def update_figure(self, data):
-        self.plt.set_data(data.real.reshape((self.xlen, self.ylen)))
-        self.plt.autoscale()
-        self.draw()
-        self.flush_events()
+        data = data.reshape((self.xlen, self.ylen))
+        for plt, f in zip(self.plots, self.plot_funcs):
+            plt.set_data(f(data))
+            plt.autoscale()
+            self.draw()
+            self.flush_events()
 
     def set_desc(self, desc):
-        self.axes.clear()
-        if 'x_label' in desc.keys():
-            self.axes.set_xlabel(desc['x_label'])
-        if 'y_label' in desc.keys():
-            self.axes.set_ylabel(desc['y_label'])
+
         self.aspect = (desc['x_max']-desc['x_min'])/(desc['y_max']-desc['y_min'])
         self.extent = (desc['x_min'], desc['x_max'], desc['y_min'], desc['y_max'])
         self.xlen = desc['x_len']
         self.ylen = desc['y_len']
-        self.plt = self.axes.imshow(np.zeros((self.xlen, self.ylen)),
-            animated=True, aspect=self.aspect, extent=self.extent, origin="lower")
+        self.plots = []
+        for ax in self.axes:
+            ax.clear()
+            plt = ax.imshow(np.zeros((self.xlen, self.ylen)),
+                animated=True, aspect=self.aspect, extent=self.extent, origin="lower")
+            self.plots.append(plt)
+        for ax, name in zip(self.axes, self.func_names):
+            if 'x_label' in desc.keys():
+                ax.set_xlabel(desc['x_label'])
+            if 'y_label' in desc.keys():
+                ax.set_ylabel(name + " " + desc['y_label'])
+        self.fig.tight_layout()
 
 class MatplotClientWindow(QtWidgets.QMainWindow):
     def __init__(self, hostname=None):
@@ -225,7 +250,10 @@ class MatplotClientWindow(QtWidgets.QMainWindow):
 
     def data_signal_received(self, message):
         plot_name, data = message
-        self.canvas_by_name[plot_name].update_figure(data)
+        try:
+            self.canvas_by_name[plot_name].update_figure(data)
+        except:
+            pass
 
     def switch_toolbar(self):
         for toolbar in self.toolbars:

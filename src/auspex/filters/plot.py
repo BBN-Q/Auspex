@@ -49,6 +49,7 @@ class Plotter(Filter):
                 'plot_dims': int(self.plot_dims.value),
                 'x_min':     float(min(self.x_values)),
                 'x_max':     float(max(self.x_values)),
+                'x_len':     int(self.descriptor.axes[-1].num_points()),
                 'x_label':   self.axis_label(-1),
                 'y_label':   "{} ({})".format(self.descriptor.data_name, self.descriptor.data_unit)
                 }
@@ -57,7 +58,6 @@ class Plotter(Filter):
             d['data_label'] = "{} ({})".format(self.descriptor.data_name, self.descriptor.data_unit)
             d['y_min']      = float(min(self.y_values))
             d['y_max']      = float(max(self.y_values))
-            d['x_len']      = int(self.descriptor.axes[-1].num_points())
             d['y_len']      = int(self.descriptor.axes[-2].num_points())
         return d
                     
