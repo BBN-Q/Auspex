@@ -66,18 +66,46 @@ class DataListener(QtCore.QObject):
 class MplCanvas(FigureCanvas):
     """Ultimately, this is a QWidget (as well as a FigureCanvasAgg, etc.)."""
 
-    def __init__(self, parent=None, width=5, height=4, dpi=100):
+    def __init__(self, parent=None, width=5, height=4, dpi=100, plot_mode="quad"):
         self.fig = Figure(figsize=(width, height), dpi=dpi)
         self.plots = []
 
-        self.real_axis  = self.fig.add_subplot(221)
-        self.imag_axis  = self.fig.add_subplot(222)
-        self.abs_axis   = self.fig.add_subplot(223)
-        self.phase_axis = self.fig.add_subplot(224)
-        
-        self.axes = [self.real_axis, self.imag_axis, self.abs_axis, self.phase_axis]
-        self.func_names = ["Real", "Imag", "Abs", "Phase"]
-        self.plot_funcs = [np.real, np.imag, np.abs, np.angle]
+        if plot_mode == "quad":
+            self.real_axis  = self.fig.add_subplot(221)
+            self.imag_axis  = self.fig.add_subplot(222)
+            self.abs_axis   = self.fig.add_subplot(223)
+            self.phase_axis = self.fig.add_subplot(224)
+            self.axes = [self.real_axis, self.imag_axis, self.abs_axis, self.phase_axis]
+            self.func_names = ["Real", "Imag", "Abs", "Phase"]
+            self.plot_funcs = [np.real, np.imag, np.abs, np.angle]
+        elif plot_mode == "real":
+            self.real_axis  = self.fig.add_subplot(111)
+            self.axes = [self.real_axis]
+            self.func_names = ["Real"]
+            self.plot_funcs = [np.real]
+        elif plot_mode == "imag":
+            self.imag_axis  = self.fig.add_subplot(111)
+            self.axes = [self.imag_axis]
+            self.func_names = ["Imag"]
+            self.plot_funcs = [np.imag]
+        elif plot_mode == "amp":
+            self.abs_axis  = self.fig.add_subplot(111)
+            self.axes = [self.abs_axis]
+            self.func_names = ["Amp"]
+            self.plot_funcs = [np.abs]
+        elif plot_mode == "real/imag":
+            self.real_axis  = self.fig.add_subplot(121)
+            self.imag_axis  = self.fig.add_subplot(122)
+            self.axes = [self.real_axis, self.imag_axis]
+            self.func_names = ["Real", "Imag"]
+            self.plot_funcs = [np.real, np.imag]
+        elif plot_mode == "amp/phase":
+            self.abs_axis  = self.fig.add_subplot(121)
+            self.phase_axis  = self.fig.add_subplot(122)
+            self.axes = [self.abs_axis, self.phase_axis]
+            self.func_names = ["Amp", "Phase"]
+            self.plot_funcs = [np.abs, np.angle]
+
         self.compute_initial_figure()
         FigureCanvas.__init__(self, self.fig)
         self.setParent(parent)
@@ -168,7 +196,6 @@ class CanvasMesh(MplCanvas):
     def set_desc(self, desc):
 
         self.plots = []
-
         for ax, name in zip(self.axes, self.func_names):
             if 'x_label' in desc.keys():
                 ax.set_xlabel(desc['x_label'])
@@ -281,11 +308,11 @@ class MatplotClientWindow(QtWidgets.QMainWindow):
         for name, desc in plot_desc.items():
             if desc['plot_type'] == "standard":
                 if desc['plot_dims'] == 1:
-                    canvas = Canvas1D(self.main_widget, width=5, height=4, dpi=100)
+                    canvas = Canvas1D(self.main_widget, width=5, height=4, dpi=100, plot_mode=desc['plot_mode'])
                 if desc['plot_dims'] == 2:
-                    canvas = Canvas2D(self.main_widget, width=5, height=4, dpi=100)
+                    canvas = Canvas2D(self.main_widget, width=5, height=4, dpi=100, plot_mode=desc['plot_mode'])
             elif desc['plot_type'] == "mesh":
-                canvas = CanvasMesh(self.main_widget, width=5, height=4, dpi=100)
+                canvas = CanvasMesh(self.main_widget, width=5, height=4, dpi=100, plot_mode=desc['plot_mode'])
             nav    = NavigationToolbar(canvas, self)
             
             canvas.set_desc(desc)
