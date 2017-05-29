@@ -12,8 +12,12 @@
 from __future__ import unicode_literals
 import sys
 import os
+import time
 import random
 import json
+
+from scipy.spatial import Delaunay
+
 import matplotlib
 # Make sure that we are using QT5
 matplotlib.use('Qt5Agg')
@@ -56,7 +60,7 @@ class DataListener(QtCore.QObject):
                     name = name.decode()
                     md   = json.loads(md.decode())
                     A    = np.frombuffer(data, dtype=md['dtype'])
-                    self.message.emit((name, A.reshape(md['shape'])))
+                    self.message.emit((name, A.reshape(md['shape'], order="f")))
         self.socket.close()
 
 class MplCanvas(FigureCanvas):
@@ -87,8 +91,6 @@ class MplCanvas(FigureCanvas):
 
 class Canvas1D(MplCanvas):
     def compute_initial_figure(self):
-        # t = np.arange(0.0, 3.0, 0.01)
-        # s = np.sin(2*np.pi*t)
         for ax in self.axes:
             plt, = ax.plot([0,0,0])
             self.plots.append(plt)
@@ -123,11 +125,10 @@ class Canvas2D(MplCanvas):
         for plt, f in zip(self.plots, self.plot_funcs):
             plt.set_data(f(data))
             plt.autoscale()
-            self.draw()
-            self.flush_events()
+        self.draw()
+        self.flush_events()
 
     def set_desc(self, desc):
-
         self.aspect = (desc['x_max']-desc['x_min'])/(desc['y_max']-desc['y_min'])
         self.extent = (desc['x_min'], desc['x_max'], desc['y_min'], desc['y_max'])
         self.xlen = desc['x_len']
@@ -144,6 +145,48 @@ class Canvas2D(MplCanvas):
             if 'y_label' in desc.keys():
                 ax.set_ylabel(name + " " + desc['y_label'])
         self.fig.tight_layout()
+
+class CanvasMesh(MplCanvas):
+    def compute_initial_figure(self):
+        # data = np.array([[0,0,0],[0,1,0],[1,1,0],[1,0,0]])
+        # self.update_figure(np.array(data))
+        pass
+
+    def update_figure(self, data):
+        # Expected xs, ys, zs coming in as
+        # data = np.array([xs, ys, zs]).transpose()
+        points = data[:,0:2]
+        mesh = self.scaled_Delaunay(points)
+        xs   = mesh.points[:,0]
+        ys   = mesh.points[:,1]
+        for ax, f in zip(self.axes, self.plot_funcs):
+            ax.clear()
+            ax.tripcolor(xs, ys, mesh.simplices, f(data[:,2]), cmap="RdGy", shading="flat")
+        self.draw()
+        self.flush_events()
+
+    def set_desc(self, desc):
+
+        self.plots = []
+
+        for ax, name in zip(self.axes, self.func_names):
+            if 'x_label' in desc.keys():
+                ax.set_xlabel(desc['x_label'])
+            if 'y_label' in desc.keys():
+                ax.set_ylabel(name + " " + desc['y_label'])
+        self.fig.tight_layout()
+
+    def scaled_Delaunay(self, points):
+        """ Return a scaled Delaunay mesh and scale factors """
+        scale_factors = []
+        points = np.array(points)
+        for i in range(points.shape[1]):
+            scale_factors.append(1.0/np.mean(points[:,i]))
+            points[:,i] = points[:,i]*scale_factors[-1]
+        mesh = Delaunay(points)
+        for i in range(points.shape[1]):
+            mesh.points[:,i] = mesh.points[:,i]/scale_factors[i]
+        return mesh
 
 class MatplotClientWindow(QtWidgets.QMainWindow):
     def __init__(self, hostname=None):
@@ -184,13 +227,18 @@ class MatplotClientWindow(QtWidgets.QMainWindow):
         socket.send(b"WHATSUP")
 
         poller = zmq.Poller()
-        poller.register(socket)
+        poller.register(socket, zmq.POLLOUT)
+        time.sleep(0.2)
 
         evts = dict(poller.poll(500))
         if socket in evts:
-            reply, desc = [e.decode() for e in socket.recv_multipart()]
-            desc = json.loads(desc)
-            self.statusBar().showMessage("Connection established. Pulling plot information.", 2000)
+            try:
+                reply, desc = [e.decode() for e in socket.recv_multipart(flags=zmq.NOBLOCK)]
+                desc = json.loads(desc)
+                self.statusBar().showMessage("Connection established. Pulling plot information.", 2000)
+            except:
+                self.statusBar().showMessage("Could not connect to server.", 2000)
+                return
         else:
             self.statusBar().showMessage("Server did not respond.", 2000)
 
@@ -231,10 +279,13 @@ class MatplotClientWindow(QtWidgets.QMainWindow):
         self.tabs  = QtWidgets.QTabWidget(self.main_widget)
 
         for name, desc in plot_desc.items():
-            if desc['plot_dims'] == 1:
-                canvas = Canvas1D(self.main_widget, width=5, height=4, dpi=100)
-            if desc['plot_dims'] == 2:
-                canvas = Canvas2D(self.main_widget, width=5, height=4, dpi=100)
+            if desc['plot_type'] == "standard":
+                if desc['plot_dims'] == 1:
+                    canvas = Canvas1D(self.main_widget, width=5, height=4, dpi=100)
+                if desc['plot_dims'] == 2:
+                    canvas = Canvas2D(self.main_widget, width=5, height=4, dpi=100)
+            elif desc['plot_type'] == "mesh":
+                canvas = CanvasMesh(self.main_widget, width=5, height=4, dpi=100)
             nav    = NavigationToolbar(canvas, self)
             
             canvas.set_desc(desc)
