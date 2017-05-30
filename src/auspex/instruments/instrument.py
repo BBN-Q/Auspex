@@ -186,8 +186,9 @@ class Instrument(metaclass=MetaInstrument):
     def disconnect(self):
         pass
 
-    def __del__(self):
-        self.disconnect()
+    # We now expect the main experiment to deal with shutting down the instruments
+    # def __del__(self):
+    #     self.disconnect()
 
     def set_all(self, settings_dict):
         """Accept a settings dictionary and attempt to set all of the instrument

@@ -213,8 +213,5 @@ class AlazarATS9870(Instrument):
         self._chan_to_wsocket.clear()
         self._lib.unregister_sockets()
 
-    def __del__(self):
-        self.disconnect()
-
     def __str__(self):
         return "<AlazarATS9870({}/{})>".format(self.name, self.resource_name)

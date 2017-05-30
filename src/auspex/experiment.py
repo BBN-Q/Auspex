@@ -449,8 +449,11 @@ class Experiment(metaclass=MetaExperiment):
         tasks = [n.run() for n in other_nodes]
 
         tasks.append(self.sweep())
-        self.loop.run_until_complete(asyncio.gather(*tasks))
-        self.loop.run_until_complete(asyncio.sleep(1))
+        try:
+            self.loop.run_until_complete(asyncio.gather(*tasks))
+            self.loop.run_until_complete(asyncio.sleep(1))
+        except Exception as e:
+            logger.error("Encountered exception %s in main loop.", repr(e))
 
         for plot, callback in zip(self.manual_plotters, self.manual_plotter_callbacks):
             if callback:
