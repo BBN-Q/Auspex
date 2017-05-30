@@ -217,6 +217,14 @@ class Experiment(metaclass=MetaExperiment):
             self.output_connectors[oc] = a
             setattr(self, oc, a)
 
+        # Some instruments don't clean up well after themselves, reconstruct them on a
+        # per instance basis
+        for n in self._instruments.keys():
+            new_cls = type(self._instruments[n])
+            new_inst = new_cls(resource_name=self._instruments[n].resource_name, name=self._instruments[n].name)
+            setattr(self, n, new_inst)
+            self._instruments[n] = new_inst
+
         # Create the asyncio measurement loop
         self.loop = asyncio.get_event_loop()
 
