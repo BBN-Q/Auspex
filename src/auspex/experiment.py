@@ -407,6 +407,7 @@ class Experiment(metaclass=MetaExperiment):
             # Make the rest of the writers use this same file object
             for w in wrs[1:]:
                 w.file = wrs[0].file
+                w.filename.value = wrs[0].filename.value
 
         # Go and find any plotters
         self.plotters = [n for n in self.nodes if isinstance(n, (Plotter, MeshPlotter, XYPlotter))]
