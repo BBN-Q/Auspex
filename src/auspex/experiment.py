@@ -439,6 +439,7 @@ class Experiment(metaclass=MetaExperiment):
             time.sleep(0.5)
             client_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),"matplotlib-client.py")
             subprocess.Popen(['python', client_path, 'localhost'], env=os.environ.copy())
+            time.sleep(1)
 
         def catch_ctrl_c(signum, frame):
             logger.info("Caught SIGINT. Shutting down.")
@@ -479,6 +480,10 @@ class Experiment(metaclass=MetaExperiment):
                 del f
             except:
                 logger.debug("File probably already closed...")
+
+        if len(self.plotters) > 0:
+            self.plot_server.stop()
+
         self.shutdown_instruments()
         self.disconnect_instruments()
 
