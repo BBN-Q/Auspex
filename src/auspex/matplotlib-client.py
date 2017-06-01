@@ -290,9 +290,9 @@ class MatplotClientWindow(QtWidgets.QMainWindow):
 
         poller = zmq.Poller()
         poller.register(socket, zmq.POLLOUT)
-        time.sleep(0.2)
+        time.sleep(0.1)
 
-        evts = dict(poller.poll(500))
+        evts = dict(poller.poll(100))
         if socket in evts:
             try:
                 reply, desc = [e.decode() for e in socket.recv_multipart(flags=zmq.NOBLOCK)]
