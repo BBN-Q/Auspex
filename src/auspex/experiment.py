@@ -187,6 +187,9 @@ class Experiment(metaclass=MetaExperiment):
         # This holds a reference to a bokeh-server instance
         # for plotting, if there is one.
         self.matplot_server_thread = None
+        # If this is True, don't close the plot server thread so that
+        # we might push additional plots after run_sweeps is complete.
+        self.leave_plot_server_open = False
 
         # Also keep references to all of the plot filters
         self.plotters = [] # Standard pipeline plotters using streams
@@ -466,7 +469,7 @@ class Experiment(metaclass=MetaExperiment):
 
         for plot, callback in zip(self.manual_plotters, self.manual_plotter_callbacks):
             if callback:
-                callback(plot.fig)
+                callback(plot)
 
         self.shutdown()
 
@@ -481,7 +484,7 @@ class Experiment(metaclass=MetaExperiment):
             except:
                 logger.debug("File probably already closed...")
 
-        if len(self.plotters) > 0:
+        if len(self.plotters) > 0 and not self.leave_plot_server_open:
             self.plot_server.stop()
 
         self.shutdown_instruments()
