@@ -204,7 +204,6 @@ class KeysightM8190A(SCPIInstrument):
     gate_mode       = StringCommand(scpi_string=":INIT:GATE:STAT", value_map={True:"1", False:"0"})
 
     def __init__(self, resource_name, *args, **kwargs):
-        resource_name += "::inst0::INSTR" #user guide recommends HiSLIP protocol
         super(KeysightM8190A, self).__init__(resource_name, *args, **kwargs)
         self.name = "KeysightM8190A AWG"
 
@@ -215,6 +214,10 @@ class KeysightM8190A(SCPIInstrument):
         self._freeze()
 
     def connect(self, resource_name=None, interface_type=None):
+        if resource_name is not None:
+            self.resource_name = resource_name
+        if "::inst0::INSTR" not in self.resource_name: #user guide recommends HiSLIP protocol
+            self.resource_name += "::inst0::INSTR"
         super(KeysightM8190A, self).connect(resource_name=resource_name, interface_type=interface_type)
         self.interface._resource.read_termination = u"\n"
 
