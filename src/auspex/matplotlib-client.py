@@ -142,6 +142,41 @@ class Canvas1D(MplCanvas):
             plt.set_ydata(np.nan*np.linspace(desc['x_min'], desc['x_max'], desc['x_len']))
         self.fig.tight_layout()
 
+class CanvasManual(MplCanvas):
+    def __init__(self, parent=None, width=5, height=4, dpi=100):
+        self.fig = Figure(figsize=(width, height), dpi=dpi)
+        self.axis = self.fig.add_subplot(111)
+        self.traces = {}
+
+        FigureCanvas.__init__(self, self.fig)
+        self.setParent(parent)
+        FigureCanvas.setSizePolicy(self,
+                                   QtWidgets.QSizePolicy.Expanding,
+                                   QtWidgets.QSizePolicy.Expanding)
+        FigureCanvas.updateGeometry(self)
+
+    def compute_initial_figure(self):
+        pass
+
+    def update_trace(self, trace_name, data):
+        xdata = data[:,0]
+        ydata = data[:,1]
+        self.traces[trace_name].set_xdata(xdata)
+        self.traces[trace_name].set_ydata(ydata)
+        self.axis.relim()
+        self.axis.autoscale_view()
+        self.draw()
+        self.flush_events()
+
+    def set_desc(self, desc):
+        if 'x_label' in desc.keys():
+            self.axis.set_xlabel(desc['x_label'])
+        if 'y_label' in desc.keys():
+            self.axis.set_ylabel(desc['y_label'])
+        for trace in desc['traces']:
+            self.traces[trace['name']], = self.axis.plot([], **trace['matplotlib_kwargs'])
+        self.fig.tight_layout()
+
 class Canvas2D(MplCanvas):
     def compute_initial_figure(self):
         for ax in self.axes:
@@ -255,9 +290,9 @@ class MatplotClientWindow(QtWidgets.QMainWindow):
 
         poller = zmq.Poller()
         poller.register(socket, zmq.POLLOUT)
-        time.sleep(0.2)
+        time.sleep(0.1)
 
-        evts = dict(poller.poll(500))
+        evts = dict(poller.poll(100))
         if socket in evts:
             try:
                 reply, desc = [e.decode() for e in socket.recv_multipart(flags=zmq.NOBLOCK)]
@@ -311,6 +346,8 @@ class MatplotClientWindow(QtWidgets.QMainWindow):
                     canvas = Canvas1D(self.main_widget, width=5, height=4, dpi=100, plot_mode=desc['plot_mode'])
                 if desc['plot_dims'] == 2:
                     canvas = Canvas2D(self.main_widget, width=5, height=4, dpi=100, plot_mode=desc['plot_mode'])
+            elif desc['plot_type'] == "manual":
+                canvas = CanvasManual(self.main_widget, width=5, height=4, dpi=100)
             elif desc['plot_type'] == "mesh":
                 canvas = CanvasMesh(self.main_widget, width=5, height=4, dpi=100, plot_mode=desc['plot_mode'])
             nav    = NavigationToolbar(canvas, self)
@@ -329,7 +366,12 @@ class MatplotClientWindow(QtWidgets.QMainWindow):
     def data_signal_received(self, message):
         plot_name, data = message
         try:
-            self.canvas_by_name[plot_name].update_figure(data)
+            # If we see a colon, then we must look for a named trace
+            if ":" in plot_name:
+                plot_name, trace_name = plot_name.split(":")
+                self.canvas_by_name[plot_name].update_trace(trace_name, data)
+            else:
+                self.canvas_by_name[plot_name].update_figure(data)
         except:
             pass
 
