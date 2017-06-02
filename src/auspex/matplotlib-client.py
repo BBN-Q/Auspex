@@ -60,7 +60,7 @@ class DataListener(QtCore.QObject):
                     name = name.decode()
                     md   = json.loads(md.decode())
                     A    = np.frombuffer(data, dtype=md['dtype'])
-                    self.message.emit((name, A.reshape(md['shape'], order="f")))
+                    self.message.emit((name, A))
         self.socket.close()
 
 class MplCanvas(FigureCanvas):
@@ -184,7 +184,7 @@ class Canvas2D(MplCanvas):
             self.plots.append(plt)
 
     def update_figure(self, data):
-        data = data.reshape((self.xlen, self.ylen))
+        data = data.reshape((self.xlen, self.ylen), order='f').T
         for plt, f in zip(self.plots, self.plot_funcs):
             plt.set_data(f(data))
             plt.autoscale()
