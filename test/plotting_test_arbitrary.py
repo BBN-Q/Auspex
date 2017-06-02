@@ -48,23 +48,22 @@ class TestExperiment(Experiment):
 if __name__ == '__main__':
 
     exp  = TestExperiment()
-    exp.leave_plot_server_open = True
-
-    # Create the plotter and the actual traces we'll need
-    plt  = ManualPlotter("Manual Plotting Test", x_label='X Thing', y_label='Y Thing')
-    plt.add_data_trace("Example Data")
-    plt.add_fit_trace("Example Fit")
+    plt  = ManualPlotter("Plot Me", x_label='X Thing', y_label='Y Thing')
     buff = DataBuffer()
 
     edges = [(exp.voltage, buff.sink)]
     exp.set_graph(edges)
 
+    # Create the actual plots we'll need
+    data_pts = plt.fig.diamond([],[], color='firebrick')
+    fit_line = plt.fig.line([],[], color='navy')
+
     # Create a plotter callback
-    def plot_me(plot):
+    def plot_me(fig, data_pts=data_pts, fit_line=fit_line):
         ys = buff.get_data()['voltage']
         xs = buff.descriptor.axes[0].points
-        plot.process_direct("Example Data", xs, ys)
-        plot.process_direct("Example Fit", xs, ys+0.1)
+        data_pts.data_source.data = dict(x=xs, y=ys)
+        fit_line.data_source.data = dict(x=xs, y=xs)
 
     exp.add_manual_plotter(plt, callback=plot_me)
 
@@ -73,7 +72,5 @@ if __name__ == '__main__':
 
     ys = buff.get_data()['voltage']
     xs = buff.descriptor.axes[0].points
-    plt.process_direct("Example Data", xs, ys)
-    plt.process_direct("Example Fit", xs, ys+0.1)
-
-    exp.plot_server.stop()
+    data_pts.data_source.data = dict(x=xs, y=ys)
+    fit_line.data_source.data = dict(x=xs, y=xs*xs)

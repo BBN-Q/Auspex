@@ -78,6 +78,4 @@ class MatplotServerThread(Thread):
             try:
                 self._loop.run_forever()
             finally:
-                self.status_sock.close()
-                self.data_sock.close()
-                self.context.destroy()
+                self.stop()

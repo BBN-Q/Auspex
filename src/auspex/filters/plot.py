@@ -332,28 +332,15 @@ class XYPlotter(Filter):
 
 class ManualPlotter(object):
     """Establish a figure, then give the user complete control over plot creation and data."""
-    def __init__(self,  name="", x_label='X', y_label="y"):
+    def __init__(self,  name="", x_label='X', y_label="y", notebook=False):
+        self.plot_height  = 600
+        self.webgl        = False
         self.x_label      = x_label
         self.y_label      = y_label
         self.name         = name
-        self.traces = []
 
-    def add_trace(self, name, matplotlib_kwargs={}):
-        self.traces.append({'name': name, 'matplotlib_kwargs': matplotlib_kwargs})
-
-    def add_fit_trace(self, name):
-        self.add_trace(name, matplotlib_kwargs={'linestyle': '-', 'linewidth': 2})
-
-    def add_data_trace(self, name):
-        self.add_trace(name, matplotlib_kwargs={'linestyle': ':', 'marker': '.'})
-
-    def desc(self):
-        d =    {'plot_type': 'manual',
-                'x_label':   self.x_label,
-                'y_label':   self.y_label,
-                'traces':    self.traces
-                }
-        return d
-
-    def process_direct(self, trace_name, xdata, ydata):
-        self.plot_server.send(self.name + ":" + trace_name, np.transpose([xdata,ydata]))
+        self.run_in_notebook = notebook
+        if self.run_in_notebook:
+            self.plot_height = round(self.plot_height*0.5)
+        self.fig = Figure(plot_width=self.plot_height, plot_height=self.plot_height,
+                          webgl=self.webgl, x_axis_label=x_label, y_axis_label=y_label)
