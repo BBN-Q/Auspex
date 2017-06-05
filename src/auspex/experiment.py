@@ -184,7 +184,7 @@ class Experiment(metaclass=MetaExperiment):
         # This holds the experiment graph
         self.graph = None
 
-        # This holds a reference to a bokeh-server instance
+        # This holds a reference to a matplotlib server instance
         # for plotting, if there is one.
         self.matplot_server_thread = None
         # If this is True, don't close the plot server thread so that
