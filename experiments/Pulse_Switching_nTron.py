@@ -150,8 +150,8 @@ class nTronSwitchingExperiment(Experiment):
         seg_ids_ch1.append(seg_id)
 
         # Build in a delay between sequences
-        settle_pts = int(640*np.int(np.ceil(self.repeat_time * self.sample_rate / 640)))
-        # settle_pts2 = int(640*np.ceil(8*2.4e-9 * self.sample_rate / 640))
+        settle_pts = 640*np.int(np.ceil(self.repeat_time * self.sample_rate / 640))
+        # settle_pts2 = 640*np.ceil(8*2.4e-9 * self.sample_rate / 640)
 
         scenario = Scenario()
         seq = Sequence(sequence_loop_ct=self.attempts*len(self.gate_amps)*len(self.gate_durs))
