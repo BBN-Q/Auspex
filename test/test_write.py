@@ -458,7 +458,7 @@ class WriteTestCase(unittest.TestCase):
             self.assertTrue(f[f['main/field+freq'][0]] == f['main/field'])
             self.assertTrue(f[f['main/field+freq'][1]] == f['main/freq'])
 
-        data, desc = load_from_HDF5("test_writehdf5_unstructured-0000.h5")
+        data, desc = load_from_HDF5("test_writehdf5_unstructured-0000.h5", reshape=False)
         self.assertTrue(data['main']['field'][-5:].sum() == 5*68)
 
         os.remove("test_writehdf5_unstructured-0000.h5")
