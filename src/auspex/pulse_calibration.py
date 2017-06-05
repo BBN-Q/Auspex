@@ -157,7 +157,7 @@ class QubitSearch(PulseCalibration):
         data, _ = self.run()
 
         # Plot the results
-        self.plot.process_direct("Data", self.frequencies, data)
+        self.plot["Data"] = (self.frequencies, data)
 
     def init_plot(self):
         plot = ManualPlotter("Qubit Search", x_label='Frequency (GHz)', y_label='Amplitude (Arb. Units)', notebook=self.notebook)
@@ -212,8 +212,8 @@ class RamseyCalibration(PulseCalibration):
         # Plot the results
         ramsey_f = ramsey_2f if self.two_freqs else ramsey_1f
         finer_delays = np.linspace(np.min(self.delays), np.max(self.delays), 4*len(self.delays))
-        self.plot.process_direct("Data", self.delays, data)
-        self.plot.process_direct("Fit", finer_delays, ramsey_f(finer_delays, *all_params))
+        self.plot["Data"] = (self.delays, data)
+        self.plot["Fit"] = (finer_delays, ramsey_f(finer_delays, *all_params))
 
         data, _ = self.run()
 
@@ -223,8 +223,8 @@ class RamseyCalibration(PulseCalibration):
         # Plot the results
         ramsey_f = ramsey_2f if self.two_freqs else ramsey_1f
         finer_delays = np.linspace(np.min(self.delays), np.max(self.delays), 4*len(self.delays))
-        self.plot.process_direct("Data", self.delays, data)
-        self.plot.process_direct("Fit", finer_delays, ramsey_f(finer_delays, *all_params))
+        self.plot["Data"] = (self.delays, data)
+        self.plot["Fit"]  = (finer_delays, ramsey_f(finer_delays, *all_params))
 
         if fit_freq_B < fit_freq_A:
             fit_freq = round(orig_freq + self.added_detuning/1e9 + 0.5*(fit_freq_A + 0.5*fit_freq_A + fit_freq_B)/1e9, 10)
@@ -414,10 +414,10 @@ class CRCalibration(PulseCalibration):
         # Plot the results
         xaxis = self.lengths if self.cal_type==CR_cal_type.LENGTH else self.phases if self.cal_type==CR_cal_type.PHASE else self.amps
         finer_xaxis = np.linspace(np.min(xaxis), np.max(xaxis), 4*len(xaxis))
-        self.plot.process_direct("Data 0", xaxis,       data_t[:len(data_t)/2])
-        self.plot.process_direct("Fit 0",  finer_xaxis, sin_f(finer_lengths, *all_params_0))
-        self.plot.process_direct("Data 1", xaxis,       data_t[len(data_t)/2:])
-        self.plot.process_direct("Fit 1",  finer_xaxis, sin_f(finer_lengths, *all_params_1))
+        self.plot["Data 0"] = (xaxis,       data_t[:len(data_t)/2])
+        self.plot["Fit 0"] =  (finer_xaxis, sin_f(finer_lengths, *all_params_0))
+        self.plot["Data 1"] = (xaxis,       data_t[len(data_t)/2:])
+        self.plot["Fit 1"] =  (finer_xaxis, sin_f(finer_lengths, *all_params_1))
 
 class CRLenCalibration(CRCalibration):
     def __init__(self, qubit_names, lengths=np.linspace(20, 1020, 21)*1e-9, phase = 0, amp = 0.8, rise_fall = 40e-9, cal_type = CR_cal_type.LENGTH):

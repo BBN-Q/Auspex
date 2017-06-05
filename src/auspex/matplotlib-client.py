@@ -159,6 +159,7 @@ class CanvasManual(MplCanvas):
         pass
 
     def update_trace(self, trace_name, data):
+        data = data.reshape((-1, 2), order='f')
         xdata = data[:,0]
         ydata = data[:,1]
         self.traces[trace_name].set_xdata(xdata)

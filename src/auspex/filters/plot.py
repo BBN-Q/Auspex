@@ -355,5 +355,12 @@ class ManualPlotter(object):
                 }
         return d
 
-    def process_direct(self, trace_name, xdata, ydata):
-        self.plot_server.send(self.name + ":" + trace_name, np.transpose([xdata,ydata]))
+    def __setitem__(self, trace_name, data_tuple):
+        if trace_name not in [t['name'] for t in self.traces]:
+            raise KeyError("Trace {} does not exist in this plotter.".format(trace_name))
+        if len(data_tuple) != 2:
+            raise ValueError("__setitem__ for ManualPlotter accepts a tuple of length 2 for (xdata, ydata)")
+        self.set_data(trace_name, data_tuple[0], data_tuple[1])
+
+    def set_data(self, trace_name, xdata, ydata):
+        self.plot_server.send(self.name + ":" + trace_name, np.array([xdata,ydata]))

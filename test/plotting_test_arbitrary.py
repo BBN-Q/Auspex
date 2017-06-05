@@ -63,8 +63,8 @@ if __name__ == '__main__':
     def plot_me(plot):
         ys = buff.get_data()['voltage']
         xs = buff.descriptor.axes[0].points
-        plot.process_direct("Example Data", xs, ys)
-        plot.process_direct("Example Fit", xs, ys+0.1)
+        plot["Example Data"] = (xs, ys)
+        plot["Example Fit"]  = (xs, ys+0.1)
 
     exp.add_manual_plotter(plt, callback=plot_me)
 
@@ -73,7 +73,7 @@ if __name__ == '__main__':
 
     ys = buff.get_data()['voltage']
     xs = buff.descriptor.axes[0].points
-    plt.process_direct("Example Data", xs, ys)
-    plt.process_direct("Example Fit", xs, ys+0.1)
+    plt["Example Data"] = (xs, ys)
+    plt["Example Fit"]  = (xs, ys+0.1)
 
     exp.plot_server.stop()
