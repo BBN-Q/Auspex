@@ -44,13 +44,13 @@ class QubitExpFactory(object):
     will override the defaulty JSON."""
 
     @staticmethod
-    def run(meta_file=None, notebook=False, expname=None, calibration=False, cw_mode=False):
-        exp = QubitExpFactory.create(meta_file=meta_file, notebook=notebook, expname=expname,
+    def run(meta_file=None, expname=None, calibration=False, cw_mode=False):
+        exp = QubitExpFactory.create(meta_file=meta_file, expname=expname,
                                      calibration=calibration, cw_mode=cw_mode)
         exp.run_sweeps()
 
     @staticmethod
-    def create(meta_file=None, notebook=False, expname=None, calibration=False, cw_mode=False):
+    def create(meta_file=None, expname=None, calibration=False, cw_mode=False):
         with open(config.instrumentLibFile, 'r') as FID:
             instrument_settings = json.load(FID)
 
@@ -114,8 +114,8 @@ class QubitExpFactory(object):
                 # The user should only have one writer enabled, otherwise we will be confused.
                 if len(writers) > 1:
                     raise Exception("More than one viable data writer was found for a receiver channel {}. Please enabled only one!".format(receiver_text))
-                if len(writers) == 0:
-                    raise Exception("No viable data writer was found for receiver channel {}. Please enabled only one!".format(receiver_text))
+                if len(writers) == 0 and len(plotters) == 0:
+                    raise Exception("No viable data writer or plotter was found for receiver channel {}. Please enabled only one!".format(receiver_text))
 
                 # If we are calibrating we don't care about storing data, use buffers instead
                 if calibration:
@@ -262,7 +262,6 @@ class QubitExpFactory(object):
         experiment.instrument_settings  = instrument_settings
         experiment.measurement_settings = measurement_settings
         experiment.sweep_settings       = sweep_settings
-        experiment.run_in_notebook = notebook
         experiment.name = expname
         experiment.cw_mode = cw_mode
 
@@ -466,8 +465,6 @@ class QubitExpFactory(object):
                 filt = module_map[filt_type](**settings)
                 filt.name = name
                 filters[name] = filt
-                if filt_type == 'Plotter':
-                    filt.run_in_notebook = experiment.run_in_notebook
                 logger.debug("Found filter class %s for '%s' when loading experiment settings.", filt_type, name)
             else:
                 logger.error("Could not find filter class %s for '%s' when loading experiment settings.", filt_type, name)
