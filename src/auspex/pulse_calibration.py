@@ -34,14 +34,13 @@ def calibrate(calibrations):
 
 class PulseCalibration(object):
     """Base class for calibration of qubit control pulses."""
-    def __init__(self, qubit_names, notebook=True):
+    def __init__(self, qubit_names):
         super(PulseCalibration, self).__init__()
         self.qubit_names = qubit_names if isinstance(qubit_names, list) else [qubit_names]
         self.qubit     = [QubitFactory(qubit_name) for qubit_name in qubit_names] if isinstance(qubit_names, list) else QubitFactory(qubit_names)
         self.filename   = 'None'
         self.exp        = None
         self.axis_descriptor = None
-        self.notebook   = notebook
         self.plot       = self.init_plot()
         self.cw_mode    = False
         with open(config.channelLibFile, 'r') as FID:
@@ -56,7 +55,7 @@ class PulseCalibration(object):
     def set(self, instrs_to_set = []):
         seq_files = compile_to_hardware(self.sequence(), fileName=self.filename, axis_descriptor=self.axis_descriptor)
         metafileName = os.path.join(QGLconfig.AWGDir, self.filename + '-meta.json')
-        self.exp = QubitExpFactory.create(meta_file=metafileName, notebook=self.notebook, calibration=True, cw_mode=self.cw_mode)
+        self.exp = QubitExpFactory.create(meta_file=metafileName, calibration=True, cw_mode=self.cw_mode)
         if self.plot:
             # Add the manual plotter and the update method to the experiment
             self.exp.add_manual_plotter(self.plot)
@@ -131,12 +130,12 @@ class CavitySearch(PulseCalibration):
         data, _ = self.run()
 
         # Plot the results
-        self.dat_line.data_source.data = dict(x=self.frequencies, y=data)
+        self.plot["Data"] = (self.frequencies, data)
 
     def init_plot(self):
-        plot = ManualPlotter("Cavity Search", x_label='Frequency (GHz)', y_label='Amplitude (Arb. Units)', notebook=self.notebook)
-        self.dat_line = plot.fig.line([],[], line_width=1.0, legend="Data", color='navy')
-        self.fit_line = plot.fig.line([],[], line_width=2.5, legend="Fit", color='firebrick')
+        plot = ManualPlotter("Qubit Search", x_label='Frequency (GHz)', y_label='Amplitude (Arb. Units)')
+        plot.add_data_trace("Data")
+        plot.add_fit_trace("Fit")
         return plot
 
 class QubitSearch(PulseCalibration):
@@ -144,7 +143,7 @@ class QubitSearch(PulseCalibration):
         super(QubitSearch, self).__init__(qubit_name)
         self.frequencies = frequencies
         self.cw_mode = True
-        
+
     def sequence(self):
         return [[X(self.qubit), MEAS(self.qubit)]]
 
@@ -160,7 +159,7 @@ class QubitSearch(PulseCalibration):
         self.plot["Data"] = (self.frequencies, data)
 
     def init_plot(self):
-        plot = ManualPlotter("Qubit Search", x_label='Frequency (GHz)', y_label='Amplitude (Arb. Units)', notebook=self.notebook)
+        plot = ManualPlotter("Qubit Search", x_label='Frequency (GHz)', y_label='Amplitude (Arb. Units)')
         plot.add_data_trace("Data")
         plot.add_fit_trace("Fit")
         return plot
