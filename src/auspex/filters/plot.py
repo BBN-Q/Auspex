@@ -107,6 +107,7 @@ class Plotter(Filter):
             self.last_update = time.time()
 
     async def on_done(self):
+        self.plot_server.send(self.name, self.plot_buffer)
         self.plot_server.send(self.name, np.array([]), msg="done")
 
     def axis_label(self, index):
