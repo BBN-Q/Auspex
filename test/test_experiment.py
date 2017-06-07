@@ -138,7 +138,7 @@ class ExperimentTestCase(unittest.TestCase):
                  (pt.source, prnt.sink)]
 
         exp.set_graph(edges)
-
+        exp.update_descriptors()
         self.assertFalse(pt.sink.descriptor is None)
         self.assertFalse(prnt.sink.descriptor is None)
         self.assertTrue(exp.chan1.descriptor == pt.sink.descriptor)
