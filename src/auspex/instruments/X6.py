@@ -211,8 +211,6 @@ class X6(Instrument):
                 break
             await asyncio.sleep(0.2)
 
-        logger.info("Digitizer %s finished getting data.", self.name)
-
     # pass thru properties
     @property
     def reference(self):
