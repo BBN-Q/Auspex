@@ -78,7 +78,7 @@ class Plotter(Filter):
             self.points_before_clear = self.descriptor.axes[-1].num_points()
         else:
             self.points_before_clear = self.descriptor.axes[-1].num_points() * self.descriptor.axes[-2].num_points()
-        logger.info("Plot will clear after every %d points.", self.points_before_clear)
+        logger.debug("Plot will clear after every %d points.", self.points_before_clear)
 
         self.x_values = self.descriptor.axes[-1].points
 
@@ -108,7 +108,6 @@ class Plotter(Filter):
 
     async def on_done(self):
         self.plot_server.send(self.name, self.plot_buffer)
-        self.plot_server.send(self.name, np.array([]), msg="done")
 
     def axis_label(self, index):
         unit_str = " ({})".format(self.descriptor.axes[index].unit) if self.descriptor.axes[index].unit else ''
@@ -151,6 +150,7 @@ class MeshPlotter(Filter):
         self.plot_server.send(self.name, data)
 
     async def on_done(self):
+        self.plot_server.send(self.name, np.array([]), msg="done")
         time.sleep(0.1)
 
 class XYPlotter(Filter):
