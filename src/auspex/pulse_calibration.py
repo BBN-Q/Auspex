@@ -30,17 +30,17 @@ def calibrate(calibrations):
         if not isinstance(calibration, PulseCalibration):
             raise TypeError("calibrate_pulses was passed a calibration that is not actually a calibration.")
         calibration.calibrate()
+        calibration.exp.plot_server.stop()
 
 class PulseCalibration(object):
     """Base class for calibration of qubit control pulses."""
-    def __init__(self, qubit_names, notebook=True):
+    def __init__(self, qubit_names):
         super(PulseCalibration, self).__init__()
         self.qubit_names = qubit_names if isinstance(qubit_names, list) else [qubit_names]
         self.qubit     = [QubitFactory(qubit_name) for qubit_name in qubit_names] if isinstance(qubit_names, list) else QubitFactory(qubit_names)
         self.filename   = 'None'
         self.exp        = None
         self.axis_descriptor = None
-        self.notebook   = notebook
         self.plot       = self.init_plot()
         self.cw_mode    = False
         with open(config.channelLibFile, 'r') as FID:
@@ -55,7 +55,7 @@ class PulseCalibration(object):
     def set(self, instrs_to_set = []):
         seq_files = compile_to_hardware(self.sequence(), fileName=self.filename, axis_descriptor=self.axis_descriptor)
         metafileName = os.path.join(QGLconfig.AWGDir, self.filename + '-meta.json')
-        self.exp = QubitExpFactory.create(meta_file=metafileName, notebook=self.notebook, calibration=True, cw_mode=self.cw_mode)
+        self.exp = QubitExpFactory.create(meta_file=metafileName, calibration=True, cw_mode=self.cw_mode)
         if self.plot:
             # Add the manual plotter and the update method to the experiment
             self.exp.add_manual_plotter(self.plot)
@@ -73,6 +73,7 @@ class PulseCalibration(object):
                 par.push()
 
     def run(self):
+        self.exp.leave_plot_server_open = True
         self.exp.run_sweeps()
         data = {}
         var = {}
@@ -129,12 +130,12 @@ class CavitySearch(PulseCalibration):
         data, _ = self.run()
 
         # Plot the results
-        self.dat_line.data_source.data = dict(x=self.frequencies, y=data)
+        self.plot["Data"] = (self.frequencies, data)
 
     def init_plot(self):
-        plot = ManualPlotter("Cavity Search", x_label='Frequency (GHz)', y_label='Amplitude (Arb. Units)', notebook=self.notebook)
-        self.dat_line = plot.fig.line([],[], line_width=1.0, legend="Data", color='navy')
-        self.fit_line = plot.fig.line([],[], line_width=2.5, legend="Fit", color='firebrick')
+        plot = ManualPlotter("Qubit Search", x_label='Frequency (GHz)', y_label='Amplitude (Arb. Units)')
+        plot.add_data_trace("Data")
+        plot.add_fit_trace("Fit")
         return plot
 
 class QubitSearch(PulseCalibration):
@@ -142,7 +143,7 @@ class QubitSearch(PulseCalibration):
         super(QubitSearch, self).__init__(qubit_name)
         self.frequencies = frequencies
         self.cw_mode = True
-        
+
     def sequence(self):
         return [[X(self.qubit), MEAS(self.qubit)]]
 
@@ -155,12 +156,12 @@ class QubitSearch(PulseCalibration):
         data, _ = self.run()
 
         # Plot the results
-        self.dat_line.data_source.data = dict(x=self.frequencies, y=data)
+        self.plot["Data"] = (self.frequencies, data)
 
     def init_plot(self):
-        plot = ManualPlotter("Qubit Search", x_label='Frequency (GHz)', y_label='Amplitude (Arb. Units)', notebook=self.notebook)
-        self.dat_line = plot.fig.line([],[], line_width=1.0, legend="Data", color='navy')
-        self.fit_line = plot.fig.line([],[], line_width=2.5, legend="Fit", color='firebrick')
+        plot = ManualPlotter("Qubit Search", x_label='Frequency (GHz)', y_label='Amplitude (Arb. Units)')
+        plot.add_data_trace("Data")
+        plot.add_fit_trace("Fit")
         return plot
 
 class RabiAmpCalibration(PulseCalibration):
@@ -186,8 +187,8 @@ class RamseyCalibration(PulseCalibration):
 
     def init_plot(self):
         plot = ManualPlotter("Ramsey Fit", x_label='Time (us)', y_label='Amplitude (Arb. Units)')
-        self.dat_line = plot.fig.line([],[], line_width=1.0, legend="Data", color='navy')
-        self.fit_line = plot.fig.line([],[], line_width=2.5, legend="Fit", color='firebrick')
+        plot.add_data_trace("Data")
+        plot.add_fit_trace("Fit")
         return plot
 
     def calibrate(self):
@@ -208,10 +209,10 @@ class RamseyCalibration(PulseCalibration):
         self.set([instr_to_set])
 
         # Plot the results
-        self.dat_line.data_source.data = dict(x=self.delays, y=data)
         ramsey_f = ramsey_2f if self.two_freqs else ramsey_1f
         finer_delays = np.linspace(np.min(self.delays), np.max(self.delays), 4*len(self.delays))
-        self.fit_line.data_source.data = dict(x=finer_delays, y=ramsey_f(finer_delays, *all_params))
+        self.plot["Data"] = (self.delays, data)
+        self.plot["Fit"] = (finer_delays, ramsey_f(finer_delays, *all_params))
 
         data, _ = self.run()
 
@@ -219,10 +220,10 @@ class RamseyCalibration(PulseCalibration):
         fit_freq_B = np.mean(fit_freqs)
 
         # Plot the results
-        self.dat_line.data_source.data = dict(x=self.delays, y=data)
         ramsey_f = ramsey_2f if self.two_freqs else ramsey_1f
         finer_delays = np.linspace(np.min(self.delays), np.max(self.delays), 4*len(self.delays))
-        self.fit_line.data_source.data = dict(x=finer_delays, y=ramsey_f(finer_delays, *all_params))
+        self.plot["Data"] = (self.delays, data)
+        self.plot["Fit"]  = (finer_delays, ramsey_f(finer_delays, *all_params))
 
         if fit_freq_B < fit_freq_A:
             fit_freq = round(orig_freq + self.added_detuning/1e9 + 0.5*(fit_freq_A + 0.5*fit_freq_A + fit_freq_B)/1e9, 10)
@@ -389,12 +390,12 @@ class CRCalibration(PulseCalibration):
         self.filename = 'CR/CR'
 
     def init_plot(self):
-        cal_plot = ManualPlotter("CR"+str.lower(self.cal_type.name)+"Fit", x_label=str.lower(self.cal_type.name), y_label='$<Z_{'+self.qubit_names[1]+'}>$')
-        self.dat_line_0 = cal_plot.fig.line([],[], line_width=1.0, legend="Data_0", color='navy') #change to markers
-        self.fit_line_0 = cal_plot.fig.line([],[], line_width=2.5, legend="Fit_0", color='firebrick')
-        self.dat_line_1 = cal_plot.fig.line([],[], line_width=1.0, legend="Data_1", color='navy') #change to markers
-        self.fit_line_1 = cal_plot.fig.line([],[], line_width=2.5, legend="Fit_1", color='firebrick')
-        return
+        plot = ManualPlotter("CR"+str.lower(self.cal_type.name)+"Fit", x_label=str.lower(self.cal_type.name), y_label='$<Z_{'+self.qubit_names[1]+'}>$')
+        plot.add_data_trace("Data 0")
+        plot.add_fit_trace("Fit 0")
+        plot.add_data_trace("Data 1")
+        plot.add_fit_trace("Fit 1")
+        return plot
 
     def calibrate(self):
         #generate sequence
@@ -412,10 +413,10 @@ class CRCalibration(PulseCalibration):
         # Plot the results
         xaxis = self.lengths if self.cal_type==CR_cal_type.LENGTH else self.phases if self.cal_type==CR_cal_type.PHASE else self.amps
         finer_xaxis = np.linspace(np.min(xaxis), np.max(xaxis), 4*len(xaxis))
-        self.dat_line_0.data_source.data = dict(x=xaxis, y=data_t[:len(data_t)/2])
-        self.fit_line_0.data_source.data = dict(x=finer_xaxis, y=sin_f(finer_lengths, *all_params_0))
-        self.dat_line_1.data_source.data = dict(x=xaxis, y=data_t[len(data_t)/2:])
-        self.fit_line_1.data_source.data = dict(x=finer_xaxis, y=sin_f(finer_lengths, *all_params_1))
+        self.plot["Data 0"] = (xaxis,       data_t[:len(data_t)/2])
+        self.plot["Fit 0"] =  (finer_xaxis, sin_f(finer_lengths, *all_params_0))
+        self.plot["Data 1"] = (xaxis,       data_t[len(data_t)/2:])
+        self.plot["Fit 1"] =  (finer_xaxis, sin_f(finer_lengths, *all_params_1))
 
 class CRLenCalibration(CRCalibration):
     def __init__(self, qubit_names, lengths=np.linspace(20, 1020, 21)*1e-9, phase = 0, amp = 0.8, rise_fall = 40e-9, cal_type = CR_cal_type.LENGTH):

@@ -32,7 +32,7 @@ def switching_pulse(amplitude, duration, delay=25e-9, holdoff=800e-9, total_dura
     if total_points < 320:
         wf = np.zeros(320)
     else:
-        wf = np.zeros(64*np.ceil(total_points/64.0))
+        wf = np.zeros(64*np.int(np.ceil(total_points/64.0)))
     wf[pad_points:pad_points+pulse_points] = amplitude
     return wf
 
@@ -43,7 +43,7 @@ def measure_pulse(amplitude, duration, frequency, holdoff=800e-9, total_duration
     if total_points < 320:
         wf = np.zeros(320)
     else:
-        wf = np.zeros(64*np.ceil(total_points/64.0))
+        wf = np.zeros(64*np.int(np.ceil(total_points/64.0)))
     wf[hold_points:hold_points+pulse_points] = amplitude*np.sin(2.0*np.pi*frequency*np.arange(pulse_points)/sample_rate)
     return wf
 
@@ -150,8 +150,8 @@ class nTronSwitchingExperiment(Experiment):
         seg_ids_ch1.append(seg_id)
 
         # Build in a delay between sequences
-        settle_pts = int(640*np.ceil(self.repeat_time * self.sample_rate / 640))
-        # settle_pts2 = int(640*np.ceil(8*2.4e-9 * self.sample_rate / 640))
+        settle_pts = 640*np.int(np.ceil(self.repeat_time * self.sample_rate / 640))
+        # settle_pts2 = 640*np.ceil(8*2.4e-9 * self.sample_rate / 640)
 
         scenario = Scenario()
         seq = Sequence(sequence_loop_ct=self.attempts*len(self.gate_amps)*len(self.gate_durs))

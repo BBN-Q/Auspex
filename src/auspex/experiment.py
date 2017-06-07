@@ -15,6 +15,7 @@ import signal
 import sys
 import numbers
 import os
+import subprocess
 
 import numpy as np
 import scipy as sp
@@ -183,9 +184,12 @@ class Experiment(metaclass=MetaExperiment):
         # This holds the experiment graph
         self.graph = None
 
-        # This holds a reference to a bokeh-server instance
+        # This holds a reference to a matplotlib server instance
         # for plotting, if there is one.
-        self.bokeh_server = None
+        self.matplot_server_thread = None
+        # If this is True, don't close the plot server thread so that
+        # we might push additional plots after run_sweeps is complete.
+        self.leave_plot_server_open = False
 
         # Also keep references to all of the plot filters
         self.plotters = [] # Standard pipeline plotters using streams
@@ -215,6 +219,14 @@ class Experiment(metaclass=MetaExperiment):
 
             self.output_connectors[oc] = a
             setattr(self, oc, a)
+
+        # Some instruments don't clean up well after themselves, reconstruct them on a
+        # per instance basis
+        for n in self._instruments.keys():
+            new_cls = type(self._instruments[n])
+            new_inst = new_cls(resource_name=self._instruments[n].resource_name, name=self._instruments[n].name)
+            setattr(self, n, new_inst)
+            self._instruments[n] = new_inst
 
         # Create the asyncio measurement loop
         self.loop = asyncio.get_event_loop()
@@ -398,6 +410,7 @@ class Experiment(metaclass=MetaExperiment):
             # Make the rest of the writers use this same file object
             for w in wrs[1:]:
                 w.file = wrs[0].file
+                w.filename.value = wrs[0].filename.value
 
         # Go and find any plotters
         self.plotters = [n for n in self.nodes if isinstance(n, (Plotter, MeshPlotter, XYPlotter))]
@@ -421,60 +434,16 @@ class Experiment(metaclass=MetaExperiment):
         if len(self.plotters) > 0:
             logger.debug("Found %d plotters", len(self.plotters))
 
-            from .plotting import BokehServerProcess
-            from bokeh.client import push_session
-            from bokeh.layouts import row, gridplot
-            from bokeh.io import curdoc
-            from bokeh.models.widgets import Panel, Tabs
+            from .plotting import MatplotServerThread
 
-            # If anybody has requested notebook plots, show them all in notebook
-            run_in_notebook = True in [p.run_in_notebook for p in self.plotters]
-
-            bokeh_process = BokehServerProcess(notebook=run_in_notebook)
-            bokeh_process.run()
-
-            tabs = True #not run_in_notebook # Tabs seem a bit sluggish in jupyter notebooks...
-            if tabs:
-                container = Tabs(tabs=[Panel(child=p.fig, title=p.name) for p in self.plotters])
-            else:
-                if len(self.plotters) <= 2:
-                    container = row(*[p.fig for p in self.plotters])
-                else:
-                    padded_list = self.plotters[:]
-                    if len(padded_list)%2 != 0:
-                        padded_list.append(None)
-                    grid = list(zip(*[iter(padded_list)]*2))
-                    container = gridplot(grid)
-
-            doc = curdoc()
-            doc.clear()
-            doc.add_root(container)
-            session = push_session(doc)
-
-            for p in self.plotters:
-                p.session = session
-
-            if run_in_notebook:
-                logger.debug("Displaying in iPython notebook")
-                from bokeh.embed import autoload_server, components
-                from bokeh.io import output_notebook
-                from IPython.display import display, HTML, clear_output
-
-                # clear_output()
-                output_notebook()
-                script = autoload_server(model=None, session_id=session.id)
-                html = \
-                        """
-                        <html>
-                        <head></head>
-                        <body>
-                        {}
-                        </body>
-                        </html>
-                        """.format(script)
-                display(HTML(html))
-            else:
-                session.show(container)
+            plot_desc = {p.name: p.desc() for p in self.plotters}
+            self.plot_server = MatplotServerThread(plot_desc)
+            for plotter in self.plotters:
+                plotter.plot_server = self.plot_server
+            time.sleep(0.5)
+            client_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),"matplotlib-client.py")
+            subprocess.Popen(['python', client_path, 'localhost'], env=os.environ.copy())
+            time.sleep(1)
 
         def catch_ctrl_c(signum, frame):
             logger.info("Caught SIGINT. Shutting down.")
@@ -493,12 +462,15 @@ class Experiment(metaclass=MetaExperiment):
         tasks = [n.run() for n in other_nodes]
 
         tasks.append(self.sweep())
-        self.loop.run_until_complete(asyncio.gather(*tasks))
-        self.loop.run_until_complete(asyncio.sleep(1))
+        try:
+            self.loop.run_until_complete(asyncio.gather(*tasks))
+            self.loop.run_until_complete(asyncio.sleep(1))
+        except Exception as e:
+            logger.error("Encountered exception %s in main loop.", repr(e))
 
         for plot, callback in zip(self.manual_plotters, self.manual_plotter_callbacks):
             if callback:
-                callback(plot.fig)
+                callback(plot)
 
         self.shutdown()
 
@@ -512,6 +484,10 @@ class Experiment(metaclass=MetaExperiment):
                 del f
             except:
                 logger.debug("File probably already closed...")
+
+        if len(self.plotters) > 0 and not self.leave_plot_server_open:
+            self.plot_server.stop()
+
         self.shutdown_instruments()
         self.disconnect_instruments()
 

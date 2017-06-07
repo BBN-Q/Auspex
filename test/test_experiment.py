@@ -93,9 +93,11 @@ class ExperimentTestCase(unittest.TestCase):
         """Check that instruments have been appropriately gathered"""
         self.assertTrue(hasattr(TestExperiment, "_instruments")) # should have parsed these instruments from class dir
         self.assertTrue(len(TestExperiment._instruments) == 3 ) # should have parsed these instruments from class dir
-        self.assertTrue(TestExperiment._instruments['fake_instr_1'] == TestExperiment.fake_instr_1) # should contain this instrument
-        self.assertTrue(TestExperiment._instruments['fake_instr_2'] == TestExperiment.fake_instr_2) # should contain this instrument
-        self.assertTrue(TestExperiment._instruments['fake_instr_3'] == TestExperiment.fake_instr_3) # should contain this instrument
+        
+        te = TestExperiment()
+        self.assertTrue(te._instruments['fake_instr_1'] == te.fake_instr_1) # should contain this instrument
+        self.assertTrue(te._instruments['fake_instr_2'] == te.fake_instr_2) # should contain this instrument
+        self.assertTrue(te._instruments['fake_instr_3'] == te.fake_instr_3) # should contain this instrument
 
     def test_create_graph(self):
         exp         = TestExperiment()

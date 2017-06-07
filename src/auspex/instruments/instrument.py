@@ -186,8 +186,9 @@ class Instrument(metaclass=MetaInstrument):
     def disconnect(self):
         pass
 
-    def __del__(self):
-        self.disconnect()
+    # We now expect the main experiment to deal with shutting down the instruments
+    # def __del__(self):
+    #     self.disconnect()
 
     def set_all(self, settings_dict):
         """Accept a settings dictionary and attempt to set all of the instrument
@@ -270,8 +271,6 @@ class SCPIInstrument(Instrument):
         if hasattr(self, 'interface') and hasattr(self.interface, "_resource"):
             logger.debug("VISA Interface for {} @ {} closed.".format(self.name, self.resource_name))
             self.interface._resource.close()
-        super(SCPIInstrument, self).__del__()
-
 
     def __repr__(self):
         return "{} @ {}".format(self.name, self.resource_name)
