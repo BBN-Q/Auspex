@@ -237,7 +237,6 @@ class Experiment(metaclass=MetaExperiment):
 
         # Run the stream init
         self.init_streams()
-        self.update_descriptors()
 
     def set_graph(self, edges):
         unique_nodes = []
@@ -248,7 +247,6 @@ class Experiment(metaclass=MetaExperiment):
                 unique_nodes.append(ee.parent)
         self.nodes = unique_nodes
         self.graph = ExperimentGraph(edges, self.loop)
-        self.update_descriptors()
 
     def init_streams(self):
         """Establish the base descriptors for any internal data streams and connectors."""
@@ -386,6 +384,9 @@ class Experiment(metaclass=MetaExperiment):
         self.instrs_connected = False
 
     def run_sweeps(self):
+        # Propagate the descriptors through the network
+        self.update_descriptors()
+
         #connect all instruments
         if not self.instrs_connected:
             self.connect_instruments()
@@ -495,7 +496,6 @@ class Experiment(metaclass=MetaExperiment):
         for oc in self.output_connectors.values():
             logger.debug("Adding axis %s to connector %s.", axis, oc.name)
             oc.descriptor.add_axis(axis)
-        self.update_descriptors()
 
     def add_sweep(self, parameters, sweep_list, refine_func=None, callback_func=None, metadata=None):
         ax = SweepAxis(parameters, sweep_list, refine_func=refine_func, callback_func=callback_func, metadata=metadata)
