@@ -44,8 +44,7 @@ Which will automatically fetch and install all of the requirements. If you are u
 - tqdm >= 4.7.0
 - pandas >= 0.18.1
 - networkx >= 1.11
-- bokeh >= 0.12.1
-- matplotlib >= 1.4.0
+- matplotlib >= 2.0.0
 
 
 There are a number of other considerations depending on which experiments will be run. For the standard suite of qubit measurements on a windows machine, the following must be done:
