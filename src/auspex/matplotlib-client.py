@@ -45,6 +45,7 @@ class DataListener(QtCore.QObject):
         self.socket = self.context.socket(zmq.SUB)
         self.socket.connect("tcp://{}:{}".format(host, port))
         self.socket.setsockopt_string(zmq.SUBSCRIBE, "data")
+        self.socket.setsockopt_string(zmq.SUBSCRIBE, "done")
         self.poller = zmq.Poller()
         self.poller.register(self.socket, zmq.POLLIN)
         self.running = True

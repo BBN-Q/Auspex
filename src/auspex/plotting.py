@@ -17,6 +17,7 @@ import time
 import asyncio
 import zmq
 import zmq.asyncio
+import numpy as np
 from auspex.log import logger
 
 class MatplotServerThread(Thread):
@@ -35,7 +36,6 @@ class MatplotServerThread(Thread):
             evts = dict(await self.poller.poll(50))
             if self.status_sock in evts and evts[self.status_sock] == zmq.POLLIN:
                 ident, msg = await self.status_sock.recv_multipart()
-                print("Got {} from {}".format(msg.decode(), ident.decode()))
                 if msg == b"WHATSUP":
                     await self.status_sock.send_multipart([ident, b"HI!", json.dumps(self.plot_desc).encode('utf8')])
             await asyncio.sleep(0.010)
@@ -51,6 +51,7 @@ class MatplotServerThread(Thread):
         self._loop.create_task(self._send(name, data, msg=msg))
 
     def stop(self):
+        self.send("irrelevant", np.array([]), msg="done")
         self.stopped = True
         pending = asyncio.Task.all_tasks(loop=self._loop)
         self._loop.stop()

@@ -365,9 +365,6 @@ class Experiment(metaclass=MetaExperiment):
                 break
 
     def connect_instruments(self):
-        # Make sure we are starting from scratch
-        self.reset()
-
         # Connect the instruments to their resources
         for instrument in self._instruments.values():
             instrument.connect()
@@ -386,6 +383,8 @@ class Experiment(metaclass=MetaExperiment):
     def run_sweeps(self):
         # Propagate the descriptors through the network
         self.update_descriptors()
+        # Make sure we are starting from scratch... is this necessary?
+        self.reset()
 
         #connect all instruments
         if not self.instrs_connected:

@@ -61,7 +61,7 @@ class X6Channel(DigitizerChannel):
                 setattr(self, name, value)
 
         if self.stream_type == "Integrated":
-            demod_channel = 0
+            demod_channel = self.dsp_channel
             result_channel = self.dsp_channel
             self.dtype = np.complex128
         elif self.stream_type == "Demodulated":
@@ -210,8 +210,6 @@ class X6(Instrument):
                 logger.error("Digitizer %s timed out.", self.name)
                 break
             await asyncio.sleep(0.2)
-
-        logger.info("Digitizer %s finished getting data.", self.name)
 
     # pass thru properties
     @property
