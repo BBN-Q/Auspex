@@ -469,7 +469,7 @@ class Experiment(metaclass=MetaExperiment):
             self.loop.run_until_complete(asyncio.gather(*tasks))
             self.loop.run_until_complete(asyncio.sleep(1))
         except Exception as e:
-            logger.error("Encountered exception %s in main loop.", repr(e))
+            logger.exception("message")
 
         for plot, callback in zip(self.manual_plotters, self.manual_plotter_callbacks):
             if callback:
