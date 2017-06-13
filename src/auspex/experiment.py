@@ -48,7 +48,7 @@ class ExpProgressBar(object):
         self.stream = stream
         self.num = num
         self.notebook = notebook
-        self.reset(stream=stream)
+        # self.reset(stream=stream)
 
     def reset(self, stream=None):
         """ Reset the progress bar(s) """
@@ -385,6 +385,9 @@ class Experiment(metaclass=MetaExperiment):
         self.update_descriptors()
         # Make sure we are starting from scratch... is this necessary?
         self.reset()
+        # Update the progress bar if need be
+        if self.progressbar is not None:
+            self.progressbar.reset()
 
         #connect all instruments
         if not self.instrs_connected:
