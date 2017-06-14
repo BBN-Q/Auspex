@@ -14,7 +14,7 @@ import time
 
 def delaunay_refine_from_file(writer, x_name, y_name, z_name, max_points=500, criterion="integral", threshold = "one_sigma", plotter=None):
     async def refine_func(sweep_axis, experiment):
-        data, desc = load_from_HDF5(writer.filename.value)
+        data, desc = load_from_HDF5(writer.filename.value, reshape=False)
         groupname = writer.groupname.value
         zs = data[groupname][z_name]
         ys = data[groupname][y_name]
@@ -30,10 +30,9 @@ def delaunay_refine_from_file(writer, x_name, y_name, z_name, max_points=500, cr
         sweep_axis.add_points(new_points)
 
         if plotter:
-            exp = plotter.experiment
             data = np.array([xs, ys, zs]).transpose()            
-            await exp.push_to_plot(plotter, data)
+            await experiment.push_to_plot(plotter, data)
 
-        time.sleep(0.1)
+        time.sleep(0.02)
         return True
     return refine_func

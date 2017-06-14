@@ -63,23 +63,23 @@ class WriteToHDF5(Filter):
 
     def new_filename(self):
         filename = self.filename.value
-        ext = filename.find('.h5')
-        if ext > -1:
-            filename = filename[:ext]
-        dirname = os.path.dirname(filename)
+        basename, ext = os.path.splitext(filename)
+        dirname = os.path.dirname(os.path.abspath(filename))
+
         if self.add_date:
-            date = time.strftime("%y%m%d")
-            basename = os.path.basename(filename)
-            dirname = os.path.join(dirname, date)
-            filename = os.path.join(dirname, basename)
+            date     = time.strftime("%y%m%d")
+            dirname  = os.path.join(dirname, date)
+            filename = os.path.join(dirname, basename+ext)
+            
         # Set the file number to the maximum in the current folder + 1
         filenums = []
         if os.path.exists(dirname):
             for f in os.listdir(dirname):
-                if self.filename.value in f:
+                if ext in f:
                     filenums += [int(re.findall('-\d{4}', f)[0][1:])] if os.path.isfile(os.path.join(dirname, f)) else []
+
         i = max(filenums) + 1 if filenums else 0
-        return "{}-{:04d}.h5".format(filename,i)
+        return "{}-{:04d}{}".format(basename,i,ext)
 
     def new_file(self):
         """ Open a new data file to write """
