@@ -191,7 +191,7 @@ class Canvas2D(MplCanvas):
             self.plots.append(plt)
 
     def update_figure(self, x_data, y_data, im_data):
-        im_data = im_data.reshape((self.xlen, self.ylen), order='c').T
+        im_data = im_data.reshape((len(y_data), len(x_data)), order='c')
         for plt, f in zip(self.plots, self.plot_funcs):
             plt.set_data(f(im_data))
             plt.autoscale()
