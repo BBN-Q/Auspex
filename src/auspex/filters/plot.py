@@ -103,7 +103,10 @@ class Plotter(Filter):
             self.idx += data.size
 
         if (time.time() - self.last_update >= self.update_interval):
-            self.plot_server.send(self.name, self.plot_buffer)
+            if self.plot_dims.value == 1:
+                self.plot_server.send(self.name, self.x_values, self.plot_buffer)
+            elif self.plot_dims.value == 2:
+                self.plot_server.send(self.name, self.x_values, self.y_values, self.plot_buffer)
             self.last_update = time.time()
 
     async def on_done(self):
@@ -364,4 +367,4 @@ class ManualPlotter(object):
         self.set_data(trace_name, data_tuple[0], data_tuple[1])
 
     def set_data(self, trace_name, xdata, ydata):
-        self.plot_server.send(self.name + ":" + trace_name, np.array([xdata,ydata]))
+        self.plot_server.send(self.name + ":" + trace_name, xdata, ydata)
