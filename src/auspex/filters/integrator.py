@@ -36,6 +36,14 @@ class KernelIntegrator(Filter):
             self.box_car_start.value = kwargs['box_car_start']
             self.box_car_stop.value = kwargs['box_car_stop']
             self.frequency.value = kwargs['frequency']
+            if "pre_integration_operation" in kwargs:
+                self.pre_int_op = kwargs["pre_integration_operation"]
+            else:
+                self.pre_int_op = None
+            if "post_integration_operation" in kwargs:
+                self.post_int_op = kwargs["post_integration_operation"]
+            else:
+                self.post_int_op = None
 
     def update_descriptors(self):
         if self.kernel.value is None:
@@ -67,7 +75,7 @@ class KernelIntegrator(Filter):
         # TODO: handle reduction to single point
         output_descriptor.axes = self.sink.descriptor.axes[:-1]
         output_descriptor.exp_src = self.sink.descriptor.exp_src
-        output_descriptor.dtype = self.sink.descriptor.dtype
+        output_descriptor.dtype = np.complex128
         for os in self.source.output_streams:
             os.set_descriptor(output_descriptor)
             os.end_connector.update_descriptors()
@@ -75,8 +83,11 @@ class KernelIntegrator(Filter):
     async def process_data(self, data):
 
         # TODO: handle variable partial records
+        if self.pre_int_op:
+            data = self.pre_int_op(data)
         filtered = np.inner(np.reshape(data, (-1, len(self.aligned_kernel))), self.aligned_kernel)
-
+        if self.post_int_op:
+            filtered = self.post_int_op(filtered)
         # push to ouptut connectors
         for os in self.source.output_streams:
             await os.push(filtered)

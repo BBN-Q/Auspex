@@ -40,15 +40,20 @@ class MatplotServerThread(Thread):
                     await self.status_sock.send_multipart([ident, b"HI!", json.dumps(self.plot_desc).encode('utf8')])
             await asyncio.sleep(0.010)
 
-    async def _send(self, name, data, msg):
-        md = dict(
-            dtype = str(data.dtype),
-            shape = data.shape,
-        )
-        await self.data_sock.send_multipart([msg.encode(), name.encode(), json.dumps(md).encode(), data])
+    async def _send(self, name, *data, msg="data"):
+        msg_contents = [msg.encode(), name.encode()]
+        # We might be sending multiple axes, series, etc.
+        # Just add them succesively to a multipart message.
+        for dat in data:
+            md = dict(
+                dtype = str(dat.dtype),
+                shape = dat.shape,
+            )
+            msg_contents.extend([json.dumps(md).encode(), np.ascontiguousarray(dat)])
+        await self.data_sock.send_multipart(msg_contents)
 
-    def send(self, name, data, msg="data"):
-        self._loop.create_task(self._send(name, data, msg=msg))
+    def send(self, name, *data, msg="data"):
+        self._loop.create_task(self._send(name, *data, msg=msg))
 
     def stop(self):
         self.send("irrelevant", np.array([]), msg="done")

@@ -48,7 +48,7 @@ class ExpProgressBar(object):
         self.stream = stream
         self.num = num
         self.notebook = notebook
-        self.reset(stream=stream)
+        # self.reset(stream=stream)
 
     def reset(self, stream=None):
         """ Reset the progress bar(s) """
@@ -385,6 +385,9 @@ class Experiment(metaclass=MetaExperiment):
         self.update_descriptors()
         # Make sure we are starting from scratch... is this necessary?
         self.reset()
+        # Update the progress bar if need be
+        if self.progressbar is not None:
+            self.progressbar.reset()
 
         #connect all instruments
         if not self.instrs_connected:
@@ -466,7 +469,7 @@ class Experiment(metaclass=MetaExperiment):
             self.loop.run_until_complete(asyncio.gather(*tasks))
             self.loop.run_until_complete(asyncio.sleep(1))
         except Exception as e:
-            logger.error("Encountered exception %s in main loop.", repr(e))
+            logger.exception("message")
 
         for plot, callback in zip(self.manual_plotters, self.manual_plotter_callbacks):
             if callback:

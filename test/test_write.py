@@ -174,6 +174,36 @@ class WriteTestCase(unittest.TestCase):
 
         os.remove("test_writehdf5-0000.h5")
 
+    def test_filename_increment(self):
+        if os.path.exists("test_writehdf5-0000.h5"):
+            os.remove("test_writehdf5-0000.h5")
+
+        exp = SweptTestExperiment()
+        wr = WriteToHDF5("test_writehdf5.h5")
+
+        edges = [(exp.voltage, wr.sink)]
+        exp.set_graph(edges)
+
+        exp.add_sweep(exp.field, np.linspace(0,100.0,4))
+        exp.add_sweep(exp.freq, np.linspace(0,10.0,3))
+        exp.run_sweeps()
+
+        exp = SweptTestExperiment()
+        wr = WriteToHDF5("test_writehdf5.h5")
+
+        edges = [(exp.voltage, wr.sink)]
+        exp.set_graph(edges)
+
+        exp.add_sweep(exp.field, np.linspace(0,100.0,4))
+        exp.add_sweep(exp.freq, np.linspace(0,10.0,3))
+        exp.run_sweeps()
+
+        self.assertTrue(os.path.exists("test_writehdf5-0000.h5"))
+        self.assertTrue(os.path.exists("test_writehdf5-0001.h5"))
+
+        os.remove("test_writehdf5-0000.h5")
+        os.remove("test_writehdf5-0001.h5")
+
     def test_writehdf5_no_tuples(self):
         exp = SweptTestExperiment()
         exp.samples = 1024
