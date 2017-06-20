@@ -81,7 +81,8 @@ class HolzworthHS9000(Instrument, metaclass=MakeSettersGetters):
     @frequency.setter
     def frequency(self, value):
         if self.fmin*1e-3 <= value <= self.fmax*1e-3:
-            self.ch_query(":FREQ:{} GHz".format(value))
+            # WARNING!!! The Holzworth might blow up if you ask for >12 digits of precision here
+            self.ch_query(":FREQ:{:.12g} GHz".format(value))
         else:
             err_msg = "The value {} GHz is outside of the allowable range {}-{} GHz specified for instrument '{}'.".format(value, self.fmin*1e-3, self.fmax*1e-3, self.name)
             raise ValueError(err_msg)
