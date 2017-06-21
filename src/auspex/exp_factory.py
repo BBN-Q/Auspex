@@ -207,8 +207,8 @@ class QubitExpFactory(object):
                     logger.debug("Setting instr %s with params %s.", name, instr_par)
                     instr.set_all(instr_par)
 
-                self.digitizers = [v for _, v in self._instruments.items() if v.instrument_type == "Digitizer"]
-                self.awgs       = [v for _, v in self._instruments.items() if v.instrument_type == "AWG"]
+                self.digitizers = [v for _, v in self._instruments.items() if "Digitizer" in v.instrument_type]
+                self.awgs       = [v for _, v in self._instruments.items() if "AWG" in v.instrument_type]
 
                 # Swap the master AWG so it is last in the list
                 master_awg_idx = next(ct for ct,awg in enumerate(self.awgs) if self.instrument_settings['instrDict'][awg.name]['is_master'])
