@@ -61,7 +61,7 @@ class X6Channel(DigitizerChannel):
                 setattr(self, name, value)
 
         if self.stream_type == "Integrated":
-            demod_channel = self.dsp_channel
+            demod_channel = 0
             result_channel = self.dsp_channel
             self.dtype = np.complex128
         elif self.stream_type == "Demodulated":
