@@ -14,10 +14,10 @@ import sys
 
 # Run this code by importing config.py
 # Load the configuration from the json file and populate the global configuration dictionary
-root_path      = os.path.dirname( os.path.abspath(__file__) )
-root_path      = os.path.abspath(os.path.join(root_path, "../.." ))
-config_dir    = os.path.join(root_path, 'config')
-config_file     = os.path.join(config_dir, 'config.json')
+root_path   = os.path.dirname( os.path.abspath(__file__) )
+root_path   = os.path.abspath(os.path.join(root_path, "../.." ))
+config_dir  = os.path.join(root_path, 'config')
+config_file = os.path.join(config_dir, 'config.json')
 
 if not os.path.isfile(config_file):
 	# build a config file from the template
@@ -36,14 +36,12 @@ else:
 
 # pull out the variables
 # abspath allows the use of relative file names in the config file
+AWGDir = os.path.abspath(cfg['AWGDir'])
+configFile = os.path.abspath(cfg['ConfigurationFile'])
 try:
 	import QGL.config
 	AWGDir = QGL.config.AWGDir
-	channelLibFile = QGL.config.channelLibFile
+	configFile = QGL.config.configFile
 except:
-	AWGDir = None
-	channelLibFile = None
+	pass
 
-instrumentLibFile  = os.path.abspath(cfg['InstrumentLibraryFile'])
-sweepLibFile       = os.path.abspath(cfg['SweepLibraryFile'])
-measurementLibFile = os.path.abspath(cfg['MeasurementLibraryFile'])
