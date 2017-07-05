@@ -44,7 +44,7 @@ class X6Channel(DigitizerChannel):
 
         self.phys_channel   = 1
         self.dsp_channel    = 0
-        self.channel     = (1,0,0)
+        self.channel_tuple  = (1,0,0)
 
         self.dtype = np.float64
 
@@ -59,6 +59,8 @@ class X6Channel(DigitizerChannel):
                 self.kernel_bias = eval(value)
             elif hasattr(self, name):
                 setattr(self, name, value)
+            elif name == "channel":
+                setattr(self, name, int(value))
 
         if self.stream_type == "Integrated":
             demod_channel = 0
@@ -73,7 +75,7 @@ class X6Channel(DigitizerChannel):
             result_channel = 0
             self.dtype = np.float64
 
-        self.channel = (self.phys_channel, demod_channel, result_channel)
+        self.channel_tuple = (self.phys_channel, demod_channel, result_channel)
 
 class X6(Instrument):
     """BBN QDSP running on the II-X6 digitizer"""
@@ -81,7 +83,7 @@ class X6(Instrument):
 
     def __init__(self, resource_name=None, name="Unlabeled X6"):
         # X6Channel objects
-        self.channels = []
+        self._channels = []
         # socket r/w pairs for each channel
         self._chan_to_rsocket = {}
         self._chan_to_wsocket = {}
@@ -127,11 +129,11 @@ class X6(Instrument):
         super(X6, self).set_all(settings_dict)
 
         # perform channel setup
-        for chan in self.channels:
+        for chan in self._channels:
             self.channel_setup(chan)
 
     def channel_setup(self, channel):
-        a, b, c = channel.channel
+        a, b, c = channel.channel_tuple
         self._lib.enable_stream(a, b, c)
         if channel.stream_type == "Raw":
             return
@@ -181,7 +183,7 @@ class X6(Instrument):
             raise ValueError("Stream type of {} not recognized by X6".format(str(channel.stream_type)))
 
         # todo: other checking here
-        self.channels.append(channel)
+        self._channels.append(channel)
 
     def receive_data(self, channel, oc):
         # push data from a socket into an OutputConnector (oc)
