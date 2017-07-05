@@ -71,23 +71,3 @@ class X6StreamSelector(Filter):
             descrip.dtype = np.complex128
 
         return channel, descrip
-
-    # work in progress on "out of spec" descriptors.
-    # def descriptor_map(self, input_descriptors):
-    #     """Return a dict of the output descriptors."""
-    #     if self.stream_type.value == "Integrated":
-    #         out_descriptor = input_descriptors['sink'].copy()
-    #         out_descriptor.dtype = np.complex128
-    #         try:
-    #             out_descriptor.pop_axis('time')
-    #         except:
-    #             self.out_of_spec = True
-    #             out_descriptor = DataStreamDescriptor()
-    #
-    #         return {'source': output_descriptor}
-    #     elif self.stream_type == 'Demodulated':
-    #         out_descriptor = input_descriptors['sink'].copy()
-    #         out_descriptor.dtype = np.complex128
-    #         return {'source': output_descriptor}
-    #     else:
-    #         return {'source': input_descriptors['sink']}
