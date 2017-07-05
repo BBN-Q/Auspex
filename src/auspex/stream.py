@@ -135,8 +135,8 @@ class DataAxis(object):
         self.num_new_points = 0
 
     def __repr__(self):
-        return "<DataAxis(name={}, points={}, unit={})>".format(
-            self.name, self.points, self.unit)
+        return "<DataAxis(name={}, start={}, stop={}, num={}, unit={})>".format(
+            self.name, min(self.points), max(self.points), len(self.points), self.unit)
 
 class SweepAxis(DataAxis):
     """ Structure for sweep axis, separate from DataAxis.

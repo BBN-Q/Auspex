@@ -42,14 +42,15 @@ class X6StreamSelector(Filter):
 
     sink   = InputConnector()
     source = OutputConnector()
-    phys_channel  = IntParameter(value_range=(1,3), snap=1)
-    dsp_channel   = IntParameter(value_range=(0,4), snap=1)
-    stream_type   = Parameter(allowed_values=["Raw", "Demodulated", "Integrated"], default='Demodulated')
+    
+    channel     = IntParameter(value_range=(1,3), snap=1)
+    dsp_channel = IntParameter(value_range=(0,4), snap=1)
+    stream_type = Parameter(allowed_values=["Raw", "Demodulated", "Integrated"], default='Demodulated')
 
     def __init__(self, name=""):
         super(X6StreamSelector, self).__init__(name=name)
         self.stream_type.value = "Raw" # One of Raw, Demodulated, Integrated
-        self.quince_parameters = [self.phys_channel, self.dsp_channel, self.stream_type]
+        self.quince_parameters = [self.channel, self.dsp_channel, self.stream_type]
 
     def get_descriptor(self, source_instr_settings, channel_settings):
         # Create a channel
