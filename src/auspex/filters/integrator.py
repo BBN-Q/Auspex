@@ -20,33 +20,27 @@ class KernelIntegrator(Filter):
     sink   = InputConnector()
     source = OutputConnector()
     kernel = Parameter()
-    bias   = FloatParameter()
-    simple_kernel = BoolParameter()
-    box_car_start = FloatParameter()
-    box_car_stop = FloatParameter()
-    frequency = FloatParameter()
+    bias   = FloatParameter(default=0.0)
+    simple_kernel = BoolParameter(default=True)
+    box_car_start = FloatParameter(default=0.0)
+    box_car_stop = FloatParameter(default=100e-9)
+    frequency = FloatParameter(default=0.0)
 
     """Integrate with a given kernel. Kernel will be padded/truncated to match record length"""
     def __init__(self, **kwargs):
         super(KernelIntegrator, self).__init__(**kwargs)
-        if len(kwargs) > 0:
-            self.kernel.value = kwargs['kernel']
-            self.bias.value = kwargs['bias']
-            self.simple_kernel.value = kwargs['simple_kernel']
-            self.box_car_start.value = kwargs['box_car_start']
-            self.box_car_stop.value = kwargs['box_car_stop']
-            self.frequency.value = kwargs['frequency']
-            if "pre_integration_operation" in kwargs:
-                self.pre_int_op = kwargs["pre_integration_operation"]
-            else:
-                self.pre_int_op = None
-            if "post_integration_operation" in kwargs:
-                self.post_int_op = kwargs["post_integration_operation"]
-            else:
-                self.post_int_op = None
+        self.pre_int_op  = None
+        self.post_int_op = None
+        for k, v in kwargs.items():
+            if hasattr(self, k) and isinstance(getattr(self,k), Parameter):
+                getattr(self, k).value = v
+        if "pre_integration_operation" in kwargs:
+            self.pre_int_op = kwargs["pre_integration_operation"]
+        if "post_integration_operation" in kwargs:
+            self.post_int_op = kwargs["post_integration_operation"]
 
     def update_descriptors(self):
-        if self.kernel.value is None:
+        if not self.simple_kernel and self.kernel.value is None:
             raise ValueError("Integrator was passed kernel None")
 
         logger.debug('Updating KernelIntegrator "%s" descriptors based on input descriptor: %s.', self.name, self.sink.descriptor)
