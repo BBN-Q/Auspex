@@ -61,7 +61,7 @@ class X6Channel(DigitizerChannel):
                 setattr(self, name, value)
 
         if self.stream_type == "Integrated":
-            demod_channel = self.dsp_channel
+            demod_channel = 0
             result_channel = self.dsp_channel
             self.dtype = np.complex128
         elif self.stream_type == "Demodulated":
@@ -141,6 +141,8 @@ class X6(Instrument):
             if channel.kernel is None:
                 logger.error("Integrated streams must specify a kernel")
                 return
+            # convert to complex128
+            channel.kernel = channel.kernel.astype(complex)
             self._lib.write_kernel(a, b, c, channel.kernel)
             self._lib.set_kernel_bias(a, b, c, channel.kernel_bias)
             self._lib.set_threshold(a, c, channel.threshold)
