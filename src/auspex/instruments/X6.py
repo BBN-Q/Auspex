@@ -8,6 +8,7 @@
 
 __all__ = ['X6Channel', 'X6']
 
+import time
 import socket
 import struct
 import datetime
@@ -81,7 +82,7 @@ class X6(Instrument):
     """BBN QDSP running on the II-X6 digitizer"""
     instrument_type = "Digitizer"
 
-    def __init__(self, resource_name=None, name="Unlabeled X6"):
+    def __init__(self, resource_name=None, name="Unlabeled X6", gen_fake_data=False):
         # X6Channel objects
         self._channels = []
         # socket r/w pairs for each channel
@@ -92,16 +93,12 @@ class X6(Instrument):
         self.name          = name
 
         self.last_timestamp = datetime.datetime.now()
+        self.gen_fake_data = gen_fake_data
 
         if fake_x6:
             self._lib = MagicMock()
         else:
             self._lib = libx6.X6()
-
-        # pass thru functions
-        self.acquire    = self._lib.acquire
-        self.stop       = self._lib.stop
-        self.disconnect = self._lib.disconnect
 
     def __str__(self):
         return "<X6({}/{})>".format(self.name, self.resource_name)
@@ -113,6 +110,15 @@ class X6(Instrument):
         if resource_name is not None:
             self.resource_name = resource_name
 
+        logger.warning("X6 GENERATING FAKE DATA")
+
+        # pass thru functions
+        self.acquire    = self._lib.acquire
+        self.stop       = self._lib.stop
+        self.disconnect = self._lib.disconnect
+
+        if self.gen_fake_data:
+            self._lib = MagicMock()
         self._lib.connect(int(self.resource_name))
 
     def disconnect(self):
@@ -127,7 +133,6 @@ class X6(Instrument):
     def set_all(self, settings_dict):
         # Call the non-channel commands
         super(X6, self).set_all(settings_dict)
-
         # perform channel setup
         for chan in self._channels:
             self.channel_setup(chan)
@@ -170,7 +175,7 @@ class X6(Instrument):
             rsock, wsock = socket.socketpair()
         except:
             raise Exception("Could not create read/write socket pair")
-        self._lib.register_socket(*channel.channel, wsock)
+        self._lib.register_socket(*channel.channel_tuple, wsock)
         self._chan_to_rsocket[channel] = rsock
         self._chan_to_wsocket[channel] = wsock
         return rsock
@@ -184,6 +189,19 @@ class X6(Instrument):
 
         # todo: other checking here
         self._channels.append(channel)
+
+    def spew_fake_data(self):
+        for chan, wsock in self._chan_to_wsocket.items():
+            if chan.stream_type == "Integrated":
+                length = 1
+                data = np.random.random(length).astype(chan.dtype)
+            elif chan.stream_type == "Demodulated":
+                length = int(self._lib.record_length/32)
+                data = np.random.random(length).astype(chan.dtype)
+            else: #Raw
+                length = int(self._lib.record_length/4)
+                data = np.random.random(length).astype(chan.dtype)
+            wsock.send(struct.pack('n', length*data.dtype.itemsize) + data.tostring())
 
     def receive_data(self, channel, oc):
         # push data from a socket into an OutputConnector (oc)
@@ -209,11 +227,17 @@ class X6(Instrument):
         return self._lib.transfer_stream(*channel.channel)
 
     async def wait_for_acquisition(self, timeout=5):
-        while not self.done():
-            if (datetime.datetime.now() - self.last_timestamp).seconds > timeout:
-                logger.error("Digitizer %s timed out.", self.name)
-                break
-            await asyncio.sleep(0.2)
+        if self.gen_fake_data:
+            for i in range(self._lib.nbr_segments):
+                for j in range(self._lib.nbr_round_robins):
+                    self.spew_fake_data()
+                    await asyncio.sleep(0.005)
+        else:
+            while not self.done():
+                if (datetime.datetime.now() - self.last_timestamp).seconds > timeout:
+                    logger.error("Digitizer %s timed out.", self.name)
+                    break
+                await asyncio.sleep(0.1)
 
     # pass thru properties
     @property
