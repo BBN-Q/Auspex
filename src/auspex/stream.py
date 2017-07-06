@@ -233,7 +233,7 @@ class DataStreamDescriptor(object):
         self.unit = None
         self.params = {} # Parameters associated with each dataset
         self.parent = None
-        self.exp_src = None # Actual source code from the underlying experiment
+        self._exp_src = None # Actual source code from the underlying experiment
         self.dtype = dtype
         self.metadata = {}
 

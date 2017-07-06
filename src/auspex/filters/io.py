@@ -127,7 +127,7 @@ class WriteToHDF5(Filter):
         params     = desc.params
         axis_names = desc.axis_names(with_metadata=True)
 
-        self.file.attrs['exp_src'] = desc.exp_src
+        self.file.attrs['exp_src'] = desc._exp_src
         num_axes   = len(axes)
 
         if desc.is_adaptive() and not self.store_tuples:

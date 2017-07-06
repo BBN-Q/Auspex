@@ -153,7 +153,7 @@ class MetaExperiment(type):
         self._output_connectors = {}
 
         # Parse ourself
-        self.exp_src = inspect.getsource(self)
+        self._exp_src = inspect.getsource(self)
 
         for k,v in dct.items():
             if isinstance(v, Instrument):
@@ -288,7 +288,7 @@ class Experiment(metaclass=MetaExperiment):
     def update_descriptors(self):
         logger.debug("Starting descriptor update in experiment.")
         for oc in self.output_connectors.values():
-            oc.descriptor.exp_src = self.exp_src
+            oc.descriptor._exp_src = self._exp_src
             for k,v in self._parameters.items():
                 oc.descriptor.add_param(k, v.value)
                 if v.unit is not None:

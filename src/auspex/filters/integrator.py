@@ -74,7 +74,7 @@ class KernelIntegrator(Filter):
         output_descriptor = DataStreamDescriptor()
         # TODO: handle reduction to single point
         output_descriptor.axes = self.sink.descriptor.axes[:-1]
-        output_descriptor.exp_src = self.sink.descriptor.exp_src
+        output_descriptor._exp_src = self.sink.descriptor._exp_src
         output_descriptor.dtype = np.complex128
         for os in self.source.output_streams:
             os.set_descriptor(output_descriptor)
