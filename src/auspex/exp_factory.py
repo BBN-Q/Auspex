@@ -420,7 +420,7 @@ class QubitExpFactory(object):
                 instr_type = par['type']
                 # Instantiate the desired instrument
                 if instr_type in module_map:
-                    logger.info("Found instrument class %s for '%s' at loc %s when loading experiment settings.", instr_type, name, par['address'])
+                    logger.debug("Found instrument class %s for '%s' at loc %s when loading experiment settings.", instr_type, name, par['address'])
                     try:
                         inst = module_map[instr_type](correct_resource_name(str(par['address'])), name=name)
                     except Exception as e:
