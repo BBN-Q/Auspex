@@ -1,4 +1,3 @@
-// Note that these are supplanted by QGL's versions if auspex can find them
 {
 	"AWGDir": "/my/path/to/AWG/",
 	"ConfigurationFile": "/my/path/to/measure.yml"
