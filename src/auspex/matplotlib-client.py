@@ -386,7 +386,7 @@ class MatplotClientWindow(QtWidgets.QMainWindow):
                 else:
                     self.canvas_by_name[plot_name].update_figure(*data)
         except:
-            pass
+            self.statusBar().showMessage("Exception while plotting.", 1000)
 
     def switch_toolbar(self):
         for toolbar in self.toolbars:

@@ -110,7 +110,10 @@ class Plotter(Filter):
             self.last_update = time.time()
 
     async def on_done(self):
-        self.plot_server.send(self.name, self.plot_buffer)
+        if self.plot_dims.value == 1:
+            self.plot_server.send(self.name, self.x_values, self.plot_buffer)
+        elif self.plot_dims.value == 2:
+            self.plot_server.send(self.name, self.x_values, self.y_values, self.plot_buffer)
 
     def axis_label(self, index):
         unit_str = " ({})".format(self.descriptor.axes[index].unit) if self.descriptor.axes[index].unit else ''
