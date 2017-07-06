@@ -61,11 +61,11 @@ class X6StreamSelector(Filter):
         # Otherswise, add the time axis.
         if channel_settings['stream_type'] == 'Raw':
             samp_time = 4.0e-9
-            descrip.add_axis(DataAxis("time", samp_time*np.arange(source_instr_settings['nbr_samples']//4)))
+            descrip.add_axis(DataAxis("time", samp_time*np.arange(source_instr_settings['record_length']//4)))
             descrip.dtype = np.float64
         elif channel_settings['stream_type'] == 'Demodulated':
             samp_time = 32.0e-9
-            descrip.add_axis(DataAxis("time", samp_time*np.arange(source_instr_settings['nbr_samples']//32)))
+            descrip.add_axis(DataAxis("time", samp_time*np.arange(source_instr_settings['record_length']//32)))
             descrip.dtype = np.complex128
         else: # Integrated
             descrip.dtype = np.complex128
