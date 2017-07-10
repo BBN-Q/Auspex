@@ -109,6 +109,16 @@ class QubitExperiment(Experiment):
             for awg in self.awgs:
                 awg.run()
 
+    def add_qubit_sweep(self, property_name, values):
+        desc = {property_name:
+                {'name': property_name,
+                'target': property_name,
+                'points': values,
+                'type': "Parameter"
+               }}
+        QubitExpFactory.load_parameter_sweeps(self, manual_sweep_params=desc)
+
+
     def shutdown_instruments(self):
         # remove socket readers
         if self.cw_mode:
@@ -181,7 +191,8 @@ class QubitExpFactory(object):
         settings["instruments"] = {e["name"]: e for e in settings['instruments']}
         settings["filters"]     = {e["name"]: e for e in settings['filters']}
         settings["qubits"]      = {e["name"]: e for e in settings['qubits']}
-        settings["sweeps"]      = {e["name"]: e for e in settings['sweeps']}
+        if 'sweeps' in settings:
+            settings["sweeps"]      = {e["name"]: e for e in settings['sweeps']}
 
         # Instantiaite and perform all of our setup
         experiment = QubitExperiment()
@@ -196,7 +207,8 @@ class QubitExpFactory(object):
         QubitExpFactory.load_instruments(experiment)
         QubitExpFactory.load_qubits(experiment)
         QubitExpFactory.load_filters(experiment)
-        QubitExpFactory.load_parameter_sweeps(experiment)
+        if 'sweeps' in settings:
+            QubitExpFactory.load_parameter_sweeps(experiment)
 
         return experiment
 
@@ -240,7 +252,8 @@ class QubitExpFactory(object):
         instruments = experiment.settings['instruments']
         filters     = experiment.settings['filters']
         qubits      = experiment.settings['qubits']
-        sweeps      = experiment.settings['sweeps']
+        if 'sweeps' in experiment.settings:
+            sweeps      = experiment.settings['sweeps']
 
         # Find any writer endpoints of the receiver channels
         for receiver_name, num_segments in meta_info['receivers'].items():
@@ -434,16 +447,21 @@ class QubitExpFactory(object):
                     logger.error("Could not find instrument class %s for '%s' when loading experiment settings.", instr_type, name)
 
     @staticmethod
-    def load_parameter_sweeps(experiment):
+    def load_parameter_sweeps(experiment, manual_sweep_params=None):
         """Create parameter sweeps (non-segment sweeps) from the settings. Users can provide
         either a space-separated pair of *instr_name method_name* (i.e. *Holzworth1 power*)
         or specify a qubit property that auspex will try to link back to the relevant instrument.
         (i.e. *q1 measure frequency* or *q2 control power*). Auspex will create a *SweepAxis* 
         for each parameter sweep, and add this axis to all output connectors."""
-        sweeps = experiment.settings['sweeps']
+        if manual_sweep_params:
+            sweeps = manual_sweep_params
+            order = [list(sweeps.keys())[0]]
+        else:
+            sweeps = experiment.settings['sweeps']
+            order = experiment.settings['sweepOrder']
         qubits = experiment.settings['qubits']
 
-        for name in experiment.settings['sweepOrder']:
+        for name in order:
             par = sweeps[name]
             # Treat segment sweeps separately since they are DataAxes rather than SweepAxes
             if par['type'] != 'Segment':
@@ -492,7 +510,6 @@ class QubitExpFactory(object):
                 elif "step" in par:
                     points = np.arange(par['start'], par['stop'], par['step'])
 
-                points = np.linspace(par['start'], par['stop'], par['numPoints'])
                 if hasattr(instr, method_name):
                     param.assign_method(getattr(instr, method_name)) # Couple the parameter to the instrument
                     experiment.add_sweep(param, points) # Create the requested sweep on this parameter
