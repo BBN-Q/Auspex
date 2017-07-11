@@ -110,6 +110,17 @@ class QubitExperiment(Experiment):
                 awg.run()
 
     def add_qubit_sweep(self, property_name, values):
+        """
+        Add a *ParameterSweep* to the experiment. By the time this experiment exists, it has already been run
+        through the qubit factory, and thus already has its segment sweep defined. This method simply utilizes
+        the *load_parameters_sweeps* method of the QubitExpFactory, thus users can provide
+        either a space-separated pair of *instr_name method_name* (i.e. *Holzworth1 power*)
+        or specify a qubit property that auspex will try to link back to the relevant instrument.
+        (i.e. *q1 measure frequency* or *q2 control power*). For example::
+            exp = QubitExpFactory.create(PulsedSpec(q))
+            exp.add_qubit_sweep("q1 measure frequency", np.linspace(6e9, 6.5e9, 500))
+            exp.run_sweeps()
+        """
         desc = {property_name:
                 {'name': property_name,
                 'target': property_name,
