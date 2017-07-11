@@ -178,6 +178,7 @@ class QubitExpFactory(object):
         exp = QubitExpFactory.create(meta_file=meta_file, expname=expname,
                                      calibration=calibration, cw_mode=cw_mode)
         exp.run_sweeps()
+        return exp
 
     @staticmethod
     def create(meta_file=None, expname=None, calibration=False, cw_mode=False):
