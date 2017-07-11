@@ -1,0 +1,117 @@
+# Qubit configuration for the 21.1st century.
+# This example configuration will be used for
+# unit tests related to the QubitExpFactory.
+
+qubits:
+  - name: q1
+    measure:
+        AWG: BBNAPS1 12
+        trigger: BBNAPS1 12m1
+        receiver: q1-RawSS
+        generator: Holz1 
+        autodyneFreq: 10e6
+        pulseParams:
+            amp: 1.0
+            cutoff: 2.0
+            length: 0.5e-06
+            shapeFun: tanh
+            sigma: 1e-9
+    control:
+        AWG: BBNAPS2 12
+        generator: Holz2
+        pulseParams:
+            cutoff: 2.0
+            length: 7e-8
+            pi2Amp: 0.4
+            piAmp: 0.8
+            shapeFun: drag
+            dragScaling: 0.0
+            sigma: 5.0e-9
+
+instruments:
+    - name: BBNAPS1
+      type: APS2
+      master:  True
+      slaveTrig: 12m4
+      address: 192.168.5.20
+      file:    thing.h5
+      channels:
+        - name:        "12"
+          phaseSkew:   -11.73
+          ampFactor:   0.898
+      markers:
+        - name: 12m1
+          delay: -5.0e-8
+        - name: 12m2
+        - name: 12m3
+        - name: 12m4
+      interval: 5e-6
+      trigger:  Internal
+      delay:    0.0
+
+    - name: BBNAPS2
+      type: APS2
+      master:  False
+      address: 192.168.5.21
+      file:    thing2.h5
+      channels:
+        - name: "12"
+      markers:
+        - name: 12m1
+        - name: 12m2
+        - name: 12m3
+        - name: 12m4
+      interval: 5e-6
+      trigger:  External
+      delay:    0.0
+
+    - name: X6-1
+      type: X6
+      address: 0
+      acquire_mode: digitizer
+      gen_fake_data: True
+      reference: external
+      record_length: 1024
+      nbr_segments: 1
+      nbr_round_robins: 4
+      channels: 
+        - name: "1"
+        - name: "2"
+      streams: ["raw", "result1", "result2"]
+
+    - name: Holz1
+      type: HolzworthHS9000
+      address: HS9004A-009-1
+      power: -10
+
+    - name: Holz2
+      type: HolzworthHS9000
+      address: HS9004A-009-2
+      power: -10
+
+filters:
+    - name: q1-RawSS
+      type: X6StreamSelector
+      source: X6-1
+      stream_type: Raw
+      channel: "1"
+
+    - name: Demod-q1
+      type: Channelizer
+      source: q1-RawSS
+      decimation_factor: 4
+      frequency: 10e6
+      bandwidth: 5e6
+
+    - name: Int-q1
+      type: KernelIntegrator
+      source: Demod-q1
+      box_car_start: 500e-9
+      box_car_stop: 900e-9
+
+    - name: avg-q1
+      type: Averager
+      source: Int-q1
+      axis: round_robins
+
+    
