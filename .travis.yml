@@ -22,6 +22,7 @@ install:
   - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION numpy scipy matplotlib h5py pandas networkx cffi
   - source activate test-environment
   - pip install git+https://github.com/BBN-Q/Adapt.git
+  - pip install git+https://github.com/BBN-Q/QGL.git
   - pip install tqdm pyvisa coveralls
   - export PYTHONPATH=$PYTHONPATH:$PWD/src
 
