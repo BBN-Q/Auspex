@@ -33,7 +33,7 @@ instruments:
       type: APS2
       master:  True
       slaveTrig: 12m4
-      address: 192.168.5.20
+      address: 192.162.247.20
       file:    thing.h5
       channels:
         - name:        "12"
@@ -52,7 +52,7 @@ instruments:
     - name: BBNAPS2
       type: APS2
       master:  False
-      address: 192.168.5.21
+      address: 192.162.247.21
       file:    thing2.h5
       channels:
         - name: "12"
@@ -114,4 +114,11 @@ filters:
       source: Int-q1
       axis: round_robins
 
-    
+    - name: final-avg-buff
+      type: DataBuffer
+      source: avg-q1 final_average
+
+    - name: partial-avg-buff
+      type: DataBuffer
+      source: avg-q1 partial_average    
+      
