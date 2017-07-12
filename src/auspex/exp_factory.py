@@ -199,13 +199,6 @@ class QubitExpFactory(object):
             finally:
                 loader.dispose()
 
-        # Convenient to have these as dicts
-        settings["instruments"] = {e["name"]: e for e in settings['instruments']}
-        settings["filters"]     = {e["name"]: e for e in settings['filters']}
-        settings["qubits"]      = {e["name"]: e for e in settings['qubits']}
-        if 'sweeps' in settings:
-            settings["sweeps"]      = {e["name"]: e for e in settings['sweeps']}
-
         # Instantiaite and perform all of our setup
         experiment = QubitExperiment()
         experiment.settings        = settings
@@ -443,6 +436,7 @@ class QubitExpFactory(object):
             if 'enabled' not in par or par['enabled']:
                 # This should go away as auspex and pyqlab converge on naming schemes
                 instr_type = par['type']
+                par['name'] = name
                 # Instantiate the desired instrument
                 if instr_type in module_map:
                     logger.debug("Found instrument class %s for '%s' at loc %s when loading experiment settings.", instr_type, name, par['address'])
@@ -452,7 +446,8 @@ class QubitExpFactory(object):
                         logger.error("Initialization of caused exception:", name, str(e))
                         inst = None
                     # Add to class dictionary for convenience
-                    setattr(experiment, 'name', inst)
+                    if not hasattr(experiment, name):
+                        setattr(experiment, name, inst)
                     # Add to _instruments dictionary
                     experiment._instruments[name] = inst
                 else:
