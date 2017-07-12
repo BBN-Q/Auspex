@@ -3,7 +3,7 @@ auspex package
 
 auspex\.exp\_factory module
 ---------------------------
-
+.. _qubitexpfactory:
 .. automodule:: auspex.exp_factory
     :members:
     :undoc-members:
@@ -19,13 +19,6 @@ auspex\.log module
 ------------------
 
 .. automodule:: auspex.log
-    :members:
-    :undoc-members:
-
-auspex\.matplotlib\-client module
----------------------------------
-
-.. automodule:: auspex.matplotlib-client
     :members:
     :undoc-members:
 
