@@ -7,3 +7,4 @@ pandas >= 0.18.1
 networkx >= 1.11
 matplotlib >= 2.0.0
 cffi >= 1.9.1
+ruamel.yaml >= 0.15.18

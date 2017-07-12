@@ -40,47 +40,6 @@ def correct_resource_name(resource_name):
         resource_name = resource_name.replace(k, v)
     return resource_name
 
-class LoaderMeta(type):
-    def __new__(metacls, __name__, __bases__, __dict__):
-        """Add include constructer to class."""
-        # register the include constructor on the class
-        cls = super().__new__(metacls, __name__, __bases__, __dict__)
-        cls.add_constructor('!include', cls.construct_include)
-        return cls
-
-class Loader(yaml.Loader, metaclass=LoaderMeta):
-    """YAML Loader with an additional `!include` constructor."""
-    def __init__(self, stream):
-        """Initialise Loader."""
-        try:
-            self._root = os.path.split(stream.name)[0]
-        except AttributeError:
-            self._root = os.path.curdir
-        super().__init__(stream)
-        self.add_implicit_resolver(
-            u'tag:yaml.org,2002:float',
-            re.compile(u'''^(?:
-             [-+]?(?:[0-9][0-9_]*)\\.[0-9_]*(?:[eE][-+]?[0-9]+)?
-            |[-+]?(?:[0-9][0-9_]*)(?:[eE][-+]?[0-9]+)
-            |\\.[0-9_]+(?:[eE][-+][0-9]+)?
-            |[-+]?[0-9][0-9_]*(?::[0-5]?[0-9])+\\.[0-9_]*
-            |[-+]?\\.(?:inf|Inf|INF)
-            |\\.(?:nan|NaN|NAN))$''', re.X),
-            list(u'-+0123456789.'))
-        self.filenames = [os.path.abspath(stream.name)]
-    def construct_include(self, node):
-        """Include file referenced at node."""
-        filename = os.path.abspath(os.path.join(
-            self._root, self.construct_scalar(node)
-        ))
-        extension = os.path.splitext(filename)[1].lstrip('.')
-        self.filenames.append(filename)
-        with open(filename, 'r') as f:
-            if extension in ('yaml', 'yml'):
-                return yaml.load(f, Loader)
-            else:
-                return ''.join(f.readlines())
-
 class QubitExperiment(Experiment):
     """Experiment with a specialized run method for qubit experiments run via the QubitExpFactory."""
     def init_instruments(self):
@@ -191,13 +150,7 @@ class QubitExpFactory(object):
         are. The *expname* argument is simply used to set the output directory relative
         to the data directory."""
 
-        with open(config.configFile, 'r') as FID:
-            loader = Loader(FID)
-            try:
-                settings  = loader.get_single_data()
-                filenames = loader.filenames
-            finally:
-                loader.dispose()
+        settings = config.yaml_load(config.configFile)
 
         # Instantiaite and perform all of our setup
         experiment = QubitExperiment()
@@ -351,14 +304,14 @@ class QubitExpFactory(object):
                     writer_to_qubit[w] = q
 
         # Disable digitizers and APSs and then build ourself back up with the relevant nodes
-        for instr_name in instruments:
+        for instr_name in instruments.keys():
             if instruments[instr_name]["type"] in ['X6', 'Alazar', 'APS2']:
                 experiment.settings["instruments"][instr_name]['enabled'] = False
         for instr_name in inst_to_enable:
             experiment.settings["instruments"][instr_name]['enabled'] = True
 
         if calibration:
-            for meas_name in filters:
+            for meas_name in filters.keys():
                 experiment.settings['filters'][meas_name]['enabled'] = False
             for meas_name in filt_to_enable:
                 experiment.settings['filters'][meas_name]['enabled'] = True
