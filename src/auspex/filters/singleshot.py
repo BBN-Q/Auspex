@@ -11,6 +11,8 @@ __all__ = ['SingleShotMeasurement']
 import numpy as np
 from scipy.signal import hilbert
 from scipy.stats import gaussian_kde, norm
+from scipy.special import betaincinv
+from sklearn.linear_model import LogisticRegressionCV
 
 from .filter import Filter
 from auspex.parameter import Parameter, FloatParameter, IntParameter, BoolParameter
@@ -101,8 +103,8 @@ class SingleShotMeasurement(Filter):
             bins = np.linspace(I_mins[best_idx], I_maxes[best_idx], 100)
             g_KDE = gaussian_kde(ground_I[best_idx, :])
             e_KDE = gaussian_kde(excited_I[best_idx, :])
-            g_PDF = e_KDE(bins)
-            e_PDF = g_KDE(bins)
+            g_PDF = g_KDE(bins)
+            e_PDF = e_KDE(bins)
         else:
             ground_I = np.sum(np.real(weighted_ground), axis=0)
             ground_Q = np.sum(np.imag(weighted_excited), axis=0)
@@ -172,8 +174,36 @@ class SingleShotMeasurement(Filter):
         logger.info("Single shot fidelity filter found: {}".format(self.fidelity_result))
 
         if self.logistic_regression.value:
-            logger.error("Logistic regression in sigle-shot fidelity filter not yet implemented.")
-            pass
+            #group data and assign state labels
+            gnd_features = np.hstack([np.real(self.ground_data.T),
+                                    np.imag(self.ground_data.T)])
+            ex_features = np.hstack([np.real(self.excited_data.T),
+                                    np.imag(self.excited_data.T)])
+            #liblinear wants arrays in C order
+            features = np.ascontiguousarray(np.vstack([gnd_features, ex_features]))
+            state = np.ascontiguousarray(np.hstack([np.zeros(self.ground_data.shape[1]),
+                                                    np.ones(self.excited_data.shape[1])]))
+            #Set up logistic regression with cross-validation using liblinear.
+            #Cs sets the inverse of the regularization strength, which will be optimized
+            #through cross-validation. Uses the default Stratified K-Folds
+            #CV generator, with 3 folds.
+            #This is set up to be as consistent with the MATLAB implementation
+            #as I can make it. --GJR
+            Cs = np.logspace(-1,2,5)
+            logreg = LogisticRegressionCV(Cs, cv=3, solver='liblinear')
+            logreg.fit(features, state) #fit the model
+            predictions = logreg.predict(features) #in-place classification
+            score = logreg.score(features,state) #mean accuracy of classification
+            N = len(predictions)
+            S = np.sum(predictions == state) #how many we got right
+            #now calculate confidence intervals
+            c = 0.95
+            flo = betaincinv(S+1, N-S+1, (1-c)/2., )
+            fhi = betaincinv(S+1, N-S+1, (1+c)/2., )
+            logger.info(("In-place logistic regression fidelity: " +
+                    "{:.2f}% ({:.2f}, {:.2f})".format(100*score, 100*flo, 100*fhi)))
+
+
 
     async def on_done(self, data):
         pass
