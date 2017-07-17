@@ -38,7 +38,7 @@ def generate_fake_data(alpha, phi, sigma, N = 5000, plot=False):
 
 
 if __name__ == "__main__":
-    gnd, ex = generate_fake_data(3, np.pi/5, 1.6, plot=False)
+    gnd, ex = generate_fake_data(3, np.pi/5, 1.6, plot=True)
     ss = SSM(save_kernel=False, optimal_integration_time=False, zero_mean=False,
                 set_threshold=True, logistic_regression=True)
     ss.ground_data = gnd

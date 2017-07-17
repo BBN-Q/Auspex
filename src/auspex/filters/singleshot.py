@@ -27,6 +27,8 @@ class SingleShotMeasurement(Filter):
     zero_mean = BoolParameter()
     logistic_regression = BoolParameter()
 
+    sink = InputConnector()
+
     TOLERANCE = 1e-3
 
     def __init__(self, **kwargs):
@@ -47,11 +49,23 @@ class SingleShotMeasurement(Filter):
         if not any(_.name == "time" for _ in self.descriptor.axes):
             raise Exception("Single shot filter must operate on Raw or Demodulated data streams!")
 
+    def process_data(self, data):
+        pass
+
 
     def compute_filter(self):
+        """Compute the single shot kernel and obtain single-shot measurement
+        fidelity.
+
+        Expects that the data will be in self.ground_data and self.excited_data,
+        which are (T, N)-shaped numpy arrays, with T the time axis and N the
+        number of shots."""
         #get excited and ground state data
-        ground_mean = np.mean(self.ground_data, axis=1)
-        excited_mean = np.mean(self.excited_data, axis=1)
+        try:
+            ground_mean = np.mean(self.ground_data, axis=1)
+            excited_mean = np.mean(self.excited_data, axis=1)
+        except AttributeError:
+            raise Exception("Single shot filter does not appear to have any data!")
         distance = np.abs(np.mean(ground_mean - excited_mean))
         bias = np.mean(ground_mean + excited_mean) / distance
         logger.info("Found single-shot measurement distance: {} and bias {}.".format(distance, bias))
@@ -118,10 +132,7 @@ class SingleShotMeasurement(Filter):
             g_PDF = g_KDE(bins)
             e_PDF = e_KDE(bins)
 
-        if self.save_kernel.value:
-            logger.debug("Kernel saving not yet implemented!")
-            pass
-
+        self.kernel = kernel
         max_F_I = 1 - 0.5 * (1 - 0.5 * (bins[2] - bins[1]) * np.sum(np.abs(g_PDF - e_PDF)))
         self.pdf_data = {"Max I Fidelity": max_F_I,
                          "I Bins": bins,
@@ -173,37 +184,39 @@ class SingleShotMeasurement(Filter):
         self.fidelity_result = self.pdf_data["Max I Fidelity"] + 1j * self.pdf_data["Max Q Fidelity"]
         logger.info("Single shot fidelity filter found: {}".format(self.fidelity_result))
 
-        if self.logistic_regression.value:
-            #group data and assign state labels
-            gnd_features = np.hstack([np.real(self.ground_data.T),
-                                    np.imag(self.ground_data.T)])
-            ex_features = np.hstack([np.real(self.excited_data.T),
-                                    np.imag(self.excited_data.T)])
-            #liblinear wants arrays in C order
-            features = np.ascontiguousarray(np.vstack([gnd_features, ex_features]))
-            state = np.ascontiguousarray(np.hstack([np.zeros(self.ground_data.shape[1]),
-                                                    np.ones(self.excited_data.shape[1])]))
-            #Set up logistic regression with cross-validation using liblinear.
-            #Cs sets the inverse of the regularization strength, which will be optimized
-            #through cross-validation. Uses the default Stratified K-Folds
-            #CV generator, with 3 folds.
-            #This is set up to be as consistent with the MATLAB implementation
-            #as I can make it. --GJR
-            Cs = np.logspace(-1,2,5)
-            logreg = LogisticRegressionCV(Cs, cv=3, solver='liblinear')
-            logreg.fit(features, state) #fit the model
-            predictions = logreg.predict(features) #in-place classification
-            score = logreg.score(features,state) #mean accuracy of classification
-            N = len(predictions)
-            S = np.sum(predictions == state) #how many we got right
-            #now calculate confidence intervals
-            c = 0.95
-            flo = betaincinv(S+1, N-S+1, (1-c)/2., )
-            fhi = betaincinv(S+1, N-S+1, (1+c)/2., )
-            logger.info(("In-place logistic regression fidelity: " +
-                    "{:.2f}% ({:.2f}, {:.2f})".format(100*score, 100*flo, 100*fhi)))
-
-
+    def logistic_fidelity(self):
+        #group data and assign state labels
+        gnd_features = np.hstack([np.real(self.ground_data.T),
+                                np.imag(self.ground_data.T)])
+        ex_features = np.hstack([np.real(self.excited_data.T),
+                                np.imag(self.excited_data.T)])
+        #liblinear wants arrays in C order
+        features = np.ascontiguousarray(np.vstack([gnd_features, ex_features]))
+        state = np.ascontiguousarray(np.hstack([np.zeros(self.ground_data.shape[1]),
+                                                np.ones(self.excited_data.shape[1])]))
+        #Set up logistic regression with cross-validation using liblinear.
+        #Cs sets the inverse of the regularization strength, which will be optimized
+        #through cross-validation. Uses the default Stratified K-Folds
+        #CV generator, with 3 folds.
+        #This is set up to be as consistent with the MATLAB implementation
+        #as I can make it. --GJR
+        Cs = np.logspace(-1,2,5)
+        logreg = LogisticRegressionCV(Cs, cv=3, solver='liblinear')
+        logreg.fit(features, state) #fit the model
+        predictions = logreg.predict(features) #in-place classification
+        score = logreg.score(features,state) #mean accuracy of classification
+        N = len(predictions)
+        S = np.sum(predictions == state) #how many we got right
+        #now calculate confidence intervals
+        c = 0.95
+        flo = betaincinv(S+1, N-S+1, (1-c)/2., )
+        fhi = betaincinv(S+1, N-S+1, (1+c)/2., )
+        logger.info(("In-place logistic regression fidelity: " +
+                "{:.2f}% ({:.2f}, {:.2f})".format(100*score, 100*flo, 100*fhi)))
 
     async def on_done(self, data):
-        pass
+        self.compute_filter()
+        if self.logistic_regression.value:
+            self.logistic_fidelity()
+        if self.save_kernel.value:
+            logger.debug("Kernel saving not yet implemented!")
