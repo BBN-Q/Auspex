@@ -1,0 +1,32 @@
+# Qubit configuration for the 21.1st century.
+# Imports can be made using the !include keyword. e.g. 
+# instruments: !include instruments.yml
+
+qubits:
+  q1:
+    measure:
+      AWG: BBNAPS1 12
+      trigger: BBNAPS1 12m1
+      receiver: q1-RawSS
+      generator: Holz1
+      autodyne_freq: 10000000.0
+      pulse_params:
+        amp: 1.0
+        cutoff: 2.0
+        length: 5.0e-07
+        shape_fun: tanh
+        sigma: 1.0e-09
+    control:
+      AWG: BBNAPS2 12  
+      generator: Holz2
+      pulseParams:
+        cutoff: 2.0
+        length: 7.0e-08
+        pi2Amp: 0.4
+        piAmp: 0.8
+        shapeFun: drag
+        dragScaling: 0.0
+        sigma: 5.0e-09
+
+instruments: !include instruments.yml
+filters: !include filters.yml
