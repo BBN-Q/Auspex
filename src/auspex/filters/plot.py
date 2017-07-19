@@ -85,7 +85,7 @@ class Plotter(Filter):
         if self.plot_dims.value == 2:
             self.y_values = self.descriptor.axes[-2].points
 
-        self.plot_buffer = np.nan*np.ones(self.points_before_clear, dtype=self.descriptor.dtype)
+        self.plot_buffer = (np.nan*np.ones(self.points_before_clear)).astype(self.descriptor.dtype)
         self.idx = 0
 
     async def process_data(self, data):
