@@ -305,7 +305,7 @@ class QubitExpFactory(object):
 
         # Disable digitizers and APSs and then build ourself back up with the relevant nodes
         for instr_name in instruments.keys():
-            if instruments[instr_name]["type"] in ['X6', 'Alazar', 'APS2']:
+            if 'tx_channels' in instruments[instr_name].keys() or 'rx_channels' in instruments[instr_name].keys():
                 experiment.settings["instruments"][instr_name]['enabled'] = False
         for instr_name in inst_to_enable:
             experiment.settings["instruments"][instr_name]['enabled'] = True
@@ -322,10 +322,15 @@ class QubitExpFactory(object):
                     experiment.settings['filters'][meas_name]['groupname'] = writer_to_qubit[meas_name] \
                         + "-" + experiment.settings['filters'][meas_name]['groupname']
 
-        # First enable any instruments and set the sequence files
-        for instr_name, seq_file in meta_info['instruments'].items():
+        for instr_name, chan_data in meta_info['instruments'].items():
             experiment.settings["instruments"][instr_name]['enabled']  = True
-            experiment.settings["instruments"][instr_name]['seq_file'] = seq_file
+            for chan_name, seq_file in chan_data.items():
+                if chan_name in experiment.settings["instruments"][instr_name]["tx_channels"].keys():
+                    experiment.settings["instruments"][instr_name]["tx_channels"][chan_name]['seq_file'] = seq_file
+                elif chan_name in experiment.settings["instruments"][instr_name]["rx_channels"].keys():
+                    experiment.settings["instruments"][instr_name]["rx_channels"][chan_name]['seq_file'] = seq_file
+                else:
+                    raise ValueError("Could not find channel {} in of instrument {}.".format(chan_name, instr_name))
 
         # Now we will construct the DataAxis from the meta_info
         desc = meta_info["axis_descriptor"] 
@@ -555,7 +560,7 @@ class QubitExpFactory(object):
                     descrip.add_axis(DataAxis("segments", range(source_instr_settings['nbr_segments'])))
 
             # Digitizer mode preserves round_robins, averager mode collapsing along them:
-            if source_instr_settings['acquire_mode'] == 'digitizer':
+            if 'acquire_mode' not in source_instr_settings.keys() or source_instr_settings['acquire_mode'] == 'digitizer':
                 descrip.add_axis(DataAxis("round_robins", range(source_instr_settings['nbr_round_robins'])))
 
             oc.set_descriptor(descrip)
