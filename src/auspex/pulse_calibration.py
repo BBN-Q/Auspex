@@ -129,7 +129,7 @@ class CavitySearch(PulseCalibration):
         data, _ = self.run()
 
         # Plot the results
-        self.plot["Data"] = (self.frequencies, data)
+        self.plots[0]["Data"] = (self.frequencies, data)
 
     def init_plots(self):
         plot = ManualPlotter("Qubit Search", x_label='Frequency (GHz)', y_label='Amplitude (Arb. Units)')
@@ -155,7 +155,7 @@ class QubitSearch(PulseCalibration):
         data, _ = self.run()
 
         # Plot the results
-        self.plot["Data"] = (self.frequencies, data)
+        self.plots[0]["Data"] = (self.frequencies, data)
 
     def init_plots(self):
         plot = ManualPlotter("Qubit Search", x_label='Frequency (GHz)', y_label='Amplitude (Arb. Units)')
@@ -209,9 +209,9 @@ class RamseyCalibration(PulseCalibration):
 
         # Plot the results
         ramsey_f = ramsey_2f if self.two_freqs else ramsey_1f
+		self.plots[0]["Data"] = (self.delays, data)
+		self.plots[0]["Fit"] = (finer_delays, ramsey_f(finer_delays, *all_params))
         finer_delays = np.linspace(np.min(self.delays), np.max(self.delays), 4*len(self.delays))
-        self.plot["Data"] = (self.delays, data)
-        self.plot["Fit"] = (finer_delays, ramsey_f(finer_delays, *all_params))
 
         data, _ = self.run()
 
@@ -220,9 +220,9 @@ class RamseyCalibration(PulseCalibration):
 
         # Plot the results
         ramsey_f = ramsey_2f if self.two_freqs else ramsey_1f
+		self.plots[0]["Data"] = (self.delays, data)
+		self.plots[0]["Fit"]  = (finer_delays, ramsey_f(finer_delays, *all_params))
         finer_delays = np.linspace(np.min(self.delays), np.max(self.delays), 4*len(self.delays))
-        self.plot["Data"] = (self.delays, data)
-        self.plot["Fit"]  = (finer_delays, ramsey_f(finer_delays, *all_params))
 
         if fit_freq_B < fit_freq_A:
             fit_freq = round(orig_freq + self.added_detuning/1e9 + 0.5*(fit_freq_A + 0.5*fit_freq_A + fit_freq_B)/1e9, 10)
@@ -369,12 +369,12 @@ class DRAGCalibration(PulseCalibration):
         #fit and analyze
         opt_drag, error_drag, popt_mat = fit_drag(self.deltas, self.num_pulses, norm_data)
 
+		self.plots[0]["Data"] = (self.deltas, data)
         # Plot the results
-        self.dat_line.data_source.data = dict(x=self.deltas, y=data)
-        finer_deltas = np.linspace(np.min(self.deltas), np.max(self.deltas), 4*len(self.deltas))
-        #self.fit_line.data_source.data = dict(x=finer_deltas, y=fit_drag(finer_deltas, popt_mat)) #do we need a separate dat_line per curve? I hope not
-        self.DRAG_line.data_source.data = dict(x=self.num_pulses, y=opt_drag)
-        self.DRAG_points.data_source.data = dict(x=self.num_pulses, y=opt_drag)
+		self.plots[0]["Fit"] = (finer_deltas, fit_drag(finer_deltas, popt_mat))
+	    finer_deltas = np.linspace(np.min(self.deltas), np.max(self.deltas), 4*len(self.deltas))
+		self.plots[1]["Data"] = (self.num.pulses, opt_drag)
+
         #TODO: add error bars
 
         #generate sequence with new pulses and drag parameters
@@ -387,8 +387,8 @@ class DRAGCalibration(PulseCalibration):
         #second run, finer range
         data, _ = self.run()
         opt_drag, error_drag, popt_mat = fit_drag(data)
+		#TODO: plots results 2nd round
 
-        #TODO: plot results 2nd round
 
         #TODO: success condition
 
@@ -409,8 +409,8 @@ class CRCalibration(PulseCalibration):
         self.rise_fall = rise_fall
         self.filename = 'CR/CR'
 
+		plot = ManualPlotter("CR"+str.lower(self.cal_type.name)+"Fit", x_label=str.lower(self.cal_type.name), y_label='$<Z_{'+self.qubit_names[1]+'}>$')
     def init_plots(self):
-        plot = ManualPlotter("CR"+str.lower(self.cal_type.name)+"Fit", x_label=str.lower(self.cal_type.name), y_label='$<Z_{'+self.qubit_names[1]+'}>$')
         plot.add_data_trace("Data 0")
         plot.add_fit_trace("Fit 0")
         plot.add_data_trace("Data 1")
@@ -433,10 +433,10 @@ class CRCalibration(PulseCalibration):
         # Plot the results
         xaxis = self.lengths if self.cal_type==CR_cal_type.LENGTH else self.phases if self.cal_type==CR_cal_type.PHASE else self.amps
         finer_xaxis = np.linspace(np.min(xaxis), np.max(xaxis), 4*len(xaxis))
-        self.plot["Data 0"] = (xaxis,       data_t[:len(data_t)/2])
-        self.plot["Fit 0"] =  (finer_xaxis, sin_f(finer_lengths, *all_params_0))
-        self.plot["Data 1"] = (xaxis,       data_t[len(data_t)/2:])
-        self.plot["Fit 1"] =  (finer_xaxis, sin_f(finer_lengths, *all_params_1))
+        self.plots[0]["Data 0"] = (xaxis,       data_t[:len(data_t)/2])
+        self.plots[0]["Fit 0"] =  (finer_xaxis, sin_f(finer_lengths, *all_params_0))
+        self.plots[0]["Data 1"] = (xaxis,       data_t[len(data_t)/2:])
+        self.plots[0]["Fit 1"] =  (finer_xaxis, sin_f(finer_lengths, *all_params_1))
 
 class CRLenCalibration(CRCalibration):
     def __init__(self, qubit_names, lengths=np.linspace(20, 1020, 21)*1e-9, phase = 0, amp = 0.8, rise_fall = 40e-9, cal_type = CR_cal_type.LENGTH):
