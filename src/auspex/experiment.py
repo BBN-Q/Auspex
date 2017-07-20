@@ -15,6 +15,7 @@ import signal
 import sys
 import numbers
 import os
+import subprocess
 
 import numpy as np
 import scipy as sp
@@ -47,7 +48,7 @@ class ExpProgressBar(object):
         self.stream = stream
         self.num = num
         self.notebook = notebook
-        self.reset(stream=stream)
+        # self.reset(stream=stream)
 
     def reset(self, stream=None):
         """ Reset the progress bar(s) """
@@ -183,9 +184,12 @@ class Experiment(metaclass=MetaExperiment):
         # This holds the experiment graph
         self.graph = None
 
-        # This holds a reference to a bokeh-server instance
+        # This holds a reference to a matplotlib server instance
         # for plotting, if there is one.
-        self.bokeh_server = None
+        self.matplot_server_thread = None
+        # If this is True, don't close the plot server thread so that
+        # we might push additional plots after run_sweeps is complete.
+        self.leave_plot_server_open = False
 
         # Also keep references to all of the plot filters
         self.plotters = [] # Standard pipeline plotters using streams
@@ -216,6 +220,14 @@ class Experiment(metaclass=MetaExperiment):
             self.output_connectors[oc] = a
             setattr(self, oc, a)
 
+        # Some instruments don't clean up well after themselves, reconstruct them on a
+        # per instance basis
+        for n in self._instruments.keys():
+            new_cls = type(self._instruments[n])
+            new_inst = new_cls(resource_name=self._instruments[n].resource_name, name=self._instruments[n].name)
+            setattr(self, n, new_inst)
+            self._instruments[n] = new_inst
+
         # Create the asyncio measurement loop
         self.loop = asyncio.get_event_loop()
 
@@ -225,7 +237,6 @@ class Experiment(metaclass=MetaExperiment):
 
         # Run the stream init
         self.init_streams()
-        self.update_descriptors()
 
     def set_graph(self, edges):
         unique_nodes = []
@@ -236,7 +247,6 @@ class Experiment(metaclass=MetaExperiment):
                 unique_nodes.append(ee.parent)
         self.nodes = unique_nodes
         self.graph = ExperimentGraph(edges, self.loop)
-        self.update_descriptors()
 
     def init_streams(self):
         """Establish the base descriptors for any internal data streams and connectors."""
@@ -287,9 +297,11 @@ class Experiment(metaclass=MetaExperiment):
                 if hasattr(self,k):
                     v = getattr(self,k)
                     oc.descriptor.add_param(k, v)
+            # if not self.sweeper.is_adaptive():
+            #     oc.descriptor.visited_tuples = oc.descriptor.expected_tuples(with_metadata=True, as_structured_array=False)
+            # else:
+            oc.descriptor.visited_tuples = []
             oc.update_descriptors()
-        # TODO: have this push any changes to JSON file
-        # if we're using Quince to define connections.
 
     async def declare_done(self):
         for oc in self.output_connectors.values():
@@ -300,6 +312,11 @@ class Experiment(metaclass=MetaExperiment):
             await stream.push_event("done")
 
     async def sweep(self):
+        # Set any static parameters
+        static_params = [p for p in self._parameters.values() if p not in self.sweeper.swept_parameters()]
+        for p in static_params:
+            p.push()
+
         # Keep track of the previous values
         logger.debug("Waiting for filters.")
         await asyncio.sleep(0.1)
@@ -308,14 +325,35 @@ class Experiment(metaclass=MetaExperiment):
 
         done = True
         while True:
-            await self.sweeper.update()
+            # Increment the sweeper, which returns a list of the current
+            # values of the SweepAxes (no DataAxes).
+            sweep_values = await self.sweeper.update()
+
+            if self.sweeper.is_adaptive():
+                # Add the new tuples to the stream descriptors
+                for oc in self.output_connectors.values():
+                    # Obtain the lists of values for any fixed
+                    # DataAxes and append them to them to the sweep_values
+                    # in preperation for finding all combinations. 
+                    vals = [a for a in oc.descriptor.data_axis_values()]
+                    if sweep_values:
+                        vals  = [[v] for v in sweep_values] + vals
+
+                    # Find all coordinate tuples and update the list of 
+                    # tuples that the experiment has probed.
+                    nested_list    = list(itertools.product(*vals))
+                    flattened_list = [tuple((val for sublist in line for val in sublist)) for line in nested_list]
+                    oc.descriptor.visited_tuples = oc.descriptor.visited_tuples + flattened_list
 
             # Run the procedure
-            logger.debug("Starting a new run.")
+            # logger.debug("Starting a new run.")
             await self.run()
 
             # See if the axes want to extend themselves
-            await self.sweeper.check_for_refinement()
+            refined_axis = await self.sweeper.check_for_refinement()
+            if refined_axis is not None:
+                for oc in self.output_connectors.values():
+                     await oc.push_event("refined", refined_axis)
 
             # Update progress bars
             if self.progressbar is not None:
@@ -327,9 +365,6 @@ class Experiment(metaclass=MetaExperiment):
                 break
 
     def connect_instruments(self):
-        # Make sure we are starting from scratch
-        self.reset()
-
         # Connect the instruments to their resources
         for instrument in self._instruments.values():
             instrument.connect()
@@ -345,7 +380,15 @@ class Experiment(metaclass=MetaExperiment):
             instrument.disconnect()
         self.instrs_connected = False
 
-    def run_sweeps(self, ):
+    def run_sweeps(self):
+        # Propagate the descriptors through the network
+        self.update_descriptors()
+        # Make sure we are starting from scratch... is this necessary?
+        self.reset()
+        # Update the progress bar if need be
+        if self.progressbar is not None:
+            self.progressbar.reset()
+
         #connect all instruments
         if not self.instrs_connected:
             self.connect_instruments()
@@ -370,6 +413,7 @@ class Experiment(metaclass=MetaExperiment):
             # Make the rest of the writers use this same file object
             for w in wrs[1:]:
                 w.file = wrs[0].file
+                w.filename.value = wrs[0].filename.value
 
         # Go and find any plotters
         self.plotters = [n for n in self.nodes if isinstance(n, (Plotter, MeshPlotter, XYPlotter))]
@@ -393,77 +437,20 @@ class Experiment(metaclass=MetaExperiment):
         if len(self.plotters) > 0:
             logger.debug("Found %d plotters", len(self.plotters))
 
-            from .plotting import BokehServerProcess
-            from bokeh.client import push_session
-            from bokeh.layouts import row, gridplot
-            from bokeh.io import curdoc
-            from bokeh.models.widgets import Panel, Tabs
+            from .plotting import MatplotServerThread
 
-            # If anybody has requested notebook plots, show them all in notebook
-            run_in_notebook = True in [p.run_in_notebook for p in self.plotters]
-
-            bokeh_process = BokehServerProcess(notebook=run_in_notebook)
-            bokeh_process.run()
-
-            tabs = True #not run_in_notebook # Tabs seem a bit sluggish in jupyter notebooks...
-            if tabs:
-                container = Tabs(tabs=[Panel(child=p.fig, title=p.name) for p in self.plotters])
-            else:
-                if len(self.plotters) <= 2:
-                    container = row(*[p.fig for p in self.plotters])
-                else:
-                    padded_list = self.plotters[:]
-                    if len(padded_list)%2 != 0:
-                        padded_list.append(None)
-                    grid = list(zip(*[iter(padded_list)]*2))
-                    container = gridplot(grid)
-
-            doc = curdoc()
-            doc.clear()
-            doc.add_root(container)
-            session = push_session(doc)
-
-            for p in self.plotters:
-                p.session = session
-
-            if run_in_notebook:
-                logger.info("Displaying in iPython notebook")
-                from bokeh.embed import autoload_server, components
-                from bokeh.io import output_notebook
-                from IPython.display import display, HTML, clear_output
-
-                clear_output()
-                output_notebook()
-                script = autoload_server(model=None, session_id=session.id)
-                html = \
-                        """
-                        <html>
-                        <head></head>
-                        <body>
-                        {}
-                        </body>
-                        </html>
-                        """.format(script)
-                display(HTML(html))
-            else:
-                session.show(container)
-
-        def shutdown():
-            logger.debug("Shutting Down!")
-
-            for f in self.files:
-                try:
-                    logger.debug("Closing %s", f)
-                    f.close()
-                    del f
-                except:
-                    logger.debug("File probably already closed...")
-            self.shutdown_instruments()
-            self.disconnect_instruments()
+            plot_desc = {p.name: p.desc() for p in self.plotters}
+            self.plot_server = MatplotServerThread(plot_desc)
+            for plotter in self.plotters:
+                plotter.plot_server = self.plot_server
+            time.sleep(0.5)
+            client_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),"matplotlib-client.py")
+            subprocess.Popen(['python', client_path, 'localhost'], env=os.environ.copy())
+            time.sleep(1)
 
         def catch_ctrl_c(signum, frame):
             logger.info("Caught SIGINT. Shutting down.")
-            shutdown()
+            self.shutdown()
             raise NameError("Shutting down.")
             sys.exit(0)
 
@@ -478,22 +465,45 @@ class Experiment(metaclass=MetaExperiment):
         tasks = [n.run() for n in other_nodes]
 
         tasks.append(self.sweep())
-        self.loop.run_until_complete(asyncio.gather(*tasks))
+        try:
+            self.loop.run_until_complete(asyncio.gather(*tasks))
+            self.loop.run_until_complete(asyncio.sleep(1))
+        except Exception as e:
+            logger.exception("message")
 
         for plot, callback in zip(self.manual_plotters, self.manual_plotter_callbacks):
             if callback:
-                callback(plot.fig)
+                callback(plot)
 
-        shutdown()
+        self.shutdown()
+
+    def shutdown(self):
+        logger.debug("Shutting Down!")
+
+        for f in self.files:
+            try:
+                logger.debug("Closing %s", f)
+                f.close()
+                del f
+            except:
+                logger.debug("File probably already closed...")
+
+        if len(self.plotters) > 0 and not self.leave_plot_server_open:
+            self.plot_server.stop()
+
+        self.shutdown_instruments()
+        self.disconnect_instruments()
+
+    def add_axis(self, axis):
+        for oc in self.output_connectors.values():
+            logger.debug("Adding axis %s to connector %s.", axis, oc.name)
+            oc.descriptor.add_axis(axis)
 
     def add_sweep(self, parameters, sweep_list, refine_func=None, callback_func=None, metadata=None):
         ax = SweepAxis(parameters, sweep_list, refine_func=refine_func, callback_func=callback_func, metadata=metadata)
         ax.experiment = self
         self.sweeper.add_sweep(ax)
-        for oc in self.output_connectors.values():
-            logger.debug("Adding sweep axis %s to connector %s.", ax, oc.name)
-            oc.descriptor.add_axis(ax)
-        self.update_descriptors()
+        self.add_axis(ax)
         if ax.unstructured:
             for p, v in zip(parameters, sweep_list[0]):
                 p.value = v

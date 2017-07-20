@@ -6,6 +6,8 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
+__all__ = ['Channelizer']
+
 import os
 import platform
 from copy import deepcopy
@@ -138,6 +140,7 @@ class Channelizer(Filter):
         decimated_descriptor.axes = self.sink.descriptor.axes[:]
         decimated_descriptor.axes[-1] = deepcopy(self.sink.descriptor.axes[-1])
         decimated_descriptor.axes[-1].points = self.sink.descriptor.axes[-1].points[self.decimation_factor.value-1::self.decimation_factor.value]
+        decimated_descriptor.axes[-1].original_points = decimated_descriptor.axes[-1].points
         decimated_descriptor.exp_src = self.sink.descriptor.exp_src
         decimated_descriptor.dtype = np.complex64
         for os in self.source.output_streams:

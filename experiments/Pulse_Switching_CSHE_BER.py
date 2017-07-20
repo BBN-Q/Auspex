@@ -15,8 +15,7 @@ from auspex.instruments import Attenuator
 
 from auspex.experiment import FloatParameter, IntParameter, Experiment
 from auspex.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector
-from auspex.filters.debug import Print
-from auspex.filters.io import WriteToHDF5
+from auspex.filters import Print, Averager, WriteToHDF5
 
 from PyDAQmx import *
 
@@ -29,8 +28,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from scipy.interpolate import interp1d
 
-import analysis.switching as sw
-from analysis.h5shell import h5shell
+import auspex.analysis.switching as sw
 
 from auspex.log import logger
 # Experimental Topology
@@ -40,20 +38,9 @@ from auspex.log import logger
 # AWG Sync Marker Out -> DAQmx PFI0
 # AWG Samp. Marker Out -> PSPL Trigger
 
-def arb_voltage_lookup(arb_calib="calibration/AWG_20160718.csv",
-                        midpoint_calib="calibration/midpoint_20160718.csv"):
-    df_midpoint = pd.read_csv(midpoint_calib, sep=",")
+def arb_voltage_lookup(arb_calib="calibration/AWG_20160901.csv"):
     df_arb = pd.read_csv(arb_calib, sep=",")
-    midpoint_lookup = interp1d(df_midpoint["Sample Voltage"],df_midpoint["Midpoint Voltage"])
-    arb_control_lookup = interp1d(df_arb["Midpoint Voltage"],df_arb["Control Voltage"])
-    sample_volts = []
-    control_volts = []
-    for volt in df_midpoint['Sample Voltage']:
-        mid_volt = midpoint_lookup(volt)
-        if (mid_volt > min(df_arb['Midpoint Voltage'])) and (mid_volt < max(df_arb['Midpoint Voltage'])):
-            sample_volts.append(volt)
-            control_volts.append(arb_control_lookup(mid_volt))
-    return interp1d(sample_volts, control_volts)
+    return interp1d(df_arb["Amp Out"], df_arb["Control Voltage"])
 
 class BERExperiment(Experiment):
     """ Switching Bit Error Rate measurement """
@@ -67,6 +54,7 @@ class BERExperiment(Experiment):
     pulse_duration = FloatParameter(default=10.0e-9, unit="s")
     pulse_voltage  = FloatParameter(default=0.1, unit="V")
     attempts       = IntParameter(default = 1 << 10)
+    repeats        = IntParameter(default = 1) # Dummy parameter for repeating
 
     settle_delay    = 50e-6
     measure_current = 3.0e-6
@@ -82,13 +70,13 @@ class BERExperiment(Experiment):
     reset_duration  = 5.0e-9
 
     # Things coming back
-    daq_buffer     = OutputConnector()
+    voltage     = OutputConnector()
 
     # Instrument resources
     mag   = AMI430("192.168.5.109")
     lock  = SR865("USB0::0xB506::0x2000::002638::INSTR")
     pspl  = Picosecond10070A("GPIB0::24::INSTR")
-    atten = Attenuator("calibration/RFSA2113SB_HPD_20160706.csv", lock.set_ao2, lock.set_ao3)
+    atten = Attenuator("calibration/RFSA2113SB_HPD_20160901.csv", lock.set_ao2, lock.set_ao3)
     arb   = KeysightM8190A("192.168.5.108")
     keith = Keithley2400("GPIB0::25::INSTR")
 
@@ -220,15 +208,12 @@ class BERExperiment(Experiment):
     def init_streams(self):
         # Baked in data axes
         descrip = DataStreamDescriptor()
-        descrip.add_axis(DataAxis("samples", range(self.samps_per_trig)))
+        descrip.add_axis(DataAxis("sample", range(self.samps_per_trig)))
         descrip.add_axis(DataAxis("state", range(2)))
-        descrip.add_axis(DataAxis("attempts", range(self.attempts.value)))
-        self.daq_buffer.set_descriptor(descrip)
+        descrip.add_axis(DataAxis("attempt", range(self.attempts.value)))
+        self.voltage.set_descriptor(descrip)
 
     async def run(self):
-        """We are no longer using the sweeper."""
-
-        # Keep track of the previous values
         logger.debug("Waiting for filters.")
         await asyncio.sleep(1.0)
 
@@ -237,10 +222,9 @@ class BERExperiment(Experiment):
         buf = np.empty(self.buf_points)
         self.analog_input.ReadAnalogF64(self.buf_points, -1, DAQmx_Val_GroupByChannel,
                                         buf, self.buf_points, byref(self.read), None)
-        await self.daq_buffer.push(buf)
+        await self.voltage.push(buf)
         # Seemingly we need to give the filters some time to catch up here...
         await asyncio.sleep(0.002)
-        # logger.debug("Stream has filled {} of {} points".format(self.daq_buffer.points_taken, self.daq_buffer.num_points() ))
 
     def shutdown_instruments(self):
         self.keith.current = 0.0e-5
@@ -253,56 +237,56 @@ class BERExperiment(Experiment):
             print("Warning: failed to stop task (this normally happens with no consequences when taking multiple samples per trigger).")
             pass
 
-def data_at_volt(fname, volt):
-    """ Extract datasets in file fname that have pulse_voltage == volt """
-    with h5shell(fname, 'r') as f:
-        dsets = [f[k] for k in f.ls('-d')]
-        dsets = [dset for dset in dsets if abs(float(dset.attrs['pulse_voltage'])-volt)/volt<0.01]
-        data_mean = [np.mean(dset.value, axis=-1) for dset in dsets]
-    return np.concatenate(data_mean,axis=0)
-
-def stop_measure(data):
-    """ Determine whether we should stop the measurement at a given pulse voltage """
-    results = sw.switching_BER(data)
-    limit = results[1]
-    ci95 = results[3]
-    return limit > max(ci95)
-
-def load_BER_data(fname):
-    with h5shell(fname, 'r') as f:
-        dsets = [f[k] for k in f.ls('-d')]
-        volts = [float(dset.attrs['pulse_voltage']) for dset in dsets]
-
-    unique_volts = []
-    for v in sorted(volts):
-        if len(unique_volts) == 0:
-            unique_volts.append(v)
-        else:
-            check = [abs((uv-v)/v)<0.01 for uv in unique_volts]
-            if not np.any(check):
-                unique_volts.append(v)
-    data = [data_at_volt(fname,volt) for volt in unique_volts]
-    return np.array(unique_volts), np.array(data)
-
-def plot_BER(volts, results):
-    mean = []; limit = []; ci68 = []; ci95 = []
-    for datum in results:
-        mean.append(datum[0])
-        limit.append(datum[1])
-        ci68.append(datum[2])
-        ci95.append(datum[3])
-    mean = 1-np.array(mean)
-    limit = 1-np.array(limit)
-    ci68 = 1- np.array(ci68)
-    ci95 = 1-np.array(ci95)
-    fig = plt.figure()
-    plt.semilogy(volts, mean, '-o')
-    plt.semilogy(volts, limit, linestyle="--")
-    plt.fill_between(volts, [ci[0] for ci in ci68], [ci[1] for ci in ci68],  alpha=0.2, edgecolor="none")
-    plt.fill_between(volts, [ci[0] for ci in ci95], [ci[1] for ci in ci95],  alpha=0.2, edgecolor="none")
-    plt.ylabel("Switching Probability", size=14)
-    plt.xlabel("Pulse Voltage (V)", size=14)
-    return fig
+# def data_at_volt(fname, volt):
+#     """ Extract datasets in file fname that have pulse_voltage == volt """
+#     with h5shell(fname, 'r') as f:
+#         dsets = [f[k] for k in f.ls('-d')]
+#         dsets = [dset for dset in dsets if abs(float(dset.attrs['pulse_voltage'])-volt)/volt<0.01]
+#         data_mean = [np.mean(dset.value, axis=-1) for dset in dsets]
+#     return np.concatenate(data_mean,axis=0)
+#
+# def stop_measure(data):
+#     """ Determine whether we should stop the measurement at a given pulse voltage """
+#     results = sw.switching_BER(data)
+#     limit = results[1]
+#     ci95 = results[3]
+#     return limit > max(ci95)
+#
+# def load_BER_data(fname):
+#     with h5shell(fname, 'r') as f:
+#         dsets = [f[k] for k in f.ls('-d')]
+#         volts = [float(dset.attrs['pulse_voltage']) for dset in dsets]
+#
+#     unique_volts = []
+#     for v in sorted(volts):
+#         if len(unique_volts) == 0:
+#             unique_volts.append(v)
+#         else:
+#             check = [abs((uv-v)/v)<0.01 for uv in unique_volts]
+#             if not np.any(check):
+#                 unique_volts.append(v)
+#     data = [data_at_volt(fname,volt) for volt in unique_volts]
+#     return np.array(unique_volts), np.array(data)
+#
+# def plot_BER(volts, results):
+#     mean = []; limit = []; ci68 = []; ci95 = []
+#     for datum in results:
+#         mean.append(datum[0])
+#         limit.append(datum[1])
+#         ci68.append(datum[2])
+#         ci95.append(datum[3])
+#     mean = 1-np.array(mean)
+#     limit = 1-np.array(limit)
+#     ci68 = 1- np.array(ci68)
+#     ci95 = 1-np.array(ci95)
+#     fig = plt.figure()
+#     plt.semilogy(volts, mean, '-o')
+#     plt.semilogy(volts, limit, linestyle="--")
+#     plt.fill_between(volts, [ci[0] for ci in ci68], [ci[1] for ci in ci68],  alpha=0.2, edgecolor="none")
+#     plt.fill_between(volts, [ci[0] for ci in ci95], [ci[1] for ci in ci95],  alpha=0.2, edgecolor="none")
+#     plt.ylabel("Switching Probability", size=14)
+#     plt.xlabel("Pulse Voltage (V)", size=14)
+#     return fig
 
 if __name__ == '__main__':
     exp = BERExperiment()
@@ -318,7 +302,7 @@ if __name__ == '__main__':
     exp.init_instruments()
 
     wr = WriteToHDF5("data\CSHE-Switching\CSHE-Die5-C2R3\\test\CSHE5-C2R3-AP2P_2016-07-27_BER_5ns.h5")
-    edges = [(exp.daq_buffer, wr.data)]
+    edges = [(exp.voltage, wr.data)]
     exp.set_graph(edges)
 
     V0 = 0.5

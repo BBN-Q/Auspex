@@ -19,6 +19,6 @@ setup(
         "tqdm >= 4.7.0",
         "pandas >= 0.18.1",
         "networkx >= 1.11",
-        "bokeh >= 0.12.1"
+        "matplotlib >= 2.0.0"
     ]
 )

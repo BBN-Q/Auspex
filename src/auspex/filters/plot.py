@@ -6,15 +6,10 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
+__all__ = ['Plotter', 'ManualPlotter', 'XYPlotter', 'MeshPlotter']
+
 import time
-
 import numpy as np
-
-from bokeh.plotting import Figure
-from bokeh.layouts import gridplot
-from bokeh.models.renderers import GlyphRenderer
-from bokeh.palettes import Viridis256, d3
-import matplotlib.pyplot as plt
 
 from .filter import Filter
 from auspex.parameter import Parameter, IntParameter
@@ -26,7 +21,7 @@ class Plotter(Filter):
     plot_dims = IntParameter(value_range=(0,1,2), snap=1, default=0) # 0 means auto
     plot_mode = Parameter(allowed_values=["real", "imag", "real/imag", "amp/phase", "quad"], default="quad")
 
-    def __init__(self, *args, name="", plot_dims=None, plot_mode=None, notebook=False, **plot_args):
+    def __init__(self, *args, name="", plot_dims=None, plot_mode=None, **plot_args):
         super(Plotter, self).__init__(*args, name=name)
         if plot_dims:
             self.plot_dims.value = plot_dims
@@ -35,9 +30,30 @@ class Plotter(Filter):
         self.plot_args = plot_args
         self.update_interval = 0.5
         self.last_update = time.time()
-        self.run_in_notebook = notebook
 
         self.quince_parameters = [self.plot_dims, self.plot_mode]
+
+        # This will hold the matplot server
+        self.plot_server = None
+
+    def desc(self):
+        d =    {'plot_type': 'standard',
+                'plot_mode': self.plot_mode.value,
+                'plot_dims': int(self.plot_dims.value),
+                'x_min':     float(min(self.x_values)),
+                'x_max':     float(max(self.x_values)),
+                'x_len':     int(self.descriptor.axes[-1].num_points()),
+                'x_label':   self.axis_label(-1),
+                'y_label':   "{} ({})".format(self.descriptor.data_name, self.descriptor.data_unit)
+                }
+        if self.plot_dims.value == 2:
+            d['y_label']    = self.axis_label(-2)
+            d['data_label'] = "{} ({})".format(self.descriptor.data_name, self.descriptor.data_unit)
+            d['y_min']      = float(min(self.y_values))
+            d['y_max']      = float(max(self.y_values))
+            d['y_len']      = int(self.descriptor.axes[-2].num_points())
+        return d
+                    
 
     def update_descriptors(self):
         logger.debug("Updating Plotter %s descriptors based on input descriptor %s", self.name, self.sink.descriptor)
@@ -62,64 +78,13 @@ class Plotter(Filter):
             self.points_before_clear = self.descriptor.axes[-1].num_points()
         else:
             self.points_before_clear = self.descriptor.axes[-1].num_points() * self.descriptor.axes[-2].num_points()
-        logger.info("Plot will clear after every %d points.", self.points_before_clear)
+        logger.debug("Plot will clear after every %d points.", self.points_before_clear)
 
         self.x_values = self.descriptor.axes[-1].points
-        xmax = max(self.x_values)
-        xmin = min(self.x_values)
 
-        # Establish how the data will be mapped to multiple subplots. Each
-        # top level list element will become a row, and subelements will
-        # become columns. A single plot_buffer is used to store data, and it
-        # will be cast according to these functions.
-        plot_height = 600
-        if self.plot_mode.value == "real":
-            self.mapping_functions = [[np.real]]
-        elif self.plot_mode.value == "imag":
-            self.mapping_functions = [[np.imag]]
-        elif self.plot_mode.value == "real/imag":
-            self.mapping_functions = [[np.real, np.imag]]
-        elif self.plot_mode.value == "amp/phase":
-            self.mapping_functions = [[np.abs, lambda x: np.angle(x, deg=1)]]
-        elif self.plot_mode.value =="quad":
-            self.mapping_functions = [[np.abs, lambda x: np.angle(x, deg=1)],[np.real, np.imag]]
-            plot_height = 450
-
-        if self.run_in_notebook:
-            plot_height = round(plot_height*0.6)
-
-        if self.plot_mode.value == "quad":
-            self.y_labels = [["amp", "phase"], ["real", "imag"]]
-        elif len(self.mapping_functions[0]) == 1:
-            self.y_labels = [[self.plot_mode.value]]
-        elif len(self.mapping_functions[0]) == 2:
-            self.y_labels = [self.plot_mode.value.split('/')]
-        else:
-            self.y_labels = [['' for col in row] for row in self.mapping_functions]
-
-        data_name = self.descriptor.data_name
-        data_unit = self.descriptor.data_unit
-        self.y_labels = [["{} ({}) [{}]".format(data_name,data_unit,col) for col in row] for row in self.y_labels]
-
-        if self.plot_dims.value == 1:
-            self.figures = [[Figure(x_range=[xmin, xmax], plot_width=plot_height, plot_height=plot_height, webgl=False, x_axis_label=self.axis_label(-1),\
-            y_axis_label=y_lab) for (col, y_lab) in zip(row, y_label)] for (row, y_label) in zip(self.mapping_functions, self.y_labels)]
-            self.plots = [[fig.line(np.copy(self.x_values), np.nan*np.ones(self.points_before_clear), name=self.name) for fig in row] for row in self.figures]
-        else:
+        if self.plot_dims.value == 2:
             self.y_values = self.descriptor.axes[-2].points
-            self.x_mesh, self.y_mesh = np.meshgrid(self.x_values, self.y_values)
-            self.z_data = np.zeros_like(self.x_mesh)
-            ymax = max(self.y_values)
-            ymin = min(self.y_values)
-            self.figures = [[Figure(x_range=[xmin, xmax], y_range=[ymin, ymax], plot_width=plot_height, plot_height=plot_height, webgl=False, x_axis_label=self.axis_label(-1),\
-            y_axis_label=self.axis_label(-2)) for col in row] for row in self.mapping_functions]
-            self.plots = [[fig.image(image=[self.z_data], x=[xmin], y=[ymin],
-                                          dw=[xmax-xmin], dh=[ymax-ymin], name=self.name, palette="Spectral11") for fig in row] for row in self.figures]
 
-        # Construct the master gridplot
-        self.fig = gridplot(self.figures)
-
-        self.data_sources = [[plot.data_source for plot in row] for row in self.plots]
         self.plot_buffer = np.nan*np.ones(self.points_before_clear, dtype=self.descriptor.dtype)
         self.idx = 0
 
@@ -138,23 +103,14 @@ class Plotter(Filter):
             self.idx += data.size
 
         if (time.time() - self.last_update >= self.update_interval):
-            for i,j in zip(self.mapping_functions, self.data_sources):
-                for mapping_function, data_source in zip(i,j):
-                    if self.plot_dims.value == 1:
-                        data_source.data["y"] = np.copy(mapping_function(self.plot_buffer))
-                    else:
-                        data_source.data["image"] = [np.reshape(mapping_function(self.plot_buffer), self.z_data.shape)]
+            if self.plot_dims.value == 1:
+                self.plot_server.send(self.name, self.x_values, self.plot_buffer)
+            elif self.plot_dims.value == 2:
+                self.plot_server.send(self.name, self.x_values, self.y_values, self.plot_buffer)
             self.last_update = time.time()
 
     async def on_done(self):
-        for i,j in zip(self.mapping_functions, self.data_sources):
-            for mapping_function, data_source in zip(i,j):
-                if self.plot_dims.value == 1:
-                    data_source.data["y"] = np.copy(mapping_function(self.plot_buffer))
-                else:
-                    data_source.data["image"] = [np.reshape(mapping_function(self.plot_buffer), self.z_data.shape)]
-
-        time.sleep(0.1)
+        self.plot_server.send(self.name, self.plot_buffer)
 
     def axis_label(self, index):
         unit_str = " ({})".format(self.descriptor.axes[index].unit) if self.descriptor.axes[index].unit else ''
@@ -162,65 +118,49 @@ class Plotter(Filter):
 
 class MeshPlotter(Filter):
     sink = InputConnector()
+    plot_mode = Parameter(allowed_values=["real", "imag", "real/imag", "amp/phase", "quad"], default="quad")
 
-    def __init__(self, *args, name="", plot_mode='real', notebook=False, **plot_args):
+    def __init__(self, *args, name="", plot_mode=None, x_label="", y_label="", **plot_args):
         super(MeshPlotter, self).__init__(*args, name=name)
-        self.plot_mode = plot_mode
+        if plot_mode:
+            self.plot_mode.value = plot_mode
         self.plot_args = plot_args
         self.update_interval = 0.5
         self.last_update = time.time()
-        self.run_in_notebook = notebook
+        self.x_label = x_label
+        self.y_label = y_label
+
+        self.quince_parameters = [self.plot_mode]
+
+        # This will hold the matplot server
+        self.plot_server = None
+
+    def desc(self):
+        d =    {'plot_type': 'mesh',
+                'plot_mode': self.plot_mode.value,
+                'x_label':   self.x_label,
+                'y_label':   self.y_label
+                }
+        return d
 
     def update_descriptors(self):
         logger.info("Updating MeshPlotter %s descriptors based on input descriptor %s", self.name, self.sink.descriptor)
-        self.stream = self.sink.input_streams[0]
-        self.descriptor = self.sink.descriptor
 
     def final_init(self):
-        # This should be a set of 2D coordinate tuples
-        if hasattr(self, 'descriptor'):
-            self.x_values = self.descriptor.axes[-1].points[:,0]
-            self.y_values = self.descriptor.axes[-1].points[:,1]
-        else:
-            self.x_values = [0,10]
-            self.y_values = [0,10]
-
-        xmax = max(self.x_values)
-        xmin = min(self.x_values)
-        ymax = max(self.y_values)
-        ymin = min(self.y_values)
-
-        self.fig  = Figure(x_range=[xmin, xmax], y_range=[ymin, ymax], plot_width=600, plot_height=600, webgl=False)
-        self.plot = self.fig.patches(xs=[[xmin, xmax, xmin],[xmin, xmax, xmax]],
-                                          ys=[[ymin, ymin, ymax],[ymax, ymax, xmin]],
-                                          fill_color=["#000000","#000000"],
-                                          line_color=None)
-        self.data_source = self.plot.data_source
-
+        pass
 
     async def process_direct(self, data):
-        xs, ys, vals = data
-        vals = np.array(vals)
-        xs = [list(el) for el in xs]
-        ys = [list(el) for el in ys]
-        vals   -= vals.min()
-        vals   /= vals.max()
-        rgb_tuples = (255*plt.cm.RdGy(vals)[:,:3]).astype(np.int)
-        colors = ["#%02x%02x%02x" % tuple(color) for color in rgb_tuples]
-        self.fig.x_range.start = np.min(xs)
-        self.fig.x_range.end   = np.max(xs)
-        self.fig.y_range.start = np.min(ys)
-        self.fig.y_range.end   = np.max(ys)
-        self.data_source.data  = {'xs': xs, 'ys': ys, 'fill_color': colors}
+        self.plot_server.send(self.name, data)
 
     async def on_done(self):
-        time.sleep(0.5)
+        self.plot_server.send(self.name, np.array([]), msg="done")
+        time.sleep(0.1)
 
 class XYPlotter(Filter):
     sink_x = InputConnector()
     sink_y = InputConnector()
 
-    def __init__(self, *args, name="", x_series=False, y_series=False, series="inner", notebook=False, **plot_args):
+    def __init__(self, *args, name="", x_series=False, y_series=False, series="inner", notebook=False, webgl=False, **plot_args):
         """Theyintent is to let someone plot this vs. that from different streams."""
         super(XYPlotter, self).__init__(*args, name=name)
 
@@ -232,6 +172,7 @@ class XYPlotter(Filter):
         self.y_series        = y_series or self.x_series
         self.plot_height     = 600
         self.series          = series
+        self.webgl           = webgl
 
         self.quince_parameters = []
 
@@ -250,14 +191,18 @@ class XYPlotter(Filter):
             if self.desc_x.axes[-2].num_points() != self.desc_y.axes[-2].num_points():
                 raise ValueError("XYPlotter x and y second-to-last axis lengths must match when plotting series.")
 
-        if self.series == "inner":
-            series_axis = -2
-            data_axis = -1
-        elif self.series == "outer":
+        if len(self.desc_x.axes) == 1 and len(self.desc_y.axes) == 1:
             series_axis = 0
-            data_axis = 1
+            data_axis = 0
         else:
-            raise ValueError("series must be either inner or outer")
+            if self.series == "inner":
+                series_axis = -2
+                data_axis = -1
+            elif self.series == "outer":
+                series_axis = 0
+                data_axis = 1
+            else:
+                raise ValueError("series must be either inner or outer")
 
         # How many points before clear
         self.points_before_clear_y = self.desc_y.axes[data_axis].num_points()
@@ -278,7 +223,7 @@ class XYPlotter(Filter):
         x_label = "{} ({})".format(self.desc_x.data_name, self.desc_x.data_unit)
         y_label = "{} ({})".format(self.desc_y.data_name, self.desc_y.data_unit)
 
-        self.fig = Figure(plot_width=self.plot_height, plot_height=self.plot_height, webgl=False,
+        self.fig = Figure(plot_width=self.plot_height, plot_height=self.plot_height, webgl=self.webgl,
                           x_axis_label=x_label, y_axis_label=y_label)
 
         if self.desc_y.axes[series_axis].num_points() <= 10:
@@ -306,7 +251,7 @@ class XYPlotter(Filter):
             # Wait for all of the acquisition to complete, avoid asyncio.wait because of random return order...
             message_x = await self.stream_x.queue.get()
             message_y = await self.stream_y.queue.get()
-            messages = [message_x, message_y] # Returns a set for some stupid reason
+            messages = [message_x, message_y]
 
             # Ensure we aren't getting different types of messages at the same time.
             message_types = [m['type'] for m in messages]
@@ -321,8 +266,8 @@ class XYPlotter(Filter):
 
             # If we receive a message
             if message_type == 'event':
-                logger.debug('%s "%s" received event "%s"', self.__class__.__name__, self.name, message_data)
-                if messages[0]['data'] == 'done':
+                logger.debug('%s "%s" received event "%s"', self.__class__.__name__, self.name, message_type)
+                if messages[0]['event_type'] == 'done':
                     break
 
             elif message_type == 'data':
@@ -391,15 +336,35 @@ class XYPlotter(Filter):
 
 class ManualPlotter(object):
     """Establish a figure, then give the user complete control over plot creation and data."""
-    def __init__(self,  name="", x_label='X', y_label="y", notebook=False,):
-        self.plot_height  = 600
-        self.webgl        = False
+    def __init__(self,  name="", x_label='X', y_label="y"):
         self.x_label      = x_label
         self.y_label      = y_label
         self.name         = name
+        self.traces = []
 
-        self.run_in_notebook = notebook
-        if self.run_in_notebook:
-            self.plot_height = round(self.plot_height*0.5)
-        self.fig = Figure(plot_width=self.plot_height, plot_height=self.plot_height,
-                          webgl=self.webgl, x_axis_label=x_label, y_axis_label=y_label)
+    def add_trace(self, name, matplotlib_kwargs={}):
+        self.traces.append({'name': name, 'matplotlib_kwargs': matplotlib_kwargs})
+
+    def add_fit_trace(self, name):
+        self.add_trace(name, matplotlib_kwargs={'linestyle': '-', 'linewidth': 2})
+
+    def add_data_trace(self, name):
+        self.add_trace(name, matplotlib_kwargs={'linestyle': ':', 'marker': '.'})
+
+    def desc(self):
+        d =    {'plot_type': 'manual',
+                'x_label':   self.x_label,
+                'y_label':   self.y_label,
+                'traces':    self.traces
+                }
+        return d
+
+    def __setitem__(self, trace_name, data_tuple):
+        if trace_name not in [t['name'] for t in self.traces]:
+            raise KeyError("Trace {} does not exist in this plotter.".format(trace_name))
+        if len(data_tuple) != 2:
+            raise ValueError("__setitem__ for ManualPlotter accepts a tuple of length 2 for (xdata, ydata)")
+        self.set_data(trace_name, data_tuple[0], data_tuple[1])
+
+    def set_data(self, trace_name, xdata, ydata):
+        self.plot_server.send(self.name + ":" + trace_name, xdata, ydata)

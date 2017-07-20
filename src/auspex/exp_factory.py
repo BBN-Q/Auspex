@@ -7,6 +7,7 @@
 #    http://www.apache.org/licenses/LICENSE-2.0
 
 import json
+import sys
 import importlib
 import pkgutil
 import inspect
@@ -43,12 +44,13 @@ class QubitExpFactory(object):
     will override the defaulty JSON."""
 
     @staticmethod
-    def run(notebook=False, expname=None, calibration=False):
-        exp = QubitExpFactory.create(notebook=notebook, expname=expname, calibration=calibration)
+    def run(meta_file=None, expname=None, calibration=False, cw_mode=False):
+        exp = QubitExpFactory.create(meta_file=meta_file, expname=expname,
+                                     calibration=calibration, cw_mode=cw_mode)
         exp.run_sweeps()
 
     @staticmethod
-    def create(meta_file=None, notebook=False, expname=None, calibration=False):
+    def create(meta_file=None, expname=None, calibration=False, cw_mode=False):
         with open(config.instrumentLibFile, 'r') as FID:
             instrument_settings = json.load(FID)
 
@@ -58,8 +60,9 @@ class QubitExpFactory(object):
         with open(config.sweepLibFile, 'r') as FID:
             sweep_settings = json.load(FID)
 
-        # Create a mapping from qubits to data writers
+        # Create a mapping from qubits to data writers and inverse
         qubit_to_writer = {}
+        writer_to_qubit = {}
 
         if meta_file:
             # Use the meta info to modify the other JSON
@@ -93,20 +96,26 @@ class QubitExpFactory(object):
 
                 # Set number of segments in the digitizer
                 instrument_settings['instrDict'][dig_name]['nbr_segments'] = num_segments
-                # Find descendants of the channel selector
-                chan_descendants = nx.descendants(dag, chan_name)
-                # Find endpoints within the descendants
-                endpoints = [n for n in chan_descendants if dag.in_degree(n) == 1 and dag.out_degree(n) == 0]
-                # Find endpoints which are enabled writers
-                writers = [e for e in endpoints if measurement_settings["filterDict"][e]["x__class__"] == "WriteToHDF5" and
-                                                   measurement_settings["filterDict"][e]["enabled"]]
-                plotters = [e for e in endpoints if measurement_settings["filterDict"][e]["x__class__"] == "Plotter" and
-                                                   measurement_settings["filterDict"][e]["enabled"]]
+                writers = []
+                plotters = []
+                for ch_name, ch in measurement_settings["filterDict"].items():
+                    if ch_name == chan_name or measurement_settings["filterDict"][chan_name]["x__class__"] == "X6StreamSelector" \
+                        and ch["data_source"] == measurement_settings["filterDict"][chan_name]["data_source"] \
+                        and ch["phys_channel"] == measurement_settings["filterDict"][chan_name]["phys_channel"]:
+                        # Find descendants of the channel selector
+                        chan_descendants = nx.descendants(dag, ch_name)
+                        # Find endpoints within the descendants
+                        endpoints = [n for n in chan_descendants if dag.in_degree(n) == 1 and dag.out_degree(n) == 0]
+                        # Find endpoints which are enabled writers
+                        writers += [e for e in endpoints if measurement_settings["filterDict"][e]["x__class__"] == "WriteToHDF5" and
+                                               measurement_settings["filterDict"][e]["enabled"]]
+                        plotters += [e for e in endpoints if measurement_settings["filterDict"][e]["x__class__"] == "Plotter" and
+                                               measurement_settings["filterDict"][e]["enabled"]]
                 # The user should only have one writer enabled, otherwise we will be confused.
                 if len(writers) > 1:
                     raise Exception("More than one viable data writer was found for a receiver channel {}. Please enabled only one!".format(receiver_text))
-                if len(writers) == 0:
-                    raise Exception("No viable data writer was found for receiver channel {}. Please enabled only one!".format(receiver_text))
+                if len(writers) == 0 and len(plotters) == 0:
+                    raise Exception("No viable data writer or plotter was found for receiver channel {}. Please enabled only one!".format(receiver_text))
 
                 # If we are calibrating we don't care about storing data, use buffers instead
                 if calibration:
@@ -143,8 +152,6 @@ class QubitExpFactory(object):
 
                 instrument_settings['instrDict'][dig_name]['nbr_segments'] = num_segments
 
-                plotters = [e for e in endpoints if measurement_settings["filterDict"][e]["x__class__"] == "Plotter" and
-                                                   measurement_settings["filterDict"][e]["enabled"]]
                 if plotters:
                     plotter_ancestors = set().union(*[nx.ancestors(dag, pl) for pl in plotters])
                     plotter_ancestors.remove(dig_name)
@@ -200,8 +207,8 @@ class QubitExpFactory(object):
                     logger.debug("Setting instr %s with params %s.", name, instr_par)
                     instr.set_all(instr_par)
 
-                self.digitizers = [v for _, v in self._instruments.items() if v.instrument_type == "Digitizer"]
-                self.awgs       = [v for _, v in self._instruments.items() if v.instrument_type == "AWG"]
+                self.digitizers = [v for _, v in self._instruments.items() if "Digitizer" in v.instrument_type]
+                self.awgs       = [v for _, v in self._instruments.items() if "AWG" in v.instrument_type]
 
                 # Swap the master AWG so it is last in the list
                 master_awg_idx = next(ct for ct,awg in enumerate(self.awgs) if self.instrument_settings['instrDict'][awg.name]['is_master'])
@@ -213,8 +220,15 @@ class QubitExpFactory(object):
                     oc = self.chan_to_oc[chan]
                     self.loop.add_reader(socket, dig.receive_data, chan, oc)
 
+                if self.cw_mode:
+                    for awg in self.awgs:
+                        awg.run()
+
             def shutdown_instruments(self):
                 # remove socket readers
+                if self.cw_mode:
+                    for awg in self.awgs:
+                        awg.stop()
                 for chan, dig in self.chan_to_dig.items():
                     socket = dig.get_socket(chan)
                     self.loop.remove_reader(socket)
@@ -225,30 +239,34 @@ class QubitExpFactory(object):
                 """This is run for each step in a sweep."""
                 for dig in self.digitizers:
                     dig.acquire()
-                for awg in self.awgs:
-                    awg.run()
+                if not self.cw_mode:
+                    for awg in self.awgs:
+                        awg.run()
 
                 # Wait for all of the acquisitions to complete
                 timeout = 10
-                await asyncio.wait([dig.wait_for_acquisition(timeout)
-                    for dig in self.digitizers])
+                try:
+                    await asyncio.gather(*[dig.wait_for_acquisition(timeout) for dig in self.digitizers])
+                except Exception as e:
+                    logger.error("Received exception %s in run loop. Bailing", repr(e))
+                    self.shutdown()
+                    sys.exit(0)
 
                 for dig in self.digitizers:
                     dig.stop()
-                for awg in self.awgs:
-                    awg.stop()
-
-                # hack to try to get plots to finish updating before we exit
-                await asyncio.sleep(2)
+                if not self.cw_mode:
+                    for awg in self.awgs:
+                        awg.stop()
 
         experiment = QubitExperiment()
         experiment.instrument_settings  = instrument_settings
         experiment.measurement_settings = measurement_settings
         experiment.sweep_settings       = sweep_settings
-        experiment.run_in_notebook = notebook
         experiment.name = expname
+        experiment.cw_mode = cw_mode
 
         experiment.qubit_to_writer = qubit_to_writer
+        experiment.writer_to_qubit = writer_to_qubit
 
         QubitExpFactory.load_instruments(experiment)
         QubitExpFactory.load_segment_sweeps(experiment)
@@ -317,12 +335,15 @@ class QubitExpFactory(object):
 
                     # Pad the data axis with dummy equidistant x-points for the extra calibration points
                     avg_step = (data_axis['points'][-1] - data_axis['points'][0])/(len(data_axis['points'])-1)
-                    points = np.append(data_axis['points'], data_axis['points'][-1] + (np.arange(len(meta_axis))+1)*avg_step)
+                    points = np.append(data_axis['points'], data_axis['points'][-1] + (np.arange(len(meta_axis['points']))+1)*avg_step)
 
-                    experiment.segment_axis = DataAxis(data_axis['name'], points, unit=data_axis['unit'], metadata=metadata)
+                    # If there's only one segment we can probabluy ignore this axis
+                    if len(points) > 1:
+                        experiment.segment_axis = DataAxis(data_axis['name'], points, unit=data_axis['unit'], metadata=metadata)
 
                 else:
-                    experiment.segment_axis = DataAxis(data_axis['name'], data_axis['points'], unit=data_axis['unit'])
+                    if len(data_axis['points']) > 1:
+                        experiment.segment_axis = DataAxis(data_axis['name'], data_axis['points'], unit=data_axis['unit'])
 
     @staticmethod
     def load_parameter_sweeps(experiment):
@@ -419,7 +440,9 @@ class QubitExpFactory(object):
                 descrip.add_axis(experiment.segment_axis)
             else:
                 # This is the generic axis based on the instrument parameters
-                descrip.add_axis(DataAxis("segments",     range(source_instr_settings['nbr_segments'])))
+                # If there is only one segement, we should omit this axis.
+                if source_instr_settings['nbr_segments'] > 1:
+                    descrip.add_axis(DataAxis("segments", range(source_instr_settings['nbr_segments'])))
 
             # Digitizer mode preserves round_robins, averager mode collapsing along them:
             if source_instr_settings['acquire_mode'] == 'digitizer':
@@ -442,8 +465,6 @@ class QubitExpFactory(object):
                 filt = module_map[filt_type](**settings)
                 filt.name = name
                 filters[name] = filt
-                if filt_type == 'Plotter':
-                    filt.run_in_notebook = experiment.run_in_notebook
                 logger.debug("Found filter class %s for '%s' when loading experiment settings.", filt_type, name)
             else:
                 logger.error("Could not find filter class %s for '%s' when loading experiment settings.", filt_type, name)

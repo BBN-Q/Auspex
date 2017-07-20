@@ -20,10 +20,8 @@ from auspex.instruments.instrument import SCPIInstrument, StringCommand, FloatCo
 from auspex.experiment import Experiment
 from auspex.parameter import FloatParameter
 from auspex.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector
-from auspex.filters.debug import Print, Passthrough
-from auspex.filters.average import Averager
-from auspex.log import logger, logging
-logger.setLevel(logging.INFO)
+from auspex.filters import Print, Passthrough
+from auspex.log import logger
 
 class TestInstrument1(SCPIInstrument):
     frequency = FloatCommand(get_string="frequency?", set_string="frequency {:g}", value_range=(0.1, 10))
@@ -95,61 +93,55 @@ class ExperimentTestCase(unittest.TestCase):
         """Check that instruments have been appropriately gathered"""
         self.assertTrue(hasattr(TestExperiment, "_instruments")) # should have parsed these instruments from class dir
         self.assertTrue(len(TestExperiment._instruments) == 3 ) # should have parsed these instruments from class dir
-        self.assertTrue(TestExperiment._instruments['fake_instr_1'] == TestExperiment.fake_instr_1) # should contain this instrument
-        self.assertTrue(TestExperiment._instruments['fake_instr_2'] == TestExperiment.fake_instr_2) # should contain this instrument
-        self.assertTrue(TestExperiment._instruments['fake_instr_3'] == TestExperiment.fake_instr_3) # should contain this instrument
+        
+        te = TestExperiment()
+        self.assertTrue(te._instruments['fake_instr_1'] == te.fake_instr_1) # should contain this instrument
+        self.assertTrue(te._instruments['fake_instr_2'] == te.fake_instr_2) # should contain this instrument
+        self.assertTrue(te._instruments['fake_instr_3'] == te.fake_instr_3) # should contain this instrument
 
     def test_create_graph(self):
-        exp             = TestExperiment()
-        printer_partial = Print(name="Partial")
-        printer_final   = Print(name="Final")
-        avgr            = Averager('samples', name="TestAverager")
+        exp         = TestExperiment()
+        printer_one = Print(name="One")
+        printer_two = Print(name="Two")
 
-        edges = [(exp.chan1, avgr.sink),
-                 (avgr.partial_average, printer_partial.sink),
-                 (avgr.final_average, printer_final.sink)]
+        edges = [(exp.chan1, printer_one.sink),
+                 (exp.chan2, printer_two.sink)]
 
         exp.set_graph(edges)
 
-        self.assertTrue(exp.chan1.output_streams[0] == avgr.sink.input_streams[0])
-        self.assertTrue(avgr.partial_average.output_streams[0] == printer_partial.sink.input_streams[0])
-        self.assertTrue(avgr.final_average.output_streams[0] == printer_final.sink.input_streams[0])
-        self.assertTrue(len(exp.nodes) == 4)
+        self.assertTrue(exp.chan1.output_streams[0] == printer_one.sink.input_streams[0])
+        self.assertTrue(exp.chan2.output_streams[0] == printer_two.sink.input_streams[0])
+        self.assertTrue(len(exp.nodes) == 3)
         self.assertTrue(exp in exp.nodes)
-        self.assertTrue(avgr in exp.nodes)
+        self.assertTrue(printer_one in exp.nodes)
 
     def test_graph_parenting(self):
-        exp             = TestExperiment()
-        printer_partial = Print(name="Partial")
-        printer_final   = Print(name="Final")
-        avgr            = Averager('samples', name="TestAverager")
+        exp  = TestExperiment()
+        pt   = Passthrough()
+        prnt = Print(name="One")
 
-        edges = [(exp.chan1, avgr.sink),
-                 (avgr.partial_average, printer_partial.sink),
-                 (avgr.final_average, printer_final.sink)]
+        edges = [(exp.chan1, pt.sink),
+                 (pt.source, prnt.sink)]
 
         exp.set_graph(edges)
 
-        self.assertTrue(avgr.partial_average.parent == avgr)
-        self.assertTrue(avgr.final_average.parent == avgr)
-        self.assertTrue(exp.chan1.output_streams[0].end_connector.parent == avgr)
-        self.assertTrue(avgr.partial_average.output_streams[0].end_connector.parent == printer_partial)
+        self.assertTrue(pt.source.parent == pt)
+        self.assertTrue(exp.chan1.output_streams[0].end_connector.parent == pt)
+        self.assertTrue(pt.source.output_streams[0].end_connector.parent == prnt)
 
     def test_update_descriptors(self):
-        exp             = TestExperiment()
-        printer_partial = Print(name="Partial")
-        printer_final   = Print(name="Final")
-        avgr            = Averager('samples', name="TestAverager")
+        exp  = TestExperiment()
+        pt   = Passthrough()
+        prnt = Print(name="One")
 
-        edges = [(exp.chan1, avgr.sink),
-                 (avgr.partial_average, printer_partial.sink),
-                 (avgr.final_average, printer_final.sink)]
+        edges = [(exp.chan1, pt.sink),
+                 (pt.source, prnt.sink)]
 
         exp.set_graph(edges)
-
-        self.assertFalse(avgr.sink.descriptor is None)
-        self.assertFalse(printer_partial.sink.descriptor is None)
-        self.assertTrue(exp.chan1.descriptor == avgr.sink.descriptor)
+        exp.update_descriptors()
+        self.assertFalse(pt.sink.descriptor is None)
+        self.assertFalse(prnt.sink.descriptor is None)
+        self.assertTrue(exp.chan1.descriptor == pt.sink.descriptor)
 
     def test_copy_descriptor(self):
         dsd = DataStreamDescriptor()

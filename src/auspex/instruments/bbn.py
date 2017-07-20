@@ -6,6 +6,8 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
+__all__ = ['APS2', 'DigitalAttenuator']
+
 from .instrument import Instrument, SCPIInstrument, VisaInterface, MetaInstrument
 from auspex.log import logger
 
@@ -30,20 +32,24 @@ class DigitalAttenuator(SCPIInstrument):
 
     NUM_CHANNELS = 3
 
-    def __init__(self, resource_name):
-        super(DigitalAttenuator, self).__init__(resource_name, interface_type="VISA")
-        self.name = "BBN Digital Attenuator"
+    def __init__(self, resource_name=None, name='Unlabeled Digital Attenuator'):
+        super(DigitalAttenuator, self).__init__(resource_name=resource_name,
+            name=name)
+
+    def connect(self, resource_name=None, interface_type=None):
+        if resource_name is not None:
+            self.resource_name = resource_name
+        super(DigitalAttenuator, self).connect(resource_name=self.resource_name,
+            interface_type=interface_type)
         self.interface._resource.baud_rate = 115200
         self.interface._resource.read_termination = u"\r\n"
         self.interface._resource.write_termination = u"\n"
-
         #Override query to look for ``end``
         def query(self, query_string):
             val = self._resource.query(query_string)
             assert self.read() == "END"
             return val
-
-        self.interface.query = MethodType(query, self.interface, VisaInterface)
+        self.interface.query = MethodType(query, self.interface)
 
     @classmethod
     def channel_check(cls, chan):
@@ -80,6 +86,45 @@ class DigitalAttenuator(SCPIInstrument):
     @ch3_attenuation.setter
     def ch3_attenuation(self, value):
         self.set_attenuation(3, value)
+
+class SpectrumAnaylzer(SCPIInstrument):
+    """BBN USB Spectrum Analyzer"""
+
+    IF_FREQ = 0.0107 # 10.7 MHz IF notch filter
+
+    def __init__(self, resource_name=None, *args, **kwargs):
+        super(SpectrumAnaylzer, self).__init__(resource_name, *args, **kwargs)
+
+    def connect(self, resource_name=None, interface_type=None):
+        super(SpectrumAnaylzer, self).connect(resource_name, interface_type)
+        self.interface._resource.timeout = 0.1
+        self.interface._resource.read_termination = u"\r\n"
+        self.interface._resource.write_termination = u"\n"
+
+    def get_voltage(self):
+        volt = None
+        for ct in range(10):
+            try:
+                volt = float(self.interface.query("READ "))
+            except ValueError:
+                pass
+        if volt is None:
+            logger.warning("Failed to get data from BBN Spectrum Analyzer "+
+                " at {}.".format(self.resource_name))
+        return volt
+
+    @property
+    def voltage(self):
+        return self.get_voltage()
+
+    def peak_amplitude(self):
+        volt = self.get_voltage()
+        if volt is None:
+            return None
+        else:
+            interp = -100. + (volt - 75.) * (8/45)
+            return interp
+
 
 
 class MakeSettersGetters(MetaInstrument):
@@ -128,6 +173,7 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
 
     def disconnect(self):
         if self.resource_name and self.connected:
+            self.stop()
             self.wrapper.disconnect()
             self.connected = False
 

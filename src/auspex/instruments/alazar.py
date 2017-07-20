@@ -6,6 +6,8 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
+__all__ = ['AlazarATS9870', 'AlazarChannel']
+
 import re
 import socket
 import struct
@@ -155,10 +157,10 @@ class AlazarATS9870(Instrument):
         while not self.done():
             if (datetime.datetime.now() - self.last_timestamp).seconds > timeout:
                 logger.error("Digitizer %s timed out.", self.name)
-                break
+                raise Exception("Alazar timed out.")
             await asyncio.sleep(0.2)
 
-        logger.info("Digitizer %s finished getting data.", self.name)
+        logger.debug("Digitizer %s finished getting data.", self.name)
 
     def set_all(self, settings_dict):
         # Flatten the dict and then pass to super
@@ -209,9 +211,7 @@ class AlazarATS9870(Instrument):
             socket.close()
         self._chan_to_rsocket.clear()
         self._chan_to_wsocket.clear()
-
-    def __del__(self):
-        self.disconnect()
+        self._lib.unregister_sockets()
 
     def __str__(self):
         return "<AlazarATS9870({}/{})>".format(self.name, self.resource_name)

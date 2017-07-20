@@ -6,13 +6,48 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
+__all__ = ['Averager']
+
 import time
+import itertools
 import numpy as np
 
 from .filter import Filter
 from auspex.log import logger
 from auspex.parameter import Parameter
 from auspex.stream import InputConnector, OutputConnector
+
+def view_fields(a, names):
+    """
+    `a` must be a numpy structured array.
+    `names` is the collection of field names to keep.
+
+    Returns a view of the array `a` (not a copy).
+    http://stackoverflow.com/questions/37079175/how-to-remove-a-column-from-a-structured-numpy-array-without-copying-it
+    """
+    dt = a.dtype
+    formats = [dt.fields[name][0] for name in names]
+    offsets = [dt.fields[name][1] for name in names]
+    itemsize = a.dtype.itemsize
+    newdt = np.dtype(dict(names=names,
+                          formats=formats,
+                          offsets=offsets,
+                          itemsize=itemsize))
+    b = a.view(newdt)
+    return b
+
+def remove_fields(a, names):
+    """
+    `a` must be a numpy structured array.
+    `names` is the collection of field names to remove.
+
+    Returns a view of the array `a` (not a copy).
+    http://stackoverflow.com/questions/37079175/how-to-remove-a-column-from-a-structured-numpy-array-without-copying-it
+    """
+    dt = a.dtype
+    keep_names = [name for name in dt.names if name not in names]
+    return view_fields(a, keep_names)
+
 
 class Averager(Filter):
     """Takes data and collapses along the specified axis."""
@@ -21,11 +56,11 @@ class Averager(Filter):
     partial_average = OutputConnector()
     final_average   = OutputConnector()
     final_variance  = OutputConnector()
-    axis            = Parameter(allowed_values=["round_robins", "segments", "time"])
+    axis            = Parameter()
 
-    def __init__(self, averaging_axis=None, **kwargs):
+    def __init__(self, axis=None, **kwargs):
         super(Averager, self).__init__(**kwargs)
-        self.axis.value = averaging_axis
+        self.axis.value = axis
         self.points_before_final_average   = None
         self.points_before_partial_average = None
         self.sum_so_far = None
@@ -50,9 +85,7 @@ class Averager(Filter):
         # Convert named axes to an index
         if self.axis.value not in names:
             raise ValueError("Could not find axis {} within the DataStreamDescriptor {}".format(self.axis.value, descriptor_in))
-        self.axis_num = names.index(self.axis.value)
-        logger.debug("Axis %s corresponds to numerical axis %d", self.axis.value, self.axis_num)
-
+        self.axis_num = descriptor_in.axis_num(self.axis.value)
         logger.debug("Averaging over axis #%d: %s", self.axis_num, self.axis.value)
 
         self.data_dims = descriptor_in.data_dims()
@@ -86,21 +119,37 @@ class Averager(Filter):
         self.partial_average.descriptor = descriptor
         self.final_average.descriptor   = descriptor
 
+        # We can update the visited_tuples upfront if none
+        # of the sweeps are adaptive...
+        desc_out_dtype = descriptor_in.axis_data_type(with_metadata=True, excluding_axis=self.axis.value)
+        if not descriptor_in.is_adaptive():
+            vals           = [a.points_with_metadata() for a in descriptor_in.axes if a.name != self.axis.value]
+            nested_list    = list(itertools.product(*vals))
+            flattened_list = [tuple((val for sublist in line for val in sublist)) for line in nested_list]
+            descriptor.visited_tuples = np.core.records.fromrecords(flattened_list, dtype=desc_out_dtype)
+        else:
+            descriptor.visited_tuples = np.empty((0), dtype=desc_out_dtype)
+
         for stream in self.partial_average.output_streams + self.final_average.output_streams:
             stream.set_descriptor(descriptor)
             stream.end_connector.update_descriptors()
 
         # Define variance axis descriptor
-        descriptor = descriptor_in.copy()
-        descriptor.data_name = "Variance"
-        descriptor.pop_axis(self.axis.value)
-        if descriptor.unit:
-            descriptor.unit = descriptor.unit + "^2"
-        descriptor.metadata["num_averages"] = self.num_averages
-        self.final_variance.descriptor = descriptor
+        descriptor_var = descriptor_in.copy()
+        descriptor_var.data_name = "Variance"
+        descriptor_var.pop_axis(self.axis.value)
+        if descriptor_var.unit:
+            descriptor_var.unit = descriptor_var.unit + "^2"
+        descriptor_var.metadata["num_averages"] = self.num_averages
+        self.final_variance.descriptor= descriptor_var
+
+        if not descriptor_in.is_adaptive():
+            descriptor_var.visited_tuples = np.core.records.fromrecords(flattened_list, dtype=desc_out_dtype)
+        else:
+            descriptor_var.visited_tuples = np.empty((0), dtype=desc_out_dtype)
 
         for stream in self.final_variance.output_streams:
-            stream.set_descriptor(descriptor)
+            stream.set_descriptor(descriptor_var)
             stream.end_connector.update_descriptors()
 
     def final_init(self):
@@ -109,6 +158,7 @@ class Averager(Filter):
 
         self.completed_averages = 0
         self.idx_frame          = 0
+        self.idx_global         = 0
         # We only need to accumulate up to the averaging axis
         # BUT we may get something longer at any given time!
         self.carry = np.zeros(0, dtype=self.final_average.descriptor.dtype)
@@ -136,6 +186,18 @@ class Averager(Filter):
                 reshaped   = data[idx:idx+new_points].reshape(self.reshape_dims)
                 averaged   = reshaped.mean(axis=self.mean_axis)
                 idx       += new_points
+
+                if self.sink.descriptor.is_adaptive():
+                    new_tuples = self.sink.descriptor.tuples()[self.idx_global:self.idx_global + new_points]
+                    new_tuples_stripped = remove_fields(new_tuples, self.axis.value)
+                    take_axis = -1 if self.axis_num > 0 else 0
+                    reduced_tuples = new_tuples_stripped.reshape(self.reshape_dims).take((0,), axis=take_axis)
+                    self.idx_global += new_points
+
+                # Add to Visited tuples
+                if self.sink.descriptor.is_adaptive():
+                    for os in self.final_average.output_streams + self.final_variance.output_streams + self.partial_average.output_streams:
+                        os.descriptor.visited_tuples = np.append(os.descriptor.visited_tuples, reduced_tuples)
 
                 for os in self.final_average.output_streams:
                     await os.push(averaged)

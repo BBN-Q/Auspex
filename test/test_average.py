@@ -20,8 +20,7 @@ from auspex.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConn
 from auspex.filters.debug import Print, Passthrough
 from auspex.filters.io import DataBuffer
 from auspex.filters.average import Averager
-from auspex.log import logger, logging
-logger.setLevel(logging.INFO)
+from auspex.log import logger
 
 class TestExperiment(Experiment):
 
@@ -137,7 +136,7 @@ class AverageTestCase(unittest.TestCase):
         exp             = TestExperiment()
         printer_partial = Print(name="Partial")
         printer_final   = Print(name="Final")
-        avgr            = Averager(name="TestAverager")
+        avgr            = Averager(name="TestAverager", axis='freq_1')
 
         edges = [(exp.chan1, avgr.sink),
                  (avgr.partial_average, printer_partial.sink),
@@ -145,8 +144,6 @@ class AverageTestCase(unittest.TestCase):
         exp.set_graph(edges)
 
         exp.add_sweep(exp.freq_1, np.linspace(0,9,10))
-        avgr.axis.value = 'freq_1'
-        avgr.update_descriptors()
         exp.run_sweeps()
 
 if __name__ == '__main__':

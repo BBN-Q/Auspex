@@ -6,6 +6,8 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
+__all__ = ['AMI430']
+
 from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand
 
 import time

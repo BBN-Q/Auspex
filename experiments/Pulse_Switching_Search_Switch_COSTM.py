@@ -9,7 +9,7 @@
 from auspex.instruments import KeysightM8190A, Scenario, Sequence
 from auspex.instruments import Picosecond10070A
 from auspex.instruments import SR865
-from auspex.instruments import Keithley2400
+# from auspex.instruments import Keithley2400
 from auspex.instruments import AMI430
 from auspex.instruments import Attenuator
 
@@ -34,7 +34,7 @@ from auspex.log import logger
 # AWG Sync Marker Out -> DAQmx PFI0
 # AWG Samp. Marker Out -> PSPL Trigger
 
-class SwitchSearchExperiment(Experiment):
+class SwitchSearchLockinExperiment(Experiment):
     voltage = OutputConnector()
 
     sample = "CSHE2"
@@ -45,32 +45,35 @@ class SwitchSearchExperiment(Experiment):
     pulse_duration = FloatParameter(default=5.0e-9, unit="s")
     measure_current = 3e-6
 
-    base_attenuation = 10
-    settle_delay = 50e-6
+    circuit_attenuation = 20.0
+    pspl_base_attenuation = 30.0
+    settle_delay = 100e-6
 
-    attempts = 1 << 10 # Number of attemps
-    samps_per_trig = 5 # Samples per trigger
+    attempts = 1 << 8 # Number of attemps
+    samps_per_trig = 10 # Samples per trigger
 
     # Instruments
     arb   = KeysightM8190A("192.168.5.108")
     pspl  = Picosecond10070A("GPIB0::24::INSTR")
     mag   = AMI430("192.168.5.109")
-    keith = Keithley2400("GPIB0::25::INSTR")
+    # keith = Keithley2400("GPIB0::25::INSTR")
     lock  = SR865("USB0::0xB506::0x2000::002638::INSTR")
     atten = Attenuator("calibration/RFSA2113SB_HPD_20160901.csv", lock.set_ao2, lock.set_ao3)
 
-    min_daq_voltage = 0.0
-    max_daq_voltage = 0.4
+    min_daq_voltage = -10
+    max_daq_voltage = 10
 
     def init_instruments(self):
         # ===================
-        #    Setup the Keithley
+        #    Setup the Lockin
         # ===================
+        self.lock.tc = 30e-6
+        time.sleep(0.5)
 
-        self.keith.triad()
-        self.keith.conf_meas_res(res_range=1e5)
-        self.keith.conf_src_curr(comp_voltage=0.5, curr_range=1.0e-5)
-        self.keith.current = self.measure_current
+        # self.keith.triad()
+        # self.keith.conf_meas_res(res_range=1e5)
+        # self.keith.conf_src_curr(comp_voltage=0.5, curr_range=1.0e-5)
+        # self.keith.current = self.measure_current
         self.mag.ramp()
 
         # ===================
@@ -92,7 +95,7 @@ class SwitchSearchExperiment(Experiment):
         #   Setup the PSPL
         # ===================
 
-        self.pspl.amplitude = 7.5*np.power(10, -self.base_attenuation/20.0)
+        self.pspl.amplitude = 7.5*np.power(10, -self.pspl_base_attenuation/20.0)
         self.pspl.trigger_source = "EXT"
         self.pspl.trigger_level = 0.1
         self.pspl.output = True
@@ -101,8 +104,8 @@ class SwitchSearchExperiment(Experiment):
 
         def set_voltage(voltage):
             # Calculate the voltage controller attenuator setting
-            self.pspl.amplitude = np.sign(voltage)*7.5*np.power(10, -self.base_attenuation/20.0)
-            vc_atten = abs(20.0 * np.log10(abs(voltage)/7.5)) - self.base_attenuation - 0
+            self.pspl.amplitude = np.sign(voltage)*7.5*np.power(10, -self.pspl_base_attenuation/20.0)
+            vc_atten = abs(20.0 * np.log10(abs(voltage)/7.5)) - self.pspl_base_attenuation - self.circuit_attenuation
             if vc_atten <= 6.0:
                 logger.error("Voltage controlled attenuation under range (6dB).")
                 raise ValueError("Voltage controlled attenuation under range (6dB).")
@@ -152,7 +155,7 @@ class SwitchSearchExperiment(Experiment):
         self.analog_input = Task()
         self.read = int32()
         self.buf_points = self.samps_per_trig*self.attempts
-        self.analog_input.CreateAIVoltageChan("Dev1/ai1", "", DAQmx_Val_Diff,
+        self.analog_input.CreateAIVoltageChan("Dev1/ai0", "", DAQmx_Val_Diff,
             self.min_daq_voltage, self.max_daq_voltage, DAQmx_Val_Volts, None)
         self.analog_input.CfgSampClkTiming("", 1e6, DAQmx_Val_Rising, DAQmx_Val_FiniteSamps , self.samps_per_trig)
         self.analog_input.CfgInputBuffer(self.buf_points)
@@ -186,12 +189,12 @@ class SwitchSearchExperiment(Experiment):
             logger.warning("Warning failed to stop task, which is quite typical (!)")
 
         self.arb.stop()
-        self.keith.current = 0.0
+        # self.keith.current = 0.0
         # self.mag.zero()
         self.pspl.output = False
 
 if __name__=='__main__':
-    exp = SwitchSearchExperiment()
+    exp = SwitchSearchLockinExperiment()
     exp.sample = "CSHE2-C4R2"
     exp.field.value = 0.0133
     exp.measure_current = 3e-6

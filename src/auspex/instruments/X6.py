@@ -6,6 +6,8 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
+__all__ = ['X6Channel', 'X6']
+
 import socket
 import struct
 import datetime
@@ -51,7 +53,11 @@ class X6Channel(DigitizerChannel):
 
     def set_all(self, settings_dict):
         for name, value in settings_dict.items():
-            if hasattr(self, name):
+            if name == "kernel" and isinstance(value, str) and value:
+                self.kernel = eval(value)
+            elif name == "kernel_bias" and isinstance(value, str) and value:
+                self.kernel_bias = eval(value)
+            elif hasattr(self, name):
                 setattr(self, name, value)
 
         if self.stream_type == "Integrated":
@@ -132,13 +138,15 @@ class X6(Instrument):
         elif channel.stream_type == "Demodulated":
             self._lib.set_nco_frequency(a, b, channel.if_freq)
         elif channel.stream_type == "Integrated":
-            if not channel.kernel:
+            if channel.kernel is None:
                 logger.error("Integrated streams must specify a kernel")
                 return
+            # convert to complex128
+            channel.kernel = channel.kernel.astype(complex)
             self._lib.write_kernel(a, b, c, channel.kernel)
             self._lib.set_kernel_bias(a, b, c, channel.kernel_bias)
-            self._lib.set_threshold(a, b, channel.threshold)
-            self._lib.set_threshold_invert(a, b, channel.threshold_invert)
+            self._lib.set_threshold(a, c, channel.threshold)
+            self._lib.set_threshold_invert(a, c, channel.threshold_invert)
         else:
             logger.error("Unrecognized stream type %s" % channel.stream_type)
 
@@ -204,8 +212,6 @@ class X6(Instrument):
                 logger.error("Digitizer %s timed out.", self.name)
                 break
             await asyncio.sleep(0.2)
-
-        logger.info("Digitizer %s finished getting data.", self.name)
 
     # pass thru properties
     @property

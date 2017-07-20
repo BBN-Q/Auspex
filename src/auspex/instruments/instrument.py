@@ -1,3 +1,8 @@
+# __all__ = ['Command', 'FloatCommand', 'StringCommand', 'IntCommand', 'RampCommand',
+#             'SCPICommand',
+#             'DigitizerChannel',
+__all__ = ['Instrument'] # 'SCPIInstrument', 'CLibInstrument', 'MetaInstrument']
+
 import numpy as np
 import os
 import time
@@ -5,7 +10,7 @@ import socket
 from unittest.mock import MagicMock
 
 from auspex.log import logger
-from .interface import Interface, VisaInterface
+from .interface import Interface, VisaInterface, PrologixInterface
 
 #Helper function to check for IPv4 address
 #See http://stackoverflow.com/a/11264379
@@ -67,6 +72,14 @@ class Command(object):
             return set_value_python
         else:
             return self.python_to_instr[set_value_python]
+
+    def convert_get(self, get_value_instrument):
+        """Convert the instrument's returned values to something conveniently accessed
+        through python."""
+        if self.python_to_instr is None:
+            return get_value_instrument
+        else:
+            return self.instr_to_python[get_value_instrument]
 
 class SCPICommand(Command):
     def parse(self):
@@ -173,8 +186,9 @@ class Instrument(metaclass=MetaInstrument):
     def disconnect(self):
         pass
 
-    def __del__(self):
-        self.disconnect()
+    # We now expect the main experiment to deal with shutting down the instruments
+    # def __del__(self):
+    #     self.disconnect()
 
     def set_all(self, settings_dict):
         """Accept a settings dictionary and attempt to set all of the instrument
@@ -206,10 +220,11 @@ class SCPIInstrument(Instrument):
             raise Exception("Must supply a resource name to 'connect' if the instrument was initialized without one.")
         elif resource_name is not None:
             self.resource_name = resource_name
+        self.full_resource_name = self.resource_name
 
         if interface_type is None:
             # Load the dummy interface, unless we see that GPIB is in the resource string
-            if any([x in self.resource_name for x in ["GPIB", "USB", "SOCKET", "hislip", "inst0"]]):
+            if any([x in self.resource_name for x in ["GPIB", "USB", "SOCKET", "hislip", "inst0", "COM"]]):
                 interface_type = "VISA"
 
         try:
@@ -218,16 +233,21 @@ class SCPIInstrument(Instrument):
                     "interface as none was provided.".format(self.name))
                 self.interface = Interface()
             elif interface_type == "VISA":
-                if any(is_valid_ipv4(substr) for substr in self.resource_name.split("::")):
-                    ## assume single NIC for now
-                    self.resource_name = "TCPIP0::" + self.resource_name
-                self.interface = VisaInterface(self.resource_name)
+                if "GPIB" in self.full_resource_name:
+                    pass
+                elif any(is_valid_ipv4(substr) for substr in self.full_resource_name.split("::")) and "TCPIP" not in self.full_resource_name:
+                    # assume single NIC for now
+                    self.full_resource_name = "TCPIP0::" + self.full_resource_name
+                self.interface = VisaInterface(self.full_resource_name)
                 print(self.interface._resource)
                 logger.debug("A pyVISA interface {} was created for instrument {}.".format(str(self.interface._resource), self.name))
+            elif interface_type == "Prologix":
+                self.interface = PrologixInterface(self.full_resource_name)
+
             else:
                 raise ValueError("That interface type is not yet recognized.")
         except:
-            logger.error("Could not initialize interface for %s.", self.resource_name)
+            logger.error("Could not initialize interface for %s.", self.full_resource_name)
             self.interface = MagicMock()
         self._freeze()
 
