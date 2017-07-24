@@ -38,6 +38,7 @@ class KernelIntegrator(Filter):
             self.pre_int_op = kwargs["pre_integration_operation"]
         if "post_integration_operation" in kwargs:
             self.post_int_op = kwargs["post_integration_operation"]
+        self.quince_parameters = [self.simple_kernel, self.frequency, self.box_car_start, self.box_car_stop]
 
     def update_descriptors(self):
         if not self.simple_kernel and self.kernel.value is None:

@@ -148,12 +148,12 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
           master: true           # true or false
           slave_trig:            # name of marker below, optional, i.e. 12m4. Used by QGL.
           address:               # IP address or hostname should be fine
-          seq_file: test.h5      # optional
           trigger_interval: 0.0  # (s)
           trigger: External      # Internal, External, Software, or System
           delay: 0.0
           tx_channels:           # All transmit channels
             '12':                # Quadrature channel name (string)
+              seq_file: test.h5  # optional sequence file
               phase_skew: 0.0    # (deg) - Used by QGL
               amp_factor: 1.0    # Used by QGL
               '1':
@@ -227,6 +227,10 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
         if not main_quad_dict:
             raise ValueError("APS2 {} expected to receive quad channel '12'".format(self))
 
+        # Set the sequence file
+        self.seq_file = main_quad_dict['seq_file']
+
+        # Set the properties of individual hardware channels (offset, amplitude)
         for chan_num, chan_name in enumerate(['1', '2']):
             chan_dict = main_quad_dict.pop(chan_name, None)
             if not chan_dict:

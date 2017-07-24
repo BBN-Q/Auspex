@@ -80,7 +80,7 @@ class X6Channel(DigitizerChannel):
 
 class X6(Instrument):
     """BBN QDSP running on the II-X6 digitizer"""
-    instrument_type = "Digitizer"
+    instrument_type = ("Digitizer")
 
     def __init__(self, resource_name=None, name="Unlabeled X6", gen_fake_data=False):
         # X6Channel objects
