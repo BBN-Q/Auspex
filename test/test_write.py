@@ -52,6 +52,8 @@ class SweptTestExperiment(Experiment):
         # Add a "base" data axis: say we are averaging 5 samples per trigger
         descrip = DataStreamDescriptor()
         descrip.data_name='voltage'
+        if self.is_complex:
+            descrip.dtype = np.complex128
         descrip.add_axis(DataAxis("samples", list(range(self.samples))))
         self.voltage.set_descriptor(descrip)
 

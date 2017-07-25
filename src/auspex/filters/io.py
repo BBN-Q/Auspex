@@ -69,7 +69,7 @@ class WriteToHDF5(Filter):
         if self.add_date:
             date     = time.strftime("%y%m%d")
             dirname  = os.path.join(dirname, date)
-            filename = os.path.join(dirname, basename+ext)
+            basename = os.path.join(dirname, os.path.basename(basename))
             
         # Set the file number to the maximum in the current folder + 1
         filenums = []
