@@ -193,13 +193,16 @@ class QubitExpFactory(object):
         # associated with the meta_file. We only need to use string representations
         # here, not actual filter and instrument objects.
 
-        # Strip any colons, since we only care about the general flow, and not any
-        # named connectors as specified 
+        # Strip any spaces, since we only care about the general flow, and not any
+        # named connectors.
         def strip_conn_name(text):
-            return text.strip().split()[0]
+            vals = text.strip().split()
+            if len(vals) == 0:
+                raise ValueError("Please disable filters with missing source.")
+            return vals[0]
 
         # Graph edges for the measurement filters
-        edges = [(strip_conn_name(v["source"]), k) for k,v in experiment.settings["filters"].items()]
+        edges = [(strip_conn_name(v["source"]), k) for k,v in experiment.settings["filters"].items() if ("enabled" not in v.keys()) or v["enabled"]]
         dag = nx.DiGraph()
         dag.add_edges_from(edges)
 
