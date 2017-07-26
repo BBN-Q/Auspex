@@ -40,7 +40,7 @@ class QubitExpFactoryTestCase(unittest.TestCase):
     instrs = ['BBNAPS1', 'BBNAPS2', 'X6-1', 'Holz1', 'Holz2']
     filts  = ['Demod-q1', 'Int-q1', 'avg-q1', 'final-avg-buff', 'partial-avg-buff']
 
-    @unittest.expectedFailure
+    @unittest.skip("waiting for QGL compatibility")
     def test_create(self):
         qq = QubitFactory("q1")
         exp = QubitExpFactory.create(PulsedSpec(qq))
@@ -49,7 +49,7 @@ class QubitExpFactoryTestCase(unittest.TestCase):
         self.assertTrue(set(self.qubits).issubset(exp.qubits))
         self.assertTrue(len(exp._output_connectors["q1-RawSS"].descriptor.axes) == 2)
     
-    @unittest.expectedFailure
+    @unittest.skip("waiting for QGL compatibility")
     def test_add_qubit_sweep(self):
         qq = QubitFactory("q1")
         exp = QubitExpFactory.create(PulsedSpec(qq))
@@ -57,13 +57,13 @@ class QubitExpFactoryTestCase(unittest.TestCase):
         self.assertTrue(len(exp._output_connectors["q1-RawSS"].descriptor.axes[0].points) == 500)
         self.assertTrue(exp._output_connectors["q1-RawSS"].descriptor.axes[0].points[-1] == 6.5e9)
 
-    @unittest.expectedFailure
+    @unittest.skip("waiting for QGL compatibility")
     def test_run_direct(self):
         qq = QubitFactory("q1")
         exp = QubitExpFactory.run(RabiAmp(qq, np.linspace(-1,1,21)))
 
     # Figure out how to buffer a partial average for testing...
-    @unittest.expectedFailure
+    @unittest.skip("waiting for QGL compatibility")
     def test_final_vs_partial_avg(self):
         qq = QubitFactory("q1")
         exp = QubitExpFactory.run(RabiAmp(qq, np.linspace(-1,1,21)))
