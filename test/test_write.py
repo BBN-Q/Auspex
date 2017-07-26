@@ -9,6 +9,7 @@
 import unittest
 import asyncio
 import os
+import glob
 import numpy as np
 import h5py
 
@@ -23,6 +24,10 @@ from auspex.filters.debug import Print
 from auspex.filters.io import WriteToHDF5
 from auspex.analysis.io import load_from_HDF5
 from auspex.log import logger
+
+def clear_test_data():
+    for file in glob.glob("test_*.h5"):
+        os.remove(file)
 
 class SweptTestExperiment(Experiment):
     """Here the run loop merely spews data until it fills up the stream. """
@@ -152,8 +157,7 @@ class WriteTestCase(unittest.TestCase):
 
     def test_writehdf5(self):
         exp = SweptTestExperiment()
-        if os.path.exists("test_writehdf5-0000.h5"):
-            os.remove("test_writehdf5-0000.h5")
+        clear_test_data()
         wr = WriteToHDF5("test_writehdf5.h5")
 
         edges = [(exp.voltage, wr.sink)]
@@ -175,8 +179,7 @@ class WriteTestCase(unittest.TestCase):
         os.remove("test_writehdf5-0000.h5")
 
     def test_filename_increment(self):
-        if os.path.exists("test_writehdf5-0000.h5"):
-            os.remove("test_writehdf5-0000.h5")
+        clear_test_data()
 
         exp = SweptTestExperiment()
         wr = WriteToHDF5("test_writehdf5.h5")
@@ -209,8 +212,7 @@ class WriteTestCase(unittest.TestCase):
         exp.samples = 1024
         exp.init_streams()
 
-        if os.path.exists("test_writehdf5_no_tuples-0000.h5"):
-            os.remove("test_writehdf5_no_tuples-0000.h5")
+        clear_test_data()
         wr = WriteToHDF5("test_writehdf5_no_tuples.h5", store_tuples=False)
 
         edges = [(exp.voltage, wr.sink)]
@@ -229,8 +231,7 @@ class WriteTestCase(unittest.TestCase):
 
     def test_writehdf5_metadata(self):
         exp = SweptTestExperimentMetadata()
-        if os.path.exists("test_writehdf5_metadata-0000.h5"):
-            os.remove("test_writehdf5_metadata-0000.h5")
+        clear_test_data()
         wr = WriteToHDF5("test_writehdf5_metadata.h5")
 
         edges = [(exp.voltage, wr.sink)]
@@ -260,8 +261,7 @@ class WriteTestCase(unittest.TestCase):
 
     def test_writehdf5_metadata_unstructured(self):
         exp = SweptTestExperimentMetadata()
-        if os.path.exists("test_writehdf5_metadata_unstructured-0000.h5"):
-            os.remove("test_writehdf5_metadata_unstructured-0000.h5")
+        clear_test_data()
         wr = WriteToHDF5("test_writehdf5_metadata_unstructured.h5")
 
         edges = [(exp.voltage, wr.sink)]
@@ -303,8 +303,7 @@ class WriteTestCase(unittest.TestCase):
 
     def test_writehdf5_metadata_unstructured_adaptive(self):
         exp = SweptTestExperimentMetadata()
-        if os.path.exists("test_writehdf5_metadata_unstructured_adaptive-0000.h5"):
-            os.remove("test_writehdf5_metadata_unstructured_adaptive-0000.h5")
+        clear_test_data()
         wr = WriteToHDF5("test_writehdf5_metadata_unstructured_adaptive.h5")
 
         edges = [(exp.voltage, wr.sink)]
@@ -357,8 +356,7 @@ class WriteTestCase(unittest.TestCase):
 
     def test_samefile_writehdf5(self):
         exp = SweptTestExperiment()
-        if os.path.exists("test_samefile_writehdf5-0000.h5"):
-            os.remove("test_samefile_writehdf5-0000.h5")
+        clear_test_data()
         wr1 = WriteToHDF5("test_samefile_writehdf5.h5", "group1")
         wr2 = WriteToHDF5("test_samefile_writehdf5.h5", "group2")
 
@@ -389,8 +387,7 @@ class WriteTestCase(unittest.TestCase):
     def test_writehdf5_complex(self):
         exp = SweptTestExperiment()
         exp.is_complex = True
-        if os.path.exists("test_writehdf5_complex-0000.h5"):
-            os.remove("test_writehdf5_complex-0000.h5")
+        clear_test_data()
         wr = WriteToHDF5("test_writehdf5_complex.h5")
 
         edges = [(exp.voltage, wr.sink)]
@@ -413,8 +410,7 @@ class WriteTestCase(unittest.TestCase):
 
     def test_writehdf5_multiple_streams(self):
         exp = SweptTestExperiment2()
-        if os.path.exists("test_writehdf5_mult-0000.h5"):
-            os.remove("test_writehdf5_mult-0000.h5")
+        clear_test_data()
         wr = WriteToHDF5("test_writehdf5_mult.h5")
 
         edges = [(exp.voltage, wr.sink), (exp.current, wr.sink)]
@@ -435,8 +431,7 @@ class WriteTestCase(unittest.TestCase):
 
     def test_writehdf5_adaptive_sweep(self):
         exp = SweptTestExperiment()
-        if os.path.exists("test_writehdf5_adaptive-0000.h5"):
-            os.remove("test_writehdf5_adaptive-0000.h5")
+        clear_test_data()
         wr = WriteToHDF5("test_writehdf5_adaptive.h5")
 
         edges = [(exp.voltage, wr.sink)]
@@ -464,8 +459,7 @@ class WriteTestCase(unittest.TestCase):
 
     def test_writehdf5_unstructured_sweep(self):
         exp = SweptTestExperiment()
-        if os.path.exists("test_writehdf5_unstructured-0000.h5"):
-            os.remove("test_writehdf5_unstructured-0000.h5")
+        clear_test_data()
         wr = WriteToHDF5("test_writehdf5_unstructured.h5")
 
         edges = [(exp.voltage, wr.sink)]
@@ -497,8 +491,7 @@ class WriteTestCase(unittest.TestCase):
 
     def test_writehdf5_adaptive_unstructured_sweep(self):
         exp = SweptTestExperiment()
-        if os.path.exists("test_writehdf5_adaptive_unstructured-0000.h5"):
-            os.remove("test_writehdf5_adaptive_unstructured-0000.h5")
+        clear_test_data()
         wr = WriteToHDF5("test_writehdf5_adaptive_unstructured.h5")
 
         edges = [(exp.voltage, wr.sink)]
