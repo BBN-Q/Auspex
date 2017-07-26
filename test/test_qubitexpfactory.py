@@ -5,7 +5,7 @@ import time
 import numpy as np
 
 # Trick QGL and Auspex into using our local config
-from QGL import config_location
+# from QGL import config_location
 import auspex.config
 
 
@@ -17,7 +17,7 @@ cfg_file = os.path.join(curr_dir, "test_config.yml")
 import auspex.globals
 auspex.globals.auspex_dummy_mode = True
 
-config_location.config(cfg_file)
+# config_location.config(cfg_file)
 
 # QGL.config.configFile    = cfg_file
 auspex.config.configFile = cfg_file
@@ -31,6 +31,7 @@ from auspex.exp_factory import QubitExpFactory
 
 import QGL.config
 QGL.config.AWGDir        = awg_dir
+QGL.config.configFile    = cfg_file
 from QGL import *
 
 class QubitExpFactoryTestCase(unittest.TestCase):
