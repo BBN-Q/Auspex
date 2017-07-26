@@ -35,6 +35,7 @@ class HolzworthHS9000(Instrument, metaclass=MakeSettersGetters):
         except:
             logger.warning("Could not find the Holzworth driver.")
             self._lib = MagicMock()
+            self.fake_holz = True
 
         self._lib.usbCommWrite.restype = ctypes.c_char_p
         self._lib.openDevice.restype = ctypes.c_int
@@ -80,12 +81,13 @@ class HolzworthHS9000(Instrument, metaclass=MakeSettersGetters):
         return float(v.split()[0])*1e-3
     @frequency.setter
     def frequency(self, value):
-        if self.fmin*1e-3 <= value <= self.fmax*1e-3:
-            # WARNING!!! The Holzworth might blow up if you ask for >12 digits of precision here
-            self.ch_query(":FREQ:{:.12g} GHz".format(value))
-        else:
-            err_msg = "The value {} GHz is outside of the allowable range {}-{} GHz specified for instrument '{}'.".format(value, self.fmin*1e-3, self.fmax*1e-3, self.name)
-            raise ValueError(err_msg)
+        if not self.fake_holz:
+            if self.fmin*1e-3 <= value <= self.fmax*1e-3:
+                # WARNING!!! The Holzworth might blow up if you ask for >12 digits of precision here
+                self.ch_query(":FREQ:{:.12g} GHz".format(value))
+            else:
+                err_msg = "The value {} GHz is outside of the allowable range {}-{} GHz specified for instrument '{}'.".format(value, self.fmin*1e-3, self.fmax*1e-3, self.name)
+                raise ValueError(err_msg)
 
     @property
     def power(self):
@@ -93,11 +95,12 @@ class HolzworthHS9000(Instrument, metaclass=MakeSettersGetters):
         return float(v.split()[0])
     @power.setter
     def power(self, value):
-        if self.pmin <= value <= self.pmax:
-            self.ch_query(":PWR:{} dBm".format(value))
-        else:
-            err_msg = "The value {} dBm is outside of the allowable range {}-{} dBm specified for instrument '{}'.".format(value, self.pmin, self.pmax, self.name)
-            raise ValueError(err_msg)
+        if not self.fake_holz:
+            if self.pmin <= value <= self.pmax:
+                self.ch_query(":PWR:{} dBm".format(value))
+            else:
+                err_msg = "The value {} dBm is outside of the allowable range {}-{} dBm specified for instrument '{}'.".format(value, self.pmin, self.pmax, self.name)
+                raise ValueError(err_msg)
 
     @property
     def phase(self):

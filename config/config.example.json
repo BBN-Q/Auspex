@@ -1,5 +1,4 @@
 {
-	"InstrumentLibraryFile": "/my/path/to/Instruments.json",
-	"SweepLibraryFile": "/my/path/to/Sweeps.json",
-	"MeasurementLibraryFile": "/my/path/to/Measurements.json"
+	"AWGDir": "/my/path/to/AWG/",
+	"ConfigurationFile": "/my/path/to/measure.yml"
 }

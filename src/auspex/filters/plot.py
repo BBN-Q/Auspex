@@ -85,7 +85,7 @@ class Plotter(Filter):
         if self.plot_dims.value == 2:
             self.y_values = self.descriptor.axes[-2].points
 
-        self.plot_buffer = np.nan*np.ones(self.points_before_clear, dtype=self.descriptor.dtype)
+        self.plot_buffer = (np.nan*np.ones(self.points_before_clear)).astype(self.descriptor.dtype)
         self.idx = 0
 
     async def process_data(self, data):
@@ -110,7 +110,10 @@ class Plotter(Filter):
             self.last_update = time.time()
 
     async def on_done(self):
-        self.plot_server.send(self.name, self.plot_buffer)
+        if self.plot_dims.value == 1:
+            self.plot_server.send(self.name, self.x_values, self.plot_buffer)
+        elif self.plot_dims.value == 2:
+            self.plot_server.send(self.name, self.x_values, self.y_values, self.plot_buffer)
 
     def axis_label(self, index):
         unit_str = " ({})".format(self.descriptor.axes[index].unit) if self.descriptor.axes[index].unit else ''

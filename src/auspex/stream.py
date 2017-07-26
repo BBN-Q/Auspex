@@ -135,8 +135,8 @@ class DataAxis(object):
         self.num_new_points = 0
 
     def __repr__(self):
-        return "<DataAxis(name={}, points={}, unit={})>".format(
-            self.name, self.points, self.unit)
+        return "<DataAxis(name={}, start={}, stop={}, num={}, unit={})>".format(
+            self.name, self.points[0], self.points[-1], len(self.points), self.unit)
 
 class SweepAxis(DataAxis):
     """ Structure for sweep axis, separate from DataAxis.
@@ -233,7 +233,7 @@ class DataStreamDescriptor(object):
         self.unit = None
         self.params = {} # Parameters associated with each dataset
         self.parent = None
-        self.exp_src = None # Actual source code from the underlying experiment
+        self._exp_src = None # Actual source code from the underlying experiment
         self.dtype = dtype
         self.metadata = {}
 

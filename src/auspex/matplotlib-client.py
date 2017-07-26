@@ -129,6 +129,8 @@ class Canvas1D(MplCanvas):
     def compute_initial_figure(self):
         for ax in self.axes:
             plt, = ax.plot([0,0,0])
+            ax.ticklabel_format(style='sci', axis='x', scilimits=(-3,3))
+            ax.ticklabel_format(style='sci', axis='y', scilimits=(-3,3))
             self.plots.append(plt)
 
     def update_figure(self, x_data, y_data):
@@ -155,6 +157,8 @@ class CanvasManual(MplCanvas):
     def __init__(self, parent=None, width=5, height=4, dpi=100):
         self.fig = Figure(figsize=(width, height), dpi=dpi)
         self.axis = self.fig.add_subplot(111)
+        self.axis.ticklabel_format(style='sci', axis='x', scilimits=(-3,3))
+        self.axis.ticklabel_format(style='sci', axis='y', scilimits=(-3,3))
         self.traces = {}
 
         FigureCanvas.__init__(self, self.fig)
@@ -182,12 +186,16 @@ class CanvasManual(MplCanvas):
             self.axis.set_ylabel(desc['y_label'])
         for trace in desc['traces']:
             self.traces[trace['name']], = self.axis.plot([], **trace['matplotlib_kwargs'])
+        self.axis.ticklabel_format(style='sci', axis='x', scilimits=(-3,3))
+        self.axis.ticklabel_format(style='sci', axis='y', scilimits=(-3,3))
         self.fig.tight_layout()
 
 class Canvas2D(MplCanvas):
     def compute_initial_figure(self):
         for ax in self.axes:
             plt = ax.imshow(np.zeros((10,10)))
+            ax.ticklabel_format(style='sci', axis='x', scilimits=(-3,3))
+            ax.ticklabel_format(style='sci', axis='y', scilimits=(-3,3))
             self.plots.append(plt)
 
     def update_figure(self, x_data, y_data, im_data):
@@ -206,6 +214,8 @@ class Canvas2D(MplCanvas):
         self.plots = []
         for ax in self.axes:
             ax.clear()
+            ax.ticklabel_format(style='sci', axis='x', scilimits=(-3,3))
+            ax.ticklabel_format(style='sci', axis='y', scilimits=(-3,3))
             plt = ax.imshow(np.zeros((self.xlen, self.ylen)),
                 animated=True, aspect=self.aspect, extent=self.extent, origin="lower")
             self.plots.append(plt)
@@ -245,6 +255,8 @@ class CanvasMesh(MplCanvas):
                 ax.set_xlabel(desc['x_label'])
             if 'y_label' in desc.keys():
                 ax.set_ylabel(name + " " + desc['y_label'])
+            ax.ticklabel_format(style='sci', axis='x', scilimits=(-3,3))
+            ax.ticklabel_format(style='sci', axis='y', scilimits=(-3,3))
         self.fig.tight_layout()
 
     def scaled_Delaunay(self, points):
@@ -385,8 +397,8 @@ class MatplotClientWindow(QtWidgets.QMainWindow):
                     self.canvas_by_name[plot_name].update_figure(data[0])
                 else:
                     self.canvas_by_name[plot_name].update_figure(*data)
-        except:
-            pass
+        except Exception as e:
+            self.statusBar().showMessage("Exception while plotting {}.".format(e), 1000)
 
     def switch_toolbar(self):
         for toolbar in self.toolbars:
