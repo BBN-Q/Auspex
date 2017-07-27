@@ -327,13 +327,16 @@ class QubitExpFactory(object):
 
         for instr_name, chan_data in meta_info['instruments'].items():
             experiment.settings["instruments"][instr_name]['enabled']  = True
-            for chan_name, seq_file in chan_data.items():
-                if chan_name in experiment.settings["instruments"][instr_name]["tx_channels"].keys():
-                    experiment.settings["instruments"][instr_name]["tx_channels"][chan_name]['seq_file'] = seq_file
-                elif chan_name in experiment.settings["instruments"][instr_name]["rx_channels"].keys():
-                    experiment.settings["instruments"][instr_name]["rx_channels"][chan_name]['seq_file'] = seq_file
-                else:
-                    raise ValueError("Could not find channel {} in of instrument {}.".format(chan_name, instr_name))
+            if isinstance(chan_data, str):
+                experiment.settings["instruments"][instr_name]['seq_file'] = chan_data # Per-instrument seq file
+            elif isinstance(chan_data, dict):
+                for chan_name, seq_file in chan_data.items():
+                    if "tx_channels" in experiment.settings["instruments"][instr_name] and chan_name in experiment.settings["instruments"][instr_name]["tx_channels"].keys():
+                        experiment.settings["instruments"][instr_name]["tx_channels"][chan_name]['seq_file'] = seq_file
+                    elif "rx_channels" in experiment.settings["instruments"][instr_name] and chan_name in experiment.settings["instruments"][instr_name]["rx_channels"].keys():
+                        experiment.settings["instruments"][instr_name]["rx_channels"][chan_name]['seq_file'] = seq_file
+                    else:
+                        raise ValueError("Could not find channel {} in of instrument {}.".format(chan_name, instr_name))
 
         # Now we will construct the DataAxis from the meta_info
         desc = meta_info["axis_descriptor"] 

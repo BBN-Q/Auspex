@@ -151,9 +151,9 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
           trigger_interval: 0.0  # (s)
           trigger: External      # Internal, External, Software, or System
           delay: 0.0
+          seq_file: test.h5      # optional sequence file
           tx_channels:           # All transmit channels
             '12':                # Quadrature channel name (string)
-              seq_file: test.h5  # optional sequence file
               phase_skew: 0.0    # (deg) - Used by QGL
               amp_factor: 1.0    # Used by QGL
               '1':
@@ -227,9 +227,6 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
         if not main_quad_dict:
             raise ValueError("APS2 {} expected to receive quad channel '12'".format(self))
 
-        # Set the sequence file
-        self.seq_file = main_quad_dict['seq_file']
-
         # Set the properties of individual hardware channels (offset, amplitude)
         for chan_num, chan_name in enumerate(['1', '2']):
             chan_dict = main_quad_dict.pop(chan_name, None)
@@ -237,7 +234,6 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
                 raise ValueError("Could not find channel {} in quadrature channel 12 in settings for {}".format(chan_name, self))
             for chan_attr, value in chan_dict.items():
                 if hasattr(self, 'set_' + chan_attr):
-                    print('set_' + chan_attr, chan_num, value)
                     getattr(self, 'set_' + chan_attr)(chan_num, value)
 
     @property
