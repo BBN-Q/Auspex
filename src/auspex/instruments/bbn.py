@@ -173,7 +173,7 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
               delay: 0.0
     """
 
-    def __init__(self, resource_name, name="Unlabeled APS2"):
+    def __init__(self, resource_name=None, name="Unlabeled APS2"):
         self.name = name
         self.resource_name = resource_name
 
