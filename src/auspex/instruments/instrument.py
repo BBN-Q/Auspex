@@ -194,8 +194,14 @@ class Instrument(metaclass=MetaInstrument):
         """Accept a settings dictionary and attempt to set all of the instrument
         parameters using the key/value pairs."""
         for name, value in settings_dict.items():
-            if hasattr(self, name):
-                setattr(self, name, value)
+            # Python is insane, and attempts to run a property's getter
+            # when queried by hasattr. Avoid this behavior with the
+            # "asl for forgiveness" paradigm.
+            if name not in ['type', 'address']: # ignore these keys since they aren't used
+                try:
+                    setattr(self, name, value)
+                except (AttributeError, TypeError):
+                    pass
 
 class CLibInstrument(Instrument): pass
 
