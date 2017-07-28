@@ -143,23 +143,25 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
 
     yaml_template = """
         APS2-Name:
-          type: APS2             # Used by QGL and Auspex. QGL assumes XXXPattern for the pattern generator
-          enabled: true          # true or false, optional
-          master: true           # true or false
-          slave_trig:            # name of marker below, optional, i.e. 12m4. Used by QGL.
-          address:               # IP address or hostname should be fine
-          trigger_interval: 0.0  # (s)
-          trigger: External      # Internal, External, Software, or System
+          type: APS2               # Used by QGL and Auspex. QGL assumes XXXPattern for the pattern generator
+          enabled: true            # true or false, optional
+          master: true             # true or false
+          slave_trig:              # name of marker below, optional, i.e. 12m4. Used by QGL.
+          address:                 # IP address or hostname should be fine
+          trigger_interval: 0.0    # (s)
+          trigger_source: External # Internal, External, Software, or System
           delay: 0.0
-          seq_file: test.h5      # optional sequence file
-          tx_channels:           # All transmit channels
-            '12':                # Quadrature channel name (string)
-              phase_skew: 0.0    # (deg) - Used by QGL
-              amp_factor: 1.0    # Used by QGL
+          seq_file: test.h5        # optional sequence file
+          tx_channels:             # All transmit channels
+            '12':                  # Quadrature channel name (string)
+              phase_skew: 0.0      # (deg) - Used by QGL
+              amp_factor: 1.0      # Used by QGL
               '1':
+                enabled: true
                 offset: 0.0
                 amplitude: 1.0
               '2':
+                enabled: true
                 offset: 0.0
                 amplitude: 1.0
           markers:
