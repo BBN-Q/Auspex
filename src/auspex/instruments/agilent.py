@@ -299,11 +299,12 @@ class AgilentN5183A(SCPIInstrument):
         #If we only have an IP address then tack on the raw socket port to the VISA resource string
         super(AgilentN5183A, self).__init__(resource_name, *args, **kwargs)
 
-    def connect(self, resource_name=None, interface_type=None):
+    def connect(self, resource_name=None, interface_type="VISA"):
         if resource_name is not None:
             self.resource_name = resource_name
         if is_valid_ipv4(self.resource_name):
-            self.resource_name += "::5025::SOCKET"
+            if "::5025::SOCKET" not in self.resource_name:
+                self.resource_name += "::5025::SOCKET"
         print(self.resource_name)
         super(AgilentN5183A, self).connect(resource_name=resource_name, interface_type=interface_type)
         self.interface._resource.read_termination = u"\n"
