@@ -218,7 +218,7 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
         super(APS2, self).set_all(settings)
 
         # Mandatory arguments
-        for key in ['address', 'seq_file', 'trigger_interval', 'trigger', 'master']:
+        for key in ['address', 'seq_file', 'trigger_interval', 'trigger_source', 'master']:
             if key not in settings.keys():
                 raise ValueError("Instrument {} configuration lacks mandatory key {}".format(self, key))
 
