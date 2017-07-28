@@ -76,7 +76,7 @@ class X6Channel(DigitizerChannel):
             result_channel = 0
             self.dtype = np.float64
 
-        self.channel_tuple = (self.phys_channel, demod_channel, result_channel)
+        self.channel_tuple = (int(self.phys_channel), int(demod_channel), int(result_channel))
 
 class X6(Instrument):
     """BBN QDSP running on the II-X6 digitizer"""
@@ -110,8 +110,6 @@ class X6(Instrument):
         if resource_name is not None:
             self.resource_name = resource_name
 
-        logger.warning("X6 GENERATING FAKE DATA")
-
         # pass thru functions
         self.acquire    = self._lib.acquire
         self.stop       = self._lib.stop
@@ -119,6 +117,7 @@ class X6(Instrument):
 
         if self.gen_fake_data:
             self._lib = MagicMock()
+            logger.warning("X6 GENERATING FAKE DATA")
         self._lib.connect(int(self.resource_name))
 
     def disconnect(self):
