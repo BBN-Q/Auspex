@@ -54,14 +54,21 @@ class X6Channel(DigitizerChannel):
 
     def set_all(self, settings_dict):
         for name, value in settings_dict.items():
+
             if name == "kernel" and isinstance(value, str) and value:
                 self.kernel = eval(value)
             elif name == "kernel_bias" and isinstance(value, str) and value:
                 self.kernel_bias = eval(value)
-            elif hasattr(self, name):
-                setattr(self, name, value)
+            #elif hasattr(self, name):
+            #        setattr(self, name, value)
             elif name == "channel":
                 setattr(self, name, int(value))
+            else:
+                try:
+                    setattr(self, name, value)
+                except AttributeError:
+                    logger.debug(f"Could not set channel attirbute: {name} on X6 {self.stream_type} channel.")
+                    pass
 
         if self.stream_type == "Integrated":
             demod_channel = 0
@@ -139,6 +146,7 @@ class X6(Instrument):
     def channel_setup(self, channel):
         a, b, c = channel.channel_tuple
         self._lib.enable_stream(a, b, c)
+
         if channel.stream_type == "Raw":
             return
         elif channel.stream_type == "Demodulated":
