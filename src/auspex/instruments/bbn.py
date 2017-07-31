@@ -150,12 +150,12 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
           address:                 # IP address or hostname should be fine
           trigger_interval: 0.0    # (s)
           trigger_source: External # Internal, External, Software, or System
-          delay: 0.0
           seq_file: test.h5        # optional sequence file
           tx_channels:             # All transmit channels
             '12':                  # Quadrature channel name (string)
               phase_skew: 0.0      # (deg) - Used by QGL
               amp_factor: 1.0      # Used by QGL
+              delay: 0.0           # (s) - Used by QGL
               '1':
                 enabled: true
                 offset: 0.0
@@ -251,7 +251,7 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
     @trigger_source.setter
     def trigger_source(self, source):
         if source in ["Internal", "External", "Software", "System"]:
-            self.wrapper.set_trigger_source(getattr(aps2,source.upper()))
+            self.wrapper.set_trigger_source(getattr(self.wrapper,source.upper()))
         else:
             raise ValueError("Invalid trigger source specification.")
 
