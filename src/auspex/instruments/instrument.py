@@ -197,11 +197,11 @@ class Instrument(metaclass=MetaInstrument):
             # Python is insane, and attempts to run a property's getter
             # when queried by hasattr. Avoid this behavior with the
             # "asl for forgiveness" paradigm.
-            if name not in ['type', 'address']: # ignore these keys since they aren't used
-                try:
-                    setattr(self, name, value)
-                except (AttributeError, TypeError) as e:
-                    pass
+            try:
+                setattr(self, name, value)
+            except (AttributeError, TypeError) as e:
+                logger.debug(f"Instrument {self.name} property: {name} could not be set to {value}.")
+                pass
 
 class CLibInstrument(Instrument): pass
 
