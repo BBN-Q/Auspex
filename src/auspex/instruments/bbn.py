@@ -215,7 +215,6 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
         # Pop the channel settings
         settings = settings_dict.copy()
         quad_channels = settings.pop('tx_channels')
-
         # Call the non-channel commands
         super(APS2, self).set_all(settings)
 
@@ -251,7 +250,7 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
     @trigger_source.setter
     def trigger_source(self, source):
         if source in ["Internal", "External", "Software", "System"]:
-            self.wrapper.set_trigger_source(getattr(self.wrapper,source.upper()))
+            self.wrapper.set_trigger_source(getattr(aps2,source.upper()))
         else:
             raise ValueError("Invalid trigger source specification.")
 
