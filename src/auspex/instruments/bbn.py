@@ -26,6 +26,7 @@ else:
     except:
         logger.warning("Could not find APS2 python driver.")
         fake_aps2 = True
+        aps2 = MagicMock()
 
 class DigitalAttenuator(SCPIInstrument):
     """BBN 3 Channel Instrument"""
