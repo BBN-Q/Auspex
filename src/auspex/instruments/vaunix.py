@@ -90,10 +90,10 @@ class Labbrick(Instrument, metaclass=MakeSettersGetters):
 
     @property
     def frequency(self):
-        return self._lib.fnLMS_GetFrequency(self.device_id) * 1e-8 # Convert from tens of Hz to GHz
+        return self._lib.fnLMS_GetFrequency(self.device_id) * 10 # Convert from tens of Hz to Hz
     @frequency.setter
     def frequency(self, value):
-        self._lib.fnLMS_SetFrequency(self.device_id, int(value * 1e8)) # Convert to tens of Hz from Ghz
+        self._lib.fnLMS_SetFrequency(self.device_id, int(value * 0.1)) # Convert to tens of Hz from Hz
 
     @property
     def power(self):

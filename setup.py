@@ -19,6 +19,7 @@ setup(
         "tqdm >= 4.7.0",
         "pandas >= 0.18.1",
         "networkx >= 1.11",
-        "matplotlib >= 2.0.0"
+        "matplotlib >= 2.0.0",
+        "ruamel.yaml >= 0.15.18"
     ]
 )

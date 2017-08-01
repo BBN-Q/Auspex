@@ -6,7 +6,7 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-__all__ = ['APS2', 'DigitalAttenuator']
+__all__ = ['APS2', 'DigitalAttenuator', 'SpectrumAnaylzer']
 
 from .instrument import Instrument, SCPIInstrument, VisaInterface, MetaInstrument
 from auspex.log import logger
@@ -14,6 +14,8 @@ from auspex.log import logger
 from types import MethodType
 from unittest.mock import MagicMock
 import auspex.globals
+from time import sleep
+from visa import VisaIOError
 
 # Dirty trick to avoid loading libraries when scraping
 # This code using quince.
@@ -26,6 +28,7 @@ else:
     except:
         logger.warning("Could not find APS2 python driver.")
         fake_aps2 = True
+        aps2 = MagicMock()
 
 class DigitalAttenuator(SCPIInstrument):
     """BBN 3 Channel Instrument"""
@@ -97,7 +100,8 @@ class SpectrumAnaylzer(SCPIInstrument):
 
     def connect(self, resource_name=None, interface_type=None):
         super(SpectrumAnaylzer, self).connect(resource_name, interface_type)
-        self.interface._resource.timeout = 0.1
+        self.interface._resource.timeout = 100
+        self.interface._resource.baud_rate = 115200
         self.interface._resource.read_termination = u"\r\n"
         self.interface._resource.write_termination = u"\n"
 
@@ -105,9 +109,11 @@ class SpectrumAnaylzer(SCPIInstrument):
         volt = None
         for ct in range(10):
             try:
-                volt = float(self.interface.query("READ "))
-            except ValueError:
-                pass
+                volt = float(self.interface._resource.query("READ "))
+            except (ValueError, VisaIOError):
+                sleep(0.01)
+            else:
+                break
         if volt is None:
             logger.warning("Failed to get data from BBN Spectrum Analyzer "+
                 " at {}.".format(self.resource_name))
@@ -125,8 +131,6 @@ class SpectrumAnaylzer(SCPIInstrument):
             interp = -100. + (volt - 75.) * (8/45)
             return interp
 
-
-
 class MakeSettersGetters(MetaInstrument):
     def __init__(self, name, bases, dct):
         super(MakeSettersGetters, self).__init__(name, bases, dct)
@@ -141,7 +145,41 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
     """BBN APS2"""
     instrument_type = "AWG"
 
-    def __init__(self, resource_name, name="Unlabeled APS2"):
+    yaml_template = """
+        APS2-Name:
+          type: APS2               # Used by QGL and Auspex. QGL assumes XXXPattern for the pattern generator
+          enabled: true            # true or false, optional
+          master: true             # true or false
+          slave_trig:              # name of marker below, optional, i.e. 12m4. Used by QGL.
+          address:                 # IP address or hostname should be fine
+          trigger_interval: 0.0    # (s)
+          trigger_source: External # Internal, External, Software, or System
+          seq_file: test.h5        # optional sequence file
+          tx_channels:             # All transmit channels
+            '12':                  # Quadrature channel name (string)
+              phase_skew: 0.0      # (deg) - Used by QGL
+              amp_factor: 1.0      # Used by QGL
+              delay: 0.0           # (s) - Used by QGL
+              '1':
+                enabled: true
+                offset: 0.0
+                amplitude: 1.0
+              '2':
+                enabled: true
+                offset: 0.0
+                amplitude: 1.0
+          markers:
+            12m1:
+              delay: 0.0         # (s)
+            12m2:
+              delay: 0.0
+            12m3:
+              delay: 0.0
+            12m4:
+              delay: 0.0
+    """
+
+    def __init__(self, resource_name=None, name="Unlabeled APS2"):
         self.name = name
         self.resource_name = resource_name
 
@@ -177,18 +215,31 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
             self.wrapper.disconnect()
             self.connected = False
 
-    def set_all(self, settings_dict):
+    def set_all(self, settings_dict, prefix=""):
         # Pop the channel settings
         settings = settings_dict.copy()
-        channel_settings = settings.pop('channels')
-
+        quad_channels = settings.pop('tx_channels')
         # Call the non-channel commands
         super(APS2, self).set_all(settings)
 
-        for chan, ch_settings in enumerate(channel_settings):
-            for name, value in ch_settings.items():
-                if hasattr(self, 'set_' + name):
-                    getattr(self, 'set_' + name)(chan, value)
+        # Mandatory arguments
+        for key in ['address', 'seq_file', 'trigger_interval', 'trigger_source', 'master']:
+            if key not in settings.keys():
+                raise ValueError("Instrument {} configuration lacks mandatory key {}".format(self, key))
+
+        # We expect a dictionary of channel names and their properties
+        main_quad_dict = quad_channels.pop('12', None)
+        if not main_quad_dict:
+            raise ValueError("APS2 {} expected to receive quad channel '12'".format(self))
+
+        # Set the properties of individual hardware channels (offset, amplitude)
+        for chan_num, chan_name in enumerate(['1', '2']):
+            chan_dict = main_quad_dict.pop(chan_name, None)
+            if not chan_dict:
+                raise ValueError("Could not find channel {} in quadrature channel 12 in settings for {}".format(chan_name, self))
+            for chan_attr, value in chan_dict.items():
+                if hasattr(self, 'set_' + chan_attr):
+                    getattr(self, 'set_' + chan_attr)(chan_num, value)
 
     @property
     def seq_file(self):

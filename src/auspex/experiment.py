@@ -30,6 +30,7 @@ from auspex.stream import DataStream, DataAxis, SweepAxis, DataStreamDescriptor,
 from auspex.filters.plot import Plotter, XYPlotter, MeshPlotter, ManualPlotter
 from auspex.filters.io import WriteToHDF5, DataBuffer
 from auspex.log import logger
+import auspex.globals
 
 class ExpProgressBar(object):
     """ Display progress bar(s) on the terminal.
@@ -153,7 +154,7 @@ class MetaExperiment(type):
         self._output_connectors = {}
 
         # Parse ourself
-        self.exp_src = inspect.getsource(self)
+        self._exp_src = inspect.getsource(self)
 
         for k,v in dct.items():
             if isinstance(v, Instrument):
@@ -288,7 +289,7 @@ class Experiment(metaclass=MetaExperiment):
     def update_descriptors(self):
         logger.debug("Starting descriptor update in experiment.")
         for oc in self.output_connectors.values():
-            oc.descriptor.exp_src = self.exp_src
+            oc.descriptor._exp_src = self._exp_src
             for k,v in self._parameters.items():
                 oc.descriptor.add_param(k, v.value)
                 if v.unit is not None:
@@ -444,8 +445,14 @@ class Experiment(metaclass=MetaExperiment):
             for plotter in self.plotters:
                 plotter.plot_server = self.plot_server
             time.sleep(0.5)
+            # Kill a previous plotter if desired.
+            if auspex.globals.single_plotter_mode and auspex.globals.last_plotter_process:
+                pro = auspex.globals.last_plotter_process
+                os.killpg(os.getpgid(pro.pid), signal.SIGTERM)
+
             client_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),"matplotlib-client.py")
-            subprocess.Popen(['python', client_path, 'localhost'], env=os.environ.copy())
+            auspex.globals.last_plotter_process = subprocess.Popen(['python', client_path, 'localhost'], 
+                                                                    env=os.environ.copy(), preexec_fn=os.setsid)
             time.sleep(1)
 
         def catch_ctrl_c(signum, frame):
