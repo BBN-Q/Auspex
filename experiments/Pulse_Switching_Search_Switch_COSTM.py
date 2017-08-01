@@ -11,7 +11,7 @@ from auspex.instruments import Picosecond10070A
 from auspex.instruments import SR865
 # from auspex.instruments import Keithley2400
 from auspex.instruments import AMI430
-from auspex.instruments import Attenuator
+from auspex.instruments import RFMDAttenuator
 
 from auspex.experiment import FloatParameter, IntParameter, Experiment
 from auspex.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector
@@ -30,7 +30,7 @@ from auspex.log import logger
 # Experimental Topology
 # lockin AO 2 -> Analog Attenuator Vdd
 # lockin AO 3 -> Analog Attenuator Vc (Control Voltages)
-# Keithley Output -> Voltage divider with 1 MOhm, DAQmx AI1
+# Lockin offset/expand (x10) analog output -> DAQmx ai0
 # AWG Sync Marker Out -> DAQmx PFI0
 # AWG Samp. Marker Out -> PSPL Trigger
 
@@ -58,7 +58,7 @@ class SwitchSearchLockinExperiment(Experiment):
     mag   = AMI430("192.168.5.109")
     # keith = Keithley2400("GPIB0::25::INSTR")
     lock  = SR865("USB0::0xB506::0x2000::002638::INSTR")
-    atten = Attenuator("calibration/RFSA2113SB_HPD_20160901.csv", lock.set_ao2, lock.set_ao3)
+    atten = RFMDAttenuator("calibration/RFSA2113SB_HPD_20160901.csv")
 
     min_daq_voltage = -10
     max_daq_voltage = 10
@@ -75,6 +75,8 @@ class SwitchSearchLockinExperiment(Experiment):
         # self.keith.conf_src_curr(comp_voltage=0.5, curr_range=1.0e-5)
         # self.keith.current = self.measure_current
         self.mag.ramp()
+        self.atten.set_supply_method(self.lock.set_ao2)
+        self.atten.set_control_method(self.lock.set_ao3)
 
         # ===================
         #    Setup the AWG
