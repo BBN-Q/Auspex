@@ -448,11 +448,18 @@ class Experiment(metaclass=MetaExperiment):
             # Kill a previous plotter if desired.
             if auspex.globals.single_plotter_mode and auspex.globals.last_plotter_process:
                 pro = auspex.globals.last_plotter_process
-                os.killpg(os.getpgid(pro.pid), signal.SIGTERM)
+                if hasattr(os, 'setsid'):
+                    os.killpg(os.getpgid(pro.pid), signal.SIGTERM)
+                else:
+                    pro.kill()
 
             client_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),"matplotlib-client.py")
-            auspex.globals.last_plotter_process = subprocess.Popen(['python', client_path, 'localhost'], 
+            if hasattr(os, 'setsid'):
+                auspex.globals.last_plotter_process = subprocess.Popen(['python', client_path, 'localhost'],
                                                                     env=os.environ.copy(), preexec_fn=os.setsid)
+            else:
+                auspex.globals.last_plotter_process = subprocess.Popen(['python', client_path, 'localhost'],
+                                                                    env=os.environ.copy())
             time.sleep(1)
 
         def catch_ctrl_c(signum, frame):
