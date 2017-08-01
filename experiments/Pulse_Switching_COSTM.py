@@ -43,7 +43,7 @@ import h5py
 # Experimental Topology
 # lockin AO 2 -> Analog Attenuator Vdd
 # lockin AO 3 -> Analog Attenuator Vc (Control Voltages)
-# Keithley Output -> Voltage divider with 1 MOhm, DAQmx AI1
+# Lockin offset/expand (x10) analog output -> DAQmx ai0
 # AWG Sync Marker Out -> DAQmx PFI0
 # AWG Samp. Marker Out -> PSPL Trigger
 

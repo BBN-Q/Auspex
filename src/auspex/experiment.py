@@ -30,6 +30,7 @@ from auspex.stream import DataStream, DataAxis, SweepAxis, DataStreamDescriptor,
 from auspex.filters.plot import Plotter, XYPlotter, MeshPlotter, ManualPlotter
 from auspex.filters.io import WriteToHDF5, DataBuffer
 from auspex.log import logger
+import auspex.globals
 
 class ExpProgressBar(object):
     """ Display progress bar(s) on the terminal.
@@ -444,8 +445,21 @@ class Experiment(metaclass=MetaExperiment):
             for plotter in self.plotters:
                 plotter.plot_server = self.plot_server
             time.sleep(0.5)
+            # Kill a previous plotter if desired.
+            if auspex.globals.single_plotter_mode and auspex.globals.last_plotter_process:
+                pro = auspex.globals.last_plotter_process
+                if hasattr(os, 'setsid'):
+                    os.killpg(os.getpgid(pro.pid), signal.SIGTERM)
+                else:
+                    pro.kill()
+
             client_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),"matplotlib-client.py")
-            subprocess.Popen(['python', client_path, 'localhost'], env=os.environ.copy())
+            if hasattr(os, 'setsid'):
+                auspex.globals.last_plotter_process = subprocess.Popen(['python', client_path, 'localhost'],
+                                                                    env=os.environ.copy(), preexec_fn=os.setsid)
+            else:
+                auspex.globals.last_plotter_process = subprocess.Popen(['python', client_path, 'localhost'],
+                                                                    env=os.environ.copy())
             time.sleep(1)
 
         def catch_ctrl_c(signum, frame):
@@ -488,8 +502,11 @@ class Experiment(metaclass=MetaExperiment):
             except:
                 logger.debug("File probably already closed...")
 
-        if len(self.plotters) > 0 and not self.leave_plot_server_open:
-            self.plot_server.stop()
+        try:
+            if len(self.plotters) > 0 and not self.leave_plot_server_open:
+                self.plot_server.stop()
+        except:
+            logger.warning("Could not stop plot server gracefully...")
 
         self.shutdown_instruments()
         self.disconnect_instruments()
