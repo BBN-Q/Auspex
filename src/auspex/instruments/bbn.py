@@ -6,7 +6,7 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-__all__ = ['APS2', 'DigitalAttenuator']
+__all__ = ['APS2', 'DigitalAttenuator', 'SpectrumAnaylzer']
 
 from .instrument import Instrument, SCPIInstrument, VisaInterface, MetaInstrument
 from auspex.log import logger
@@ -14,6 +14,8 @@ from auspex.log import logger
 from types import MethodType
 from unittest.mock import MagicMock
 import auspex.globals
+from time import sleep
+from visa import VisaIOError
 
 # Dirty trick to avoid loading libraries when scraping
 # This code using quince.
@@ -97,7 +99,8 @@ class SpectrumAnaylzer(SCPIInstrument):
 
     def connect(self, resource_name=None, interface_type=None):
         super(SpectrumAnaylzer, self).connect(resource_name, interface_type)
-        self.interface._resource.timeout = 0.1
+        self.interface._resource.timeout = 100
+        self.interface._resource.baud_rate = 115200
         self.interface._resource.read_termination = u"\r\n"
         self.interface._resource.write_termination = u"\n"
 
@@ -105,9 +108,11 @@ class SpectrumAnaylzer(SCPIInstrument):
         volt = None
         for ct in range(10):
             try:
-                volt = float(self.interface.query("READ "))
-            except ValueError:
-                pass
+                volt = float(self.interface._resource.query("READ "))
+            except (ValueError, VisaIOError):
+                sleep(0.01)
+            else:
+                break
         if volt is None:
             logger.warning("Failed to get data from BBN Spectrum Analyzer "+
                 " at {}.".format(self.resource_name))
@@ -124,8 +129,6 @@ class SpectrumAnaylzer(SCPIInstrument):
         else:
             interp = -100. + (volt - 75.) * (8/45)
             return interp
-
-
 
 class MakeSettersGetters(MetaInstrument):
     def __init__(self, name, bases, dct):
