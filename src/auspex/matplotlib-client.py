@@ -68,7 +68,7 @@ class DataListener(QtCore.QObject):
                         md = json.loads(md.decode())
                         A = np.frombuffer(data, dtype=md['dtype'])
                         result.append(A)
-                        self.message.emit(tuple(result))
+                    self.message.emit(tuple(result))
         self.socket.close()
 
 class MplCanvas(FigureCanvas):
@@ -133,7 +133,8 @@ class Canvas1D(MplCanvas):
             ax.ticklabel_format(style='sci', axis='y', scilimits=(-3,3))
             self.plots.append(plt)
 
-    def update_figure(self, x_data, y_data):
+    def update_figure(self, data):
+        x_data, y_data = data
         for plt, ax, f in zip(self.plots, self.axes, self.plot_funcs):
             plt.set_xdata(x_data)
             plt.set_ydata(f(y_data))
@@ -198,7 +199,8 @@ class Canvas2D(MplCanvas):
             ax.ticklabel_format(style='sci', axis='y', scilimits=(-3,3))
             self.plots.append(plt)
 
-    def update_figure(self, x_data, y_data, im_data):
+    def update_figure(self, data):
+        x_data, y_data, im_data = data
         im_data = im_data.reshape((len(y_data), len(x_data)), order='c')
         for plt, f in zip(self.plots, self.plot_funcs):
             plt.set_data(f(im_data))
@@ -316,7 +318,7 @@ class MatplotClientWindow(QtWidgets.QMainWindow):
         evts = dict(poller.poll(100))
         if socket in evts:
             try:
-                reply, desc = [e.decode() for e in socket.recv_multipart(flags=zmq.NOBLOCK)]
+                reply, desc = [e.decode() for e in socket.recv_multipart()]
                 desc = json.loads(desc)
                 self.statusBar().showMessage("Connection established. Pulling plot information.", 2000)
             except:
@@ -396,9 +398,9 @@ class MatplotClientWindow(QtWidgets.QMainWindow):
                 if isinstance(self.canvas_by_name[plot_name], CanvasMesh):
                     self.canvas_by_name[plot_name].update_figure(data[0])
                 else:
-                    self.canvas_by_name[plot_name].update_figure(*data)
+                    self.canvas_by_name[plot_name].update_figure(data)
         except Exception as e:
-            self.statusBar().showMessage("Exception while plotting {}.".format(e), 1000)
+            self.statusBar().showMessage("Exception while plotting {}. Length of data: {}".format(e, len(data)), 1000)
 
     def switch_toolbar(self):
         for toolbar in self.toolbars:

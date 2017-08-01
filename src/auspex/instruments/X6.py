@@ -122,7 +122,7 @@ class X6(Instrument):
         self.stop       = self._lib.stop
         self.disconnect = self._lib.disconnect
 
-        if self.gen_fake_data:
+        if self.gen_fake_data or fake_x6:
             self._lib = MagicMock()
             logger.warning("X6 GENERATING FAKE DATA")
         self._lib.connect(int(self.resource_name))
