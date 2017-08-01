@@ -152,6 +152,9 @@ class QubitExpFactory(object):
 
         settings = config.yaml_load(config.configFile)
 
+        # This is generally the behavior we want
+        auspex.globals.single_plotter_mode = True
+
         # Instantiaite and perform all of our setup
         experiment = QubitExperiment()
         experiment.settings        = settings
