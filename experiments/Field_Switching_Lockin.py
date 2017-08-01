@@ -23,13 +23,11 @@ class FieldSwitchingLockinExperiment(Experiment):
     """ Field Switching Experimen: measure resistance on Keithley while sweeping AMI430 field
     """
     field           = FloatParameter(default=0.0, unit="T")
-    # measure_current = FloatParameter(default=3e-6, unit="A")
     resistance      = OutputConnector(unit="Ohm")
 
     res_reference = 1e3
     vsource  = 10e-3
     mag   = AMI430("192.168.5.109")
-    # keith = Keithley2400("GPIB0::25::INSTR")
     lock  = SR865("USB0::0xB506::0x2000::002638::INSTR")
 
     def init_instruments(self):

@@ -44,7 +44,7 @@ class SwitchSearchLockinExperiment(Experiment):
     pulse_voltage  = FloatParameter(default=0, unit="V")
     pulse_duration = FloatParameter(default=5.0e-9, unit="s")
     measure_current = 3e-6
-
+    time_constant = 30e-6
     circuit_attenuation = 20.0
     pspl_base_attenuation = 30.0
     settle_delay = 100e-6
@@ -67,7 +67,7 @@ class SwitchSearchLockinExperiment(Experiment):
         # ===================
         #    Setup the Lockin
         # ===================
-        self.lock.tc = 30e-6
+        self.lock.tc = self.time_constant
         time.sleep(0.5)
 
         # self.keith.triad()
