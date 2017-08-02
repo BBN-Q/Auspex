@@ -16,6 +16,7 @@ import json
 
 from scipy.optimize import curve_fit
 
+from auspex.log import logger
 from auspex.exp_factory import QubitExpFactory
 from auspex.analysis.io import load_from_HDF5
 from auspex.parameter import FloatParameter
@@ -37,21 +38,38 @@ def find_null_offset(xpts, powers):
     fit_pts = np.array([np.real(model(x, *fit)) for x in xpts])
     return best_offset, fit_pts
 
-
-
-
 class MixerCalibration(Experiment):
 
     def __init__(self, qubit):
-        super(MixerCalibration, self).__init__()
-
         self.settings = config.yaml_load(config.configFile)
-        #search for spectrum analyzer
-        self.sa_settings = [instr for instr in self.settings['instruments'].items() if instr[1]['type'] == 'SpectrumAnalyzer']
-        if len(self.sa_settings) != 1:
+        sa = [instr for instr in self.settings['instruments'].items() if instr[1]['type'] == 'SpectrumAnalyzer']
+        if len(sa) != 1:
             raise ValueError("More than one spectrum analyzer is defined in the configuration file.")
-        self.sa_settings = self.sa_settings[0]
+        self.sa = sa[0][0]
+        self.sa_settings = sa[0][1]
+        logger.debug("Found spectrum analyzer: {}.".format(self.sa))
+        if "LO" not in self.sa_settings.keys():
+            raise ValueError("No local oscillator is defined for spectrum analyzer {}.".format(self.sa))
+        try:
+            self.LO = self.settings['instruments'][self.sa_settings['LO']][0]
+            self.LO_settings = self.settings['instruments'][self.sa_settings['LO']][1]
+        except KeyError:
+            raise ValueError("LO {} for spectrum analyzer {} not found in instrument configuration file!".format(self.sa_settings['LO'], self.sa))
         try:
             self.qubit_settings = self.settings['qubits'][qubit]
         except KeyError as ex:
             raise ValueError("Could not find qubit {} in the qubit configuration file.".format(qubit)) from ex
+        super(MixerCalibration, self).__init__()
+
+    def init_instruments(self):
+        QubitExpFactory.init_instruments(self)
+
+    def shutdown_instruments(self):
+        for name, instr in self._instruments.items():
+            instr.disconnect()
+
+    def init_streams(self):
+        pass
+
+    async def run(self):
+        pass
