@@ -335,12 +335,12 @@ class Experiment(metaclass=MetaExperiment):
                 for oc in self.output_connectors.values():
                     # Obtain the lists of values for any fixed
                     # DataAxes and append them to them to the sweep_values
-                    # in preperation for finding all combinations. 
+                    # in preperation for finding all combinations.
                     vals = [a for a in oc.descriptor.data_axis_values()]
                     if sweep_values:
                         vals  = [[v] for v in sweep_values] + vals
 
-                    # Find all coordinate tuples and update the list of 
+                    # Find all coordinate tuples and update the list of
                     # tuples that the experiment has probed.
                     nested_list    = list(itertools.product(*vals))
                     flattened_list = [tuple((val for sublist in line for val in sublist)) for line in nested_list]
@@ -382,6 +382,9 @@ class Experiment(metaclass=MetaExperiment):
         self.instrs_connected = False
 
     def run_sweeps(self):
+        if not self.sweeper.axes:
+            logger.info("No sweeps to run.")
+            return
         # Propagate the descriptors through the network
         self.update_descriptors()
         # Make sure we are starting from scratch... is this necessary?
@@ -527,6 +530,23 @@ class Experiment(metaclass=MetaExperiment):
         else:
             parameters.value = sweep_list[0]
         return ax
+
+    def clear_sweeps(self):
+        """Delete all sweeps present in this experiment."""
+        logger.debug("Removing all axes from experiment.")
+        self.sweeper.axes = []
+        for oc in self.output_connectors.values():
+            oc.descriptor.axes = []
+
+    def pop_sweep(self, name):
+        """Remove sweep that has a given name."""
+        names = [_.name for _ in self.sweeper.axes]
+        if name not in names:
+            raise KeyError("Could not remove sweep named {}; does not appear to be present.".format(name))
+        self.sweeper.axes = [_ for _ in self.sweeper.axes if _.name != name]
+        for oc in self.output_connectors.values():
+            oc.descriptor.axes = [_ for _ in oc.descriptor.axes if _.name != name]
+        logger.debug("Removed sweep {} from experiment".format(name))
 
     def add_direct_plotter(self, plotter):
         """A plotter that lives outside the filter pipeline, intended for advanced
