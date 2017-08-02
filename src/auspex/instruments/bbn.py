@@ -17,6 +17,7 @@ import auspex.globals
 from time import sleep
 from visa import VisaIOError
 import numpy as np
+from copy import deepcopy
 
 # Dirty trick to avoid loading libraries when scraping
 # This code using quince.
@@ -94,7 +95,7 @@ class DigitalAttenuator(SCPIInstrument):
 class SpectrumAnalyzer(SCPIInstrument):
     """BBN USB Spectrum Analyzer"""
 
-    IF_FREQ = 0.0107 # 10.7 MHz IF notch filter
+    IF_FREQ = 0.0107e9 # 10.7 MHz IF notch filter
 
     def __init__(self, resource_name=None, *args, **kwargs):
         super(SpectrumAnalyzer, self).__init__(resource_name, *args, **kwargs)
@@ -228,7 +229,8 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
 
     def set_all(self, settings_dict, prefix=""):
         # Pop the channel settings
-        settings = settings_dict.copy()
+        #settings = settings_dict.copy()
+        settings = deepcopy(settings_dict)
         quad_channels = settings.pop('tx_channels')
         # Call the non-channel commands
         super(APS2, self).set_all(settings)
