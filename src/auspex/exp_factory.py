@@ -24,6 +24,7 @@ import networkx as nx
 import auspex.config as config
 import auspex.instruments
 import auspex.filters
+import auspex.globals
 
 from auspex.log import logger
 from auspex.experiment import Experiment
@@ -177,7 +178,7 @@ class QubitExpFactory(object):
         return experiment
 
     @staticmethod
-    def calibrate_mixer(qubit, mixer="control", first_cal="phase"):
+    def calibrate_mixer(qubit, mixer="control", first_cal="phase", write_to_file=True):
         """Calibrates IQ mixer offset, amplitude imbalanace, and phase skew.
         See Analog Devices Application note AN-1039. Parses instrument connectivity from
         the experiment settings YAML.
@@ -189,6 +190,8 @@ class QubitExpFactory(object):
             For example, a mixer with -40dBc sideband supression at 1 degree of phase skew
             and 0.1 dB amplitude imbalance should calibrate the phase first.
         """
+        spm = auspex.globals.single_plotter_mode
+        auspex.globals.single_plotter_mode = True
 
         def sweep_offset(experiment, name, pts):
             mce.clear_sweeps()
@@ -197,13 +200,13 @@ class QubitExpFactory(object):
 
         offset_pts = np.linspace(-0.2, 0.2, 51)
         amp_pts = np.linspace(0.4, 1.4, 51)
-        phase_pts = np.linspace(-30, 30, 61) * np.pi/180
+        phase_pts = np.linspace(-30, 30, 61)
 
-        plt = Plotter(name="Mixer Calibration", plot_mode="real")
         buff = DataBuffer()
+        plt = Plotter(name="Mixer calibration", plot_mode="real") #TODO: Plot fit.
         mce = MixerCalibrationExperiment(qubit, mixer=mixer)
         QubitExpFactory.load_instruments(mce, mce.instruments_to_enable)
-        edges = [(mce.amplitude, plt.sink), (mce.amplitude, buff.sink)]
+        edges = [(mce.amplitude, buff.sink), (mce.amplitude, plt.sink)]
         mce.set_graph(edges)
 
         sweep_offset(mce, "I_offset", offset_pts)
@@ -227,21 +230,34 @@ class QubitExpFactory(object):
         #this is a bit hacky but OK...
         cals = {"phase": "phase_skew", "amplitude": "amplitude_factor"}
         cal_pts = {"phase": phase_pts, "amplitude": amp_pts}
+        cal_defaults = {"phase": 0.0, "amplitude": 1.0}
         if first_cal not in cals.keys():
             raise ValueError("First calibration should be one of ('phase, amplitude'). Instead got {}".format(first_cal))
-        second_cal = list(set(cals.keys()).difference(first_cal))[0]
+        second_cal = list(set(cals.keys()).difference({first_cal,}))[0]
+
+        mce.sideband_modulation = True
 
         sweep_offset(mce, cals[first_cal], cal_pts[first_cal])
         amps1 = np.array([x[1] for x in buff.get_data()])
-        offset1, pts = find_null_offset(cal_pts[first_cal], amps1)
+        offset1, pts = find_null_offset(cal_pts[first_cal], amps1, default=cal_defaults[first_cal])
         logger.info("Found {} offset of {}.".format(first_cal, offset1))
         getattr(mce, cals[first_cal]).value = offset1
 
         sweep_offset(mce, cals[second_cal], cal_pts[second_cal])
         amps2 = np.array([x[1] for x in buff.get_data()])
-        offset2, pts = find_null_offset(cal_pts[second_cal], amps2)
+        offset2, pts = find_null_offset(cal_pts[second_cal], amps2, default=cal_defaults[second_cal])
         logger.info("Found {} offset of {}.".format(second_cal, offset2))
-        getattr(mce, cals[first_cal]).value = offset2
+        getattr(mce, cals[second_cal]).value = offset2
+
+        mce.disconnect_instruments()
+        if write_to_file:
+            mce.write_to_file()
+        logger.info(("Mixer calibration: I offset = {}, Q offset = {}, "
+                    "Amplitude Imbalance = {}, Phase Skew = {}").format(mce.I_offset.value,
+                                                                        mce.Q_offset.value,
+                                                                        mce.amplitude_factor.value,
+                                                                        mce.phase_skew.value))
+        auspex.globals.single_plotter_mode = spm
 
     @staticmethod
     def load_meta_info(experiment, meta_file):
