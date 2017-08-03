@@ -11,6 +11,7 @@
 import json
 import os.path
 import sys
+from shutil import move
 import ruamel.yaml as yaml
 
 # Run this code by importing config.py
@@ -66,9 +67,11 @@ def yaml_load(filename):
     return code
 
 def yaml_dump(data, filename):
-    with open(filename, 'w') as fid:
+    with open(filename+".tmp", 'w') as fid:
         Dumper.add_representer(Include, Dumper.include)
-        yaml.dump(code, fid, Dumper=Dumper)
+        yaml.dump(data, fid, Dumper=Dumper)
+    # Upon success
+    move(filename+".tmp", filename)
 
 if not os.path.isfile(config_file):
     # build a config file from the template
@@ -95,4 +98,3 @@ try:
     configFile = QGL.config.configFile
 except:
     pass
-
