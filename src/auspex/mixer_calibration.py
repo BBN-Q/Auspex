@@ -14,6 +14,7 @@ import json
 import numpy as np
 from scipy.optimize import curve_fit
 import time
+from asyncio import sleep
 
 from auspex.log import logger
 from auspex.experiment import FloatParameter, IntParameter, Experiment
@@ -25,13 +26,14 @@ def find_null_offset(xpts, powers):
     """Finds the offset corresponding to the minimum power using a fit to the measured data"""
     def model(x, a, b, c):
         return a*(x - b)**2 + c
+    powers = np.power(10, powers/10.)
     min_idx = np.argmin(powers)
     fit = curve_fit(model, xpts, powers, p0=[1, xpts[min_idx], powers[min_idx]])
     best_offset = np.real(fit[0][1])
     best_offset = np.minimum(best_offset, xpts[-1])
     best_offset = np.maximum(best_offset, xpts[0])
     fit_pts = np.array([np.real(model(x, *fit[0])) for x in xpts])
-    return best_offset, fit_pts
+    return best_offset, 10*np.log10(fit_pts)
 
 class MixerCalibrationExperiment(Experiment):
 
@@ -82,16 +84,15 @@ class MixerCalibrationExperiment(Experiment):
         super(MixerCalibrationExperiment, self).__init__()
 
     def init_instruments(self):
-
         self.I_offset.assign_method(lambda x: self._instruments[self.AWG].set_offset(0, x))
         self.Q_offset.assign_method(lambda x: self._instruments[self.AWG].set_offset(1, x))
         self.amplitude_factor.assign_method(self._instruments[self.AWG].set_mixer_amplitude_imbalance)
         self.phase_skew.assign_method(self._instruments[self.AWG].set_mixer_phase_skew)
 
-        self.I_offset.add_post_push_hook(lambda: time.sleep(0.01))
-        self.Q_offset.add_post_push_hook(lambda: time.sleep(0.01))
-        self.amplitude_factor.add_post_push_hook(lambda: time.sleep(0.01))
-        self.phase_skew.add_post_push_hook(lambda: time.sleep(0.01))
+        self.I_offset.add_post_push_hook(lambda: time.sleep(0.1))
+        self.Q_offset.add_post_push_hook(lambda: time.sleep(0.1))
+        self.amplitude_factor.add_post_push_hook(lambda: time.sleep(0.1))
+        self.phase_skew.add_post_push_hook(lambda: time.sleep(0.1))
 
         for name, instr in self._instruments.items():
             instr_par = self.settings['instruments'][name]
@@ -106,6 +107,16 @@ class MixerCalibrationExperiment(Experiment):
         self._instruments[self.LO].output = True
         self._setup_awg_ssb()
 
+    def reset_calibration(self):
+        try:
+            self._instruments[self.AWG].set_mixer_amplitude_imbalance(1.0)
+            self._instruments[self.AWG].set_mixer_phase_skew(0.0)
+            self._instruments[self.AWG].set_offset(0, 0.0)
+            self._instruments[self.AWG].set_offset(1, 0.0)
+        except Exception as ex:
+            raise Exception("Could not reset APS2 mixer calibration. Is the AWG connected?") from ex
+
+
     def _setup_awg_ssb(self):
         #set up ingle sideband modulation IQ playback on the AWG
         self._instruments[self.AWG].stop()
@@ -113,9 +124,6 @@ class MixerCalibrationExperiment(Experiment):
         self._instruments[self.AWG].load_waveform(2, np.zeros(1200, dtype=np.float))
         self._instruments[self.AWG].waveform_frequency = -self.SSB_FREQ
         self._instruments[self.AWG].run_mode = "CW_WAVEFORM"
-        #rest mixer correction and I/Q offsets
-        self._instruments[self.AWG].set_mixer_amplitude_imbalance(1.0)
-        self._instruments[self.AWG].set_mixer_phase_skew(0.0)
         #start playback
         self._instruments[self.AWG].run()
         logger.debug("Playing SSB CW IQ modulation on {} at frequency: {} MHz".format(self.AWG, self.SSB_FREQ/1e6))
@@ -125,8 +133,7 @@ class MixerCalibrationExperiment(Experiment):
         self._instruments[self.LO].output = False
         self._instruments[self.source].output = False
         self._instruments[self.AWG].stop()
-        for name, instr in self._instruments.items():
-            instr.disconnect()
+
 
     def init_streams(self):
         pass

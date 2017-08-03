@@ -193,7 +193,7 @@ class QubitExpFactory(object):
         def sweep_offset(experiment, name, pts):
             mce.clear_sweeps()
             mce.add_sweep(getattr(mce, name), pts)
-            mce.run_sweeps()
+            mce.run_sweeps(keep_instruments_connected = True)
 
         offset_pts = np.linspace(-0.2, 0.2, 51)
         amp_pts = np.linspace(0.4, 1.4, 51)

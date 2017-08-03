@@ -367,13 +367,10 @@ class Experiment(metaclass=MetaExperiment):
 
     def connect_instruments(self):
         # Connect the instruments to their resources
-        for instrument in self._instruments.values():
-            instrument.connect()
-
-        # Initialize the instruments and stream
-        self.init_instruments()
-
-        self.instrs_connected = True
+        if not self.instrs_connected:
+            for instrument in self._instruments.values():
+                instrument.connect()
+            self.instrs_connected = True
 
     def disconnect_instruments(self):
         # Connect the instruments to their resources
@@ -381,7 +378,7 @@ class Experiment(metaclass=MetaExperiment):
             instrument.disconnect()
         self.instrs_connected = False
 
-    def run_sweeps(self):
+    def run_sweeps(self, keep_instruments_connected = False):
         if not self.sweeper.axes:
             logger.info("No sweeps to run.")
             return
@@ -394,8 +391,9 @@ class Experiment(metaclass=MetaExperiment):
             self.progressbar.reset()
 
         #connect all instruments
-        if not self.instrs_connected:
-            self.connect_instruments()
+        self.connect_instruments()
+        #initialize instruments
+        self.init_instruments()
 
         # Go find any writers
         self.writers = [n for n in self.nodes if isinstance(n, WriteToHDF5)]
@@ -492,9 +490,9 @@ class Experiment(metaclass=MetaExperiment):
             if callback:
                 callback(plot)
 
-        self.shutdown()
+        self.shutdown(keep_instruments_connected=keep_instruments_connected)
 
-    def shutdown(self):
+    def shutdown(self, keep_instruments_connected=False):
         logger.debug("Shutting Down!")
 
         for f in self.files:
@@ -512,7 +510,9 @@ class Experiment(metaclass=MetaExperiment):
             logger.warning("Could not stop plot server gracefully...")
 
         self.shutdown_instruments()
-        self.disconnect_instruments()
+
+        if not keep_instruments_connected:
+            self.disconnect_instruments()
 
     def add_axis(self, axis):
         for oc in self.output_connectors.values():
