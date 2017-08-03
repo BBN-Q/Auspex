@@ -448,10 +448,17 @@ class Experiment(metaclass=MetaExperiment):
             # Kill a previous plotter if desired.
             if auspex.globals.single_plotter_mode and auspex.globals.last_plotter_process:
                 pro = auspex.globals.last_plotter_process
-                if hasattr(os, 'setsid'):
-                    os.killpg(os.getpgid(pro.pid), signal.SIGTERM)
+                if hasattr(os, 'setsid'): # Doesn't exist on windows
+                    try:
+                        os.kill(pro.pid, 0) # Raises an error if the PID doesn't exist
+                        os.killpg(os.getpgid(pro.pid), signal.SIGTERM) # Proceed to kill process group
+                    except OSError:
+                        logger.debug("No plotter to kill.")
                 else:
-                    pro.kill()
+                    try:
+                        pro.kill()
+                    except:
+                        logger.debug("No plotter to kill.")
 
             client_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),"matplotlib-client.py")
             if hasattr(os, 'setsid'):
