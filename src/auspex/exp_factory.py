@@ -177,6 +177,73 @@ class QubitExpFactory(object):
         return experiment
 
     @staticmethod
+    def calibrate_mixer(qubit, mixer="control", first_cal="phase"):
+        """Calibrates IQ mixer offset, amplitude imbalanace, and phase skew.
+        See Analog Devices Application note AN-1039. Parses instrument connectivity from
+        the experiment settings YAML.
+        Arguments:
+            qubit: Qubit identifier string.
+            mixer: One of ("control", "measure") to select which IQ channel is calibrated.
+            first_cal: One of ("phase", "amplitude") to select which adjustment is attempted
+            first. You should pick whichever the particular mixer is most sensitive to.
+            For example, a mixer with -40dBc sideband supression at 1 degree of phase skew
+            and 0.1 dB amplitude imbalance should calibrate the phase first.
+        """
+
+        def sweep_offset(experiment, name, pts):
+            mce.clear_sweeps()
+            mce.add_sweep(getattr(mce, name), pts)
+            mce.run_sweeps()
+
+        offset_pts = np.linspace(-0.2, 0.2, 51)
+        amp_pts = np.linspace(0.4, 1.4, 51)
+        phase_pts = np.linspace(-30, 30, 61) * np.pi/180
+
+        plt = Plotter(name="Mixer Calibration", plot_mode="real")
+        buff = DataBuffer()
+        mce = MixerCalibrationExperiment(qubit, mixer=mixer)
+        QubitExpFactory.load_instruments(mce, mce.instruments_to_enable)
+        edges = [(mce.amplitude, plt.sink), (mce.amplitude, buff.sink)]
+        mce.set_graph(edges)
+
+        sweep_offset(mce, "I_offset", offset_pts)
+        I1_amps = np.array([x[1] for x in buff.get_data()])
+        I1_offset, pts = find_null_offset(offset_pts, I1_amps)
+        logger.info("Found first pass I offset of {}.".format(I1_offset))
+        mce.I_offset.value = I1_offset
+
+        sweep_offset(mce, "Q_offset", offset_pts)
+        Q1_amps = np.array([x[1] for x in buff.get_data()])
+        Q1_offset, pts = find_null_offset(offset_pts, Q1_amps)
+        logger.info("Found first pass Q offset of {}.".format(Q1_offset))
+        mce.Q_offset.value = Q1_offset
+
+        sweep_offset(mce, "I_offset", offset_pts)
+        I2_amps = np.array([x[1] for x in buff.get_data()])
+        I2_offset, pts = find_null_offset(offset_pts, I2_amps)
+        logger.info("Found second pass I offset of {}.".format(I1_offset))
+        mce.I_offset.value = I2_offset
+
+        #this is a bit hacky but OK...
+        cals = {"phase": "phase_skew", "amplitude": "amplitude_factor"}
+        cal_pts = {"phase": phase_pts, "amplitude": amp_pts}
+        if first_cal not in cals.keys():
+            raise ValueError("First calibration should be one of ('phase, amplitude'). Instead got {}".format(first_cal))
+        second_cal = list(set(cals.keys()).difference(first_cal))[0]
+
+        sweep_offset(mce, cals[first_cal], cal_pts[first_cal])
+        amps1 = np.array([x[1] for x in buff.get_data()])
+        offset1, pts = find_null_offset(cal_pts[first_cal], amps1)
+        logger.info("Found {} offset of {}.".format(first_cal, offset1))
+        getattr(mce, cals[first_cal]).value = offset1
+
+        sweep_offset(mce, cals[second_cal], cal_pts[second_cal])
+        amps2 = np.array([x[1] for x in buff.get_data()])
+        offset2, pts = find_null_offset(cal_pts[second_cal], amps2)
+        logger.info("Found {} offset of {}.".format(second_cal, offset2))
+        getattr(mce, cals[first_cal]).value = offset2
+
+    @staticmethod
     def load_meta_info(experiment, meta_file):
         """If we get a meta_file, modify the configurations accordingly. Enable only instruments
         on the graph that connect the relevant *ReceiverChannel* objects to *Writer* or *Plotter*
