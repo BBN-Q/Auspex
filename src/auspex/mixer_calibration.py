@@ -22,13 +22,17 @@ from auspex.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConn
 
 from JSONLibraryUtils import LibraryCoders
 
-def find_null_offset(xpts, powers):
+def find_null_offset(xpts, powers, default=0.0):
     """Finds the offset corresponding to the minimum power using a fit to the measured data"""
     def model(x, a, b, c):
         return a*(x - b)**2 + c
     powers = np.power(10, powers/10.)
     min_idx = np.argmin(powers)
-    fit = curve_fit(model, xpts, powers, p0=[1, xpts[min_idx], powers[min_idx]])
+    try:
+        fit = curve_fit(model, xpts, powers, p0=[1, xpts[min_idx], powers[min_idx]])
+    except RuntimeError:
+        logger.warning("Mixer null offset fit failed.")
+        return default, np.zeros(len(powers))
     best_offset = np.real(fit[0][1])
     best_offset = np.minimum(best_offset, xpts[-1])
     best_offset = np.maximum(best_offset, xpts[0])
@@ -37,7 +41,7 @@ def find_null_offset(xpts, powers):
 
 class MixerCalibrationExperiment(Experiment):
 
-    SSB_FREQ = 100000000
+    SSB_FREQ = 10e6
 
     amplitude = OutputConnector(unit='dBc')
 
@@ -46,6 +50,7 @@ class MixerCalibrationExperiment(Experiment):
     amplitude_factor = FloatParameter(default=1.0)
     phase_skew = FloatParameter(default=0.0, unit="deg")
 
+    sideband_modulation = False
 
     def __init__(self, qubit, mixer="control"):
         """Initialize MixerCalibrationExperiment Experiment.
@@ -76,18 +81,42 @@ class MixerCalibrationExperiment(Experiment):
         except KeyError as ex:
             raise ValueError("Could not find qubit {} in the qubit configuration file.".format(qubit)) from ex
         self.AWG = self.settings['qubits'][qubit][mixer]['AWG'].split(" ")[0]
+        self.chan = self.settings['qubits'][qubit][mixer]['AWG'].split(" ")[1]
         if self.settings['instruments'][self.AWG]['type'] != 'APS2':
             raise ValueError("Mixer calibration only supported for APS2.")
         self.source = self.settings['qubits'][qubit][mixer]['generator']
+
         self.instruments_to_enable = [self.sa, self.LO, self.AWG, self.source]
         self.instrs_connected = False
         super(MixerCalibrationExperiment, self).__init__()
+
+    def write_to_file(self):
+        awg_settings = self.settings['instruments'][self.AWG]
+        awg_settings['tx_channels'][self.chan]['amp_factor'] = self.amplitude_factor.value
+        awg_settings['tx_channels'][self.chan]['phase_skew'] = self.phase_skew.value
+        awg_settings['tx_channels'][self.chan][self.chan[0]]['offset'] = self.I_offset.value
+        awg_settings['tx_channels'][self.chan][self.chan[1]]['offset'] = self.Q_offset.value
+        self.settings['instruments'][self.AWG] = awg_settings
+        config.yaml_dump(self.settings, config.configFile)
+        logger.info("Mixer calibration for {}-{} written to experiment file.".format(self.AWG, self.chan))
+
+    def _set_mixer_phase(self, phase):
+        self._instruments[self.AWG].set_mixer_phase_skew(phase * np.pi / 180.) #APS expects radians
+
+    def connect_instruments(self):
+        """Extend connect_instruments to reset I,Q offsets and amplitude and phase
+        imbalance."""
+        super(MixerCalibrationExperiment, self).connect_instruments()
+        self._instruments[self.AWG].set_offset(0, 0.0)
+        self._instruments[self.AWG].set_offset(1, 0.0)
+        self._instruments[self.AWG].set_mixer_amplitude_imbalance(0.0)
+        self._instruments[self.AWG].set_mixer_phase_skew(0.0)
 
     def init_instruments(self):
         self.I_offset.assign_method(lambda x: self._instruments[self.AWG].set_offset(0, x))
         self.Q_offset.assign_method(lambda x: self._instruments[self.AWG].set_offset(1, x))
         self.amplitude_factor.assign_method(self._instruments[self.AWG].set_mixer_amplitude_imbalance)
-        self.phase_skew.assign_method(self._instruments[self.AWG].set_mixer_phase_skew)
+        self.phase_skew.assign_method(self._set_mixer_phase)
 
         self.I_offset.add_post_push_hook(lambda: time.sleep(0.1))
         self.Q_offset.add_post_push_hook(lambda: time.sleep(0.1))
@@ -103,9 +132,13 @@ class MixerCalibrationExperiment(Experiment):
 
         #make sure the microwave generators are set up properly
         self._instruments[self.source].output = True
-        self._instruments[self.LO].frequency = self._instruments[self.source].frequency - self._instruments[self.sa].IF_FREQ
+        LO_freq = self._instruments[self.source].frequency - self._instruments[self.sa].IF_FREQ
+        if self.sideband_modulation:
+            LO_freq -= self.SSB_FREQ
+        self._instruments[self.LO].frequency = LO_freq
         self._instruments[self.LO].output = True
         self._setup_awg_ssb()
+        time.sleep(0.1)
 
     def reset_calibration(self):
         try:
