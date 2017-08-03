@@ -379,9 +379,7 @@ class Experiment(metaclass=MetaExperiment):
         self.instrs_connected = False
 
     def run_sweeps(self, keep_instruments_connected = False):
-        if not self.sweeper.axes:
-            logger.info("No sweeps to run.")
-            return
+
         # Propagate the descriptors through the network
         self.update_descriptors()
         # Make sure we are starting from scratch... is this necessary?
@@ -389,6 +387,10 @@ class Experiment(metaclass=MetaExperiment):
         # Update the progress bar if need be
         if self.progressbar is not None:
             self.progressbar.reset()
+
+        #Make sure we have axes.
+        if not any([oc.descriptor.axes for oc in self.output_connectors.values()]):
+            logger.warning("There do not appear to be any axes defined for this experiment!")
 
         #connect all instruments
         self.connect_instruments()
