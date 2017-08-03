@@ -180,9 +180,6 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
               delay: 0.0
     """
 
-    _mode_dict = aps2.run_mode_dict
-    _mode_inv_dict = {v: k for k, v in aps2.run_mode_dict.items()}
-
     def __init__(self, resource_name=None, name="Unlabeled APS2"):
         self.name = name
         self.resource_name = resource_name
@@ -210,6 +207,9 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
 
         self._sequence_filename = None
         self._mode = "RUN_SEQUENCE"
+
+        self._mode_dict = aps2.run_mode_dict
+        self._mode_inv_dict = {v: k for k, v in aps2.run_mode_dict.items()}
 
     def connect(self, resource_name=None):
         if resource_name is None and self.resource_name is None:
