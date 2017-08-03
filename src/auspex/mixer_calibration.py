@@ -24,13 +24,13 @@ from JSONLibraryUtils import LibraryCoders
 def find_null_offset(xpts, powers):
     """Finds the offset corresponding to the minimum power using a fit to the measured data"""
     def model(x, a, b, c):
-        return 10*np.log10(a*(x - b)**2 + c)
+        return a*(x - b)**2 + c
     min_idx = np.argmin(powers)
-    fit = curve_fit(xpts, powers, p0=[1, xpts[min_idx], pow(10, powers[min_idx]/10)])
-    best_offset = np.real(fit[1])
+    fit = curve_fit(model, xpts, powers, p0=[1, xpts[min_idx], powers[min_idx]])
+    best_offset = np.real(fit[0][1])
     best_offset = np.minimum(best_offset, xpts[-1])
     best_offset = np.maximum(best_offset, xpts[0])
-    fit_pts = np.array([np.real(model(x, *fit)) for x in xpts])
+    fit_pts = np.array([np.real(model(x, *fit[0])) for x in xpts])
     return best_offset, fit_pts
 
 class MixerCalibrationExperiment(Experiment):
