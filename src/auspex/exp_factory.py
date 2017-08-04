@@ -54,10 +54,10 @@ class QubitExperiment(Experiment):
         # Swap the master AWG so it is last in the list
         try:
             master_awg_idx = next(ct for ct,awg in enumerate(self.awgs) if 'master' in self.settings['instruments'][awg.name] and self.settings['instruments'][awg.name]['master'])
+            self.awgs[-1], self.awgs[master_awg_idx] = self.awgs[master_awg_idx], self.awgs[-1]
         except:
-            raise ValueError("No AWG is specified as the master.")
-        self.awgs[-1], self.awgs[master_awg_idx] = self.awgs[master_awg_idx], self.awgs[-1]
-
+            logger.warning("No AWG is specified as the master.")
+        
         # attach digitizer stream sockets to output connectors
         for chan, dig in self.chan_to_dig.items():
             socket = dig.get_socket(chan)

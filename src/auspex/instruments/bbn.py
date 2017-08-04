@@ -6,7 +6,7 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-__all__ = ['APS2', 'DigitalAttenuator', 'SpectrumAnaylzer']
+__all__ = ['APS2', 'DigitalAttenuator', 'SpectrumAnalyzer']
 
 from .instrument import Instrument, SCPIInstrument, VisaInterface, MetaInstrument
 from auspex.log import logger
@@ -16,6 +16,7 @@ from unittest.mock import MagicMock
 import auspex.globals
 from time import sleep
 from visa import VisaIOError
+import numpy as np
 
 # Dirty trick to avoid loading libraries when scraping
 # This code using quince.
@@ -90,16 +91,16 @@ class DigitalAttenuator(SCPIInstrument):
     def ch3_attenuation(self, value):
         self.set_attenuation(3, value)
 
-class SpectrumAnaylzer(SCPIInstrument):
+class SpectrumAnalyzer(SCPIInstrument):
     """BBN USB Spectrum Analyzer"""
 
     IF_FREQ = 0.0107 # 10.7 MHz IF notch filter
 
     def __init__(self, resource_name=None, *args, **kwargs):
-        super(SpectrumAnaylzer, self).__init__(resource_name, *args, **kwargs)
+        super(SpectrumAnalyzer, self).__init__(resource_name, *args, **kwargs)
 
     def connect(self, resource_name=None, interface_type=None):
-        super(SpectrumAnaylzer, self).connect(resource_name, interface_type)
+        super(SpectrumAnalyzer, self).connect(resource_name, interface_type)
         self.interface._resource.timeout = 100
         self.interface._resource.baud_rate = 115200
         self.interface._resource.read_termination = u"\r\n"
@@ -191,14 +192,24 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
         self.set_amplitude = self.wrapper.set_channel_scale
         self.set_offset    = self.wrapper.set_channel_offset
         self.set_enabled   = self.wrapper.set_channel_enabled
+        self.set_mixer_phase_skew = self.wrapper.set_mixer_phase_skew
+        self.set_mixer_amplitude_imbalance = self.wrapper.set_mixer_amplitude_imbalance
 
         self.get_amplitude = self.wrapper.get_channel_scale
         self.get_offset    = self.wrapper.get_channel_offset
         self.get_enabled   = self.wrapper.get_channel_enabled
+        self.get_mixer_phase_skew = self.wrapper.get_mixer_phase_skew
+        self.get_mixer_amplitude_imbalance = self.wrapper.get_mixer_amplitude_imbalance
 
         self.run           = self.wrapper.run
         self.stop          = self.wrapper.stop
         self.connected     = False
+
+        self._sequence_filename = None
+        self._mode = "RUN_SEQUENCE"
+
+        self._mode_dict = aps2.run_mode_dict
+        self._mode_inv_dict = {v: k for k, v in aps2.run_mode_dict.items()}
 
     def connect(self, resource_name=None):
         if resource_name is None and self.resource_name is None:
@@ -238,15 +249,61 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
             if not chan_dict:
                 raise ValueError("Could not find channel {} in quadrature channel 12 in settings for {}".format(chan_name, self))
             for chan_attr, value in chan_dict.items():
-                if hasattr(self, 'set_' + chan_attr):
+                try:
                     getattr(self, 'set_' + chan_attr)(chan_num, value)
+                except AttributeError:
+                    pass
+
+    def load_waveform(self, channel, data):
+        if channel not in (1, 2):
+            raise ValueError("Cannot load APS waveform data to channel {} on {} -- must be 1 or 2.".format(channe, self.name))
+        try:
+            if data.dtype == np.int:
+                self.wrapper.set_waveform_int(channel-1, data.astype(np.int16))
+            elif data.dtype == np.float:
+                self.wrapper.set_waveform_float(channel-1, data.astype(np.float32))
+            else:
+                raise ValueError("Channel waveform data must be either int or float. Unknown type {}.".format(data.dtype))
+        except AttributeError as ex:
+            raise ValueError("Channel waveform data must be a numpy array.") from ex
+
+    @property
+    def waveform_frequency(self):
+        return self.wrapper.get_waveform_frequency()
+    @waveform_frequency.setter
+    def waveform_frequency(self, freq):
+        self.wrapper.set_waveform_frequency(freq)
+
+    @property
+    def mixer_correction_matrix(self):
+        return self.wrapper.get_mixer_correction_matrix()
+    @mixer_correction_matrix.setter
+    def mixer_correction_matrix(self, matrix):
+        try:
+            if matrix.shape != (2,2):
+                raise ValueError("Mixer correction matrix must be 2 x 2. Got {} instead.".format(matrix.shape))
+        except AttributeError as ex:
+            raise ValueError("Mixer correction matrix must be a 2 x 2 numpy matrix. Got {} instead".format(matrix))
+        self.wrapper.set_mixer_correction_matrix(matrix)
+
+    @property
+    def run_mode(self):
+        return self._mode
+    @run_mode.setter
+    def run_mode(self, mode):
+        if mode not in self._mode_dict.values():
+            raise ValueError("Unknown run mode {} for APS2 {}. Run mode must be one of {}.".format(mode, self.name, list(self._mode_dict.values())))
+        else:
+            self.wrapper.set_run_mode(self._mode_inv_dict[mode])
+            self._mode = mode
 
     @property
     def seq_file(self):
-        return None
+        return self._sequence_filename
     @seq_file.setter
     def seq_file(self, filename):
         self.wrapper.load_sequence_file(filename)
+        self._sequence_filename = filename
 
     @property
     def trigger_source(self):
@@ -271,3 +328,7 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
     @sampling_rate.setter
     def sampling_rate(self, value):
         self.wrapper.set_sampling_rate(value)
+
+    @property
+    def fpga_temperature(self):
+        return self.wrapper.get_fpga_temperature()

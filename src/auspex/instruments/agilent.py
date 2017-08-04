@@ -312,7 +312,6 @@ class AgilentN5183A(SCPIInstrument):
         self.interface._resource.timeout = 3000 #seem to have trouble timing out on first query sometimes
 
     def set_all(self, settings):
-        settings['frequency'] = settings['frequency']*1e9
         super(AgilentN5183A, self).set_all(settings)
 
 class AgilentE8363C(SCPIInstrument):
