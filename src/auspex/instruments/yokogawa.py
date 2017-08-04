@@ -15,7 +15,7 @@ class YokogawaGS200(SCPIInstrument):
     """YokogawaGS200 Current source"""
     instrument_type = "Current source"
 
-    function           = StringCommand(scpi_string=":source:function",
+    mode               = StringCommand(scpi_string=":source:function",
                           value_map={"current": "CURR", "voltage": "VOLT"})
     level              = FloatCommand(scpi_string=":source:level", aliases=['value'])
     protection_volts   = FloatCommand(scpi_string=":source:protection:voltage")
@@ -29,6 +29,6 @@ class YokogawaGS200(SCPIInstrument):
         super(YokogawaGS200, self).__init__(resource_name, *args, **kwargs)
 
     def connect(self):
-        super(YokogawaGS200, self).connect()
+        super(YokogawaGS200, self).connect(resource_name=self.resource_name)
         self.interface.write(":sense:trigger immediate")
         self.interface._resource.read_termination = "\n"
