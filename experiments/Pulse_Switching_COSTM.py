@@ -11,7 +11,7 @@ from auspex.instruments import Picosecond10070A
 from auspex.instruments import SR865
 # from auspex.instruments import Keithley2400
 from auspex.instruments import AMI430
-from auspex.instruments import Attenuator
+from auspex.instruments import RFMDAttenuator
 
 from PyDAQmx import *
 
@@ -77,7 +77,7 @@ class SwitchingExperiment(Experiment):
     mag   = AMI430("192.168.5.109")
     lock  = SR865("USB0::0xB506::0x2000::002638::INSTR")
     pspl  = Picosecond10070A("GPIB0::24::INSTR")
-    atten = Attenuator("calibration/RFSA2113SB_HPD_20160901.csv", lock.set_ao2, lock.set_ao3)
+    atten = RFMDAttenuator("calibration/RFSA2113SB_HPD_20160901.csv", lock.set_ao2, lock.set_ao3)
     arb   = KeysightM8190A("192.168.5.108")
     # keith = Keithley2400("GPIB0::25::INSTR")
 

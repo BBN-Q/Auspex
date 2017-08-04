@@ -335,12 +335,12 @@ class Experiment(metaclass=MetaExperiment):
                 for oc in self.output_connectors.values():
                     # Obtain the lists of values for any fixed
                     # DataAxes and append them to them to the sweep_values
-                    # in preperation for finding all combinations. 
+                    # in preperation for finding all combinations.
                     vals = [a for a in oc.descriptor.data_axis_values()]
                     if sweep_values:
                         vals  = [[v] for v in sweep_values] + vals
 
-                    # Find all coordinate tuples and update the list of 
+                    # Find all coordinate tuples and update the list of
                     # tuples that the experiment has probed.
                     nested_list    = list(itertools.product(*vals))
                     flattened_list = [tuple((val for sublist in line for val in sublist)) for line in nested_list]
@@ -368,6 +368,7 @@ class Experiment(metaclass=MetaExperiment):
     def connect_instruments(self):
         # Connect the instruments to their resources
         for instrument in self._instruments.values():
+            logger.info(f"Connecting {instrument} with addr {instrument.resource_name}")
             instrument.connect()
 
         # Initialize the instruments and stream

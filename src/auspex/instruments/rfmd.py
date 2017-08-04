@@ -23,8 +23,8 @@ class RFMDAttenuator(object):
     def __init__(self, calibration_file):
         super(RFMDAttenuator, self).__init__()
         self.name = "RFMD VC Attenuator"
-        df = pd.read_csv(calibration_file, sep=",")
-        attenuator_interp = interp1d(df["Attenuation"], df["Control Voltage"])
+        self.df = pd.read_csv(calibration_file, sep=",")
+        attenuator_interp = interp1d(self.df["Attenuation"], self.df["Control Voltage"])
         self.attenuator_lookup = lambda x : float(attenuator_interp(x))
         # if self.voltage_control_method = voltage_control_method
         # voltage_supply_method(3.0)
@@ -34,6 +34,12 @@ class RFMDAttenuator(object):
 
     def set_control_method(self, func):
         self.voltage_control_method = func
+
+    def minimum_atten(self):
+        return np.amin(np.absolute(self.df["Attenuation"]))
+
+    def maximum_atten(self):
+        return np.amax(np.absolute(self.df["Attenuation"]))
 
     # Add a property setter only
     def set_attenuation(self, value):

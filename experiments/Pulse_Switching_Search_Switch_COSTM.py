@@ -39,15 +39,19 @@ class SwitchSearchLockinExperiment(Experiment):
 
     sample = "CSHE2"
     comment = "Search PSPL Switch Voltage"
-    # PARAMETERS: Confirm these before running
+
     field = FloatParameter(default=0.0, unit="T")
     pulse_voltage  = FloatParameter(default=0, unit="V")
     pulse_duration = FloatParameter(default=5.0e-9, unit="s")
-    measure_current = 3e-6
-    time_constant = 30e-6
+
+    # Default values for lockin measurement. These will need to be changed in a notebook to match the MR and switching current of the sample being measured
+    res_reference = 1e3
+    measure_current = 10e-6
+    fdB = 18
+    tc = 100e-3
+
     circuit_attenuation = 20.0
     pspl_base_attenuation = 30.0
-    settle_delay = 100e-6
 
     attempts = 1 << 8 # Number of attemps
     samps_per_trig = 10 # Samples per trigger
@@ -56,7 +60,6 @@ class SwitchSearchLockinExperiment(Experiment):
     arb   = KeysightM8190A("192.168.5.108")
     pspl  = Picosecond10070A("GPIB0::24::INSTR")
     mag   = AMI430("192.168.5.109")
-    # keith = Keithley2400("GPIB0::25::INSTR")
     lock  = SR865("USB0::0xB506::0x2000::002638::INSTR")
     atten = RFMDAttenuator("calibration/RFSA2113SB_HPD_20160901.csv")
 
@@ -67,13 +70,15 @@ class SwitchSearchLockinExperiment(Experiment):
         # ===================
         #    Setup the Lockin
         # ===================
-        self.lock.tc = self.time_constant
+        self.lock.tc = self.tc
+        self.lock.filter_slope = self.fdB
+        self.lock.amp = self.res_reference * self.measure_current
         time.sleep(0.5)
+        # Rescale lockin analogue output for NIDAQ
+        self.lock.r_offset_enable = True
+        self.lock.auto_offset("R")
+        self.lock.r_expand = 10
 
-        # self.keith.triad()
-        # self.keith.conf_meas_res(res_range=1e5)
-        # self.keith.conf_src_curr(comp_voltage=0.5, curr_range=1.0e-5)
-        # self.keith.current = self.measure_current
         self.mag.ramp()
         self.atten.set_supply_method(self.lock.set_ao2)
         self.atten.set_control_method(self.lock.set_ao3)
@@ -96,7 +101,7 @@ class SwitchSearchLockinExperiment(Experiment):
         # ===================
         #   Setup the PSPL
         # ===================
-
+        # PSPL Max amplitude is 7.5 V
         self.pspl.amplitude = 7.5*np.power(10, -self.pspl_base_attenuation/20.0)
         self.pspl.trigger_source = "EXT"
         self.pspl.trigger_level = 0.1
@@ -108,9 +113,15 @@ class SwitchSearchLockinExperiment(Experiment):
             # Calculate the voltage controller attenuator setting
             self.pspl.amplitude = np.sign(voltage)*7.5*np.power(10, -self.pspl_base_attenuation/20.0)
             vc_atten = abs(20.0 * np.log10(abs(voltage)/7.5)) - self.pspl_base_attenuation - self.circuit_attenuation
-            if vc_atten <= 6.0:
-                logger.error("Voltage controlled attenuation under range (6dB).")
-                raise ValueError("Voltage controlled attenuation under range (6dB).")
+
+            if vc_atten <= self.atten.minimum_atten():
+                logger.error("Voltage controlled attenuation {} under range.".format(vc_atten))
+                raise ValueError("Voltage controlled attenuation {} under range.".format(vc_atten))
+
+            if self.atten.maximum_atten() < vc_atten:
+                logger.error("Voltage controlled attenuation {} over range.".format(vc_atten))
+                raise ValueError("Voltage controlled attenuation {} over range.".format(vc_atten))
+
             self.atten.set_attenuation(vc_atten)
             time.sleep(0.02)
 
@@ -137,7 +148,7 @@ class SwitchSearchLockinExperiment(Experiment):
         nidaq_trig_segment_id = self.arb.define_waveform(len(nidaq_trig_wf))
         self.arb.upload_waveform(nidaq_trig_wf, nidaq_trig_segment_id)
 
-        settle_pts = int(640*np.ceil(self.settle_delay * 12e9 / 640))
+        settle_pts = int(640*np.ceil(self.lock.measure_delay() * 12e9 / 640))
         scenario = Scenario()
         seq = Sequence(sequence_loop_ct=int(self.attempts))
         seq.add_waveform(pspl_trig_segment_id)
