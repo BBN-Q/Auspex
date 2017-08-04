@@ -27,5 +27,8 @@ class YokogawaGS200(SCPIInstrument):
 
     def __init__(self, resource_name, *args, **kwargs):
         super(YokogawaGS200, self).__init__(resource_name, *args, **kwargs)
+
+    def connect(self):
+        super(YokogawaGS200, self).connect()
         self.interface.write(":sense:trigger immediate")
         self.interface._resource.read_termination = "\n"
