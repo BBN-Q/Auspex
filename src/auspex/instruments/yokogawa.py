@@ -18,6 +18,7 @@ class YokogawaGS200(SCPIInstrument):
     mode               = StringCommand(scpi_string=":source:function",
                           value_map={"current": "CURR", "voltage": "VOLT"})
     level              = FloatCommand(scpi_string=":source:level", aliases=['value'])
+    output_range       = FloatCommand(scpi_string=":source:range")
     protection_volts   = FloatCommand(scpi_string=":source:protection:voltage")
     protection_current = FloatCommand(scpi_string=":source:protection:current")
     sense              = StringCommand(scpi_string=":sense:state", value_map={True: "1", False: "0"})
