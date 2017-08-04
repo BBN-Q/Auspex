@@ -13,6 +13,7 @@ from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand
 
 class YokogawaGS200(SCPIInstrument):
     """YokogawaGS200 Current source"""
+    instrument_type = "Current source"
 
     function           = StringCommand(scpi_string=":source:function",
                           value_map={"current": "CURR", "voltage": "VOLT"})
