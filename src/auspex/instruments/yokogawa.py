@@ -6,13 +6,13 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-__all__ = ['GS200']
+__all__ = ['YokogawaGS200']
 
 from auspex.log import logger
 from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand
 
-class GS200(SCPIInstrument):
-    """GS200 Current source"""
+class YokogawaGS200(SCPIInstrument):
+    """YokogawaGS200 Current source"""
 
     function           = StringCommand(scpi_string=":source:function",
                           value_map={"current": "CURR", "voltage": "VOLT"})
@@ -25,6 +25,6 @@ class GS200(SCPIInstrument):
     averaging_nplc     = IntCommand(scpi_string=":sense:nplc") # Number of power level cycles (60Hz)
 
     def __init__(self, resource_name, *args, **kwargs):
-        super(GS200, self).__init__(resource_name, *args, **kwargs)
+        super(YokogawaGS200, self).__init__(resource_name, *args, **kwargs)
         self.interface.write(":sense:trigger immediate")
         self.interface._resource.read_termination = "\n"
