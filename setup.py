@@ -1,4 +1,9 @@
+import sys
 from setuptools import setup
+
+# See https://stackoverflow.com/questions/19534896/enforcing-python-version-in-setup-py
+if sys.version_info < (3,6):
+    sys.exit("Sorry, Python < 3.6 is not supported by Auspex.")
 
 setup(
     name='auspex',
