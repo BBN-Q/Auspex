@@ -43,10 +43,7 @@ class PulseCalibration(object):
         self.axis_descriptor = None
         self.plot       = self.init_plot()
         self.cw_mode    = False
-        with open(config.channelLibFile, 'r') as FID:
-            self.chan_settings = json.load(FID)
-        with open(config.instrumentLibFile, 'r') as FID:
-            self.instr_settings = json.load(FID)
+        self.settings = config.yaml_load(config.configFile)
 
     def sequence(self):
         """Returns the sequence for the given calibration, must be overridden"""
@@ -105,11 +102,9 @@ class PulseCalibration(object):
         This function is responsible for calling self.update_plot()"""
         pass
 
-    def update_libraries(self, libraries, filenames):
-        """Update calibrated json libraries"""
-        for library, filename in zip(libraries, filenames):
-            with open(filename, 'w') as FID:
-                json.dump(library, FID, cls=LibraryCoders.LibraryEncoder, indent=2, sort_keys=True)
+    def update_settings(self):
+        """Update calibrated YAML with calibration parameters"""
+        config.yaml_dump(data, config.configFile)
 
 class CavitySearch(PulseCalibration):
     def __init__(self, qubit_name, frequencies=np.linspace(4, 5, 100)):
@@ -122,12 +117,11 @@ class CavitySearch(PulseCalibration):
 
     def calibrate(self):
         #find cavity source from config
-        cavity_source = self.chan_settings['channelDict'][self.chan_settings['channelDict']['M-'+self.qubit_names[0]]['physChan']]['generator']
-        orig_freq = self.instr_settings['instrDict'][cavity_source]['frequency']
+        cavity_source = self.settings['qubits'][self.qubit.label]['measure']['generator']
+        orig_freq = self.settings['instruments'][cavity_source]['frequency']
         instr_to_set = {'instr': cavity_source, 'method': 'set_frequency', 'sweep_values': self.frequencies}
         self.set([instr_to_set])
         data, _ = self.run()
-
         # Plot the results
         self.plot["Data"] = (self.frequencies, data)
 
@@ -148,8 +142,8 @@ class QubitSearch(PulseCalibration):
 
     def calibrate(self):
         #find qubit control source from config
-        qubit_source = self.chan_settings['channelDict'][self.chan_settings['channelDict'][self.qubit_names[0]]['physChan']]['generator']
-        orig_freq = self.instr_settings['instrDict'][qubit_source]['frequency']
+        qubit_source = self.settings['qubits'][self.qubit.label]['control']['generator']
+        orig_freq = self.settings['instruments'][qubit_soruce]['frequency']
         instr_to_set = {'instr': qubit_source, 'method': 'set_frequency', 'sweep_values': self.frequencies}
         self.set([instr_to_set])
         data, _ = self.run()
@@ -192,8 +186,8 @@ class RamseyCalibration(PulseCalibration):
 
     def calibrate(self):
         #find qubit control source (from config)
-        qubit_source = self.chan_settings['channelDict'][self.chan_settings['channelDict'][self.qubit_names[0]]['physChan']]['generator']
-        orig_freq = self.instr_settings['instrDict'][qubit_source]['frequency']
+        qubit_source = self.settings['qubits'][self.qubit.label]['control']['generator']
+        orig_freq = self.settings['instruments'][qubit_soruce]['frequency']
         set_freq = round(orig_freq + self.added_detuning/1e9, 10)
         instr_to_set = {'instr': qubit_source, 'method': 'set_frequency', 'value': set_freq}
         self.set([instr_to_set])
@@ -229,9 +223,10 @@ class RamseyCalibration(PulseCalibration):
         else:
             fit_freq = round(orig_freq + self.added_detuning/1e9 - 0.5*(fit_freq_A - 0.5*fit_freq_A + fit_freq_B)/1e9, 10)
         if self.set_source:
-            self.instr_settings['instrDict'][qubit_source]['frequency'] = fit_freq
-            self.update_libraries([self.instr_settings], [config.instrumentLibFile])
-        else:
+            self.settings['instruments'][qubit_source]['frequency'] = fit_freq
+            self.update_settings()
+        else: #TODO here!
+            self.settings['qubits']
             self.chan_settings['channelDict'][self.qubit_names[0]]['frequency'] += (fit_freq - orig_freq)*1e9
             self.update_libraries([self.chan_settings], [config.channelLibFile])
 
@@ -314,8 +309,8 @@ class PhaseEstimation(PulseCalibration):
         print('Amp',amp)
 
         set_chan = self.qubit_names[0] if len(self.qubit_names) == 1 else ChannelLibrary.EdgeFactory(*self.qubits).label
-        self.chan_settings['channelDict'][set_chan]['pulseParams'][set_amp] = round(amp, 5)
-        self.update_libraries([self.chan_settings], [config.channelLibFile])
+        self.settings['quibts'][set_chan]['pulseParams'][set_amp] = round(amp, 5)
+        self.update_settings()
         return amp
 
 class Pi2Calibration(PhaseEstimation):
@@ -373,8 +368,8 @@ class DRAGCalibration(PulseCalibration):
 
         print("DRAG", opt_drag)
 
-        self.chan_settings['channelDict'][self.qubit_names[0]]['pulseParams']['dragScaling'] = fitted_drag
-        self.update_libraries([self.chan_settings], [config.channelLibFile])
+        self.settings['qubits'][self.qubit_names[0]]['pulseParams']['dragScaling'] = fitted_drag
+        self.update_settings()
 
         return fitted_drag
 
@@ -406,10 +401,10 @@ class CRCalibration(PulseCalibration):
 
         #update CR channel
         CRchan = ChannelLibrary.EdgeFactory(*self.qubits)
-        self.chan_settings['channelDict'][CRchan][str.lower(self.cal_type.name)] = opt_par
-        self.update_libraries([self.chan_settings], [config.channelLibFile])
+        self.settings['edges'][CRchan][str.lower(self.cal_type.name)] = opt_par
+        self.update_settings()
 
-        # Plot the results
+        # Plot the result
         xaxis = self.lengths if self.cal_type==CR_cal_type.LENGTH else self.phases if self.cal_type==CR_cal_type.PHASE else self.amps
         finer_xaxis = np.linspace(np.min(xaxis), np.max(xaxis), 4*len(xaxis))
         self.plot["Data 0"] = (xaxis,       data_t[:len(data_t)/2])
