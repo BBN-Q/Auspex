@@ -93,7 +93,7 @@ class MixerCalibrationExperiment(Experiment):
     def write_to_file(self):
         awg_settings = self.settings['instruments'][self.AWG]
         awg_settings['tx_channels'][self.chan]['amp_factor'] = round(self.amplitude_factor.value, 5)
-        awg_settings['tx_channels'][self.chan]['phase_skew'] = round(self.phase_skew.value, 5)
+        awg_settings['tx_channels'][self.chan]['phase_skew'] = round(self.phase_skew.value * np.pi/180, 5)
         awg_settings['tx_channels'][self.chan][self.chan[0]]['offset'] = round(self.I_offset.value, 5)
         awg_settings['tx_channels'][self.chan][self.chan[1]]['offset'] = round(self.Q_offset.value, 5)
         self.settings['instruments'][self.AWG] = awg_settings
