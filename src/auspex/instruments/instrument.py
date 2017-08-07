@@ -245,7 +245,6 @@ class SCPIInstrument(Instrument):
                     # assume single NIC for now
                     self.full_resource_name = "TCPIP0::" + self.full_resource_name
                 self.interface = VisaInterface(self.full_resource_name)
-                print(self.interface._resource)
                 logger.debug("A pyVISA interface {} was created for instrument {}.".format(str(self.interface._resource), self.name))
             elif interface_type == "Prologix":
                 self.interface = PrologixInterface(self.full_resource_name)

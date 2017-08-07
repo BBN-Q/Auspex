@@ -35,6 +35,7 @@ class DigitalAttenuator(SCPIInstrument):
     """BBN 3 Channel Instrument"""
 
     NUM_CHANNELS = 3
+    instrument_type = 'Attenuator'
 
     def __init__(self, resource_name=None, name='Unlabeled Digital Attenuator'):
         super(DigitalAttenuator, self).__init__(resource_name=resource_name,
@@ -48,12 +49,14 @@ class DigitalAttenuator(SCPIInstrument):
         self.interface._resource.baud_rate = 115200
         self.interface._resource.read_termination = u"\r\n"
         self.interface._resource.write_termination = u"\n"
+        self.interface._resource.timeout = 1000
         #Override query to look for ``end``
         def query(self, query_string):
             val = self._resource.query(query_string)
             assert self.read() == "END"
             return val
         self.interface.query = MethodType(query, self.interface)
+        sleep(2) #!!! Why is the digital attenuator so slow?
 
     @classmethod
     def channel_check(cls, chan):
