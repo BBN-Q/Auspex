@@ -11,7 +11,10 @@
 import json
 import os.path
 import sys
-import ruamel.yaml as yaml
+try:
+    import ruamel.yaml as yaml
+except:
+    import yuamel_yaml as yaml
 
 # Run this code by importing config.py
 # Load the configuration from the json file and populate the global configuration dictionary
