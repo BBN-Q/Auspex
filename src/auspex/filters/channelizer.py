@@ -78,7 +78,7 @@ class Channelizer(Filter):
             self.demod_freqs  = (self.sink.descriptor.expected_tuples(with_metadata=True, as_structured_array=True)[self.follow_axis.value] - self.follow_freq_offset.value)
             self.current_freq = 0
             self.update_references(self.current_freq)
-            self.idx = 0
+        self.idx = 0
 
 
     def update_references(self, frequency):
@@ -86,6 +86,7 @@ class Channelizer(Filter):
         # phase_drift = 2j*np.pi*0.5e-6 * (abs(frequency) - 100e6)
         ref = np.exp(2j*np.pi * -frequency * self.time_pts[::self.d1] + 1j*self._phase, dtype=np.complex64)
 
+        self.reference   = ref
         self.reference_r = np.real(ref)
         self.reference_i = np.imag(ref)
 
@@ -182,7 +183,7 @@ class Channelizer(Filter):
         # TODO: handle partial records
         num_records = data.size // self.record_length
         reshaped_data = np.reshape(data, (num_records, self.record_length), order="C")
-        
+
         # Update frequency if necessary
         if self.follow_axis.value is not "":
             freq = self.demod_freqs[self.idx+1]
@@ -202,17 +203,33 @@ class Channelizer(Filter):
         else:
             stacked_coeffs = np.concatenate(self.filters[0])
             # filter
-            filtered = np.empty_like(reshaped_data)
-            libipp.filter_records_iir(stacked_coeffs, self.filters[0][0].size-1, reshaped_data, self.record_length, num_records, filtered)
+            if np.iscomplexobj(reshaped_data):
+                # TODO: compile complex versions of the IPP functions
+                filtered_r = np.empty_like(reshaped_data, dtype=np.float32)
+                filtered_i = np.empty_like(reshaped_data, dtype=np.float32)
+                libipp.filter_records_iir(stacked_coeffs, self.filters[0][0].size-1, np.ascontiguousarray(reshaped_data.real.astype(np.float32)), self.record_length, num_records, filtered_r)
+                libipp.filter_records_iir(stacked_coeffs, self.filters[0][0].size-1, np.ascontiguousarray(reshaped_data.imag.astype(np.float32)), self.record_length, num_records, filtered_i)
+                filtered = filtered_r + 1j*filtered_i
+                # decimate
+                if self.decim_factors[0] > 1:
+                    filtered = filtered[:, ::self.decim_factors[0]]
+            else:
+                filtered = np.empty_like(reshaped_data)
+                libipp.filter_records_iir(stacked_coeffs, self.filters[0][0].size-1, reshaped_data, self.record_length, num_records, filtered)
 
-            # decimate
-            if self.decim_factors[0] > 1:
-                filtered = filtered[:, ::self.decim_factors[0]]
+                # decimate
+                if self.decim_factors[0] > 1:
+                    filtered = filtered[:, ::self.decim_factors[0]]
 
         # mix with reference
         # keep real and imaginary separate for filtering below
-        filtered_r = self.reference_r * filtered
-        filtered_i = self.reference_i * filtered
+        if np.iscomplexobj(reshaped_data):
+            filtered *= self.reference
+            filtered_r = filtered.real
+            filtered_i = filtered.imag
+        else:
+            filtered_r = self.reference_r * filtered
+            filtered_i = self.reference_i * filtered
 
         # import pdb; pdb.set_trace()
         # if plot_me:
@@ -230,8 +247,8 @@ class Channelizer(Filter):
             stacked_coeffs = np.concatenate(self.filters[ct])
             out_r = np.empty_like(filtered_r)
             out_i = np.empty_like(filtered_i)
-            libipp.filter_records_iir(stacked_coeffs, self.filters[ct][0].size-1, filtered_r, filtered_r.shape[-1], num_records, out_r)
-            libipp.filter_records_iir(stacked_coeffs, self.filters[ct][0].size-1, filtered_i, filtered_i.shape[-1], num_records, out_i)
+            libipp.filter_records_iir(stacked_coeffs, self.filters[ct][0].size-1, np.ascontiguousarray(filtered_r.astype(np.float32)), filtered_r.shape[-1], num_records, out_r)
+            libipp.filter_records_iir(stacked_coeffs, self.filters[ct][0].size-1, np.ascontiguousarray(filtered_i.astype(np.float32)), filtered_i.shape[-1], num_records, out_i)
 
             # decimate
             if self.decim_factors[ct] > 1:
