@@ -451,6 +451,9 @@ class QubitExpFactory(object):
                 setattr(experiment, name, param)
                 experiment._parameters[name] = param
 
+                # We might need to return a custom function rather than just a method_name
+                method = None
+
                 # Figure our what we are sweeping
                 target_info = par["target"].split()
                 if target_info[0] in experiment.qubits:
@@ -464,9 +467,14 @@ class QubitExpFactory(object):
                         instr = experiment._instruments[name]
                         method_name = 'set_' + prop.lower()
                     else:
-                        name, chan = experiment.settings['qubits'][meas_or_control]['AWG']
+                        # Construct a function that sets a per-channel property
+                        name, chan = qubit[meas_or_control]['AWG'].split()
                         instr = experiment._instruments[name]
-                        method_name = "set_{}_{}".format(chan, prop.lower())
+                        method_name = "set_{}".format(prop.lower())
+                        
+                        def method(value, channel=chan, instr=instr, prop=prop.lower()):
+                            # e.g. keysight.set_amplitude("ch1", 0.5)
+                            getattr(instr, "set_"+prop)(chan, value)
                         
                 elif target_info[0] in experiment._instruments:
                     # We are sweeping an instrument directly
@@ -484,11 +492,16 @@ class QubitExpFactory(object):
                 elif "step" in par:
                     points = np.arange(par['start'], par['stop'], par['step'])
 
-                if hasattr(instr, method_name):
-                    param.assign_method(getattr(instr, method_name)) # Couple the parameter to the instrument
-                    experiment.add_sweep(param, points) # Create the requested sweep on this parameter
+                if method:
+                    # Custom method
+                    param.assign_method(method)
                 else:
-                    raise ValueError("The instrument {} has no method set_{}".format(name, par['type'].lower()))
+                    # Get method by name
+                    if hasattr(instr, method_name):
+                        param.assign_method(getattr(instr, method_name)) # Couple the parameter to the instrument
+                    else:
+                        raise ValueError("The instrument {} has no method {}".format(name, method_name))
+                experiment.add_sweep(param, points) # Create the requested sweep on this parameter
 
     @staticmethod
     def load_filters(experiment):
