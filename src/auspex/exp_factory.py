@@ -224,7 +224,7 @@ class QubitExpFactory(object):
         sweep_offset(mce, "I_offset", offset_pts)
         I2_amps = np.array([x[1] for x in buff.get_data()])
         I2_offset, pts = find_null_offset(offset_pts, I2_amps)
-        logger.info("Found second pass I offset of {}.".format(I1_offset))
+        logger.info("Found second pass I offset of {}.".format(I2_offset))
         mce.I_offset.value = I2_offset
 
         #this is a bit hacky but OK...
