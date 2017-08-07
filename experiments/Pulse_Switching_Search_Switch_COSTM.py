@@ -202,9 +202,8 @@ class SwitchSearchLockinExperiment(Experiment):
             logger.warning("Warning failed to stop task, which is quite typical (!)")
 
         self.arb.stop()
-        # self.keith.current = 0.0
-        # self.mag.zero()
         self.pspl.output = False
+        self.lock.amp = 0
 
 if __name__=='__main__':
     exp = SwitchSearchLockinExperiment()

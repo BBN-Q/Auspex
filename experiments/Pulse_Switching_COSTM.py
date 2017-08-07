@@ -9,7 +9,6 @@
 from auspex.instruments import KeysightM8190A, Scenario, Sequence
 from auspex.instruments import Picosecond10070A
 from auspex.instruments import SR865
-# from auspex.instruments import Keithley2400
 from auspex.instruments import AMI430
 from auspex.instruments import RFMDAttenuator
 
@@ -61,25 +60,28 @@ class SwitchingExperiment(Experiment):
 
     # Constants (set with attribute access if you want to change these!)
     attempts        = 1 << 9
-    settle_delay    = 100e-6
-    measure_current = 3.0e-6
     samps_per_trig  = 15
     polarity        = 1
-    pspl_atten      = 4
+    pspl_base_atten  = 4
     min_daq_voltage = -1
     max_daq_voltage = 1
     reset_amplitude = 0.2
     reset_duration  = 5.0e-9
     circuit_attenuation = 20.0
-    tc = 300e-6
+
+    # Default values for lockin measurement. These will need to be changed in a notebook to match the MR and switching current of the sample being measured
+    res_reference = 1e3
+    measure_current = 10e-6
+    fdB = 18
+    tc = 100e-3
 
     # Instrument Resources
     mag   = AMI430("192.168.5.109")
     lock  = SR865("USB0::0xB506::0x2000::002638::INSTR")
     pspl  = Picosecond10070A("GPIB0::24::INSTR")
-    atten = RFMDAttenuator("calibration/RFSA2113SB_HPD_20160901.csv", lock.set_ao2, lock.set_ao3)
+    atten = RFMDAttenuator("calibration/RFSA2113SB_HPD_20160901.csv")
     arb   = KeysightM8190A("192.168.5.108")
-    # keith = Keithley2400("GPIB0::25::INSTR")
+
 
     def init_streams(self):
         descrip = DataStreamDescriptor()
@@ -90,14 +92,21 @@ class SwitchingExperiment(Experiment):
         self.voltage.set_descriptor(descrip)
 
     def init_instruments(self):
+        # ===================
+        #    Setup the Lockin
+        # ===================
         self.lock.tc = self.tc
+        self.lock.filter_slope = self.fdB
+        self.lock.amp = self.res_reference * self.measure_current
+        time.sleep(0.5)
+        # Rescale lockin analogue output for NIDAQ
+        self.lock.r_offset_enable = True
+        self.lock.auto_offset("R")
+        self.lock.r_expand = 10
 
-        # Setup the Keithley
-        # self.keith.triad()
-        # self.keith.conf_meas_res(res_range=1e5)
-        # self.keith.conf_src_curr(comp_voltage=0.5, curr_range=1.0e-5)
-        # self.keith.current = self.measure_current
         self.mag.ramp()
+        self.atten.set_supply_method(self.lock.set_ao2)
+        self.atten.set_control_method(self.lock.set_ao3)
 
         # Setup the AWG
         self.arb.set_output(True, channel=1)
@@ -129,11 +138,6 @@ class SwitchingExperiment(Experiment):
         rst_segment_id  = self.arb.define_waveform(len(wf_data))
         self.arb.upload_waveform(wf_data, rst_segment_id)
 
-        # no_reset_wf = arb_pulse(0.0, 3.0/12e9)
-        # wf_data     = KeysightM8190A.create_binary_wf_data(no_reset_wf)
-        # no_rst_segment_id  = self.arb.define_waveform(len(wf_data))
-        # self.arb.upload_waveform(wf_data, no_rst_segment_id)
-
         # Picosecond trigger waveform
         pspl_trig_wf = KeysightM8190A.create_binary_wf_data(np.zeros(3200), samp_mkr=1)
         pspl_trig_segment_id = self.arb.define_waveform(len(pspl_trig_wf))
@@ -144,7 +148,7 @@ class SwitchingExperiment(Experiment):
         nidaq_trig_segment_id = self.arb.define_waveform(len(nidaq_trig_wf))
         self.arb.upload_waveform(nidaq_trig_wf, nidaq_trig_segment_id)
 
-        settle_pts = int(640*np.ceil(self.settle_delay * 12e9 / 640))
+        settle_pts = int(640*np.ceil(self.lock.measure_delay() * 12e9 / 640))
 
         scenario = Scenario()
         seq = Sequence(sequence_loop_ct=int(self.attempts))
@@ -177,16 +181,24 @@ class SwitchingExperiment(Experiment):
         self.analog_input.StartTask()
 
         # Setup the PSPL
-        self.pspl.amplitude = self.polarity*7.5*np.power(10, (-self.pspl_atten)/20.0)
+        self.pspl.amplitude = self.polarity*7.5*np.power(10, (-self.pspl_base_atten)/20.0)
         self.pspl.trigger_source = "EXT"
         self.pspl.trigger_level = 0.1
         self.pspl.output = True
 
         def set_voltage(voltage):
             # Calculate the voltage controller attenuator setting
-            vc_atten = abs(20.0 * np.log10(abs(voltage)/7.5)) - self.pspl_atten - self.circuit_attenuation
-            if vc_atten <= 6.0:
-                raise ValueError("Voltage controlled attenuation under range (6dB).")
+            self.pspl.amplitude = np.sign(voltage)*7.5*np.power(10, -self.pspl_base_attenuation/20.0)
+            vc_atten = abs(20.0 * np.log10(abs(voltage)/7.5)) - self.pspl_base_attenuation - self.circuit_attenuation
+
+            if vc_atten <= self.atten.minimum_atten():
+                logger.error("Voltage controlled attenuation {} under range.".format(vc_atten))
+                raise ValueError("Voltage controlled attenuation {} under range.".format(vc_atten))
+
+            if self.atten.maximum_atten() < vc_atten:
+                logger.error("Voltage controlled attenuation {} over range.".format(vc_atten))
+                raise ValueError("Voltage controlled attenuation {} over range.".format(vc_atten))
+
             self.atten.set_attenuation(vc_atten)
             time.sleep(0.02)
 
@@ -211,15 +223,15 @@ class SwitchingExperiment(Experiment):
         logger.debug("Stream has filled {} of {} points".format(self.voltage.points_taken, self.voltage.num_points() ))
 
     def shutdown_instruments(self):
-        # self.keith.current = 0.0e-5
-        # self.mag.zero()
-        self.arb.stop()
-        self.pspl.output = False
         try:
             self.analog_input.StopTask()
         except Exception as e:
             print("Warning: failed to stop task (this normally happens with no consequences when taking multiple samples per trigger).")
             pass
+
+        self.arb.stop()
+        self.pspl.output = False
+        self.lock.amp = 0
 
 if __name__ == '__main__':
 

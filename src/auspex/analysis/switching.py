@@ -19,7 +19,7 @@ from auspex.log import logger
 
 def load_switching_data(filename_or_fileobject, start_state=None, group="main", failure=False, threshold=None,
                         voltage_scale_factor=1.0, duration_scale_factor=1.0, data_name='voltage', data_filter=None):
-    data, desc = load_from_HDF5(filename_or_fileobject)
+    data, desc = load_from_HDF5(filename_or_fileobject, reshape=False)
     # Regular axes
     states = desc[group].axis("state").points
     reps   = desc[group].axis("attempt").points

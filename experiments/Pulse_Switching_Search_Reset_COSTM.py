@@ -193,11 +193,9 @@ class ResetSearchLockinExperiment(Experiment):
         except Exception as e:
             logger.warning("Warning failed to stop task. This is typical.")
             pass
+
         self.arb.stop()
-        # self.keith.current = 0.0
-        self.mag.disconnect()
-        # del self.mag
-        # mag.zero()
+        self.lock.amp = 0
 
 if __name__ == "__main__":
     sample_name = "CSHE-Die7-C6R7"
