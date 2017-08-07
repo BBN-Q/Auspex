@@ -207,8 +207,8 @@ class Channelizer(Filter):
                 # TODO: compile complex versions of the IPP functions
                 filtered_r = np.empty_like(reshaped_data, dtype=np.float32)
                 filtered_i = np.empty_like(reshaped_data, dtype=np.float32)
-                libipp.filter_records_iir(stacked_coeffs, self.filters[0][0].size-1, reshaped_data.real, self.record_length, num_records, filtered_r)
-                libipp.filter_records_iir(stacked_coeffs, self.filters[0][0].size-1, reshaped_data.imag, self.record_length, num_records, filtered_i)
+                libipp.filter_records_iir(stacked_coeffs, self.filters[0][0].size-1, np.ascontiguousarray(reshaped_data.real.astype(np.float32)), self.record_length, num_records, filtered_r)
+                libipp.filter_records_iir(stacked_coeffs, self.filters[0][0].size-1, np.ascontiguousarray(reshaped_data.imag.astype(np.float32)), self.record_length, num_records, filtered_i)
                 filtered = filtered_r + 1j*filtered_i
                 # decimate
                 if self.decim_factors[0] > 1:
@@ -247,8 +247,8 @@ class Channelizer(Filter):
             stacked_coeffs = np.concatenate(self.filters[ct])
             out_r = np.empty_like(filtered_r)
             out_i = np.empty_like(filtered_i)
-            libipp.filter_records_iir(stacked_coeffs, self.filters[ct][0].size-1, filtered_r, filtered_r.shape[-1], num_records, out_r)
-            libipp.filter_records_iir(stacked_coeffs, self.filters[ct][0].size-1, filtered_i, filtered_i.shape[-1], num_records, out_i)
+            libipp.filter_records_iir(stacked_coeffs, self.filters[ct][0].size-1, np.ascontiguousarray(filtered_r.astype(np.float32)), filtered_r.shape[-1], num_records, out_r)
+            libipp.filter_records_iir(stacked_coeffs, self.filters[ct][0].size-1, np.ascontiguousarray(filtered_i.astype(np.float32)), filtered_i.shape[-1], num_records, out_i)
 
             # decimate
             if self.decim_factors[ct] > 1:
