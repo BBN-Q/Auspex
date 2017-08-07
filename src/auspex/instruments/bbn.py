@@ -34,7 +34,7 @@ else:
 
 class DigitalAttenuator(SCPIInstrument):
     """BBN 3 Channel Instrument"""
-
+    instrument_type = "Digital attenuator"
     NUM_CHANNELS = 3
 
     def __init__(self, resource_name=None, name='Unlabeled Digital Attenuator'):
@@ -94,7 +94,7 @@ class DigitalAttenuator(SCPIInstrument):
 
 class SpectrumAnalyzer(SCPIInstrument):
     """BBN USB Spectrum Analyzer"""
-
+    instrument_type = "Spectrum analyzer"
     IF_FREQ = 0.0107e9 # 10.7 MHz IF notch filter
 
     def __init__(self, resource_name=None, *args, **kwargs):
