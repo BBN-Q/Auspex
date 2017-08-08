@@ -34,7 +34,7 @@ def calibrate(calibrations):
 
 class PulseCalibration(object):
     """Base class for calibration of qubit control pulses."""
-    def __init__(self, qubit_names):
+    def __init__(self, qubit_names, quad="real"):
         super(PulseCalibration, self).__init__()
         self.qubit_names = qubit_names if isinstance(qubit_names, list) else [qubit_names]
         self.qubit     = [QubitFactory(qubit_name) for qubit_name in qubit_names] if isinstance(qubit_names, list) else QubitFactory(qubit_names)
@@ -44,6 +44,18 @@ class PulseCalibration(object):
         self.plot       = self.init_plot()
         self.cw_mode    = False
         self.settings = config.yaml_load(config.configFile)
+        self.quad = quad
+        if quad == "real":
+            self.quad_fun = np.real
+        elif quad == "imag":
+            self.quad_fun = np.imag
+        elif quad == "amp":
+            self.quad_fun = np.abs
+        elif quad == "phase":
+            self.quad_fun = np.angle
+        else:
+            raise ValueError('Quadrature to calibrate must be one of ("real", "imag", "amp", "phase"]).')
+
 
     def sequence(self):
         """Returns the sequence for the given calibration, must be overridden"""
@@ -79,7 +91,7 @@ class PulseCalibration(object):
         for buff in self.exp.buffers:
             if self.exp.writer_to_qubit[buff.name] in self.qubit_names:
                 dataset, descriptor = buff.get_data(), buff.get_descriptor()
-                data[self.exp.writer_to_qubit[buff.name]] = np.real(dataset['Data'])
+                data[self.exp.writer_to_qubit[buff.name]] = self.quad_fun(dataset['Data'])
                 if 'Variance' in dataset.dtype.names:
                     var[self.exp.writer_to_qubit[buff.name]] = dataset['Variance']/descriptor.metadata["num_averages"]
                 else:
@@ -107,8 +119,8 @@ class PulseCalibration(object):
         config.yaml_dump(data, config.configFile)
 
 class CavitySearch(PulseCalibration):
-    def __init__(self, qubit_name, frequencies=np.linspace(4, 5, 100)):
-        super(CavitySearch, self).__init__(qubit_name)
+    def __init__(self, qubit_name, frequencies=np.linspace(4, 5, 100), **kwargs):
+        super(CavitySearch, self).__init__(qubit_name, **kwargs)
         self.frequencies = frequencies
         self.cw_mode = True
 
@@ -132,8 +144,8 @@ class CavitySearch(PulseCalibration):
         return plot
 
 class QubitSearch(PulseCalibration):
-    def __init__(self, qubit_name, frequencies=np.linspace(4, 5, 100)):
-        super(QubitSearch, self).__init__(qubit_name)
+    def __init__(self, qubit_name, frequencies=np.linspace(4, 5, 100), **kwargs):
+        super(QubitSearch, self).__init__(qubit_name, **kwargs)
         self.frequencies = frequencies
         self.cw_mode = True
 
@@ -159,8 +171,8 @@ class QubitSearch(PulseCalibration):
 
 class RabiAmpCalibration(PulseCalibration):
 
-    def __init__(self, qubit_name, num_steps = 40):
-        super(RabiAmpCalibration, self).__init__(qubit_name)
+    def __init__(self, qubit_name, num_steps = 40, **kwargs):
+        super(RabiAmpCalibration, self).__init__(qubit_name, **kwargs)
         if num_steps % 2 != 0:
             raise ValueError("Number of steps for RabiAmp calibration must be even!")
         self.num_steps = num_steps
@@ -173,22 +185,20 @@ class RabiAmpCalibration(PulseCalibration):
 
     def calibrate(self):
         data, _ = self.run()
-        piI, offI, fitI = fit_rabi(self.amps, data[0:N//2-1])
-        piQ, offQ, fitQ = fit_rabi(self.amps, data[N//2:-1])
+        N = len(data)
+        piI, offI, fitI = fit_rabi(self.amps, data[0:N//2])
+        piQ, offQ, fitQ = fit_rabi(self.amps, data[N//2-1:-1])
         #Arbitary extra division by two so that it doesn't push the offset too far.
         amp2offset = 0.5
-
         self.pi_amp = piI
         self.pi2_amp = piI/2
         self.i_offset = offI*amp2offset
         self.q_offset = offQ*amp2offset
-
         logger.info(f"Found X180 amplitude: {self.pi_amp}")
         logger.info(f"Shifting I offset by: {self.i_offset}")
         logger.info(f"Shifting Q offset by: {self.q_offset}")
-
-        self.plot["I Data"] = (self.amps, data[0:N//2-1])
-        self.plot["Q Data"] = (self.amps, data[N//2:-1])
+        self.plot["I Data"] = (self.amps, data[0:N//2])
+        self.plot["Q Data"] = (self.amps, data[N//2-1:-1])
         self.plot["I Fit"] = (self.amps, fitI)
         self.plot["Q Fit"] = (self.amps, fitQ)
 
