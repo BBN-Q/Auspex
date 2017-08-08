@@ -10,6 +10,7 @@ from QGL import *
 from QGL import config as QGLconfig
 # from QGL.BasicSequences.helpers import create_cal_seqs, time_descriptor, cal_descriptor
 import auspex.config as config
+from auspex.log import logger
 from copy import copy
 import os
 import json
@@ -21,14 +22,13 @@ from auspex.filters.plot import ManualPlotter
 from auspex.analysis.fits import *
 from auspex.analysis.helpers import normalize_data
 
-from JSONLibraryUtils import LibraryCoders
-
 def calibrate(calibrations):
     """Takes in a qubit (as a string) and list of calibrations (as instantiated classes).
     e.g. calibrate_pulses([RabiAmp("q1"), PhaseEstimation("q1")])"""
     for calibration in calibrations:
         if not isinstance(calibration, PulseCalibration):
             raise TypeError("calibrate_pulses was passed a calibration that is not actually a calibration.")
+        calibration.set()
         calibration.calibrate()
         calibration.exp.plot_server.stop()
 
@@ -158,12 +158,47 @@ class QubitSearch(PulseCalibration):
         return plot
 
 class RabiAmpCalibration(PulseCalibration):
-    def __init__(self, qubit_name, amps=np.linspace(0.0, 1.0, 51)):
+
+    def __init__(self, qubit_name, num_steps = 40):
         super(RabiAmpCalibration, self).__init__(qubit_name)
-        self.amps = amps
+        if num_steps % 2 != 0:
+            raise ValueError("Number of steps for RabiAmp calibration must be even!")
+        self.num_steps = num_steps
+        self.amps = np.hstack((np.arange(-1, 0, 2./num_steps),
+                            np.arange(2./num_steps, 1+2./num_steps, 2./num_steps)))
 
     def sequence(self):
-        return [[Xtheta(self.qubit, amp=a), MEAS(self.qubit)] for a in self.amps]
+        return ([[Xtheta(self.qubit, amp=a), MEAS(self.qubit)] for a in self.amps] +
+            [[Ytheta(self.qubit, amp=a), MEAS(self.qubit)] for a in self.amps])
+
+    def calibrate(self):
+        data, _ = self.run()
+        piI, offI, fitI = fit_rabi(self.amps, data[0:N//2-1])
+        piQ, offQ, fitQ = fit_rabi(self.amps, data[N//2:-1])
+        #Arbitary extra division by two so that it doesn't push the offset too far.
+        amp2offset = 0.5
+
+        self.pi_amp = piI
+        self.pi2_amp = piI/2
+        self.i_offset = offI*amp2offset
+        self.q_offset = offQ*amp2offset
+
+        logger.info(f"Found X180 amplitude: {self.pi_amp}")
+        logger.info(f"Shifting I offset by: {self.i_offset}")
+        logger.info(f"Shifting Q offset by: {self.q_offset}")
+
+        self.plot["I Data"] = (self.amps, data[0:N//2-1])
+        self.plot["Q Data"] = (self.amps, data[N//2:-1])
+        self.plot["I Fit"] = (self.amps, fitI)
+        self.plot["Q Fit"] = (self.amps, fitQ)
+
+    def init_plot(self):
+        plot = ManualPlotter("Rabi Amplitude Cal", x_label="I/Q Amplitude", y_label="Amplitude (Arb. Units)")
+        plot.add_data_trace("I Data")
+        plot.add_data_trace("Q Data")
+        plot.add_fit_trace("I Fit")
+        plot.add_fit_trace("Q Fit")
+        return plot
 
 class RamseyCalibration(PulseCalibration):
     def __init__(self, qubit_name, delays=np.linspace(0.0, 50.0, 51)*1e-6, two_freqs = False, added_detuning = 150e3, set_source = True):
