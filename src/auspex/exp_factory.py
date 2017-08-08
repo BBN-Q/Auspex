@@ -247,7 +247,7 @@ class QubitExpFactory(object):
                     # Find endpoints which are enabled writers
                     writers += [e for e in endpoints if filters[e]["type"] == "WriteToHDF5" and (not hasattr(filters[e], "enabled") or filters[e]["enabled"])]
                     plotters += [e for e in endpoints if filters[e]["type"] == "Plotter" and (not hasattr(filters[e], "enabled") or filters[e]["enabled"])]
-            
+            filt_to_enable.extend(set().union(writers, plotters))
             if calibration:
                 # For calibrations the user should only have one writer enabled, otherwise we will be confused.
                 if len(writers) > 1:
@@ -297,7 +297,7 @@ class QubitExpFactory(object):
                 else:
                     plotter_ancestors = []
 
-                filt_to_enable.extend(set().union(writers, useful_output_filter_ancestors, plotters, plotter_ancestors))
+                filt_to_enable.extend(set().union(useful_output_filter_ancestors, plotter_ancestors))
 
         if calibration:
             # One to one writers to qubits
