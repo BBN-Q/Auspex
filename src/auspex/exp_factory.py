@@ -247,7 +247,7 @@ class QubitExpFactory(object):
                     # Find endpoints which are enabled writers
                     writers += [e for e in endpoints if filters[e]["type"] == "WriteToHDF5" and (not hasattr(filters[e], "enabled") or filters[e]["enabled"])]
                     plotters += [e for e in endpoints if filters[e]["type"] == "Plotter" and (not hasattr(filters[e], "enabled") or filters[e]["enabled"])]
-            
+            filt_to_enable.extend(set().union(writers, plotters))
             if calibration:
                 # For calibrations the user should only have one writer enabled, otherwise we will be confused.
                 if len(writers) > 1:
@@ -297,7 +297,7 @@ class QubitExpFactory(object):
                 else:
                     plotter_ancestors = []
 
-                filt_to_enable.extend(set().union(writers, useful_output_filter_ancestors, plotters, plotter_ancestors))
+                filt_to_enable.extend(set().union(useful_output_filter_ancestors, plotter_ancestors))
 
         if calibration:
             # One to one writers to qubits
@@ -451,22 +451,30 @@ class QubitExpFactory(object):
                 setattr(experiment, name, param)
                 experiment._parameters[name] = param
 
+                # We might need to return a custom function rather than just a method_name
+                method = None
+
                 # Figure our what we are sweeping
                 target_info = par["target"].split()
                 if target_info[0] in experiment.qubits:
                     # We are sweeping a qubit, so we must lookup the instrument
                     name, meas_or_control, prop = par["target"].split()
                     qubit = qubits[name]
+                    method_name = "set_{}".format(prop.lower())
 
-                    # We should allow for either mixed up signals or direct synthesis
-                    if 'generator' in qubit[meas_or_control]:
+                    # If sweeping frequency, we should allow for either mixed up signals or direct synthesis.
+                    # Sweeping power is always through the AWG channels.
+                    if 'generator' in qubit[meas_or_control] and prop.lower() == "frequency":
                         name = qubit[meas_or_control]['generator']
                         instr = experiment._instruments[name]
-                        method_name = 'set_' + prop.lower()
                     else:
-                        name, chan = experiment.settings['qubits'][meas_or_control]['AWG']
+                        # Construct a function that sets a per-channel property
+                        name, chan = qubit[meas_or_control]['AWG'].split()
                         instr = experiment._instruments[name]
-                        method_name = "set_{}_{}".format(chan, prop.lower())
+                        
+                        def method(value, channel=chan, instr=instr, prop=prop.lower()):
+                            # e.g. keysight.set_amplitude("ch1", 0.5)
+                            getattr(instr, "set_"+prop)(chan, value)
                         
                 elif target_info[0] in experiment._instruments:
                     # We are sweeping an instrument directly
@@ -484,11 +492,16 @@ class QubitExpFactory(object):
                 elif "step" in par:
                     points = np.arange(par['start'], par['stop'], par['step'])
 
-                if hasattr(instr, method_name):
-                    param.assign_method(getattr(instr, method_name)) # Couple the parameter to the instrument
-                    experiment.add_sweep(param, points) # Create the requested sweep on this parameter
+                if method:
+                    # Custom method
+                    param.assign_method(method)
                 else:
-                    raise ValueError("The instrument {} has no method set_{}".format(name, par['type'].lower()))
+                    # Get method by name
+                    if hasattr(instr, method_name):
+                        param.assign_method(getattr(instr, method_name)) # Couple the parameter to the instrument
+                    else:
+                        raise ValueError("The instrument {} has no method {}".format(name, method_name))
+                experiment.add_sweep(param, points) # Create the requested sweep on this parameter
 
     @staticmethod
     def load_filters(experiment):
@@ -521,7 +534,7 @@ class QubitExpFactory(object):
         # Find out which output connectors we need to create
         # ==================================================
 
-        # Get the enabled measurements, or those which aren't explicitlu 
+        # Get the enabled measurements, or those which aren't explicitly
         enabled_meas = {k: v for k, v in experiment.settings['filters'].items() if 'enabled' not in v or v['enabled'] }
 
         # First look for digitizer streams (Alazar or X6)
