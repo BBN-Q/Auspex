@@ -39,6 +39,8 @@ class Include():
     def write(self):
         with open(self.filename, 'w') as fid:
             yaml.dump(self.data, fid, Dumper=yaml.RoundTripDumper)
+    def pop(self, key):
+        return self.data.pop(key)
 
 class Loader(yaml.RoundTripLoader):
     def __init__(self, stream):
@@ -98,4 +100,3 @@ try:
     configFile = QGL.config.configFile
 except:
     pass
-
