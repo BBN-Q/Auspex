@@ -192,7 +192,6 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
         else:
             self.wrapper = aps2.APS2()
 
-        self.set_amplitude = self.wrapper.set_channel_scale
         self.set_offset    = self.wrapper.set_channel_offset
         self.set_enabled   = self.wrapper.set_channel_enabled
         self.set_mixer_phase_skew = self.wrapper.set_mixer_phase_skew
@@ -228,6 +227,13 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
             self.stop()
             self.wrapper.disconnect()
             self.connected = False
+
+    def set_amplitude(self, chs, value):
+        if isinstance(chs, int) or len(chs)==1:
+            self.wrapper.set_channel_scale(int(chs), value)
+        else:
+            self.wrapper.set_channel_scale(int(chs[0])-1, value)
+            self.wrapper.set_channel_scale(int(chs[1])-1, value)
 
     def set_all(self, settings_dict, prefix=""):
         # Pop the channel settings
