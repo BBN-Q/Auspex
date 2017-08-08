@@ -17,34 +17,21 @@ def fit_rabi(xdata, ydata):
 
     def rabi_model(x, *p):
         return p[0] - p[1]*np.cos(2*np.pi*p[2]*(x - p[3]))
-
+        
     #seed Rabi frequency from largest FFT component
     N = len(ydata)
     yfft = fft(ydata)
     f_max_ind = np.argmax(np.abs(yfft[1:N//2]))
     f_0 = 0.5 * max([1, f_max_ind]) / xdata[-1]
-
-    plt.figure()
-    plt.plot(xdata, ydata)
-    plt.figure()
-    ts = xdata[1]-xdata[0]
-    plt.plot(np.fft.fftfreq(xdata.size, d=ts), yfft)
-    plt.show()
-
     amp_0 = 0.5*(ydata.max() - ydata.min())
     offset_0 = np.mean(ydata)
     phase_0 = 0
-
     if ydata[N//2 - 1] > offset_0:
         amp_0 = -amp_0
     popt, _ = curve_fit(rabi_model, xdata, ydata, [offset_0, amp_0, f_0, phase_0])
     f_rabi = np.abs(popt[2])
     pi_amp = 0.5/f_rabi
     offset = popt[3]
-
-    print(f"Initial guess: {[offset_0, amp_0, f_0, phase_0]}")
-    print(f"Fitted: {[offset_0, amp_0, f_0, phase_0]}")
-
     return pi_amp, offset, rabi_model(xdata, *popt)
 
 def fit_ramsey(xdata, ydata, two_freqs = False):
