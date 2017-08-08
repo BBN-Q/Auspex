@@ -80,8 +80,8 @@ class Labbrick(Instrument, metaclass=MakeSettersGetters):
 
         self.max_power = self._lib.fnLMS_GetMaxPwr(self.device_id) / 4.0
         self.min_power = self._lib.fnLMS_GetMinPwr(self.device_id) / 4.0
-        self.max_freq = self._lib.fnLMS_GetMaxFreq(self.device_id) / 1.0e8
-        self.min_freq = self._lib.fnLMS_GetMinFreq(self.device_id) / 1.0e8
+        self.max_freq = self._lib.fnLMS_GetMaxFreq(self.device_id) * 10
+        self.min_freq = self._lib.fnLMS_GetMinFreq(self.device_id) * 10
 
     def disconnect(self):
         status = self._lib.fnLMS_CloseDevice(self.device_id)
