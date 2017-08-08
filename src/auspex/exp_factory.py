@@ -460,17 +460,17 @@ class QubitExpFactory(object):
                     # We are sweeping a qubit, so we must lookup the instrument
                     name, meas_or_control, prop = par["target"].split()
                     qubit = qubits[name]
+                    method_name = "set_{}".format(prop.lower())
 
-                    # We should allow for either mixed up signals or direct synthesis
-                    if 'generator' in qubit[meas_or_control]:
+                    # If sweeping frequency, we should allow for either mixed up signals or direct synthesis.
+                    # Sweeping power is always through the AWG channels.
+                    if 'generator' in qubit[meas_or_control] and prop.lower() == "frequency":
                         name = qubit[meas_or_control]['generator']
                         instr = experiment._instruments[name]
-                        method_name = 'set_' + prop.lower()
                     else:
                         # Construct a function that sets a per-channel property
                         name, chan = qubit[meas_or_control]['AWG'].split()
                         instr = experiment._instruments[name]
-                        method_name = "set_{}".format(prop.lower())
                         
                         def method(value, channel=chan, instr=instr, prop=prop.lower()):
                             # e.g. keysight.set_amplitude("ch1", 0.5)
@@ -534,7 +534,7 @@ class QubitExpFactory(object):
         # Find out which output connectors we need to create
         # ==================================================
 
-        # Get the enabled measurements, or those which aren't explicitlu 
+        # Get the enabled measurements, or those which aren't explicitly
         enabled_meas = {k: v for k, v in experiment.settings['filters'].items() if 'enabled' not in v or v['enabled'] }
 
         # First look for digitizer streams (Alazar or X6)
