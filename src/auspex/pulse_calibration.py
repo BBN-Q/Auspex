@@ -15,6 +15,8 @@ from copy import copy
 import os
 import json
 
+from time import sleep
+
 from auspex.exp_factory import QubitExpFactory
 from auspex.analysis.io import load_from_HDF5
 from auspex.parameter import FloatParameter
@@ -22,15 +24,23 @@ from auspex.filters.plot import ManualPlotter
 from auspex.analysis.fits import *
 from auspex.analysis.helpers import normalize_data
 
-def calibrate(calibrations):
+def calibrate(calibrations, update_settings=True):
     """Takes in a qubit (as a string) and list of calibrations (as instantiated classes).
     e.g. calibrate_pulses([RabiAmp("q1"), PhaseEstimation("q1")])"""
     for calibration in calibrations:
         if not isinstance(calibration, PulseCalibration):
             raise TypeError("calibrate_pulses was passed a calibration that is not actually a calibration.")
         calibration.set()
-        calibration.calibrate()
-        calibration.exp.plot_server.stop()
+        try:
+            calibration.calibrate()
+            if update_settings:
+                calibration.update_settings()
+        except Exception as ex:
+            logger.warning('Calibration {} could not complete: got exception: {}.'.format(type(calibration).__name__, ex))
+        finally:
+            sleep(0.1) #occasionally ZMQ barfs here
+            calibration.exp.plot_server.stop()
+
 
 class PulseCalibration(object):
     """Base class for calibration of qubit control pulses."""
@@ -116,7 +126,7 @@ class PulseCalibration(object):
 
     def update_settings(self):
         """Update calibrated YAML with calibration parameters"""
-        config.yaml_dump(data, config.configFile)
+        config.yaml_dump(self.settings, config.configFile)
 
 class CavitySearch(PulseCalibration):
     def __init__(self, qubit_name, frequencies=np.linspace(4, 5, 100), **kwargs):
@@ -171,10 +181,13 @@ class QubitSearch(PulseCalibration):
 
 class RabiAmpCalibration(PulseCalibration):
 
+    amp2offset = 0.5
+
     def __init__(self, qubit_name, num_steps = 40, **kwargs):
         super(RabiAmpCalibration, self).__init__(qubit_name, **kwargs)
         if num_steps % 2 != 0:
             raise ValueError("Number of steps for RabiAmp calibration must be even!")
+        #for now, only do one qubit at a time
         self.num_steps = num_steps
         self.amps = np.hstack((np.arange(-1, 0, 2./num_steps),
                             np.arange(2./num_steps, 1+2./num_steps, 2./num_steps)))
@@ -189,11 +202,10 @@ class RabiAmpCalibration(PulseCalibration):
         piI, offI, fitI = fit_rabi(self.amps, data[0:N//2])
         piQ, offQ, fitQ = fit_rabi(self.amps, data[N//2-1:-1])
         #Arbitary extra division by two so that it doesn't push the offset too far.
-        amp2offset = 0.5
         self.pi_amp = piI
-        self.pi2_amp = piI/2
-        self.i_offset = offI*amp2offset
-        self.q_offset = offQ*amp2offset
+        self.pi2_amp = piI/2.0
+        self.i_offset = offI*self.amp2offset
+        self.q_offset = offQ*self.amp2offset
         logger.info(f"Found X180 amplitude: {self.pi_amp}")
         logger.info(f"Shifting I offset by: {self.i_offset}")
         logger.info(f"Shifting Q offset by: {self.q_offset}")
@@ -209,6 +221,18 @@ class RabiAmpCalibration(PulseCalibration):
         plot.add_fit_trace("I Fit")
         plot.add_fit_trace("Q Fit")
         return plot
+
+    def update_settings(self):
+        #casting to float since YAML was complaining?
+        self.settings['qubits'][self.qubit.label]['control']['pulse_params']['piAmp'] = round(float(self.pi_amp), 5)
+        self.settings['qubits'][self.qubit.label]['control']['pulse_params']['pi2Amp'] = round(float(self.pi2_amp), 5)
+        # a few contortions to get the right awg
+        AWG = self.settings['qubits'][self.qubit.label]['control']['AWG'].split(" ")[0]
+        amp_factor = self.settings['instruments'][AWG]['tx_channels']['12']['amp_factor']
+        self.settings['instruments'][AWG]['tx_channels']['12']['1']['offset'] += round(float(amp_factor*self.amp2offset*self.i_offset), 5)
+        self.settings['instruments'][AWG]['tx_channels']['12']['2']['offset'] += round(float(amp_factor*self.amp2offset*self.i_offset), 5)
+        super(RabiAmpCalibration, self).update_settings()
+
 
 class RamseyCalibration(PulseCalibration):
     def __init__(self, qubit_name, delays=np.linspace(0.0, 50.0, 51)*1e-6, two_freqs = False, added_detuning = 150e3, set_source = True):
