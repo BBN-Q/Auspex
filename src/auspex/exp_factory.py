@@ -258,8 +258,13 @@ class QubitExpFactory(object):
                 # If we are calibrating we don't care about storing data, use buffers instead
                 buffers = []
                 for w in writers:
+                    source_filt = filters[w]["source"].split(" ")[0]
+                    if filters[source_filt]["type"] == "Averager":
+                        sources = ", ".join([source_filt + " final_average", source_filt + " final_variance"])
+                    else:
+                        sources = filters[w]["source"]
                     buff = {
-                            "source": filters[w]["source"],
+                            "source": sources,
                             "enabled": True,
                             "type": "DataBuffer",
                             }
