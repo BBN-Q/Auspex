@@ -34,7 +34,7 @@ class AlazarStreamSelector(Filter):
         # Add the time axis
         samp_time = 1.0/source_instr_settings['sampling_rate']
         descrip = DataStreamDescriptor()
-        descrip.add_axis(DataAxis("time", samp_time*np.arange(source_instr_settings['record_length'])))
+        descrip.add_axis(DataAxis("time", samp_time*np.arange(source_instr_settings['nbr_samples'])))
         return channel, descrip
 
 class X6StreamSelector(Filter):
@@ -42,14 +42,15 @@ class X6StreamSelector(Filter):
 
     sink   = InputConnector()
     source = OutputConnector()
-    phys_channel  = IntParameter(value_range=(1,3), snap=1)
-    dsp_channel   = IntParameter(value_range=(0,4), snap=1)
-    stream_type   = Parameter(allowed_values=["Raw", "Demodulated", "Integrated"], default='Demodulated')
+    
+    channel     = IntParameter(value_range=(1,3), snap=1)
+    dsp_channel = IntParameter(value_range=(0,4), snap=1)
+    stream_type = Parameter(allowed_values=["Raw", "Demodulated", "Integrated"], default='Demodulated')
 
     def __init__(self, name=""):
         super(X6StreamSelector, self).__init__(name=name)
         self.stream_type.value = "Raw" # One of Raw, Demodulated, Integrated
-        self.quince_parameters = [self.phys_channel, self.dsp_channel, self.stream_type]
+        self.quince_parameters = [self.channel, self.dsp_channel, self.stream_type]
 
     def get_descriptor(self, source_instr_settings, channel_settings):
         # Create a channel
@@ -70,23 +71,3 @@ class X6StreamSelector(Filter):
             descrip.dtype = np.complex128
 
         return channel, descrip
-
-    # work in progress on "out of spec" descriptors.
-    # def descriptor_map(self, input_descriptors):
-    #     """Return a dict of the output descriptors."""
-    #     if self.stream_type.value == "Integrated":
-    #         out_descriptor = input_descriptors['sink'].copy()
-    #         out_descriptor.dtype = np.complex128
-    #         try:
-    #             out_descriptor.pop_axis('time')
-    #         except:
-    #             self.out_of_spec = True
-    #             out_descriptor = DataStreamDescriptor()
-    #
-    #         return {'source': output_descriptor}
-    #     elif self.stream_type == 'Demodulated':
-    #         out_descriptor = input_descriptors['sink'].copy()
-    #         out_descriptor.dtype = np.complex128
-    #         return {'source': output_descriptor}
-    #     else:
-    #         return {'source': input_descriptors['sink']}

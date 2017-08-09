@@ -35,7 +35,7 @@ And subsequently installed using pip::
 	cd auspex
 	pip install -e .
 
-Which will automatically fetch and install all of the requirements. If you are using an anaconda python distribution, some of the requirements can be install with *conda install*. The following, from *requirements.txt*, are required by Auspex:
+Which will automatically fetch and install all of the requirements. If you are using an anaconda python distribution, some of the requirements should be install with *conda install*. The following, from *requirements.txt*, are required by Auspex:
 
 - numpy >= 1.11.1
 - scipy >= 0.17.1
@@ -46,13 +46,11 @@ Which will automatically fetch and install all of the requirements. If you are u
 - networkx >= 1.11
 - matplotlib >= 2.0.0
 
+Qubit Experiments
+*****************
 
-There are a number of other considerations depending on which experiments will be run. For the standard suite of qubit measurements on a windows machine, the following must be done:
+Auspex is agnostic to the type of experiment being performed, but we have included a special :ref:`QubitExpFactory <qubitexpfactory>` that is designed to work seamlessly with `QGL <https://github.com/BBN-Q/QGL>`_ to allow for simple execution of experiments on superconducting qubits. Though Auspex is generally decoupled from other BBN software packages, this mode of operation introduces *QGL* as a dependency. Depending on the experiments being run, one may need to install a number of additional driver libraries.
 
-1. Install libaps2, put the shared library on the system path and the python wrapper on the python path.
-2. Build libalazar, put the shared library on the system path and the python wrapper on the python path.
-3. If using PyQLab, clone a fresh directory PyQLab-auspex put it on the *feature/auspex-compat* branch for the time being. Use a fresh set of configuration .json files, which will be automatically migrated to account for auspex-specific changes. For the time being, PyQLab needs a virtual environment with Python2.7 and Qt4 for full compatibility.
-4. If using Quince, pip install quince in an environment that supports Python3 and Qt5. If you are running PyQLab inside of a Python2.7/PyQt4, you must ensure that the run-quince.py script (or run-quince.bat script) is executable from the Python2.7/PyQt4 environment but invokes the proper Python3 interpreter. For anaconda on windows, one can simply copy the run-quince.bat script into the appropriate */path/to/anaconda3/envs/evn_name/scripts* directory.
 
 Genealogy and Etymology
 ***********************
@@ -67,7 +65,8 @@ Contents:
    Instrument Drivers <instruments>
    Defining Experiments <experiments>
    Advanced Sweeps <sweeps>
-   Integration with PyQLab/Quince <integration>
+   Qubit Experiments <qubits>
+   Plotting Client <plotting>
    Full API <api/auspex>
 
 

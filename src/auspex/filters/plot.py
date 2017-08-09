@@ -28,8 +28,10 @@ class Plotter(Filter):
         if plot_mode:
             self.plot_mode.value = plot_mode
         self.plot_args = plot_args
-        self.update_interval = 0.5
+        self.full_update_interval = 0.5
+        self.update_interval = 2.0 # slower for partial updates
         self.last_update = time.time()
+        self.last_full_update = time.time()
 
         self.quince_parameters = [self.plot_dims, self.plot_mode]
 
@@ -78,36 +80,49 @@ class Plotter(Filter):
             self.points_before_clear = self.descriptor.axes[-1].num_points()
         else:
             self.points_before_clear = self.descriptor.axes[-1].num_points() * self.descriptor.axes[-2].num_points()
-        logger.info("Plot will clear after every %d points.", self.points_before_clear)
+        logger.debug("Plot will clear after every %d points.", self.points_before_clear)
 
         self.x_values = self.descriptor.axes[-1].points
 
         if self.plot_dims.value == 2:
             self.y_values = self.descriptor.axes[-2].points
 
-        self.plot_buffer = np.nan*np.ones(self.points_before_clear, dtype=self.descriptor.dtype)
+        self.plot_buffer = (np.nan*np.ones(self.points_before_clear)).astype(self.descriptor.dtype)
         self.idx = 0
 
+    def update(self):
+        if self.plot_dims.value == 1:
+            self.plot_server.send(self.name, self.x_values, self.plot_buffer.copy())
+        elif self.plot_dims.value == 2:
+            self.plot_server.send(self.name, self.x_values, self.y_values, self.plot_buffer.copy())
+
     async def process_data(self, data):
-        #if we're going to clear then reset idx
-        if self.idx + data.size > self.points_before_clear:
-            logger.debug("Clearing previous plot and restarting")
+        # If we get more than enough data, pause to update the plot if necessary
+        if (self.idx + data.size) > self.points_before_clear:
             spill_over = (self.idx + data.size) % self.points_before_clear
             if spill_over == 0:
                 spill_over = self.points_before_clear
+            if (time.time() - self.last_full_update >= self.full_update_interval):
+                # If we are getting data quickly, then we can afford to wait
+                # for a full frame before pushing to plot.
+                self.plot_buffer[self.idx:] = data[:(self.points_before_clear-self.idx)]
+                self.update()
+                self.last_full_update = time.time()
             self.plot_buffer[:] = np.nan
             self.plot_buffer[:spill_over] = data[-spill_over:]
             self.idx = spill_over
-        else:
+        else: # just keep trucking
             self.plot_buffer[self.idx:self.idx+data.size] = data.flatten()
             self.idx += data.size
-
-        if (time.time() - self.last_update >= self.update_interval):
-            self.plot_server.send(self.name, self.plot_buffer)
-            self.last_update = time.time()
+            if (time.time() - max(self.last_full_update, self.last_update) >= self.update_interval):
+                self.update()
+                self.last_update = time.time()
 
     async def on_done(self):
-        self.plot_server.send(self.name, np.array([]), msg="done")
+        if self.plot_dims.value == 1:
+            self.plot_server.send(self.name, self.x_values, self.plot_buffer)
+        elif self.plot_dims.value == 2:
+            self.plot_server.send(self.name, self.x_values, self.y_values, self.plot_buffer)
 
     def axis_label(self, index):
         unit_str = " ({})".format(self.descriptor.axes[index].unit) if self.descriptor.axes[index].unit else ''
@@ -150,6 +165,7 @@ class MeshPlotter(Filter):
         self.plot_server.send(self.name, data)
 
     async def on_done(self):
+        self.plot_server.send(self.name, np.array([]), msg="done")
         time.sleep(0.1)
 
 class XYPlotter(Filter):
@@ -363,4 +379,4 @@ class ManualPlotter(object):
         self.set_data(trace_name, data_tuple[0], data_tuple[1])
 
     def set_data(self, trace_name, xdata, ydata):
-        self.plot_server.send(self.name + ":" + trace_name, np.array([xdata,ydata]))
+        self.plot_server.send(self.name + ":" + trace_name, xdata, ydata)

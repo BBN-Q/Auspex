@@ -45,6 +45,7 @@ class DataListener(QtCore.QObject):
         self.socket = self.context.socket(zmq.SUB)
         self.socket.connect("tcp://{}:{}".format(host, port))
         self.socket.setsockopt_string(zmq.SUBSCRIBE, "data")
+        self.socket.setsockopt_string(zmq.SUBSCRIBE, "done")
         self.poller = zmq.Poller()
         self.poller.register(self.socket, zmq.POLLIN)
         self.running = True
@@ -53,14 +54,21 @@ class DataListener(QtCore.QObject):
         while self.running:
             evts = dict(self.poller.poll(50))
             if self.socket in evts and evts[self.socket] == zmq.POLLIN:
-                msg_type, name, md, data = self.socket.recv_multipart()
-                if msg_type.decode() == "done":
+                msg = self.socket.recv_multipart()
+                msg_type = msg[0].decode()
+                name     = msg[1].decode()
+                if msg_type == "done":
                     self.finished.emit(True)
-                else:
-                    name = name.decode()
-                    md   = json.loads(md.decode())
-                    A    = np.frombuffer(data, dtype=md['dtype'])
-                    self.message.emit((name, A))
+                elif msg_type == "data":
+                    result = [name]
+                    # How many pairs of metadata and data are there?
+                    num_arrays = int((len(msg) - 2)/2)
+                    for i in range(num_arrays):
+                        md, data = msg[2+2*i:4+2*i]
+                        md = json.loads(md.decode())
+                        A = np.frombuffer(data, dtype=md['dtype'])
+                        result.append(A)
+                    self.message.emit(tuple(result))
         self.socket.close()
 
 class MplCanvas(FigureCanvas):
@@ -121,11 +129,15 @@ class Canvas1D(MplCanvas):
     def compute_initial_figure(self):
         for ax in self.axes:
             plt, = ax.plot([0,0,0])
+            ax.ticklabel_format(style='sci', axis='x', scilimits=(-3,3))
+            ax.ticklabel_format(style='sci', axis='y', scilimits=(-3,3))
             self.plots.append(plt)
 
     def update_figure(self, data):
+        x_data, y_data = data
         for plt, ax, f in zip(self.plots, self.axes, self.plot_funcs):
-            plt.set_ydata(f(data))
+            plt.set_xdata(x_data)
+            plt.set_ydata(f(y_data))
             ax.relim()
             ax.autoscale_view()
             self.draw()
@@ -146,6 +158,8 @@ class CanvasManual(MplCanvas):
     def __init__(self, parent=None, width=5, height=4, dpi=100):
         self.fig = Figure(figsize=(width, height), dpi=dpi)
         self.axis = self.fig.add_subplot(111)
+        self.axis.ticklabel_format(style='sci', axis='x', scilimits=(-3,3))
+        self.axis.ticklabel_format(style='sci', axis='y', scilimits=(-3,3))
         self.traces = {}
 
         FigureCanvas.__init__(self, self.fig)
@@ -158,12 +172,9 @@ class CanvasManual(MplCanvas):
     def compute_initial_figure(self):
         pass
 
-    def update_trace(self, trace_name, data):
-        data = data.reshape((-1, 2), order='f')
-        xdata = data[:,0]
-        ydata = data[:,1]
-        self.traces[trace_name].set_xdata(xdata)
-        self.traces[trace_name].set_ydata(ydata)
+    def update_trace(self, trace_name, x_data, y_data):
+        self.traces[trace_name].set_xdata(x_data)
+        self.traces[trace_name].set_ydata(y_data)
         self.axis.relim()
         self.axis.autoscale_view()
         self.draw()
@@ -176,18 +187,23 @@ class CanvasManual(MplCanvas):
             self.axis.set_ylabel(desc['y_label'])
         for trace in desc['traces']:
             self.traces[trace['name']], = self.axis.plot([], **trace['matplotlib_kwargs'])
+        self.axis.ticklabel_format(style='sci', axis='x', scilimits=(-3,3))
+        self.axis.ticklabel_format(style='sci', axis='y', scilimits=(-3,3))
         self.fig.tight_layout()
 
 class Canvas2D(MplCanvas):
     def compute_initial_figure(self):
         for ax in self.axes:
             plt = ax.imshow(np.zeros((10,10)))
+            ax.ticklabel_format(style='sci', axis='x', scilimits=(-3,3))
+            ax.ticklabel_format(style='sci', axis='y', scilimits=(-3,3))
             self.plots.append(plt)
 
     def update_figure(self, data):
-        data = data.reshape((self.xlen, self.ylen), order='f').T
+        x_data, y_data, im_data = data
+        im_data = im_data.reshape((len(y_data), len(x_data)), order='c')
         for plt, f in zip(self.plots, self.plot_funcs):
-            plt.set_data(f(data))
+            plt.set_data(f(im_data))
             plt.autoscale()
         self.draw()
         self.flush_events()
@@ -200,6 +216,8 @@ class Canvas2D(MplCanvas):
         self.plots = []
         for ax in self.axes:
             ax.clear()
+            ax.ticklabel_format(style='sci', axis='x', scilimits=(-3,3))
+            ax.ticklabel_format(style='sci', axis='y', scilimits=(-3,3))
             plt = ax.imshow(np.zeros((self.xlen, self.ylen)),
                 animated=True, aspect=self.aspect, extent=self.extent, origin="lower")
             self.plots.append(plt)
@@ -219,6 +237,7 @@ class CanvasMesh(MplCanvas):
     def update_figure(self, data):
         # Expected xs, ys, zs coming in as
         # data = np.array([xs, ys, zs]).transpose()
+        data = data.reshape((-1, 3), order='c')
         points = data[:,0:2]
         mesh = self.scaled_Delaunay(points)
         xs   = mesh.points[:,0]
@@ -226,6 +245,7 @@ class CanvasMesh(MplCanvas):
         for ax, f in zip(self.axes, self.plot_funcs):
             ax.clear()
             ax.tripcolor(xs, ys, mesh.simplices, f(data[:,2]), cmap="RdGy", shading="flat")
+            ax.autoscale()
         self.draw()
         self.flush_events()
 
@@ -237,6 +257,8 @@ class CanvasMesh(MplCanvas):
                 ax.set_xlabel(desc['x_label'])
             if 'y_label' in desc.keys():
                 ax.set_ylabel(name + " " + desc['y_label'])
+            ax.ticklabel_format(style='sci', axis='x', scilimits=(-3,3))
+            ax.ticklabel_format(style='sci', axis='y', scilimits=(-3,3))
         self.fig.tight_layout()
 
     def scaled_Delaunay(self, points):
@@ -296,7 +318,7 @@ class MatplotClientWindow(QtWidgets.QMainWindow):
         evts = dict(poller.poll(100))
         if socket in evts:
             try:
-                reply, desc = [e.decode() for e in socket.recv_multipart(flags=zmq.NOBLOCK)]
+                reply, desc = [e.decode() for e in socket.recv_multipart()]
                 desc = json.loads(desc)
                 self.statusBar().showMessage("Connection established. Pulling plot information.", 2000)
             except:
@@ -365,16 +387,20 @@ class MatplotClientWindow(QtWidgets.QMainWindow):
         self.tabs.currentChanged.connect(self.switch_toolbar)
 
     def data_signal_received(self, message):
-        plot_name, data = message
+        plot_name = message[0]
+        data      = message[1:]
         try:
             # If we see a colon, then we must look for a named trace
             if ":" in plot_name:
                 plot_name, trace_name = plot_name.split(":")
-                self.canvas_by_name[plot_name].update_trace(trace_name, data)
+                self.canvas_by_name[plot_name].update_trace(trace_name, *data)
             else:
-                self.canvas_by_name[plot_name].update_figure(data)
-        except:
-            pass
+                if isinstance(self.canvas_by_name[plot_name], CanvasMesh):
+                    self.canvas_by_name[plot_name].update_figure(data[0])
+                else:
+                    self.canvas_by_name[plot_name].update_figure(data)
+        except Exception as e:
+            self.statusBar().showMessage("Exception while plotting {}. Length of data: {}".format(e, len(data)), 1000)
 
     def switch_toolbar(self):
         for toolbar in self.toolbars:

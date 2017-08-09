@@ -32,9 +32,11 @@ class HolzworthHS9000(Instrument, metaclass=MakeSettersGetters):
         self.resource_name = resource_name
         try:
             self._lib = ctypes.CDLL("HolzworthMulti.dll")
+            self.fake_holz = False
         except:
             logger.warning("Could not find the Holzworth driver.")
             self._lib = MagicMock()
+            self.fake_holz = True
 
         self._lib.usbCommWrite.restype = ctypes.c_char_p
         self._lib.openDevice.restype = ctypes.c_int
@@ -60,8 +62,8 @@ class HolzworthHS9000(Instrument, metaclass=MakeSettersGetters):
         if success != 0:
             logger.info("Could not open Holzworth at address: {}, might already be open on another channel.".format(self.serial))
         # read frequency and power ranges
-        self.fmin = float((self.ch_query(":FREQ:MIN?")).split()[0]) #MHz
-        self.fmax = float((self.ch_query(":FREQ:MAX?")).split()[0]) #MHz
+        self.fmin = float((self.ch_query(":FREQ:MIN?")).split()[0]) * 1e6 #Hz
+        self.fmax = float((self.ch_query(":FREQ:MAX?")).split()[0]) * 1e6 #Hz
         self.pmin = float((self.ch_query(":PWR:MIN?")).split()[0]) #dBm
         self.pmax = float((self.ch_query(":PWR:MAX?")).split()[0]) #dBm
 
@@ -77,14 +79,16 @@ class HolzworthHS9000(Instrument, metaclass=MakeSettersGetters):
     @property
     def frequency(self):
         v = self.ch_query(":FREQ?")
-        return float(v.split()[0])*1e-3
+        return float(v.split()[0]) * 1e6
     @frequency.setter
     def frequency(self, value):
-        if self.fmin*1e-3 <= value <= self.fmax*1e-3:
-            self.ch_query(":FREQ:{} GHz".format(value))
-        else:
-            err_msg = "The value {} GHz is outside of the allowable range {}-{} GHz specified for instrument '{}'.".format(value, self.fmin*1e-3, self.fmax*1e-3, self.name)
-            raise ValueError(err_msg)
+        if not self.fake_holz:
+            if self.fmin <= value <= self.fmax:
+                # WARNING!!! The Holzworth might blow up if you ask for >12 digits of precision here
+                self.ch_query(":FREQ:{:.12g} Hz".format(value))
+            else:
+                err_msg = "The value {} GHz is outside of the allowable range {}-{} GHz specified for instrument '{}'.".format(value*1e-9, self.fmin*1e-9, self.fmax*1e-9, self.name)
+                raise ValueError(err_msg)
 
     @property
     def power(self):
@@ -92,11 +96,12 @@ class HolzworthHS9000(Instrument, metaclass=MakeSettersGetters):
         return float(v.split()[0])
     @power.setter
     def power(self, value):
-        if self.pmin <= value <= self.pmax:
-            self.ch_query(":PWR:{} dBm".format(value))
-        else:
-            err_msg = "The value {} dBm is outside of the allowable range {}-{} dBm specified for instrument '{}'.".format(value, self.pmin, self.pmax, self.name)
-            raise ValueError(err_msg)
+        if not self.fake_holz:
+            if self.pmin <= value <= self.pmax:
+                self.ch_query(":PWR:{} dBm".format(value))
+            else:
+                err_msg = "The value {} dBm is outside of the allowable range {}-{} dBm specified for instrument '{}'.".format(value, self.pmin, self.pmax, self.name)
+                raise ValueError(err_msg)
 
     @property
     def phase(self):

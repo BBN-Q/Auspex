@@ -34,14 +34,13 @@ def calibrate(calibrations):
 
 class PulseCalibration(object):
     """Base class for calibration of qubit control pulses."""
-    def __init__(self, qubit_names, notebook=True):
+    def __init__(self, qubit_names):
         super(PulseCalibration, self).__init__()
         self.qubit_names = qubit_names if isinstance(qubit_names, list) else [qubit_names]
         self.qubit     = [QubitFactory(qubit_name) for qubit_name in qubit_names] if isinstance(qubit_names, list) else QubitFactory(qubit_names)
         self.filename   = 'None'
         self.exp        = None
         self.axis_descriptor = None
-        self.notebook   = notebook
         self.plot       = self.init_plot()
         self.cw_mode    = False
         with open(config.channelLibFile, 'r') as FID:
@@ -54,9 +53,8 @@ class PulseCalibration(object):
         return [[Id(self.qubit), MEAS(self.qubit)]]
 
     def set(self, instrs_to_set = []):
-        seq_files = compile_to_hardware(self.sequence(), fileName=self.filename, axis_descriptor=self.axis_descriptor)
-        metafileName = os.path.join(QGLconfig.AWGDir, self.filename + '-meta.json')
-        self.exp = QubitExpFactory.create(meta_file=metafileName, notebook=self.notebook, calibration=True, cw_mode=self.cw_mode)
+        meta_file = compile_to_hardware(self.sequence(), fileName=self.filename, axis_descriptor=self.axis_descriptor)
+        self.exp = QubitExpFactory.create(meta_file=meta_file, calibration=True, cw_mode=self.cw_mode)
         if self.plot:
             # Add the manual plotter and the update method to the experiment
             self.exp.add_manual_plotter(self.plot)
@@ -131,12 +129,12 @@ class CavitySearch(PulseCalibration):
         data, _ = self.run()
 
         # Plot the results
-        self.dat_line.data_source.data = dict(x=self.frequencies, y=data)
+        self.plot["Data"] = (self.frequencies, data)
 
     def init_plot(self):
-        plot = ManualPlotter("Cavity Search", x_label='Frequency (GHz)', y_label='Amplitude (Arb. Units)', notebook=self.notebook)
-        self.dat_line = plot.fig.line([],[], line_width=1.0, legend="Data", color='navy')
-        self.fit_line = plot.fig.line([],[], line_width=2.5, legend="Fit", color='firebrick')
+        plot = ManualPlotter("Qubit Search", x_label='Frequency (GHz)', y_label='Amplitude (Arb. Units)')
+        plot.add_data_trace("Data")
+        plot.add_fit_trace("Fit")
         return plot
 
 class QubitSearch(PulseCalibration):
@@ -144,7 +142,7 @@ class QubitSearch(PulseCalibration):
         super(QubitSearch, self).__init__(qubit_name)
         self.frequencies = frequencies
         self.cw_mode = True
-        
+
     def sequence(self):
         return [[X(self.qubit), MEAS(self.qubit)]]
 
@@ -160,7 +158,7 @@ class QubitSearch(PulseCalibration):
         self.plot["Data"] = (self.frequencies, data)
 
     def init_plot(self):
-        plot = ManualPlotter("Qubit Search", x_label='Frequency (GHz)', y_label='Amplitude (Arb. Units)', notebook=self.notebook)
+        plot = ManualPlotter("Qubit Search", x_label='Frequency (GHz)', y_label='Amplitude (Arb. Units)')
         plot.add_data_trace("Data")
         plot.add_fit_trace("Fit")
         return plot
@@ -426,8 +424,8 @@ class CRLenCalibration(CRCalibration):
 
     def sequence(self):
         qc, qt = self.qubits[:]
-        seqs = [[Id(qc)] + echoCR(qc, qt, length=l, phase = self.phases, amp=self.amps, riseFall=self.rise_fall) + [Id(qc), MEAS(qt)*MEAS(qc)]
-        for l in self.lengths]+ [[X(qc)] + echoCR(qc, qt, length=l, phase= self.phases, amp=self.amps, riseFall=self.rise_fall) + [X(qc), MEAS(qt)*MEAS(qc)]
+        seqs = [[Id(qc)] + echoCR(qc, qt, length=l, phase = self.phases, amp=self.amps, riseFall=self.rise_fall).seq + [Id(qc), MEAS(qt)*MEAS(qc)]
+        for l in self.lengths]+ [[X(qc)] + echoCR(qc, qt, length=l, phase= self.phases, amp=self.amps, riseFall=self.rise_fall).seq + [X(qc), MEAS(qt)*MEAS(qc)]
         for l in self.lengths] + create_cal_seqs((qt,qc), calRepeats=2, measChans=(qt,qc))
 
         self.axis_descriptor=[
@@ -448,8 +446,8 @@ class CRPhaseCalibration(PulseCalibration):
 
     def sequence(self):
         qc, qt = self.qubits[:]
-        seqs = [[Id(qc)] + echoCR(qc, qt, length=length, phase=ph, amp=self.amp, riseFall=self.rise_fall) + [X90(qt)*Id(qc), MEAS(qt)*MEAS(qc)]
-        for ph in self.phases]+ [[X(qc)] + echoCR(qc, qt, length=length, phase= ph, amp=self.amp, riseFall=self.rise_fall) + [X90(qt)*X(qc), MEAS(qt)*MEAS(qc)]
+        seqs = [[Id(qc)] + echoCR(qc, qt, length=length, phase=ph, amp=self.amp, riseFall=self.rise_fall).seq + [X90(qt)*Id(qc), MEAS(qt)*MEAS(qc)]
+        for ph in self.phases]+ [[X(qc)] + echoCR(qc, qt, length=length, phase= ph, amp=self.amp, riseFall=self.rise_fall).seq + [X90(qt)*X(qc), MEAS(qt)*MEAS(qc)]
         for ph in self.phases] + create_cal_seqs((qt,qc), calRepeats=2, measChans=(qt,qc))
 
         self.axis_descriptor = [
@@ -478,8 +476,8 @@ class CRAmpCalibration(PulseCalibration):
     def sequence(self):
         qc, qt = self.qubits[:]
         CRchan = ChannelLibrary.EdgeFactory(qc, qt)
-        seqs = [[Id(qc)] + num_CR*echoCR(qc, qt, length=self.length, phase=self.phase, amp=a, riseFall=self.rise_fall) + [Id(qc), MEAS(qt)*MEAS(qc)]
-        for a in self.amps]+ [[X(qc)] + num_CR*echoCR(qc, qt, length=length, phase= self.phase, amp=a, riseFall=self.rise_fall) + [X(qc), MEAS(qt)*MEAS(qc)]
+        seqs = [[Id(qc)] + num_CR*echoCR(qc, qt, length=self.length, phase=self.phase, amp=a, riseFall=self.rise_fall).seq + [Id(qc), MEAS(qt)*MEAS(qc)]
+        for a in self.amps]+ [[X(qc)] + num_CR*echoCR(qc, qt, length=length, phase= self.phase, amp=a, riseFall=self.rise_fall).seq + [X(qc), MEAS(qt)*MEAS(qc)]
         for a in self.amps] + create_cal_seqs((qt,qc), calRepeats=2, measChans=(qt,qc))
 
         self.axis_descriptor = [

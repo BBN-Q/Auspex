@@ -41,15 +41,22 @@ except:
 
 
 class Channelizer(Filter):
-    """Digital demodulation and filtering to select a particular frequency multiplexed channel"""
+    """Digital demodulation and filtering to select a particular frequency multiplexed channel. If 
+    an axis name is supplied to `follow_axis` then the filter will demodulate at the freqency 
+    `axis_frequency_value - follow_freq_offset` otherwise it will demodulate at `frequency`. Note that
+    the filter coefficients are still calculated with respect to the `frequency` paramter, so it should
+    be chosen accordingly when `follow_axis` is defined."""
 
-    sink              = InputConnector()
-    source            = OutputConnector()
-    decimation_factor = IntParameter(value_range=(1,100), default=2, snap=1)
-    frequency         = FloatParameter(value_range=(-5e9,5e9), increment=1.0e6, default=-9e6)
-    bandwidth         = FloatParameter(value_range=(0.00, 100e6), increment=0.1e6, default=5e6)
+    sink               = InputConnector()
+    source             = OutputConnector()
+    follow_axis        = Parameter(default="") # Name of the axis to follow
+    follow_freq_offset = FloatParameter(default=0.0) # Offset 
+    decimation_factor  = IntParameter(value_range=(1,100), default=4, snap=1)
+    frequency          = FloatParameter(value_range=(-10e9,10e9), increment=1.0e6, default=10e6)
+    bandwidth          = FloatParameter(value_range=(0.00, 100e6), increment=0.1e6, default=5e6)
 
-    def __init__(self, frequency=None, bandwidth=None, decimation_factor=None, **kwargs):
+    def __init__(self, frequency=None, bandwidth=None, decimation_factor=None,
+                    follow_axis=None, follow_freq_offset=None, **kwargs):
         super(Channelizer, self).__init__(**kwargs)
         if frequency:
             self.frequency.value = frequency
@@ -57,20 +64,36 @@ class Channelizer(Filter):
             self.bandwidth.value = bandwidth
         if decimation_factor:
             self.decimation_factor.value = decimation_factor
+        if follow_axis:
+            self.follow_axis.value = follow_axis
+        if follow_freq_offset:
+            self.follow_freq_offset.value = follow_freq_offset
         self.quince_parameters = [self.decimation_factor, self.frequency, self.bandwidth]
+        self._phase = 0.0
 
-    def update_descriptors(self):
-        logger.debug('Updating Channelizer "%s" descriptors based on input descriptor: %s.', self.name, self.sink.descriptor)
+    def final_init(self):
+        self.init_filters(self.frequency.value, self.bandwidth.value)
 
-        # extract record time sampling
-        time_pts = self.sink.descriptor.axes[-1].points
-        self.record_length = len(time_pts)
-        self.time_step = time_pts[1] - time_pts[0]
-        logger.debug("Channelizer time_step = {}".format(self.time_step))
+        if self.follow_axis.value is not "":
+            self.demod_freqs  = (self.sink.descriptor.expected_tuples(with_metadata=True, as_structured_array=True)[self.follow_axis.value] - self.follow_freq_offset.value)
+            self.current_freq = 0
+            self.update_references(self.current_freq)
+        self.idx = 0
 
+
+    def update_references(self, frequency):
+        # store decimated reference for mix down
+        # phase_drift = 2j*np.pi*0.5e-6 * (abs(frequency) - 100e6)
+        ref = np.exp(2j*np.pi * -frequency * self.time_pts[::self.d1] + 1j*self._phase, dtype=np.complex64)
+
+        self.reference   = ref
+        self.reference_r = np.real(ref)
+        self.reference_i = np.imag(ref)
+
+    def init_filters(self, frequency, bandwidth):
         # convert bandwidth normalized to Nyquist interval
-        n_bandwidth = self.bandwidth.value * self.time_step * 2
-        n_frequency = self.frequency.value * self.time_step * 2
+        n_bandwidth = bandwidth * self.time_step * 2
+        n_frequency = frequency * self.time_step * 2
 
         # arbitrarily decide on three stage filter pipeline
         # 1. first stage decimating filter on real data
@@ -87,53 +110,60 @@ class Channelizer(Filter):
         #     * minimize subsequent stages time taken
         #     * filter and decimate while signal is still real
         #     * first stage decimation cannot be too large or then 2omega signal from mixing will alias
-        d1 = 1
-        while (d1 < 8) and (2*n_frequency <= 0.8/d1) and (d1 < self.decimation_factor.value):
-            d1 *= 2
+        self.d1 = 1
+        while (self.d1 < 8) and (2*n_frequency <= 0.8/self.d1) and (self.d1 < self.decimation_factor.value):
+            self.d1 *= 2
             n_bandwidth *= 2
             n_frequency *= 2
 
-        if d1 > 1:
+        if self.d1 > 1:
             # create an anti-aliasing filter
             # pass-band to 0.8 * decimation factor; anecdotally single precision needs order <= 4 for stability
-            b,a = scipy.signal.cheby1(4, 3, 0.8/d1)
+            b,a = scipy.signal.cheby1(4, 3, 0.8/self.d1)
             b = np.float32(b)
             a = np.float32(a)
-            self.decim_factors[0] = d1
+            self.decim_factors[0] = self.d1
             self.filters[0]  = (b,a)
 
         # store decimated reference for mix down
-        ref = np.exp(2j*np.pi * self.frequency.value * time_pts[::d1], dtype=np.complex64)
-        self.reference_r = np.real(ref)
-        self.reference_i = np.imag(ref)
+        self.update_references(frequency)
 
         # second stage filter to bring n_bandwidth/2 up
         # decimation cannot be too large or will impinge on channel bandwidth (keep n_bandwidth/2 <= 0.8)
-        d2 = 1
-        while (d2 < 8) and ((d1*d2) < self.decimation_factor.value) and (n_bandwidth/2 <= 0.8):
-            d2 *= 2
+        self.d2 = 1
+        while (self.d2 < 8) and ((self.d1*self.d2) < self.decimation_factor.value) and (n_bandwidth/2 <= 0.8):
+            self.d2 *= 2
             n_bandwidth *= 2
             n_frequency *= 2
 
-        if d2 > 1:
+        if self.d2 > 1:
             # create an anti-aliasing filter
             # pass-band to 0.8 * decimation factor; anecdotally single precision needs order <= 4 for stability
-            b,a = scipy.signal.cheby1(4, 3, 0.8/d2)
+            b,a = scipy.signal.cheby1(4, 3, 0.8/self.d2)
             b = np.float32(b)
             a = np.float32(a)
-            self.decim_factors[1] = d2
+            self.decim_factors[1] = self.d2
             self.filters[1]  = (b,a)
 
 
         # final channel selection filter
         if n_bandwidth < 0.1:
-            raise ValueError("Insufficient decimation to achieve stable filter")
+            raise ValueError("Insufficient decimation to achieve stable filter: {}.".format(n_bandwidth))
 
         b,a = scipy.signal.cheby1(4, 3, n_bandwidth/2)
         b = np.float32(b)
         a = np.float32(a)
-        self.decim_factors[2] = self.decimation_factor.value // (d1*d2)
+        self.decim_factors[2] = self.decimation_factor.value // (self.d1*self.d2)
         self.filters[2]  = (b,a)
+
+    def update_descriptors(self):
+        logger.debug('Updating Channelizer "%s" descriptors based on input descriptor: %s.', self.name, self.sink.descriptor)
+
+        # extract record time sampling
+        self.time_pts = self.sink.descriptor.axes[-1].points
+        self.record_length = len(self.time_pts)
+        self.time_step = self.time_pts[1] - self.time_pts[0]
+        logger.debug("Channelizer time_step = {}".format(self.time_step))
 
         # update output descriptors
         decimated_descriptor = DataStreamDescriptor()
@@ -141,7 +171,7 @@ class Channelizer(Filter):
         decimated_descriptor.axes[-1] = deepcopy(self.sink.descriptor.axes[-1])
         decimated_descriptor.axes[-1].points = self.sink.descriptor.axes[-1].points[self.decimation_factor.value-1::self.decimation_factor.value]
         decimated_descriptor.axes[-1].original_points = decimated_descriptor.axes[-1].points
-        decimated_descriptor.exp_src = self.sink.descriptor.exp_src
+        decimated_descriptor._exp_src = self.sink.descriptor._exp_src
         decimated_descriptor.dtype = np.complex64
         for os in self.source.output_streams:
             os.set_descriptor(decimated_descriptor)
@@ -154,21 +184,59 @@ class Channelizer(Filter):
         num_records = data.size // self.record_length
         reshaped_data = np.reshape(data, (num_records, self.record_length), order="C")
 
+        # Update frequency if necessary
+        if self.follow_axis.value is not "":
+            freq = self.demod_freqs[self.idx+1]
+            if freq != self.current_freq:
+                self.update_references(freq)
+                self.current_freq = freq
+            #     # print(f"Channelizer freq now {freq}")
+            #     plot_me = True
+            # else:
+            #     plot_me = False
+
+        self.idx += data.size
+
         # first stage decimating filter
-        if self.filters[0] is not None:
+        if self.filters[0] is None:
+            filtered = reshaped_data
+        else:
             stacked_coeffs = np.concatenate(self.filters[0])
             # filter
-            filtered = np.empty_like(reshaped_data)
-            libipp.filter_records_iir(stacked_coeffs, self.filters[0][0].size-1, reshaped_data, self.record_length, num_records, filtered)
+            if np.iscomplexobj(reshaped_data):
+                # TODO: compile complex versions of the IPP functions
+                filtered_r = np.empty_like(reshaped_data, dtype=np.float32)
+                filtered_i = np.empty_like(reshaped_data, dtype=np.float32)
+                libipp.filter_records_iir(stacked_coeffs, self.filters[0][0].size-1, np.ascontiguousarray(reshaped_data.real.astype(np.float32)), self.record_length, num_records, filtered_r)
+                libipp.filter_records_iir(stacked_coeffs, self.filters[0][0].size-1, np.ascontiguousarray(reshaped_data.imag.astype(np.float32)), self.record_length, num_records, filtered_i)
+                filtered = filtered_r + 1j*filtered_i
+                # decimate
+                if self.decim_factors[0] > 1:
+                    filtered = filtered[:, ::self.decim_factors[0]]
+            else:
+                filtered = np.empty_like(reshaped_data)
+                libipp.filter_records_iir(stacked_coeffs, self.filters[0][0].size-1, reshaped_data, self.record_length, num_records, filtered)
 
-            # decimate
-            if self.decim_factors[0] > 1:
-                filtered = filtered[:, ::self.decim_factors[0]]
+                # decimate
+                if self.decim_factors[0] > 1:
+                    filtered = filtered[:, ::self.decim_factors[0]]
 
         # mix with reference
         # keep real and imaginary separate for filtering below
-        filtered_r = self.reference_r * filtered
-        filtered_i = self.reference_i * filtered
+        if np.iscomplexobj(reshaped_data):
+            filtered *= self.reference
+            filtered_r = filtered.real
+            filtered_i = filtered.imag
+        else:
+            filtered_r = self.reference_r * filtered
+            filtered_i = self.reference_i * filtered
+
+        # import pdb; pdb.set_trace()
+        # if plot_me:
+        #     import matplotlib.pyplot as plt
+        # #     # import pdb; pdb.set_trace()
+        #     plt.plot(self.time_pts[::2], filtered[0]*np.exp(2j*np.pi * -self.current_freq * self.time_pts[::self.d1], dtype=np.complex64))
+        #     plt.plot(self.time_pts[::2], self.reference_r)
 
         # channel selection filters
         for ct in [1,2]:
@@ -179,8 +247,8 @@ class Channelizer(Filter):
             stacked_coeffs = np.concatenate(self.filters[ct])
             out_r = np.empty_like(filtered_r)
             out_i = np.empty_like(filtered_i)
-            libipp.filter_records_iir(stacked_coeffs, self.filters[ct][0].size-1, filtered_r, filtered_r.shape[-1], num_records, out_r)
-            libipp.filter_records_iir(stacked_coeffs, self.filters[ct][0].size-1, filtered_i, filtered_i.shape[-1], num_records, out_i)
+            libipp.filter_records_iir(stacked_coeffs, self.filters[ct][0].size-1, np.ascontiguousarray(filtered_r.astype(np.float32)), filtered_r.shape[-1], num_records, out_r)
+            libipp.filter_records_iir(stacked_coeffs, self.filters[ct][0].size-1, np.ascontiguousarray(filtered_i.astype(np.float32)), filtered_i.shape[-1], num_records, out_i)
 
             # decimate
             if self.decim_factors[ct] > 1:

@@ -30,6 +30,7 @@ from auspex.stream import DataStream, DataAxis, SweepAxis, DataStreamDescriptor,
 from auspex.filters.plot import Plotter, XYPlotter, MeshPlotter, ManualPlotter
 from auspex.filters.io import WriteToHDF5, DataBuffer
 from auspex.log import logger
+import auspex.globals
 
 class ExpProgressBar(object):
     """ Display progress bar(s) on the terminal.
@@ -48,7 +49,7 @@ class ExpProgressBar(object):
         self.stream = stream
         self.num = num
         self.notebook = notebook
-        self.reset(stream=stream)
+        # self.reset(stream=stream)
 
     def reset(self, stream=None):
         """ Reset the progress bar(s) """
@@ -153,7 +154,7 @@ class MetaExperiment(type):
         self._output_connectors = {}
 
         # Parse ourself
-        self.exp_src = inspect.getsource(self)
+        self._exp_src = inspect.getsource(self)
 
         for k,v in dct.items():
             if isinstance(v, Instrument):
@@ -237,7 +238,6 @@ class Experiment(metaclass=MetaExperiment):
 
         # Run the stream init
         self.init_streams()
-        self.update_descriptors()
 
     def set_graph(self, edges):
         unique_nodes = []
@@ -248,7 +248,6 @@ class Experiment(metaclass=MetaExperiment):
                 unique_nodes.append(ee.parent)
         self.nodes = unique_nodes
         self.graph = ExperimentGraph(edges, self.loop)
-        self.update_descriptors()
 
     def init_streams(self):
         """Establish the base descriptors for any internal data streams and connectors."""
@@ -290,7 +289,7 @@ class Experiment(metaclass=MetaExperiment):
     def update_descriptors(self):
         logger.debug("Starting descriptor update in experiment.")
         for oc in self.output_connectors.values():
-            oc.descriptor.exp_src = self.exp_src
+            oc.descriptor._exp_src = self._exp_src
             for k,v in self._parameters.items():
                 oc.descriptor.add_param(k, v.value)
                 if v.unit is not None:
@@ -367,9 +366,6 @@ class Experiment(metaclass=MetaExperiment):
                 break
 
     def connect_instruments(self):
-        # Make sure we are starting from scratch
-        self.reset()
-
         # Connect the instruments to their resources
         for instrument in self._instruments.values():
             instrument.connect()
@@ -386,6 +382,14 @@ class Experiment(metaclass=MetaExperiment):
         self.instrs_connected = False
 
     def run_sweeps(self):
+        # Propagate the descriptors through the network
+        self.update_descriptors()
+        # Make sure we are starting from scratch... is this necessary?
+        self.reset()
+        # Update the progress bar if need be
+        if self.progressbar is not None:
+            self.progressbar.reset()
+
         #connect all instruments
         if not self.instrs_connected:
             self.connect_instruments()
@@ -441,8 +445,28 @@ class Experiment(metaclass=MetaExperiment):
             for plotter in self.plotters:
                 plotter.plot_server = self.plot_server
             time.sleep(0.5)
+            # Kill a previous plotter if desired.
+            if auspex.globals.single_plotter_mode and auspex.globals.last_plotter_process:
+                pro = auspex.globals.last_plotter_process
+                if hasattr(os, 'setsid'): # Doesn't exist on windows
+                    try:
+                        os.kill(pro.pid, 0) # Raises an error if the PID doesn't exist
+                        os.killpg(os.getpgid(pro.pid), signal.SIGTERM) # Proceed to kill process group
+                    except OSError:
+                        logger.debug("No plotter to kill.")
+                else:
+                    try:
+                        pro.kill()
+                    except:
+                        logger.debug("No plotter to kill.")
+
             client_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),"matplotlib-client.py")
-            subprocess.Popen(['python', client_path, 'localhost'], env=os.environ.copy())
+            if hasattr(os, 'setsid'):
+                auspex.globals.last_plotter_process = subprocess.Popen(['python', client_path, 'localhost'],
+                                                                    env=os.environ.copy(), preexec_fn=os.setsid)
+            else:
+                auspex.globals.last_plotter_process = subprocess.Popen(['python', client_path, 'localhost'],
+                                                                    env=os.environ.copy())
             time.sleep(1)
 
         def catch_ctrl_c(signum, frame):
@@ -466,7 +490,7 @@ class Experiment(metaclass=MetaExperiment):
             self.loop.run_until_complete(asyncio.gather(*tasks))
             self.loop.run_until_complete(asyncio.sleep(1))
         except Exception as e:
-            logger.error("Encountered exception %s in main loop.", repr(e))
+            logger.exception("message")
 
         for plot, callback in zip(self.manual_plotters, self.manual_plotter_callbacks):
             if callback:
@@ -485,8 +509,11 @@ class Experiment(metaclass=MetaExperiment):
             except:
                 logger.debug("File probably already closed...")
 
-        if len(self.plotters) > 0 and not self.leave_plot_server_open:
-            self.plot_server.stop()
+        try:
+            if len(self.plotters) > 0 and not self.leave_plot_server_open:
+                self.plot_server.stop()
+        except:
+            logger.warning("Could not stop plot server gracefully...")
 
         self.shutdown_instruments()
         self.disconnect_instruments()
@@ -495,7 +522,6 @@ class Experiment(metaclass=MetaExperiment):
         for oc in self.output_connectors.values():
             logger.debug("Adding axis %s to connector %s.", axis, oc.name)
             oc.descriptor.add_axis(axis)
-        self.update_descriptors()
 
     def add_sweep(self, parameters, sweep_list, refine_func=None, callback_func=None, metadata=None):
         ax = SweepAxis(parameters, sweep_list, refine_func=refine_func, callback_func=callback_func, metadata=metadata)

@@ -62,7 +62,7 @@ class AlazarChannel(DigitizerChannel):
 
 class AlazarATS9870(Instrument):
     """Alazar ATS9870 digitizer"""
-    instrument_type = "Digitizer"
+    instrument_type = ("Digitizer")
 
     def __init__(self, resource_name=None, name="Unlabeled Alazar"):
         self.name = name

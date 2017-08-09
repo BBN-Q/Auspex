@@ -3,7 +3,6 @@
 
 language: python
 python:
-  - "3.5"
   - "3.6"
 
 install:
@@ -19,10 +18,16 @@ install:
   - conda info -a
 
   # Create conda environment with dependencies
+<<<<<<< HEAD
   - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION numpy scipy matplotlib h5py pandas networkx cffi scikit-learn
+=======
+  - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION numpy scipy matplotlib h5py pandas networkx cffi bokeh jupyter future
+>>>>>>> master
   - source activate test-environment
   - pip install git+https://github.com/BBN-Q/Adapt.git
-  - pip install tqdm pyvisa coveralls
+  - pip install git+https://github.com/BBN-Q/QGL.git@load-from-yaml
+  - pip install tqdm pyvisa coveralls ruamel.yaml watchdog
+  - conda install -c ecpy atom;
   - export PYTHONPATH=$PYTHONPATH:$PWD/src
 
 script:

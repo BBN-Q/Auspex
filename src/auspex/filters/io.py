@@ -63,23 +63,27 @@ class WriteToHDF5(Filter):
 
     def new_filename(self):
         filename = self.filename.value
-        ext = filename.find('.h5')
-        if ext > -1:
-            filename = filename[:ext]
-        dirname = os.path.dirname(filename)
+        basename, ext = os.path.splitext(filename)
+        if ext == "":
+            logger.debug(f"Filename for writer {self.name} does not have an extension -- using default '.h5'")
+            ext = ".h5"
+
+        dirname = os.path.dirname(os.path.abspath(filename))
+
         if self.add_date:
-            date = time.strftime("%y%m%d")
-            basename = os.path.basename(filename)
-            dirname = os.path.join(dirname, date)
-            filename = os.path.join(dirname, basename)
+            date     = time.strftime("%y%m%d")
+            dirname  = os.path.join(dirname, date)
+            basename = os.path.join(dirname, os.path.basename(basename))
+
         # Set the file number to the maximum in the current folder + 1
         filenums = []
         if os.path.exists(dirname):
             for f in os.listdir(dirname):
-                if self.filename.value in f:
-                    filenums += [int(re.findall('-\d{4}', f)[0][1:])] if os.path.isfile(os.path.join(dirname, f)) else []
+                if ext in f:
+                    filenums += [int(re.findall('-(\d{4})\.', f)[0])] if os.path.isfile(os.path.join(dirname, f)) else []
+
         i = max(filenums) + 1 if filenums else 0
-        return "{}-{:04d}.h5".format(filename,i)
+        return "{}-{:04d}{}".format(basename,i,ext)
 
     def new_file(self):
         """ Open a new data file to write """
@@ -127,7 +131,7 @@ class WriteToHDF5(Filter):
         params     = desc.params
         axis_names = desc.axis_names(with_metadata=True)
 
-        self.file.attrs['exp_src'] = desc.exp_src
+        self.file.attrs['exp_src'] = desc._exp_src
         num_axes   = len(axes)
 
         if desc.is_adaptive() and not self.store_tuples:
@@ -147,7 +151,7 @@ class WriteToHDF5(Filter):
             self.group = self.file
 
         self.data_group = self.group.create_group("data")
-        
+
         # Create datasets for each stream
         dset_for_streams = {}
         for stream in streams:
@@ -172,7 +176,7 @@ class WriteToHDF5(Filter):
             self.descriptor.attrs[k] = v
 
         # Create axis data sets for storing the base axes as well as the
-        # full set of tuples. For the former we add 
+        # full set of tuples. For the former we add
         # references to the descriptor.
         tuple_dset_for_axis_name = {}
         for i, a in enumerate(axes):
@@ -196,7 +200,7 @@ class WriteToHDF5(Filter):
 
                     # This stores the values taking during the experiment sweeps
                     if self.store_tuples:
-                        dset = self.data_group.create_dataset(col_name, (expected_length,), dtype=a.dtype, 
+                        dset = self.data_group.create_dataset(col_name, (expected_length,), dtype=a.dtype,
                                                              chunks=True, compression=compression, maxshape=(None,) )
                         dset.attrs['unit'] = col_unit
                         dset.attrs['is_data'] = False
@@ -279,7 +283,7 @@ class WriteToHDF5(Filter):
 
             # Infer the type from the first message
             message_type = messages[0]['type']
-            
+
             # If we receive a message
             if message_type == 'event':
                 logger.debug('%s "%s" received event of type "%s"', self.__class__.__name__, self.name, message_type)
@@ -287,7 +291,7 @@ class WriteToHDF5(Filter):
                     break
                 elif messages[0]['event_type'] == 'refined':
                     refined_axis = messages[0]['data']
-                    
+
                     # Resize the data set
                     num_new_points = desc.num_new_points_through_axis(refined_axis)
                     for stream in streams:
@@ -302,7 +306,7 @@ class WriteToHDF5(Filter):
                     # descriptor axes accordingly.
                     self.group[name].attrs['was_refined'] = True
 
-            
+
             elif message_type == 'data':
                 message_data = [message['data'] for message in messages]
                 message_comp = [message['compression'] for message in messages]
@@ -324,7 +328,7 @@ class WriteToHDF5(Filter):
                 # Write the data
                 for s, d in zip(streams, message_data):
                     dset_for_streams[s][w_idx:w_idx+d.size] = d
-                
+
                 # Write the coordinate tuples
                 if self.store_tuples:
                     if desc.is_adaptive():
@@ -413,7 +417,7 @@ class DataBuffer(Filter):
 
             for stream in stream_results.keys():
                 data = stream_data[stream]
-                
+
                 self.buffers[stream][self.w_idxs[stream]:self.w_idxs[stream]+data.size] = data
                 self.w_idxs[stream] += data.size
 
