@@ -80,6 +80,10 @@ class PulseCalibration(object):
         return [[Id(self.qubit), MEAS(self.qubit)]]
 
     def set(self, instrs_to_set = []):
+        try:
+            self.exp.plot_server.stop()
+        except AttributeError:
+            pass #no experiment yet created, or plot server not yet started
         meta_file = compile_to_hardware(self.sequence(), fileName=self.filename, axis_descriptor=self.axis_descriptor)
         self.exp = QubitExpFactory.create(meta_file=meta_file, calibration=True, cw_mode=self.cw_mode)
         if self.plot:
@@ -358,7 +362,6 @@ class PhaseEstimation(PulseCalibration):
             if ct > 1:
                 self.set()
             [phase, sigma] = phase_estimation(*self.run())
-            self.exp.plot_server.stop()
             logger.info("Phase: %.4f Sigma: %.4f"%(phase,sigma))
             # correct for some errors related to 2pi uncertainties
             if np.sign(phase) != np.sign(amp):
@@ -378,8 +381,10 @@ class PhaseEstimation(PulseCalibration):
             if np.abs(phase_error) < 1e-2 or np.abs(phase_error/sigma) < 1 or ct > self.iteration_limit:
                 if np.abs(phase_error) < 1e-2:
                     logger.info('Reached target rotation angle accuracy');
+                    self.amplitude = amp
                 elif abs(phase_error/sigma) < 1:
                     logger.info('Reached phase uncertainty limit');
+                    self.amplitude = amp
                 else:
                     logger.info('Hit max iteration count');
                 break
@@ -392,8 +397,8 @@ class PhaseEstimation(PulseCalibration):
 
     def update_settings(self):
         set_amp = 'pi2Amp' if isinstance(self, Pi2Calibration) else 'piAmp' if isinstance(self, PiCalibration) else 'amp'
-        self.settings['qubits'][self.qubit.label]['control']['pulse_params'][set_amp] = round(float(self.pi_amp), 5)
-        super(self, PhaseEstimation).update_settings()
+        self.settings['qubits'][self.qubit.label]['control']['pulse_params'][set_amp] = round(float(self.amplitude), 5)
+        super(PhaseEstimation, self).update_settings()
 
 class Pi2Calibration(PhaseEstimation):
     def __init__(self, qubit_name, num_pulses= 9):
