@@ -96,7 +96,9 @@ class SingleShotMeasurement(Filter):
         bias = np.mean(ground_mean + excited_mean) / distance
         logger.info("Found single-shot measurement distance: {} and bias {}.".format(distance, bias))
         #construct matched filter kernel
+        old_settings = np.seterr(divide='ignore', invalid='ignore')
         kernel = np.nan_to_num(np.divide(np.conj(ground_mean - excited_mean), np.var(self.ground_data, ddof=1, axis=1)))
+        np.seterr(**old_settings)
         #sets kernel to zero when difference is too small, and prevents
         #kernel from diverging when var->0 at beginning of record_length
         kernel = np.multiply(kernel, np.greater(np.abs(ground_mean - excited_mean), self.TOLERANCE * distance))
@@ -150,8 +152,8 @@ class SingleShotMeasurement(Filter):
             ground_Q = np.sum(np.imag(weighted_excited), axis=0)
             excited_I = np.sum(np.real(weighted_excited), axis=0)
             excited_Q = np.sum(np.imag(weighted_excited), axis=0)
-            I_min = np.amin([ground_I, excited_I])
-            I_max = np.amax([ground_I, excited_I])
+            I_min = np.amin(np.minimum(ground_I, excited_I))
+            I_max = np.amax(np.maximum(ground_I, excited_I))
             bins = np.linspace(I_min, I_max, 100)
             g_KDE = gaussian_kde(ground_I)
             e_KDE = gaussian_kde(excited_I)
