@@ -14,6 +14,7 @@ from copy import copy
 import os
 import json
 
+from auspex.log import logger
 from auspex.exp_factory import QubitExpFactory, QubitExperiment
 from auspex.analysis.io import load_from_HDF5
 from auspex.parameter import FloatParameter
@@ -66,7 +67,7 @@ class SingleShotFidelityExperiment(QubitExperiment):
     def run_sweeps(self):
         super(SingleShotFidelityExperiment, self).run_sweeps()
 
-        pdf_data = self.get_data()
+        pdf_data = self.get_results()
 
         self.re_plot.set_data("Ground", pdf_data["I Bins"], pdf_data["Ground I PDF"])
         self.re_plot.set_data("Ground Gaussian Fit", pdf_data["I Bins"], pdf_data["Ground I Gaussian PDF"])
@@ -91,8 +92,9 @@ class SingleShotFidelityExperiment(QubitExperiment):
 
     def _squash_round_robins(self):
         """Make it so that the round robins are set to 1."""
-        digitizers =  [_ for _ in self.settings['instruments'].keys() if self.settings['instruments'][_]['type'] == "digitizer"]
+        digitizers =  [_ for _ in self.settings['instruments'].keys() if 'nbr_round_robins' in self.settings['instruments'][_].keys()]
         for d in digitizers:
+            logger.info(f"Set digitizer {d} round robins to 1 for single shot experiment.")
             self.settings['instruments'][d]['nbr_round_robins'] = 1
 
     def _check_for_single_shot_filter(self):
