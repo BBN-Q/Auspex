@@ -106,7 +106,7 @@ class SingleShotMeasurement(Filter):
             kernel = kernel - np.mean(kernel)
         logger.info("Found single shot filter norm: {}.".format(np.sum(np.abs(kernel))))
         #annoyingly numpy's isreal has the opposite behavior to MATLAB's
-        if np.any(np.imag(kernel) > np.finfo(np.complex128).eps):
+        if not np.any(np.imag(kernel) > np.finfo(np.complex128).eps):
             #construct analytic signal from Hilbert transform
             kernel = hilbert(kernel)
         #normalize between -1 and 1
