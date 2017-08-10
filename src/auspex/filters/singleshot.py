@@ -13,6 +13,7 @@ from scipy.signal import hilbert
 from scipy.stats import gaussian_kde, norm
 from scipy.special import betaincinv
 from sklearn.linear_model import LogisticRegressionCV
+from time import sleep
 
 from .filter import Filter
 from auspex.parameter import Parameter, FloatParameter, IntParameter, BoolParameter
@@ -21,36 +22,61 @@ from auspex.log import logger
 
 class SingleShotMeasurement(Filter):
 
-    save_kernel = BoolParameter()
-    optimal_integration_time = BoolParameter()
-    set_threshold = BoolParameter()
-    zero_mean = BoolParameter()
-    logistic_regression = BoolParameter()
+    save_kernel = BoolParameter(default=False)
+    optimal_integration_time = BoolParameter(default=False)
+    set_threshold = BoolParameter(default=False)
+    zero_mean = BoolParameter(default=False)
+    logistic_regression = BoolParameter(default=False)
 
     sink = InputConnector()
 
     TOLERANCE = 1e-3
 
-    def __init__(self, **kwargs):
+    def __init__(self, save_kernel=False, optimal_integration_time=False,
+                    zero_mean=False, set_threshold=False,
+                    logistic_regression=False, **kwargs):
         super(SingleShotMeasurement, self).__init__(**kwargs)
         if len(kwargs) > 0:
-            self.save_kernel.value = kwargs['save_kernel']
-            self.optimal_integration_time.value = kwargs['optimal_integration_time']
-            self.zero_mean.value = kwargs['zero_mean']
-            self.set_threshold.value = kwargs['set_threshold']
-            self.logistic_regression.value = kwargs['logistic_regression']
+            self.save_kernel.value = save_kernel
+            self.optimal_integration_time.value = optimal_integration_time
+            self.zero_mean.value = zero_mean
+            self.set_threshold.value = set_threshold
+            self.logistic_regression.value = logistic_regression
 
     def update_descriptors(self):
+
         logger.debug("Updating Plotter %s descriptors based on input descriptor %s", self.name, self.sink.descriptor)
         self.stream = self.sink.input_streams[0]
         self.descriptor = self.sink.descriptor
+        try:
+            self.time_pts = self.descriptor.axes[self.descriptor.axis_num("time")].points
+            self.record_length = len(self.time_pts)
+        except ValueError:
+            raise ValueError("Single shot filter sink does not appear to have a time axis!")
+        try:
+            rr_num = self.descriptor.axis_num("round_robins")
+        except ValueError:
+            pass
+        if self.descriptor.axes[rr_num].num_points() > 1:
+            raise ValueError("Round robins for single shot filter should be set to 1!")
+        self.num_segments = len(self.sink.descriptor.axes[self.descriptor.axis_num("segment")].points)
+        self.ground_data = np.zeros((self.record_length, self.num_segments//2), dtype=np.complex)
+        self.excited_data = np.zeros((self.record_length, self.num_segments//2), dtype=np.complex)
+
 
     def final_init(self):
-        if not any(_.name == "time" for _ in self.descriptor.axes):
-            raise Exception("Single shot filter must operate on Raw or Demodulated data streams!")
+        self.counter = 1
 
-    def process_data(self, data):
-        pass
+    async def process_data(self, data):
+        """Fill the ground and excited data bins"""
+        if self.counter % 2 != 0:
+            N = (self.counter + 1) // 2 - 1
+            self.ground_data[:,N] = data
+        else:
+            N = self.counter // 2 - 1
+            self.excited_data[:,N] = data
+        self.counter += 1
+
 
 
     def compute_filter(self):
@@ -214,7 +240,7 @@ class SingleShotMeasurement(Filter):
         logger.info(("In-place logistic regression fidelity: " +
                 "{:.2f}% ({:.2f}, {:.2f})".format(100*score, 100*flo, 100*fhi)))
 
-    async def on_done(self, data):
+    async def on_done(self):
         self.compute_filter()
         if self.logistic_regression.value:
             self.logistic_fidelity()
