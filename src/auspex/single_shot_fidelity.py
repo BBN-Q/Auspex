@@ -58,17 +58,24 @@ class SingleShotFidelityExperiment(QubitExperiment):
         if 'sweeps' in self.settings:
             QubitExpFactory.load_parameter_sweeps(experiment)
         self._check_for_single_shot_filter()
-
-        self.init_plots()
-        self.add_manual_plotter(self.re_plot)
-        self.add_manual_plotter(self.im_plot)
         self.leave_plot_server_open = True
 
     def run_sweeps(self):
+        #For now, only update histograms if we have a parameter sweep.
+        if not self.sweeper.axes:
+            self.init_plots()
+            self.add_manual_plotter(self.re_plot)
+            self.add_manual_plotter(self.im_plot)
+
         super(SingleShotFidelityExperiment, self).run_sweeps()
 
-        pdf_data = self.get_results()
+        if not self.sweeper.axes:
+            self._update_histogram_plots()
 
+        self.plot_server.stop()
+
+    def _update_histogram_plots(self):
+        pdf_data = self.get_results()
         self.re_plot.set_data("Ground", pdf_data["I Bins"], pdf_data["Ground I PDF"])
         self.re_plot.set_data("Ground Gaussian Fit", pdf_data["I Bins"], pdf_data["Ground I Gaussian PDF"])
         self.re_plot.set_data("Excited", pdf_data["I Bins"], pdf_data["Excited I PDF"])
