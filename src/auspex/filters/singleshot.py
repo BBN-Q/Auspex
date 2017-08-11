@@ -17,8 +17,9 @@ from time import sleep
 
 from .filter import Filter
 from auspex.parameter import Parameter, FloatParameter, IntParameter, BoolParameter
-from auspex.stream import DataStreamDescriptor, InputConnector, OutputConnector
+from auspex.stream import DataStreamDescriptor, InputConnector, OutputConnector, SweepAxis
 from auspex.log import logger
+import time
 
 class SingleShotMeasurement(Filter):
 
@@ -29,6 +30,7 @@ class SingleShotMeasurement(Filter):
     logistic_regression = BoolParameter(default=False)
 
     sink = InputConnector()
+    fidelity = OutputConnector()
 
     TOLERANCE = 1e-3
 
@@ -42,6 +44,9 @@ class SingleShotMeasurement(Filter):
             self.zero_mean.value = zero_mean
             self.set_threshold.value = set_threshold
             self.logistic_regression.value = logistic_regression
+
+            self.quince_parameters = [self.save_kernel, self.optimal_integration_time,
+                self.zero_mean, self.set_threshold, self.logistic_regression]
 
     def update_descriptors(self):
 
@@ -63,6 +68,14 @@ class SingleShotMeasurement(Filter):
         self.ground_data = np.zeros((self.record_length, self.num_segments//2), dtype=np.complex)
         self.excited_data = np.zeros((self.record_length, self.num_segments//2), dtype=np.complex)
 
+        output_descriptor = DataStreamDescriptor()
+        output_descriptor.axes = [_ for _ in self.descriptor.axes if type(_) is SweepAxis]
+        output_descriptor._exp_src = self.sink.descriptor._exp_src
+        output_descriptor.dtype = np.complex128
+        for os in self.fidelity.output_streams:
+            os.set_descriptor(output_descriptor)
+            os.end_connector.update_descriptors()
+
 
     def final_init(self):
         self.counter = 1
@@ -76,8 +89,15 @@ class SingleShotMeasurement(Filter):
             N = self.counter // 2 - 1
             self.excited_data[:,N] = data
         self.counter += 1
-
-
+        if self.counter > self.num_segments-1:
+            self.counter = 1
+            self.compute_filter()
+            if self.logistic_regression.value:
+                self.logistic_fidelity()
+            if self.save_kernel.value:
+                self._save_kernel()
+            for os in self.fidelity.output_streams:
+                await os.push(self.fidelity_result)
 
     def compute_filter(self):
         """Compute the single shot kernel and obtain single-shot measurement
@@ -242,9 +262,13 @@ class SingleShotMeasurement(Filter):
         logger.info(("In-place logistic regression fidelity: " +
                 "{:.2f}% ({:.2f}, {:.2f})".format(100*score, 100*flo, 100*fhi)))
 
+    def _save_kernel(self):
+        try:
+            filename = self.sink.parent.name + "_kernel.txt"
+            header = f'Single shot fidelity filter - {time.strftime("%m/%d/%y -- %H:%M")}:\nSource: {self.sink.parent.name}'
+            np.savetxt(filename, self.kernel, header=header, comments="#")
+        except (AttributeError, IOError) as ex:
+            raise AttributeError("Could not save single shot fidelity kernel!") from ex
+
     async def on_done(self):
-        self.compute_filter()
-        if self.logistic_regression.value:
-            self.logistic_fidelity()
-        if self.save_kernel.value:
-            logger.debug("Kernel saving not yet implemented!")
+        pass
