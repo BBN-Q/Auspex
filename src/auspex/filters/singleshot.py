@@ -89,7 +89,7 @@ class SingleShotMeasurement(Filter):
             N = self.counter // 2 - 1
             self.excited_data[:,N] = data
         self.counter += 1
-        if self.counter > self.num_segments-1:
+        if self.counter > self.num_segments:
             self.counter = 1
             self.compute_filter()
             if self.logistic_regression.value:
