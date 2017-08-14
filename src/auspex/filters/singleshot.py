@@ -45,8 +45,8 @@ class SingleShotMeasurement(Filter):
             self.set_threshold.value = set_threshold
             self.logistic_regression.value = logistic_regression
 
-            self.quince_parameters = [self.save_kernel, self.optimal_integration_time,
-                self.zero_mean, self.set_threshold, self.logistic_regression]
+        self.quince_parameters = [self.save_kernel, self.optimal_integration_time,
+            self.zero_mean, self.set_threshold, self.logistic_regression]
 
     def update_descriptors(self):
 
@@ -130,7 +130,7 @@ class SingleShotMeasurement(Filter):
         #annoyingly numpy's isreal has the opposite behavior to MATLAB's
         if not np.any(np.imag(kernel) > np.finfo(np.complex128).eps):
             #construct analytic signal from Hilbert transform
-            kernel = hilbert(kernel)
+            kernel = hilbert(np.real(kernel))
         #normalize between -1 and 1
         kernel = kernel / np.amax(np.hstack([np.abs(np.real(kernel)), np.abs(np.imag(kernel))]))
         #apply matched filter
