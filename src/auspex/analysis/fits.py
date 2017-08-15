@@ -29,6 +29,8 @@ def fit_drag(data, DRAG_vec, pulse_vec):
     num_DRAG = len(DRAG_vec)
     num_seqs = len(pulse_vec)
     xopt_vec = np.zeros(num_seqs)
+    perr_vec = np.zeros(num_seqs)
+    popt_mat = np.zeros(4, num_seqs-1)
     data = norm_data(data).reshape(num_DRAG, len(data)/num_DRAG)
     #first fit sine to lowest n, for the full range
     data_n = data[:, 1]
@@ -36,9 +38,10 @@ def fit_drag(data, DRAG_vec, pulse_vec):
 
     p0 = [0, 1, T0, 0]
     popt, pcov = curve_fit(sinf, DRAG_vec, data_n, p0 = p0)
+    perr_vec[0] = np.sqrt(np.diag(pcov))
     x_fine = np.linspace(min(DRAG_vec), max(DRAG_vec), 1001)
     xopt_vec[0] = x_fine[np.argmin(sinf(x_fine, *popt))]
-
+    popt_mat[:,0] = popt
     for ct in range(1, len(pulse_vec)):
         #quadratic fit for subsequent steps, narrower range
         data_n = data[:, ct]
@@ -50,10 +53,11 @@ def fit_drag(data, DRAG_vec, pulse_vec):
         reduced_data_n = data_n[max(0, closest_ind - fit_range) : min(num_DRAG-1, closest_ind + fit_range)]
         #quadratic fit
         popt, pcov = curve_fit(quadf, curr_DRAG_vec, reduced_data_n, p0 = p0)
-        perr = np.sqrt(np.diag(pcov))
+        perr_vec[ct] = np.sqrt(np.diag(pcov))
         x_fine = np.linspace(min(curr_DRAG_vec), max(curr_DRAG_vec), 1001)
-        x0 = x_fine[np.argmin(quadf(x_fine, *popt))]
-    return xopt_vec[-1], perr[1]
+        xopt_vec[ct] = x_fine[np.argmin(quadf(x_fine, *popt))]
+        popt_mat[1:3,ct] = popt
+    return xopt_vec, perr_vec, popt_mat
 
 def sinf(x, f, A, phi, y0):
     return A*np.sin(2*np.pi*f*x + phi) + y0
