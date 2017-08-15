@@ -54,7 +54,7 @@ class PulseCalibration(object):
 
     def set(self, instrs_to_set = []):
         meta_file = compile_to_hardware(self.sequence(), fileName=self.filename, axis_descriptor=self.axis_descriptor)
-        self.exp = QubitExpFactory.create(meta_file=meta_file, calibration=True, cw_mode=self.cw_mode)
+        self.exp = QubitExpFactory.create(meta_file=meta_file, calibration=True, save_data=False, cw_mode=self.cw_mode)
         if self.plot:
             # Add the manual plotter and the update method to the experiment
             self.exp.add_manual_plotter(self.plot)
