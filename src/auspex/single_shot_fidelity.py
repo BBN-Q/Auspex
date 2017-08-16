@@ -26,7 +26,7 @@ from auspex.analysis.helpers import normalize_data
 class SingleShotFidelityExperiment(QubitExperiment):
     """Experiment to measure single-shot measurement fidelity of a qubit."""
 
-    def __init__(self, qubit_names, num_shots=10000, expname=None, meta_file=None, save_data=False):
+    def __init__(self, qubit_names, num_shots=10000, expname=None, meta_file=None, save_data=False, stream_type = 'Raw'):
         """Create a single shot fidelity measurement experiment. Assumes that there is a single shot measurement
         filter in the filter pipeline.
         Arguments:
@@ -41,10 +41,12 @@ class SingleShotFidelityExperiment(QubitExperiment):
         self.qubit     = [QubitFactory(qubit_name) for qubit_name in qubit_names] if isinstance(qubit_names, list) else QubitFactory(qubit_names)
 
         self.settings = config.yaml_load(config.configFile)
-        self.calibration = save_data
+        self.save_data = save_data
+        self.calibration = True
         self.name = expname
         self.cw_mode = False
         self.repeats = num_shots
+        self.ss_stream_type = stream_type
 
         if meta_file is None:
             meta_file = SingleShot(self.qubit)
@@ -57,7 +59,7 @@ class SingleShotFidelityExperiment(QubitExperiment):
         QubitExpFactory.load_filters(self)
         if 'sweeps' in self.settings:
             QubitExpFactory.load_parameter_sweeps(experiment)
-        self._check_for_single_shot_filter()
+        self.ssf = self.find_single_shot_filter()
         self.leave_plot_server_open = True
 
     def run_sweeps(self):
@@ -107,17 +109,20 @@ class SingleShotFidelityExperiment(QubitExperiment):
             logger.info(f"Set digitizer {d} round robins to 1 for single shot experiment.")
             self.settings['instruments'][d]['nbr_round_robins'] = 1
 
-    def _check_for_single_shot_filter(self):
-        """Make sure there is at least one single shot measurement filter in the pipeline."""
-        if not any([type(x) is SingleShotMeasurement for x in self.filters.values()]):
+    def find_single_shot_filter(self):
+        """Make sure there is one single shot measurement filter in the pipeline."""
+        ssf = [x for x in self.filters.values() if type(x) is SingleShotMeasurement]
+        if len(ssf) > 1:
+            raise NotImplementedError("Single shot fidelity for more than one qubit is not yet implemented.")
+        elif len(ssf) == 0:
             raise NameError("There do not appear to be any single-shot measurements in your filter pipeline. Please add one!")
+        return ssf
 
     def get_results(self):
         """Get the PDF and fidelity numbers from the filters. Returns a dictionary of PDF data with the
         filter names as keys."""
-        ssf = [x for x in self.filters.values() if type(x) is SingleShotMeasurement]
+        ssf = self.find_single_shot_filter()
         if len(ssf) > 1:
-            raise NotImplementedError("Single shot fidelity for more than one qubit is not yet implemented.")
             try:
                 return {x.name: x.pdf_data for x in ssf}
             except AttributeError:
