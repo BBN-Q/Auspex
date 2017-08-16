@@ -109,11 +109,6 @@ class SingleShotFidelityExperiment(QubitExperiment):
             logger.info(f"Set digitizer {d} round robins to 1 for single shot experiment.")
             self.settings['instruments'][d]['nbr_round_robins'] = 1
 
-    def _check_for_single_shot_filter(self):
-        """Make sure there is at least one single shot measurement filter in the pipeline."""
-        if not any([type(x) is SingleShotMeasurement for x in self.filters.values()]):
-            raise NameError("There do not appear to be any single-shot measurements in your filter pipeline. Please add one!")
-
     def find_single_shot_filter(self):
         """Make sure there is one single shot measurement filter in the pipeline."""
         ssf = [x for x in self.filters.values() if type(x) is SingleShotMeasurement]
