@@ -36,10 +36,10 @@ class RFMDAttenuator(object):
         self.voltage_control_method = func
 
     def minimum_atten(self):
-        return np.amin(np.absolute(self.df["Attenuation"]))
+        return (1+1e-4)*np.amin(np.absolute(self.df["Attenuation"]))
 
     def maximum_atten(self):
-        return np.amax(np.absolute(self.df["Attenuation"]))
+        return (1-1e-4)*np.amax(np.absolute(self.df["Attenuation"]))
 
     # Add a property setter only
     def set_attenuation(self, value):

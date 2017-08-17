@@ -62,15 +62,16 @@ class SwitchingExperiment(Experiment):
     attempts        = 1 << 9
     samps_per_trig  = 15
     polarity        = 1
-    pspl_base_atten  = 4
-    min_daq_voltage = -1
-    max_daq_voltage = 1
+    pspl_base_attenuation  = 4
+    min_daq_voltage = 0
+    max_daq_voltage = 10
     reset_amplitude = 0.2
     reset_duration  = 5.0e-9
     circuit_attenuation = 20.0
 
     # Default values for lockin measurement. These will need to be changed in a notebook to match the MR and switching current of the sample being measured
     res_reference = 1e3
+    sample_resistance = 50
     measure_current = 10e-6
     fdB = 18
     tc = 100e-3
@@ -98,11 +99,18 @@ class SwitchingExperiment(Experiment):
         self.lock.tc = self.tc
         self.lock.filter_slope = self.fdB
         self.lock.amp = self.res_reference * self.measure_current
-        time.sleep(0.5)
+        sense_vals = np.array(self.lock.SENSITIVITY_VALUES)
+        self.lock.sensitivity = sense_vals[np.argmin(np.absolute(sense_vals-2*self.sample_resistance*self.measure_current*np.ones(sense_vals.size)))]
+        time.sleep(20 * self.lock.measure_delay())
+
         # Rescale lockin analogue output for NIDAQ
         self.lock.r_offset_enable = True
+        #self.lock.r_expand = 10
+        #self.lock.r_offset = 100 * ((self.sample_resistance*self.measure_current/self.lock.sensitivity) - (0.5/self.lock.r_expand))
+        self.lock.r_expand = 100
         self.lock.auto_offset("R")
-        self.lock.r_expand = 10
+        self.lock.r_offset = 0.995*self.lock.r_offset
+        time.sleep(20 * self.lock.measure_delay())
 
         self.mag.ramp()
         self.atten.set_supply_method(self.lock.set_ao2)
@@ -133,7 +141,7 @@ class SwitchingExperiment(Experiment):
             wf[:pulse_points] = np.sign(amplitude)*arb_voltage(abs(amplitude))
             return wf
 
-        reset_wf    = arb_pulse(-self.polarity*self.reset_amplitude*np.power(10.0, self.circuit_attenuation/20.0), self.reset_duration)
+        reset_wf    = arb_pulse(-self.polarity*abs(self.reset_amplitude)*np.power(10.0, self.circuit_attenuation/20.0), self.reset_duration)
         wf_data     = KeysightM8190A.create_binary_wf_data(reset_wf)
         rst_segment_id  = self.arb.define_waveform(len(wf_data))
         self.arb.upload_waveform(wf_data, rst_segment_id)
@@ -181,14 +189,14 @@ class SwitchingExperiment(Experiment):
         self.analog_input.StartTask()
 
         # Setup the PSPL
-        self.pspl.amplitude = self.polarity*7.5*np.power(10, (-self.pspl_base_atten)/20.0)
+        self.pspl.amplitude = self.polarity*7.5*np.power(10, (-self.pspl_base_attenuation)/20.0)
         self.pspl.trigger_source = "EXT"
         self.pspl.trigger_level = 0.1
         self.pspl.output = True
 
         def set_voltage(voltage):
             # Calculate the voltage controller attenuator setting
-            self.pspl.amplitude = np.sign(voltage)*7.5*np.power(10, -self.pspl_base_attenuation/20.0)
+            self.pspl.amplitude = self.polarity*7.5*np.power(10, -self.pspl_base_attenuation/20.0)
             vc_atten = abs(20.0 * np.log10(abs(voltage)/7.5)) - self.pspl_base_attenuation - self.circuit_attenuation
 
             if vc_atten <= self.atten.minimum_atten():
@@ -275,11 +283,11 @@ if __name__ == '__main__':
             return False
         print("Reached {} points.".format(len(points) + len(new_points)))
         sweep_axis.add_points(new_points)
-
-        # Plot previous mesh
-        x = [list(el) for el in points[mesh.simplices,0]]
-        y = [list(el) for el in points[mesh.simplices,1]]
-        val = [np.mean(vals) for vals in mean[mesh.simplices]]
+        #
+        # # Plot previous mesh
+        # x = [list(el) for el in points[mesh.simplices,0]]
+        # y = [list(el) for el in points[mesh.simplices,1]]
+        # val = [np.mean(vals) for vals in mean[mesh.simplices]]
 
         desc = DataStreamDescriptor()
         desc.add_axis(sweep_axis)

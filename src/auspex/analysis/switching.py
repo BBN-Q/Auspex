@@ -18,7 +18,7 @@ from auspex.analysis.io import load_from_HDF5
 from auspex.log import logger
 
 def load_switching_data(filename_or_fileobject, start_state=None, group="main", failure=False, threshold=None,
-                        voltage_scale_factor=1.0, duration_scale_factor=1.0, data_name='voltage', data_filter=None):
+                        voltage_scale_factor=1.0, duration_scale_factor=1.0, data_name='voltage', data_filter=None, display=False):
     data, desc = load_from_HDF5(filename_or_fileobject, reshape=False)
     # Regular axes
     states = desc[group].axis("state").points
@@ -38,7 +38,7 @@ def load_switching_data(filename_or_fileobject, start_state=None, group="main", 
     if failure:
         return points, reset_failure(Vs, start_state=start_state)
     else:
-        return points, switching_phase(Vs, start_state=start_state, threshold=threshold)
+        return points, switching_phase(Vs, start_state=start_state, threshold=threshold, display=display)
 
 def switching_phase(data, **kwargs):
     counts, start_stt = count_matrices(data, **kwargs)
@@ -65,7 +65,7 @@ def clusterer(data, num_clusters=2):
         logger.debug("Cluster {}: {} +/- {}".format(ct, all_vals[state==ct].mean(), all_vals[state==ct].std()))
     return clust
 
-def count_matrices(data, start_state=None, threshold=None, display=None):
+def count_matrices(data, start_state=None, threshold=None, display=False):
     num_clusters = 2
     if threshold is None:
         clust = clusterer(data)

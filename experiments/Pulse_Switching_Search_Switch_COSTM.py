@@ -46,6 +46,7 @@ class SwitchSearchLockinExperiment(Experiment):
 
     # Default values for lockin measurement. These will need to be changed in a notebook to match the MR and switching current of the sample being measured
     res_reference = 1e3
+    sample_resistance = 50
     measure_current = 10e-6
     fdB = 18
     tc = 100e-3
@@ -63,7 +64,7 @@ class SwitchSearchLockinExperiment(Experiment):
     lock  = SR865("USB0::0xB506::0x2000::002638::INSTR")
     atten = RFMDAttenuator("calibration/RFSA2113SB_HPD_20160901.csv")
 
-    min_daq_voltage = -10
+    min_daq_voltage = 0
     max_daq_voltage = 10
 
     def init_instruments(self):
@@ -72,14 +73,23 @@ class SwitchSearchLockinExperiment(Experiment):
         # ===================
         self.lock.tc = self.tc
         self.lock.filter_slope = self.fdB
-        self.lock.amp = self.res_reference * self.measure_current
-        time.sleep(0.5)
+        self.lock.amp = (self.res_reference + self.sample_resistance) * self.measure_current
+        sense_vals = np.array(self.lock.SENSITIVITY_VALUES)
+        self.lock.sensitivity = sense_vals[np.argmin(np.absolute(sense_vals-2*self.sample_resistance*self.measure_current*np.ones(sense_vals.size)))]
+        time.sleep(20 * self.lock.measure_delay())
+
         # Rescale lockin analogue output for NIDAQ
         self.lock.r_offset_enable = True
+        self.lock.r_expand = 100
         self.lock.auto_offset("R")
-        self.lock.r_expand = 10
+        self.lock.r_offset = 0.99*self.lock.r_offset
+        #self.lock.r_offset = 100 * ((self.sample_resistance*self.measure_current/self.lock.sensitivity) - (0.05/self.lock.r_expand))
+        time.sleep(20 * self.lock.measure_delay())
 
+        # Ramp magnet to set point
         self.mag.ramp()
+
+        #Set attenuator control methods
         self.atten.set_supply_method(self.lock.set_ao2)
         self.atten.set_control_method(self.lock.set_ao3)
 

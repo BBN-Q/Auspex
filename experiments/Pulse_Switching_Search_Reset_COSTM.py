@@ -45,10 +45,9 @@ class ResetSearchLockinExperiment(Experiment):
     field            = FloatParameter(default=0, unit="T")
     pulse_duration   = FloatParameter(default=5e-9, unit="s")
 
-    repeats         = 200
+    attempts         = 200
     amplitudes      = np.arange(-0.01, 0.011, 0.01) # Reset amplitudes
     samps_per_trig  = 5
-    settle_delay    = 50e-6
     circuit_attenuation = 20.0
     res_reference = 1e3
     measure_current = 3e-6
@@ -72,7 +71,7 @@ class ResetSearchLockinExperiment(Experiment):
         descrip.data_name='voltage'
         descrip.add_axis(DataAxis("sample", range(self.samps_per_trig)))
         descrip.add_axis(DataAxis("amplitude", self.amplitudes))
-        descrip.add_axis(DataAxis("repeat", range(self.repeats)))
+        descrip.add_axis(DataAxis("repeat", range(self.attempts)))
         self.voltage.set_descriptor(descrip)
 
     def init_instruments(self):
@@ -82,11 +81,13 @@ class ResetSearchLockinExperiment(Experiment):
         self.lock.tc = self.tc
         self.lock.filter_slope = self.fdB
         self.lock.amp = self.res_reference * self.measure_current
-        time.sleep(0.5)
+        time.sleep(10 * self.lock.measure_delay())
         # Rescale lockin analogue output for NIDAQ
         self.lock.r_offset_enable = True
+        self.lock.r_expand = 100
         self.lock.auto_offset("R")
-        self.lock.r_expand = 10
+        self.lock.r_offset = 0.995*self.lock.r_offset
+        time.sleep(10 * self.lock.measure_delay())
 
         self.mag.ramp()
 
@@ -98,7 +99,7 @@ class ResetSearchLockinExperiment(Experiment):
 
         self.analog_input = Task()
         self.read = int32()
-        self.buf_points = len(self.amplitudes)*self.samps_per_trig*self.repeats
+        self.buf_points = len(self.amplitudes)*self.samps_per_trig*self.attempts
         self.analog_input.CreateAIVoltageChan("Dev1/ai0", "", DAQmx_Val_Diff, -10.0, 10.0, DAQmx_Val_Volts, None)
         self.analog_input.CfgSampClkTiming("", 1e6, DAQmx_Val_Rising, DAQmx_Val_FiniteSamps, self.samps_per_trig)
         self.analog_input.CfgInputBuffer(self.buf_points)
@@ -150,11 +151,11 @@ class ResetSearchLockinExperiment(Experiment):
         nidaq_trig_segment_id = self.arb.define_waveform(len(nidaq_trig_wf))
         self.arb.upload_waveform(nidaq_trig_wf, nidaq_trig_segment_id)
 
-        settle_pts = int(640*np.ceil(self.settle_delay * 12e9 / 640))
+        settle_pts = int(640*np.ceil(self.lock.measure_delay() * 12e9 / 640))
         start_idxs = [0]
 
         scenario = Scenario()
-        seq = Sequence(sequence_loop_ct=int(self.repeats))
+        seq = Sequence(sequence_loop_ct=int(self.attempts))
         for si in segment_ids:
             # seq = Sequence(sequence_loop_ct=int(1))
             seq.add_waveform(si) # Apply switching pulse to the sample

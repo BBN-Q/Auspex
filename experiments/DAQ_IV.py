@@ -18,7 +18,7 @@ import time
 
 class IVExperiment(Experiment):
 
-    awg = Agilent33220A("192.168.5.198")
+    awg = Agilent33220A("192.168.5.199")
 
     amplitude = FloatParameter(default=0.1, unit="V")
     frequency  = 167.0 # FloatParameter(default=167.0, unit="Hz")
