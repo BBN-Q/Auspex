@@ -11,7 +11,11 @@
 import json
 import os.path
 import sys
-import ruamel.yaml as yaml
+from shutil import move
+try:
+    import ruamel.yaml as yaml
+except:
+    import ruamel_yaml as yaml
 
 # Run this code by importing config.py
 # Load the configuration from the json file and populate the global configuration dictionary
@@ -36,6 +40,8 @@ class Include():
     def write(self):
         with open(self.filename, 'w') as fid:
             yaml.dump(self.data, fid, Dumper=yaml.RoundTripDumper)
+    def pop(self, key):
+        return self.data.pop(key)
 
 class Loader(yaml.RoundTripLoader):
     def __init__(self, stream):
@@ -66,9 +72,11 @@ def yaml_load(filename):
     return code
 
 def yaml_dump(data, filename):
-    with open(filename, 'w') as fid:
+    with open(filename+".tmp", 'w+') as fid:
         Dumper.add_representer(Include, Dumper.include)
-        yaml.dump(code, fid, Dumper=Dumper)
+        yaml.dump(data, fid, Dumper=Dumper)
+    # Upon success
+    move(filename+".tmp", filename)
 
 if not os.path.isfile(config_file):
     # build a config file from the template

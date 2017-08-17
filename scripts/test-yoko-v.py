@@ -13,7 +13,7 @@ logging.basicConfig(format='%(levelname)s:\t%(message)s', level=logging.INFO)
 
 import numpy as np
 
-from auspex.instruments.yokogawa import GS200
+from auspex.instruments.yokogawa import YokogawaGS200
 from auspex.sweep import Sweep
 from auspex.experiment import FloatParameter, Quantity, Procedure
 
@@ -21,7 +21,7 @@ class RampCurrent(Procedure):
     voltage = FloatParameter(unit="V")
     current = Quantity(unit="A")
 
-    yoko = GS200("GPIB0::30::INSTR")
+    yoko = YokogawaGS200("GPIB0::30::INSTR")
 
     def init_instruments(self):
         self.yoko.function = "voltage"
