@@ -96,7 +96,7 @@ class Channelizer(Filter):
     def init_filters(self, frequency, bandwidth):
         # convert bandwidth normalized to Nyquist interval
         n_bandwidth = bandwidth * self.time_step * 2
-        n_frequency = frequency * self.time_step * 2
+        n_frequency = abs(frequency) * self.time_step * 2
 
         # arbitrarily decide on three stage filter pipeline
         # 1. first stage decimating filter on real data
