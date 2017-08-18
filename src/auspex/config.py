@@ -87,6 +87,9 @@ def yaml_dump(data, filename, flatten=False):
         yaml.dump(data, fid, Dumper=d)
     # Upon success
     move(filename+".tmp", filename)
+    with open(filename, 'r') as fid:
+        contents = fid.read()
+    return contents
 
 if not os.path.isfile(config_file):
     # build a config file from the template
