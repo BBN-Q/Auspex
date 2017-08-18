@@ -38,8 +38,9 @@ class Include():
     def keys(self):
         return self.data.keys()
     def write(self):
-        with open(self.filename, 'w') as fid:
+        with open(self.filename+".tmp", 'w') as fid:
             yaml.dump(self.data, fid, Dumper=yaml.RoundTripDumper)
+        move(self.filename+".tmp", filename)
     def pop(self, key):
         return self.data.pop(key)
 
@@ -62,6 +63,9 @@ class Dumper(yaml.RoundTripDumper):
     def include(self, data):
         data.write()
         return self.represent_scalar(u'!include', data.filename)
+class FlatDumper(yaml.RoundTripDumper):
+    def include(self, data):
+        return self.represent_mapping('tag:yaml.org,2002:map', data.data)
 
 def yaml_load(filename):
     with open(filename, 'r') as fid:
@@ -71,10 +75,16 @@ def yaml_load(filename):
         load.dispose()
     return code
 
-def yaml_dump(data, filename):
+def yaml_dump(data, filename, flatten=False):
+    if flatten:
+        d = FlatDumper
+        d.add_representer(Include, d.include)
+    else:
+        d = Dumper
+        d.add_representer(Include, d.include)
     with open(filename+".tmp", 'w+') as fid:
-        Dumper.add_representer(Include, Dumper.include)
-        yaml.dump(data, fid, Dumper=Dumper)
+        
+        yaml.dump(data, fid, Dumper=d)
     # Upon success
     move(filename+".tmp", filename)
 
