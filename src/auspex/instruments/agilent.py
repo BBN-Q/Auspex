@@ -72,7 +72,7 @@ class Agilent33220A(SCPIInstrument):
 
     # Pulse characteristics
     pulse_width = FloatCommand(scpi_string="FUNCtion:PULSe:WIDTh")
-    pusle_period = FloatCommand(scpi_string="FUNCtion:PULSe:PERiod")
+    pulse_period = FloatCommand(scpi_string="PULSe:PERiod")
     pulse_edge = FloatCommand(scpi_string="FUNCtion:PULSe:TRANsition")
     pulse_dcyc = IntCommand(scpi_string="FUNCtion:PULSe:DCYCle")
 
