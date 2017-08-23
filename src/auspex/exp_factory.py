@@ -352,6 +352,10 @@ class QubitExpFactory(object):
             for meas_name in filt_to_enable:
                 filters[meas_name]['enabled'] = True
         else:
+            #disable single-shot filters 
+            for meas_name in filters.keys():
+                if filters[meas_name]["type"] == "SingleShotMeasurement":
+                    filters[meas_name]['enabled'] = False
             #label measurement with qubit name (assuming the convention "M-"+qubit_name)
             for meas_name in filt_to_enable:
                 if filters[meas_name]["type"] == "WriteToHDF5":
