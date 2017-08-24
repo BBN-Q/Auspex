@@ -19,7 +19,9 @@ from .filter import Filter
 from auspex.parameter import Parameter, FloatParameter, IntParameter, BoolParameter
 from auspex.stream import DataStreamDescriptor, InputConnector, OutputConnector, SweepAxis
 from auspex.log import logger
+import auspex.config as config
 import time
+import os
 
 class SingleShotMeasurement(Filter):
 
@@ -266,7 +268,7 @@ class SingleShotMeasurement(Filter):
         try:
             filename = self.sink.parent.name + "_kernel.txt"
             header = f'Single shot fidelity filter - {time.strftime("%m/%d/%y -- %H:%M")}:\nSource: {self.sink.parent.name}'
-            np.savetxt(filename, self.kernel, header=header, comments="#")
+            np.savetxt(os.path.join(config.KernelDir, filename), self.kernel, header=header, comments="#")
         except (AttributeError, IOError) as ex:
             raise AttributeError("Could not save single shot fidelity kernel!") from ex
 

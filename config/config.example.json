@@ -1,4 +1,5 @@
 {
 	"AWGDir": "/my/path/to/AWG/",
+	"kernelDir": "/my/path/to/kernels/",
 	"ConfigurationFile": "/my/path/to/measure.yml"
 }
