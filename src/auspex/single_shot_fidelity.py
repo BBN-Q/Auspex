@@ -77,7 +77,8 @@ class SingleShotFidelityExperiment(QubitExperiment):
         if not self.sweeper.axes:
             self._update_histogram_plots()
 
-        self.plot_server.stop()
+        if self.plotters:
+            self.plot_server.stop()
 
     def _update_histogram_plots(self):
         pdf_data = self.get_results()
