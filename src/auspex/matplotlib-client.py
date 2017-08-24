@@ -177,6 +177,8 @@ class CanvasManual(MplCanvas):
         self.traces[trace_name].set_ydata(y_data)
         self.axis.relim()
         self.axis.autoscale_view()
+        if len(self.traces)>1:
+            self.axis.legend()
         self.draw()
         self.flush_events()
 
@@ -186,7 +188,7 @@ class CanvasManual(MplCanvas):
         if 'y_label' in desc.keys():
             self.axis.set_ylabel(desc['y_label'])
         for trace in desc['traces']:
-            self.traces[trace['name']], = self.axis.plot([], **trace['matplotlib_kwargs'])
+            self.traces[trace['name']], = self.axis.plot([], **trace['matplotlib_kwargs'], label = trace["name"])
         self.axis.ticklabel_format(style='sci', axis='x', scilimits=(-3,3))
         self.axis.ticklabel_format(style='sci', axis='y', scilimits=(-3,3))
         self.fig.tight_layout()
