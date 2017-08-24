@@ -273,6 +273,10 @@ class QubitExpFactory(object):
                     writers += [e for e in endpoints if filters[e]["type"] == "WriteToHDF5" and (not hasattr(filters[e], "enabled") or filters[e]["enabled"])]
                     plotters += [e for e in endpoints if filters[e]["type"] == "Plotter" and (not hasattr(filters[e], "enabled") or filters[e]["enabled"])]
                     singleshot += [e for e in endpoints if filters[e]["type"] == "SingleShotMeasurement" and (not hasattr(filters[e], "enabled") or filters[e]["enabled"]) and isinstance(experiment, auspex.single_shot_fidelity.SingleShotFidelityExperiment)]
+                    if singleshot:
+                        # SingleShotMeasurement has fidelity as output connector
+                        plotters += [d for ss in singleshot for d in dag.successors(ss) if filters[d]["type"] == "Plotter" and (not hasattr(filters[d], "enabled") or filters[d]["enabled"])]
+                        writers += [d for ss in singleshot for d in dag.successors(ss) if filters[d]["type"] == "Writer" and (not hasattr(filters[d], "enabled") or filters[d]["enabled"])]
             filt_to_enable.extend(set().union(writers, plotters, singleshot))
             if calibration:
                 # For calibrations the user should only have one writer enabled, otherwise we will be confused.
