@@ -63,14 +63,14 @@ class SingleShotFidelityExperiment(QubitExperiment):
         self.leave_plot_server_open = True
 
     def run_sweeps(self):
-        #For now, only update histograms if we have a parameter sweep.
+        #For now, only update histograms if we don't have a parameter sweep.
         if not self.sweeper.axes:
             self.init_plots()
             self.add_manual_plotter(self.re_plot)
             self.add_manual_plotter(self.im_plot)
         else:
             if any([x.save_kernel.value for x in self.filters.values() if type(x) is SingleShotMeasurement]):
-                raise ValueError("Kernel saving is not supported if you have parameter sweeps!")
+                logger.warning("Kernel saving is not supported if you have parameter sweeps!")
 
         super(SingleShotFidelityExperiment, self).run_sweeps()
 
