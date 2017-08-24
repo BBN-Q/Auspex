@@ -103,6 +103,5 @@ try:
     import QGL.config
     AWGDir = QGL.config.AWGDir
     configFile = QGL.config.configFile
-    KernelDir = QGL.config.KernelDir
 except:
     pass
