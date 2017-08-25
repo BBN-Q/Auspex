@@ -95,7 +95,7 @@ class SingleShotFidelityExperiment(QubitExperiment):
                         #    logger.warning("Sweep parameter not in instrument settings. Added to the sweep")
                         #param_key = param_key.setdefault(key, {})
                         param_key = param_key[key]
-                    param_key[instr_tree[-1]] = axis.points[opt_ind]
+                    param_key[instr_tree[-1]] = float(axis.points[opt_ind])
                 config.yaml_dump(self.settings, config.configFile)
     def _update_histogram_plots(self):
         pdf_data = self.get_results()
