@@ -19,6 +19,7 @@ class Parameter(object):
         self.unit     = unit
         self.default  = default
         self.method   = None
+        self.instrument_tree = None
 
         # These are primarily intended for Quince interoperation,
         # but will maybe be useful for Auspex too...

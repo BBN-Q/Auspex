@@ -17,6 +17,7 @@ import auspex.globals
 from time import sleep
 from visa import VisaIOError
 import numpy as np
+import copy
 
 # Dirty trick to avoid loading libraries when scraping
 # This code using quince.
@@ -241,7 +242,7 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
 
     def set_all(self, settings_dict, prefix=""):
         # Pop the channel settings
-        settings = settings_dict.copy()
+        settings = copy.deepcopy(settings_dict)
         quad_channels = settings.pop('tx_channels')
         # Call the non-channel commands
         super(APS2, self).set_all(settings)

@@ -265,6 +265,7 @@ class QubitExpFactory(object):
             writers = []
             plotters = []
             singleshot = []
+            buffers = []
             for filt_name, filt in filters.items():
                 if filt_name == stream_sel_name:
                     # Find descendants of the channel selector
@@ -274,12 +275,14 @@ class QubitExpFactory(object):
                     # Find endpoints which are enabled writers, plotters or singleshot filters
                     writers += [e for e in endpoints if filters[e]["type"] == "WriteToHDF5" and (not hasattr(filters[e], "enabled") or filters[e]["enabled"])]
                     plotters += [e for e in endpoints if filters[e]["type"] == "Plotter" and (not hasattr(filters[e], "enabled") or filters[e]["enabled"])]
+                    buffers += [e for e in endpoints if filters[e]["type"] == "DataBuffer" and (not hasattr(filters[e], "enabled") or filters[e]["enabled"])]
                     singleshot += [e for e in endpoints if filters[e]["type"] == "SingleShotMeasurement" and (not hasattr(filters[e], "enabled") or filters[e]["enabled"]) and isinstance(experiment, auspex.single_shot_fidelity.SingleShotFidelityExperiment)]
                     if singleshot:
                         # SingleShotMeasurement has fidelity as output connector
                         plotters += [d for ss in singleshot for d in dag.successors(ss) if filters[d]["type"] == "Plotter" and (not hasattr(filters[d], "enabled") or filters[d]["enabled"])]
                         writers += [d for ss in singleshot for d in dag.successors(ss) if filters[d]["type"] == "Writer" and (not hasattr(filters[d], "enabled") or filters[d]["enabled"])]
-            filt_to_enable.extend(set().union(writers, plotters, singleshot))
+                        buffers += [d for ss in singleshot for d in dag.successors(ss) if filters[d]["type"] == "DataBuffer" and (not hasattr(filters[d], "enabled") or filters[d]["enabled"])]
+            filt_to_enable.extend(set().union(writers, plotters, singleshot, buffers))
             if calibration:
                 # For calibrations the user should only have one writer enabled, otherwise we will be confused.
                 if len(writers) > 1:
@@ -545,6 +548,7 @@ class QubitExpFactory(object):
                         param.assign_method(getattr(instr, method_name)) # Couple the parameter to the instrument
                     else:
                         raise ValueError("The instrument {} has no method {}".format(name, method_name))
+                param.instr_tree = [instr.name, prop] #TODO: extend tree to endpoint
                 experiment.add_sweep(param, points) # Create the requested sweep on this parameter
 
     @staticmethod
