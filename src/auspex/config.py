@@ -97,10 +97,11 @@ else:
 # abspath allows the use of relative file names in the config file
 AWGDir = os.path.abspath(cfg['AWGDir'])
 configFile = os.path.abspath(cfg['ConfigurationFile'])
+KernelDir = os.path.abspath(cfg['KernelDir'])
+
 try:
     import QGL.config
     AWGDir = QGL.config.AWGDir
     configFile = QGL.config.configFile
 except:
     pass
-
