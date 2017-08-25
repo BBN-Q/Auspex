@@ -91,11 +91,10 @@ class SingleShotFidelityExperiment(QubitExperiment):
                     instr_tree = axis.parameter.instr_tree
                     param_key = self.settings['instruments']
                     for key in instr_tree[:-1]:
-                        #if key not in param_key.keys():
-                        #    logger.warning("Sweep parameter not in instrument settings. Added to the sweep")
-                        #param_key = param_key.setdefault(key, {})
+                        # go through the tree
                         param_key = param_key[key]
                     param_key[instr_tree[-1]] = float(axis.points[opt_ind])
+                    logger.info(f'Set{" ".join(str(x) for x in instr_tree)} to {axis.points[opt_ind]}.')
                 config.yaml_dump(self.settings, config.configFile)
     def _update_histogram_plots(self):
         pdf_data = self.get_results()
