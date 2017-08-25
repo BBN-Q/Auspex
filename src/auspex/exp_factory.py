@@ -548,6 +548,7 @@ class QubitExpFactory(object):
                         param.assign_method(getattr(instr, method_name)) # Couple the parameter to the instrument
                     else:
                         raise ValueError("The instrument {} has no method {}".format(name, method_name))
+                param.instr_tree = [instr.name, prop] #TODO: extend tree to endpoint
                 experiment.add_sweep(param, points) # Create the requested sweep on this parameter
 
     @staticmethod
