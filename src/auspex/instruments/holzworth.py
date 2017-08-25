@@ -60,7 +60,7 @@ class HolzworthHS9000(Instrument, metaclass=MakeSettersGetters):
         self.serial = model + '-' + serial
         success = self._lib.openDevice(self.serial.encode('ascii'))
         if success != 0:
-            logger.info("Could not open Holzworth at address: {}, might already be open on another channel.".format(self.serial))
+            logger.debug("Could not open Holzworth at address: {}, might already be open on another channel.".format(self.serial))
         # read frequency and power ranges
         self.fmin = float((self.ch_query(":FREQ:MIN?")).split()[0]) * 1e6 #Hz
         self.fmax = float((self.ch_query(":FREQ:MAX?")).split()[0]) * 1e6 #Hz
