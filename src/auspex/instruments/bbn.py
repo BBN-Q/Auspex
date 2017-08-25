@@ -20,6 +20,7 @@ import numpy as np
 
 # Dirty trick to avoid loading libraries when scraping
 # This code using quince.
+aps2_missing = False
 if auspex.globals.auspex_dummy_mode:
     fake_aps2 = True
 else:
@@ -27,8 +28,8 @@ else:
         import aps2
         fake_aps2 = False
     except:
-        logger.warning("Could not find APS2 python driver.")
         fake_aps2 = True
+        aps2_missing = True
         aps2 = MagicMock()
 
 class DigitalAttenuator(SCPIInstrument):
@@ -186,6 +187,9 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
     def __init__(self, resource_name=None, name="Unlabeled APS2"):
         self.name = name
         self.resource_name = resource_name
+
+        if aps2_missing:
+            logger.warning("Could not load aps2 library")
 
         if fake_aps2:
             self.wrapper = MagicMock()

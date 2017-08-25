@@ -8,6 +8,7 @@
 
 import inspect
 import time
+import copy
 import itertools
 import logging
 import asyncio
@@ -222,12 +223,26 @@ class Experiment(metaclass=MetaExperiment):
             setattr(self, oc, a)
 
         # Some instruments don't clean up well after themselves, reconstruct them on a
-        # per instance basis
+        # per instance basis. These instruments contain a wide variety of complex behaviors
+        # and rely on other classes and data structures, so we avoid copying them and 
+        # run through the constructor instead.
+        self._instruments_instance = {}
         for n in self._instruments.keys():
             new_cls = type(self._instruments[n])
             new_inst = new_cls(resource_name=self._instruments[n].resource_name, name=self._instruments[n].name)
             setattr(self, n, new_inst)
-            self._instruments[n] = new_inst
+            self._instruments_instance[n] = new_inst
+        self._instruments = self._instruments_instance
+
+        # We don't want to add parameters to the base class, so do the same here.
+        # These aren't very complicated objects, so we'll throw caution to the wind and
+        # try copying them directly.
+        self._parameters_instance = {}
+        for n, v in self._parameters.items():
+            new_inst = copy.deepcopy(v)
+            setattr(self, n, new_inst)
+            self._parameters_instance[n] = new_inst
+        self._parameters = self._parameters_instance
 
         # Create the asyncio measurement loop
         self.loop = asyncio.get_event_loop()

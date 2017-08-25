@@ -22,7 +22,7 @@ install:
   - source activate test-environment
   - pip install git+https://github.com/BBN-Q/Adapt.git
   - pip install git+https://github.com/BBN-Q/QGL.git@load-from-yaml
-  - pip install tqdm pyvisa coveralls ruamel.yaml watchdog
+  - pip install tqdm pyvisa coveralls ruamel.yaml watchdog scikit-learn
   - conda install -c ecpy atom;
   - export PYTHONPATH=$PYTHONPATH:$PWD/src
 

@@ -30,7 +30,7 @@ else:
         from libalazar import ATS9870
         fake_alazar = False
     except:
-        logger.warning("Could not load alazar library")
+        # logger.warning("Could not load alazar library")
         fake_alazar = True
 
 # Convert from pep8 back to camelCase labels
@@ -86,6 +86,8 @@ class AlazarATS9870(Instrument):
             self._lib = ATS9870()
 
     def connect(self, resource_name=None):
+        if fake_alazar:
+            logger.warning("Could not load Alazar library")
         if resource_name:
             self.resource_name = resource_name
 

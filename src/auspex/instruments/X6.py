@@ -29,7 +29,7 @@ else:
         import libx6
         fake_x6 = False
     except:
-        logger.warning("Could not load x6 library")
+        # logger.warning("Could not load x6 library")
         fake_x6 = True
 
 class X6Channel(DigitizerChannel):
@@ -124,6 +124,7 @@ class X6(Instrument):
 
         if self.gen_fake_data or fake_x6:
             self._lib = MagicMock()
+            logger.warning("Could not load x6 library")
             logger.warning("X6 GENERATING FAKE DATA")
         self._lib.connect(int(self.resource_name))
 

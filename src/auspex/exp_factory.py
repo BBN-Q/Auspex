@@ -131,16 +131,17 @@ class QubitExpFactory(object):
     will override some of the config values depending on the experiment being run."""
 
     @staticmethod
-    def run(meta_file=None, expname=None, calibration=False, cw_mode=False):
+    def run(meta_file=None, expname=None, calibration=False, cw_mode=False, repeats=None):
         """This passes all of the parameters given to the *create* method
         and then runs the experiment immediately."""
         exp = QubitExpFactory.create(meta_file=meta_file, expname=expname,
-                                     calibration=calibration, cw_mode=cw_mode)
+                                     calibration=calibration, cw_mode=cw_mode,
+                                    repeats=repeats)
         exp.run_sweeps()
         return exp
 
     @staticmethod
-    def create(meta_file=None, expname=None, calibration=False, cw_mode=False):
+    def create(meta_file=None, expname=None, calibration=False, cw_mode=False, repeats=None):
         """Create the experiment, but do not run the sweeps. If *cw_mode* is specified
         the AWGs will be operated in continuous waveform mode, and will not be stopped
         and started between succesive sweep points. The *calibration* argument is used
@@ -148,7 +149,8 @@ class QubitExpFactory(object):
         any file writers to IO buffers. The *meta_file* specified here is one output by
         QGL that specifies which instruments are required and what the SegmentSweep axes
         are. The *expname* argument is simply used to set the output directory relative
-        to the data directory."""
+        to the data directory. If *repeats* is defined this will overide the
+        number of segments gleaned from the meta_info"""
 
         settings = config.yaml_load(config.configFile)
 
@@ -162,6 +164,7 @@ class QubitExpFactory(object):
         experiment.name            = expname
         experiment.cw_mode         = cw_mode
         experiment.calibration     = calibration
+        experiment.repeats         = repeats
 
         if meta_file:
             QubitExpFactory.load_meta_info(experiment, meta_file)
@@ -225,6 +228,9 @@ class QubitExpFactory(object):
             stream_sel_name = receiver_name.replace('RecvChan-', '')
             dig_name = filters[stream_sel_name]['source']
             chan_name = filters[stream_sel_name]['channel']
+
+            if experiment.repeats is not None:
+                num_segments *= experiment.repeats
 
             # Set the correct number of segments for the digitizer
             experiment.settings["instruments"][dig_name]['nbr_segments'] = num_segments
@@ -347,6 +353,10 @@ class QubitExpFactory(object):
         # Now we will construct the DataAxis from the meta_info
         desc = meta_info["axis_descriptor"]
         data_axis = desc[0] # Data will always be the first axis
+
+        if experiment.repeats is not None:
+            #ovverride data axis with repeated number of segments
+            data_axis['points'] = np.tile(data_axis['points'], experiment.repeats)
 
         # See if there are multiple partitions, and therefore metadata
         if len(desc) > 1:
