@@ -86,15 +86,16 @@ class SingleShotFidelityExperiment(QubitExperiment):
             #set sweep parameters to the values that maximize fidelity
             for buff in self.buffers: #TODO: select the buffers whose sources are singleshot filters
                 dataset, descriptor = buff.get_data(), buff.get_descriptor()
+                opt_ind = np.argmax(dataset['Data'])
                 for k, axis in enumerate(self.sweeper.axes):
-                    opt_ind = np.argmax(dataset['Data'], k)
                     instr_tree = axis.parameter.instr_tree
                     param_key = self.settings['instruments']
                     for key in instr_tree[:-1]:
                         # go through the tree
                         param_key = param_key[key]
-                    param_key[instr_tree[-1]] = float(axis.points[opt_ind])
-                    logger.info(f'Set{" ".join(str(x) for x in instr_tree)} to {axis.points[opt_ind]}.')
+                    opt_value = float(dataset[axis.name][opt_ind])
+                    param_key[instr_tree[-1]] = opt_value
+                    logger.info(f'Set{" ".join(str(x) for x in instr_tree)} to {opt_value}.')
                 config.yaml_dump(self.settings, config.configFile)
     def _update_histogram_plots(self):
         pdf_data = self.get_results()
