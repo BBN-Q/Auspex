@@ -272,16 +272,11 @@ class QubitExpFactory(object):
                     chan_descendants = nx.descendants(dag, filt_name)
                     # Find endpoints within the descendants
                     endpoints = [n for n in chan_descendants if dag.in_degree(n) == 1 and dag.out_degree(n) == 0]
-                    # Find endpoints which are enabled writers, plotters or singleshot filters
+                    # Find endpoints which are enabled writers, plotters or singleshot filters without an output
                     writers += [e for e in endpoints if filters[e]["type"] == "WriteToHDF5" and (not hasattr(filters[e], "enabled") or filters[e]["enabled"])]
                     plotters += [e for e in endpoints if filters[e]["type"] == "Plotter" and (not hasattr(filters[e], "enabled") or filters[e]["enabled"])]
                     buffers += [e for e in endpoints if filters[e]["type"] == "DataBuffer" and (not hasattr(filters[e], "enabled") or filters[e]["enabled"])]
                     singleshot += [e for e in endpoints if filters[e]["type"] == "SingleShotMeasurement" and (not hasattr(filters[e], "enabled") or filters[e]["enabled"]) and isinstance(experiment, auspex.single_shot_fidelity.SingleShotFidelityExperiment)]
-                    if singleshot:
-                        # SingleShotMeasurement has fidelity as output connector
-                        plotters += [d for ss in singleshot for d in dag.successors(ss) if filters[d]["type"] == "Plotter" and (not hasattr(filters[d], "enabled") or filters[d]["enabled"])]
-                        writers += [d for ss in singleshot for d in dag.successors(ss) if filters[d]["type"] == "Writer" and (not hasattr(filters[d], "enabled") or filters[d]["enabled"])]
-                        buffers += [d for ss in singleshot for d in dag.successors(ss) if filters[d]["type"] == "DataBuffer" and (not hasattr(filters[d], "enabled") or filters[d]["enabled"])]
             filt_to_enable.extend(set().union(writers, plotters, singleshot, buffers))
             if calibration:
                 # For calibrations the user should only have one writer enabled, otherwise we will be confused.
