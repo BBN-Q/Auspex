@@ -282,7 +282,7 @@ class QubitExpFactory(object):
                 # For calibrations the user should only have one writer enabled, otherwise we will be confused.
                 if len(writers) > 1:
                     raise Exception("More than one viable data writer was found for a receiver channel {}. Please enable only one!".format(receiver_name))
-                if len(writers) == 0 and len(plotters) == 0 and len(singleshot) == 0:
+                if len(writers) == 0 and len(plotters) == 0 and len(singleshot) == 0 and len(buffers) == 0:
                     raise Exception("No viable data writer, plotter or single-shot filter was found for receiver channel {}. Please enable one!".format(receiver_name))
 
             if writers and not save_data:
@@ -330,8 +330,11 @@ class QubitExpFactory(object):
                 if singleshot:
                     singleshot_ancestors = set().union(*[nx.ancestors(dag, ss) for ss in singleshot])
                     singleshot_ancestors.remove(dig_name)
+                if buffers:
+                    buffer_ancestors = set().union(*[nx.ancestors(dag, bf) for bf in buffers])
+                    buffer_ancestors.remove(dig_name)
 
-                filt_to_enable.extend(set().union(writer_ancestors, plotter_ancestors, singleshot_ancestors))
+                filt_to_enable.extend(set().union(writer_ancestors, plotter_ancestors, singleshot_ancestors, buffer_ancestors))
 
         if calibration:
             # One to one writers to qubits
