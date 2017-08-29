@@ -161,8 +161,8 @@ class CavitySearch(PulseCalibration):
 
     def init_plot(self):
         plot = ManualPlotter("Qubit Search", x_label='Frequency (GHz)', y_label='Amplitude (Arb. Units)')
-        plot.add_data_trace("Data")
-        plot.add_fit_trace("Fit")
+        plot.add_data_trace("Data", {'color': 'C1'})
+        plot.add_fit_trace("Fit", {'color': 'C1'})
         return plot
 
 class QubitSearch(PulseCalibration):
@@ -187,8 +187,8 @@ class QubitSearch(PulseCalibration):
 
     def init_plot(self):
         plot = ManualPlotter("Qubit Search", x_label='Frequency (GHz)', y_label='Amplitude (Arb. Units)')
-        plot.add_data_trace("Data")
-        plot.add_fit_trace("Fit")
+        plot.add_data_trace("Data", {'color': 'C1'})
+        plot.add_fit_trace("Fit", {'color': 'C1'})
         return plot
 
 class RabiAmpCalibration(PulseCalibration):
@@ -228,10 +228,10 @@ class RabiAmpCalibration(PulseCalibration):
 
     def init_plot(self):
         plot = ManualPlotter("Rabi Amplitude Cal", x_label="I/Q Amplitude", y_label=f"{self.quad} (Arb. Units)")
-        plot.add_data_trace("I Data")
-        plot.add_data_trace("Q Data")
-        plot.add_fit_trace("I Fit")
-        plot.add_fit_trace("Q Fit")
+        plot.add_data_trace("I Data", {'color': 'C1'})
+        plot.add_data_trace("Q Data", {'color': 'C2'})
+        plot.add_fit_trace("I Fit", {'color': 'C1'})
+        plot.add_fit_trace("Q Fit", {'color': 'C2'})
         return plot
 
     def update_settings(self):
@@ -261,8 +261,8 @@ class RamseyCalibration(PulseCalibration):
 
     def init_plot(self):
         plot = ManualPlotter("Ramsey Fit", x_label='Time (us)', y_label='Amplitude (Arb. Units)')
-        plot.add_data_trace("Data")
-        plot.add_fit_trace("Fit")
+        plot.add_data_trace("Data", {'color': 'C1'})
+        plot.add_fit_trace("Fit", {'color': 'C1'})
         return plot
 
     def calibrate(self):
@@ -472,10 +472,10 @@ class CRCalibration(PulseCalibration):
 
     def init_plot(self):
         plot = ManualPlotter("CR"+str.lower(self.cal_type.name)+"Fit", x_label=str.lower(self.cal_type.name), y_label='$<Z_{'+self.qubit_names[1]+'}>$')
-        plot.add_data_trace("Data 0")
-        plot.add_fit_trace("Fit 0")
-        plot.add_data_trace("Data 1")
-        plot.add_fit_trace("Fit 1")
+        plot.add_data_trace("Data 0", {'color': 'C1'})
+        plot.add_fit_trace("Fit 0", {'color': 'C1'})
+        plot.add_data_trace("Data 1", {'color': 'C2'})
+        plot.add_fit_trace("Fit 1", {'color': 'C2'})
         return plot
 
     def calibrate(self):
