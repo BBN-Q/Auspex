@@ -50,6 +50,13 @@ auspex\.refine module
     :members:
     :undoc-members:
 
+auspex\.single\_shot\_fidelity module
+---------------------------
+.. _singleshotfidelityexperiment:
+.. automodule:: auspex.single_shot_fidelity
+    :members:
+    :undoc-members:
+
 auspex\.stream module
 ---------------------
 
