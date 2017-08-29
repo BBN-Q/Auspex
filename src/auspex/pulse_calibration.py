@@ -82,7 +82,7 @@ class PulseCalibration(object):
     def set(self, instrs_to_set = []):
         try:
             self.exp.plot_server.stop()
-        except AttributeError:
+        except Exception as e:
             pass #no experiment yet created, or plot server not yet started
         meta_file = compile_to_hardware(self.sequence(), fileName=self.filename, axis_descriptor=self.axis_descriptor)
         self.exp = QubitExpFactory.create(meta_file=meta_file, calibration=True, save_data=False, cw_mode=self.cw_mode)
