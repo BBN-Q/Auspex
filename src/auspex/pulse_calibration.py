@@ -269,7 +269,7 @@ class RamseyCalibration(PulseCalibration):
         #find qubit control source (from config)
         qubit_source = self.settings['qubits'][self.qubit.label]['control']['generator']
         orig_freq = self.settings['instruments'][qubit_source]['frequency']
-        set_freq = round(orig_freq + self.added_detuning/1e9, 10)
+        set_freq = round(orig_freq + self.added_detuning, 10)
         instr_to_set = {'instr': qubit_source, 'method': 'set_frequency', 'value': set_freq}
         #plot settings
         ramsey_f = ramsey_2f if self.two_freqs else ramsey_1f
@@ -285,7 +285,7 @@ class RamseyCalibration(PulseCalibration):
 
         #TODO: set conditions for success
         fit_freq_A = np.mean(fit_freqs) #the fit result can be one or two frequencies
-        set_freq = round(orig_freq + self.added_detuning/1e9 + fit_freq_A/2/1e9, 10)
+        set_freq = round(orig_freq + self.added_detuning + fit_freq_A/2, 10)
         instr_to_set['value'] = set_freq
         self.set([instr_to_set])
         data, _ = self.run()
@@ -299,16 +299,13 @@ class RamseyCalibration(PulseCalibration):
 
         fit_freq_B = np.mean(fit_freqs)
         if fit_freq_B < fit_freq_A:
-            fit_freq = round(orig_freq + self.added_detuning/1e9 + 0.5*(fit_freq_A + 0.5*fit_freq_A + fit_freq_B)/1e9, 10)
+            fit_freq = round(orig_freq + self.added_detuning + 0.5*(fit_freq_A + 0.5*fit_freq_A + fit_freq_B), 10)
         else:
-            fit_freq = round(orig_freq + self.added_detuning/1e9 - 0.5*(fit_freq_A - 0.5*fit_freq_A + fit_freq_B)/1e9, 10)
+            fit_freq = round(orig_freq + self.added_detuning - 0.5*(fit_freq_A - 0.5*fit_freq_A + fit_freq_B), 10)
         if self.set_source:
             self.settings['instruments'][qubit_source]['frequency'] = float(fit_freq)
         else:
-            self.settings['qubits']['q1']['control']['frequency'] += float((fit_freq - orig_freq)*1e9)
-        self.update_settings()
-        print('Frequency', fit_freq)
-            self.settings['qubits']['q1']['control']['frequency'] += float((orig_freq - fit_freq)*1e9)
+            self.settings['qubits']['q1']['control']['frequency'] += float(fit_freq - orig_freq)
         logger.info(f"Qubit set frequency = {round(float(fit_freq/1e9),5)} GHz")
         return fit_freq
 
