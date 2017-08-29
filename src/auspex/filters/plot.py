@@ -55,7 +55,7 @@ class Plotter(Filter):
             d['y_max']      = float(max(self.y_values))
             d['y_len']      = int(self.descriptor.axes[-2].num_points())
         return d
-                    
+
 
     def update_descriptors(self):
         logger.debug("Updating Plotter %s descriptors based on input descriptor %s", self.name, self.sink.descriptor)
@@ -348,29 +348,31 @@ class XYPlotter(Filter):
 
 class ManualPlotter(object):
     """Establish a figure, then give the user complete control over plot creation and data."""
-    def __init__(self,  name="", x_label='X', y_label="y"):
+    def __init__(self,  name="", x_label=['X'], y_label=["y"], numplots = 1):
         self.x_label      = x_label
         self.y_label      = y_label
         self.name         = name
+        self.numplots     = numplots
         self.traces = []
 
-    def add_trace(self, name, matplotlib_kwargs={}):
-        self.traces.append({'name': name, 'matplotlib_kwargs': matplotlib_kwargs})
+    def add_trace(self, name, subplot_num = 0, matplotlib_kwargs={}):
+        self.traces.append({'name': name, 'axis_num' : subplot_num, 'matplotlib_kwargs': matplotlib_kwargs})
 
-    def add_fit_trace(self, name, custom_mpl_kwargs={}):
+    def add_fit_trace(self, name, subplot_num = 0, custom_mpl_kwargs={}):
         matplotlib_kwargs={'linestyle': '-', 'linewidth': 2}
         matplotlib_kwargs.update(custom_mpl_kwargs)
-        self.add_trace(name, matplotlib_kwargs=matplotlib_kwargs)
+        self.add_trace(name, subplot_num=subplot_num, matplotlib_kwargs=matplotlib_kwargs)
 
-    def add_data_trace(self, name, custom_mpl_kwargs={}):
+    def add_data_trace(self, name, subplot_num = 0, custom_mpl_kwargs={}):
         matplotlib_kwargs={'linestyle': ':', 'marker': '.'}
         matplotlib_kwargs.update(custom_mpl_kwargs)
-        self.add_trace(name, matplotlib_kwargs=matplotlib_kwargs)
+        self.add_trace(name, subplot_num=subplot_num, matplotlib_kwargs=matplotlib_kwargs)
 
     def desc(self):
         d =    {'plot_type': 'manual',
                 'x_label':   self.x_label,
                 'y_label':   self.y_label,
+                'numplots':  self.numplots,
                 'traces':    self.traces
                 }
         return d
