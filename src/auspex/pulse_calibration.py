@@ -261,8 +261,8 @@ class RamseyCalibration(PulseCalibration):
 
     def init_plot(self):
         plot = ManualPlotter("Ramsey Fit", x_label='Time (us)', y_label='Amplitude (Arb. Units)')
-        plot.add_data_trace("Data", {'color': 'C1'})
-        plot.add_fit_trace("Fit", {'color': 'C1'})
+        plot.add_data_trace("Data", {'color': 'black'})
+        plot.add_fit_trace("Fit", {'color': 'red'})
         return plot
 
     def calibrate(self):
@@ -308,6 +308,8 @@ class RamseyCalibration(PulseCalibration):
             self.settings['qubits']['q1']['control']['frequency'] += float((fit_freq - orig_freq)*1e9)
         self.update_settings()
         print('Frequency', fit_freq)
+            self.settings['qubits']['q1']['control']['frequency'] += float((orig_freq - fit_freq)*1e9)
+        logger.info(f"Qubit set frequency = {round(float(fit_freq/1e9),5)} GHz")
         return fit_freq
 
 class PhaseEstimation(PulseCalibration):
