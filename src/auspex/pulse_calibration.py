@@ -82,7 +82,7 @@ class PulseCalibration(object):
     def set(self, instrs_to_set = []):
         try:
             self.exp.plot_server.stop()
-        except AttributeError:
+        except Exception as e:
             pass #no experiment yet created, or plot server not yet started
         meta_file = compile_to_hardware(self.sequence(), fileName=self.filename, axis_descriptor=self.axis_descriptor)
         self.exp = QubitExpFactory.create(meta_file=meta_file, calibration=True, save_data=False, cw_mode=self.cw_mode)
@@ -261,57 +261,52 @@ class RamseyCalibration(PulseCalibration):
 
     def init_plot(self):
         plot = ManualPlotter("Ramsey Fit", x_label='Time (us)', y_label='Amplitude (Arb. Units)')
-        plot.add_data_trace("Data", {'color': 'C1'})
-        plot.add_fit_trace("Fit", {'color': 'C1'})
+        plot.add_data_trace("Data", {'color': 'black'})
+        plot.add_fit_trace("Fit", {'color': 'red'})
         return plot
 
     def calibrate(self):
         #find qubit control source (from config)
         qubit_source = self.settings['qubits'][self.qubit.label]['control']['generator']
         orig_freq = self.settings['instruments'][qubit_source]['frequency']
-        set_freq = round(orig_freq + self.added_detuning/1e9, 10)
+        set_freq = round(orig_freq + self.added_detuning, 10)
         instr_to_set = {'instr': qubit_source, 'method': 'set_frequency', 'value': set_freq}
-        self.set([instr_to_set])
-        data, _ = self.run()
-
-        #TODO: fit Ramsey and find new detuning. Finally, set source or qubit channel frequency
-        fit_freqs, fit_errs, all_params = fit_ramsey(self.delays, data, two_freqs = self.two_freqs)
-        fit_freq_A = np.mean(fit_freqs) #the fit result can be one or two frequencies
-        #TODO: set conditions for success
-        set_freq = round(orig_freq + self.added_detuning/1e9 + fit_freq_A/2/1e9, 10)
-        instr_to_set['value'] = set_freq
-        self.set([instr_to_set])
-
-        # Plot the results
+        #plot settings
         ramsey_f = ramsey_2f if self.two_freqs else ramsey_1f
         finer_delays = np.linspace(np.min(self.delays), np.max(self.delays), 4*len(self.delays))
+
+        self.set([instr_to_set])
+        data, _ = self.run()
+        fit_freqs, fit_errs, all_params = fit_ramsey(self.delays, data, two_freqs = self.two_freqs)
+
+        # Plot the results
         self.plot["Data"] = (self.delays, data)
         self.plot["Fit"] = (finer_delays, ramsey_f(finer_delays, *all_params))
 
+        #TODO: set conditions for success
+        fit_freq_A = np.mean(fit_freqs) #the fit result can be one or two frequencies
+        set_freq = round(orig_freq + self.added_detuning + fit_freq_A/2, 10)
+        instr_to_set['value'] = set_freq
+        self.set([instr_to_set])
         data, _ = self.run()
 
         fit_freqs, fit_errs, all_params = fit_ramsey(self.delays, data, two_freqs = self.two_freqs)
-        fit_freq_B = np.mean(fit_freqs)
 
         # Plot the results
-        ramsey_f = ramsey_2f if self.two_freqs else ramsey_1f
-        finer_delays = np.linspace(np.min(self.delays), np.max(self.delays), 4*len(self.delays))
+        self.init_plot()
         self.plot["Data"] = (self.delays, data)
         self.plot["Fit"]  = (finer_delays, ramsey_f(finer_delays, *all_params))
 
+        fit_freq_B = np.mean(fit_freqs)
         if fit_freq_B < fit_freq_A:
-            fit_freq = round(orig_freq + self.added_detuning/1e9 + 0.5*(fit_freq_A + 0.5*fit_freq_A + fit_freq_B)/1e9, 10)
+            fit_freq = round(orig_freq + self.added_detuning + 0.5*(fit_freq_A + 0.5*fit_freq_A + fit_freq_B), 10)
         else:
-            fit_freq = round(orig_freq + self.added_detuning/1e9 - 0.5*(fit_freq_A - 0.5*fit_freq_A + fit_freq_B)/1e9, 10)
+            fit_freq = round(orig_freq + self.added_detuning - 0.5*(fit_freq_A - 0.5*fit_freq_A + fit_freq_B), 10)
         if self.set_source:
-            self.settings['instruments'][qubit_source]['frequency'] = fit_freq
-            #self.update_settings()
-        else: #TODO here!
-            self.settings['qubits']
-            self.chan_settings['channelDict'][self.qubit_names[0]]['frequency'] += (fit_freq - orig_freq)*1e9
-            #self.update_libraries([self.chan_settings], [config.channelLibFile])
-
-        print('Frequency', fit_freq)
+            self.settings['instruments'][qubit_source]['frequency'] = float(fit_freq)
+        else:
+            self.settings['qubits']['q1']['control']['frequency'] += float(fit_freq - orig_freq)
+        logger.info(f"Qubit set frequency = {round(float(fit_freq/1e9),5)} GHz")
         return fit_freq
 
 class PhaseEstimation(PulseCalibration):
