@@ -28,6 +28,8 @@ install:
 
 script:
   - coverage run -m unittest discover -v test
+  # Try to get the readthedocs builds working until they get working python 3.6 up
+  - sphinx-build -v -b html doc doc/_build/html -d doc/_build/doctrees
 
 after_script:
   - coveralls
