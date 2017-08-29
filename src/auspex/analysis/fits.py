@@ -54,7 +54,7 @@ def ramsey_1f(x, f, A, tau, phi, y0):
     return A*np.exp(-x/tau)*np.cos(2*np.pi*f*x + phi) + y0
 
 def ramsey_2f(x, f1, f2, A1, A2, tau1, tau2, phi1, phi2, y0):
-    return ramsey_1f(x, f1, A1, tau1, phi1, y0) + ramsey_1f(x, f2, A2, tau2, phi2, y0)
+    return ramsey_1f(x, f1, A1, tau1, phi1, y0/2) + ramsey_1f(x, f2, A2, tau2, phi2, y0/2)
 
 def fit_drag(data, DRAG_vec, pulse_vec):
     """Fit calibration curves vs DRAG parameter, for variable number of pulses"""
