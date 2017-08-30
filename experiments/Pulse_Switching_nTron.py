@@ -168,20 +168,30 @@ class nTronSwitchingExperiment(Experiment):
         self.atten.set_supply_method(self.lock.set_ao2)
         self.atten.set_control_method(self.lock.set_ao3)
 
-        def set_voltage(voltage):
+        def set_voltage(voltage, base_atten=self.pspl_base_attenuation):
             # Calculate the voltage controller attenuator setting
-            self.pspl.amplitude = 7.5*np.power(10, -self.pspl_base_attenuation/20.0)
-            vc_atten = abs(20.0 * np.log10(abs(voltage)/7.5)) - self.pspl_base_attenuation - self.circuit_attenuation
+            amplitude = 7.5*np.power(10, -base_atten/20.0)
+            vc_atten = abs(20.0 * np.log10(abs(voltage)/7.5)) - base_atten - self.circuit_attenuation
 
             if vc_atten <= self.atten.minimum_atten():
-                logger.error("Voltage controlled attenuation {} under range.".format(vc_atten))
-                raise ValueError("Voltage controlled attenuation {} under range.".format(vc_atten))
+                base_atten -= 1
+                if base_atten < 0:
+                    logger.error("Voltage controlled attenuation {} under range, PSPL at Max.".format(vc_atten))
+                    raise ValueError("Voltage controlled attenuation {} under range, PSPL at Max.".format(vc_atten))
+                set_voltage(voltage, base_atten=base_atten)
+                return
 
             if self.atten.maximum_atten() < vc_atten:
-                logger.error("Voltage controlled attenuation {} over range.".format(vc_atten))
-                raise ValueError("Voltage controlled attenuation {} over range.".format(vc_atten))
+                base_atten += 1
+                if base_atten > 80:
+                    logger.error("Voltage controlled attenuation {} over range, PSPL at Min.".format(vc_atten))
+                    raise ValueError("Voltage controlled attenuation {} over range, PSPL at Min.".format(vc_atten))
+                set_voltage(voltage, base_atten=base_atten)
+                return
 
+            print("PSPL Amplitude: {}, Attenuator: {}".format(amplitude,vc_atten))
             self.atten.set_attenuation(vc_atten)
+            self.pspl.amplitude = amplitude
             time.sleep(0.02)
 
         # Assign Methods
