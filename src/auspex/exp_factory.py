@@ -220,7 +220,7 @@ class QubitExpFactory(object):
 
         # Graph edges for the measurement filters
         # switch stream selector to raw (by default) before building the graph
-        if isinstance(experiment, auspex.single_shot_fidelity.SingleShotFidelityExperiment):
+        if experiment.__class__.__name__ == "SingleShotFidelityExperiment":
             receivers = [s for s in meta_info['receivers'].items()]
             if len(receivers) > 1:
                 raise NotImplementedError("Single shot fidelity for more than one qubit is not yet implemented.")
@@ -243,7 +243,7 @@ class QubitExpFactory(object):
         # Find any writer endpoints of the receiver channels
         for receiver_name, num_segments in meta_info['receivers'].items():
             # Receiver channel name format: RecvChan-StreamSelectorName
-            if not isinstance(experiment, auspex.single_shot_fidelity.SingleShotFidelityExperiment):
+            if not experiment.__class__.__name__ == "SingleShotFidelityExperiment":
                 stream_sel_name = receiver_name.replace('RecvChan-', '')
                 stream_sel_name_orig = stream_sel_name
             dig_name = filters[stream_sel_name]['source']
@@ -276,7 +276,7 @@ class QubitExpFactory(object):
                     writers += [e for e in endpoints if filters[e]["type"] == "WriteToHDF5" and (not hasattr(filters[e], "enabled") or filters[e]["enabled"])]
                     plotters += [e for e in endpoints if filters[e]["type"] == "Plotter" and (not hasattr(filters[e], "enabled") or filters[e]["enabled"])]
                     buffers += [e for e in endpoints if filters[e]["type"] == "DataBuffer" and (not hasattr(filters[e], "enabled") or filters[e]["enabled"])]
-                    singleshot += [e for e in endpoints if filters[e]["type"] == "SingleShotMeasurement" and (not hasattr(filters[e], "enabled") or filters[e]["enabled"]) and isinstance(experiment, auspex.single_shot_fidelity.SingleShotFidelityExperiment)]
+                    singleshot += [e for e in endpoints if filters[e]["type"] == "SingleShotMeasurement" and (not hasattr(filters[e], "enabled") or filters[e]["enabled"]) and experiment.__class__.__name__ == "SingleShotFidelityExperiment"]
             filt_to_enable.extend(set().union(writers, plotters, singleshot, buffers))
             if calibration:
                 # For calibrations the user should only have one writer enabled, otherwise we will be confused.
