@@ -187,7 +187,7 @@ class SwitchingExperiment(Experiment):
         self.analog_input.CfgDigEdgeStartTrig("/Dev1/PFI0", DAQmx_Val_Rising)
         self.analog_input.SetStartTrigRetriggerable(1)
         self.analog_input.StartTask()
-                
+
 
         # Setup the PSPL
         self.pspl.amplitude = self.polarity*7.5*np.power(10, (-self.pspl_base_attenuation)/20.0)

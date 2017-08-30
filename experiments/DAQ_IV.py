@@ -1,3 +1,11 @@
+# Copyright 2017 Raytheon BBN Technologies
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+
 from PyDAQmx import *
 
 from auspex.experiment import FloatParameter, IntParameter, Experiment
@@ -31,14 +39,7 @@ class IVExperiment(Experiment):
 
     current_input  = OutputConnector(unit="V")
     voltage_sample = OutputConnector(unit="V")
-data, desc = load_from_HDF5(wr.filename.value)
-plt.figure(figsize=(4,4), dpi=150)
-plt.title("Channel IV")
-plt.plot(data["main"]["current_input"]*1e6, data["main"]["voltage_sample"], 'b-', linewidth=0.1)
-# plt.plot((data["main"]["current_input"]*1e3 - data["main"]["voltage_sample"])*1e3, data["main"]["voltage_sample"], 'b-', linewidth=0.1)
-plt.xlabel(r"Channel Current ($\mu$A)")
-plt.ylabel(r"Channel Voltage (V)")
-plt.savefig(f"data\\nTron-Switching\\{sample_name}\\{sample_name}-IV_Channel_KillMe_{date}.png", dpi=150, bbox_inches='tight')
+
     def init_streams(self):
         descrip = DataStreamDescriptor()
         descrip.data_name='current_input'
@@ -68,7 +69,7 @@ plt.savefig(f"data\\nTron-Switching\\{sample_name}\\{sample_name}-IV_Channel_Kil
         # self.frequency.assign_method(self.awg.set_frequency)
 
         # Setup the NIDAQ
-        max_voltage = 2.0 #self.amplitude.value*2.0
+        max_voltage = 5.0 #self.amplitude.value*2.0
         self.num_samples_total = int(self.sample_rate*(self.num_bursts+2)/self.frequency)
         self.num_samples_trimmed = int(self.sample_rate*(self.num_bursts)/self.frequency)
         self.trim_len = int(self.sample_rate/self.frequency)
