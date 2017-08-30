@@ -12,6 +12,7 @@ import json
 import os.path
 import sys
 from shutil import move
+from io import StringIO
 try:
     import ruamel.yaml as yaml
 except:
@@ -63,6 +64,7 @@ class Dumper(yaml.RoundTripDumper):
     def include(self, data):
         data.write()
         return self.represent_scalar(u'!include', data.filename)
+
 class FlatDumper(yaml.RoundTripDumper):
     def include(self, data):
         return self.represent_mapping('tag:yaml.org,2002:map', data.data)
@@ -75,21 +77,34 @@ def yaml_load(filename):
         load.dispose()
     return code
 
-def yaml_dump(data, filename, flatten=False):
+def yaml_dump(data, filename = "", flatten=False):
     if flatten:
         d = FlatDumper
         d.add_representer(Include, d.include)
     else:
         d = Dumper
         d.add_representer(Include, d.include)
-    with open(filename+".tmp", 'w+') as fid:
-        
-        yaml.dump(data, fid, Dumper=d)
-    # Upon success
-    move(filename+".tmp", filename)
-    with open(filename, 'r') as fid:
-        contents = fid.read()
-    return contents
+
+    if filename:
+        with open(filename+".tmp", 'w+') as fid:
+
+            yaml.dump(data, fid, Dumper=d)
+            # Upon success
+            move(filename+".tmp", filename)
+            with open(filename, 'r') as fid:
+                contents = fid.read()
+        return contents
+    else:
+        # dump to an IO stream:
+        # note you need to use the FlatDumper for this to work
+        out = StringIO()
+        d = FlatDumper
+
+        d.add_representer(Include, d.include)
+        yaml.dump(data, out, Dumper=d)
+        ret_string = out.getvalue()
+        out.close()
+        return ret_string
 
 if not os.path.isfile(config_file):
     # build a config file from the template
