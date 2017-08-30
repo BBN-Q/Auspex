@@ -18,6 +18,7 @@ import os.path
 import time
 import re
 from shutil import copyfile
+from ruamel.yaml import YAML
 
 from .filter import Filter
 from auspex.parameter import Parameter, FilenameParameter
@@ -34,7 +35,8 @@ class WriteToHDF5(Filter):
     filename = FilenameParameter()
     groupname = Parameter(default='main')
 
-    def __init__(self, filename=None, groupname=None, add_date=False, save_settings=False, compress=True, store_tuples=True, **kwargs):
+    def __init__(self, filename=None, groupname=None, add_date=False,
+            save_settings=False, settings_type='yaml', compress=True, store_tuples=True, **kwargs):
         super(WriteToHDF5, self).__init__(**kwargs)
         self.compress = compress
         if filename:
@@ -50,6 +52,7 @@ class WriteToHDF5(Filter):
         self.sink.max_input_streams = 100
         self.add_date = add_date
         self.save_settings = save_settings
+        self.settings_type =  settings_type
         self.quince_parameters = [self.filename, self.groupname]
 
     def final_init(self):
@@ -104,7 +107,11 @@ class WriteToHDF5(Filter):
         logger.debug("Create new data file: %s." % self.filename.value)
         # Copy current settings to a folder with the file name
         if self.save_settings:
-            self.save_json()
+            # just move copies to a new directory
+            if self.settings_type == 'json':
+                self.save_json()
+            elif self.settings_type == 'yaml':
+                self.save_yaml()
         return h5py.File(self.filename.value, 'w', libver='latest')
 
     def save_json(self):
@@ -117,6 +124,20 @@ class WriteToHDF5(Filter):
             copyfile(config.measurementLibFile, os.path.join(fulldir, os.path.split(config.measurementLibFile)[1]))
             copyfile(config.sweepLibFile, os.path.join(fulldir, os.path.split(config.sweepLibFile)[1]))
             copyfile(config.channelLibFile, os.path.join(fulldir, os.path.split(config.channelLibFile)[1]))
+
+    def save_yaml(self):
+        """ Save a copy of current experiment settings """
+        head = os.path.dirname(self.filename.value)
+        fulldir = os.path.splitext(self.filename.value)[0]
+        if not os.path.exists(fulldir):
+            os.makedirs(fulldir)
+            copyfile(config.configFile, os.path.join(fulldir, os.path.split(config.configFile)[1]))
+
+    def save_yaml_h5(self):
+        """ Save a copy of current experiment settings in the h5 metadata"""
+        header = self.file.create_group("header")
+        # load them dump to get the 'include' information
+        header.attrs['settings'] = config.yaml_dump(config.yaml_load(config.configFile), flatten = True)
 
     async def run(self):
         streams    = self.sink.input_streams
@@ -151,6 +172,13 @@ class WriteToHDF5(Filter):
             self.group = self.file
 
         self.data_group = self.group.create_group("data")
+
+        # If desired, push experimental metadata into the h5 file
+        if self.save_settings:
+            if self.settings_type == 'json':
+                pass
+            elif self.settings_type == 'yaml':
+                self.save_yaml_h5()
 
         # Create datasets for each stream
         dset_for_streams = {}
