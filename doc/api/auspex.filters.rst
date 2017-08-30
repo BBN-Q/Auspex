@@ -67,6 +67,14 @@ auspex\.filters\.plot module
     :members:
     :undoc-members:
 
+SingleShotMeasurement
+auspex\.filters\.singleshot module
+----------------------------
+
+.. automodule:: auspex.filters.singleshot
+    :members:
+    :undoc-members:
+
 auspex\.filters\.stream\_selectors module
 -----------------------------------------
 

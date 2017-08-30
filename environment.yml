@@ -1,0 +1,17 @@
+name: auspex
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - python=3.6
+  - matplotlib
+  - h5py
+  - numpy
+  - scipy
+  - scikit-learn
+  - ruamel.yaml
+  - PyVISA
+  - tqdm
+  - pandas
+  - networkx
+  - cffi

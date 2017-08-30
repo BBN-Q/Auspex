@@ -26,7 +26,7 @@ from auspex.analysis.helpers import normalize_data
 class SingleShotFidelityExperiment(QubitExperiment):
     """Experiment to measure single-shot measurement fidelity of a qubit."""
 
-    def __init__(self, qubit_names, num_shots=10000, expname=None, meta_file=None, save_data=False, stream_type = 'Raw'):
+    def __init__(self, qubit_names, num_shots=10000, expname=None, meta_file=None, save_data=False, optimize=False, stream_type = 'Raw'):
         """Create a single shot fidelity measurement experiment. Assumes that there is a single shot measurement
         filter in the filter pipeline.
         Arguments:
@@ -34,7 +34,8 @@ class SingleShotFidelityExperiment(QubitExperiment):
             num_shots: Total number of 0 and 1 measurements used to reconstruct fidelity histograms (int)
             expname: Experiment name for data saving.
             meta_file: Meta file for defining custom single-shot fidelity experiment.
-            save_data: If true, will save the raw or demodulated data."""
+            save_data: If true, will save the raw or demodulated data.
+            optimize: if true, will set the swept parameters to their optimum values"""
 
         super(SingleShotFidelityExperiment, self).__init__()
         self.qubit_names = qubit_names if isinstance(qubit_names, list) else [qubit_names]
@@ -43,6 +44,7 @@ class SingleShotFidelityExperiment(QubitExperiment):
         self.settings = config.yaml_load(config.configFile)
         self.save_data = save_data
         self.calibration = True
+        self.optimize = optimize
         self.name = expname
         self.cw_mode = False
         self.repeats = num_shots
@@ -63,21 +65,42 @@ class SingleShotFidelityExperiment(QubitExperiment):
         self.leave_plot_server_open = True
 
     def run_sweeps(self):
-        #For now, only update histograms if we have a parameter sweep.
+        #For now, only update histograms if we don't have a parameter sweep.
         if not self.sweeper.axes:
             self.init_plots()
             self.add_manual_plotter(self.re_plot)
             self.add_manual_plotter(self.im_plot)
         else:
             if any([x.save_kernel.value for x in self.filters.values() if type(x) is SingleShotMeasurement]):
-                raise ValueError("Kernel saving is not supported if you have parameter sweeps!")
+                logger.warning("Kernel saving is not supported if you have parameter sweeps!")
 
         super(SingleShotFidelityExperiment, self).run_sweeps()
 
         if not self.sweeper.axes:
             self._update_histogram_plots()
 
-        self.plot_server.stop()
+        if self.plotters:
+            self.plot_server.stop()
+
+        if self.sweeper.axes and self.optimize:
+            #select the buffers/writers whose sources are singleshot filters
+            fid_buffers = [buff for buff in self.buffers if self.settings['filters'][buff.name]['source'].strip().split()[1] == 'fidelity']
+            if not fid_buffers:
+                raise NameError("Please connect a buffer to the single-shot filter output in order to optimize fidelity.")
+            #set sweep parameters to the values that maximize fidelity
+            for buff in fid_buffers:
+                dataset, descriptor = buff.get_data(), buff.get_descriptor()
+                opt_ind = np.argmax(dataset['Data'])
+                for k, axis in enumerate(self.sweeper.axes):
+                    instr_tree = axis.parameter.instr_tree
+                    param_key = self.settings['instruments']
+                    for key in instr_tree[:-1]:
+                        # go through the tree
+                        param_key = param_key[key]
+                    opt_value = float(dataset[axis.name][opt_ind])
+                    param_key[instr_tree[-1]] = opt_value
+                    logger.info(f'Set{" ".join(str(x) for x in instr_tree)} to {opt_value}.')
+                config.yaml_dump(self.settings, config.configFile)
 
     def _update_histogram_plots(self):
         pdf_data = self.get_results()

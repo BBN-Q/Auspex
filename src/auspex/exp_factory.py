@@ -214,11 +214,13 @@ class QubitExpFactory(object):
             vals = text.strip().split()
             if len(vals) == 0:
                 raise ValueError("Please disable filters with missing source.")
+            elif len(vals) > 2:
+                raise ValueError(f"Spaces are reserved to separate filters and connectors. Please rename {text}.")
             return vals[0]
 
         # Graph edges for the measurement filters
         # switch stream selector to raw (by default) before building the graph
-        if isinstance(experiment, auspex.single_shot_fidelity.SingleShotFidelityExperiment):
+        if experiment.__class__.__name__ == "SingleShotFidelityExperiment":
             receivers = [s for s in meta_info['receivers'].items()]
             if len(receivers) > 1:
                 raise NotImplementedError("Single shot fidelity for more than one qubit is not yet implemented.")
@@ -241,7 +243,7 @@ class QubitExpFactory(object):
         # Find any writer endpoints of the receiver channels
         for receiver_name, num_segments in meta_info['receivers'].items():
             # Receiver channel name format: RecvChan-StreamSelectorName
-            if not isinstance(experiment, auspex.single_shot_fidelity.SingleShotFidelityExperiment):
+            if not experiment.__class__.__name__ == "SingleShotFidelityExperiment":
                 stream_sel_name = receiver_name.replace('RecvChan-', '')
                 stream_sel_name_orig = stream_sel_name
             dig_name = filters[stream_sel_name]['source']
@@ -263,22 +265,24 @@ class QubitExpFactory(object):
             writers = []
             plotters = []
             singleshot = []
+            buffers = []
             for filt_name, filt in filters.items():
                 if filt_name == stream_sel_name:
                     # Find descendants of the channel selector
                     chan_descendants = nx.descendants(dag, filt_name)
                     # Find endpoints within the descendants
                     endpoints = [n for n in chan_descendants if dag.in_degree(n) == 1 and dag.out_degree(n) == 0]
-                    # Find endpoints which are enabled writers, plotters or singleshot filters
+                    # Find endpoints which are enabled writers, plotters or singleshot filters without an output
                     writers += [e for e in endpoints if filters[e]["type"] == "WriteToHDF5" and (not hasattr(filters[e], "enabled") or filters[e]["enabled"])]
                     plotters += [e for e in endpoints if filters[e]["type"] == "Plotter" and (not hasattr(filters[e], "enabled") or filters[e]["enabled"])]
-                    singleshot += [e for e in endpoints if filters[e]["type"] == "SingleShotMeasurement" and (not hasattr(filters[e], "enabled") or filters[e]["enabled"]) and isinstance(experiment, auspex.single_shot_fidelity.SingleShotFidelityExperiment)]
-            filt_to_enable.extend(set().union(writers, plotters, singleshot))
+                    buffers += [e for e in endpoints if filters[e]["type"] == "DataBuffer" and (not hasattr(filters[e], "enabled") or filters[e]["enabled"])]
+                    singleshot += [e for e in endpoints if filters[e]["type"] == "SingleShotMeasurement" and (not hasattr(filters[e], "enabled") or filters[e]["enabled"]) and experiment.__class__.__name__ == "SingleShotFidelityExperiment"]
+            filt_to_enable.extend(set().union(writers, plotters, singleshot, buffers))
             if calibration:
                 # For calibrations the user should only have one writer enabled, otherwise we will be confused.
                 if len(writers) > 1:
                     raise Exception("More than one viable data writer was found for a receiver channel {}. Please enable only one!".format(receiver_name))
-                if len(writers) == 0 and len(plotters) == 0 and len(singleshot) == 0:
+                if len(writers) == 0 and len(plotters) == 0 and len(singleshot) == 0 and len(buffers) == 0:
                     raise Exception("No viable data writer, plotter or single-shot filter was found for receiver channel {}. Please enable one!".format(receiver_name))
 
             if writers and not save_data:
@@ -326,8 +330,11 @@ class QubitExpFactory(object):
                 if singleshot:
                     singleshot_ancestors = set().union(*[nx.ancestors(dag, ss) for ss in singleshot])
                     singleshot_ancestors.remove(dig_name)
+                if buffers:
+                    buffer_ancestors = set().union(*[nx.ancestors(dag, bf) for bf in buffers])
+                    buffer_ancestors.remove(dig_name)
 
-                filt_to_enable.extend(set().union(writer_ancestors, plotter_ancestors, singleshot_ancestors))
+                filt_to_enable.extend(set().union(writer_ancestors, plotter_ancestors, singleshot_ancestors, buffer_ancestors))
 
         if calibration:
             # One to one writers to qubits
@@ -352,6 +359,12 @@ class QubitExpFactory(object):
             for meas_name in filt_to_enable:
                 filters[meas_name]['enabled'] = True
         else:
+            #disable single-shot filters and their output
+            for meas_name in filters.keys():
+                filt_source = filters[meas_name]["source"].split(" ")[0]
+                if filt_source != dig_name and "SingleShotMeasurement" in (filters[meas_name]["type"], filters[filt_source]['type']):
+                    filters[meas_name]['enabled'] = False
+
             #label measurement with qubit name (assuming the convention "M-"+qubit_name)
             for meas_name in filt_to_enable:
                 if filters[meas_name]["type"] == "WriteToHDF5":
@@ -535,6 +548,7 @@ class QubitExpFactory(object):
                         param.assign_method(getattr(instr, method_name)) # Couple the parameter to the instrument
                     else:
                         raise ValueError("The instrument {} has no method {}".format(name, method_name))
+                param.instr_tree = [instr.name, prop] #TODO: extend tree to endpoint
                 experiment.add_sweep(param, points) # Create the requested sweep on this parameter
 
     @staticmethod

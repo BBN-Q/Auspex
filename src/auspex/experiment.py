@@ -457,7 +457,8 @@ class Experiment(metaclass=MetaExperiment):
             from .plotting import MatplotServerThread
 
             plot_desc = {p.name: p.desc() for p in self.plotters}
-            self.plot_server = MatplotServerThread(plot_desc)
+            if not self.leave_plot_server_open or not hasattr(self, "plot_server"):
+                self.plot_server = MatplotServerThread(plot_desc)
             for plotter in self.plotters:
                 plotter.plot_server = self.plot_server
             time.sleep(0.5)
