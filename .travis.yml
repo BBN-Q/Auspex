@@ -26,6 +26,9 @@ install:
   - conda install -c ecpy atom;
   - export PYTHONPATH=$PYTHONPATH:$PWD/src
 
+  # Install sphinx for our preliminary build attempt...
+  - conda install sphinx sphinx_rtd_theme
+
 script:
   - coverage run -m unittest discover -v test
   # Try to get the readthedocs builds working until they get working python 3.6 up
