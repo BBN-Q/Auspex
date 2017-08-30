@@ -24,6 +24,7 @@ from auspex.filters.debug import Print
 from auspex.filters.io import WriteToHDF5
 from auspex.analysis.io import load_from_HDF5
 from auspex.log import logger
+from auspex.config import configFile, yaml_load, yaml_dump
 
 def clear_test_data():
     for file in glob.glob("test_*.h5"):
@@ -158,7 +159,7 @@ class WriteTestCase(unittest.TestCase):
     def test_writehdf5(self):
         exp = SweptTestExperiment()
         clear_test_data()
-        wr = WriteToHDF5("test_writehdf5.h5")
+        wr = WriteToHDF5("test_writehdf5.h5", save_settings = True)
 
         edges = [(exp.voltage, wr.sink)]
         exp.set_graph(edges)
@@ -175,6 +176,7 @@ class WriteTestCase(unittest.TestCase):
             self.assertTrue("Here the run loop merely spews" in f.attrs['exp_src'])
             self.assertTrue(f['main/data'].attrs['time_val'] == 0)
             self.assertTrue(f['main/data'].attrs['unit_freq'] == "Hz")
+            self.assertTrue(f['header'].attrs['settings'] == yaml_dump(yaml_load(configFile), flatten = True))
 
         os.remove("test_writehdf5-0000.h5")
 
