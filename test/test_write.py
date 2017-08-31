@@ -159,6 +159,30 @@ class WriteTestCase(unittest.TestCase):
     def test_writehdf5(self):
         exp = SweptTestExperiment()
         clear_test_data()
+        wr = WriteToHDF5("test_writehdf5.h5", save_settings = False)
+
+        edges = [(exp.voltage, wr.sink)]
+        exp.set_graph(edges)
+
+        exp.add_sweep(exp.field, np.linspace(0,100.0,4))
+        exp.add_sweep(exp.freq, np.linspace(0,10.0,3))
+        exp.run_sweeps()
+        self.assertTrue(os.path.exists("test_writehdf5-0000.h5"))
+        with h5py.File("test_writehdf5-0000.h5", 'r') as f:
+            self.assertTrue(0.0 not in f['main/data/voltage'])
+            self.assertTrue(np.sum(f['main/data/field']) == 5*3*np.sum(np.linspace(0,100.0,4)) )
+            self.assertTrue(np.sum(f['main/data/freq']) == 5*4*np.sum(np.linspace(0,10.0,3)) )
+            self.assertTrue(np.sum(f['main/data/samples']) == 3*4*np.sum(np.linspace(0,4,5)) )
+            self.assertTrue("Here the run loop merely spews" in f.attrs['exp_src'])
+            self.assertTrue(f['main/data'].attrs['time_val'] == 0)
+            self.assertTrue(f['main/data'].attrs['unit_freq'] == "Hz")
+            self.assertTrue(f['header'].attrs['settings'] == yaml_dump(yaml_load(configFile), flatten = True))
+
+        os.remove("test_writehdf5-0000.h5")
+
+    def test_writehdf5_with_settings(self):
+        exp = SweptTestExperiment()
+        clear_test_data()
         wr = WriteToHDF5("test_writehdf5.h5", save_settings = True)
 
         edges = [(exp.voltage, wr.sink)]
