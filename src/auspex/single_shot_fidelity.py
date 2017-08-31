@@ -87,6 +87,8 @@ class SingleShotFidelityExperiment(QubitExperiment):
             fid_buffers = [buff for buff in self.buffers if self.settings['filters'][buff.name]['source'].strip().split()[1] == 'fidelity']
             if not fid_buffers:
                 raise NameError("Please connect a buffer to the single-shot filter output in order to optimize fidelity.")
+            #restore original card settings before overwriting the config
+            self._restore_round_robins()
             #set sweep parameters to the values that maximize fidelity
             for buff in fid_buffers:
                 dataset, descriptor = buff.get_data(), buff.get_descriptor()
@@ -128,9 +130,17 @@ class SingleShotFidelityExperiment(QubitExperiment):
     def _squash_round_robins(self):
         """Make it so that the round robins are set to 1."""
         digitizers =  [_ for _ in self.settings['instruments'].keys() if 'nbr_round_robins' in self.settings['instruments'][_].keys()]
+        self.digitizers_temp = {}
         for d in digitizers:
             logger.info(f"Set digitizer {d} round robins to 1 for single shot experiment.")
+            self.digitizers_temp[d] = self.settings['instruments'][d]['nbr_round_robins']
             self.settings['instruments'][d]['nbr_round_robins'] = 1
+
+    def _restore_round_robins(self):
+        """Restore round robins to the original values."""
+        digitizers =  [_ for _ in self.settings['instruments'].keys() if 'nbr_round_robins' in self.settings['instruments'][_].keys()]
+        for d in digitizers:
+            self.settings['instruments'][d]['nbr_round_robins'] = self.digitizers_temp[d]
 
     def find_single_shot_filter(self):
         """Make sure there is one single shot measurement filter in the pipeline."""
