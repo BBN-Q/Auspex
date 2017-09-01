@@ -113,7 +113,7 @@ if not os.path.isfile(config_file):
         template = json.load(ifid)
     cfg = {}
     for k,v in template.items():
-        cfg[k] = os.path.join(root_path, v.replace("/my/path/to/", "/examples/"))
+        cfg[k] = os.path.join(root_path, v.replace("/my/path/to/", "examples/"))
 
     with open(config_file, 'w') as ofid:
         json.dump(cfg, ofid, indent=2)
