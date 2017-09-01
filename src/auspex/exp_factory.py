@@ -17,6 +17,7 @@ import re
 import asyncio
 import base64
 import datetime
+import subprocess
 
 import numpy as np
 import networkx as nx
@@ -39,6 +40,9 @@ def correct_resource_name(resource_name):
     for k, v in substs.items():
         resource_name = resource_name.replace(k, v)
     return resource_name
+
+def quince():
+    subprocess.Popen(['run-quince.py', config.configFile], env=os.environ.copy(), preexec_fn=os.setsid)
 
 class QubitExperiment(Experiment):
     """Experiment with a specialized run method for qubit experiments run via the QubitExpFactory."""
