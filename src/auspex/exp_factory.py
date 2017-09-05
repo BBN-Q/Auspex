@@ -324,6 +324,7 @@ class QubitExpFactory(object):
                 writer_ancestors = []
                 plotter_ancestors = []
                 singleshot_ancestors = []
+                buffer_ancestors = []
                 # Trace back our ancestors, using plotters if no writers are available
                 if len(writers) == 1:
                     writer_ancestors = nx.ancestors(dag, writers[0])
@@ -338,7 +339,6 @@ class QubitExpFactory(object):
                 if buffers:
                     buffer_ancestors = set().union(*[nx.ancestors(dag, bf) for bf in buffers])
                     buffer_ancestors.remove(dig_name)
-
                 filt_to_enable.extend(set().union(writer_ancestors, plotter_ancestors, singleshot_ancestors, buffer_ancestors))
 
         if calibration:
