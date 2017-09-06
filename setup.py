@@ -27,6 +27,6 @@ setup(
         "matplotlib >= 2.0.0",
         "ruamel.yaml >= 0.15.18",
         "psutil >= 5.0.0",
-        "zmq >= 16.0.0"
+        "pyzmq >= 16.0.0"
     ]
 )
