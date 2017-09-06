@@ -17,5 +17,6 @@ dependencies:
   - networkx
   - cffi
   - psutil
-  - qgl
-  
+  - pip
+     - "--editable=git+https://github.com/bbn-q/qgl.git@load-from-yaml#egg=qgl"
+     - "--editable=git+https://github.com/bbn-q/adapt.git@master#egg=adapt"
