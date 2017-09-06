@@ -218,16 +218,16 @@ class RabiAmpCalibration(PulseCalibration):
         self.pi2_amp = piI/2.0
         self.i_offset = offI*self.amp2offset
         self.q_offset = offQ*self.amp2offset
-        logger.info(f"Found X180 amplitude: {self.pi_amp}")
-        logger.info(f"Shifting I offset by: {self.i_offset}")
-        logger.info(f"Shifting Q offset by: {self.q_offset}")
+        logger.info("Found X180 amplitude: {}".format(self.pi_amp))
+        logger.info("Shifting I offset by: {}".format(self.i_offset))
+        logger.info("Shifting Q offset by: {}".format(self.q_offset))
         self.plot["I Data"] = (self.amps, data[0:N//2])
         self.plot["Q Data"] = (self.amps, data[N//2-1:-1])
         self.plot["I Fit"] = (self.amps, fitI)
         self.plot["Q Fit"] = (self.amps, fitQ)
 
     def init_plot(self):
-        plot = ManualPlotter("Rabi Amplitude Cal", x_label="I/Q Amplitude", y_label=f"{self.quad} (Arb. Units)")
+        plot = ManualPlotter("Rabi Amplitude Cal", x_label="I/Q Amplitude", y_label="{} (Arb. Units)".format(self.quad))
         plot.add_data_trace("I Data", {'color': 'C1'})
         plot.add_data_trace("Q Data", {'color': 'C2'})
         plot.add_fit_trace("I Fit", {'color': 'C1'})
@@ -306,7 +306,7 @@ class RamseyCalibration(PulseCalibration):
             self.settings['instruments'][qubit_source]['frequency'] = float(fit_freq)
         else:
             self.settings['qubits']['q1']['control']['frequency'] += float(fit_freq - orig_freq)
-        logger.info(f"Qubit set frequency = {round(float(fit_freq/1e9),5)} GHz")
+        logger.info("Qubit set frequency = {} GHz".format(round(float(fit_freq/1e9),5)))
         return fit_freq
 
 class PhaseEstimation(PulseCalibration):
@@ -385,7 +385,7 @@ class PhaseEstimation(PulseCalibration):
                 break
             #update amplitude
             self.amplitude = amp
-        logger.info(f"Found amplitude for {type(self).__name__} calibration of: {amp}")
+        logger.info("Found amplitude for {type(self).__name__} calibration of: {}".format(amp))
 
         set_chan = self.qubit_names[0] if len(self.qubit_names) == 1 else ChannelLibrary.EdgeFactory(*self.qubits).label
         return amp

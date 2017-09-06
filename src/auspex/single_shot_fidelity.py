@@ -132,7 +132,7 @@ class SingleShotFidelityExperiment(QubitExperiment):
         digitizers =  [_ for _ in self.settings['instruments'].keys() if 'nbr_round_robins' in self.settings['instruments'][_].keys()]
         self.digitizers_temp = {}
         for d in digitizers:
-            logger.info(f"Set digitizer {d} round robins to 1 for single shot experiment.")
+            logger.info("Set digitizer {} round robins to 1 for single shot experiment.".format(d))
             self.digitizers_temp[d] = self.settings['instruments'][d]['nbr_round_robins']
             self.settings['instruments'][d]['nbr_round_robins'] = 1
 
