@@ -104,7 +104,7 @@ class SingleShotFidelityExperiment(QubitExperiment):
                         param_key = param_key[key]
                     opt_value = float(dataset[axis.name][opt_ind])
                     param_key[instr_tree[-1]] = opt_value
-                    logger.info(f'Set{} to {}.'.format(" ".join(str(x) for x in instr_tree),opt_value ))
+                    logger.info("Set{} to {}.".format(" ".join(str(x) for x in instr_tree),opt_value ))
                 config.yaml_dump(self.settings, config.configFile)
 
     def _update_histogram_plots(self):
