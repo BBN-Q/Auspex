@@ -20,8 +20,8 @@ install:
   # Create conda environment with dependencies
   - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION numpy scipy matplotlib h5py pandas networkx cffi bokeh jupyter future
   - source activate test-environment
-  - pip install -e git+https://github.com/BBN-Q/Adapt.git
-  - pip install -e git+https://github.com/BBN-Q/QGL.git@load-from-yaml
+  - pip install git+https://github.com/BBN-Q/Adapt.git
+  - pip install git+https://github.com/BBN-Q/QGL.git@load-from-yaml
   - pip install tqdm pyvisa coveralls ruamel.yaml watchdog scikit-learn
   - conda install -c ecpy atom;
   - export PYTHONPATH=$PYTHONPATH:$PWD/src
