@@ -6,14 +6,17 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-from QGL import *
-from QGL import config as QGLconfig
-from QGL.BasicSequences.helpers import create_cal_seqs, delay_descriptor, cal_descriptor
+try:
+    from QGL import *
+    from QGL import config as QGLconfig
+    from QGL.BasicSequences.helpers import create_cal_seqs, delay_descriptor, cal_descriptor
+except:
+    print("Could not find QGL")
+
 import auspex.config as config
 from auspex.log import logger
 from copy import copy
 import os
-import json
 
 from time import sleep
 

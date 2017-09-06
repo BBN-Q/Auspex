@@ -6,8 +6,11 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-from QGL import *
-from QGL import config as QGLconfig
+try:
+    from QGL import *
+    from QGL import config as QGLconfig
+except:
+    print("Could not load QGL.")
 # from QGL.BasicSequences.helpers import create_cal_seqs, time_descriptor, cal_descriptor
 import auspex.config as config
 from copy import copy
@@ -101,7 +104,7 @@ class SingleShotFidelityExperiment(QubitExperiment):
                         param_key = param_key[key]
                     opt_value = float(dataset[axis.name][opt_ind])
                     param_key[instr_tree[-1]] = opt_value
-                    logger.info(f'Set{" ".join(str(x) for x in instr_tree)} to {opt_value}.')
+                    logger.info(f'Set{} to {}.'.format(" ".join(str(x) for x in instr_tree),opt_value ))
                 config.yaml_dump(self.settings, config.configFile)
 
     def _update_histogram_plots(self):
