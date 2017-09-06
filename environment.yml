@@ -1,5 +1,6 @@
 name: auspex
 channels:
+  - bbn-q
   - defaults
   - conda-forge
 dependencies:
@@ -15,3 +16,7 @@ dependencies:
   - pandas
   - networkx
   - cffi
+  - psutil
+  - qgl
+  - adapt
+  
