@@ -267,7 +267,7 @@ class SingleShotMeasurement(Filter):
     def _save_kernel(self):
         try:
             filename = self.sink.parent.name + "_kernel.txt"
-            header = f'Single shot fidelity filter - {time.strftime("%m/%d/%y -- %H:%M")}:\nSource: {self.sink.parent.name}'
+            header = "Single shot fidelity filter - {}:\nSource: {}".format(time.strftime("%m/%d/%y -- %H:%M"), self.sink.parent.name)
             np.savetxt(os.path.join(config.KernelDir, filename), self.kernel, header=header, comments="#")
         except (AttributeError, IOError) as ex:
             raise AttributeError("Could not save single shot fidelity kernel!") from ex

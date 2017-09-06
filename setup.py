@@ -25,6 +25,8 @@ setup(
         "pandas >= 0.18.1",
         "networkx >= 1.11",
         "matplotlib >= 2.0.0",
-        "ruamel.yaml >= 0.15.18"
+        "ruamel.yaml >= 0.15.18",
+        "psutil >= 5.0.0",
+        "pyzmq >= 16.0.0"
     ]
 )

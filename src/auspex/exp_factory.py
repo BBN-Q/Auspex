@@ -219,7 +219,7 @@ class QubitExpFactory(object):
             if len(vals) == 0:
                 raise ValueError("Please disable filters with missing source.")
             elif len(vals) > 2:
-                raise ValueError(f"Spaces are reserved to separate filters and connectors. Please rename {text}.")
+                raise ValueError("Spaces are reserved to separate filters and connectors. Please rename {}.".format(text))
             return vals[0]
 
         # Graph edges for the measurement filters
