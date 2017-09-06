@@ -70,7 +70,7 @@ class X6Channel(DigitizerChannel):
                 try:
                     setattr(self, name, value)
                 except AttributeError:
-                    logger.debug(f"Could not set channel attribute: {name} on X6 {self.stream_type} channel.")
+                    logger.debug("Could not set channel attribute: {} on X6 {} channel.".format(name, self.stream_type))
                     pass
 
         if self.stream_type == "Integrated":

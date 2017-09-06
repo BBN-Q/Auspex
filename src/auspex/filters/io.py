@@ -65,7 +65,7 @@ class WriteToHDF5(Filter):
         filename = self.filename.value
         basename, ext = os.path.splitext(filename)
         if ext == "":
-            logger.debug(f"Filename for writer {self.name} does not have an extension -- using default '.h5'")
+            logger.debug("Filename for writer {} does not have an extension -- using default '.h5'".format(self.name))
             ext = ".h5"
 
         dirname = os.path.dirname(os.path.abspath(filename))
