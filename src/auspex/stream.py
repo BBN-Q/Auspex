@@ -472,6 +472,9 @@ class DataStream(object):
             logger.warning("Stream '{}' has no descriptor. Function num_points() returns 0.".format(self.name))
             return 0
 
+    def done(self):
+        return self.points_taken == self.num_points()
+
     def percent_complete(self):
         if (self.descriptor is not None) and self.num_points()>0:
             return 100.0*self.points_taken/self.num_points()
@@ -541,6 +544,9 @@ class InputConnector(object):
         else:
             raise ValueError("Reached maximum number of input connectors. Could not add another input stream to the connector.")
 
+    def done(self):
+        return all([stream.done() for stream in self.input_streams])
+
     def num_points(self):
         if len(self.input_streams) > 0:
             return self.input_streams[0].num_points()
@@ -601,7 +607,7 @@ class OutputConnector(object):
         return self.descriptor.num_points()
 
     def done(self):
-        return np.all([stream.done for stream in self.output_streams])
+        return all([stream.done() for stream in self.output_streams])
 
     async def push(self, data):
         if hasattr(data, 'size'):
