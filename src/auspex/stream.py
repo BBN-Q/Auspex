@@ -473,7 +473,7 @@ class DataStream(object):
             return 0
 
     def done(self):
-        return self.points_taken == self.num_points()
+        return self.points_taken >= self.num_points()
 
     def percent_complete(self):
         if (self.descriptor is not None) and self.num_points()>0:
