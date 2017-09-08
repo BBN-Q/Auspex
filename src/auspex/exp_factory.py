@@ -41,7 +41,10 @@ def correct_resource_name(resource_name):
     return resource_name
 
 def quince():
-    subprocess.Popen(['run-quince.py', config.configFile], env=os.environ.copy(), preexec_fn=os.setsid)
+    if (os.name == 'nt'):
+        subprocess.Popen(['run-quince.bat', config.configFile], env=os.environ.copy())
+    else:
+        subprocess.Popen(['run-quince.py', config.configFile], env=os.environ.copy())
 
 class QubitExperiment(Experiment):
     """Experiment with a specialized run method for qubit experiments run via the QubitExpFactory."""
