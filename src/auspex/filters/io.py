@@ -116,11 +116,11 @@ class WriteToHDF5(Filter):
         #logfile =
         logfile = os.path.join(config.LogDir, "experiment_log.csv")
         if os.path.isfile(logfile):
-            lf = pd.read_csv(logfile, sep="\t")
+            lf = pd.read_csv(logfile, sep="\t", index_col=0)
         else:
             logger.info("Experiment log file created.")
             lf = pd.DataFrame(columns = ["Filename", "Date", "Time"])
-        lf = lf.append(pd.DataFrame([[self.filename.value, time.strftime("%y%m%d"), time.strftime("%H%M%S")]],columns=["Filename", "Date", "Time"]),ignore_index=True)
+        lf = lf.append(pd.DataFrame([[self.filename.value, time.strftime("%y%m%d"), time.strftime("%H:%M:%S")]],columns=["Filename", "Date", "Time"]),ignore_index=True)
         lf.to_csv(logfile, sep = "\t")
 
     def save_json(self):
