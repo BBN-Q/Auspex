@@ -115,7 +115,7 @@ class WriteToHDF5(Filter):
         """ Record the experiment in a log file """
         logfile = os.path.join(config.LogDir, "experiment_log.tsv")
         if os.path.isfile(logfile):
-            lf = pd.read_csv(logfile, sep="\t", index_col=0)
+            lf = pd.read_csv(logfile, sep="\t")
         else:
             logger.info("Experiment log file created.")
             lf = pd.DataFrame(columns = ["Filename", "Date", "Time"])
