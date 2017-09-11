@@ -113,7 +113,6 @@ class WriteToHDF5(Filter):
 
     def write_to_log(self):
         """ Record the experiment in a log file """
-        #logfile =
         logfile = os.path.join(config.LogDir, "experiment_log.csv")
         if os.path.isfile(logfile):
             lf = pd.read_csv(logfile, sep="\t", index_col=0)
