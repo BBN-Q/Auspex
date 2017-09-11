@@ -98,6 +98,7 @@ else:
 AWGDir = os.path.abspath(cfg['AWGDir'])
 configFile = os.path.abspath(cfg['ConfigurationFile'])
 KernelDir = os.path.abspath(cfg['KernelDir'])
+LogDir = os.path.abspath(cfg['LogDir'])
 
 try:
     import QGL.config
