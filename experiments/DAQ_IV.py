@@ -56,20 +56,21 @@ class IVExperiment(Experiment):
         self.awg.output         = False
         self.awg.function       = 'Sine'
         self.awg.load_resistance = self.r_ref
-        self.awg.auto_range     = True
+        self.awg.auto_range     = False
         self.awg.amplitude      = self.amplitude.value # Preset to avoid danger
         self.awg.dc_offset      = 0.0
         self.awg.frequency      = self.frequency
         self.awg.burst_state    = True
         self.awg.burst_cycles   = self.num_bursts + 2
         self.awg.trigger_source = "Bus"
+        self.awg.polarity       = +1
         self.awg.output         = True
 
         self.amplitude.assign_method(self.awg.set_amplitude)
         # self.frequency.assign_method(self.awg.set_frequency)
 
         # Setup the NIDAQ
-        max_voltage = 5.0 #self.amplitude.value*2.0
+        max_voltage = self.amplitude.value*2.0
         self.num_samples_total = int(self.sample_rate*(self.num_bursts+2)/self.frequency)
         self.num_samples_trimmed = int(self.sample_rate*(self.num_bursts)/self.frequency)
         self.trim_len = int(self.sample_rate/self.frequency)
