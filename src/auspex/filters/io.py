@@ -65,7 +65,7 @@ class WriteToHDF5(Filter):
         filename = self.filename.value
         basename, ext = os.path.splitext(filename)
         if ext == "":
-            logger.debug(f"Filename for writer {self.name} does not have an extension -- using default '.h5'")
+            logger.debug("Filename for writer {} does not have an extension -- using default '.h5'".format(self.name))
             ext = ".h5"
 
         dirname = os.path.dirname(os.path.abspath(filename))
@@ -119,6 +119,7 @@ class WriteToHDF5(Filter):
             copyfile(config.channelLibFile, os.path.join(fulldir, os.path.split(config.channelLibFile)[1]))
 
     async def run(self):
+        self.finished_processing = False
         streams    = self.sink.input_streams
         stream     = streams[0]
 
@@ -343,6 +344,10 @@ class WriteToHDF5(Filter):
                 logger.debug("HDF5: Write index at %d", w_idx)
                 logger.debug("HDF5: %s has written %d points", stream.name, w_idx)
 
+            # If we have gotten all our data and process_data has returned, then we are done!
+            if np.all([v.done() for v in self.input_connectors.values()]):
+                self.finished_processing = True
+
 class DataBuffer(Filter):
     """Writes data to file."""
 
@@ -359,6 +364,7 @@ class DataBuffer(Filter):
         self.w_idxs  = {s: 0 for s in self.sink.input_streams}
 
     async def run(self):
+        self.finished_processing = False
         streams = self.sink.input_streams
 
         for s in streams[1:]:
@@ -420,6 +426,10 @@ class DataBuffer(Filter):
 
                 self.buffers[stream][self.w_idxs[stream]:self.w_idxs[stream]+data.size] = data
                 self.w_idxs[stream] += data.size
+
+            # If we have gotten all our data and process_data has returned, then we are done!
+            if np.all([v.done() for v in self.input_connectors.values()]):
+                self.finished_processing = True
 
     def get_data(self):
         streams = self.sink.input_streams

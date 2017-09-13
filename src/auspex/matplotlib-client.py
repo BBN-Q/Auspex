@@ -15,6 +15,7 @@ import os
 import time
 import random
 import json
+import ctypes
 
 from scipy.spatial import Delaunay
 
@@ -22,6 +23,7 @@ import matplotlib
 # Make sure that we are using QT5
 matplotlib.use('Qt5Agg')
 from PyQt5 import QtCore, QtWidgets
+from PyQt5.QtGui import QIcon
 
 import numpy as np
 from matplotlib.backends.backend_qt4agg import NavigationToolbar2QT as NavigationToolbar
@@ -425,6 +427,17 @@ class MatplotClientWindow(QtWidgets.QMainWindow):
 
 if __name__ == '__main__':
     qApp = QtWidgets.QApplication(sys.argv)
+
+    # Setup icon
+    png_path = os.path.join(os.path.dirname(__file__), "assets/plotter_icon.png")
+    qApp.setWindowIcon(QIcon(png_path))
+
+    # Convince windows that this is a separate application to get the task bar icon working
+    # https://stackoverflow.com/questions/1551605/how-to-set-applications-taskbar-icon-in-windows-7/1552105#1552105
+    if (os.name == 'nt'):
+        myappid = u'BBN.auspex.matplotlib-client.0001' # arbitrary string
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
+
     if len(sys.argv) > 1:
         aw = MatplotClientWindow(hostname=sys.argv[1])
     else:

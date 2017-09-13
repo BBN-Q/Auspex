@@ -330,7 +330,7 @@ class AgilentE8363C(SCPIInstrument):
     frequency_stop     = FloatCommand(scpi_string=":SENSe:FREQuency:STOP")
     sweep_num_points   = IntCommand(scpi_string=":SENSe:SWEep:POINts")
     averaging_factor   = IntCommand(scpi_string=":SENSe1:AVERage:COUNt")
-    averaging_enable   = StringCommand(get_string=":SENSe1:AVERage:STATe?", set_string=":SENSe1:AVERage:STATe {:c}", value_map={False:"0", True:"1"})
+    averaging_enable   = StringCommand(get_string=":SENSe1:AVERage:STATe?", set_string=":SENSe1:AVERage:STATe {:s}", value_map={False:"0", True:"1"})
     averaging_complete = StringCommand(get_string=":STATus:OPERation:AVERaging1:CONDition?", value_map={False:"+0", True:"+2"})
     if_bandwidth       = FloatCommand(scpi_string=":SENSe1:BANDwidth")
     sweep_time         = FloatCommand(get_string=":SENSe:SWEep:TIME?")

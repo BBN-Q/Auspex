@@ -28,8 +28,7 @@ from auspex.instruments.instrument import Instrument
 from auspex.parameter import ParameterGroup, FloatParameter, IntParameter, Parameter
 from auspex.sweep import Sweeper
 from auspex.stream import DataStream, DataAxis, SweepAxis, DataStreamDescriptor, InputConnector, OutputConnector
-from auspex.filters.plot import Plotter, XYPlotter, MeshPlotter, ManualPlotter
-from auspex.filters.io import WriteToHDF5, DataBuffer
+from auspex.filters import Plotter, XYPlotter, MeshPlotter, ManualPlotter, WriteToHDF5, DataBuffer, Filter
 from auspex.log import logger
 import auspex.globals
 
@@ -224,7 +223,7 @@ class Experiment(metaclass=MetaExperiment):
 
         # Some instruments don't clean up well after themselves, reconstruct them on a
         # per instance basis. These instruments contain a wide variety of complex behaviors
-        # and rely on other classes and data structures, so we avoid copying them and 
+        # and rely on other classes and data structures, so we avoid copying them and
         # run through the constructor instead.
         self._instruments_instance = {}
         for n in self._instruments.keys():
@@ -375,10 +374,27 @@ class Experiment(metaclass=MetaExperiment):
             if self.progressbar is not None:
                 self.progressbar.update()
 
+            # Finish up, checking to see whether we've received all of our data
             if self.sweeper.done():
-                logger.debug("Sweeper has finished.")
+                sleep_time = 0
+                while not self.filters_finished():
+                    await asyncio.sleep(1)
+                    sleep_time += 1
+                    if sleep_time == 5:
+                        logger.info("Still waiting for filters to finish. Did the experiment produce the expected amount of data?")
+                        for n in self.nodes:
+                            if isinstance(n, Filter):
+                                logger.info("  {} done: {}".format(n, n.finished_processing))
+                        print({n: n.finished_processing for n in self.nodes if isinstance(n, Filter)})
+
+                    if sleep_time >= 20:
+                        logger.warning("Filters not stopped after 20 seconds, bailing.")
+                        break
                 await self.declare_done()
                 break
+
+    def filters_finished(self):
+        return all([n.finished_processing for n in self.nodes if isinstance(n, Filter)])
 
     def connect_instruments(self):
         # Connect the instruments to their resources

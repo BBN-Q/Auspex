@@ -6,7 +6,6 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-import yaml
 import json
 import sys
 import os
@@ -17,6 +16,7 @@ import re
 import asyncio
 import base64
 import datetime
+import subprocess
 
 import numpy as np
 import networkx as nx
@@ -39,6 +39,12 @@ def correct_resource_name(resource_name):
     for k, v in substs.items():
         resource_name = resource_name.replace(k, v)
     return resource_name
+
+def quince():
+    if (os.name == 'nt'):
+        subprocess.Popen(['run-quince.bat', config.configFile], env=os.environ.copy())
+    else:
+        subprocess.Popen(['run-quince.py', config.configFile], env=os.environ.copy())
 
 class QubitExperiment(Experiment):
     """Experiment with a specialized run method for qubit experiments run via the QubitExpFactory."""
@@ -104,6 +110,7 @@ class QubitExperiment(Experiment):
         """This is run for each step in a sweep."""
         for dig in self.digitizers:
             dig.acquire()
+        await asyncio.sleep(0.5)
         if not self.cw_mode:
             for awg in self.awgs:
                 awg.run()
@@ -215,7 +222,7 @@ class QubitExpFactory(object):
             if len(vals) == 0:
                 raise ValueError("Please disable filters with missing source.")
             elif len(vals) > 2:
-                raise ValueError(f"Spaces are reserved to separate filters and connectors. Please rename {text}.")
+                raise ValueError("Spaces are reserved to separate filters and connectors. Please rename {}.".format(text))
             return vals[0]
 
         # Graph edges for the measurement filters
@@ -319,6 +326,7 @@ class QubitExpFactory(object):
                 writer_ancestors = []
                 plotter_ancestors = []
                 singleshot_ancestors = []
+                buffer_ancestors = []
                 # Trace back our ancestors, using plotters if no writers are available
                 if len(writers) == 1:
                     writer_ancestors = nx.ancestors(dag, writers[0])
@@ -333,7 +341,6 @@ class QubitExpFactory(object):
                 if buffers:
                     buffer_ancestors = set().union(*[nx.ancestors(dag, bf) for bf in buffers])
                     buffer_ancestors.remove(dig_name)
-
                 filt_to_enable.extend(set().union(writer_ancestors, plotter_ancestors, singleshot_ancestors, buffer_ancestors))
 
         if calibration:
