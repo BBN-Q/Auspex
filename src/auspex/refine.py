@@ -8,7 +8,10 @@
 
 import auspex.analysis.switching as sw
 from auspex.analysis.io import load_from_HDF5
-from adapt import refine
+try:
+    from adapt import refine
+except:
+    print("Could not import the adapt package.")
 import numpy as np
 import time
 

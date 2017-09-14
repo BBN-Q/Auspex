@@ -180,6 +180,7 @@ class Averager(Filter):
         while idx < data.size:
             #check whether we have enough data to fill an averaging frame
             if data.size - idx >= self.points_before_final_average:
+                # logger.debug("Have {} points, enough for final avg.".format(data.size))
                 # How many chunks can we process at once?
                 num_chunks = int((data.size - idx)/self.points_before_final_average)
                 new_points = num_chunks*self.points_before_final_average
@@ -210,6 +211,7 @@ class Averager(Filter):
 
             # Maybe we can fill a partial frame
             elif data.size - idx >= self.points_before_partial_average:
+                # logger.info("Have {} points, enough for partial avg.".format(data.size))
                 # How many chunks can we process at once?
                 num_chunks       = int((data.size - idx)/self.points_before_partial_average)
                 new_points       = num_chunks*self.points_before_partial_average

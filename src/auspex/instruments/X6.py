@@ -14,9 +14,11 @@ import struct
 import datetime
 import asyncio
 import numpy as np
+import os
 
 import auspex.globals
 from auspex.log import logger
+import auspex.config as config
 from .instrument import Instrument, DigitizerChannel
 from unittest.mock import MagicMock
 
@@ -29,7 +31,7 @@ else:
         import libx6
         fake_x6 = False
     except:
-        logger.warning("Could not load x6 library")
+        # logger.warning("Could not load x6 library")
         fake_x6 = True
 
 class X6Channel(DigitizerChannel):
@@ -56,7 +58,8 @@ class X6Channel(DigitizerChannel):
         for name, value in settings_dict.items():
 
             if name == "kernel" and isinstance(value, str) and value:
-                self.kernel = eval(value)
+                #assume that the kernel is saved as a complex array
+                self.kernel = np.loadtxt(os.path.join(config.KernelDir, value+'.txt'), dtype=complex, converters={0: lambda s: complex(s.decode().replace('+-', '-'))})
             elif name == "kernel_bias" and isinstance(value, str) and value:
                 self.kernel_bias = eval(value)
             #elif hasattr(self, name):
@@ -67,7 +70,7 @@ class X6Channel(DigitizerChannel):
                 try:
                     setattr(self, name, value)
                 except AttributeError:
-                    logger.debug(f"Could not set channel attirbute: {name} on X6 {self.stream_type} channel.")
+                    logger.debug("Could not set channel attribute: {} on X6 {} channel.".format(name, self.stream_type))
                     pass
 
         if self.stream_type == "Integrated":
@@ -124,6 +127,7 @@ class X6(Instrument):
 
         if self.gen_fake_data or fake_x6:
             self._lib = MagicMock()
+            logger.warning("Could not load x6 library")
             logger.warning("X6 GENERATING FAKE DATA")
         self._lib.connect(int(self.resource_name))
 

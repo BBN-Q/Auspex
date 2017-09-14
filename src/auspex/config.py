@@ -12,7 +12,10 @@ import json
 import os.path
 import sys
 from shutil import move
-import ruamel.yaml as yaml
+try:
+    import ruamel.yaml as yaml
+except:
+    import ruamel_yaml as yaml
 
 # Run this code by importing config.py
 # Load the configuration from the json file and populate the global configuration dictionary
@@ -37,6 +40,8 @@ class Include():
     def write(self):
         with open(self.filename, 'w') as fid:
             yaml.dump(self.data, fid, Dumper=yaml.RoundTripDumper)
+    def pop(self, key):
+        return self.data.pop(key)
 
 class Loader(yaml.RoundTripLoader):
     def __init__(self, stream):
@@ -67,7 +72,7 @@ def yaml_load(filename):
     return code
 
 def yaml_dump(data, filename):
-    with open(filename+".tmp", 'w') as fid:
+    with open(filename+".tmp", 'w+') as fid:
         Dumper.add_representer(Include, Dumper.include)
         yaml.dump(data, fid, Dumper=Dumper)
     # Upon success
@@ -92,6 +97,13 @@ else:
 # abspath allows the use of relative file names in the config file
 AWGDir = os.path.abspath(cfg['AWGDir'])
 configFile = os.path.abspath(cfg['ConfigurationFile'])
+KernelDir = os.path.abspath(cfg['KernelDir'])
+LogDir = os.path.abspath(cfg['LogDir'])
+if not os.path.isdir(KernelDir):
+    os.mkdir(KernelDir)
+if not os.path.isdir(LogDir):
+    os.mkdir(LogDir)
+
 try:
     import QGL.config
     AWGDir = QGL.config.AWGDir

@@ -15,6 +15,7 @@ import os
 import time
 import random
 import json
+import ctypes
 
 from scipy.spatial import Delaunay
 
@@ -22,6 +23,7 @@ import matplotlib
 # Make sure that we are using QT5
 matplotlib.use('Qt5Agg')
 from PyQt5 import QtCore, QtWidgets
+from PyQt5.QtGui import QIcon
 
 import numpy as np
 from matplotlib.backends.backend_qt4agg import NavigationToolbar2QT as NavigationToolbar
@@ -177,6 +179,8 @@ class CanvasManual(MplCanvas):
         self.traces[trace_name].set_ydata(y_data)
         self.axis.relim()
         self.axis.autoscale_view()
+        if len(self.traces)>1:
+            self.axis.legend()
         self.draw()
         self.flush_events()
 
@@ -186,7 +190,7 @@ class CanvasManual(MplCanvas):
         if 'y_label' in desc.keys():
             self.axis.set_ylabel(desc['y_label'])
         for trace in desc['traces']:
-            self.traces[trace['name']], = self.axis.plot([], **trace['matplotlib_kwargs'])
+            self.traces[trace['name']], = self.axis.plot([], **trace['matplotlib_kwargs'], label = trace["name"])
         self.axis.ticklabel_format(style='sci', axis='x', scilimits=(-3,3))
         self.axis.ticklabel_format(style='sci', axis='y', scilimits=(-3,3))
         self.fig.tight_layout()
@@ -423,6 +427,17 @@ class MatplotClientWindow(QtWidgets.QMainWindow):
 
 if __name__ == '__main__':
     qApp = QtWidgets.QApplication(sys.argv)
+
+    # Setup icon
+    png_path = os.path.join(os.path.dirname(__file__), "assets/plotter_icon.png")
+    qApp.setWindowIcon(QIcon(png_path))
+
+    # Convince windows that this is a separate application to get the task bar icon working
+    # https://stackoverflow.com/questions/1551605/how-to-set-applications-taskbar-icon-in-windows-7/1552105#1552105
+    if (os.name == 'nt'):
+        myappid = u'BBN.auspex.matplotlib-client.0001' # arbitrary string
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
+
     if len(sys.argv) > 1:
         aw = MatplotClientWindow(hostname=sys.argv[1])
     else:

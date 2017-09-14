@@ -6,7 +6,6 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-import yaml
 import json
 import sys
 import os
@@ -17,6 +16,7 @@ import re
 import asyncio
 import base64
 import datetime
+import subprocess
 
 import numpy as np
 import networkx as nx
@@ -44,6 +44,12 @@ def correct_resource_name(resource_name):
         resource_name = resource_name.replace(k, v)
     return resource_name
 
+def quince():
+    if (os.name == 'nt'):
+        subprocess.Popen(['run-quince.bat', config.configFile], env=os.environ.copy())
+    else:
+        subprocess.Popen(['run-quince.py', config.configFile], env=os.environ.copy())
+
 class QubitExperiment(Experiment):
     """Experiment with a specialized run method for qubit experiments run via the QubitExpFactory."""
     def init_instruments(self):
@@ -61,7 +67,7 @@ class QubitExperiment(Experiment):
             self.awgs[-1], self.awgs[master_awg_idx] = self.awgs[master_awg_idx], self.awgs[-1]
         except:
             logger.warning("No AWG is specified as the master.")
-        
+
         # attach digitizer stream sockets to output connectors
         for chan, dig in self.chan_to_dig.items():
             socket = dig.get_socket(chan)
@@ -108,6 +114,7 @@ class QubitExperiment(Experiment):
         """This is run for each step in a sweep."""
         for dig in self.digitizers:
             dig.acquire()
+        await asyncio.sleep(0.5)
         if not self.cw_mode:
             for awg in self.awgs:
                 awg.run()
@@ -135,16 +142,17 @@ class QubitExpFactory(object):
     will override some of the config values depending on the experiment being run."""
 
     @staticmethod
-    def run(meta_file=None, expname=None, calibration=False, cw_mode=False):
+    def run(meta_file=None, expname=None, calibration=False, cw_mode=False, repeats=None):
         """This passes all of the parameters given to the *create* method
         and then runs the experiment immediately."""
         exp = QubitExpFactory.create(meta_file=meta_file, expname=expname,
-                                     calibration=calibration, cw_mode=cw_mode)
+                                     calibration=calibration, cw_mode=cw_mode,
+                                    repeats=repeats)
         exp.run_sweeps()
         return exp
 
     @staticmethod
-    def create(meta_file=None, expname=None, calibration=False, cw_mode=False, instr_filter=None):
+    def create(meta_file=None, expname=None, calibration=False, save_data = True, cw_mode=False, instr_filter = None, repeats=None):
         """Create the experiment, but do not run the sweeps. If *cw_mode* is specified
         the AWGs will be operated in continuous waveform mode, and will not be stopped
         and started between succesive sweep points. The *calibration* argument is used
@@ -152,20 +160,23 @@ class QubitExpFactory(object):
         any file writers to IO buffers. The *meta_file* specified here is one output by
         QGL that specifies which instruments are required and what the SegmentSweep axes
         are. The *expname* argument is simply used to set the output directory relative
-        to the data directory."""
+        to the data directory. If *repeats* is defined this will overide the
+        number of segments gleaned from the meta_info"""
 
         settings = config.yaml_load(config.configFile)
 
         # This is generally the behavior we want
         auspex.globals.single_plotter_mode = True
 
-        # Instantiaite and perform all of our setup
+        # Instantiate and perform all of our setup
         experiment = QubitExperiment()
         experiment.settings        = settings
         experiment.calibration     = calibration
+        experiment.save_data       = save_data
         experiment.name            = expname
         experiment.cw_mode         = cw_mode
         experiment.calibration     = calibration
+        experiment.repeats         = repeats
 
         if meta_file:
             QubitExpFactory.load_meta_info(experiment, meta_file)
@@ -267,12 +278,20 @@ class QubitExpFactory(object):
         objects."""
 
         calibration = experiment.calibration
+        save_data = experiment.save_data
 
         # Create a mapping from qubits to data writers and inverse
         qubit_to_writer     = {}
         writer_to_qubit     = {}
         qubit_to_stream_sel = {}
         stream_sel_to_qubit = {}
+
+        # shortcuts
+        instruments = experiment.settings['instruments']
+        filters     = experiment.settings['filters']
+        qubits      = experiment.settings['qubits']
+        if 'sweeps' in experiment.settings:
+            sweeps      = experiment.settings['sweeps']
 
         # Use the meta info to modify the parameters
         # loaded from the human-friendly yaml configuration.
@@ -289,32 +308,49 @@ class QubitExpFactory(object):
             vals = text.strip().split()
             if len(vals) == 0:
                 raise ValueError("Please disable filters with missing source.")
+            elif len(vals) > 2:
+                raise ValueError("Spaces are reserved to separate filters and connectors. Please rename {}.".format(text))
             return vals[0]
 
         # Graph edges for the measurement filters
-        edges = [(strip_conn_name(v["source"]), k) for k,v in experiment.settings["filters"].items() if ("enabled" not in v.keys()) or v["enabled"]]
+        # switch stream selector to raw (by default) before building the graph
+        if experiment.__class__.__name__ == "SingleShotFidelityExperiment":
+            receivers = [s for s in meta_info['receivers'].items()]
+            if len(receivers) > 1:
+                raise NotImplementedError("Single shot fidelity for more than one qubit is not yet implemented.")
+            stream_sel_name_orig = receivers[0][0].replace('RecvChan-', '')
+            X6_stream_selectors = [k for k,v in filters.items() if v["type"] == 'X6StreamSelector' and v["source"] == filters[stream_sel_name_orig]['source']]
+            for s in X6_stream_selectors:
+                if filters[s]['stream_type'] == experiment.ss_stream_type:
+                    filters[s]['enabled'] = True
+                    stream_sel_name = s
+                else:
+                    filters[s]['enabled'] = False
+
+        edges = [(strip_conn_name(v["source"]), k) for k,v in filters.items() if ("enabled" not in v.keys()) or v["enabled"]]
         dag = nx.DiGraph()
         dag.add_edges_from(edges)
 
         inst_to_enable = []
         filt_to_enable = []
 
-        # Laziness
-        instruments = experiment.settings['instruments']
-        filters     = experiment.settings['filters']
-        qubits      = experiment.settings['qubits']
-        if 'sweeps' in experiment.settings:
-            sweeps      = experiment.settings['sweeps']
-
         # Find any writer endpoints of the receiver channels
         for receiver_name, num_segments in meta_info['receivers'].items():
             # Receiver channel name format: RecvChan-StreamSelectorName
-            stream_sel_name = receiver_name.replace('RecvChan-', '')
+            if not experiment.__class__.__name__ == "SingleShotFidelityExperiment":
+                stream_sel_name = receiver_name.replace('RecvChan-', '')
+                stream_sel_name_orig = stream_sel_name
             dig_name = filters[stream_sel_name]['source']
             chan_name = filters[stream_sel_name]['channel']
 
+<<<<<<< HEAD
+=======
+            if experiment.repeats is not None:
+                num_segments *= experiment.repeats
+
+>>>>>>> master
             # Set the correct number of segments for the digitizer
-            experiment.settings["instruments"][dig_name]['nbr_segments'] = num_segments
+            instruments[dig_name]['nbr_segments'] = num_segments
 
             # Enable the digitizer
             inst_to_enable.append(dig_name)
@@ -322,46 +358,54 @@ class QubitExpFactory(object):
             # Set number of segments in the digitizer
             instruments[dig_name]['nbr_segments'] = num_segments
 
-            # Find the descendants tree for the receiver channels
+            # Enable the tree for single-shot fidelity experiment. Change stream_sel_name to raw (by default)
             writers = []
             plotters = []
+            singleshot = []
+            buffers = []
             for filt_name, filt in filters.items():
                 if filt_name == stream_sel_name:
                     # Find descendants of the channel selector
                     chan_descendants = nx.descendants(dag, filt_name)
                     # Find endpoints within the descendants
                     endpoints = [n for n in chan_descendants if dag.in_degree(n) == 1 and dag.out_degree(n) == 0]
-                    # Find endpoints which are enabled writers
+                    # Find endpoints which are enabled writers, plotters or singleshot filters without an output
                     writers += [e for e in endpoints if filters[e]["type"] == "WriteToHDF5" and (not hasattr(filters[e], "enabled") or filters[e]["enabled"])]
                     plotters += [e for e in endpoints if filters[e]["type"] == "Plotter" and (not hasattr(filters[e], "enabled") or filters[e]["enabled"])]
-
+                    buffers += [e for e in endpoints if filters[e]["type"] == "DataBuffer" and (not hasattr(filters[e], "enabled") or filters[e]["enabled"])]
+                    singleshot += [e for e in endpoints if filters[e]["type"] == "SingleShotMeasurement" and (not hasattr(filters[e], "enabled") or filters[e]["enabled"]) and experiment.__class__.__name__ == "SingleShotFidelityExperiment"]
+            filt_to_enable.extend(set().union(writers, plotters, singleshot, buffers))
             if calibration:
                 # For calibrations the user should only have one writer enabled, otherwise we will be confused.
                 if len(writers) > 1:
-                    raise Exception("More than one viable data writer was found for a receiver channel {}. Please enabled only one!".format(receiver_name))
-                if len(writers) == 0 and len(plotters) == 0:
-                    raise Exception("No viable data writer or plotter was found for receiver channel {}. Please enabled only one!".format(receiver_name))
+                    raise Exception("More than one viable data writer was found for a receiver channel {}. Please enable only one!".format(receiver_name))
+                if len(writers) == 0 and len(plotters) == 0 and len(singleshot) == 0 and len(buffers) == 0:
+                    raise Exception("No viable data writer, plotter or single-shot filter was found for receiver channel {}. Please enable one!".format(receiver_name))
 
+            if writers and not save_data:
                 # If we are calibrating we don't care about storing data, use buffers instead
                 buffers = []
                 for w in writers:
-                    label = filters[w]["label"]
+                    source_filt = filters[w]["source"].split(" ")[0]
+                    if filters[source_filt]["type"] == "Averager":
+                        sources = ", ".join([source_filt + " final_average", source_filt + " final_variance"])
+                    else:
+                        sources = filters[w]["source"]
                     buff = {
-                            "source": filters[w]["source"],
+                            "source": sources,
                             "enabled": True,
-                            "label": label,
                             "type": "DataBuffer",
                             }
                     # Remove the writer
-                    filters.pop(filters[w]["label"])
+                    filters.pop(w)
                     # Substitute the buffer
-                    filters[label] = buff
+                    filters[w] = buff
                     # Store buffer name for local use
-                    buffers.append(label)
+                    buffers.append(w)
                 writers = buffers
 
             # For now we assume a single qubit, not a big change for multiple qubits
-            qubit_name = next(k for k, v in qubits.items() if v["measure"]["receiver"] == stream_sel_name)
+            qubit_name = next(k for k, v in qubits.items() if v["measure"]["receiver"] in (stream_sel_name, stream_sel_name_orig))
             if calibration:
                 if len(writers) == 1:
                     qubit_to_writer[qubit_name] = writers[0]
@@ -369,22 +413,25 @@ class QubitExpFactory(object):
                 qubit_to_writer[qubit_name] = writers
 
             if calibration:
+                writer_ancestors = []
+                plotter_ancestors = []
+                singleshot_ancestors = []
+                buffer_ancestors = []
                 # Trace back our ancestors, using plotters if no writers are available
                 if len(writers) == 1:
-                    useful_output_filter_ancestors = nx.ancestors(dag, writers[0])
-                else:
-                    useful_output_filter_ancestors = nx.ancestors(dag, plotters[0])
-
-                # We will have gotten the digitizer, which should be removed since we're already taking care of it
-                useful_output_filter_ancestors.remove(dig_name)
-
+                    writer_ancestors = nx.ancestors(dag, writers[0])
+                    # We will have gotten the digitizer, which should be removed since we're already taking care of it
+                    writer_ancestors.remove(dig_name)
                 if plotters:
                     plotter_ancestors = set().union(*[nx.ancestors(dag, pl) for pl in plotters])
                     plotter_ancestors.remove(dig_name)
-                else:
-                    plotter_ancestors = []
-
-                filt_to_enable.extend(set().union(writers, useful_output_filter_ancestors, plotters, plotter_ancestors))
+                if singleshot:
+                    singleshot_ancestors = set().union(*[nx.ancestors(dag, ss) for ss in singleshot])
+                    singleshot_ancestors.remove(dig_name)
+                if buffers:
+                    buffer_ancestors = set().union(*[nx.ancestors(dag, bf) for bf in buffers])
+                    buffer_ancestors.remove(dig_name)
+                filt_to_enable.extend(set().union(writer_ancestors, plotter_ancestors, singleshot_ancestors, buffer_ancestors))
 
         if calibration:
             # One to one writers to qubits
@@ -399,38 +446,48 @@ class QubitExpFactory(object):
         # Disable digitizers and APSs and then build ourself back up with the relevant nodes
         for instr_name in instruments.keys():
             if 'tx_channels' in instruments[instr_name].keys() or 'rx_channels' in instruments[instr_name].keys():
-                experiment.settings["instruments"][instr_name]['enabled'] = False
+                instruments[instr_name]['enabled'] = False
         for instr_name in inst_to_enable:
-            experiment.settings["instruments"][instr_name]['enabled'] = True
+            instruments[instr_name]['enabled'] = True
 
         if calibration:
             for meas_name in filters.keys():
-                experiment.settings['filters'][meas_name]['enabled'] = False
+                filters[meas_name]['enabled'] = False
             for meas_name in filt_to_enable:
-                experiment.settings['filters'][meas_name]['enabled'] = True
+                filters[meas_name]['enabled'] = True
         else:
+            #disable single-shot filters and their output
+            for meas_name in filters.keys():
+                filt_source = filters[meas_name]["source"].split(" ")[0]
+                if filt_source != dig_name and "SingleShotMeasurement" in (filters[meas_name]["type"], filters[filt_source]['type']):
+                    filters[meas_name]['enabled'] = False
+
             #label measurement with qubit name (assuming the convention "M-"+qubit_name)
             for meas_name in filt_to_enable:
-                if experiment.settings['filters'][meas_name]["type"] == "WriteToHDF5":
-                    experiment.settings['filters'][meas_name]['groupname'] = writer_to_qubit[meas_name] \
-                        + "-" + experiment.settings['filters'][meas_name]['groupname']
+                if filters[meas_name]["type"] == "WriteToHDF5":
+                    filters[meas_name]['groupname'] = writer_to_qubit[meas_name] \
+                        + "-" + filters[meas_name]['groupname']
 
         for instr_name, chan_data in meta_info['instruments'].items():
-            experiment.settings["instruments"][instr_name]['enabled']  = True
+            instruments[instr_name]['enabled']  = True
             if isinstance(chan_data, str):
-                experiment.settings["instruments"][instr_name]['seq_file'] = chan_data # Per-instrument seq file
+                instruments[instr_name]['seq_file'] = chan_data # Per-instrument seq file
             elif isinstance(chan_data, dict):
                 for chan_name, seq_file in chan_data.items():
-                    if "tx_channels" in experiment.settings["instruments"][instr_name] and chan_name in experiment.settings["instruments"][instr_name]["tx_channels"].keys():
-                        experiment.settings["instruments"][instr_name]["tx_channels"][chan_name]['seq_file'] = seq_file
-                    elif "rx_channels" in experiment.settings["instruments"][instr_name] and chan_name in experiment.settings["instruments"][instr_name]["rx_channels"].keys():
-                        experiment.settings["instruments"][instr_name]["rx_channels"][chan_name]['seq_file'] = seq_file
+                    if "tx_channels" in instruments[instr_name] and chan_name in instruments[instr_name]["tx_channels"].keys():
+                        instruments[instr_name]["tx_channels"][chan_name]['seq_file'] = seq_file
+                    elif "rx_channels" in instruments[instr_name] and chan_name in instruments[instr_name]["rx_channels"].keys():
+                        instruments[instr_name]["rx_channels"][chan_name]['seq_file'] = seq_file
                     else:
                         raise ValueError("Could not find channel {} in of instrument {}.".format(chan_name, instr_name))
 
         # Now we will construct the DataAxis from the meta_info
         desc = meta_info["axis_descriptor"]
         data_axis = desc[0] # Data will always be the first axis
+
+        if experiment.repeats is not None:
+            #ovverride data axis with repeated number of segments
+            data_axis['points'] = np.tile(data_axis['points'], experiment.repeats)
 
         # See if there are multiple partitions, and therefore metadata
         if len(desc) > 1:
@@ -553,22 +610,30 @@ class QubitExpFactory(object):
                 setattr(experiment, name, param)
                 experiment._parameters[name] = param
 
+                # We might need to return a custom function rather than just a method_name
+                method = None
+
                 # Figure our what we are sweeping
                 target_info = par["target"].split()
                 if target_info[0] in experiment.qubits:
                     # We are sweeping a qubit, so we must lookup the instrument
                     name, meas_or_control, prop = par["target"].split()
                     qubit = qubits[name]
+                    method_name = "set_{}".format(prop.lower())
 
-                    # We should allow for either mixed up signals or direct synthesis
-                    if 'generator' in qubit[meas_or_control]:
+                    # If sweeping frequency, we should allow for either mixed up signals or direct synthesis.
+                    # Sweeping power is always through the AWG channels.
+                    if 'generator' in qubit[meas_or_control] and prop.lower() == "frequency":
                         name = qubit[meas_or_control]['generator']
                         instr = experiment._instruments[name]
-                        method_name = 'set_' + prop.lower()
                     else:
-                        name, chan = experiment.settings['qubits'][meas_or_control]['AWG']
+                        # Construct a function that sets a per-channel property
+                        name, chan = qubit[meas_or_control]['AWG'].split()
                         instr = experiment._instruments[name]
-                        method_name = "set_{}_{}".format(chan, prop.lower())
+
+                        def method(value, channel=chan, instr=instr, prop=prop.lower()):
+                            # e.g. keysight.set_amplitude("ch1", 0.5)
+                            getattr(instr, "set_"+prop)(chan, value)
 
                 elif target_info[0] in experiment._instruments:
                     # We are sweeping an instrument directly
@@ -586,11 +651,17 @@ class QubitExpFactory(object):
                 elif "step" in par:
                     points = np.arange(par['start'], par['stop'], par['step'])
 
-                if hasattr(instr, method_name):
-                    param.assign_method(getattr(instr, method_name)) # Couple the parameter to the instrument
-                    experiment.add_sweep(param, points) # Create the requested sweep on this parameter
+                if method:
+                    # Custom method
+                    param.assign_method(method)
                 else:
-                    raise ValueError("The instrument {} has no method set_{}".format(name, par['type'].lower()))
+                    # Get method by name
+                    if hasattr(instr, method_name):
+                        param.assign_method(getattr(instr, method_name)) # Couple the parameter to the instrument
+                    else:
+                        raise ValueError("The instrument {} has no method {}".format(name, method_name))
+                param.instr_tree = [instr.name, prop] #TODO: extend tree to endpoint
+                experiment.add_sweep(param, points) # Create the requested sweep on this parameter
 
     @staticmethod
     def load_filters(experiment):
@@ -623,7 +694,7 @@ class QubitExpFactory(object):
         # Find out which output connectors we need to create
         # ==================================================
 
-        # Get the enabled measurements, or those which aren't explicitlu
+        # Get the enabled measurements, or those which aren't explicitly
         enabled_meas = {k: v for k, v in experiment.settings['filters'].items() if 'enabled' not in v or v['enabled'] }
 
         # First look for digitizer streams (Alazar or X6)

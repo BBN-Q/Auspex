@@ -21,6 +21,7 @@ from copy import deepcopy
 
 # Dirty trick to avoid loading libraries when scraping
 # This code using quince.
+aps2_missing = False
 if auspex.globals.auspex_dummy_mode:
     fake_aps2 = True
 else:
@@ -28,14 +29,15 @@ else:
         import aps2
         fake_aps2 = False
     except:
-        logger.warning("Could not find APS2 python driver.")
         fake_aps2 = True
+        aps2_missing = True
         aps2 = MagicMock()
 
 class DigitalAttenuator(SCPIInstrument):
     """BBN 3 Channel Instrument"""
     instrument_type = "Digital attenuator"
     NUM_CHANNELS = 3
+    instrument_type = 'Attenuator'
 
     def __init__(self, resource_name=None, name='Unlabeled Digital Attenuator'):
         super(DigitalAttenuator, self).__init__(resource_name=resource_name,
@@ -49,12 +51,14 @@ class DigitalAttenuator(SCPIInstrument):
         self.interface._resource.baud_rate = 115200
         self.interface._resource.read_termination = u"\r\n"
         self.interface._resource.write_termination = u"\n"
+        self.interface._resource.timeout = 1000
         #Override query to look for ``end``
         def query(self, query_string):
             val = self._resource.query(query_string)
             assert self.read() == "END"
             return val
         self.interface.query = MethodType(query, self.interface)
+        sleep(2) #!!! Why is the digital attenuator so slow?
 
     @classmethod
     def channel_check(cls, chan):
@@ -185,12 +189,14 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
         self.name = name
         self.resource_name = resource_name
 
+        if aps2_missing:
+            logger.warning("Could not load aps2 library")
+
         if fake_aps2:
             self.wrapper = MagicMock()
         else:
             self.wrapper = aps2.APS2()
 
-        self.set_amplitude = self.wrapper.set_channel_scale
         self.set_offset    = self.wrapper.set_channel_offset
         self.set_enabled   = self.wrapper.set_channel_enabled
         self.set_mixer_phase_skew = self.wrapper.set_mixer_phase_skew
@@ -227,10 +233,16 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
             self.wrapper.disconnect()
             self.connected = False
 
+    def set_amplitude(self, chs, value):
+        if isinstance(chs, int) or len(chs)==1:
+            self.wrapper.set_channel_scale(int(chs), value)
+        else:
+            self.wrapper.set_channel_scale(int(chs[0])-1, value)
+            self.wrapper.set_channel_scale(int(chs[1])-1, value)
+
     def set_all(self, settings_dict, prefix=""):
         # Pop the channel settings
-        #settings = settings_dict.copy()
-        settings = deepcopy(settings_dict)
+        settings = copy.deepcopy(settings_dict)
         quad_channels = settings.pop('tx_channels')
         # Call the non-channel commands
         super(APS2, self).set_all(settings)
