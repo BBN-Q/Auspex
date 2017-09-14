@@ -178,7 +178,8 @@ class QubitExpFactory(object):
         return experiment
 
     @staticmethod
-    def calibrate_mixer(qubit, mixer="control", first_cal="phase", write_to_file=True):
+    def calibrate_mixer(qubit, mixer="control", first_cal="phase", write_to_file=True,
+    offset_range = (-0.2,0.2), amp_range = (0.6,1.4), phase_range = (-np.pi/6,np.pi/6), nsteps = 51):
         """Calibrates IQ mixer offset, amplitude imbalanace, and phase skew.
         See Analog Devices Application note AN-1039. Parses instrument connectivity from
         the experiment settings YAML.
@@ -198,9 +199,9 @@ class QubitExpFactory(object):
             mce.add_sweep(getattr(mce, name), pts)
             mce.run_sweeps(keep_instruments_connected = True)
 
-        offset_pts = np.linspace(-0.2, 0.2, 51)
-        amp_pts = np.linspace(0.4, 1.4, 51)
-        phase_pts = np.linspace(-30, 30, 61)
+        offset_pts = np.linspace(offset_range[0], offset_range[1], nsteps)
+        amp_pts = np.linspace(amp_range[0], amp_range[1], nsteps)
+        phase_pts = np.linspace(phase_range[0], phase_range[1], nsteps)
 
         buff = DataBuffer()
         plt = Plotter(name="Mixer calibration", plot_mode="real") #TODO: Plot fit.
