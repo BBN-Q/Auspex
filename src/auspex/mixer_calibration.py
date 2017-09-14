@@ -48,7 +48,7 @@ class MixerCalibrationExperiment(Experiment):
     I_offset = FloatParameter(default=0.0, unit="V")
     Q_offset = FloatParameter(default=0.0, unit="V")
     amplitude_factor = FloatParameter(default=1.0)
-    phase_skew = FloatParameter(default=0.0, unit="deg")
+    phase_skew = FloatParameter(default=0.0, unit="rad")
 
     sideband_modulation = False
 
@@ -93,7 +93,7 @@ class MixerCalibrationExperiment(Experiment):
     def write_to_file(self):
         awg_settings = self.settings['instruments'][self.AWG]
         awg_settings['tx_channels'][self.chan]['amp_factor'] = round(self.amplitude_factor.value, 5)
-        awg_settings['tx_channels'][self.chan]['phase_skew'] = round(self.phase_skew.value * np.pi/180, 5)
+        awg_settings['tx_channels'][self.chan]['phase_skew'] = round(self.phase_skew.value, 5)
         awg_settings['tx_channels'][self.chan][self.chan[0]]['offset'] = round(self.I_offset.value, 5)
         awg_settings['tx_channels'][self.chan][self.chan[1]]['offset'] = round(self.Q_offset.value, 5)
         self.settings['instruments'][self.AWG] = awg_settings
@@ -101,7 +101,7 @@ class MixerCalibrationExperiment(Experiment):
         logger.info("Mixer calibration for {}-{} written to experiment file.".format(self.AWG, self.chan))
 
     def _set_mixer_phase(self, phase):
-        self._instruments[self.AWG].set_mixer_phase_skew(phase * np.pi / 180.) #APS expects radians
+        self._instruments[self.AWG].set_mixer_phase_skew(phase) 
 
     def connect_instruments(self):
         """Extend connect_instruments to reset I,Q offsets and amplitude and phase
