@@ -30,7 +30,7 @@ from auspex.log import logger
 from auspex.experiment import Experiment
 from auspex.filters.filter import Filter
 from auspex.filters.io import DataBuffer
-from auspex.filters.plot import Plotter
+from auspex.filters.plot import Plotter, ManualPlotter
 from auspex.instruments.instrument import Instrument, SCPIInstrument, CLibInstrument, DigitizerChannel
 from auspex.stream import OutputConnector, DataStreamDescriptor, DataAxis
 from auspex.experiment import FloatParameter
@@ -205,7 +205,7 @@ class QubitExpFactory(object):
         spm = auspex.globals.single_plotter_mode
         auspex.globals.single_plotter_mode = True
 
-        def sweep_offset(experiment, name, pts):
+        def sweep_offset(name, pts):
             mce.clear_sweeps()
             mce.add_sweep(getattr(mce, name), pts)
             mce.run_sweeps(keep_instruments_connected = True)
@@ -215,27 +215,37 @@ class QubitExpFactory(object):
         phase_pts = np.linspace(phase_range[0], phase_range[1], nsteps)
 
         buff = DataBuffer()
-        plt = Plotter(name="Mixer calibration", plot_mode="real") #TODO: Plot fit.
+        plt = ManualPlotter(name="Mixer calibration")
+        plt.add_data_trace("Amplitude")
+        plt.add_fit_trace("Fit") #TODO: add labels
         mce = MixerCalibrationExperiment(qubit, mixer=mixer)
+        mce.add_manual_plotter(plt)
+        mce.leave_plot_server_open = True
         QubitExpFactory.load_instruments(mce, mce.instruments_to_enable)
-        edges = [(mce.amplitude, buff.sink), (mce.amplitude, plt.sink)]
+        edges = [(mce.amplitude, buff.sink)]
         mce.set_graph(edges)
 
-        sweep_offset(mce, "I_offset", offset_pts)
+        sweep_offset("I_offset", offset_pts)
         I1_amps = np.array([x[1] for x in buff.get_data()])
         I1_offset, pts = find_null_offset(offset_pts, I1_amps)
+        plt["Amplitude"] = (offset_pts, I1_amps)
+        plt["Fit"] = (offset_pts, pts)
         logger.info("Found first pass I offset of {}.".format(I1_offset))
         mce.I_offset.value = I1_offset
 
-        sweep_offset(mce, "Q_offset", offset_pts)
+        sweep_offset("Q_offset", offset_pts)
         Q1_amps = np.array([x[1] for x in buff.get_data()])
         Q1_offset, pts = find_null_offset(offset_pts, Q1_amps)
+        plt["Amplitude"] = (offset_pts, Q1_amps)
+        plt["Fit"] = (offset_pts, pts)
         logger.info("Found first pass Q offset of {}.".format(Q1_offset))
         mce.Q_offset.value = Q1_offset
 
-        sweep_offset(mce, "I_offset", offset_pts)
+        sweep_offset("I_offset", offset_pts)
         I2_amps = np.array([x[1] for x in buff.get_data()])
         I2_offset, pts = find_null_offset(offset_pts, I2_amps)
+        plt["Amplitude"] = (offset_pts, I2_amps)
+        plt["Fit"] = (offset_pts, pts)
         logger.info("Found second pass I offset of {}.".format(I2_offset))
         mce.I_offset.value = I2_offset
 
@@ -249,15 +259,19 @@ class QubitExpFactory(object):
 
         mce.sideband_modulation = True
 
-        sweep_offset(mce, cals[first_cal], cal_pts[first_cal])
+        sweep_offset(cals[first_cal], cal_pts[first_cal])
         amps1 = np.array([x[1] for x in buff.get_data()])
         offset1, pts = find_null_offset(cal_pts[first_cal], amps1, default=cal_defaults[first_cal])
+        plt["Amplitude"] = (cal_pts[first_cal], amps1)
+        plt["Fit"] = (cal_pts[first_cal], pts)
         logger.info("Found {} offset of {}.".format(first_cal, offset1))
         getattr(mce, cals[first_cal]).value = offset1
 
-        sweep_offset(mce, cals[second_cal], cal_pts[second_cal])
+        sweep_offset(cals[second_cal], cal_pts[second_cal])
         amps2 = np.array([x[1] for x in buff.get_data()])
         offset2, pts = find_null_offset(cal_pts[second_cal], amps2, default=cal_defaults[second_cal])
+        plt["Amplitude"] = (cal_pts[second_cal], amps2)
+        plt["Fit"] = (cal_pts[second_cal], pts)
         logger.info("Found {} offset of {}.".format(second_cal, offset2))
         getattr(mce, cals[second_cal]).value = offset2
 
