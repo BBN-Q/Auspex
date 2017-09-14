@@ -343,12 +343,9 @@ class QubitExpFactory(object):
             dig_name = filters[stream_sel_name]['source']
             chan_name = filters[stream_sel_name]['channel']
 
-<<<<<<< HEAD
-=======
             if experiment.repeats is not None:
                 num_segments *= experiment.repeats
 
->>>>>>> master
             # Set the correct number of segments for the digitizer
             instruments[dig_name]['nbr_segments'] = num_segments
 

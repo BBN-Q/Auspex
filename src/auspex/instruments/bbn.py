@@ -242,7 +242,7 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
 
     def set_all(self, settings_dict, prefix=""):
         # Pop the channel settings
-        settings = copy.deepcopy(settings_dict)
+        settings = deepcopy(settings_dict)
         quad_channels = settings.pop('tx_channels')
         # Call the non-channel commands
         super(APS2, self).set_all(settings)
