@@ -230,6 +230,7 @@ class QubitExpFactory(object):
 
         mce = MixerCalibrationExperiment(qubit, mixer=mixer)
         mce.add_manual_plotter(plt)
+        mce.add_manual_plotter(plt2)
         mce.leave_plot_server_open = True
         QubitExpFactory.load_instruments(mce, mce.instruments_to_enable)
         edges = [(mce.amplitude, buff.sink)]
@@ -269,7 +270,6 @@ class QubitExpFactory(object):
 
         mce.sideband_modulation = True
 
-        mce.add_manual_plotter(plt2)
         sweep_offset(cals[first_cal], cal_pts[first_cal])
         amps1 = np.array([x[1] for x in buff.get_data()])
         offset1, pts = find_null_offset(cal_pts[first_cal], amps1, default=cal_defaults[first_cal])
@@ -281,7 +281,7 @@ class QubitExpFactory(object):
         sweep_offset(cals[second_cal], cal_pts[second_cal])
         amps2 = np.array([x[1] for x in buff.get_data()])
         offset2, pts = find_null_offset(cal_pts[second_cal], amps2, default=cal_defaults[second_cal])
-        plt2[cals[first_cal]] = (cal_pts[second_cal], amps2)
+        plt2[cals[second_cal]] = (cal_pts[second_cal], amps2)
         plt2["Fit "+cals[second_cal]] = (cal_pts[second_cal], pts)
         logger.info("Found {} offset of {}.".format(second_cal, offset2))
         getattr(mce, cals[second_cal]).value = offset2
