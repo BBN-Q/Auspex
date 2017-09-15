@@ -364,7 +364,7 @@ class WriteToHDF5(Filter):
                 self.finished_processing = True
 
 class DataBuffer(Filter):
-    """Writes data to file."""
+    """Writes data to IO."""
 
     sink = InputConnector()
 

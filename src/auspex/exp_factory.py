@@ -24,15 +24,19 @@ import networkx as nx
 import auspex.config as config
 import auspex.instruments
 import auspex.filters
+import auspex.globals
 
 from auspex.log import logger
 from auspex.experiment import Experiment
 from auspex.filters.filter import Filter
+from auspex.filters.io import DataBuffer
+from auspex.filters.plot import Plotter, ManualPlotter
 from auspex.instruments.instrument import Instrument, SCPIInstrument, CLibInstrument, DigitizerChannel
 from auspex.stream import OutputConnector, DataStreamDescriptor, DataAxis
 from auspex.experiment import FloatParameter
 from auspex.instruments.X6 import X6Channel
 from auspex.instruments.alazar import AlazarChannel
+from auspex.mixer_calibration import MixerCalibrationExperiment, find_null_offset
 
 def correct_resource_name(resource_name):
     substs = {"USB::": "USB0::", }
@@ -148,7 +152,7 @@ class QubitExpFactory(object):
         return exp
 
     @staticmethod
-    def create(meta_file=None, expname=None, calibration=False, save_data = True, cw_mode=False, repeats=None):
+    def create(meta_file=None, expname=None, calibration=False, save_data = True, cw_mode=False, instr_filter = None, repeats=None):
         """Create the experiment, but do not run the sweeps. If *cw_mode* is specified
         the AWGs will be operated in continuous waveform mode, and will not be stopped
         and started between succesive sweep points. The *calibration* argument is used
@@ -176,13 +180,121 @@ class QubitExpFactory(object):
 
         if meta_file:
             QubitExpFactory.load_meta_info(experiment, meta_file)
-        QubitExpFactory.load_instruments(experiment)
+        QubitExpFactory.load_instruments(experiment, instr_filter=instr_filter)
         QubitExpFactory.load_qubits(experiment)
         QubitExpFactory.load_filters(experiment)
         if 'sweeps' in settings:
             QubitExpFactory.load_parameter_sweeps(experiment)
 
         return experiment
+
+    @staticmethod
+    def calibrate_mixer(qubit, mixer="control", first_cal="phase", write_to_file=True,
+    offset_range = (-0.2,0.2), amp_range = (0.6,1.4), phase_range = (-np.pi/6,np.pi/6), nsteps = 51):
+        """Calibrates IQ mixer offset, amplitude imbalanace, and phase skew.
+        See Analog Devices Application note AN-1039. Parses instrument connectivity from
+        the experiment settings YAML.
+        Arguments:
+            qubit: Qubit identifier string.
+            mixer: One of ("control", "measure") to select which IQ channel is calibrated.
+            first_cal: One of ("phase", "amplitude") to select which adjustment is attempted
+            first. You should pick whichever the particular mixer is most sensitive to.
+            For example, a mixer with -40dBc sideband supression at 1 degree of phase skew
+            and 0.1 dB amplitude imbalance should calibrate the phase first.
+        """
+        spm = auspex.globals.single_plotter_mode
+        auspex.globals.single_plotter_mode = True
+
+        def sweep_offset(name, pts):
+            mce.clear_sweeps()
+            mce.add_sweep(getattr(mce, name), pts)
+            mce.keep_instruments_connected = True
+            mce.run_sweeps()
+
+        offset_pts = np.linspace(offset_range[0], offset_range[1], nsteps)
+        amp_pts = np.linspace(amp_range[0], amp_range[1], nsteps)
+        phase_pts = np.linspace(phase_range[0], phase_range[1], nsteps)
+
+        buff = DataBuffer()
+        plt = ManualPlotter(name="Mixer offset calibration", x_label='{} {} offset (V)'.format(qubit, mixer), y_label='Power (dBm)')
+        plt.add_data_trace("I-offset", {'color': 'C1'})
+        plt.add_data_trace("Q-offset", {'color': 'C2'})
+        plt.add_fit_trace("Fit I-offset", {'color': 'C1'}) #TODO: fix axis labels
+        plt.add_fit_trace("Fit Q-offset", {'color': 'C2'})
+
+        plt2 = ManualPlotter(name="Mixer  amp/phase calibration", x_label='{} {} amplitude (V)/phase (rad)'.format(qubit, mixer), y_label='Power (dBm)')
+        plt2.add_data_trace("phase_skew", {'color': 'C3'})
+        plt2.add_data_trace("amplitude_factor", {'color': 'C4'})
+        plt2.add_fit_trace("Fit phase_skew", {'color': 'C3'})
+        plt2.add_fit_trace("Fit amplitude_factor", {'color': 'C4'})
+
+        mce = MixerCalibrationExperiment(qubit, mixer=mixer)
+        mce.add_manual_plotter(plt)
+        mce.add_manual_plotter(plt2)
+        mce.leave_plot_server_open = True
+        QubitExpFactory.load_instruments(mce, mce.instruments_to_enable)
+        edges = [(mce.amplitude, buff.sink)]
+        mce.set_graph(edges)
+
+        sweep_offset("I_offset", offset_pts)
+        I1_amps = np.array([x[1] for x in buff.get_data()])
+        I1_offset, xpts, ypts = find_null_offset(offset_pts, I1_amps)
+        plt["I-offset"] = (offset_pts, I1_amps)
+        plt["Fit I-offset"] = (xpts, ypts)
+        logger.info("Found first pass I offset of {}.".format(I1_offset))
+        mce.I_offset.value = I1_offset
+
+        sweep_offset("Q_offset", offset_pts)
+        Q1_amps = np.array([x[1] for x in buff.get_data()])
+        Q1_offset, xpts, ypts = find_null_offset(offset_pts, Q1_amps)
+        plt["Q-offset"] = (offset_pts, Q1_amps)
+        plt["Fit Q-offset"] = (xpts, ypts)
+        logger.info("Found first pass Q offset of {}.".format(Q1_offset))
+        mce.Q_offset.value = Q1_offset
+
+        sweep_offset("I_offset", offset_pts)
+        I2_amps = np.array([x[1] for x in buff.get_data()])
+        I2_offset, xpts, ypts = find_null_offset(offset_pts, I2_amps)
+        plt["I-offset"] = (offset_pts, I2_amps)
+        plt["Fit I-offset"] = (xpts, ypts)
+        logger.info("Found second pass I offset of {}.".format(I2_offset))
+        mce.I_offset.value = I2_offset
+
+        #this is a bit hacky but OK...
+        cals = {"phase": "phase_skew", "amplitude": "amplitude_factor"}
+        cal_pts = {"phase": phase_pts, "amplitude": amp_pts}
+        cal_defaults = {"phase": 0.0, "amplitude": 1.0}
+        if first_cal not in cals.keys():
+            raise ValueError("First calibration should be one of ('phase, amplitude'). Instead got {}".format(first_cal))
+        second_cal = list(set(cals.keys()).difference({first_cal,}))[0]
+
+        mce.sideband_modulation = True
+
+        sweep_offset(cals[first_cal], cal_pts[first_cal])
+        amps1 = np.array([x[1] for x in buff.get_data()])
+        offset1, xpts, ypts = find_null_offset(cal_pts[first_cal], amps1, default=cal_defaults[first_cal])
+        plt2[cals[first_cal]] = (cal_pts[first_cal], amps1)
+        plt2["Fit "+cals[first_cal]] = (xpts, ypts)
+        logger.info("Found {} offset of {}.".format(first_cal, offset1))
+        getattr(mce, cals[first_cal]).value = offset1
+
+        sweep_offset(cals[second_cal], cal_pts[second_cal])
+        amps2 = np.array([x[1] for x in buff.get_data()])
+        offset2, xpts, ypts = find_null_offset(cal_pts[second_cal], amps2, default=cal_defaults[second_cal])
+        plt2[cals[second_cal]] = (cal_pts[second_cal], amps2)
+        plt2["Fit "+cals[second_cal]] = (xpts, ypts)
+        logger.info("Found {} offset of {}.".format(second_cal, offset2))
+        getattr(mce, cals[second_cal]).value = offset2
+
+        mce.disconnect_instruments()
+        if write_to_file:
+            mce.write_to_file()
+        logger.info(("Mixer calibration: I offset = {}, Q offset = {}, "
+                    "Amplitude Imbalance = {}, Phase Skew = {}").format(mce.I_offset.value,
+                                                                        mce.Q_offset.value,
+                                                                        mce.amplitude_factor.value,
+                                                                        mce.phase_skew.value))
+        auspex.globals.single_plotter_mode = spm
 
     @staticmethod
     def load_meta_info(experiment, meta_file):
@@ -433,10 +545,12 @@ class QubitExpFactory(object):
             experiment.stream_sel_to_qubit[par["measure"]["receiver"]] = name
 
     @staticmethod
-    def load_instruments(experiment):
+    def load_instruments(experiment, instr_filter=None):
         """Parse the instruments settings and instantiate the corresponding Auspex instruments by name.
         This function first traverses all vendor instrument modules and constructs a map from the instrument names
-        to the relevant module members."""
+        to the relevant module members. To select only a subset of instruments, use an instrument_filter by either
+        passing a list of instruments to be loaded by name, or a callable object that takes a (key, value) pair
+        and returns a boolean. Example: instr_filter = lambda x: 'Holzworth' in x[1]['type'] or 'APS' in x[0]"""
         modules = (
             importlib.import_module('auspex.instruments.' + name)
             for loader, name, is_pkg in pkgutil.iter_modules(auspex.instruments.__path__)
@@ -451,8 +565,21 @@ class QubitExpFactory(object):
             module_map.update(dict(instrs))
         logger.debug("Found instruments %s.", module_map)
 
+        #only select the instruments we want. not super happy with this code so
+        #if anyone has a better way to do this please fix. -GJR
+        if instr_filter is not None:
+            if isinstance(instr_filter, (list, tuple)):
+                filtfun = lambda x: x[0] in instr_filter
+            elif hasattr(instr_filter, "__call__"):
+                filtfun = instr_filter
+            else:
+                raise TypeError("Instrument filter must be either a list, tuple, or callable. Got a {} instead.".format(type(instr_filter)))
+        instruments = {k: v for k, v in experiment.settings['instruments'].items() if instr_filter is None or filtfun((k,v))}
+        if not instruments:
+            logger.warning("No instruments are being loaded by the experiment! Is this what you want to do?")
+
         # Loop through instruments, and add them to the experiment if they are enabled.
-        for name, par in experiment.settings['instruments'].items():
+        for name, par in instruments.items():
             # Assume we're enabled by default, or enabled is not False
             if 'enabled' not in par or par['enabled']:
                 # This should go away as auspex and pyqlab converge on naming schemes
