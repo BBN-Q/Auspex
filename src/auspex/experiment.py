@@ -497,12 +497,13 @@ class Experiment(metaclass=MetaExperiment):
                         logger.debug("No plotter to kill.")
 
             client_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),"matplotlib-client.py")
-            if hasattr(os, 'setsid'):
-                auspex.globals.last_plotter_process = subprocess.Popen(['python', client_path, 'localhost'],
-                                                                    env=os.environ.copy(), preexec_fn=os.setsid)
-            else:
-                auspex.globals.last_plotter_process = subprocess.Popen(['python', client_path, 'localhost'],
-                                                                    env=os.environ.copy())
+            if not self.keep_instruments_connected or not auspex.globals.last_plotter_process: #keep_instruments_connected is a flag for keeping the plot process running
+                if hasattr(os, 'setsid'):
+                    auspex.globals.last_plotter_process = subprocess.Popen(['python', client_path, 'localhost'],
+                                                                        env=os.environ.copy(), preexec_fn=os.setsid)
+                else:
+                    auspex.globals.last_plotter_process = subprocess.Popen(['python', client_path, 'localhost'],
+                                                                        env=os.environ.copy())
             time.sleep(1)
 
         def catch_ctrl_c(signum, frame):
