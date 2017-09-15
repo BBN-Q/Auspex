@@ -208,16 +208,26 @@ class QubitExpFactory(object):
         def sweep_offset(name, pts):
             mce.clear_sweeps()
             mce.add_sweep(getattr(mce, name), pts)
-            mce.run_sweeps(keep_instruments_connected = True)
+            mce.keep_instruments_connected = True
+            mce.run_sweeps()
 
         offset_pts = np.linspace(offset_range[0], offset_range[1], nsteps)
         amp_pts = np.linspace(amp_range[0], amp_range[1], nsteps)
         phase_pts = np.linspace(phase_range[0], phase_range[1], nsteps)
 
         buff = DataBuffer()
-        plt = ManualPlotter(name="Mixer calibration")
-        plt.add_data_trace("Amplitude")
-        plt.add_fit_trace("Fit") #TODO: add labels
+        plt = ManualPlotter(name="Mixer offset calibration")
+        plt.add_data_trace("I-offset", {'color': 'C1'})
+        plt.add_data_trace("Q-offset", {'color': 'C2'})
+        plt.add_fit_trace("Fit I-offset", {'color': 'C1'}) #TODO: fix axis labels
+        plt.add_fit_trace("Fit Q-offset", {'color': 'C2'})
+
+        plt2 = ManualPlotter(name="Mixer  amp/phase calibration")
+        plt2.add_data_trace("phase_skew", {'color': 'C3'})
+        plt2.add_data_trace("amplitude_factor", {'color': 'C4'})
+        plt2.add_fit_trace("Fit phase_skew", {'color': 'C3'})
+        plt2.add_fit_trace("Fit amplitude_factor", {'color': 'C4'})
+
         mce = MixerCalibrationExperiment(qubit, mixer=mixer)
         mce.add_manual_plotter(plt)
         mce.leave_plot_server_open = True
@@ -228,24 +238,24 @@ class QubitExpFactory(object):
         sweep_offset("I_offset", offset_pts)
         I1_amps = np.array([x[1] for x in buff.get_data()])
         I1_offset, pts = find_null_offset(offset_pts, I1_amps)
-        plt["Amplitude"] = (offset_pts, I1_amps)
-        plt["Fit"] = (offset_pts, pts)
+        plt["I-offset"] = (offset_pts, I1_amps)
+        plt["Fit I-offset"] = (offset_pts, pts)
         logger.info("Found first pass I offset of {}.".format(I1_offset))
         mce.I_offset.value = I1_offset
 
         sweep_offset("Q_offset", offset_pts)
         Q1_amps = np.array([x[1] for x in buff.get_data()])
         Q1_offset, pts = find_null_offset(offset_pts, Q1_amps)
-        plt["Amplitude"] = (offset_pts, Q1_amps)
-        plt["Fit"] = (offset_pts, pts)
+        plt["Q-offset"] = (offset_pts, Q1_amps)
+        plt["Fit Q-offset"] = (offset_pts, pts)
         logger.info("Found first pass Q offset of {}.".format(Q1_offset))
         mce.Q_offset.value = Q1_offset
 
         sweep_offset("I_offset", offset_pts)
         I2_amps = np.array([x[1] for x in buff.get_data()])
         I2_offset, pts = find_null_offset(offset_pts, I2_amps)
-        plt["Amplitude"] = (offset_pts, I2_amps)
-        plt["Fit"] = (offset_pts, pts)
+        plt["I-offset"] = (offset_pts, I2_amps)
+        plt["Fit I-offset"] = (offset_pts, pts)
         logger.info("Found second pass I offset of {}.".format(I2_offset))
         mce.I_offset.value = I2_offset
 
@@ -259,19 +269,20 @@ class QubitExpFactory(object):
 
         mce.sideband_modulation = True
 
+        mce.add_manual_plotter(plt2)
         sweep_offset(cals[first_cal], cal_pts[first_cal])
         amps1 = np.array([x[1] for x in buff.get_data()])
         offset1, pts = find_null_offset(cal_pts[first_cal], amps1, default=cal_defaults[first_cal])
-        plt["Amplitude"] = (cal_pts[first_cal], amps1)
-        plt["Fit"] = (cal_pts[first_cal], pts)
+        plt2[cals[first_cal]] = (cal_pts[first_cal], amps1)
+        plt2["Fit "+cals[first_cal]] = (cal_pts[first_cal], pts)
         logger.info("Found {} offset of {}.".format(first_cal, offset1))
         getattr(mce, cals[first_cal]).value = offset1
 
         sweep_offset(cals[second_cal], cal_pts[second_cal])
         amps2 = np.array([x[1] for x in buff.get_data()])
         offset2, pts = find_null_offset(cal_pts[second_cal], amps2, default=cal_defaults[second_cal])
-        plt["Amplitude"] = (cal_pts[second_cal], amps2)
-        plt["Fit"] = (cal_pts[second_cal], pts)
+        plt2[cals[first_cal]] = (cal_pts[second_cal], amps2)
+        plt2["Fit "+cals[second_cal]] = (cal_pts[second_cal], pts)
         logger.info("Found {} offset of {}.".format(second_cal, offset2))
         getattr(mce, cals[second_cal]).value = offset2
 

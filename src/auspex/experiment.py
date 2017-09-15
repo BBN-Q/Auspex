@@ -192,6 +192,8 @@ class Experiment(metaclass=MetaExperiment):
         # we might push additional plots after run_sweeps is complete.
         self.leave_plot_server_open = False
 
+        self.keep_instruments_connected = False
+
         # Also keep references to all of the plot filters
         self.plotters = [] # Standard pipeline plotters using streams
         self.extra_plotters = [] # Plotters using streams, but not the pipeline
@@ -409,8 +411,7 @@ class Experiment(metaclass=MetaExperiment):
             instrument.disconnect()
         self.instrs_connected = False
 
-    def run_sweeps(self, keep_instruments_connected = False):
-
+    def run_sweeps(self):
         # Propagate the descriptors through the network
         self.update_descriptors()
         # Make sure we are starting from scratch... is this necessary?
@@ -481,7 +482,7 @@ class Experiment(metaclass=MetaExperiment):
                 plotter.plot_server = self.plot_server
             time.sleep(0.5)
             # Kill a previous plotter if desired.
-            if auspex.globals.single_plotter_mode and auspex.globals.last_plotter_process:
+            if auspex.globals.single_plotter_mode and auspex.globals.last_plotter_process and not self.keep_instruments_connected:
                 pro = auspex.globals.last_plotter_process
                 if hasattr(os, 'setsid'): # Doesn't exist on windows
                     try:
@@ -531,11 +532,10 @@ class Experiment(metaclass=MetaExperiment):
             if callback:
                 callback(plot)
 
-        self.shutdown(keep_instruments_connected=keep_instruments_connected)
+        self.shutdown()
 
-    def shutdown(self, keep_instruments_connected=False):
+    def shutdown(self):
         logger.debug("Shutting Down!")
-
         for f in self.files:
             try:
                 logger.debug("Closing %s", f)
@@ -552,7 +552,7 @@ class Experiment(metaclass=MetaExperiment):
 
         self.shutdown_instruments()
 
-        if not keep_instruments_connected:
+        if not self.keep_instruments_connected:
             self.disconnect_instruments()
 
     def add_axis(self, axis):
