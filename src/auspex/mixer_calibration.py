@@ -38,6 +38,7 @@ def find_null_offset(xpts, powers, default=0.0):
     best_offset = np.maximum(best_offset, xpts[0])
     xpts_fine = np.linspace(xpts[0],xpts[-1],101)
     fit_pts = np.array([np.real(model(x, *fit[0])) for x in xpts_fine])
+    if min(fit_pts)<0: fit_pts-=min(fit_pts)-1e-10 #prevent log of a negative number
     return best_offset, xpts_fine, 10*np.log10(fit_pts)
 
 class MixerCalibrationExperiment(Experiment):
