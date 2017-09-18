@@ -11,6 +11,7 @@
 import json
 import os.path
 import sys
+import auspex.globals
 from shutil import move
 try:
     import ruamel.yaml as yaml
@@ -19,10 +20,13 @@ except:
 
 # Run this code by importing config.py
 # Load the configuration from the json file and populate the global configuration dictionary
-root_path   = os.path.dirname( os.path.abspath(__file__) )
-root_path   = os.path.abspath(os.path.join(root_path, "../.." ))
-config_dir  = os.path.join(root_path, 'config')
-config_file = os.path.join(config_dir, 'config.json')
+if auspex.globals.config_file:
+    config_file = os.path.abspath(auspex.globals.config_file)
+else:
+    root_path   = os.path.dirname( os.path.abspath(__file__) )
+    root_path   = os.path.abspath(os.path.join(root_path, "../.." ))
+    config_dir  = os.path.join(root_path, 'config')
+    config_file = os.path.join(config_dir, 'config.json')
 
 class Include():
     def __init__(self, filename):
@@ -95,10 +99,22 @@ else:
 
 # pull out the variables
 # abspath allows the use of relative file names in the config file
-AWGDir = os.path.abspath(cfg['AWGDir'])
-configFile = os.path.abspath(cfg['ConfigurationFile'])
-KernelDir = os.path.abspath(cfg['KernelDir'])
-LogDir = os.path.abspath(cfg['LogDir'])
+if auspex.globals.AWGDir:
+    AWGDir = os.path.abspath(auspex.globals.AWGDir)
+else:
+    AWGDir = os.path.abspath(cfg['AWGDir'])
+if auspex.globals.ConfigurationFile:
+    configFile = os.path.abspath(auspex.globals.ConfigurationFile)
+else:
+    configFile = os.path.abspath(cfg['ConfigurationFile'])
+if auspex.globals.KernelDir:
+    KernelDir = os.path.abspath(auspex.globals.KernelDir)
+else:
+    KernelDir = os.path.abspath(cfg['KernelDir'])
+if auspex.globals.LogDir:
+    LogDir = os.path.abspath(auspex.globals.LogDir)
+else:
+    LogDir = os.path.abspath(cfg['LogDir'])
 if not os.path.isdir(KernelDir):
     os.mkdir(KernelDir)
 if not os.path.isdir(LogDir):
