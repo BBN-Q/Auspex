@@ -20,8 +20,6 @@ from auspex.log import logger
 from auspex.experiment import FloatParameter, IntParameter, Experiment
 from auspex.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector
 
-from JSONLibraryUtils import LibraryCoders
-
 def find_null_offset(xpts, powers, default=0.0):
     """Finds the offset corresponding to the minimum power using a fit to the measured data"""
     def model(x, a, b, c):
