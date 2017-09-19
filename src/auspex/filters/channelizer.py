@@ -75,7 +75,11 @@ class Channelizer(Filter):
         self.init_filters(self.frequency.value, self.bandwidth.value)
 
         if self.follow_axis.value is not "":
-            self.demod_freqs  = (self.sink.descriptor.expected_tuples(with_metadata=True, as_structured_array=True)[self.follow_axis.value] - self.follow_freq_offset.value)
+            desc = self.sink.descriptor
+            axis_num = desc.axis_num(self.follow_axis.value)
+            self.pts_before_freq_update = desc.num_points_through_axis(axis_num + 1)
+            self.pts_before_freq_reset  = desc.num_points_through_axis(axis_num)
+            self.demod_freqs = desc.axes[axis_num].points
             self.current_freq = 0
             self.update_references(self.current_freq)
         self.idx = 0
@@ -214,7 +218,7 @@ class Channelizer(Filter):
 
             # Update demodulation frequency if necessary
             if self.follow_axis.value is not "":
-                freq = self.demod_freqs[self.idx+1]
+                freq = self.demod_freqs[(self.idx % self.pts_before_freq_reset) // self.pts_before_freq_update]
                 if freq != self.current_freq:
                     self.update_references(freq)
                     self.current_freq = freq
