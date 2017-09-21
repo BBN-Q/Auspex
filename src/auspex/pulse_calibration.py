@@ -490,8 +490,8 @@ class CLEARCalibration(MeasCalibration):
         self.nsteps = nsteps
         if not self.eps1:
             # theoretical values as default
-            self.eps1 = (1 - 2*exp(kappa*t_empty/4)*cos(chi*t_empty/2))/(1+exp(kappa*t_empty/2)-2*exp(kappa*t_empty/4)*cos(chi*t_empty/2))
-            self.eps2 = 1/(1+exp(kappa*t_empty/2)-2*exp(kappa*t_empty/4)*cos(chi*t_empty/2))
+            self.eps1 = (1 - 2*exp(kappa*t_empty/4)*np.cos(chi*t_empty/2))/(1+exp(kappa*t_empty/2)-2*exp(kappa*t_empty/4)*np.cos(chi*t_empty/2))
+            self.eps2 = 1/(1+exp(kappa*t_empty/2)-2*exp(kappa*t_empty/4)*np.cos(chi*t_empty/2))
         self.cal_steps = cal_steps
 
     def sequence(self, **params):
@@ -542,7 +542,10 @@ class CLEARCalibration(MeasCalibration):
         chan_settings['channelDict'][self.meas_name]['pulseParams']['amp1'] = self.eps1
         chan_settings['channelDict'][self.meas_name]['pulseParams']['amp2'] = self.eps2
         chan_settings['channelDict'][self.meas_name]['pulseParams']['step_length'] = self.tau
-        self.update_libraries([chan_settings], [config.channelLibFile])
+        self.settings['qubits'][self.qubit.label]['measure']['pulse_params']['amp1'] = round(float(self.eps1), 5)
+        self.settings['qubits'][self.qubit.label]['measure']['pulse_params']['amp2'] = round(float(self.eps2), 5)
+        self.settings['qubits'][self.qubit.label]['measure']['pulse_params']['step_length'] = round(float(self.tau), 5)
+        super(CLEARCalibration, self).update_settings()
 
 '''Two-qubit gate calibrations'''
 class CRCalibration(PulseCalibration):
