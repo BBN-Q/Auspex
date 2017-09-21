@@ -6,6 +6,8 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
+__all__ = ['KeysightM8190A', 'Sequence', 'Scenario']
+
 from auspex.log import logger
 from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand
 from .binutils import BitField, BitFieldUnion
@@ -173,14 +175,14 @@ class KeysightM8190A(SCPIInstrument):
     sample_freq_source = StringCommand(scpi_string=":FREQ:RAST:SOUR", # sample frequency source
                           allowed_values=("INTERNAL", "EXTERNAL"))
 
-    waveform_output_mode  = StringCommand(scpi_string=":TRAC:DWID",
+    waveform_output_mode  = StringCommand(scpi_string=":TRAC{channel:d}:DWID", additional_args=['channel'],
                              allowed_values=("WSPEED", "WPRECISION", "INTX3", "INTX12", "INTX24", "INT48"))
-    sequence_mode         = StringCommand(scpi_string=":FUNC:MODE",
-                             value_map={"ARBITRARY":"ARB", "SEQUENCE":"STS", "SCENARIO":"STSC"})
-    scenario_loop_ct      = IntCommand(scpi_string=":STAB:SCEN:COUN")
-    scenario_advance_mode = StringCommand(scpi_string=":STAB:SCEN:ADV",
+    sequence_mode         = StringCommand(scpi_string=":FUNC{channel:d}:MODE", additional_args=['channel'],
+                                          value_map={"ARBITRARY":"ARB", "SEQUENCE":"STS", "SCENARIO":"STSC"})
+    scenario_loop_ct      = IntCommand(scpi_string=":STAB{channel:d}:SCEN:COUN", additional_args=['channel'])
+    scenario_advance_mode = StringCommand(scpi_string=":STAB{channel:d}:SCEN:ADV", additional_args=['channel'],
                              value_map={"AUTOMATIC":"AUTO", "CONDITIONAL":"COND", "REPEAT":"REP", "SINGLE":"SING"})
-    scenario_start_index  = IntCommand(scpi_string=":STAB:SCEN:SEL")
+    scenario_start_index  = IntCommand(scpi_string=":STAB{channel:d}:SCEN:SEL", additional_args=['channel'])
 
     output            = StringCommand(scpi_string=":OUTP{channel:d}:NORM",
                          value_map={False:"0", True:"1"}, additional_args=['channel'])
@@ -189,9 +191,9 @@ class KeysightM8190A(SCPIInstrument):
     output_route      = StringCommand(scpi_string=":OUTP{channel:d}:ROUT", allowed_values=["DAC","AC","DC"],
                          additional_args=["channel"])
 
-    voltage_amplitude = FloatCommand(scpi_string=":VOLT:AMPL")
+    voltage_amplitude = FloatCommand(scpi_string=":VOLT{channel:d}:AMPL", additional_args=['channel'])
     #TODO: voltage_amplitude for the different output routes
-    voltage_offset    = FloatCommand(scpi_string=":VOLT:OFFS")
+    voltage_offset    = FloatCommand(scpi_string=":VOLT{channel:d}:OFFS", additional_args=['channel'])
 
     marker_level_low  = FloatCommand(scpi_string=":MARK{channel:d}:{marker_type:s}:VOLT:LOW",
                          additional_args=["channel", "marker_type"]) # marker (sync/samp) low
@@ -202,7 +204,6 @@ class KeysightM8190A(SCPIInstrument):
     gate_mode       = StringCommand(scpi_string=":INIT:GATE:STAT", value_map={True:"1", False:"0"})
 
     def __init__(self, resource_name, *args, **kwargs):
-        resource_name += "::inst0::INSTR" #user guide recommends HiSLIP protocol
         super(KeysightM8190A, self).__init__(resource_name, *args, **kwargs)
         self.name = "KeysightM8190A AWG"
 
@@ -213,6 +214,10 @@ class KeysightM8190A(SCPIInstrument):
         self._freeze()
 
     def connect(self, resource_name=None, interface_type=None):
+        if resource_name is not None:
+            self.resource_name = resource_name
+        if "::inst0::INSTR" not in self.resource_name: #user guide recommends HiSLIP protocol
+            self.resource_name += "::inst0::INSTR"
         super(KeysightM8190A, self).connect(resource_name=resource_name, interface_type=interface_type)
         self.interface._resource.read_termination = u"\n"
 
@@ -310,8 +315,8 @@ class KeysightM8190A(SCPIInstrument):
 
         return bin_data
 
-    def reset_sequence_table(self):
-        self.interface.write(":STAB:RES")
+    def reset_sequence_table(self, channel=1):
+        self.interface.write(":STAB:RES{:d}.format(channel)")
 
     def upload_scenario(self, scenario, channel=1, start_idx=0, binary=True):
         if binary:

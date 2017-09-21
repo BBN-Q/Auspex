@@ -6,6 +6,8 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
+__all__ = ['ElementwiseFilter']
+
 import asyncio, concurrent
 import h5py
 import itertools
@@ -60,6 +62,7 @@ class ElementwiseFilter(Filter):
         self.source.update_descriptors()
 
     async def run(self):
+        self.finished_processing = False
         streams = self.sink.input_streams
 
         for s in streams[1:]:
@@ -131,3 +134,7 @@ class ElementwiseFilter(Filter):
                     stream_data[stream] = stream_data[stream][smallest_length:]
                 else:
                     stream_data[stream] = np.zeros(0, dtype=self.sink.descriptor.dtype)
+
+            # If we have gotten all our data and process_data has returned, then we are done!
+            if all([v.done() for v in self.input_connectors.values()]):
+                self.finished_processing = True

@@ -47,19 +47,18 @@ class TestExperiment(Experiment):
     def init_streams(self):
         self.voltage.add_axis(DataAxis("xs", np.arange(100)))
         self.voltage.add_axis(DataAxis("ys", np.arange(100)))
-        self.voltage.add_axis(DataAxis("repeats", np.arange(80)))
+        self.voltage.add_axis(DataAxis("repeats", np.arange(500)))
 
     def __repr__(self):
         return "<SweptTestExperiment>"
 
     async def run(self):
        
-        #fake the response for a Ramsey frequency experiment with a gaussian excitation profile
-        for _ in range(80):
-            await asyncio.sleep(0.1)
+        for _ in range(500):
+            await asyncio.sleep(0.01)
             data = np.zeros((100,100))
             data[25:75, 25:75] = 1.0 
-            data = data + 5*np.random.random((100,100))
+            data = data + 25*np.random.random((100,100))
             await self.voltage.push(data.flatten())
 
 if __name__ == '__main__':
@@ -76,6 +75,8 @@ if __name__ == '__main__':
             ]
 
     avg.update_interval = 0.2
+    pl1.update_interval = 0.2
+    pl2.update_interval = 0.2
 
     exp.set_graph(edges)
     exp.init_instruments()

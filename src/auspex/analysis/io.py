@@ -12,7 +12,7 @@ from auspex.log import logger
 import h5py
 import numpy as np
 
-def load_from_HDF5(filename_or_fileobject, return_structured_array=True):
+def load_from_HDF5(filename_or_fileobject, reshape=True, return_structured_array=True):
     data = {}
     descriptors = {}
     if isinstance(filename_or_fileobject, h5py.File):
@@ -55,6 +55,8 @@ def load_from_HDF5(filename_or_fileobject, return_structured_array=True):
         else:
             group_data = {n: g['data'][n][:] for n in col_names}
 
+        if reshape:
+            group_data = group_data.reshape(descriptor.dims())
 
         data[groupname] = group_data
         descriptors[groupname] = descriptor

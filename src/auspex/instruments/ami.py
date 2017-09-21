@@ -6,6 +6,8 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
+__all__ = ['AMI430']
+
 from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand
 
 import time
@@ -66,7 +68,6 @@ class AMI430(SCPIInstrument):
     ramping_state  = StringCommand(get_string="STATE?", value_map={v:str(ct+1) for ct,v in enumerate(RAMPING_STATES)}) # Current ramping state
 
     def __init__(self, resource_name, *args, **kwargs):
-        resource_name += "::7180::SOCKET"
         super(AMI430, self).__init__(resource_name, *args, **kwargs)
         self.name = "American Magnetics Model 430"
 
@@ -75,7 +76,11 @@ class AMI430(SCPIInstrument):
     #     get_string="RAMP:RATE:CURRent:{segment:d}?", additional_args=["segment"])
 
     def connect(self, resource_name=None, interface_type=None):
-        super(AMI430, self).connect(resource_name=None, interface_type=None)
+        if resource_name:
+            self.resource_name = resource_name
+        if "::7180::SOCKET" not in self.resource_name: #user guide recommends HiSLIP protocol
+            self.resource_name += "::7180::SOCKET"
+        super(AMI430, self).connect(resource_name=self.resource_name, interface_type=None)
         self.interface._resource.read_termination = u"\r\n"
         #device responds with 'American Magnetics Model 430 IP Interface\r\nHello\r\n' on connect
         assert self.interface.read() == "American Magnetics Model 430 IP Interface"

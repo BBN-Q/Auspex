@@ -8,6 +8,7 @@
 
 import inspect
 import time
+import copy
 import itertools
 import logging
 import asyncio
@@ -15,6 +16,7 @@ import signal
 import sys
 import numbers
 import os
+import subprocess
 
 import numpy as np
 import scipy as sp
@@ -26,9 +28,9 @@ from auspex.instruments.instrument import Instrument
 from auspex.parameter import ParameterGroup, FloatParameter, IntParameter, Parameter
 from auspex.sweep import Sweeper
 from auspex.stream import DataStream, DataAxis, SweepAxis, DataStreamDescriptor, InputConnector, OutputConnector
-from auspex.filters.plot import Plotter, XYPlotter, MeshPlotter, ManualPlotter
-from auspex.filters.io import WriteToHDF5, DataBuffer
+from auspex.filters import Plotter, XYPlotter, MeshPlotter, ManualPlotter, WriteToHDF5, DataBuffer, Filter
 from auspex.log import logger
+import auspex.globals
 
 class ExpProgressBar(object):
     """ Display progress bar(s) on the terminal.
@@ -47,7 +49,7 @@ class ExpProgressBar(object):
         self.stream = stream
         self.num = num
         self.notebook = notebook
-        self.reset(stream=stream)
+        # self.reset(stream=stream)
 
     def reset(self, stream=None):
         """ Reset the progress bar(s) """
@@ -152,7 +154,7 @@ class MetaExperiment(type):
         self._output_connectors = {}
 
         # Parse ourself
-        self.exp_src = inspect.getsource(self)
+        self._exp_src = inspect.getsource(self)
 
         for k,v in dct.items():
             if isinstance(v, Instrument):
@@ -183,9 +185,12 @@ class Experiment(metaclass=MetaExperiment):
         # This holds the experiment graph
         self.graph = None
 
-        # This holds a reference to a bokeh-server instance
+        # This holds a reference to a matplotlib server instance
         # for plotting, if there is one.
-        self.bokeh_server = None
+        self.matplot_server_thread = None
+        # If this is True, don't close the plot server thread so that
+        # we might push additional plots after run_sweeps is complete.
+        self.leave_plot_server_open = False
 
         # Also keep references to all of the plot filters
         self.plotters = [] # Standard pipeline plotters using streams
@@ -216,6 +221,28 @@ class Experiment(metaclass=MetaExperiment):
             self.output_connectors[oc] = a
             setattr(self, oc, a)
 
+        # Some instruments don't clean up well after themselves, reconstruct them on a
+        # per instance basis. These instruments contain a wide variety of complex behaviors
+        # and rely on other classes and data structures, so we avoid copying them and
+        # run through the constructor instead.
+        self._instruments_instance = {}
+        for n in self._instruments.keys():
+            new_cls = type(self._instruments[n])
+            new_inst = new_cls(resource_name=self._instruments[n].resource_name, name=self._instruments[n].name)
+            setattr(self, n, new_inst)
+            self._instruments_instance[n] = new_inst
+        self._instruments = self._instruments_instance
+
+        # We don't want to add parameters to the base class, so do the same here.
+        # These aren't very complicated objects, so we'll throw caution to the wind and
+        # try copying them directly.
+        self._parameters_instance = {}
+        for n, v in self._parameters.items():
+            new_inst = copy.deepcopy(v)
+            setattr(self, n, new_inst)
+            self._parameters_instance[n] = new_inst
+        self._parameters = self._parameters_instance
+
         # Create the asyncio measurement loop
         self.loop = asyncio.get_event_loop()
 
@@ -225,7 +252,6 @@ class Experiment(metaclass=MetaExperiment):
 
         # Run the stream init
         self.init_streams()
-        self.update_descriptors()
 
     def set_graph(self, edges):
         unique_nodes = []
@@ -236,7 +262,6 @@ class Experiment(metaclass=MetaExperiment):
                 unique_nodes.append(ee.parent)
         self.nodes = unique_nodes
         self.graph = ExperimentGraph(edges, self.loop)
-        self.update_descriptors()
 
     def init_streams(self):
         """Establish the base descriptors for any internal data streams and connectors."""
@@ -278,7 +303,7 @@ class Experiment(metaclass=MetaExperiment):
     def update_descriptors(self):
         logger.debug("Starting descriptor update in experiment.")
         for oc in self.output_connectors.values():
-            oc.descriptor.exp_src = self.exp_src
+            oc.descriptor._exp_src = self._exp_src
             for k,v in self._parameters.items():
                 oc.descriptor.add_param(k, v.value)
                 if v.unit is not None:
@@ -287,10 +312,10 @@ class Experiment(metaclass=MetaExperiment):
                 if hasattr(self,k):
                     v = getattr(self,k)
                     oc.descriptor.add_param(k, v)
-            if not self.sweeper.is_adaptive():
-                oc.descriptor.visited_tuples = oc.descriptor.expected_tuples(with_metadata=True, as_structured_array=False)
-            else:
-                oc.descriptor.visited_tuples = []
+            # if not self.sweeper.is_adaptive():
+            #     oc.descriptor.visited_tuples = oc.descriptor.expected_tuples(with_metadata=True, as_structured_array=False)
+            # else:
+            oc.descriptor.visited_tuples = []
             oc.update_descriptors()
 
     async def declare_done(self):
@@ -324,19 +349,19 @@ class Experiment(metaclass=MetaExperiment):
                 for oc in self.output_connectors.values():
                     # Obtain the lists of values for any fixed
                     # DataAxes and append them to them to the sweep_values
-                    # in preperation for finding all combinations. 
+                    # in preperation for finding all combinations.
                     vals = [a for a in oc.descriptor.data_axis_values()]
                     if sweep_values:
                         vals  = [[v] for v in sweep_values] + vals
 
-                    # Find all coordinate tuples and update the list of 
+                    # Find all coordinate tuples and update the list of
                     # tuples that the experiment has probed.
                     nested_list    = list(itertools.product(*vals))
                     flattened_list = [tuple((val for sublist in line for val in sublist)) for line in nested_list]
                     oc.descriptor.visited_tuples = oc.descriptor.visited_tuples + flattened_list
 
             # Run the procedure
-            logger.debug("Starting a new run.")
+            # logger.debug("Starting a new run.")
             await self.run()
 
             # See if the axes want to extend themselves
@@ -349,15 +374,29 @@ class Experiment(metaclass=MetaExperiment):
             if self.progressbar is not None:
                 self.progressbar.update()
 
+            # Finish up, checking to see whether we've received all of our data
             if self.sweeper.done():
-                logger.debug("Sweeper has finished.")
+                sleep_time = 0
+                while not self.filters_finished():
+                    await asyncio.sleep(1)
+                    sleep_time += 1
+                    if sleep_time == 5:
+                        logger.info("Still waiting for filters to finish. Did the experiment produce the expected amount of data?")
+                        for n in self.nodes:
+                            if isinstance(n, Filter):
+                                logger.info("  {} done: {}".format(n, n.finished_processing))
+                        print({n: n.finished_processing for n in self.nodes if isinstance(n, Filter)})
+
+                    if sleep_time >= 20:
+                        logger.warning("Filters not stopped after 20 seconds, bailing.")
+                        break
                 await self.declare_done()
                 break
 
-    def connect_instruments(self):
-        # Make sure we are starting from scratch
-        self.reset()
+    def filters_finished(self):
+        return all([n.finished_processing for n in self.nodes if isinstance(n, Filter)])
 
+    def connect_instruments(self):
         # Connect the instruments to their resources
         for instrument in self._instruments.values():
             instrument.connect()
@@ -373,7 +412,15 @@ class Experiment(metaclass=MetaExperiment):
             instrument.disconnect()
         self.instrs_connected = False
 
-    def run_sweeps(self, ):
+    def run_sweeps(self):
+        # Propagate the descriptors through the network
+        self.update_descriptors()
+        # Make sure we are starting from scratch... is this necessary?
+        self.reset()
+        # Update the progress bar if need be
+        if self.progressbar is not None:
+            self.progressbar.reset()
+
         #connect all instruments
         if not self.instrs_connected:
             self.connect_instruments()
@@ -398,6 +445,7 @@ class Experiment(metaclass=MetaExperiment):
             # Make the rest of the writers use this same file object
             for w in wrs[1:]:
                 w.file = wrs[0].file
+                w.filename.value = wrs[0].filename.value
 
         # Go and find any plotters
         self.plotters = [n for n in self.nodes if isinstance(n, (Plotter, MeshPlotter, XYPlotter))]
@@ -421,77 +469,41 @@ class Experiment(metaclass=MetaExperiment):
         if len(self.plotters) > 0:
             logger.debug("Found %d plotters", len(self.plotters))
 
-            from .plotting import BokehServerProcess
-            from bokeh.client import push_session
-            from bokeh.layouts import row, gridplot
-            from bokeh.io import curdoc
-            from bokeh.models.widgets import Panel, Tabs
+            from .plotting import MatplotServerThread
 
-            # If anybody has requested notebook plots, show them all in notebook
-            run_in_notebook = True in [p.run_in_notebook for p in self.plotters]
-
-            bokeh_process = BokehServerProcess(notebook=run_in_notebook)
-            bokeh_process.run()
-
-            tabs = True #not run_in_notebook # Tabs seem a bit sluggish in jupyter notebooks...
-            if tabs:
-                container = Tabs(tabs=[Panel(child=p.fig, title=p.name) for p in self.plotters])
-            else:
-                if len(self.plotters) <= 2:
-                    container = row(*[p.fig for p in self.plotters])
+            plot_desc = {p.name: p.desc() for p in self.plotters}
+            if not self.leave_plot_server_open or not hasattr(self, "plot_server"):
+                self.plot_server = MatplotServerThread(plot_desc)
+            for plotter in self.plotters:
+                plotter.plot_server = self.plot_server
+            time.sleep(0.5)
+            # Kill a previous plotter if desired.
+            if auspex.globals.single_plotter_mode and auspex.globals.last_plotter_process:
+                pro = auspex.globals.last_plotter_process
+                if hasattr(os, 'setsid'): # Doesn't exist on windows
+                    try:
+                        os.kill(pro.pid, 0) # Raises an error if the PID doesn't exist
+                        os.killpg(os.getpgid(pro.pid), signal.SIGTERM) # Proceed to kill process group
+                    except OSError:
+                        logger.debug("No plotter to kill.")
                 else:
-                    padded_list = self.plotters[:]
-                    if len(padded_list)%2 != 0:
-                        padded_list.append(None)
-                    grid = list(zip(*[iter(padded_list)]*2))
-                    container = gridplot(grid)
+                    try:
+                        pro.kill()
+                    except:
+                        logger.debug("No plotter to kill.")
 
-            doc = curdoc()
-            doc.clear()
-            doc.add_root(container)
-            session = push_session(doc)
-
-            for p in self.plotters:
-                p.session = session
-
-            if run_in_notebook:
-                logger.info("Displaying in iPython notebook")
-                from bokeh.embed import autoload_server, components
-                from bokeh.io import output_notebook
-                from IPython.display import display, HTML, clear_output
-
-                clear_output()
-                output_notebook()
-                script = autoload_server(model=None, session_id=session.id)
-                html = \
-                        """
-                        <html>
-                        <head></head>
-                        <body>
-                        {}
-                        </body>
-                        </html>
-                        """.format(script)
-                display(HTML(html))
+            client_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),"matplotlib-client.py")
+            if hasattr(os, 'setsid'):
+                auspex.globals.last_plotter_process = subprocess.Popen(['python', client_path, 'localhost'],
+                                                                    env=os.environ.copy(), preexec_fn=os.setsid)
             else:
-                session.show(container)
-
-        def shutdown():
-            logger.debug("Shutting Down!")
-
-            for f in self.files:
-                try:
-                    logger.debug("Closing %s", f)
-                    f.close()
-                    del f
-                except:
-                    logger.debug("File probably already closed...")
-            self.shutdown_instruments()
-            self.disconnect_instruments()
+                auspex.globals.last_plotter_process = subprocess.Popen(['python', client_path, 'localhost'],
+                                                                    env=os.environ.copy())
+            time.sleep(1)
 
         def catch_ctrl_c(signum, frame):
             logger.info("Caught SIGINT. Shutting down.")
-            shutdown()
+            self.shutdown()
             raise NameError("Shutting down.")
             sys.exit(0)
 
@@ -506,19 +518,42 @@ class Experiment(metaclass=MetaExperiment):
         tasks = [n.run() for n in other_nodes]
 
         tasks.append(self.sweep())
-        self.loop.run_until_complete(asyncio.gather(*tasks))
+        try:
+            self.loop.run_until_complete(asyncio.gather(*tasks))
+            self.loop.run_until_complete(asyncio.sleep(1))
+        except Exception as e:
+            logger.exception("message")
 
         for plot, callback in zip(self.manual_plotters, self.manual_plotter_callbacks):
             if callback:
-                callback(plot.fig)
+                callback(plot)
 
-        shutdown()
+        self.shutdown()
+
+    def shutdown(self):
+        logger.debug("Shutting Down!")
+
+        for f in self.files:
+            try:
+                logger.debug("Closing %s", f)
+                f.close()
+                del f
+            except:
+                logger.debug("File probably already closed...")
+
+        try:
+            if len(self.plotters) > 0 and not self.leave_plot_server_open:
+                self.plot_server.stop()
+        except:
+            logger.warning("Could not stop plot server gracefully...")
+
+        self.shutdown_instruments()
+        self.disconnect_instruments()
 
     def add_axis(self, axis):
         for oc in self.output_connectors.values():
             logger.debug("Adding axis %s to connector %s.", axis, oc.name)
             oc.descriptor.add_axis(axis)
-        self.update_descriptors()
 
     def add_sweep(self, parameters, sweep_list, refine_func=None, callback_func=None, metadata=None):
         ax = SweepAxis(parameters, sweep_list, refine_func=refine_func, callback_func=callback_func, metadata=metadata)

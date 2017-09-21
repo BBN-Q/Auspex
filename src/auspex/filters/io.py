@@ -6,6 +6,8 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
+__all__ = ['WriteToHDF5', 'DataBuffer', 'ProgressBar']
+
 import asyncio, concurrent
 import itertools
 import h5py
@@ -14,11 +16,15 @@ import zlib
 import numpy as np
 import os.path
 import time
+import re
+import pandas as pd
+from shutil import copyfile
 
 from .filter import Filter
 from auspex.parameter import Parameter, FilenameParameter
 from auspex.stream import InputConnector, OutputConnector
 from auspex.log import logger
+import auspex.config as config
 
 from tqdm import tqdm, tqdm_notebook
 
@@ -29,7 +35,7 @@ class WriteToHDF5(Filter):
     filename = FilenameParameter()
     groupname = Parameter(default='main')
 
-    def __init__(self, filename=None, groupname=None, add_date=False, compress=True, **kwargs):
+    def __init__(self, filename=None, groupname=None, add_date=False, save_settings=False, compress=True, store_tuples=True, exp_log=True, **kwargs):
         super(WriteToHDF5, self).__init__(**kwargs)
         self.compress = compress
         if filename:
@@ -39,11 +45,13 @@ class WriteToHDF5(Filter):
         self.points_taken = 0
         self.file = None
         self.group = None
+        self.store_tuples = store_tuples
         self.create_group = True
         self.up_to_date = False
         self.sink.max_input_streams = 100
         self.add_date = add_date
-
+        self.save_settings = save_settings
+        self.exp_log = exp_log
         self.quince_parameters = [self.filename, self.groupname]
 
     def final_init(self):
@@ -56,23 +64,28 @@ class WriteToHDF5(Filter):
             self.file = self.new_file()
 
     def new_filename(self):
-        # Increment the filename until we find one we want.
-        i = 0
         filename = self.filename.value
-        ext = filename.find('.h5')
-        if ext > -1:
-            filename = filename[:ext]
+        basename, ext = os.path.splitext(filename)
+        if ext == "":
+            logger.debug("Filename for writer {} does not have an extension -- using default '.h5'".format(self.name))
+            ext = ".h5"
+
+        dirname = os.path.dirname(os.path.abspath(filename))
+
         if self.add_date:
-            date = time.strftime("%y%m%d")
-            dirname = os.path.dirname(filename)
-            basename = os.path.basename(filename)
-            fulldir = os.path.join(dirname, date)
-            if not os.path.exists(fulldir):
-                os.mkdir(fulldir)
-            filename = os.path.join(fulldir, basename)
-        while os.path.exists("{}-{:04d}.h5".format(filename,i)):
-            i += 1
-        return "{}-{:04d}.h5".format(filename,i)
+            date     = time.strftime("%y%m%d")
+            dirname  = os.path.join(dirname, date)
+            basename = os.path.join(dirname, os.path.basename(basename))
+
+        # Set the file number to the maximum in the current folder + 1
+        filenums = []
+        if os.path.exists(dirname):
+            for f in os.listdir(dirname):
+                if ext in f:
+                    filenums += [int(re.findall('-(\d{4})\.', f)[0])] if os.path.isfile(os.path.join(dirname, f)) else []
+
+        i = max(filenums) + 1 if filenums else 0
+        return "{}-{:04d}{}".format(basename,i,ext)
 
     def new_file(self):
         """ Open a new data file to write """
@@ -89,16 +102,39 @@ class WriteToHDF5(Filter):
         head = os.path.normpath(head)
         dirs = head.split(os.sep)
         # Check if path exists. If not, create new one(s).
-        fulldir = ''
-        for d in dirs:
-            fulldir = os.path.join(fulldir, d)
-            if not os.path.exists(fulldir):
-                logger.debug("Create new directory: {}.".format(fulldir))
-                os.mkdir(fulldir)
+        os.makedirs(head, exist_ok=True)
         logger.debug("Create new data file: %s." % self.filename.value)
+        # Copy current settings to a folder with the file name
+        if self.save_settings:
+            self.save_json()
+        if self.exp_log:
+            self.write_to_log()
         return h5py.File(self.filename.value, 'w', libver='latest')
 
+    def write_to_log(self):
+        """ Record the experiment in a log file """
+        logfile = os.path.join(config.LogDir, "experiment_log.tsv")
+        if os.path.isfile(logfile):
+            lf = pd.read_csv(logfile, sep="\t")
+        else:
+            logger.info("Experiment log file created.")
+            lf = pd.DataFrame(columns = ["Filename", "Date", "Time"])
+        lf = lf.append(pd.DataFrame([[self.filename.value, time.strftime("%y%m%d"), time.strftime("%H:%M:%S")]],columns=["Filename", "Date", "Time"]),ignore_index=True)
+        lf.to_csv(logfile, sep = "\t", index = False)
+
+    def save_json(self):
+        """ Save a copy of current experiment settings """
+        head = os.path.dirname(self.filename.value)
+        fulldir = os.path.splitext(self.filename.value)[0]
+        if not os.path.exists(fulldir):
+            os.makedirs(fulldir)
+            copyfile(config.instrumentLibFile, os.path.join(fulldir, os.path.split(config.instrumentLibFile)[1]))
+            copyfile(config.measurementLibFile, os.path.join(fulldir, os.path.split(config.measurementLibFile)[1]))
+            copyfile(config.sweepLibFile, os.path.join(fulldir, os.path.split(config.sweepLibFile)[1]))
+            copyfile(config.channelLibFile, os.path.join(fulldir, os.path.split(config.channelLibFile)[1]))
+
     async def run(self):
+        self.finished_processing = False
         streams    = self.sink.input_streams
         stream     = streams[0]
 
@@ -111,11 +147,15 @@ class WriteToHDF5(Filter):
         params     = desc.params
         axis_names = desc.axis_names(with_metadata=True)
 
-        self.file.attrs['exp_src'] = desc.exp_src
+        self.file.attrs['exp_src'] = desc._exp_src
         num_axes   = len(axes)
 
-        # All of the combinations for the present values of the sweep parameters only
-        tuples          = desc.expected_tuples(with_metadata=True, as_structured_array=True)
+        if desc.is_adaptive() and not self.store_tuples:
+            raise Exception("Cannot omit writing tuples with an adaptive sweep... please enabled store_tuples.")
+
+        if self.store_tuples:
+            # All of the combinations for the present values of the sweep parameters only
+            tuples          = desc.expected_tuples(with_metadata=True, as_structured_array=True)
         expected_length = desc.expected_num_points()
 
         compression = 'gzip' if self.compress else None
@@ -127,7 +167,7 @@ class WriteToHDF5(Filter):
             self.group = self.file
 
         self.data_group = self.group.create_group("data")
-        
+
         # Create datasets for each stream
         dset_for_streams = {}
         for stream in streams:
@@ -136,6 +176,7 @@ class WriteToHDF5(Filter):
                                         chunks=True, maxshape=(None,),
                                         compression=compression)
             dset.attrs['is_data'] = True
+            dset.attrs['store_tuples'] = self.store_tuples
             dset.attrs['name'] = stream.descriptor.data_name
             dset_for_streams[stream] = dset
 
@@ -151,7 +192,7 @@ class WriteToHDF5(Filter):
             self.descriptor.attrs[k] = v
 
         # Create axis data sets for storing the base axes as well as the
-        # full set of tuples. For the former we add 
+        # full set of tuples. For the former we add
         # references to the descriptor.
         tuple_dset_for_axis_name = {}
         for i, a in enumerate(axes):
@@ -174,12 +215,13 @@ class WriteToHDF5(Filter):
                     unstruc_dset.attrs['name'] = col_name
 
                     # This stores the values taking during the experiment sweeps
-                    dset = self.data_group.create_dataset(col_name, (expected_length,), dtype=a.dtype, 
-                                                         chunks=True, compression=compression, maxshape=(None,) )
-                    dset.attrs['unit'] = col_unit
-                    dset.attrs['is_data'] = False
-                    dset.attrs['name'] = col_name
-                    tuple_dset_for_axis_name[col_name] = dset
+                    if self.store_tuples:
+                        dset = self.data_group.create_dataset(col_name, (expected_length,), dtype=a.dtype,
+                                                             chunks=True, compression=compression, maxshape=(None,) )
+                        dset.attrs['unit'] = col_unit
+                        dset.attrs['is_data'] = False
+                        dset.attrs['name'] = col_name
+                        tuple_dset_for_axis_name[col_name] = dset
 
                 self.descriptor[i] = self.group[name].ref
             else:
@@ -192,34 +234,41 @@ class WriteToHDF5(Filter):
                 self.descriptor[i] = self.group[name].ref
 
                 # This stores the values taking during the experiment sweeps
-                dset = self.data_group.create_dataset(name, (expected_length,), dtype=a.dtype,
-                                                      chunks=True, compression=compression, maxshape=(None,) )
-                dset.attrs['unit'] = "None" if a.unit is None else a.unit
-                dset.attrs['is_data'] = False
-                dset.attrs['name'] = name
-                tuple_dset_for_axis_name[name] = dset
+                if self.store_tuples:
+                    dset = self.data_group.create_dataset(name, (expected_length,), dtype=a.dtype,
+                                                          chunks=True, compression=compression, maxshape=(None,) )
+                    dset.attrs['unit'] = "None" if a.unit is None else a.unit
+                    dset.attrs['is_data'] = False
+                    dset.attrs['name'] = name
+                    tuple_dset_for_axis_name[name] = dset
 
             # Give the reader some warning about the usefulness of these axes
             self.group[name].attrs['was_refined'] = False
 
-            if a.metadata:
+            if a.metadata is not None:
                 # Create the axis table for the metadata
-                self.group[name + "_metadata"] = np.string_(a.metadata)
+                dset = self.group.create_dataset(name + "_metadata", (a.metadata.size,), dtype=np.uint8, maxshape=(None,) )
+                dset[:] = a.metadata
+                dset = self.group.create_dataset(name + "_metadata_enum", (a.metadata_enum.size,), dtype='S128', maxshape=(None,) )
+                dset[:] = np.asarray(a.metadata_enum, dtype='S128')
 
                 # Associate the metadata with the data axis
                 self.group[name].attrs['metadata'] = self.group[name + "_metadata"].ref
+                self.group[name].attrs['metadata_enum'] = self.group[name + "_metadata_enum"].ref
                 self.group[name].attrs['name'] = name + "_metadata"
 
                 # Create the dataset that stores the individual tuple values
-                dset = self.data_group.create_dataset(name + "_metadata" , (expected_length,),
-                                                      dtype=h5py.special_dtype(vlen=str), maxshape=(None,) )
-                dset.attrs['name'] = name + "_metadata"
-                tuple_dset_for_axis_name[name + "_metadata"] = dset
+                if self.store_tuples:
+                    dset = self.data_group.create_dataset(name + "_metadata" , (expected_length,),
+                                                          dtype=np.uint8, maxshape=(None,) )
+                    dset.attrs['name'] = name + "_metadata"
+                    tuple_dset_for_axis_name[name + "_metadata"] = dset
 
         # Write all the tuples if this isn't adaptive
-        if not desc.is_adaptive():
-            for i, a in enumerate(axis_names):
-                tuple_dset_for_axis_name[a][:] = tuples[a]
+        if self.store_tuples:
+            if not desc.is_adaptive():
+                for i, a in enumerate(axis_names):
+                    tuple_dset_for_axis_name[a][:] = tuples[a]
 
         # Write pointer
         w_idx = 0
@@ -250,36 +299,37 @@ class WriteToHDF5(Filter):
 
             # Infer the type from the first message
             message_type = messages[0]['type']
-            
+
             # If we receive a message
             if message_type == 'event':
-                logger.debug('%s "%s" received event "%s"', self.__class__.__name__, self.name, message_data)
+                logger.debug('%s "%s" received event of type "%s"', self.__class__.__name__, self.name, message_type)
                 if messages[0]['event_type'] == 'done':
                     break
                 elif messages[0]['event_type'] == 'refined':
                     refined_axis = messages[0]['data']
-                    
+
                     # Resize the data set
                     num_new_points = desc.num_new_points_through_axis(refined_axis)
                     for stream in streams:
                         dset_for_streams[stream].resize((len(dset_for_streams[streams[0]])+num_new_points,))
 
-                    for an in axis_names:
-                        tuple_dset_for_axis_name[an].resize((len(tuple_dset_for_axis_name[an])+num_new_points,))
+                    if self.store_tuples:
+                        for an in axis_names:
+                            tuple_dset_for_axis_name[an].resize((len(tuple_dset_for_axis_name[an])+num_new_points,))
 
                     # Generally speaking the descriptors are now insufficient to reconstruct
                     # the full set of tuples. The user should know this, so let's mark the
                     # descriptor axes accordingly.
                     self.group[name].attrs['was_refined'] = True
 
-            
+
             elif message_type == 'data':
                 message_data = [message['data'] for message in messages]
                 message_comp = [message['compression'] for message in messages]
                 message_data = [pickle.loads(zlib.decompress(dat)) if comp == 'zlib' else dat for comp, dat in zip(message_comp, message_data)]
                 message_data = [dat if hasattr(dat, 'size') else np.array([dat]) for dat in message_data]  # Convert single values to arrays
 
-                for ii in range(1, len(message_data)):
+                for ii in range(len(message_data)):
                     if not hasattr(message_data[ii], 'size'):
                         message_data[ii] = np.array([message_data[ii]])
                     message_data[ii] = message_data[ii].flatten()
@@ -294,12 +344,13 @@ class WriteToHDF5(Filter):
                 # Write the data
                 for s, d in zip(streams, message_data):
                     dset_for_streams[s][w_idx:w_idx+d.size] = d
-                
+
                 # Write the coordinate tuples
-                if desc.is_adaptive():
-                    tuples = desc.tuples()
-                    for axis_name in axis_names:
-                        tuple_dset_for_axis_name[axis_name][w_idx:w_idx+d.size] = tuples[axis_name][w_idx:w_idx+d.size]
+                if self.store_tuples:
+                    if desc.is_adaptive():
+                        tuples = desc.tuples()
+                        for axis_name in axis_names:
+                            tuple_dset_for_axis_name[axis_name][w_idx:w_idx+d.size] = tuples[axis_name][w_idx:w_idx+d.size]
 
                 self.file.flush()
                 w_idx += message_data[0].size
@@ -308,21 +359,27 @@ class WriteToHDF5(Filter):
                 logger.debug("HDF5: Write index at %d", w_idx)
                 logger.debug("HDF5: %s has written %d points", stream.name, w_idx)
 
+            # If we have gotten all our data and process_data has returned, then we are done!
+            if np.all([v.done() for v in self.input_connectors.values()]):
+                self.finished_processing = True
+
 class DataBuffer(Filter):
     """Writes data to file."""
 
     sink = InputConnector()
 
-    def __init__(self, **kwargs):
+    def __init__(self, store_tuples=True, **kwargs):
         super(DataBuffer, self).__init__(**kwargs)
         self.quince_parameters = []
         self.sink.max_input_streams = 100
+        self.store_tuples = store_tuples
 
     def final_init(self):
         self.buffers = {s: np.empty(s.descriptor.expected_num_points(), dtype=s.descriptor.dtype) for s in self.sink.input_streams}
         self.w_idxs  = {s: 0 for s in self.sink.input_streams}
 
     async def run(self):
+        self.finished_processing = False
         streams = self.sink.input_streams
 
         for s in streams[1:]:
@@ -381,24 +438,33 @@ class DataBuffer(Filter):
 
             for stream in stream_results.keys():
                 data = stream_data[stream]
-                
+
                 self.buffers[stream][self.w_idxs[stream]:self.w_idxs[stream]+data.size] = data
                 self.w_idxs[stream] += data.size
+
+            # If we have gotten all our data and process_data has returned, then we are done!
+            if np.all([v.done() for v in self.input_connectors.values()]):
+                self.finished_processing = True
 
     def get_data(self):
         streams = self.sink.input_streams
         desc = streams[0].descriptor
+
         # Set the dtype for the parameter columns
-        dtype = desc.axis_data_type(with_metadata=True)
+        if self.store_tuples:
+            dtype = desc.axis_data_type(with_metadata=True)
+        else:
+            dtype = []
 
         # Extend the dtypes for each data column
         for stream in streams:
             dtype.append((stream.descriptor.data_name, stream.descriptor.dtype))
         data = np.empty(self.buffers[streams[0]].size, dtype=dtype)
 
-        tuples = desc.tuples(as_structured_array=True)
-        for a in desc.axis_names(with_metadata=True):
-            data[a] = tuples[a]
+        if self.store_tuples:
+            tuples = desc.tuples(as_structured_array=True)
+            for a in desc.axis_names(with_metadata=True):
+                data[a] = tuples[a]
         for stream in streams:
             data[stream.descriptor.data_name] = self.buffers[stream]
         return data

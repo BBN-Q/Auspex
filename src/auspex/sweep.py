@@ -52,7 +52,7 @@ class Sweeper(object):
         # reversed list since we store "innermost" axes last.
         values = []
         for a in self.axes[::-1]:
-            if a.metadata:
+            if a.metadata is not None:
                 if type(a.value) in [np.ndarray, list]:
                     values.append(tuple(list(a.value) + [a.metadata_value])) 
                 else:
@@ -72,6 +72,7 @@ class Sweeper(object):
         for a in self.axes:
             if await a.check_for_refinement():
                 refined_axes.append(a.name)
+                break
         if len(refined_axes) > 1:
             raise Exception("More than one axis trying to refine simultaneously. This cannot be tolerated.")
         elif len(refined_axes) == 1:

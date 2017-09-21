@@ -71,9 +71,11 @@ class TestExperiment(Experiment):
         logger.debug("Data taker running (inner loop)")
         time_step = 0.1
         await asyncio.sleep(0.002)
-        data_row = np.sin(2*np.pi*self.time_val)*np.ones(self.samples*self.num_trials) + 0.1*np.random.random(self.samples*self.num_trials)
+        data_row = np.sin(2*np.pi*self.time_val)*np.ones(self.samples) + 0.1*np.random.random(self.samples)
         self.time_val += time_step
         await self.chan1.push(data_row)
+        data_row = np.sin(2*np.pi*self.time_val)*np.ones(self.num_trials) + 0.1*np.random.random(self.num_trials)
+        await self.chan2.push(data_row)
         logger.debug("Stream pushed points {}.".format(data_row))
         logger.debug("Stream has filled {} of {} points".format(self.chan1.points_taken, self.chan1.num_points() ))
 
@@ -93,9 +95,11 @@ class ExperimentTestCase(unittest.TestCase):
         """Check that instruments have been appropriately gathered"""
         self.assertTrue(hasattr(TestExperiment, "_instruments")) # should have parsed these instruments from class dir
         self.assertTrue(len(TestExperiment._instruments) == 3 ) # should have parsed these instruments from class dir
-        self.assertTrue(TestExperiment._instruments['fake_instr_1'] == TestExperiment.fake_instr_1) # should contain this instrument
-        self.assertTrue(TestExperiment._instruments['fake_instr_2'] == TestExperiment.fake_instr_2) # should contain this instrument
-        self.assertTrue(TestExperiment._instruments['fake_instr_3'] == TestExperiment.fake_instr_3) # should contain this instrument
+        
+        te = TestExperiment()
+        self.assertTrue(te._instruments['fake_instr_1'] == te.fake_instr_1) # should contain this instrument
+        self.assertTrue(te._instruments['fake_instr_2'] == te.fake_instr_2) # should contain this instrument
+        self.assertTrue(te._instruments['fake_instr_3'] == te.fake_instr_3) # should contain this instrument
 
     def test_create_graph(self):
         exp         = TestExperiment()
@@ -136,7 +140,7 @@ class ExperimentTestCase(unittest.TestCase):
                  (pt.source, prnt.sink)]
 
         exp.set_graph(edges)
-
+        exp.update_descriptors()
         self.assertFalse(pt.sink.descriptor is None)
         self.assertFalse(prnt.sink.descriptor is None)
         self.assertTrue(exp.chan1.descriptor == pt.sink.descriptor)

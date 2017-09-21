@@ -6,6 +6,8 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
+__all__ = ['KernelIntegrator']
+
 import numpy as np
 
 from .filter import Filter
@@ -18,25 +20,28 @@ class KernelIntegrator(Filter):
     sink   = InputConnector()
     source = OutputConnector()
     kernel = Parameter()
-    bias   = FloatParameter()
-    simple_kernel = BoolParameter()
-    box_car_start = FloatParameter()
-    box_car_stop = FloatParameter()
-    frequency = FloatParameter()
+    bias   = FloatParameter(default=0.0)
+    simple_kernel = BoolParameter(default=True)
+    box_car_start = FloatParameter(default=0.0)
+    box_car_stop = FloatParameter(default=100e-9)
+    frequency = FloatParameter(default=0.0)
 
     """Integrate with a given kernel. Kernel will be padded/truncated to match record length"""
     def __init__(self, **kwargs):
         super(KernelIntegrator, self).__init__(**kwargs)
-        if len(kwargs) > 0:
-            self.kernel.value = kwargs['kernel']
-            self.bias.value = kwargs['bias']
-            self.simple_kernel.value = kwargs['simple_kernel']
-            self.box_car_start.value = kwargs['box_car_start']
-            self.box_car_stop.value = kwargs['box_car_stop']
-            self.frequency.value = kwargs['frequency']
+        self.pre_int_op  = None
+        self.post_int_op = None
+        for k, v in kwargs.items():
+            if hasattr(self, k) and isinstance(getattr(self,k), Parameter):
+                getattr(self, k).value = v
+        if "pre_integration_operation" in kwargs:
+            self.pre_int_op = kwargs["pre_integration_operation"]
+        if "post_integration_operation" in kwargs:
+            self.post_int_op = kwargs["post_integration_operation"]
+        self.quince_parameters = [self.simple_kernel, self.frequency, self.box_car_start, self.box_car_stop]
 
     def update_descriptors(self):
-        if self.kernel.value is None:
+        if not self.simple_kernel and self.kernel.value is None:
             raise ValueError("Integrator was passed kernel None")
 
         logger.debug('Updating KernelIntegrator "%s" descriptors based on input descriptor: %s.', self.name, self.sink.descriptor)
@@ -64,8 +69,8 @@ class KernelIntegrator(Filter):
         output_descriptor = DataStreamDescriptor()
         # TODO: handle reduction to single point
         output_descriptor.axes = self.sink.descriptor.axes[:-1]
-        output_descriptor.exp_src = self.sink.descriptor.exp_src
-        output_descriptor.dtype = self.sink.descriptor.dtype
+        output_descriptor._exp_src = self.sink.descriptor._exp_src
+        output_descriptor.dtype = np.complex128
         for os in self.source.output_streams:
             os.set_descriptor(output_descriptor)
             os.end_connector.update_descriptors()
@@ -73,8 +78,11 @@ class KernelIntegrator(Filter):
     async def process_data(self, data):
 
         # TODO: handle variable partial records
+        if self.pre_int_op:
+            data = self.pre_int_op(data)
         filtered = np.inner(np.reshape(data, (-1, len(self.aligned_kernel))), self.aligned_kernel)
-
+        if self.post_int_op:
+            filtered = self.post_int_op(filtered)
         # push to ouptut connectors
         for os in self.source.output_streams:
             await os.push(filtered)

@@ -7,15 +7,21 @@
 #    http://www.apache.org/licenses/LICENSE-2.0
 
 import auspex.analysis.switching as sw
-from adapt import refine
+from auspex.analysis.io import load_from_HDF5
+try:
+    from adapt import refine
+except:
+    print("Could not import the adapt package.")
 import numpy as np
 import time
 
 def delaunay_refine_from_file(writer, x_name, y_name, z_name, max_points=500, criterion="integral", threshold = "one_sigma", plotter=None):
     async def refine_func(sweep_axis, experiment):
-        zs = writer.data.value[z_name]
-        ys = writer.data.value[y_name]
-        xs = writer.data.value[x_name]
+        data, desc = load_from_HDF5(writer.filename.value, reshape=False)
+        groupname = writer.groupname.value
+        zs = data[groupname][z_name]
+        ys = data[groupname][y_name]
+        xs = data[groupname][x_name]
 
         points     = np.array([xs, ys]).transpose()
         new_points = refine.refine_scalar_field(points, zs, all_points=False,
@@ -27,14 +33,9 @@ def delaunay_refine_from_file(writer, x_name, y_name, z_name, max_points=500, cr
         sweep_axis.add_points(new_points)
 
         if plotter:
-            exp = plotter.experiment
+            data = np.array([xs, ys, zs]).transpose()            
+            await experiment.push_to_plot(plotter, data)
 
-            mesh, scale_factors = sw.scaled_Delaunay(points)
-            xs     = xs[mesh.simplices]
-            ys     = ys[mesh.simplices]
-            avg_zs = [np.mean(row) for row in zs[mesh.simplices]]
-            await exp.push_to_plot(plotter, [xs,ys,avg_zs])
-
-        time.sleep(0.1)
+        time.sleep(0.02)
         return True
     return refine_func

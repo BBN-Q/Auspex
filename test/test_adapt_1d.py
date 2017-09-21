@@ -86,7 +86,7 @@ class Adapt1DTestCase(unittest.TestCase):
         self.assertTrue(os.path.exists("test_writehdf5_1D_adaptive-0000.h5"))
         
         expected_data = np.array([ 0., 5.,10.,15.,20., 7.5, 8.75, 9.375, 9.0625, 8.90625, 8.984375,12.5,17.5, 9.0234375, 8.945312])
-        data, desc = load_from_HDF5(wr.filename.value)
+        data, desc = load_from_HDF5(wr.filename.value, reshape=False)
         actual_data = data['main']['temperature']
         self.assertTrue(actual_data.size == expected_data.size)
         os.remove("test_writehdf5_1D_adaptive-0000.h5")

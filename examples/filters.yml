@@ -1,0 +1,41 @@
+q1-RawSS:
+  type: X6StreamSelector
+  source: X6-1
+  stream_type: Raw
+  channel: '1'
+
+q1-DemodSS:
+  type: X6StreamSelector
+  source: X6-1
+  stream_type: Demodulated
+  channel: "1"
+
+Demod-q1:
+  type: Channelizer
+  source: q1-RawSS
+  decimation_factor: 4
+  frequency: 10000000.0
+  bandwidth: 5000000.0
+
+Int-q1:
+  type: KernelIntegrator
+  source: Demod-q1
+  box_car_start: 5.0e-07
+  box_car_stop: 9.0e-07
+
+avg-q1:
+  type: Averager
+  source: Int-q1
+  axis: round_robins
+
+Plot-q1-Int:
+  type: Plotter
+  source: avg-q1 final_average
+
+Plot-q1-Raw:
+  type: Plotter
+  source: q1-RawSS
+
+Plot-q1-Demod:
+  type: Plotter
+  source: Demod-q1

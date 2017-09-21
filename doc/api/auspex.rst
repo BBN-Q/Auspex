@@ -1,86 +1,80 @@
 auspex package
 ==============
 
-Subpackages
------------
-
-.. toctree::
-
-    auspex.filters
-    auspex.instruments
-
-Submodules
-----------
-
-auspex.config module
---------------------
-
-.. automodule:: auspex.config
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-auspex.exp_factory module
--------------------------
-
+auspex\.exp\_factory module
+---------------------------
+.. _qubitexpfactory:
 .. automodule:: auspex.exp_factory
     :members:
     :undoc-members:
-    :show-inheritance:
 
-auspex.experiment module
-------------------------
+auspex\.experiment module
+-------------------------
 
 .. automodule:: auspex.experiment
     :members:
     :undoc-members:
-    :show-inheritance:
 
-auspex.log module
------------------
+auspex\.log module
+------------------
 
 .. automodule:: auspex.log
     :members:
     :undoc-members:
-    :show-inheritance:
 
-auspex.parameter module
------------------------
+auspex\.parameter module
+------------------------
 
 .. automodule:: auspex.parameter
     :members:
     :undoc-members:
-    :show-inheritance:
 
-auspex.plotting module
-----------------------
+auspex\.plotting module
+-----------------------
 
 .. automodule:: auspex.plotting
     :members:
     :undoc-members:
-    :show-inheritance:
 
-auspex.stream module
---------------------
+auspex\.pulse\_calibration module
+---------------------------------
+
+.. automodule:: auspex.pulse_calibration
+    :members:
+    :undoc-members:
+
+auspex\.refine module
+---------------------
+
+.. automodule:: auspex.refine
+    :members:
+    :undoc-members:
+
+auspex\.single\_shot\_fidelity module
+---------------------------
+.. _singleshotfidelityexperiment:
+.. automodule:: auspex.single_shot_fidelity
+    :members:
+    :undoc-members:
+
+auspex\.stream module
+---------------------
 
 .. automodule:: auspex.stream
     :members:
     :undoc-members:
-    :show-inheritance:
 
-auspex.sweep module
--------------------
+auspex\.sweep module
+--------------------
 
 .. automodule:: auspex.sweep
     :members:
     :undoc-members:
-    :show-inheritance:
 
+Subpackages
+-----------
 
-Module contents
----------------
-
-.. automodule:: auspex
-    :members:
-    :undoc-members:
-    :show-inheritance:
+.. toctree::
+    auspex.analysis
+    auspex.filters
+    auspex.instruments

@@ -15,9 +15,8 @@ from auspex.instruments import Attenuator
 
 from auspex.experiment import FloatParameter, IntParameter, Experiment
 from auspex.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector
-from auspex.filters.debug import Print
-from auspex.filters.io import WriteToHDF5
-
+from auspex.filters import Print, WriteToHDF5, Averager
+from auspex.log import logger
 from PyDAQmx import *
 
 import itertools
@@ -29,10 +28,8 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from scipy.interpolate import interp1d
 
-import analysis.switching as sw
+import auspex.analysis.switching as sw
 from adapt import refine
-
-from auspex.log import logger
 
 # Experimental Topology
 # lockin AO 2 -> Analog Attenuator Vdd
@@ -51,17 +48,17 @@ def arb_pulse(amplitude, duration, sample_rate=12e9):
     wf[:pulse_points] = amplitude
     return wf
 
-def nTron_voltage_lookup(nTron_calib="calibration/nTron_20160718.csv",
+def pulse_voltage_lookup(nTron_calib="calibration/nTron_20160815.csv",
                         midpoint_calib="calibration/midpoint_20160718.csv"):
     df_midpoint = pd.read_csv(midpoint_calib, sep=",")
     df_nTron = pd.read_csv(nTron_calib, sep=",")
     midpoint_lookup = interp1d(df_midpoint["Sample Voltage"],df_midpoint["Midpoint Voltage"])
-    nTron_control_lookup = interp1d(df_nTron["Midpoint Voltage"],df_nTron["Control Voltage"])
+    nTron_control_lookup = interp1d(df_nTron["Amp Out"],df_nTron["Control Voltage"])
     sample_volts = []
     control_volts = []
     for volt in df_midpoint['Sample Voltage']:
         mid_volt = midpoint_lookup(volt)
-        if (mid_volt > min(df_nTron['Midpoint Voltage'])) and (mid_volt < max(df_nTron['Midpoint Voltage'])):
+        if (mid_volt > min(df_nTron['Amp Out'])) and (mid_volt < max(df_nTron['Amp Out'])):
             sample_volts.append(volt)
             control_volts.append(nTron_control_lookup(mid_volt))
     return interp1d(sample_volts, control_volts)
@@ -91,21 +88,21 @@ def ntron_pulse(amplitude=1.0, rise_time=80e-12, hold_time=170e-12, fall_time=1.
 
     return amplitude*wf
 
-class nTronPhaseDiagramExperiment(Experiment):
+class nTronSwitchingExperiment(Experiment):
 
     # Sample information
     sample         = "CSHE"
     comment        = "Phase Diagram with nTron pulse"
     # Parameters
     field          = FloatParameter(default=0.0, unit="T")
-    nTron_voltage  = FloatParameter(default=0.2, unit="V")
-    nTron_duration = FloatParameter(default=1e-9, unit="s")
-    nTron_durations = [0]
-    nTron_voltages  = [0]
+    pulse_voltage  = FloatParameter(default=0.2, unit="V")
+    pulse_duration = FloatParameter(default=1e-9, unit="s")
+    pulse_durations = [0]
+    pulse_voltages  = [0]
 
     # Constants (set with attribute access if you want to change these!)
     iteration       = 5
-    attempts        = 1 << 10
+    attempts        = 1 << 11
     settle_delay    = 200e-6
     measure_current = 3.0e-6
     samps_per_trig  = 5
@@ -119,7 +116,7 @@ class nTronPhaseDiagramExperiment(Experiment):
     reset_duration  = 5.0e-9
 
     # Things coming back
-    daq_buffer     = OutputConnector()
+    voltage     = OutputConnector()
 
     # Instrument resources
     mag   = AMI430("192.168.5.109")
@@ -175,6 +172,12 @@ class nTronPhaseDiagramExperiment(Experiment):
 
         # Assign methods
         self.field.assign_method(self.mag.set_field)
+    #     self.pulse_voltage.assign_method(self.set_arb_voltage)
+    #     self.pulse_duration.assign_method(self.set_arb_duration)
+    #
+    # def set_arb_voltage(self, voltage):
+    #     self.setup_arb(voltage=voltage, duration=self.duration.value)
+    #
 
     def setup_arb(self):
         self.arb.abort()
@@ -192,9 +195,9 @@ class nTronPhaseDiagramExperiment(Experiment):
         self.arb.upload_waveform(wf_data, no_rst_segment_id)
 
         # nTron waveforms
-        nTron_control_voltage = nTron_voltage_lookup()
+        nTron_control_voltage = pulse_voltage_lookup()
         nTron_segment_ids = []
-        for dur,vpeak in zip(self.nTron_durations, self.nTron_voltages):
+        for dur,vpeak in zip(self.pulse_durations, self.pulse_voltages):
             volt = self.polarity*nTron_control_voltage(vpeak)
             logger.debug("Set nTron pulse: {}V -> AWG {}V, {}s".format(vpeak,volt,dur))
             ntron_wf    = ntron_pulse(amplitude=volt, fall_time=dur)
@@ -238,10 +241,10 @@ class nTronPhaseDiagramExperiment(Experiment):
     def init_streams(self):
         # Baked in data axes
         descrip = DataStreamDescriptor()
-        descrip.add_axis(DataAxis("samples", range(self.samps_per_trig)))
+        descrip.add_axis(DataAxis("sample", range(self.samps_per_trig)))
         descrip.add_axis(DataAxis("state", range(2)))
-        descrip.add_axis(DataAxis("attempts", range(self.attempts)))
-        self.daq_buffer.set_descriptor(descrip)
+        descrip.add_axis(DataAxis("attempt", range(self.attempts)))
+        self.voltage.set_descriptor(descrip)
 
     async def run(self):
         """This is run for each step in a sweep."""
@@ -254,10 +257,10 @@ class nTronPhaseDiagramExperiment(Experiment):
         buf = np.empty(self.buf_points)
         self.analog_input.ReadAnalogF64(self.buf_points, -1, DAQmx_Val_GroupByChannel,
                                         buf, self.buf_points, byref(self.read), None)
-        await self.daq_buffer.push(buf)
+        await self.voltage.push(buf)
         # Seemingly we need to give the filters some time to catch up here...
         await asyncio.sleep(0.02)
-        logger.debug("Stream has filled {} of {} points".format(self.daq_buffer.points_taken, self.daq_buffer.num_points() ))
+        logger.debug("Stream has filled {} of {} points".format(self.voltage.points_taken, self.voltage.num_points() ))
         self.start_id += 1
         if self.start_id == len(self.start_idxs):
             self.start_id = 0
@@ -275,7 +278,7 @@ class nTronPhaseDiagramExperiment(Experiment):
             pass
 
 if __name__ == '__main__':
-    exp = nTronPhaseDiagramExperiment()
+    exp = nTronSwitchingExperiment()
     exp.sample = "CSHE5-C1R3"
     exp.comment = "nTrong Phase Diagram -  P to AP - Interations = 2"
     exp.polarity = 1 # -1: AP to P; 1: P to AP
@@ -286,18 +289,18 @@ if __name__ == '__main__':
     coarse_vs = np.linspace(0.4,0.6,3)
     points    = [coarse_ts, coarse_vs]
     points    = np.array(list(itertools.product(*points)))
-    exp.nTron_durations = points[:,0]
-    exp.nTron_voltages = points[:,1]
+    exp.pulse_durations = points[:,0]
+    exp.pulse_voltages = points[:,1]
     exp.field.value = -0.0074
     exp.measure_current = 0e-6
     exp.init_instruments()
 
     wr = WriteToHDF5("data\CSHE-Switching\CSHE-Die5-C1R3\CSHE5-C1R3_nTron_P2AP_2016-07-15.h5")
-    edges = [(exp.daq_buffer, wr.data)]
+    edges = [(exp.voltage, wr.data)]
     exp.set_graph(edges)
 
 
-    main_sweep = exp.add_unstructured_sweep([exp.nTron_duration, exp.nTron_voltage], points)
+    main_sweep = exp.add_unstructured_sweep([exp.pulse_duration, exp.pulse_voltage], points)
     figs = []
     t1 = time.time()
     for i in range(exp.iteration):
@@ -314,8 +317,8 @@ if __name__ == '__main__':
         print("Added {} new points.".format(len(new_points)))
         print("Elapsed time: {}".format((time.time()-t1)/60))
         main_sweep.update_values(new_points)
-        exp.nTron_durations = new_points[:,0]
-        exp.nTron_voltages = new_points[:,1]
+        exp.pulse_durations = new_points[:,0]
+        exp.pulse_voltages = new_points[:,1]
         exp.setup_arb()
         time.sleep(3)
 
