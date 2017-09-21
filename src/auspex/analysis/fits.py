@@ -33,8 +33,7 @@ def KT_estimation(data, times, order):
         H[:,ct] = analytic_signal[ct:ct+L]
 
     #Try and seperate the signal and noise subspace via the svd
-    U,S,V = svd(H, False)
-    V = V.T # not transposed/conjugated in numpy svd
+    U,S,V = svd(H, False) # V is not transposed/conjugated in numpy svd
 
     #Reconstruct the approximate Hankel matrix with the first K singular values
     #Here we can iterate and modify the singular values
@@ -43,7 +42,7 @@ def KT_estimation(data, times, order):
     #Estimate the variance from the rest of the singular values
     varEst = (1/((M-K)*L)) * np.sum(S[K:]**2)
     Sfilt = np.matmul(S_k**2 - L*varEst*np.eye(K), inv(S_k))
-    Hbar = np.matmul(np.matmul(U[:,:K], Sfilt), V[:,:K].T)
+    Hbar = np.matmul(np.matmul(U[:,:K], Sfilt), V[:K,:])
 
     #Reconstruct the data from the averaged anti-diagonals
     cleanedData = np.zeros(N, dtype=np.complex128)
