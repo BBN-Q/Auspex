@@ -67,7 +67,7 @@ def KT_estimation(data, times, order):
     n = np.size(U_K,1)
     V_AB = V[:n,n:]
     V_BB = V[n:,n:]
-    Q = -np.matmul(V_AB,inv(V_BB)) # Julia conversion gotcha...
+    Q = np.linalg.lstsq(V_BB.conj().T, -V_AB.conj().T)[0].conj().T
 
     #Now poles are eigenvalues of Q
     poles, _ = eig(Q)
@@ -85,7 +85,7 @@ def KT_estimation(data, times, order):
     for ct in range(K):
         A[:,ct] = np.power(poles[ct], range(0,N))
 
-    amps = np.matmul(pinv(A),cleanedData)
+    amps = np.linalg.lstsq(A, cleanedData)[0]
 
     return freqs, Tcs, amps
 
