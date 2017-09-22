@@ -188,13 +188,15 @@ def fit_photon_number(xdata, ydata, params):
 	5 - exp(-t_meas/T1) (us), only if starting from |1> (to include relaxation during the 1st msm't)
 	6 - initial qubit state (0/1)
     '''
-	params[:2]*=2*pi # convert to angular frequencies
-	model_0(t, p) = (-imag(exp(-(1/params[3]+params[1]*1j).*t + (p[0]-p[1]*params[2]*(1-exp(-((params[0] + params[2]*1j).*t)))/(params[0]+params[2]*1j))*1j)))
-	if params[5] == 1:
-	       model(t, p) = params[4]*model_0(t, p) + (1-params[4])*model_0(t, [p[0]+np.pi; p[1:]]) if params[5] == 1  else model_0(t, p)
-	popt, pcov = curve_fit(model, xdata, ydata, p0 = [0, 1])
+    params[:2]*=2*pi # convert to angular frequencies
+    def model_0(t, p):
+        return (-np.imag(np.exp(-(1/params[3]+params[1]*1j)*t + (p[0]-p[1]*params[2]*(1-np.exp(-((params[0] + params[2]*1j)*t)))/(params[0]+params[2]*1j))*1j)))
+    if params[5] == 1:
+        def model(t, p):
+            return  params[4]*model_0(t, p) + (1-params[4])*model_0(t,[pn+k==0*np.pi for (k,pn) in enumerate(p)]) if params[5] == 1  else model_0(t, p)
+    popt, pcov = curve_fit(model, xdata, ydata, p0 = [0, 1])
     perr = np.sqrt(np.diag(pcov))
-	return popt[1], perr[1]
+    return popt[1], perr[1]
 
 class CR_cal_type(Enum):
     LENGTH = 1
