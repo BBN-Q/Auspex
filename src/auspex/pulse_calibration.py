@@ -81,13 +81,12 @@ class PulseCalibration(object):
     def sequence(self):
         """Returns the sequence for the given calibration, must be overridden"""
         return [[Id(self.qubit), MEAS(self.qubit)]]
-
-    def set(self, instrs_to_set = []):
+    def set(self, instrs_to_set = [], **params):
         try:
             self.exp.plot_server.stop()
         except Exception as e:
             pass #no experiment yet created, or plot server not yet started
-        meta_file = compile_to_hardware(self.sequence(), fileName=self.filename, axis_descriptor=self.axis_descriptor)
+        meta_file = compile_to_hardware(self.sequence(**params), fileName=self.filename, axis_descriptor=self.axis_descriptor)
         self.exp = QubitExpFactory.create(meta_file=meta_file, calibration=True, save_data=False, cw_mode=self.cw_mode)
         if self.plot:
             # Add the manual plotter and the update method to the experiment
@@ -457,6 +456,96 @@ class DRAGCalibration(PulseCalibration):
         self.update_settings()
 
         return fitted_drag
+class MeasCalibration(PulseCalibration):
+    def __init__(self, qubit_name):
+        super(MeasCalibration, self).__init__(qubit_name)
+        self.meas_name = = "M-" + qubit.name
+
+class CLEARCalibration(MeasCalibration):
+    ''' Calibration of cavity reset pulse
+    aux_qubit: auxiliary qubit used for CLEAR pulse
+    kappa: cavity linewidth (angular frequency: 1/s)
+    chi: half of the dispershive shift (angular frequency: 1/s)
+    tau: duration of each of the 2 depletion steps (s)
+    alpha: scaling factor
+    T1factor: decay due to T1 between end of msm't and start of Ramsey
+    T2: measured T2*
+    nsteps: calibration steps/sweep
+    cal_steps: choose ranges for calibration steps. 1: +-100%; 0: skip step
+    '''
+    def __init__(self, qubit_name, aux_qubit, kappa = 2e6, chi = 1e6, t_empty = 200e-9, ramsey_delays=np.linspace(0.0, 50.0, 51)*1e-6, ramsey_freq = 100e3, meas_delay = 0, tau = 200e-9, \
+    alpha = 1, T1factor = 1, T2 = 30e-6, nsteps = 11, eps1 = None, eps2 = None, cal_steps = (1,1,1)):
+        super(CLEARCalibration, self).__init__(qubit_name)
+        self.filename = 'CLEAR/CLEAR'
+        self.aux_qubit = aux_qubit
+        self.kappa = kappa
+        self.chi = chi
+        self.ramsey_delays = ramsey_delays
+        self.ramsey_freq = ramsey_freq
+        self.meas_delay = meas_delay
+        self.tau = tau
+        self.alpha = alpha
+        self.T1factor = T1factor
+        self.T2 = T2
+        self.nsteps = nsteps
+        if not self.eps1:
+            # theoretical values as default
+            self.eps1 = (1 - 2*exp(kappa*t_empty/4)*np.cos(chi*t_empty/2))/(1+exp(kappa*t_empty/2)-2*exp(kappa*t_empty/4)*np.cos(chi*t_empty/2))
+            self.eps2 = 1/(1+exp(kappa*t_empty/2)-2*exp(kappa*t_empty/4)*np.cos(chi*t_empty/2))
+        self.cal_steps = cal_steps
+
+    def sequence(self, **params):
+        qM = QubitFactory(self.aux_qubit) #TODO: replace with MEAS(q) devoid of digitizer trigger
+        prep = X(q) if self.state else Id(q)
+
+        seqs = [[prep, MEAS(qM, amp1 = params['eps1'], amp2 =  params['eps2'], step_length = self.tau), X90(self.qubit), Id(self.qubit,d), U90(self.qubit,phase = self.ramsey_freq*d,\
+        self.t_empty/2,  params['state']),
+        Id(self.qubit, self.meas_delay), MEAS(self.qubit)] for d in self.ramsey_delays]
+        seqs += create_cal_seqs((self.qubit,), 2, delay = self.meas_delay)
+    return seqs
+
+    def init_plot(self):
+        #TODO: see feature/DRAGcal-plots
+        pass
+
+    def calibrate(self):
+        for ct = range(3):
+            #generate sequence
+            xpoints = linspace(1-self.cal_steps[ct], 1+self.cal_steps[ct], nsteps)
+            n0vec = np.zeros(nsteps)
+            err0vec = np.zeros(nsteps)
+            n1vec = np.zeros(nsteps)
+            err1vec = np.zeros(nsteps)
+            for k = range(nsteps):
+                eps1 = self.eps1 if k==1 else xpoints[k]*self.eps1
+                eps2 = self.eps2 if k==2 else xpoints[k]*self.eps2
+                #run for qubit in 0
+                self.set(eps1 = eps1, eps2 = eps2, state = 0)
+                #analyze
+                data, _ = self.run()
+                n0vec[k], err0vec[k] = fit_photon_number(self.xpoints, data, [self.kappa, self.ramsey_freq, 2*self.chi, self.T2, self.T1factor, 0])
+                #qubit in 1
+                self.set(eps1 = eps1, eps2 = eps2, state = 1)
+                #analyze
+                data, _ = self.run()
+                n1vec[k], err1vec[k] = fit_photon_number(self.xpoints, data, [self.kappa, self.ramsey_freq, 2*self.chi, self.T2, self.T1factor, 1])
+            #fit for minimum photon number
+            x0 = min(n0vec)
+            x1 = min(n1vec)
+            opt_scaling = fit_CLEAR(xpoints, n0vec, n1vec, [x0 x1])
+            if ct==1 or ct==2:
+                self.eps1*=opt_scaling
+            if ct==1 or ct==3:
+                self.eps2*=opt_scaling
+
+        #update library (default amp1, amp2 for MEAS)
+        chan_settings['channelDict'][self.meas_name]['pulseParams']['amp1'] = self.eps1
+        chan_settings['channelDict'][self.meas_name]['pulseParams']['amp2'] = self.eps2
+        chan_settings['channelDict'][self.meas_name]['pulseParams']['step_length'] = self.tau
+        self.settings['qubits'][self.qubit.label]['measure']['pulse_params']['amp1'] = round(float(self.eps1), 5)
+        self.settings['qubits'][self.qubit.label]['measure']['pulse_params']['amp2'] = round(float(self.eps2), 5)
+        self.settings['qubits'][self.qubit.label]['measure']['pulse_params']['step_length'] = round(float(self.tau), 5)
+        super(CLEARCalibration, self).update_settings()
 
 '''Two-qubit gate calibrations'''
 class CRCalibration(PulseCalibration):
