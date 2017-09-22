@@ -459,7 +459,7 @@ class DRAGCalibration(PulseCalibration):
 class MeasCalibration(PulseCalibration):
     def __init__(self, qubit_name):
         super(MeasCalibration, self).__init__(qubit_name)
-        self.meas_name = = "M-" + qubit.name
+        self.meas_name = "M-" + qubit.name
 
 class CLEARCalibration(MeasCalibration):
     ''' Calibration of cavity reset pulse
@@ -497,26 +497,24 @@ class CLEARCalibration(MeasCalibration):
     def sequence(self, **params):
         qM = QubitFactory(self.aux_qubit) #TODO: replace with MEAS(q) devoid of digitizer trigger
         prep = X(q) if self.state else Id(q)
-
-        seqs = [[prep, MEAS(qM, amp1 = params['eps1'], amp2 =  params['eps2'], step_length = self.tau), X90(self.qubit), Id(self.qubit,d), U90(self.qubit,phase = self.ramsey_freq*d,\
-        self.t_empty/2,  params['state']),
+        seqs = [[prep, MEAS(qM, amp1 = params['eps1'], amp2 =  params['eps2'], step_length = self.tau), X90(self.qubit), Id(self.qubit,d), U90(self.qubit,phase = self.ramsey_freq*d),
         Id(self.qubit, self.meas_delay), MEAS(self.qubit)] for d in self.ramsey_delays]
         seqs += create_cal_seqs((self.qubit,), 2, delay = self.meas_delay)
-    return seqs
+        return seqs
 
     def init_plot(self):
         #TODO: see feature/DRAGcal-plots
         pass
 
     def calibrate(self):
-        for ct = range(3):
+        for ct in range(3):
             #generate sequence
             xpoints = linspace(1-self.cal_steps[ct], 1+self.cal_steps[ct], nsteps)
             n0vec = np.zeros(nsteps)
             err0vec = np.zeros(nsteps)
             n1vec = np.zeros(nsteps)
             err1vec = np.zeros(nsteps)
-            for k = range(nsteps):
+            for k in range(nsteps):
                 eps1 = self.eps1 if k==1 else xpoints[k]*self.eps1
                 eps2 = self.eps2 if k==2 else xpoints[k]*self.eps2
                 #run for qubit in 0
@@ -532,7 +530,7 @@ class CLEARCalibration(MeasCalibration):
             #fit for minimum photon number
             x0 = min(n0vec)
             x1 = min(n1vec)
-            opt_scaling = fit_CLEAR(xpoints, n0vec, n1vec, [x0 x1])
+            opt_scaling = fit_CLEAR(xpoints, n0vec, n1vec, [x0, x1])
             if ct==1 or ct==2:
                 self.eps1*=opt_scaling
             if ct==1 or ct==3:
