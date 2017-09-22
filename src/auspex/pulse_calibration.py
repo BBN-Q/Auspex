@@ -387,7 +387,7 @@ class PhaseEstimation(PulseCalibration):
                 break
             #update amplitude
             self.amplitude = amp
-        logger.info("Found amplitude for {type(self).__name__} calibration of: {}".format(amp))
+        logger.info("Found amplitude for {} calibration of: {}".format(type(self).__name__, amp))
 
         set_chan = self.qubit_names[0] if len(self.qubit_names) == 1 else ChannelLibrary.EdgeFactory(*self.qubits).label
         return amp
