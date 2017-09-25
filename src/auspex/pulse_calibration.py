@@ -81,6 +81,7 @@ class PulseCalibration(object):
     def sequence(self):
         """Returns the sequence for the given calibration, must be overridden"""
         return [[Id(self.qubit), MEAS(self.qubit)]]
+
     def set(self, instrs_to_set = [], **params):
         try:
             self.exp.plot_server.stop()
@@ -92,17 +93,15 @@ class PulseCalibration(object):
             # Add the manual plotter and the update method to the experiment
             self.exp.add_manual_plotter(self.plot)
         self.exp.connect_instruments()
-        #set instruments for calibration
+        #sweep instruments for calibration
         for instr_to_set in instrs_to_set:
             par = FloatParameter()
             par.assign_method(getattr(self.exp._instruments[instr_to_set['instr']], instr_to_set['method']))
-            # Either sweep or set single value
             if 'sweep_values' in instr_to_set.keys():
                 par.value = instr_to_set['sweep_values'][0]
                 self.exp.add_sweep(par, instr_to_set['sweep_values'])
             else:
-                par.value = instr_to_set['value']
-                par.push()
+                raise KeyError("Sweep values not defined.")
 
     def run(self):
         self.exp.leave_plot_server_open = True
@@ -155,8 +154,8 @@ class CavitySearch(PulseCalibration):
         #find cavity source from config
         cavity_source = self.settings['qubits'][self.qubit.label]['measure']['generator']
         orig_freq = self.settings['instruments'][cavity_source]['frequency']
-        instr_to_set = {'instr': cavity_source, 'method': 'set_frequency', 'sweep_values': self.frequencies}
-        self.set([instr_to_set])
+        instr_to_sweep = {'instr': cavity_source, 'method': 'set_frequency', 'sweep_values': self.frequencies}
+        self.set([instr_to_sweep])
         data, _ = self.run()
         # Plot the results
         self.plot["Data"] = (self.frequencies, data)
@@ -180,8 +179,8 @@ class QubitSearch(PulseCalibration):
         #find qubit control source from config
         qubit_source = self.settings['qubits'][self.qubit.label]['control']['generator']
         orig_freq = self.settings['instruments'][qubit_source]['frequency']
-        instr_to_set = {'instr': qubit_source, 'method': 'set_frequency', 'sweep_values': self.frequencies}
-        self.set([instr_to_set])
+        instr_to_sweep = {'instr': qubit_source, 'method': 'set_frequency', 'sweep_values': self.frequencies}
+        self.set([instr_to_sweep])
         data, _ = self.run()
 
         # Plot the results
@@ -272,12 +271,11 @@ class RamseyCalibration(PulseCalibration):
         qubit_source = self.settings['qubits'][self.qubit.label]['control']['generator']
         orig_freq = self.settings['instruments'][qubit_source]['frequency']
         set_freq = round(orig_freq + self.added_detuning, 10)
-        instr_to_set = {'instr': qubit_source, 'method': 'set_frequency', 'value': set_freq}
         #plot settings
         ramsey_f = ramsey_2f if self.two_freqs else ramsey_1f
         finer_delays = np.linspace(np.min(self.delays), np.max(self.delays), 4*len(self.delays))
-
-        self.set([instr_to_set])
+        self.set()
+        self.exp.settings['instruments'][qubit_source]['frequency'] = set_freq
         data, _ = self.run()
         fit_freqs, fit_errs, all_params = fit_ramsey(self.delays, data, two_freqs = self.two_freqs)
 
@@ -288,8 +286,8 @@ class RamseyCalibration(PulseCalibration):
         #TODO: set conditions for success
         fit_freq_A = np.mean(fit_freqs) #the fit result can be one or two frequencies
         set_freq = round(orig_freq + self.added_detuning + fit_freq_A/2, 10)
-        instr_to_set['value'] = set_freq
-        self.set([instr_to_set])
+        self.set()
+        self.exp.settings['instruments'][qubit_source]['frequency'] = set_freq
         data, _ = self.run()
 
         fit_freqs, fit_errs, all_params = fit_ramsey(self.delays, data, two_freqs = self.two_freqs)
@@ -368,6 +366,7 @@ class PhaseEstimation(PulseCalibration):
 
             amp_target = self.target/phase * amp
             amp_error = amp - amp_target
+            logger.info('Set amplitude: %.4f\n'%amp)
             logger.info('Amplitude error: %.4f\n'%amp_error)
 
             amp = amp_target
