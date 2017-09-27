@@ -82,12 +82,8 @@ def yaml_load(filename):
     return code
 
 def yaml_dump(data, filename = "", flatten=False):
-    if flatten:
-        d = FlatDumper
-        d.add_representer(Include, d.include)
-    else:
-        d = Dumper
-        d.add_representer(Include, d.include)
+    d = Dumper if filename and not flatten else FlatDumper
+    d.add_representer(Include, d.include)
 
     if filename:
         with open(filename+".tmp", 'w+') as fid:
@@ -102,9 +98,6 @@ def yaml_dump(data, filename = "", flatten=False):
         # dump to an IO stream:
         # note you need to use the FlatDumper for this to work
         out = StringIO()
-        d = FlatDumper
-
-        d.add_representer(Include, d.include)
         yaml.dump(data, out, Dumper=d)
         ret_string = out.getvalue()
         out.close()
