@@ -21,7 +21,6 @@ import os
 from time import sleep
 
 from auspex.exp_factory import QubitExpFactory
-from auspex.analysis.io import load_from_HDF5
 from auspex.parameter import FloatParameter
 from auspex.filters.plot import ManualPlotter
 from auspex.analysis.fits import *

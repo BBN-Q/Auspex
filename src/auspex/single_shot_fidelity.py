@@ -19,7 +19,6 @@ import json
 
 from auspex.log import logger
 from auspex.exp_factory import QubitExpFactory, QubitExperiment
-from auspex.analysis.io import load_from_HDF5
 from auspex.parameter import FloatParameter
 from auspex.filters.plot import ManualPlotter
 from auspex.filters.singleshot import SingleShotMeasurement
