@@ -34,16 +34,21 @@ import time, sys, datetime
 #                     PSPL
 
 class CallbackTask(Task):
-    def __init__(self, loop, points_per_trigger, attempts, output_connector, min_voltage=-10.0, max_voltage=10.0, ai_clock=1e6):
+    def __init__(self, loop, points_per_trigger, attempts, output_connector,
+                 chunk_size=None, min_voltage=-10.0, max_voltage=10.0, ai_clock=1e6):
         Task.__init__(self)
         self.loop = loop # the asyncio loop to push data on
         self.points_per_trigger = points_per_trigger
         self.attempts = attempts
         self.output_connector = output_connector
-        self.buffer = np.empty(self.points_per_trigger*self.attempts)
 
         # Construct our specific task.
-        self.buff_points = self.points_per_trigger*self.attempts
+        if chunk_size:
+            self.buff_points = chunk_size
+        else:
+            self.buff_points = self.points_per_trigger*self.attempts
+        self.buffer = np.empty(self.buff_points)
+
         self.CreateAIVoltageChan("Dev1/ai0", "", DAQmx_Val_Diff, min_voltage, max_voltage, DAQmx_Val_Volts, None)
         self.CfgSampClkTiming("", ai_clock, DAQmx_Val_Rising, DAQmx_Val_FiniteSamps, self.points_per_trigger)
         self.CfgInputBuffer(self.buff_points)
@@ -60,13 +65,23 @@ class CallbackTask(Task):
         read = int32()
         self.num_callbacks += 1
         self.ReadAnalogF64(self.buff_points, 5.0, DAQmx_Val_GroupByChannel,
-                                        self.buffer, self.points_per_trigger*self.attempts, byref(read), None)
+                           self.buffer, self.buff_points, byref(read), None)
         asyncio.ensure_future(self.output_connector.push(self.buffer), loop=self.loop)
         self.points_read += read.value
         return 0
 
     def DoneCallback(self, status):
         return 0
+
+def load_switching_data(filename_or_fileobject, threshold=0.08, group="main", data_name="voltage"):
+    data, desc = load_from_HDF5(filename_or_fileobject, reshape=False)
+    reps   = desc[group].axis("attempt").points
+    dat    = data[group][:].reshape((-1, reps.size))
+    probs  = (dat[data_name]>threshold).mean(axis=1)
+    durs   = dat['pulse_duration'][:,0]
+    amps   = dat['pulse_voltage'][:,0]
+    points = np.array([durs, amps]).transpose()
+    return points, probs
 
 class nTronSwitchingExperiment(Experiment):
 
@@ -84,6 +99,7 @@ class nTronSwitchingExperiment(Experiment):
     chan_bias_ref_res = 1e4
     pspl_base_attenuation = 10
     circuit_attenuation = 0
+    pulse_polarity = 1
 
     # Channel Bias current
     channel_bias = 60e-6
@@ -176,7 +192,7 @@ class nTronSwitchingExperiment(Experiment):
 
             #print("PSPL Amplitude: {}, Attenuator: {}".format(amplitude,vc_atten))
             self.atten.set_attenuation(vc_atten)
-            self.pspl.amplitude = amplitude
+            self.pspl.amplitude = self.pulse_polarity*amplitude
             time.sleep(0.04)
 
         # Assign Methods
