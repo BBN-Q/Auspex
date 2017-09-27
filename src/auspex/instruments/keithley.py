@@ -8,6 +8,7 @@
 
 __all__ = ['Keithley2400']
 
+import time
 from auspex.log import logger
 from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand
 
@@ -27,16 +28,18 @@ class Keithley2400(SCPIInstrument):
         self.interface.write("format:data ascii")
         self.interface._resource.read_termination = "\n"
 
-    def triad(self, freq=440, duration=0.2, minor=False):
-        import time
-        self.beep(freq, duration)
-        time.sleep(duration)
+    def triad(self, freq=440, duration=0.2, minor=False, down=False):
+        beeps = [(freq, duration)]
         if minor:
-            self.beep(freq*6.0/5.0, duration)
+            beeps.append((freq*6.0/5.0, duration))
         else:
-            self.beep(freq*5.0/4.0, duration)
-        time.sleep(duration)
-        self.beep(freq*6.0/4.0, duration)
+            beeps.append((freq*5.0/4.0, duration))
+        beeps.append((freq*6.0/4.0, duration))
+        if down:
+            beeps = beeps[::-1]
+        for f, d in beeps:
+            self.beep(f, d)
+            time.sleep(duration)
 
     def beep(self, freq, dur):
         self.interface.write(":SYST:BEEP {:g}, {:g}".format(freq, dur))

@@ -6,8 +6,11 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-from QGL import *
-from QGL import config as QGLconfig
+try:
+    from QGL import *
+    from QGL import config as QGLconfig
+except:
+    print("Could not load QGL.")
 # from QGL.BasicSequences.helpers import create_cal_seqs, time_descriptor, cal_descriptor
 import auspex.config as config
 from copy import copy
@@ -16,7 +19,6 @@ import json
 
 from auspex.log import logger
 from auspex.exp_factory import QubitExpFactory, QubitExperiment
-from auspex.analysis.io import load_from_HDF5
 from auspex.parameter import FloatParameter
 from auspex.filters.plot import ManualPlotter
 from auspex.filters.singleshot import SingleShotMeasurement
@@ -87,6 +89,8 @@ class SingleShotFidelityExperiment(QubitExperiment):
             fid_buffers = [buff for buff in self.buffers if self.settings['filters'][buff.name]['source'].strip().split()[1] == 'fidelity']
             if not fid_buffers:
                 raise NameError("Please connect a buffer to the single-shot filter output in order to optimize fidelity.")
+            #restore original card settings before overwriting the config
+            self._restore_round_robins()
             #set sweep parameters to the values that maximize fidelity
             for buff in fid_buffers:
                 dataset, descriptor = buff.get_data(), buff.get_descriptor()
@@ -99,7 +103,7 @@ class SingleShotFidelityExperiment(QubitExperiment):
                         param_key = param_key[key]
                     opt_value = float(dataset[axis.name][opt_ind])
                     param_key[instr_tree[-1]] = opt_value
-                    logger.info(f'Set{" ".join(str(x) for x in instr_tree)} to {opt_value}.')
+                    logger.info("Set{} to {}.".format(" ".join(str(x) for x in instr_tree),opt_value ))
                 config.yaml_dump(self.settings, config.configFile)
 
     def _update_histogram_plots(self):
@@ -128,9 +132,17 @@ class SingleShotFidelityExperiment(QubitExperiment):
     def _squash_round_robins(self):
         """Make it so that the round robins are set to 1."""
         digitizers =  [_ for _ in self.settings['instruments'].keys() if 'nbr_round_robins' in self.settings['instruments'][_].keys()]
+        self.digitizers_temp = {}
         for d in digitizers:
-            logger.info(f"Set digitizer {d} round robins to 1 for single shot experiment.")
+            logger.info("Set digitizer {} round robins to 1 for single shot experiment.".format(d))
+            self.digitizers_temp[d] = self.settings['instruments'][d]['nbr_round_robins']
             self.settings['instruments'][d]['nbr_round_robins'] = 1
+
+    def _restore_round_robins(self):
+        """Restore round robins to the original values."""
+        digitizers =  [_ for _ in self.settings['instruments'].keys() if 'nbr_round_robins' in self.settings['instruments'][_].keys()]
+        for d in digitizers:
+            self.settings['instruments'][d]['nbr_round_robins'] = self.digitizers_temp[d]
 
     def find_single_shot_filter(self):
         """Make sure there is one single shot measurement filter in the pipeline."""

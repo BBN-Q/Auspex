@@ -52,6 +52,9 @@ class Filter(metaclass=MetaFilter):
         self.parameters = {}
         self.experiment = None # Keep a reference to the parent experiment
 
+        # For objectively measuring doneness
+        self.finished_processing = False
+
         # For signaling to Quince that something is wrong
         self.out_of_spec = False
 
@@ -103,7 +106,7 @@ class Filter(metaclass=MetaFilter):
         Generic run method which waits on a single stream and calls `process_data` on any new_data
         """
         logger.debug('Running "%s" run loop', self.name)
-
+        self.finished_processing = False
         input_stream = getattr(self, self._input_connectors[0]).input_streams[0]
 
         while True:
@@ -127,6 +130,8 @@ class Filter(metaclass=MetaFilter):
 
                 # Check to see if we're done
                 if message['event_type'] == 'done':
+                    if not self.finished_processing:
+                        logger.warning("Filter {} being asked to finish before being done processing.".format(self.name))
                     await self.on_done()
                     break
                 elif message['event_type'] == 'refined':
@@ -141,6 +146,10 @@ class Filter(metaclass=MetaFilter):
 
             elif message['type'] == 'data_direct':
                 await self.process_direct(message_data)
+
+            # If we have gotten all our data and process_data has returned, then we are done!
+            if all([v.done() for v in self.input_connectors.values()]):
+                self.finished_processing = True
 
     async def process_data(self, data):
         """Process data coming through the filter pipeline"""
