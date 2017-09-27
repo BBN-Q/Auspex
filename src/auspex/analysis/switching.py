@@ -10,6 +10,7 @@ import numpy as np
 from sklearn.cluster import KMeans
 from scipy.stats import beta
 from scipy.spatial import Delaunay
+from operator import itemgetter
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 import h5py
@@ -195,8 +196,9 @@ def phase_diagram_mesh(points, values,
     plt.title(title, size=18)
     plt.xlabel(xlabel, size=16)
     plt.ylabel(ylabel, size=16)
-    plt.colorbar()
-    # return fig
+    cb = plt.colorbar()
+    cb.set_label("Probability",size=16)
+    return mesh
 
 def crossover_pairs(points, values, threshold):
     """ Find all pairs of points whose values are on the two sides of threshold """
