@@ -42,7 +42,7 @@ class DataListener(QtCore.QObject):
 
     def __init__(self, host, port=7772):
         QtCore.QObject.__init__(self)
-        
+
         self.context = zmq.Context()
         self.socket = self.context.socket(zmq.SUB)
         self.socket.connect("tcp://{}:{}".format(host, port))
@@ -346,21 +346,21 @@ class MatplotClientWindow(QtWidgets.QMainWindow):
         self.listener_thread.started.connect(self.Datalistener.loop)
         self.Datalistener.message.connect(self.data_signal_received)
         self.Datalistener.finished.connect(self.stop_listening)
-        
+
         QtCore.QTimer.singleShot(0, self.listener_thread.start)
 
     def open_connection_dialog(self):
-        address, ok = QtWidgets.QInputDialog.getText(self, 'Open Connection', 
+        address, ok = QtWidgets.QInputDialog.getText(self, 'Open Connection',
             'Resource Name:')
         if ok:
             self.open_connection(address)
-    
+
     def construct_plots(self, plot_desc):
         self.toolbars = []
         self.canvas_by_name = {}
 
         # Purge everything in the layout
-        for i in reversed(range(self.layout.count())): 
+        for i in reversed(range(self.layout.count())):
             widgetToRemove = self.layout.itemAt( i ).widget()
             self.layout.removeWidget( widgetToRemove )
             widgetToRemove.setParent( None )
@@ -378,12 +378,12 @@ class MatplotClientWindow(QtWidgets.QMainWindow):
             elif desc['plot_type'] == "mesh":
                 canvas = CanvasMesh(self.main_widget, width=5, height=4, dpi=100, plot_mode=desc['plot_mode'])
             nav    = NavigationToolbar(canvas, self)
-            
+
             canvas.set_desc(desc)
             self.toolbars.append(nav)
             self.tabs.addTab(canvas, name)
             self.layout.addWidget(nav)
-            
+
             self.canvas_by_name[name] = canvas
 
         self.layout.addWidget(self.tabs)
@@ -444,4 +444,6 @@ if __name__ == '__main__':
         aw = MatplotClientWindow()
     aw.setWindowTitle("%s" % progname)
     aw.show()
+    aw.setWindowState(aw.windowState() & ~QtCore.Qt.WindowMinimized | QtCore.Qt.WindowActive)
+    aw.activateWindow()
     sys.exit(qApp.exec_())

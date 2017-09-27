@@ -47,8 +47,8 @@ class Agilent33220A(SCPIInstrument):
 
     #Voltage
     dc_offset = FloatCommand(scpi_string="VOLT:OFFSET")
-    output = Command(get_string="OUTP?", set_string="OUTP {:s}",
-                                value_map = {True: "1", False: "0"})
+    output = Command(get_string="OUTP?", set_string="OUTP {:s}", value_map = {True: "1", False: "0"})
+    polarity = Command(get_string="OUTP:POL?", set_string="OUTP:POL {:s}", value_map = {1 : "NORM", -1 : "INV"})
     auto_range = Command(scpi_string="VOLTage:RANGe:AUTO", value_map={True: "1", False: "0"})
     load_resistance = FloatCommand(scpi_string="OUTPut:LOAD")
     amplitude = FloatCommand(scpi_string="VOLT")
@@ -72,6 +72,11 @@ class Agilent33220A(SCPIInstrument):
 
     # Pulse characteristics
     pulse_width = FloatCommand(scpi_string="FUNCtion:PULSe:WIDTh")
+    pulse_period = FloatCommand(scpi_string="PULSe:PERiod")
+    pulse_edge = FloatCommand(scpi_string="FUNCtion:PULSe:TRANsition")
+    pulse_dcyc = IntCommand(scpi_string="FUNCtion:PULSe:DCYCle")
+
+    ramp_symmetry = FloatCommand(scpi_string="FUNCtion:RAMP:SYMMetry")
 
     def trigger(self):
         self.interface.write("*TRG")

@@ -6,12 +6,13 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-# 0.1 Hz 6dB slope HPF
-# 300 kHz 6dB slope LPF
+from PyDAQmx import *
+from PyDAQmx.DAQmxCallBack import *
 
-from auspex.instruments import KeysightM8190A, Scenario, Sequence
-from auspex.instruments.alazar import AlazarATS9870, AlazarChannel
 from auspex.instruments import Agilent33220A
+from auspex.instruments import Picosecond10070A
+from auspex.instruments import SR865
+from auspex.instruments import RFMDAttenuator
 
 from auspex.experiment import FloatParameter, IntParameter, Experiment
 from auspex.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector
@@ -22,248 +23,376 @@ import numpy as np
 import asyncio
 import time, sys, datetime
 
-def switching_pulse(amplitude, duration, delay=25e-9, holdoff=800e-9, total_duration=2000e-09, sample_rate=12e9):
-    total_points = int(total_duration*sample_rate)
-    pulse_points = int(duration*sample_rate)
-    hold_points  = int(holdoff*sample_rate)
-    if total_points < 320:
-        wf = np.zeros(320)
-    else:
-        wf = np.zeros(64*np.int(np.ceil(total_points/64.0)))
-    wf[hold_points:hold_points+pulse_points] = amplitude
-    return wf
+# Experimental Topology
+# NIDAQ P1.0 -> Agilent33220A Trigger
+# NIDAQ P1.1 -> 10dB Attenuator -> PSPL Trigger
+# NIDAQ P1.1 -> NIDAQ PFI1
+# Agilent -> 10 kOhm -> Bias-T -> 50 Ohm -> nTron
+#                       |          |
+#                  Prog Atten   NIDAQ AI0
+#                       |
+#                     PSPL
+
+class CallbackTask(Task):
+    def __init__(self, loop, points_per_trigger, attempts, output_connector,
+                 chunk_size=None, min_voltage=-10.0, max_voltage=10.0, ai_clock=1e6):
+        Task.__init__(self)
+        self.loop = loop # the asyncio loop to push data on
+        self.points_per_trigger = points_per_trigger
+        self.attempts = attempts
+        self.output_connector = output_connector
+
+        # Construct our specific task.
+        if chunk_size:
+            self.buff_points = chunk_size
+        else:
+            self.buff_points = self.points_per_trigger*self.attempts
+        self.buffer = np.empty(self.buff_points)
+
+        self.CreateAIVoltageChan("Dev1/ai0", "", DAQmx_Val_Diff, min_voltage, max_voltage, DAQmx_Val_Volts, None)
+        self.CfgSampClkTiming("", ai_clock, DAQmx_Val_Rising, DAQmx_Val_FiniteSamps, self.points_per_trigger)
+        self.CfgInputBuffer(self.buff_points)
+        self.CfgDigEdgeStartTrig("/Dev1/PFI1", DAQmx_Val_Rising)
+        self.SetStartTrigRetriggerable(1)
+        self.AutoRegisterEveryNSamplesEvent(DAQmx_Val_Acquired_Into_Buffer,self.buff_points,0)
+        self.AutoRegisterDoneEvent(0)
+
+        # print("Expected to receive ", self.buff_points, "per point.")
+        self.points_read = 0
+        self.num_callbacks = 0
+
+    def EveryNCallback(self):
+        read = int32()
+        self.num_callbacks += 1
+        self.ReadAnalogF64(self.buff_points, 5.0, DAQmx_Val_GroupByChannel,
+                           self.buffer, self.buff_points, byref(read), None)
+        asyncio.ensure_future(self.output_connector.push(self.buffer), loop=self.loop)
+        self.points_read += read.value
+        return 0
+
+    def DoneCallback(self, status):
+        return 0
+
+def load_switching_data(filename_or_fileobject, threshold=0.08, group="main", data_name="voltage"):
+    data, desc = load_from_HDF5(filename_or_fileobject, reshape=False)
+    reps   = desc[group].axis("attempt").points
+    dat    = data[group][:].reshape((-1, reps.size))
+    probs  = (dat[data_name]>threshold).mean(axis=1)
+    durs   = dat['pulse_duration'][:,0]
+    amps   = dat['pulse_voltage'][:,0]
+    points = np.array([durs, amps]).transpose()
+    return points, probs
 
 class nTronSwitchingExperiment(Experiment):
 
-    # Parameters
-    channel_bias = FloatParameter(default=100e-6,  unit="A") # On the 33220A
-    gate_bias    = FloatParameter(default=5e-6,  unit="A") # On the 33220A
+    # Parameters and outputs
+    # channel_bias   = FloatParameter(default=100e-6,  unit="A") # On the 33220A
+    pulse_duration = FloatParameter(default=5.0e-9, unit="s")
+    pulse_voltage  = FloatParameter(default=1, unit="V")
+    voltage        = OutputConnector()
 
     # Constants (set with attribute access if you want to change these!)
     attempts           = 1 << 4
-    samples            = 768
 
-    # Reference resistances
-    gate_bias_ref_res = 1e4
-    chan_bias_ref_res = 1e3
+    # Reference resistances and attenuations
+    matching_ref_res = 50
+    chan_bias_ref_res = 1e4
+    pspl_base_attenuation = 10
+    circuit_attenuation = 0
+    pulse_polarity = 1
 
-    # arb
-    sample_rate = 12e9
-    repeat_time = 2*2.4e-6 # Multiple of 2.4 us for 100ns alignment
+    # Channel Bias current
+    channel_bias = 60e-6
 
-    # Things coming back
-    voltage     = OutputConnector()
+    # Min/Max NIDAQ AI Voltage
+    min_daq_voltage = 0
+    max_daq_voltage = 1e3*channel_bias
 
-    # Instrument resources
-    arb    = KeysightM8190A("192.168.5.108")
-    arb_cb = Agilent33220A("192.168.5.198") # Channel bias
-    arb_gb = Agilent33220A("192.168.5.199") # Gate bias
-    alz    = AlazarATS9870("1")
+    # Measurement Sequence timing, clocks in Hz times in seconds
+    ai_clock = 0.25e6
+    do_clock = 1e5
+    run_time = 2e-4
+    settle_time = 0.5*run_time
+    integration_time = 0.1*run_time
+    ai_delay = 0.25*0.5*run_time
 
-    def __init__(self, gate_amps, gate_durs):
-        self.gate_amps = gate_amps
-        self.gate_durs = gate_durs
-        super(nTronSwitchingExperiment, self).__init__()
+    # Instrument resources, NIDAQ called via PyDAQmx
+    arb_cb = Agilent33220A("192.168.5.199") # Channel Bias
+    pspl  = Picosecond10070A("GPIB0::24::INSTR") # Gate Pulse
+    atten = RFMDAttenuator("calibration/RFSA2113SB_HPD_20160901.csv") # Gate Amplitude control
+    lock  = SR865("USB0::0xB506::0x2000::002638::INSTR") # Gate Amplitude control
 
     def init_instruments(self):
         # Channel bias arb
         self.arb_cb.output          = False
-        self.arb_cb.load_resistance = self.chan_bias_ref_res
+        self.arb_cb.load_resistance = (self.chan_bias_ref_res+self.matching_ref_res)
         self.arb_cb.function        = 'Pulse'
-        self.arb_cb.frequency       = 0.2e6
-        self.arb_cb.pulse_width     = 2e-6
+        self.arb_cb.pulse_period    = 0.99*self.run_time
+        self.arb_cb.pulse_width     = self.run_time - self.settle_time
+        self.arb_cb.pulse_edge      = 100e-9
         self.arb_cb.low_voltage     = 0.0
-        self.arb_cb.high_voltage    = self.channel_bias.value*self.chan_bias_ref_res
-        self.arb_cb.low_voltage     = 0.0
+        self.arb_cb.high_voltage    = self.channel_bias*(self.chan_bias_ref_res+self.matching_ref_res)
         self.arb_cb.burst_state     = True
         self.arb_cb.burst_cycles    = 1
         self.arb_cb.trigger_source  = "External"
+        self.arb_cb.burst_mode      = "Triggered"
         self.arb_cb.output          = True
+        self.arb_cb.polarity        = 1
 
-        # Gate bias arb
-        self.arb_gb.output          = False
-        self.arb_gb.load_resistance = self.gate_bias_ref_res
-        self.arb_gb.function        = 'Pulse'
-        self.arb_gb.frequency       = 0.2e6
-        self.arb_gb.pulse_width     = 2e-6
-        self.arb_gb.low_voltage     = 0.0
-        self.arb_gb.high_voltage    = self.gate_bias.value*self.gate_bias_ref_res
-        self.arb_gb.low_voltage     = 0.0
-        self.arb_gb.burst_state     = True
-        self.arb_gb.burst_cycles    = 1
-        self.arb_gb.trigger_source  = "External"
-        self.arb_gb.output          = True
+        # Setup the NIDAQ
+        DAQmxResetDevice("Dev1")
+        self.nidaq = CallbackTask(asyncio.get_event_loop(), int(self.integration_time*self.ai_clock), self.attempts, self.voltage,
+                                 min_voltage=self.min_daq_voltage, max_voltage=self.max_daq_voltage, ai_clock=self.ai_clock)
+        self.nidaq.StartTask()
 
-        # What to do in order to change the bias values
-        self.channel_bias.assign_method(lambda i: self.arb_cb.set_high_voltage(i*self.chan_bias_ref_res))
-        self.gate_bias.assign_method(lambda i: self.arb_gb.set_high_voltage(i*self.gate_bias_ref_res))
-        self.channel_bias.add_post_push_hook(lambda: time.sleep(0.1))
-        self.gate_bias.add_post_push_hook(lambda: time.sleep(0.1))
+        # Setup DO Triggers, P1:0 triggers AWG, P1:1 triggers PSPL and DAQ analog input
+        self.digital_output = Task()
+        data_p0 = np.zeros(int(self.do_clock*self.run_time),dtype=np.uint8)
+        data_p0[0]=1
 
-        self.ch = AlazarChannel({'channel': 1})
-        self.alz.add_channel(self.ch)
-        alz_cfg = {
-            'acquire_mode': 'digitizer',
-            'bandwidth': 'Full',
-            'clock_type': 'ref',
-            'delay': 0, #300e-9,
-            'enabled': True,
-            'label': "Alazar",
-            'record_length': self.samples,
-            'nbr_segments': len(self.gate_amps)*len(self.gate_durs),
-            'nbr_waveforms': 1,
-            'nbr_round_robins': self.attempts,
-            'sampling_rate': 1e9,
-            'trigger_coupling': 'DC',
-            'trigger_level': 125,
-            'trigger_slope': 'rising',
-            'trigger_source': 'Ext',
-            'vertical_coupling': 'AC',
-            'vertical_offset': 0.0,
-            'vertical_scale': 0.2,
-        }
-        self.alz.set_all(alz_cfg)
-        self.loop.add_reader(self.alz.get_socket(self.ch), self.alz.receive_data, self.ch, self.voltage)
+        data_p1 = np.zeros(int(self.do_clock*self.run_time),dtype=np.uint8)
+        data_p1[int(self.do_clock*(self.ai_delay))]=1
 
-        # self.arb.set_output(True, channel=2)
-        self.arb.set_output(True, channel=1)
-        self.arb.sample_freq = self.sample_rate
-        self.arb.set_waveform_output_mode("WSPEED", channel=1)
-        # self.arb.set_waveform_output_mode("WSPEED", channel=2)
-        self.arb.set_output_route("DC", channel=1)
-        # self.arb.set_output_route("DC", channel=2)
-        self.arb.set_output_complement(False, channel=1)
-        # self.arb.set_output_complement(False, channel=2)
-        self.arb.set_voltage_amplitude(1.0, channel=1)
-        # self.arb.set_voltage_amplitude(1.0, channel=2)
-        self.arb.continuous_mode = False
-        self.arb.gate_mode = False
-        self.arb.set_marker_level_low(0.0, channel=1, marker_type="sync")
-        self.arb.set_marker_level_high(1.5, channel=1, marker_type="sync")
-        # self.arb.set_marker_level_low(0.0, channel=2, marker_type="sync")
-        # self.arb.set_marker_level_high(1.5, channel=2, marker_type="sync")
+        data = np.append(data_p0,data_p1)
 
-        self.setup_arb() #self.gate_bias.value, self.gate_pulse_amplitude.value, self.gate_pulse_duration.value) # Sequencing goes here
+        self.digital_output.CreateDOChan("/Dev1/port0/line0:1","",DAQmx_Val_ChanPerLine)
+        self.digital_output.CfgSampClkTiming("",self.do_clock, DAQmx_Val_Rising, DAQmx_Val_FiniteSamps, int(data.size/2)*self.attempts)
+        self.digital_output.WriteDigitalLines(int(self.do_clock*self.run_time),0,1,DAQmx_Val_GroupByChannel,data,None,None)
 
-    def setup_arb(self): #, gate_bias, gate_pulse_amplitude, gate_pulse_duration):
-        self.arb.abort()
-        self.arb.delete_all_waveforms()
-        self.arb.reset_sequence_table()
+        # Setup the PSPL
+        self.pspl.amplitude = 7.5*np.power(10, (-self.pspl_base_attenuation)/20.0)
+        self.pspl.trigger_source = "EXT"
+        self.pspl.trigger_level = 0.5
+        self.pspl.output = True
 
-        seg_ids = []
-        # seg_ids_ch2 = []
+        # Setup PSPL Attenuator Control
+        self.atten.set_supply_method(self.lock.set_ao2)
+        self.atten.set_control_method(self.lock.set_ao3)
 
-        # # For the measurements pulses along the channel
-        # wf      = measure_pulse(amplitude=self.measure_amplitude, duration=self.measure_duration, frequency=self.measure_frequency)
-        # wf_data = KeysightM8190A.create_binary_wf_data(wf, sync_mkr=1)
-        # seg_id  = self.arb.define_waveform(len(wf_data), channel=1)
-        # self.arb.upload_waveform(wf_data, seg_id, channel=1)
-        # seg_ids_ch1.append(seg_id)
+        def set_voltage(voltage, base_atten=self.pspl_base_attenuation):
+            # Calculate the voltage controller attenuator setting
+            amplitude = 7.5*np.power(10, -base_atten/20.0)
+            vc_atten = abs(20.0 * np.log10(abs(voltage)/7.5)) - base_atten - self.circuit_attenuation
 
-        # Build in a delay between sequences
-        settle_pts = int(640*np.int(np.ceil(self.repeat_time * self.sample_rate / 640)))
-        # settle_pts2 = int(640*np.ceil(8*2.4e-9 * self.sample_rate / 640))
+            if vc_atten <= self.atten.minimum_atten():
+                base_atten -= 1
+                if base_atten < 0:
+                    logger.error("Voltage controlled attenuation {} under range, PSPL at Max. Decrease circuit attenuation.".format(vc_atten))
+                    raise ValueError("Voltage controlled attenuation {} under range, PSPL at Max. Decrease circuit attenuation.".format(vc_atten))
+                set_voltage(voltage, base_atten=base_atten)
+                return
 
-        # scenario = Scenario()
-        # seq = Sequence(sequence_loop_ct=self.attempts*len(self.gate_amps)*len(self.gate_durs))
-        # for si in seg_ids_ch1:
-        #     seq.add_waveform(si)
-        #     seq.add_idle(settle_pts, 0.0)
-        # scenario.sequences.append(seq)
-        # self.arb.upload_scenario(scenario, start_idx=0, channel=1)
+            if self.atten.maximum_atten() < vc_atten:
+                base_atten += 1
+                if base_atten > 80:
+                    logger.error("Voltage controlled attenuation {} over range, PSPL at Min. Increase circuit attenuation.".format(vc_atten))
+                    raise ValueError("Voltage controlled attenuation {} over range, PSPL at Min. Increase circuit attenuation.".format(vc_atten))
+                set_voltage(voltage, base_atten=base_atten)
+                return
 
-        for amp in self.gate_amps:
-            for dur in self.gate_durs:
-                # For the switching pulses along the gate
-                wf      = switching_pulse(amplitude=amp, duration=dur) #self.gate_pulse_duration.value)
-                wf_data = KeysightM8190A.create_binary_wf_data(wf, sync_mkr=1)
-                seg_id  = self.arb.define_waveform(len(wf_data), channel=1)
-                self.arb.upload_waveform(wf_data, seg_id, channel=1)
-                seg_ids.append(seg_id)
+            #print("PSPL Amplitude: {}, Attenuator: {}".format(amplitude,vc_atten))
+            self.atten.set_attenuation(vc_atten)
+            self.pspl.amplitude = self.pulse_polarity*amplitude
+            time.sleep(0.04)
 
-        scenario = Scenario()
-        seq = Sequence(sequence_loop_ct=self.attempts)
-        for si in seg_ids:
-            seq.add_waveform(si)
-            seq.add_idle(settle_pts, 0.0)
-        scenario.sequences.append(seq)
-        self.arb.upload_scenario(scenario, start_idx=0, channel=1)
+        # Assign Methods
+        #self.channel_bias.assign_method(lambda i: self.arb_cb.set_high_voltage(i*self.chan_bias_ref_res))
+        self.pulse_duration.add_post_push_hook(lambda: time.sleep(0.1))
+        self.pulse_duration.assign_method(self.pspl.set_duration)
+        self.pulse_voltage.assign_method(set_voltage)
 
-        self.arb.set_sequence_mode("SCENARIO", channel=1)
-        self.arb.set_scenario_advance_mode("SINGLE", channel=1)
-        self.arb.set_scenario_start_index(0, channel=1)
-        # self.arb.set_sequence_mode("SCENARIO", channel=2)
-        # self.arb.set_scenario_advance_mode("SINGLE", channel=2)
-        # self.arb.set_scenario_start_index(0, channel=2)
-        self.arb.initiate(channel=1)
-        # self.arb.initiate(channel=2)
-        self.arb.advance()
 
     def init_streams(self):
         # Baked in data axes
         descrip = DataStreamDescriptor()
-        descrip.add_axis(DataAxis("time", 1e-9*np.arange(self.samples)))
-        if len(self.gate_durs) > 1:
-            descrip.add_axis(DataAxis("gate_pulse_duration", self.gate_durs))
-        descrip.add_axis(DataAxis("gate_pulse_amplitude", self.gate_amps))
+        descrip.data_name='voltage'
+        descrip.add_axis(DataAxis("sample", range(int(self.integration_time*self.ai_clock))))
+        #descrip.add_axis(DataAxis("state", range(2)))
         descrip.add_axis(DataAxis("attempt", range(self.attempts)))
-
         self.voltage.set_descriptor(descrip)
 
     async def run(self):
-        # self.arb.stop()
-        self.arb.set_scenario_start_index(0, channel=1)
-        self.arb.set_scenario_start_index(0, channel=2)
-        self.arb.advance()
-        self.alz.acquire()
-        self.arb.trigger()
-        await self.alz.wait_for_acquisition(10.0)
-        self.alz.stop()
 
-        await asyncio.sleep(0.1)
-        logger.info("Stream has filled {} of {} points".format(self.voltage.points_taken, self.voltage.num_points() ))
+        self.digital_output.StartTask()
+        self.digital_output.WaitUntilTaskDone(2*self.attempts*self.run_time)
+        self.digital_output.StopTask()
+        await asyncio.sleep(0.05)
+        # print("\t now ", self.nidaq.points_read)
+        logger.debug("Stream has filled {} of {} points".format(self.voltage.points_taken, self.voltage.num_points() ))
 
     def shutdown_instruments(self):
-        # self.arb_cb.output = False
-        # self.arb_gb.output = False
-        self.arb.stop()
-        self.loop.remove_reader(self.alz.get_socket(self.ch))
+        try:
+            # self.analog_input.StopTask()
+            self.nidaq.StopTask()
+            self.nidaq.ClearTask()
+            self.digital_output.StopTask()
+            del self.nidaq
+        except Exception as e:
+            print("Warning: failed to stop task (this normally happens with no consequences when taking multiple samples per trigger).")
+            pass
+        self.arb_cb.output = False
+        self.pspl.output = False
+        for name, instr in self._instruments.items():
+            instr.disconnect()
 
+class nTronSwitchingExperimentFast(Experiment):
+
+    # Parameters and outputs
+    # channel_bias   = FloatParameter(default=100e-6,  unit="A") # On the 33220A
+    pulse_duration = FloatParameter(default=5.0e-9, unit="s")
+    pulse_voltage  = FloatParameter(default=1, unit="V")
+    channel_bias   = FloatParameter(default=500e-6, unit="A")
+    voltage        = OutputConnector()
+
+    # Constants (set with attribute access if you want to change these!)
+    attempts = 1 << 6
+
+    # Reference resistances and attenuations
+    matching_ref_res      = 50
+    chan_bias_ref_res     = 1e4
+    pspl_base_attenuation = 10
+    circuit_attenuation   = 0
+    pulse_polarity        = 1
+
+    # Min/Max NIDAQ AI Voltage
+    min_daq_voltage = 0
+    max_daq_voltage = 10
+
+    # Measurement Sequence timing, clocks in Hz times in seconds
+    ai_clock         = 0.25e6
+    do_clock         = 0.5e6
+    trig_interval    = 0.2e-3  # The repetition rate for switching attempts
+    bias_pulse_width = 40e-6   # This is how long the bias pulse is
+    pspl_trig_time   = 4e-6    # When we trigger the gate pulse
+    integration_time = 20e-6   # How long to measure for
+    ai_delay         = 2e-6    # How long before the measurement begins
+
+    # Instrument resources, NIDAQ called via PyDAQmx
+    arb_cb = Agilent33220A("192.168.5.199") # Channel Bias
+    pspl   = Picosecond10070A("GPIB0::24::INSTR") # Gate Pulse
+    atten  = RFMDAttenuator("calibration/RFSA2113SB_HPD_20160901.csv") # Gate Amplitude control
+    lock   = SR865("USB0::0xB506::0x2000::002638::INSTR") # Gate Amplitude control
+
+    def init_instruments(self):
+        # Channel bias arb
+        self.arb_cb.output          = False
+        self.arb_cb.load_resistance = (self.chan_bias_ref_res+self.matching_ref_res)
+        self.arb_cb.function        = 'Pulse'
+        self.arb_cb.pulse_period    = 0.99*self.trig_interval # Slightly under the trig interval since we are driving with another instrument
+        self.arb_cb.pulse_width     = self.bias_pulse_width
+        self.arb_cb.pulse_edge      = 100e-9 # Going through the DC port of a bias-tee, no need for fast edges
+        self.arb_cb.low_voltage     = 0.0
+        self.arb_cb.high_voltage    = self.channel_bias.value*(self.chan_bias_ref_res+self.matching_ref_res)
+        self.arb_cb.burst_state     = True
+        self.arb_cb.burst_cycles    = 1
+        self.arb_cb.trigger_source  = "External"
+        self.arb_cb.burst_mode      = "Triggered"
+        self.arb_cb.output          = True
+        self.arb_cb.polarity        = 1
+
+        # Setup the NIDAQ
+        DAQmxResetDevice("Dev1")
+        measure_points = int(self.integration_time*self.ai_clock)
+        self.nidaq = CallbackTask(asyncio.get_event_loop(), measure_points, self.attempts, self.voltage,
+                                #  chunk_size=measure_points*(self.attempts>>2),
+                                 min_voltage=self.min_daq_voltage, max_voltage=self.max_daq_voltage, ai_clock=self.ai_clock)
+        self.nidaq.StartTask()
+
+        # Setup DO Triggers, P1:0 triggers AWG, P1:1 triggers PSPL and DAQ analog input
+        self.digital_output = Task()
+        data_p0 = np.zeros(int(self.do_clock*self.trig_interval),dtype=np.uint8)
+        data_p0[0]=1
+
+        data_p1 = np.zeros(int(self.do_clock*self.trig_interval),dtype=np.uint8)
+        data_p1[int(self.do_clock*(self.pspl_trig_time))]=1
+
+        data = np.append(data_p0,data_p1)
+
+        self.digital_output.CreateDOChan("/Dev1/port0/line0:1","",DAQmx_Val_ChanPerLine)
+        self.digital_output.CfgSampClkTiming("",self.do_clock, DAQmx_Val_Rising, DAQmx_Val_FiniteSamps, int(data.size/2)*self.attempts)
+        self.digital_output.WriteDigitalLines(int(self.do_clock*self.trig_interval),0,1,DAQmx_Val_GroupByChannel,data,None,None)
+
+        # Setup the PSPL`
+        self.pspl.amplitude = 7.5*np.power(10, (-self.pspl_base_attenuation)/20.0)
+        self.pspl.trigger_source = "EXT"
+        self.pspl.trigger_level = 0.5
+        self.pspl.output = True
+
+        # Setup PSPL Attenuator Control
+        self.atten.set_supply_method(self.lock.set_ao2)
+        self.atten.set_control_method(self.lock.set_ao3)
+
+        # Setup bias current method
+        def set_bias(value):
+            self.arb_cb.high_voltage = self.channel_bias.value*(self.chan_bias_ref_res+self.matching_ref_res)
+            self.arb_cb.low_voltage  = 0.0
+        self.channel_bias.assign_method(set_bias)
+
+        def set_voltage(voltage, base_atten=self.pspl_base_attenuation):
+            # Calculate the voltage controller attenuator setting
+            amplitude = 7.5*np.power(10, -base_atten/20.0)
+            vc_atten = abs(20.0 * np.log10(abs(voltage)/7.5)) - base_atten - self.circuit_attenuation
+
+            if vc_atten <= self.atten.minimum_atten():
+                base_atten -= 1
+                if base_atten < 0:
+                    logger.error("Voltage controlled attenuation {} under range, PSPL at Max. Decrease circuit attenuation.".format(vc_atten))
+                    raise ValueError("Voltage controlled attenuation {} under range, PSPL at Max. Decrease circuit attenuation.".format(vc_atten))
+                set_voltage(voltage, base_atten=base_atten)
+                return
+
+            if self.atten.maximum_atten() < vc_atten:
+                base_atten += 1
+                if base_atten > 80:
+                    logger.error("Voltage controlled attenuation {} over range, PSPL at Min. Increase circuit attenuation.".format(vc_atten))
+                    raise ValueError("Voltage controlled attenuation {} over range, PSPL at Min. Increase circuit attenuation.".format(vc_atten))
+                set_voltage(voltage, base_atten=base_atten)
+                return
+
+            #print("PSPL Amplitude: {}, Attenuator: {}".format(amplitude,vc_atten))
+            self.atten.set_attenuation(vc_atten)
+            self.pspl.amplitude = self.pulse_polarity*amplitude
+            time.sleep(0.04)
+
+        # Assign Methods
+        #self.channel_bias.assign_method(lambda i: self.arb_cb.set_high_voltage(i*self.chan_bias_ref_res))
+        self.pulse_duration.add_post_push_hook(lambda: time.sleep(0.1))
+        self.pulse_duration.assign_method(self.pspl.set_duration)
+        self.pulse_voltage.assign_method(set_voltage)
+
+
+    def init_streams(self):
+        # Baked in data axes
+        descrip = DataStreamDescriptor()
+        descrip.data_name='voltage'
+        descrip.add_axis(DataAxis("sample", range(int(self.integration_time*self.ai_clock))))
+        descrip.add_axis(DataAxis("attempt", range(self.attempts)))
+        self.voltage.set_descriptor(descrip)
+
+    async def run(self):
+
+        self.digital_output.StartTask()
+        self.digital_output.WaitUntilTaskDone(2*self.attempts*self.trig_interval)
+        self.digital_output.StopTask()
+        await asyncio.sleep(0.05)
+        # print("\t now ", self.nidaq.points_read)
+        logger.debug("Stream has filled {} of {} points".format(self.voltage.points_taken, self.voltage.num_points() ))
+
+    def shutdown_instruments(self):
+        try:
+            # self.analog_input.StopTask()
+            self.nidaq.StopTask()
+            self.nidaq.ClearTask()
+            self.digital_output.StopTask()
+            del self.nidaq
+        except Exception as e:
+            print("Warning: failed to stop task (this normally happens with no consequences when taking multiple samples per trigger).")
+            pass
+        self.arb_cb.output = False
+        self.pspl.output = False
         for name, instr in self._instruments.items():
             instr.disconnect()
 
 
 if __name__ == '__main__':
     exp = nTronSwitchingExperiment()
-    # plot = Plotter(name="Demod!", plot_mode="real", plot_dims=2)
-    # plot_ki = Plotter(name="Ki!", plot_mode="real", plot_dims=2)
-    # plot_avg = Plotter(name="Avg!", plot_mode="real")
-    plot_raw1 = Plotter(name="Raw!", plot_mode="real", plot_dims=1)
-    # plot_raw2 = Plotter(name="Raw!", plot_mode="real", plot_dims=2)
-    # demod = Channelizer(frequency=exp.measure_frequency, decimation_factor=4, bandwidth=20e6)
-
-    # ki = KernelIntegrator(kernel=0, bias=0, simple_kernel=True, box_car_start=1e-7, box_car_stop=3.8e-7, frequency=0.0)
-    # avg = Averager(axis="attempt")
-
-    # samp      = "c1r4"
-    # file_path = f"data\\nTron-Switching\\{samp}\\{samp}-PulseSwitchingShort-{datetime.datetime.today().strftime('%Y-%m-%d')}.h5"
-    # file_path = f"data\\nTron-Switching\\{samp}\\{samp}-PulseSwitching-{datetime.datetime.today().strftime('%Y-%m-%d-%H-%M')}.h5"
-    # wr_int    = WriteToHDF5(file_path, groupname="Integrated", store_tuples=False)
-    # wr_final  = WriteToHDF5(file_path, groupname="Final", store_tuples=False)
-    # wr_raw    = WriteToHDF5(file_path, groupname="Raw", store_tuples=False)
-
-    edges = [(exp.voltage, plot_raw1.sink),
-            #  (exp.voltage, demod.sink),
-            # (exp.voltage, wr_raw.sink),
-            # (exp.voltage, plot_raw1.sink),
-            # (exp.voltage, plot_raw2.sink),
-            # (demod.source, ki.sink),
-            # (ki.source, plot_ki.sink),
-            # (ki.source, avg.sink),
-            # (ki.source, wr_int.sink),
-            # (avg.final_average, plot_avg.sink),
-            # (demod.source, plot.sink),
-            ]
-    exp.set_graph(edges)
-
-    exp.run_sweeps()
