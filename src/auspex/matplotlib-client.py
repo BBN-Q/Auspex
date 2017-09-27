@@ -159,9 +159,9 @@ class Canvas1D(MplCanvas):
 class CanvasManual(MplCanvas):
     def __init__(self, parent=None, width=5, height=4, dpi=100, numplots=1):
         self.fig = Figure(figsize=(width, height), dpi=dpi)
-        self.axis = []
-        for n in numplots:
-            self.axes += [self.fig.add_subplot(100+10*(numplots+1)+n+1)]
+        self.axes = []
+        for n in range(numplots):
+            self.axes += [self.fig.add_subplot(100+10*(numplots)+n+1)]
             self.axes[n].ticklabel_format(style='sci', axis='x', scilimits=(-3,3))
             self.axes[n].ticklabel_format(style='sci', axis='y', scilimits=(-3,3))
 
@@ -189,12 +189,12 @@ class CanvasManual(MplCanvas):
 
     def set_desc(self, desc):
         for k, ax in enumerate(self.axes):
-        if 'x_label' in desc.keys():
-            ax.set_xlabel(desc['x_label'][k])
-        if 'y_label' in desc.keys():
-            ax.set_ylabel(desc['y_label'][k])
+            if 'x_label' in desc.keys():
+                ax.set_xlabel(desc['x_label'][k])
+            if 'y_label' in desc.keys():
+                ax.set_ylabel(desc['y_label'][k])
         for trace in desc['traces']:
-            self.traces[trace['name']], = self.axes[trace['axis_num']].plot([], **trace['matplotlib_kwargs'], label = trace["name"])
+            self.traces[trace['name']] = self.axes[trace['axis_num']].plot([], label=trace['name'], **trace['matplotlib_kwargs'])[0]
         self.fig.tight_layout()
 
 class Canvas2D(MplCanvas):

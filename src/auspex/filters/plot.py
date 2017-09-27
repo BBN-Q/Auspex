@@ -355,18 +355,18 @@ class ManualPlotter(object):
         self.numplots     = numplots
         self.traces = []
 
-    def add_trace(self, name, subplot_num = 0, matplotlib_kwargs={}):
+    def add_trace(self, name, matplotlib_kwargs={}, subplot_num = 0):
         self.traces.append({'name': name, 'axis_num' : subplot_num, 'matplotlib_kwargs': matplotlib_kwargs})
 
-    def add_fit_trace(self, name, subplot_num = 0, custom_mpl_kwargs={}):
+    def add_fit_trace(self, name, custom_mpl_kwargs={}, subplot_num = 0):
         matplotlib_kwargs={'linestyle': '-', 'linewidth': 2}
         matplotlib_kwargs.update(custom_mpl_kwargs)
-        self.add_trace(name, subplot_num=subplot_num, matplotlib_kwargs=matplotlib_kwargs)
+        self.add_trace(name, matplotlib_kwargs=matplotlib_kwargs, subplot_num=subplot_num)
 
-    def add_data_trace(self, name, subplot_num = 0, custom_mpl_kwargs={}):
+    def add_data_trace(self, name, custom_mpl_kwargs={}, subplot_num = 0):
         matplotlib_kwargs={'linestyle': ':', 'marker': '.'}
         matplotlib_kwargs.update(custom_mpl_kwargs)
-        self.add_trace(name, subplot_num=subplot_num, matplotlib_kwargs=matplotlib_kwargs)
+        self.add_trace(name, matplotlib_kwargs=matplotlib_kwargs, subplot_num=subplot_num)
 
     def desc(self):
         d =    {'plot_type': 'manual',
