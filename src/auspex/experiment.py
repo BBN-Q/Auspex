@@ -400,21 +400,10 @@ class Experiment(metaclass=MetaExperiment):
 
     def connect_instruments(self):
         # Connect the instruments to their resources
-<<<<<<< HEAD
-        for instrument in self._instruments.values():
-            logger.info(f"Connecting {instrument} with addr {instrument.resource_name}")
-            instrument.connect()
-
-        # Initialize the instruments and stream
-        self.init_instruments()
-
-        self.instrs_connected = True
-=======
         if not self.instrs_connected:
             for instrument in self._instruments.values():
                 instrument.connect()
             self.instrs_connected = True
->>>>>>> ca159708f0ea9199b5cb9e43872a19cbad58516c
 
     def disconnect_instruments(self):
         # Connect the instruments to their resources
