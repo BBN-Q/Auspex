@@ -17,6 +17,7 @@ import numpy as np
 import os.path
 import time
 import re
+import pandas as pd
 from shutil import copyfile
 
 from .filter import Filter
@@ -34,7 +35,7 @@ class WriteToHDF5(Filter):
     filename = FilenameParameter()
     groupname = Parameter(default='main')
 
-    def __init__(self, filename=None, groupname=None, add_date=False, save_settings=False, compress=True, store_tuples=True, **kwargs):
+    def __init__(self, filename=None, groupname=None, add_date=False, save_settings=False, compress=True, store_tuples=True, exp_log=True, **kwargs):
         super(WriteToHDF5, self).__init__(**kwargs)
         self.compress = compress
         if filename:
@@ -50,6 +51,7 @@ class WriteToHDF5(Filter):
         self.sink.max_input_streams = 100
         self.add_date = add_date
         self.save_settings = save_settings
+        self.exp_log = exp_log
         self.quince_parameters = [self.filename, self.groupname]
 
     def final_init(self):
@@ -105,7 +107,20 @@ class WriteToHDF5(Filter):
         # Copy current settings to a folder with the file name
         if self.save_settings:
             self.save_json()
+        if self.exp_log:
+            self.write_to_log()
         return h5py.File(self.filename.value, 'w', libver='latest')
+
+    def write_to_log(self):
+        """ Record the experiment in a log file """
+        logfile = os.path.join(config.LogDir, "experiment_log.tsv")
+        if os.path.isfile(logfile):
+            lf = pd.read_csv(logfile, sep="\t")
+        else:
+            logger.info("Experiment log file created.")
+            lf = pd.DataFrame(columns = ["Filename", "Date", "Time"])
+        lf = lf.append(pd.DataFrame([[self.filename.value, time.strftime("%y%m%d"), time.strftime("%H:%M:%S")]],columns=["Filename", "Date", "Time"]),ignore_index=True)
+        lf.to_csv(logfile, sep = "\t", index = False)
 
     def save_json(self):
         """ Save a copy of current experiment settings """
@@ -349,7 +364,7 @@ class WriteToHDF5(Filter):
                 self.finished_processing = True
 
 class DataBuffer(Filter):
-    """Writes data to file."""
+    """Writes data to IO."""
 
     sink = InputConnector()
 

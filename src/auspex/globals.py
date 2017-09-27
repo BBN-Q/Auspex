@@ -11,3 +11,10 @@ single_plotter_mode = False
 # This holds a reference to the most
 # recent plotter.
 last_plotter_process = None
+
+# Config directory
+config_file       = None
+AWGDir            = None
+ConfigurationFile = None
+KernelDir         = None
+LogDir            = None

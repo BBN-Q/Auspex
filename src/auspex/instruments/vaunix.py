@@ -93,6 +93,12 @@ class Labbrick(Instrument, metaclass=MakeSettersGetters):
         return self._lib.fnLMS_GetFrequency(self.device_id) * 10 # Convert from tens of Hz to Hz
     @frequency.setter
     def frequency(self, value):
+        if value < self.min_freq:
+            value = self.min_freq
+            logger.warning('Lab Brick frequency out of range. Set to min = {} GHz'.format(value/1e9))
+        elif value > self.max_freq:
+            value = self.max_freq
+            logger.warning('Lab Brick frequency out of range. Set to max = {} GHz'.format(value/1e9))
         self._lib.fnLMS_SetFrequency(self.device_id, int(value * 0.1)) # Convert to tens of Hz from Hz
 
     @property
@@ -103,8 +109,8 @@ class Labbrick(Instrument, metaclass=MakeSettersGetters):
     def power(self, value):
         if value > self.max_power:
             value = self.max_power
-            logger.warning('Lab Brick power out of range')
+            logger.warning('Lab Brick power out of range. Set to max = {} dBm'.format(value))
         elif value < self.min_power:
             value = self.min_power
-            logger.warning('Lab Brick power out of range')
+            logger.warning('Lab Brick power out of range. Set to min = {} dBm'.format(value))
         self._lib.fnLMS_SetPowerLevel(self.device_id, int(value * 4)) # Convert to 0.25 dB
