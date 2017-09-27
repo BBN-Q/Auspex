@@ -28,8 +28,7 @@ from auspex.instruments.instrument import Instrument
 from auspex.parameter import ParameterGroup, FloatParameter, IntParameter, Parameter
 from auspex.sweep import Sweeper
 from auspex.stream import DataStream, DataAxis, SweepAxis, DataStreamDescriptor, InputConnector, OutputConnector
-from auspex.filters.plot import Plotter, XYPlotter, MeshPlotter, ManualPlotter
-from auspex.filters.io import WriteToHDF5, DataBuffer
+from auspex.filters import Plotter, XYPlotter, MeshPlotter, ManualPlotter, WriteToHDF5, DataBuffer, Filter
 from auspex.log import logger
 import auspex.globals
 
@@ -193,6 +192,8 @@ class Experiment(metaclass=MetaExperiment):
         # we might push additional plots after run_sweeps is complete.
         self.leave_plot_server_open = False
 
+        self.keep_instruments_connected = False
+
         # Also keep references to all of the plot filters
         self.plotters = [] # Standard pipeline plotters using streams
         self.extra_plotters = [] # Plotters using streams, but not the pipeline
@@ -224,7 +225,7 @@ class Experiment(metaclass=MetaExperiment):
 
         # Some instruments don't clean up well after themselves, reconstruct them on a
         # per instance basis. These instruments contain a wide variety of complex behaviors
-        # and rely on other classes and data structures, so we avoid copying them and 
+        # and rely on other classes and data structures, so we avoid copying them and
         # run through the constructor instead.
         self._instruments_instance = {}
         for n in self._instruments.keys():
@@ -375,20 +376,34 @@ class Experiment(metaclass=MetaExperiment):
             if self.progressbar is not None:
                 self.progressbar.update()
 
+            # Finish up, checking to see whether we've received all of our data
             if self.sweeper.done():
-                logger.debug("Sweeper has finished.")
+                sleep_time = 0
+                while not self.filters_finished():
+                    await asyncio.sleep(1)
+                    sleep_time += 1
+                    if sleep_time == 5:
+                        logger.info("Still waiting for filters to finish. Did the experiment produce the expected amount of data?")
+                        for n in self.nodes:
+                            if isinstance(n, Filter):
+                                logger.info("  {} done: {}".format(n, n.finished_processing))
+                        print({n: n.finished_processing for n in self.nodes if isinstance(n, Filter)})
+
+                    if sleep_time >= 20:
+                        logger.warning("Filters not stopped after 20 seconds, bailing.")
+                        break
                 await self.declare_done()
                 break
 
+    def filters_finished(self):
+        return all([n.finished_processing for n in self.nodes if isinstance(n, Filter)])
+
     def connect_instruments(self):
         # Connect the instruments to their resources
-        for instrument in self._instruments.values():
-            instrument.connect()
-
-        # Initialize the instruments and stream
-        self.init_instruments()
-
-        self.instrs_connected = True
+        if not self.instrs_connected:
+            for instrument in self._instruments.values():
+                instrument.connect()
+            self.instrs_connected = True
 
     def disconnect_instruments(self):
         # Connect the instruments to their resources
@@ -405,9 +420,14 @@ class Experiment(metaclass=MetaExperiment):
         if self.progressbar is not None:
             self.progressbar.reset()
 
+        #Make sure we have axes.
+        if not any([oc.descriptor.axes for oc in self.output_connectors.values()]):
+            logger.warning("There do not appear to be any axes defined for this experiment!")
+
         #connect all instruments
-        if not self.instrs_connected:
-            self.connect_instruments()
+        self.connect_instruments()
+        #initialize instruments
+        self.init_instruments()
 
         # Go find any writers
         self.writers = [n for n in self.nodes if isinstance(n, WriteToHDF5)]
@@ -462,7 +482,7 @@ class Experiment(metaclass=MetaExperiment):
                 plotter.plot_server = self.plot_server
             time.sleep(0.5)
             # Kill a previous plotter if desired.
-            if auspex.globals.single_plotter_mode and auspex.globals.last_plotter_process:
+            if auspex.globals.single_plotter_mode and auspex.globals.last_plotter_process and not self.keep_instruments_connected:
                 pro = auspex.globals.last_plotter_process
                 if hasattr(os, 'setsid'): # Doesn't exist on windows
                     try:
@@ -477,12 +497,13 @@ class Experiment(metaclass=MetaExperiment):
                         logger.debug("No plotter to kill.")
 
             client_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),"matplotlib-client.py")
-            if hasattr(os, 'setsid'):
-                auspex.globals.last_plotter_process = subprocess.Popen(['python', client_path, 'localhost'],
-                                                                    env=os.environ.copy(), preexec_fn=os.setsid)
-            else:
-                auspex.globals.last_plotter_process = subprocess.Popen(['python', client_path, 'localhost'],
-                                                                    env=os.environ.copy())
+            if not self.keep_instruments_connected or not auspex.globals.last_plotter_process: #keep_instruments_connected is a flag for keeping the plot process running
+                if hasattr(os, 'setsid'):
+                    auspex.globals.last_plotter_process = subprocess.Popen(['python', client_path, 'localhost'],
+                                                                        env=os.environ.copy(), preexec_fn=os.setsid)
+                else:
+                    auspex.globals.last_plotter_process = subprocess.Popen(['python', client_path, 'localhost'],
+                                                                        env=os.environ.copy())
             time.sleep(1)
 
         def catch_ctrl_c(signum, frame):
@@ -516,7 +537,6 @@ class Experiment(metaclass=MetaExperiment):
 
     def shutdown(self):
         logger.debug("Shutting Down!")
-
         for f in self.files:
             try:
                 logger.debug("Closing %s", f)
@@ -532,7 +552,9 @@ class Experiment(metaclass=MetaExperiment):
             logger.warning("Could not stop plot server gracefully...")
 
         self.shutdown_instruments()
-        self.disconnect_instruments()
+
+        if not self.keep_instruments_connected:
+            self.disconnect_instruments()
 
     def add_axis(self, axis):
         for oc in self.output_connectors.values():
@@ -550,6 +572,23 @@ class Experiment(metaclass=MetaExperiment):
         else:
             parameters.value = sweep_list[0]
         return ax
+
+    def clear_sweeps(self):
+        """Delete all sweeps present in this experiment."""
+        logger.debug("Removing all axes from experiment.")
+        self.sweeper.axes = []
+        for oc in self.output_connectors.values():
+            oc.descriptor.axes = []
+
+    def pop_sweep(self, name):
+        """Remove sweep that has a given name."""
+        names = [_.name for _ in self.sweeper.axes]
+        if name not in names:
+            raise KeyError("Could not remove sweep named {}; does not appear to be present.".format(name))
+        self.sweeper.axes = [_ for _ in self.sweeper.axes if _.name != name]
+        for oc in self.output_connectors.values():
+            oc.descriptor.axes = [_ for _ in oc.descriptor.axes if _.name != name]
+        logger.debug("Removed sweep {} from experiment".format(name))
 
     def add_direct_plotter(self, plotter):
         """A plotter that lives outside the filter pipeline, intended for advanced

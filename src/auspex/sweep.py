@@ -46,20 +46,20 @@ class Sweeper(object):
             # Need to update parameters from outer --> inner axis
             for j in range(i,-1,-1):
                 await self.axes[j].update()
-        
+
         # At this point all of the updates should have happened
-        # return the current coordinates of the sweep. Return the 
+        # return the current coordinates of the sweep. Return the
         # reversed list since we store "innermost" axes last.
         values = []
         for a in self.axes[::-1]:
             if a.metadata is not None:
                 if type(a.value) in [np.ndarray, list]:
-                    values.append(tuple(list(a.value) + [a.metadata_value])) 
+                    values.append(tuple(list(a.value) + [a.metadata_value]))
                 else:
                     values.append((a.value, a.metadata_value))
             else:
                 if type(a.value) in [np.ndarray, list]:
-                    values.append(tuple(a.value)) 
+                    values.append(tuple(a.value))
                 else:
                     values.append((a.value,))
         return values

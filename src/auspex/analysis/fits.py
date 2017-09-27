@@ -1,9 +1,93 @@
 from scipy.optimize import curve_fit
 import numpy as np
 from numpy.fft import fft
+from scipy.linalg import svd, eig, inv, pinv
 from enum import Enum
 
-import matplotlib.pyplot as plt
+def hilbert(signal):
+    # construct the Hilbert transform of the signal via the FFT
+    # in essense, we just want to set negative frequency components to zero
+    spectrum = np.fft.fft(signal)
+    n = len(signal)
+    midpoint = int(np.ceil(n/2))
+
+    kernel = np.zeros(n)
+    kernel[0] = 1
+    if n%2 == 0:
+        kernel[midpoint] = 1
+    kernel[1:midpoint] = 2
+    return np.fft.ifft(kernel * spectrum)
+
+def KT_estimation(data, times, order):
+    # Find the hilbert transform
+    analytic_signal = hilbert(data)
+    time_step = times[1]-times[0]
+
+    # Create the Hankel matrix
+    N = len(analytic_signal)
+    K = order
+    M = (N//2)-1
+    L = N-M+1
+    H = np.zeros((L, M), dtype=np.complex128)
+    for ct in range(M):
+        H[:,ct] = analytic_signal[ct:ct+L]
+
+    #Try and seperate the signal and noise subspace via the svd
+    U,S,V = svd(H, False) # V is not transposed/conjugated in numpy svd
+
+    #Reconstruct the approximate Hankel matrix with the first K singular values
+    #Here we can iterate and modify the singular values
+    S_k = np.diag(S[:K])
+
+    #Estimate the variance from the rest of the singular values
+    varEst = (1/((M-K)*L)) * np.sum(S[K:]**2)
+    Sfilt = np.matmul(S_k**2 - L*varEst*np.eye(K), inv(S_k))
+    Hbar = np.matmul(np.matmul(U[:,:K], Sfilt), V[:K,:])
+
+    #Reconstruct the data from the averaged anti-diagonals
+    cleanedData = np.zeros(N, dtype=np.complex128)
+    tmpMat = np.flip(Hbar,1)
+    idx = -L+1
+    for ct in range(N-1,-1,-1):
+        cleanedData[ct] = np.mean(np.diag(tmpMat,idx))
+        idx += 1
+
+    #Create a cleaned Hankel matrix
+    cleanedH = np.empty_like(H)
+    cleanedAnalyticSig = hilbert(cleanedData)
+    for ct in range(M):
+        cleanedH[:,ct] = cleanedAnalyticSig[ct:ct+L]
+
+    #Compute Q with total least squares
+    #U_K1*Q = U_K2
+    U = svd(cleanedH, False)[0]
+    U_K = U[:,0:K]
+    tmpMat = np.hstack((U_K[:-1,:],U_K[1:,:]))
+    V = svd(tmpMat, False)[2].T.conj()
+    n = np.size(U_K,1)
+    V_AB = V[:n,n:]
+    V_BB = V[n:,n:]
+    Q = np.linalg.lstsq(V_BB.conj().T, -V_AB.conj().T)[0].conj().T
+
+    #Now poles are eigenvalues of Q
+    poles, _ = eig(Q)
+
+    #Take the log and return the decay constant and frequency
+    freqs = np.zeros(K)
+    Tcs   = np.zeros(K)
+    for ct in range(K):
+        sk = np.log(poles[ct])
+        freqs[ct] = np.imag(sk)/(2*np.pi*time_step)
+        Tcs[ct] = -1.0/np.real(sk)*time_step
+
+    #Refit the data to get the amplitude
+    A = np.zeros((N, K), dtype=np.complex128)
+    for ct in range(K):
+        A[:,ct] = np.power(poles[ct], range(0,N))
+
+    amps = np.linalg.lstsq(A, cleanedData)[0]
+
+    return freqs, Tcs, amps
 
 def fit_rabi(xdata, ydata):
     """Analyze Rabi amplitude data to find pi-pulse amplitude and phase offset.
@@ -17,7 +101,7 @@ def fit_rabi(xdata, ydata):
 
     def rabi_model(x, *p):
         return p[0] - p[1]*np.cos(2*np.pi*p[2]*(x - p[3]))
-        
+
     #seed Rabi frequency from largest FFT component
     N = len(ydata)
     yfft = fft(ydata)
@@ -35,14 +119,16 @@ def fit_rabi(xdata, ydata):
     return pi_amp, offset, rabi_model(xdata, *popt)
 
 def fit_ramsey(xdata, ydata, two_freqs = False):
-    #initial estimate
-    #TODO: KT estimate
     if two_freqs:
-        p0 = [1e5, 1e5, 0.5, 0.5, 10e-6, 10e-6, 0, 0, 0]
+        # Initial KT estimation
+        freqs, Tcs, amps = KT_estimation(ydata, xdata, 2)
+        p0 = [*freqs, *amps.real, *Tcs, 0, 0, 0]
         popt, pcov = curve_fit(ramsey_2f, xdata, ydata, p0 = p0)
         fopt = [popt[0], popt[1]]
     else:
-        p0 = [1e5, 1, 10e-6, 0, 0]
+        # Initial KT estimation
+        freqs, Tcs, amps = KT_estimation(ydata, xdata, 1)
+        p0 = [freqs[0], amps.real[0], Tcs[0], 0, 0]
         popt, pcov = curve_fit(ramsey_1f, xdata, ydata, p0 = p0)
         fopt = [popt[0]]
     perr = np.sqrt(np.diag(pcov))
@@ -92,6 +178,25 @@ def sinf(x, f, A, phi, y0):
 
 def quadf(x, A, x0, b):
     return A*(x-x0)**2+b
+def fit_photon_number(xdata, ydata, params):
+    ''' Fit number of measurement photons before a Ramsey. See McClure et al., Phys. Rev. App. 2016
+    input params:
+	1 - cavity decay rate kappa (MHz)
+	2 - detuning Delta (MHz)
+	3 - dispersive shift 2Chi (MHz)
+	4 - Ramsey decay time T2* (us)
+	5 - exp(-t_meas/T1) (us), only if starting from |1> (to include relaxation during the 1st msm't)
+	6 - initial qubit state (0/1)
+    '''
+    params[:2]*=2*pi # convert to angular frequencies
+    def model_0(t, p):
+        return (-np.imag(np.exp(-(1/params[3]+params[1]*1j)*t + (p[0]-p[1]*params[2]*(1-np.exp(-((params[0] + params[2]*1j)*t)))/(params[0]+params[2]*1j))*1j)))
+    if params[5] == 1:
+        def model(t, p):
+            return  params[4]*model_0(t, p) + (1-params[4])*model_0(t,[pn+k==0*np.pi for (k,pn) in enumerate(p)]) if params[5] == 1  else model_0(t, p)
+    popt, pcov = curve_fit(model, xdata, ydata, p0 = [0, 1])
+    perr = np.sqrt(np.diag(pcov))
+    return popt[1], perr[1]
 
 class CR_cal_type(Enum):
     LENGTH = 1
