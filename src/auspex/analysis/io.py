@@ -20,7 +20,9 @@ def load_from_HDF5(filename_or_fileobject, reshape=True, return_structured_array
     else:
         f = h5py.File(filename_or_fileobject, 'r')
     for groupname in f:
-        # Reconstruct the descrciptor
+        if groupname == "header":
+            break # for now, ignore the header
+        # Reconstruct the descriptor
         descriptor = DataStreamDescriptor()
         g = f[groupname]
         axis_refs = g['descriptor']
