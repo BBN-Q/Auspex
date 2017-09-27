@@ -76,6 +76,8 @@ class Agilent33220A(SCPIInstrument):
     pulse_edge = FloatCommand(scpi_string="FUNCtion:PULSe:TRANsition")
     pulse_dcyc = IntCommand(scpi_string="FUNCtion:PULSe:DCYCle")
 
+    ramp_symmetry = FloatCommand(scpi_string="FUNCtion:RAMP:SYMMetry")
+
     def trigger(self):
         self.interface.write("*TRG")
 
