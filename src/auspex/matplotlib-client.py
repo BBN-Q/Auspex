@@ -178,12 +178,13 @@ class CanvasManual(MplCanvas):
         pass
 
     def update_trace(self, trace_name, x_data, y_data):
-        self.traces[trace_name].set_xdata(x_data)
-        self.traces[trace_name].set_ydata(y_data)
-        self.axis.relim()
-        self.axis.autoscale_view()
+        self.traces[trace_name]['plot'].set_xdata(x_data)
+        self.traces[trace_name]['plot'].set_ydata(y_data)
+        curr_axis = self.axes[self.traces[trace_name]['axis_num']]
+        curr_axis.relim()
+        curr_axis.autoscale_view()
         if len(self.traces)>1:
-            self.axis.legend()
+            curr_axis.legend()
         self.draw()
         self.flush_events()
 
@@ -193,8 +194,8 @@ class CanvasManual(MplCanvas):
                 ax.set_xlabel(desc['x_label'][k])
             if 'y_label' in desc.keys():
                 ax.set_ylabel(desc['y_label'][k])
-        for trace in desc['traces']:
-            self.traces[trace['name']] = self.axes[trace['axis_num']].plot([], label=trace['name'], **trace['matplotlib_kwargs'])[0]
+        for trace in desc['traces']:  # relink traces and axes
+            self.traces[trace['name']] = {'plot': self.axes[trace['axis_num']].plot([], label=trace['name'], **trace['matplotlib_kwargs'])[0], 'axis_num': trace['axis_num']}
         self.fig.tight_layout()
 
 class Canvas2D(MplCanvas):

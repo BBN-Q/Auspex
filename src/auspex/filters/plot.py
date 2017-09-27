@@ -349,8 +349,8 @@ class XYPlotter(Filter):
 class ManualPlotter(object):
     """Establish a figure, then give the user complete control over plot creation and data."""
     def __init__(self,  name="", x_label=['X'], y_label=["y"], numplots = 1):
-        self.x_label      = x_label
-        self.y_label      = y_label
+        self.x_label      = x_label if type(x_label) == list else [x_label]
+        self.y_label      = y_label if type(y_label) == list else [y_label]
         self.name         = name
         self.numplots     = numplots
         self.traces = []
