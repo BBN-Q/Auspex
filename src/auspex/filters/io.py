@@ -22,7 +22,7 @@ from shutil import copyfile
 from ruamel.yaml import YAML
 
 from .filter import Filter
-from auspex.parameter import Parameter, FilenameParameter
+from auspex.parameter import Parameter, FilenameParameter, BoolParameter
 from auspex.stream import InputConnector, OutputConnector
 from auspex.log import logger
 import auspex.config as config
@@ -35,8 +35,10 @@ class WriteToHDF5(Filter):
     sink = InputConnector()
     filename = FilenameParameter()
     groupname = Parameter(default='main')
+    add_date = BoolParameter(default = False)
+    save_settings = BoolParameter(default = True)
 
-    def __init__(self, filename=None, groupname=None, add_date=False, save_settings=False, compress=True, store_tuples=True, exp_log=True, **kwargs):
+    def __init__(self, filename=None, groupname=None, add_date=False, save_settings=True, compress=True, store_tuples=True, exp_log=True, **kwargs):
         super(WriteToHDF5, self).__init__(**kwargs)
         self.compress = compress
         if filename:
@@ -50,10 +52,10 @@ class WriteToHDF5(Filter):
         self.create_group = True
         self.up_to_date = False
         self.sink.max_input_streams = 100
-        self.add_date = add_date
-        self.save_settings = save_settings
+        self.add_date.value = add_date
+        self.save_settings.value = save_settings
         self.exp_log = exp_log
-        self.quince_parameters = [self.filename, self.groupname]
+        self.quince_parameters = [self.filename, self.groupname, self.add_date, self.save_settings]
 
     def final_init(self):
         if not self.filename.value:
