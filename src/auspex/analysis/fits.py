@@ -166,7 +166,7 @@ def fit_drag(data, DRAG_vec, pulse_vec):
         p0 = [1, xopt_vec[ct-1], 0]
         #recenter for next fit
         closest_ind =np.argmin(abs(DRAG_vec - xopt_vec[ct-1]))
-        fit_range = np.round(0.5*num_DRAG*pulse_vec[0]/pulse_vec[ct])
+        fit_range = int(np.round(0.5*num_DRAG*pulse_vec[0]/pulse_vec[ct]))
         curr_DRAG_vec = DRAG_vec[max(0, closest_ind - fit_range) : min(num_DRAG-1, closest_ind + fit_range)]
         reduced_data_n = data_n[max(0, closest_ind - fit_range) : min(num_DRAG-1, closest_ind + fit_range)]
         #quadratic fit
@@ -174,7 +174,7 @@ def fit_drag(data, DRAG_vec, pulse_vec):
         perr_vec[ct] = np.sqrt(np.diag(pcov))[0]
         x_fine = np.linspace(min(curr_DRAG_vec), max(curr_DRAG_vec), 1001)
         xopt_vec[ct] = x_fine[np.argmin(quadf(x_fine, *popt))]
-        popt_mat[1:3,ct] = popt
+        popt_mat[0:3,ct] = popt
     return xopt_vec, perr_vec, popt_mat
 
 def sinf(x, f, A, phi, y0):

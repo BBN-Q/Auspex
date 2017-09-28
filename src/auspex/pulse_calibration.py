@@ -431,7 +431,7 @@ class DRAGCalibration(PulseCalibration):
     def init_plot(self):
         plot = ManualPlotter("DRAG Cal", x_label=['DRAG parameter', 'Number of pulses'], y_label=['Amplitude (Arb. Units)', 'Fit DRAG parameter'], numplots = 2)
         for n in range(len(self.num_pulses)):
-            plot.add_data_trace('Data_{}'.format(n), subplot_num = 0) #should this have a separate trace / pulse number?
+            plot.add_data_trace('Data_{}'.format(n), subplot_num = 0) #TODO: color pairs
             plot.add_fit_trace('Fit_{}'.format(n), subplot_num = 0)
         plot.add_data_trace('Data_opt', subplot_num = 1)
 		#result_plot.add_fit_trace("Fit_opt", subplot_num = 1) # not useful
@@ -453,9 +453,9 @@ class DRAGCalibration(PulseCalibration):
 
             print("DRAG", opt_drag)
             #plot
-            norm_data = reshape(data, len(self.deltas), len(self.num_pulses))
-            for n in range(self.num_pulses):
-                self.plot['Data_{}'.format(n)] = norm_data[:, n]
+            norm_data = data.reshape(len(self.deltas), len(self.num_pulses))
+            for n in range(len(self.num_pulses)):
+                self.plot['Data_{}'.format(n)] = (self.deltas, norm_data[:, n])
                 #TODO: self.plot['Fit_{}'.format(n)] = (finer_deltas, fit_drag(finer_deltas, popt_mat))
             self.plot["Data_opt"] = (self.num_pulses, opt_drag) #TODO: add error bars
 
