@@ -75,7 +75,7 @@ class WriteToHDF5(Filter):
 
         dirname = os.path.dirname(os.path.abspath(filename))
 
-        if self.add_date:
+        if self.add_date.value:
             date     = time.strftime("%y%m%d")
             dirname  = os.path.join(dirname, date)
             basename = os.path.join(dirname, os.path.basename(basename))
