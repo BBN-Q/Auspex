@@ -416,46 +416,48 @@ class CRAmpCalibration_PhEst(PhaseEstimation):
 
 class DRAGCalibration(PulseCalibration):
     def __init__(self, qubit_name, deltas = np.linspace(-1,1,11), num_pulses = np.arange(16, 64, 4)):
-        super(DRAGCalibration, self).__init__(qubit_name)
         self.filename = 'DRAG/DRAG'
         self.deltas = deltas
         self.num_pulses = num_pulses
+        super(DRAGCalibration, self).__init__(qubit_name)
 
     def sequence(self):
         seqs = []
-        for n in self.num_pulses:
-            seqs += [[X90(q, dragScaling = d), X90m(q, dragScaling = d)]*n + [X90(q, dragScaling = d), MEAS(q)] for d in self.deltas]
-        seqs += create_cal_seqs((q,),2)
+        for n in range(len(self.num_pulses)):
+            seqs += [[X90(self.qubit, dragScaling = d), X90m(self.qubit, dragScaling = d)]*n + [X90(self.qubit, dragScaling = d), MEAS(self.qubit)] for d in self.deltas]
+        seqs += create_cal_seqs((self.qubit,),2)
         return seqs
 
-    def init_plots(self):
-        plot = ManualPlotter("DRAG Cal", x_label=['DRAG parameter', 'Number of pulses'], y_label=['Amplitude (Arb. Units)', 'Fit DRAG parameter'], subplots = 2)
-        for n in range(self.num_pulses):
+    def init_plot(self):
+        plot = ManualPlotter("DRAG Cal", x_label=['DRAG parameter', 'Number of pulses'], y_label=['Amplitude (Arb. Units)', 'Fit DRAG parameter'], numplots = 2)
+        for n in range(len(self.num_pulses)):
             plot.add_data_trace('Data_{}'.format(n), subplot_num = 0) #should this have a separate trace / pulse number?
             plot.add_fit_trace('Fit_{}'.format(n), subplot_num = 0)
-		plot.add_data_trace('Data_opt', subplot_num = 1)
+        plot.add_data_trace('Data_opt', subplot_num = 1)
 		#result_plot.add_fit_trace("Fit_opt", subplot_num = 1) # not useful
         return plot
 
     def calibrate(self):
 
         # run twice for different DRAG parameter ranges
-        for k = range(2):
+        for k in range(2):
         #generate sequence
             self.set()
             #first run
             data, _ = self.run()
-            #fit and analyze
-            opt_drag, error_drag, popt_mat = fit_drag(self.deltas, self.num_pulses, data)
+            finer_deltas = np.linspace(np.min(self.deltas), np.max(self.deltas), 4*len(self.deltas))
+            #normalize data with cals
+            data = 2*(data-np.mean(data[-4:-2]))/(np.mean(data[-4:-2])-np.mean(data[-2:])) + 1
+            data = data[:-4]
+            opt_drag, error_drag, popt_mat = fit_drag(data, self.deltas, self.num_pulses)
 
             print("DRAG", opt_drag)
             #plot
             norm_data = reshape(data, len(self.deltas), len(self.num_pulses))
             for n in range(self.num_pulses):
                 self.plot['Data_{}'.format(n)] = norm_data[:, n]
-                #TODO: self.plot['Fit_{}'.format(n)] =
+                #TODO: self.plot['Fit_{}'.format(n)] = (finer_deltas, fit_drag(finer_deltas, popt_mat))
             self.plot["Data_opt"] = (self.num_pulses, opt_drag) #TODO: add error bars
-            #self.plot["Fit_opt"] = # what's this for?
 
             if k>0:
                 #generate sequence with new pulses and drag parameters
