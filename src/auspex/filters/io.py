@@ -176,7 +176,7 @@ class WriteToHDF5(Filter):
         self.data_group = self.group.create_group("data")
 
         # If desired, push experimental metadata into the h5 file
-        if self.save_settings:
+        if self.save_settings and 'header' not in self.file.keys(): # only save header once for multiple writers
             self.save_yaml_h5()
 
         # Create datasets for each stream
