@@ -451,24 +451,23 @@ class DRAGCalibration(PulseCalibration):
             data = 2*(data-np.mean(data[-4:-2]))/(np.mean(data[-4:-2])-np.mean(data[-2:])) + 1
             data = data[:-4]
             opt_drag, error_drag, popt_mat = fit_drag(data, self.deltas, self.num_pulses)
-            print("DRAG", opt_drag)
 
             #plot
             norm_data = data.reshape(len(self.deltas), len(self.num_pulses))
             for n in range(len(self.num_pulses)):
                 self.plot['Data_{}'.format(n)] = (self.deltas, norm_data[:, n])
                 finer_deltas = np.linspace(np.min(self.deltas), np.max(self.deltas), 4*len(self.deltas))
-                self.plot['Fit_{}'.format(n)] = (finer_deltas, quadf(finer_deltas, *popt_mat[:, n])) if n==0 else (finer_deltas, sinf(finer_deltas, *popt_mat[:3, n]))
+                self.plot['Fit_{}'.format(n)] = (finer_deltas, sinf(finer_deltas, *popt_mat[:, n])) if n==0 else (finer_deltas, quadf(finer_deltas, *popt_mat[:3, n]))
             self.plot["Data_opt"] = (self.num_pulses, opt_drag) #TODO: add error bars
 
             if k>0:
                 #generate sequence with new pulses and drag parameters
                 new_drag_step = 0.25*(max(self.deltas) - min(self.deltas))
-                self.deltas = np.range(opt_drag[-1] - new_drag_step, opt_drag[-1] + new_drag_step, len(self.deltas))
+                self.deltas = np.arange(opt_drag[-1] - new_drag_step, opt_drag[-1] + new_drag_step, len(self.deltas))
                 new_pulse_step = 2*(max(self.num_pulses)-min(self.num_pulses))/len(self.num_pulses)
                 self.num_pulses = np.arange(max(self.num_pulses) - new_pulse_step, max(self.num_pulses) + new_pulse_step*(len(self.num_pulses)-1), new_pulse_step)
 
-        self.settings['qubits'][self.qubit_names[0]]['pulseParams']['dragScaling'] = opt_drag[-1]
+        self.settings['qubits'][self.qubit.label]['control']['pulse_params']['drag_scaling'] = round(float(opt_drag[-1],5))
         self.update_settings()
 
         return opt_drag[-1]
@@ -554,9 +553,6 @@ class CLEARCalibration(MeasCalibration):
                 self.eps2*=opt_scaling
 
         #update library (default amp1, amp2 for MEAS)
-        chan_settings['channelDict'][self.meas_name]['pulseParams']['amp1'] = self.eps1
-        chan_settings['channelDict'][self.meas_name]['pulseParams']['amp2'] = self.eps2
-        chan_settings['channelDict'][self.meas_name]['pulseParams']['step_length'] = self.tau
         self.settings['qubits'][self.qubit.label]['measure']['pulse_params']['amp1'] = round(float(self.eps1), 5)
         self.settings['qubits'][self.qubit.label]['measure']['pulse_params']['amp2'] = round(float(self.eps2), 5)
         self.settings['qubits'][self.qubit.label]['measure']['pulse_params']['step_length'] = round(float(self.tau), 5)
