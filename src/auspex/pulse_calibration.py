@@ -25,6 +25,8 @@ from auspex.parameter import FloatParameter
 from auspex.filters.plot import ManualPlotter
 from auspex.analysis.fits import *
 from auspex.analysis.helpers import normalize_data
+from matplotlib import cm
+import numpy as np
 
 def calibrate(calibrations, update_settings=True):
     """Takes in a qubit (as a string) and list of calibrations (as instantiated classes).
@@ -430,15 +432,14 @@ class DRAGCalibration(PulseCalibration):
 
     def init_plot(self):
         plot = ManualPlotter("DRAG Cal", x_label=['DRAG parameter', 'Number of pulses'], y_label=['Amplitude (Arb. Units)', 'Fit DRAG parameter'], numplots = 2)
+        cmap = cm.viridis(np.linspace(0, 1, len(self.num_pulses)))
         for n in range(len(self.num_pulses)):
-            plot.add_data_trace('Data_{}'.format(n), subplot_num = 0) #TODO: color pairs
-            plot.add_fit_trace('Fit_{}'.format(n), subplot_num = 0)
-        plot.add_data_trace('Data_opt', subplot_num = 1)
-		#result_plot.add_fit_trace("Fit_opt", subplot_num = 1) # not useful
+            plot.add_data_trace('Data_{}'.format(n), {'color': list(cmap[n])})
+            plot.add_fit_trace('Fit_{}'.format(n), {'color': list(cmap[n])})
+        plot.add_data_trace('Data_opt', subplot_num = 1) #TODO: error bars
         return plot
 
     def calibrate(self):
-
         # run twice for different DRAG parameter ranges
         for k in range(2):
         #generate sequence
@@ -450,13 +451,14 @@ class DRAGCalibration(PulseCalibration):
             data = 2*(data-np.mean(data[-4:-2]))/(np.mean(data[-4:-2])-np.mean(data[-2:])) + 1
             data = data[:-4]
             opt_drag, error_drag, popt_mat = fit_drag(data, self.deltas, self.num_pulses)
-
             print("DRAG", opt_drag)
+
             #plot
             norm_data = data.reshape(len(self.deltas), len(self.num_pulses))
             for n in range(len(self.num_pulses)):
                 self.plot['Data_{}'.format(n)] = (self.deltas, norm_data[:, n])
-                #TODO: self.plot['Fit_{}'.format(n)] = (finer_deltas, fit_drag(finer_deltas, popt_mat))
+                finer_deltas = np.linspace(np.min(self.deltas), np.max(self.deltas), 4*len(self.deltas))
+                self.plot['Fit_{}'.format(n)] = (finer_deltas, quadf(finer_deltas, *popt_mat[:, n])) if n==0 else (finer_deltas, sinf(finer_deltas, *popt_mat[:3, n]))
             self.plot["Data_opt"] = (self.num_pulses, opt_drag) #TODO: add error bars
 
             if k>0:

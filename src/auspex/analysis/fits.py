@@ -174,7 +174,7 @@ def fit_drag(data, DRAG_vec, pulse_vec):
         perr_vec[ct] = np.sqrt(np.diag(pcov))[0]
         x_fine = np.linspace(min(curr_DRAG_vec), max(curr_DRAG_vec), 1001)
         xopt_vec[ct] = x_fine[np.argmin(quadf(x_fine, *popt))]
-        popt_mat[0:3,ct] = popt
+        popt_mat[:3,ct] = popt
     return xopt_vec, perr_vec, popt_mat
 
 def sinf(x, f, A, phi, y0):
