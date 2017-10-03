@@ -157,11 +157,14 @@ class Canvas1D(MplCanvas):
         self.fig.tight_layout()
 
 class CanvasManual(MplCanvas):
-    def __init__(self, parent=None, width=5, height=4, dpi=100):
+    def __init__(self, parent=None, width=5, height=4, dpi=100, numplots=1):
         self.fig = Figure(figsize=(width, height), dpi=dpi)
-        self.axis = self.fig.add_subplot(111)
-        self.axis.ticklabel_format(style='sci', axis='x', scilimits=(-3,3))
-        self.axis.ticklabel_format(style='sci', axis='y', scilimits=(-3,3))
+        self.axes = []
+        for n in range(numplots):
+            self.axes += [self.fig.add_subplot(100+10*(numplots)+n+1)]
+            self.axes[n].ticklabel_format(style='sci', axis='x', scilimits=(-3,3))
+            self.axes[n].ticklabel_format(style='sci', axis='y', scilimits=(-3,3))
+
         self.traces = {}
 
         FigureCanvas.__init__(self, self.fig)
@@ -175,24 +178,24 @@ class CanvasManual(MplCanvas):
         pass
 
     def update_trace(self, trace_name, x_data, y_data):
-        self.traces[trace_name].set_xdata(x_data)
-        self.traces[trace_name].set_ydata(y_data)
-        self.axis.relim()
-        self.axis.autoscale_view()
+        self.traces[trace_name]['plot'].set_xdata(x_data)
+        self.traces[trace_name]['plot'].set_ydata(y_data)
+        curr_axis = self.axes[self.traces[trace_name]['axis_num']]
+        curr_axis.relim()
+        curr_axis.autoscale_view()
         if len(self.traces)>1:
-            self.axis.legend()
+            curr_axis.legend()
         self.draw()
         self.flush_events()
 
     def set_desc(self, desc):
-        if 'x_label' in desc.keys():
-            self.axis.set_xlabel(desc['x_label'])
-        if 'y_label' in desc.keys():
-            self.axis.set_ylabel(desc['y_label'])
-        for trace in desc['traces']:
-            self.traces[trace['name']], = self.axis.plot([], **trace['matplotlib_kwargs'], label = trace["name"])
-        self.axis.ticklabel_format(style='sci', axis='x', scilimits=(-3,3))
-        self.axis.ticklabel_format(style='sci', axis='y', scilimits=(-3,3))
+        for k, ax in enumerate(self.axes):
+            if 'x_label' in desc.keys():
+                ax.set_xlabel(desc['x_label'][k])
+            if 'y_label' in desc.keys():
+                ax.set_ylabel(desc['y_label'][k])
+        for trace in desc['traces']:  # relink traces and axes
+            self.traces[trace['name']] = {'plot': self.axes[trace['axis_num']].plot([], label=trace['name'], **trace['matplotlib_kwargs'])[0], 'axis_num': trace['axis_num']}
         self.fig.tight_layout()
 
 class Canvas2D(MplCanvas):
@@ -374,7 +377,7 @@ class MatplotClientWindow(QtWidgets.QMainWindow):
                 if desc['plot_dims'] == 2:
                     canvas = Canvas2D(self.main_widget, width=5, height=4, dpi=100, plot_mode=desc['plot_mode'])
             elif desc['plot_type'] == "manual":
-                canvas = CanvasManual(self.main_widget, width=5, height=4, dpi=100)
+                canvas = CanvasManual(self.main_widget, width=5, height=4, dpi=100, numplots=desc['numplots'])
             elif desc['plot_type'] == "mesh":
                 canvas = CanvasMesh(self.main_widget, width=5, height=4, dpi=100, plot_mode=desc['plot_mode'])
             nav    = NavigationToolbar(canvas, self)
