@@ -74,7 +74,8 @@ class Plotter(Filter):
         # Check the descriptor axes
         num_axes = len(self.descriptor.axes)
         if self.plot_dims.value > num_axes:
-            raise Exception("Cannot plot in more dimensions than there are data axes.")
+            logger.info("Cannot plot in more dimensions than there are data axes.")
+            self.plot_dims.value = num_axes
 
         if self.plot_dims.value == 1:
             self.points_before_clear = self.descriptor.axes[-1].num_points()

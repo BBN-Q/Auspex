@@ -451,6 +451,9 @@ class Experiment(metaclass=MetaExperiment):
                 w.file = wrs[0].file
                 w.filename.value = wrs[0].filename.value
 
+        # Remove the nodes with 0 dimension
+        self.nodes = [n for n in self.nodes if not(hasattr(n, 'input_connectors') and        n.input_connectors['sink'].descriptor.num_dims()==0)]
+
         # Go and find any plotters
         self.plotters = [n for n in self.nodes if isinstance(n, (Plotter, MeshPlotter, XYPlotter))]
 
