@@ -380,13 +380,19 @@ class QubitExpFactory(object):
             # Set number of segments in the digitizer
             instruments[dig_name]['nbr_segments'] = num_segments
 
+            # Find the enabled X6 stream selectors with the same channel as the receiver. Allow to plot/save raw/demod/int streams belonging to the same receiver
+            if calibration:
+                X6_stream_selectors = []
+            else:
+                X6_stream_selectors = [k for k,v in filters.items() if (v["type"] == 'X6StreamSelector' and v["source"] == filters[stream_sel_name]['source'] and v["enabled"] == True and v["channel"] == filters[stream_sel_name]["channel"] and v["dsp_channel"] == filters[stream_sel_name]["dsp_channel"])]
+
             # Enable the tree for single-shot fidelity experiment. Change stream_sel_name to raw (by default)
             writers = []
             plotters = []
             singleshot = []
             buffers = []
             for filt_name, filt in filters.items():
-                if filt_name == stream_sel_name:
+                if filt_name in [stream_sel_name] + X6_stream_selectors:
                     # Find descendants of the channel selector
                     chan_descendants = nx.descendants(dag, filt_name)
                     # Find endpoints within the descendants
