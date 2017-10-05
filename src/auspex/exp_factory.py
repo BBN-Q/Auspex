@@ -481,7 +481,7 @@ class QubitExpFactory(object):
             #disable single-shot filters and their output
             for meas_name in filters.keys():
                 filt_source = filters[meas_name]["source"].split(" ")[0]
-                if filt_source != dig_name and "SingleShotMeasurement" in (filters[meas_name]["type"], filters[filt_source]['type']):
+                if filt_source not in instruments.keys() and "SingleShotMeasurement" in (filters[meas_name]["type"], filters[filt_source]['type']):
                     filters[meas_name]['enabled'] = False
 
             #label measurement with qubit name (assuming the convention "M-"+qubit_name)
