@@ -455,7 +455,6 @@ class DRAGCalibration(PulseCalibration):
             #plot
             norm_data = data.reshape((len(self.num_pulses), len(self.deltas)))
             for n in range(len(self.num_pulses)):
-                import pdb; pdb.set_trace()
                 self.plot['Data_{}'.format(n)] = (self.deltas, norm_data[n, :])
                 finer_deltas = np.linspace(np.min(self.deltas), np.max(self.deltas), 4*len(self.deltas))
                 self.plot['Fit_{}'.format(n)] = (finer_deltas, sinf(finer_deltas, *popt_mat[:, n])) if n==0 else (finer_deltas, quadf(finer_deltas, *popt_mat[:3, n]))
@@ -468,7 +467,7 @@ class DRAGCalibration(PulseCalibration):
                 new_pulse_step = 2*(max(self.num_pulses)-min(self.num_pulses))/len(self.num_pulses)
                 self.num_pulses = np.arange(max(self.num_pulses) - new_pulse_step, max(self.num_pulses) + new_pulse_step*(len(self.num_pulses)-1), new_pulse_step)
 
-        self.settings['qubits'][self.qubit.label]['control']['pulse_params']['drag_scaling'] = round(float(opt_drag[-1],5))
+        self.settings['qubits'][self.qubit.label]['control']['pulse_params']['drag_scaling'] = round(float(opt_drag[-1]), 5)
         self.update_settings()
 
         return opt_drag[-1]
