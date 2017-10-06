@@ -519,8 +519,12 @@ class CLEARCalibration(MeasCalibration):
         return seqs
 
     def init_plot(self):
-        #TODO: see feature/DRAGcal-plots
-        pass
+        plot = ManualPlotter("CLEAR Cal", x_label=['Time (us)', 'eps1/eps2'], y_label=['<Z>', 'Residual photons $n_0$'], numplots = 2)
+        #cmap = cm.viridis(np.linspace(0, 1, len(self.num_pulses)))
+        plot.add_data_trace('Ramsey')
+        plot.add_data_trace('Photon number', subplot_num = 1) #TODO: error bar
+        return plot
+
 
     def calibrate(self):
         for ct in range(3):
