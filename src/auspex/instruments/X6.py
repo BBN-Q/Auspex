@@ -65,7 +65,7 @@ class X6Channel(DigitizerChannel):
             #elif hasattr(self, name):
             #        setattr(self, name, value)
             elif name == "channel":
-                setattr(self, name, int(value))
+                setattr(self, 'phys_channel', int(value))
             else:
                 try:
                     setattr(self, name, value)
