@@ -148,10 +148,10 @@ def fit_drag(data, DRAG_vec, pulse_vec):
     num_seqs = len(pulse_vec)
     xopt_vec = np.zeros(num_seqs)
     perr_vec = np.zeros(num_seqs)
-    popt_mat = np.zeros((4, num_seqs-1))
-    data = data.reshape(num_DRAG, len(data)//num_DRAG)
+    popt_mat = np.zeros((4, num_seqs))
+    data = data.reshape(len(data)//num_DRAG, num_DRAG, )
     #first fit sine to lowest n, for the full range
-    data_n = data[:, 1]
+    data_n = data[1, :]
     T0 = 2*(DRAG_vec[np.argmax(data_n)] - DRAG_vec[np.argmin(data_n)]) #rough estimate of period
 
     p0 = [0, 1, T0, 0]
@@ -162,7 +162,7 @@ def fit_drag(data, DRAG_vec, pulse_vec):
     popt_mat[:,0] = popt
     for ct in range(1, len(pulse_vec)):
         #quadratic fit for subsequent steps, narrower range
-        data_n = data[:, ct]
+        data_n = data[ct, :]
         p0 = [1, xopt_vec[ct-1], 0]
         #recenter for next fit
         closest_ind =np.argmin(abs(DRAG_vec - xopt_vec[ct-1]))
