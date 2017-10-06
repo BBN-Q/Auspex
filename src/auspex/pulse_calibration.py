@@ -453,9 +453,10 @@ class DRAGCalibration(PulseCalibration):
             opt_drag, error_drag, popt_mat = fit_drag(data, self.deltas, self.num_pulses)
 
             #plot
-            norm_data = data.reshape(len(self.deltas), len(self.num_pulses))
+            norm_data = data.reshape((len(self.num_pulses), len(self.deltas)))
             for n in range(len(self.num_pulses)):
-                self.plot['Data_{}'.format(n)] = (self.deltas, norm_data[:, n])
+                import pdb; pdb.set_trace()
+                self.plot['Data_{}'.format(n)] = (self.deltas, norm_data[n, :])
                 finer_deltas = np.linspace(np.min(self.deltas), np.max(self.deltas), 4*len(self.deltas))
                 self.plot['Fit_{}'.format(n)] = (finer_deltas, sinf(finer_deltas, *popt_mat[:, n])) if n==0 else (finer_deltas, quadf(finer_deltas, *popt_mat[:3, n]))
             self.plot["Data_opt"] = (self.num_pulses, opt_drag) #TODO: add error bars
