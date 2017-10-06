@@ -122,13 +122,13 @@ def fit_ramsey(xdata, ydata, two_freqs = False):
     if two_freqs:
         # Initial KT estimation
         freqs, Tcs, amps = KT_estimation(ydata, xdata, 2)
-        p0 = [*freqs, *amps.real, *Tcs, 0, 0, 0]
+        p0 = [*freqs, *abs(amps), *Tcs, *np.angle(amps), np.mean(ydata)]
         popt, pcov = curve_fit(ramsey_2f, xdata, ydata, p0 = p0)
         fopt = [popt[0], popt[1]]
     else:
         # Initial KT estimation
         freqs, Tcs, amps = KT_estimation(ydata, xdata, 1)
-        p0 = [freqs[0], amps.real[0], Tcs[0], 0, 0]
+        p0 = [freqs[0], abs(amps[0]), Tcs[0], np.angle(amps[0]), np.mean(ydata)]
         popt, pcov = curve_fit(ramsey_1f, xdata, ydata, p0 = p0)
         fopt = [popt[0]]
     perr = np.sqrt(np.diag(pcov))
