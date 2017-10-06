@@ -425,8 +425,8 @@ class DRAGCalibration(PulseCalibration):
 
     def sequence(self):
         seqs = []
-        for n in range(len(self.num_pulses)):
-            seqs += [[X90(self.qubit, dragScaling = d), X90m(self.qubit, dragScaling = d)]*n + [X90(self.qubit, dragScaling = d), MEAS(self.qubit)] for d in self.deltas]
+        for n in self.num_pulses:
+            seqs += [[X90(self.qubit, drag_scaling = d), X90m(self.qubit, drag_scaling = d)]*n + [X90(self.qubit, drag_scaling = d), MEAS(self.qubit)] for d in self.deltas]
         seqs += create_cal_seqs((self.qubit,),2)
         return seqs
 
