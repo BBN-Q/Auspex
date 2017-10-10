@@ -64,7 +64,8 @@ class PulseCalibration(object):
         self.exp        = None
         self.axis_descriptor = None
         self.cw_mode    = False
-        self.settings = config.yaml_load(config.configFile)
+        self.saved_settings = config.yaml_load(config.configFile)
+        self.settings = self.saved_settings #make a copy for used during calibration
         self.quad = quad
         if quad == "real":
             self.quad_fun = np.real
@@ -140,7 +141,7 @@ class PulseCalibration(object):
 
     def update_settings(self):
         """Update calibrated YAML with calibration parameters"""
-        config.yaml_dump(self.settings, config.configFile)
+        config.yaml_dump(self.saved_settings, config.configFile)
 
 class CavitySearch(PulseCalibration):
     def __init__(self, qubit_name, frequencies=np.linspace(4, 5, 100), **kwargs):
@@ -238,13 +239,13 @@ class RabiAmpCalibration(PulseCalibration):
 
     def update_settings(self):
         #casting to float since YAML was complaining?
-        self.settings['qubits'][self.qubit.label]['control']['pulse_params']['piAmp'] = round(float(self.pi_amp), 5)
-        self.settings['qubits'][self.qubit.label]['control']['pulse_params']['pi2Amp'] = round(float(self.pi2_amp), 5)
+        self.saved_settings['qubits'][self.qubit.label]['control']['pulse_params']['piAmp'] = round(float(self.pi_amp), 5)
+        self.saved_settings['qubits'][self.qubit.label]['control']['pulse_params']['pi2Amp'] = round(float(self.pi2_amp), 5)
         # a few contortions to get the right awg
-        AWG = self.settings['qubits'][self.qubit.label]['control']['AWG'].split(" ")[0]
-        amp_factor = self.settings['instruments'][AWG]['tx_channels']['12']['amp_factor']
-        self.settings['instruments'][AWG]['tx_channels']['12']['1']['offset'] += round(float(amp_factor*self.amp2offset*self.i_offset), 5)
-        self.settings['instruments'][AWG]['tx_channels']['12']['2']['offset'] += round(float(amp_factor*self.amp2offset*self.i_offset), 5)
+        AWG = self.saved_settings['qubits'][self.qubit.label]['control']['AWG'].split(" ")[0]
+        amp_factor = self.saved_settings['instruments'][AWG]['tx_channels']['12']['amp_factor']
+        self.saved_settings['instruments'][AWG]['tx_channels']['12']['1']['offset'] += round(float(amp_factor*self.amp2offset*self.i_offset), 5)
+        self.saved_settings['instruments'][AWG]['tx_channels']['12']['2']['offset'] += round(float(amp_factor*self.amp2offset*self.i_offset), 5)
         super(RabiAmpCalibration, self).update_settings()
 
 
@@ -304,9 +305,9 @@ class RamseyCalibration(PulseCalibration):
         else:
             fit_freq = round(orig_freq + self.added_detuning - 0.5*(fit_freq_A - 0.5*fit_freq_A + fit_freq_B), 10)
         if self.set_source:
-            self.settings['instruments'][qubit_source]['frequency'] = float(fit_freq)
+            self.saved_settings['instruments'][qubit_source]['frequency'] = float(fit_freq)
         else:
-            self.settings['qubits']['q1']['control']['frequency'] += float(fit_freq - orig_freq)
+            self.saved_settings['qubits']['q1']['control']['frequency'] += float(fit_freq - orig_freq)
         logger.info("Qubit set frequency = {} GHz".format(round(float(fit_freq/1e9),5)))
         return fit_freq
 
@@ -394,7 +395,7 @@ class PhaseEstimation(PulseCalibration):
 
     def update_settings(self):
         set_amp = 'pi2Amp' if isinstance(self, Pi2Calibration) else 'piAmp' if isinstance(self, PiCalibration) else 'amp'
-        self.settings['qubits'][self.qubit.label]['control']['pulse_params'][set_amp] = round(float(self.amplitude), 5)
+        self.saved_settings['qubits'][self.qubit.label]['control']['pulse_params'][set_amp] = round(float(self.amplitude), 5)
         super(PhaseEstimation, self).update_settings()
 
 class Pi2Calibration(PhaseEstimation):
@@ -467,8 +468,7 @@ class DRAGCalibration(PulseCalibration):
                 new_pulse_step = 2*(max(self.num_pulses)-min(self.num_pulses))/len(self.num_pulses)
                 self.num_pulses = np.arange(max(self.num_pulses) - new_pulse_step, max(self.num_pulses) + new_pulse_step*(len(self.num_pulses)-1), new_pulse_step)
 
-        self.settings['qubits'][self.qubit.label]['control']['pulse_params']['drag_scaling'] = round(float(opt_drag[-1]), 5)
-        self.update_settings()
+        self.saved_settings['qubits'][self.qubit.label]['control']['pulse_params']['drag_scaling'] = round(float(opt_drag[-1]), 5)
 
         return opt_drag[-1]
 
@@ -553,9 +553,9 @@ class CLEARCalibration(MeasCalibration):
                 self.eps2*=opt_scaling
 
         #update library (default amp1, amp2 for MEAS)
-        self.settings['qubits'][self.qubit.label]['measure']['pulse_params']['amp1'] = round(float(self.eps1), 5)
-        self.settings['qubits'][self.qubit.label]['measure']['pulse_params']['amp2'] = round(float(self.eps2), 5)
-        self.settings['qubits'][self.qubit.label]['measure']['pulse_params']['step_length'] = round(float(self.tau), 5)
+        self.saved_settings['qubits'][self.qubit.label]['measure']['pulse_params']['amp1'] = round(float(self.eps1), 5)
+        self.saved_settings['qubits'][self.qubit.label]['measure']['pulse_params']['amp2'] = round(float(self.eps2), 5)
+        self.saved_settings['qubits'][self.qubit.label]['measure']['pulse_params']['step_length'] = round(float(self.tau), 5)
         super(CLEARCalibration, self).update_settings()
 
 '''Two-qubit gate calibrations'''
@@ -586,7 +586,7 @@ class CRCalibration(PulseCalibration):
 
         #update CR channel
         CRchan = ChannelLibrary.EdgeFactory(*self.qubits)
-        self.settings['edges'][CRchan][str.lower(self.cal_type.name)] = opt_par
+        self.saved_settings['edges'][CRchan][str.lower(self.cal_type.name)] = opt_par
         self.update_settings()
 
         # Plot the result
