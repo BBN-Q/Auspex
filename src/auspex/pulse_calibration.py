@@ -425,8 +425,8 @@ class DRAGCalibration(PulseCalibration):
 
     def sequence(self):
         seqs = []
-        for n in range(len(self.num_pulses)):
-            seqs += [[X90(self.qubit, dragScaling = d), X90m(self.qubit, dragScaling = d)]*n + [X90(self.qubit, dragScaling = d), MEAS(self.qubit)] for d in self.deltas]
+        for n in self.num_pulses:
+            seqs += [[X90(self.qubit, drag_scaling = d), X90m(self.qubit, drag_scaling = d)]*n + [X90(self.qubit, drag_scaling = d), MEAS(self.qubit)] for d in self.deltas]
         seqs += create_cal_seqs((self.qubit,),2)
         return seqs
 
@@ -453,9 +453,9 @@ class DRAGCalibration(PulseCalibration):
             opt_drag, error_drag, popt_mat = fit_drag(data, self.deltas, self.num_pulses)
 
             #plot
-            norm_data = data.reshape(len(self.deltas), len(self.num_pulses))
+            norm_data = data.reshape((len(self.num_pulses), len(self.deltas)))
             for n in range(len(self.num_pulses)):
-                self.plot['Data_{}'.format(n)] = (self.deltas, norm_data[:, n])
+                self.plot['Data_{}'.format(n)] = (self.deltas, norm_data[n, :])
                 finer_deltas = np.linspace(np.min(self.deltas), np.max(self.deltas), 4*len(self.deltas))
                 self.plot['Fit_{}'.format(n)] = (finer_deltas, sinf(finer_deltas, *popt_mat[:, n])) if n==0 else (finer_deltas, quadf(finer_deltas, *popt_mat[:3, n]))
             self.plot["Data_opt"] = (self.num_pulses, opt_drag) #TODO: add error bars
@@ -467,7 +467,7 @@ class DRAGCalibration(PulseCalibration):
                 new_pulse_step = 2*(max(self.num_pulses)-min(self.num_pulses))/len(self.num_pulses)
                 self.num_pulses = np.arange(max(self.num_pulses) - new_pulse_step, max(self.num_pulses) + new_pulse_step*(len(self.num_pulses)-1), new_pulse_step)
 
-        self.settings['qubits'][self.qubit.label]['control']['pulse_params']['drag_scaling'] = round(float(opt_drag[-1],5))
+        self.settings['qubits'][self.qubit.label]['control']['pulse_params']['drag_scaling'] = round(float(opt_drag[-1]), 5)
         self.update_settings()
 
         return opt_drag[-1]
