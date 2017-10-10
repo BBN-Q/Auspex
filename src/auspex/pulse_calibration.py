@@ -90,6 +90,7 @@ class PulseCalibration(object):
             pass #no experiment yet created, or plot server not yet started
         meta_file = compile_to_hardware(self.sequence(**params), fileName=self.filename, axis_descriptor=self.axis_descriptor)
         self.exp = QubitExpFactory.create(meta_file=meta_file, calibration=True, save_data=False, cw_mode=self.cw_mode)
+        self.exp.keep_instruments_connected = True
         if self.plot:
             # Add the manual plotter and the update method to the experiment
             [self.exp.add_manual_plotter(p) for p in self.plot] if isinstance(self.plot, list) else self.exp_add_manual_plotter(self.plot)
@@ -448,8 +449,7 @@ class DRAGCalibration(PulseCalibration):
             data, _ = self.run()
             finer_deltas = np.linspace(np.min(self.deltas), np.max(self.deltas), 4*len(self.deltas))
             #normalize data with cals
-            data = 2*(data-np.mean(data[-4:-2]))/(np.mean(data[-4:-2])-np.mean(data[-2:])) + 1
-            data = data[:-4]
+            data = quick_norm_data(data)
             opt_drag, error_drag, popt_mat = fit_drag(data, self.deltas, self.num_pulses)
 
             #plot
@@ -525,8 +525,8 @@ class CLEARCalibration(MeasCalibration):
         plot_raw.add_data_trace('Data')
         plot_raw.add_fit_trace('Fit')
         for sweep_num, state in product([0,1,2], [0,1]):
-            plot_res.add_data_trace('n0 sweep {}, state {}'.format(sweep_num, state), {'color': 'C{}'.format(state+1)}, sweep_num) #TODO: error bar
-            plot_res.add_fit_trace('Fit n0 sweep {}, state {}'.format(sweep_num, state), {'color' : 'C{}'.format(state+1)}, sweep_num) #TODO
+            plot_res.add_data_trace('sweep {}, state {}'.format(sweep_num, state), {'color': 'C{}'.format(state+1)}, sweep_num) #TODO: error bar
+            plot_res.add_fit_trace('Fit sweep {}, state {}'.format(sweep_num, state), {'color' : 'C{}'.format(state+1)}, sweep_num) #TODO
         return [plot_raw, plot_res]
 
 
@@ -548,11 +548,14 @@ class CLEARCalibration(MeasCalibration):
                     self.set(eps1 = eps1, eps2 = eps2, state = state)
                     #analyze
                     data, _ = self.run()
-                    norm_data = data[:-4] #TODO: normalize
+                    norm_data = quick_norm_data(data)
                     eval('n{}vec'.format(state))[k], eval('err{}vec'.format(state))[k], fit_curve = fit_photon_number(self.ramsey_delays, norm_data, [self.kappa, self.ramsey_freq, 2*self.chi, self.T2, self.T1factor, 0])
                     #plot
                     self.plot[0]['Data'] = (self.ramsey_delays, norm_data)
                     self.plot[0]['Fit'] = fit_curve
+                    import pdb; pdb.set_trace()
+                    self.plot[1]['sweep {}, state 0'.format(ct)] = (xpoints, n0vec)
+                    self.plot[1]['sweep {}, state 1'.format(ct)] = (xpoints, n1vec)
 
             #fit for minimum photon number
             popt_0,_ = fit_quad(xpoints, n0vec)
@@ -561,16 +564,12 @@ class CLEARCalibration(MeasCalibration):
             opt_scaling = np.mean(popt_0[0], popt_1[0])
             logger.info("Optimal scaling factor for step {} = {}".format(ct+1, opt_scaling))
 
-            #plot
-            self.plot[1]['n0 sweep {}, state 0'.format(ct)] = (xpoints, n0vec)
-            self.plot[1]['n0 sweep {}, state 1'.format(ct)] = (xpoints, n1vec)
-            self.plot[1]['Fit n0 sweep {}, state 0'.format(ct)] = (finer_xpoints, quadf(finer_xpoints, popt_0))
-            self.plot[1]['Fit n0 sweep {}, state 1'.format(ct)] = (finer_xpoints, quadf(finer_xpoints, popt_1))
-
             if ct<2:
                 self.eps1*=opt_scaling
             if ct!=1:
                 self.eps2*=opt_scaling
+            self.plot[1]['Fit sweep {}, state 0'.format(ct)] = (finer_xpoints, quadf(finer_xpoints, popt_0))
+            self.plot[1]['Fit sweep {}, state 1'.format(ct)] = (finer_xpoints, quadf(finer_xpoints, popt_1))
 
         def update_settings(self):
             #update library (default amp1, amp2 for MEAS)
@@ -770,3 +769,9 @@ def phase_estimation( data_in, vardata_in, verbose=False):
         sigma = np.maximum(np.abs(restrict(curGuess - lowerBound)), np.abs(restrict(curGuess - upperBound)))
 
     return phase, sigma
+
+def quick_norm_data(data): #TODO: generalize as in Qlab.jl
+    """Rescale data assuming 2 calibrations / single qubit state at the end of the sequence"""
+    data = 2*(data-np.mean(data[-4:-2]))/(np.mean(data[-4:-2])-np.mean(data[-2:])) + 1
+    data = data[:-4]
+    return data

@@ -173,7 +173,7 @@ def fit_drag(data, DRAG_vec, pulse_vec):
         popt, pcov = curve_fit(quadf, curr_DRAG_vec, reduced_data_n, p0 = p0)
         perr_vec[ct] = np.sqrt(np.diag(pcov))[0]
         x_fine = np.linspace(min(curr_DRAG_vec), max(curr_DRAG_vec), 1001)
-        xopt_vec[ct] = x_fine[np.argmin(quadf(x_fine, *popt))]
+        xopt_vec[ct] = x_fine[np.argmin(quadf(x_fine, *popt))] #why not x0?
         popt_mat[:3,ct] = popt
     return xopt_vec, perr_vec, popt_mat
 
@@ -193,7 +193,6 @@ def fit_photon_number(xdata, ydata, params):
 	5 - exp(-t_meas/T1) (us), only if starting from |1> (to include relaxation during the 1st msm't)
 	6 - initial qubit state (0/1)
     '''
-    import pdb; pdb.set_trace()
     params = [2*np.pi*p for p in params[:3]] + params[3:] # convert to angular frequencies
     def model_0(t, pa, pb):
         return (-np.imag(np.exp(-(1/params[3]+params[1]*1j)*t + (pa-pb*params[2]*(1-np.exp(-((params[0] + params[2]*1j)*t)))/(params[0]+params[2]*1j))*1j)))
@@ -202,7 +201,7 @@ def fit_photon_number(xdata, ydata, params):
     popt, pcov = curve_fit(model, xdata, ydata, p0 = [0, 1])
     perr = np.sqrt(np.diag(pcov))
     finer_delays = np.linspace(np.min(xdata), np.max(xdata), 4*len(xdata))
-    fit_curve = model(finer_delays, **popt)
+    fit_curve = model(finer_delays, *popt)
     return popt[1], perr[1], (finer_delays, fit_curve)
 
 def fit_quad(xdata, ydata):
