@@ -424,11 +424,6 @@ class Experiment(metaclass=MetaExperiment):
         if not any([oc.descriptor.axes for oc in self.output_connectors.values()]):
             logger.warning("There do not appear to be any axes defined for this experiment!")
 
-        #connect all instruments
-        self.connect_instruments()
-        #initialize instruments
-        self.init_instruments()
-
         # Go find any writers
         self.writers = [n for n in self.nodes if isinstance(n, WriteToHDF5)]
         self.buffers = [n for n in self.nodes if isinstance(n, DataBuffer)]
@@ -500,7 +495,7 @@ class Experiment(metaclass=MetaExperiment):
                         logger.debug("No plotter to kill.")
 
             client_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),"matplotlib-client.py")
-            if not self.keep_instruments_connected or not auspex.globals.last_plotter_process: #keep_instruments_connected is a flag for keeping the plot process running
+            if not self.keep_instruments_connected or not (auspex.globals.last_plotter_process and self.instrs_connected): #keep_instruments_connected is a flag for keeping the plot process running
                 if hasattr(os, 'setsid'):
                     auspex.globals.last_plotter_process = subprocess.Popen(['python', client_path, 'localhost'],
                                                                         env=os.environ.copy(), preexec_fn=os.setsid)
@@ -508,6 +503,11 @@ class Experiment(metaclass=MetaExperiment):
                     auspex.globals.last_plotter_process = subprocess.Popen(['python', client_path, 'localhost'],
                                                                         env=os.environ.copy())
             time.sleep(1)
+
+        #connect all instruments
+        self.connect_instruments()
+        #initialize instruments
+        self.init_instruments()
 
         def catch_ctrl_c(signum, frame):
             logger.info("Caught SIGINT. Shutting down.")
