@@ -287,6 +287,8 @@ class QubitExpFactory(object):
         getattr(mce, cals[second_cal]).value = offset2
 
         mce.disconnect_instruments()
+        mce.plot_server.stop()
+
         if write_to_file:
             mce.write_to_file()
         logger.info(("Mixer calibration: I offset = {}, Q offset = {}, "
