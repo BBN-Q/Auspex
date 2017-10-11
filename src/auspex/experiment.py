@@ -480,7 +480,7 @@ class Experiment(metaclass=MetaExperiment):
                 plotter.plot_server = self.plot_server
             time.sleep(0.5)
             # Kill a previous plotter if desired.
-            if auspex.globals.single_plotter_mode and auspex.globals.last_plotter_process and not self.keep_instruments_connected:
+            if auspex.globals.single_plotter_mode and auspex.globals.last_plotter_process and not( self.keep_instruments_connected and self.instrs_connected):
                 pro = auspex.globals.last_plotter_process
                 if hasattr(os, 'setsid'): # Doesn't exist on windows
                     try:
