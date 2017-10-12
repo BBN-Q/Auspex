@@ -214,6 +214,9 @@ class Experiment(metaclass=MetaExperiment):
         # indicates whether the instruments are already connected
         self.instrs_connected = False
 
+        # indicates whether this is the first (or only) experiment in a series (e.g. for pulse calibrations)
+        self.first_exp = True
+
         # Things we can't metaclass
         self.output_connectors = {}
         for oc in self._output_connectors.keys():
@@ -584,7 +587,6 @@ class Experiment(metaclass=MetaExperiment):
         logger.debug("Found %d plotters", len(self.plotters))
 
         from .plotting import MatplotServerThread
-        import pdb; pdb.set_trace()
         plot_desc = {p.name: p.desc() for p in self.standard_plotters}
         extra_plot_desc = {p.name: p.desc() for p in self.extra_plotters + self.manual_plotters}
         if not hasattr(self, "plot_server"):
@@ -599,7 +601,7 @@ class Experiment(metaclass=MetaExperiment):
         # Kill a previous plotter if desired.
         if auspex.globals.single_plotter_mode and auspex.globals.last_plotter_process:
             pros = [auspex.globals.last_plotter_process]
-            if not (self.leave_plot_server_open and self.instrs_connected) and auspex.globals.last_extra_plotter_process:
+            if (not self.leave_plot_server_open or self.first_exp) and auspex.globals.last_extra_plotter_process:
                 pros += [auspex.globals.last_extra_plotter_process]
             for pro in pros:
                 if hasattr(os, 'setsid'): # Doesn't exist on windows
@@ -622,7 +624,7 @@ class Experiment(metaclass=MetaExperiment):
         else:
             auspex.globals.last_plotter_process = subprocess.Popen(['python', client_path, 'localhost'],
                                                                 env=os.environ.copy())
-        if hasattr(self, 'extra_plot_server') and (not auspex.globals.last_extra_plotter_process or not self.leave_plot_server_open or not self.instrs_connected):
+        if hasattr(self, 'extra_plot_server') and (not auspex.globals.last_extra_plotter_process or not self.leave_plot_server_open or self.first_exp):
             if hasattr(os, 'setsid'):
                 auspex.globals.last_extra_plotter_process = subprocess.Popen(['python', client_path, 'localhost', str(self.extra_plot_server.status_port), str(self.extra_plot_server.data_port)], env=os.environ.copy(), preexec_fn=os.setsid)
             else:

@@ -89,10 +89,9 @@ class PulseCalibration(object):
         """Returns the sequence for the given calibration, must be overridden"""
         return [[Id(self.qubit), MEAS(self.qubit)]]
 
-    def set(self, instrs_to_set = [], **params):
+    def set(self, instrs_to_set = [], first_step = True, **params):
         try:
             extra_plot_server = self.exp.extra_plot_server
-            instrs_connected = self.exp.instrs_connected
         except Exception as e:
             pass #no experiment yet created, or plot server not yet started
         meta_file = compile_to_hardware(self.sequence(**params), fileName=self.filename, axis_descriptor=self.axis_descriptor)
@@ -100,10 +99,9 @@ class PulseCalibration(object):
             extra_plot_server = self.exp.extra_plot_server
         self.exp = QubitExpFactory.create(meta_file=meta_file, calibration=True, save_data=False, cw_mode=self.cw_mode)
         self.exp.leave_plot_server_open = True
-        self.exp.keep_instruments_connected = True
+        self.exp.first_exp = first_step
         try:
             self.exp.extra_plot_server = extra_plot_server
-            self.exp.instrs_connected = instrs_connected
         except:
             pass
         if self.plot:
@@ -301,7 +299,7 @@ class RamseyCalibration(PulseCalibration):
         #TODO: set conditions for success
         fit_freq_A = np.mean(fit_freqs) #the fit result can be one or two frequencies
         set_freq = round(orig_freq + self.added_detuning + fit_freq_A/2, 10)
-        self.set()
+        self.set(first_step = False)
         self.exp.settings['instruments'][qubit_source]['frequency'] = set_freq
         data, _ = self.run()
 
@@ -370,7 +368,7 @@ class PhaseEstimation(PulseCalibration):
         #TODO: add writers for variance if not existing
         while True:
             if ct > 1:
-                self.set()
+                self.set(first_step = False)
             [phase, sigma] = phase_estimation(*self.run())
             logger.info("Phase: %.4f Sigma: %.4f"%(phase,sigma))
             # correct for some errors related to 2pi uncertainties
@@ -457,7 +455,7 @@ class DRAGCalibration(PulseCalibration):
         # run twice for different DRAG parameter ranges
         for k in range(2):
         #generate sequence
-            self.set()
+            self.set(first_step = not(bool(k)))
             #first run
             data, _ = self.run()
             finer_deltas = np.linspace(np.min(self.deltas), np.max(self.deltas), 4*len(self.deltas))
@@ -552,7 +550,7 @@ class CLEARCalibration(MeasCalibration):
                 data, _ = self.run()
                 n0vec[k], err0vec[k] = fit_photon_number(self.xpoints, data, [self.kappa, self.ramsey_freq, 2*self.chi, self.T2, self.T1factor, 0])
                 #qubit in 1
-                self.set(eps1 = eps1, eps2 = eps2, state = 1)
+                self.set(first_step = False, eps1 = eps1, eps2 = eps2, state = 1)
                 #analyze
                 data, _ = self.run()
                 n1vec[k], err1vec[k] = fit_photon_number(self.xpoints, data, [self.kappa, self.ramsey_freq, 2*self.chi, self.T2, self.T1factor, 1])
