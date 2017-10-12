@@ -52,6 +52,11 @@ def calibrate(calibrations, update_settings=True):
                 calibration.exp.plot_server.stop()
             except:
                 pass
+            try:
+                print("stopping extra server")
+                calibration.exp.extra_plot_server.stop()
+            except:
+                pass
 
 
 class PulseCalibration(object):
@@ -86,13 +91,21 @@ class PulseCalibration(object):
 
     def set(self, instrs_to_set = [], **params):
         try:
-            self.exp.plot_server.stop()
+            extra_plot_server = self.exp.extra_plot_server
+            instrs_connected = self.exp.instrs_connected
         except Exception as e:
             pass #no experiment yet created, or plot server not yet started
         meta_file = compile_to_hardware(self.sequence(**params), fileName=self.filename, axis_descriptor=self.axis_descriptor)
+        if hasattr(self.exp, 'extra_plot_server'):
+            extra_plot_server = self.exp.extra_plot_server
         self.exp = QubitExpFactory.create(meta_file=meta_file, calibration=True, save_data=False, cw_mode=self.cw_mode)
         self.exp.leave_plot_server_open = True
-        self.keep_instruments_connected = True
+        self.exp.keep_instruments_connected = True
+        try:
+            self.exp.extra_plot_server = extra_plot_server
+            self.exp.instrs_connected = instrs_connected
+        except:
+            pass
         if self.plot:
             # Add the manual plotter and the update method to the experiment
             self.exp.add_manual_plotter(self.plot)

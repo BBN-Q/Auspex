@@ -516,11 +516,12 @@ class Experiment(metaclass=MetaExperiment):
             except:
                 logger.debug("File probably already closed...")
 
-        try:
-            if len(self.plotters) > 0 and not self.leave_plot_server_open:
-                self.plot_server.stop()
-        except:
-            logger.warning("Could not stop plot server gracefully...")
+        if hasattr(self, 'plot_server'):
+            try:
+                if len(self.plotters) > 0: #and not self.leave_plot_server_open:
+                    self.plot_server.stop()
+            except:
+                logger.warning("Could not stop plot server gracefully...")
 
         self.shutdown_instruments()
 
