@@ -621,7 +621,7 @@ class Experiment(metaclass=MetaExperiment):
         else:
             auspex.globals.last_plotter_process = subprocess.Popen(['python', client_path, 'localhost'],
                                                                 env=os.environ.copy())
-        if not auspex.globals.last_extra_plotter_process or not self.leave_plot_server_open or not self.instrs_connected:
+        if hasattr(self, 'extra_plot_server') and (not auspex.globals.last_extra_plotter_process or not self.leave_plot_server_open or not self.instrs_connected):
             if hasattr(os, 'setsid'):
                 auspex.globals.last_extra_plotter_process = subprocess.Popen(['python', client_path, 'localhost', str(self.extra_plot_server.status_port), str(self.extra_plot_server.data_port)], env=os.environ.copy(), preexec_fn=os.setsid)
             else:

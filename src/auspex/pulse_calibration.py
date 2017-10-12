@@ -91,10 +91,11 @@ class PulseCalibration(object):
             pass #no experiment yet created, or plot server not yet started
         meta_file = compile_to_hardware(self.sequence(**params), fileName=self.filename, axis_descriptor=self.axis_descriptor)
         self.exp = QubitExpFactory.create(meta_file=meta_file, calibration=True, save_data=False, cw_mode=self.cw_mode)
+        self.exp.leave_plot_server_open = True
+        self.keep_instruments_connected = True
         if self.plot:
             # Add the manual plotter and the update method to the experiment
             self.exp.add_manual_plotter(self.plot)
-        self.exp.connect_instruments()
         #sweep instruments for calibration
         for instr_to_set in instrs_to_set:
             par = FloatParameter()
@@ -106,7 +107,6 @@ class PulseCalibration(object):
                 raise KeyError("Sweep values not defined.")
 
     def run(self):
-        self.exp.leave_plot_server_open = True
         self.exp.run_sweeps()
         data = {}
         var = {}
