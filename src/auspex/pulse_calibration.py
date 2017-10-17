@@ -584,11 +584,6 @@ class CRCalibration(PulseCalibration):
         data_t = data[qt]
         opt_par, all_params_0, all_params_1 = fit_CR(self.lengths, data_t, self.cal_type)
 
-        #update CR channel
-        CRchan = ChannelLibrary.EdgeFactory(*self.qubits)
-        self.saved_settings['edges'][CRchan][str.lower(self.cal_type.name)] = opt_par
-        self.update_settings()
-
         # Plot the result
         xaxis = self.lengths if self.cal_type==CR_cal_type.LENGTH else self.phases if self.cal_type==CR_cal_type.PHASE else self.amps
         finer_xaxis = np.linspace(np.min(xaxis), np.max(xaxis), 4*len(xaxis))
@@ -596,6 +591,11 @@ class CRCalibration(PulseCalibration):
         self.plot["Fit 0"] =  (finer_xaxis, sin_f(finer_lengths, *all_params_0))
         self.plot["Data 1"] = (xaxis,       data_t[len(data_t)/2:])
         self.plot["Fit 1"] =  (finer_xaxis, sin_f(finer_lengths, *all_params_1))
+
+    def update_settings(self):
+        CRchan = ChannelLibrary.EdgeFactory(*self.qubits)
+        self.saved_settings['edges'][CRchan][str.lower(self.cal_type.name)] = round(float(opt_par), 5)
+        super(CRCalibration, self).update_settings()
 
 class CRLenCalibration(CRCalibration):
     def __init__(self, qubit_names, lengths=np.linspace(20, 1020, 21)*1e-9, phase = 0, amp = 0.8, rise_fall = 40e-9, cal_type = CR_cal_type.LENGTH):
@@ -615,7 +615,7 @@ class CRLenCalibration(CRCalibration):
 
         return seqs
 
-class CRPhaseCalibration(PulseCalibration):
+class CRPhaseCalibration(CRCalibration):
     def __init__(self, qubit_names, phases = np.linspace(0,2*np.pi,21), amp = 0.8, rise_fall = 40e-9, cal_type = CR_cal_type.PHASE):
         super(CRPhaseCalibration, self).__init__(qubit_names, lengths, phases, amps, rise_fall)
         self.phases = phases
@@ -642,7 +642,7 @@ class CRPhaseCalibration(PulseCalibration):
 
         return seqs
 
-class CRAmpCalibration(PulseCalibration):
+class CRAmpCalibration(CRCalibration):
     def __init__(self, qubit_names, range = 0.2, amp = 0.8, rise_fall = 40e-9, num_CR = 1, cal_type = CR_cal_type.AMPLITUDE):
         super(CRAmpCalibration, self).__init__(qubit_names, lengths, phases, amps, rise_fall)
         if mod(num_CR, 2) == 0:
