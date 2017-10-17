@@ -132,7 +132,7 @@ class WriteToHDF5(Filter):
         fulldir = os.path.splitext(self.filename.value)[0]
         if not os.path.exists(fulldir):
             os.makedirs(fulldir)
-            copyfile(config.configFile, os.path.join(fulldir, os.path.split(config.configFile)[1]))
+            config.yaml_dump(config.yaml_load(config.configFile), os.path.join(fulldir, os.path.split(config.configFile)[1]), flatten = True)
 
     def save_yaml_h5(self):
         """ Save a copy of current experiment settings in the h5 metadata"""
