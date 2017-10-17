@@ -11,3 +11,4 @@ config/config.json
 *.dll
 *.log
 *.prof
+*.bak

@@ -424,11 +424,6 @@ class Experiment(metaclass=MetaExperiment):
         if not any([oc.descriptor.axes for oc in self.output_connectors.values()]):
             logger.warning("There do not appear to be any axes defined for this experiment!")
 
-        #connect all instruments
-        self.connect_instruments()
-        #initialize instruments
-        self.init_instruments()
-
         # Go find any writers
         self.writers = [n for n in self.nodes if isinstance(n, WriteToHDF5)]
         self.buffers = [n for n in self.nodes if isinstance(n, DataBuffer)]
@@ -450,6 +445,9 @@ class Experiment(metaclass=MetaExperiment):
             for w in wrs[1:]:
                 w.file = wrs[0].file
                 w.filename.value = wrs[0].filename.value
+
+        # Remove the nodes with 0 dimension
+        self.nodes = [n for n in self.nodes if not(hasattr(n, 'input_connectors') and        n.input_connectors['sink'].descriptor.num_dims()==0)]
 
         # Go and find any plotters
         self.plotters = [n for n in self.nodes if isinstance(n, (Plotter, MeshPlotter, XYPlotter))]
@@ -482,7 +480,7 @@ class Experiment(metaclass=MetaExperiment):
                 plotter.plot_server = self.plot_server
             time.sleep(0.5)
             # Kill a previous plotter if desired.
-            if auspex.globals.single_plotter_mode and auspex.globals.last_plotter_process and not self.keep_instruments_connected:
+            if auspex.globals.single_plotter_mode and auspex.globals.last_plotter_process and not( self.keep_instruments_connected and self.instrs_connected):
                 pro = auspex.globals.last_plotter_process
                 if hasattr(os, 'setsid'): # Doesn't exist on windows
                     try:
@@ -497,7 +495,7 @@ class Experiment(metaclass=MetaExperiment):
                         logger.debug("No plotter to kill.")
 
             client_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),"matplotlib-client.py")
-            if not self.keep_instruments_connected or not auspex.globals.last_plotter_process: #keep_instruments_connected is a flag for keeping the plot process running
+            if not self.keep_instruments_connected or not (auspex.globals.last_plotter_process and self.instrs_connected): #keep_instruments_connected is a flag for keeping the plot process running
                 if hasattr(os, 'setsid'):
                     auspex.globals.last_plotter_process = subprocess.Popen(['python', client_path, 'localhost'],
                                                                         env=os.environ.copy(), preexec_fn=os.setsid)
@@ -505,6 +503,11 @@ class Experiment(metaclass=MetaExperiment):
                     auspex.globals.last_plotter_process = subprocess.Popen(['python', client_path, 'localhost'],
                                                                         env=os.environ.copy())
             time.sleep(1)
+
+        #connect all instruments
+        self.connect_instruments()
+        #initialize instruments
+        self.init_instruments()
 
         def catch_ctrl_c(signum, frame):
             logger.info("Caught SIGINT. Shutting down.")

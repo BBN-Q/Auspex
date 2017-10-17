@@ -21,11 +21,12 @@ import os
 from time import sleep
 
 from auspex.exp_factory import QubitExpFactory
-from auspex.analysis.io import load_from_HDF5
 from auspex.parameter import FloatParameter
 from auspex.filters.plot import ManualPlotter
 from auspex.analysis.fits import *
 from auspex.analysis.helpers import normalize_data
+from matplotlib import cm
+import numpy as np
 
 def calibrate(calibrations, update_settings=True):
     """Takes in a qubit (as a string) and list of calibrations (as instantiated classes).
@@ -63,7 +64,8 @@ class PulseCalibration(object):
         self.exp        = None
         self.axis_descriptor = None
         self.cw_mode    = False
-        self.settings = config.yaml_load(config.configFile)
+        self.saved_settings = config.yaml_load(config.configFile)
+        self.settings = self.saved_settings #make a copy for used during calibration
         self.quad = quad
         if quad == "real":
             self.quad_fun = np.real
@@ -139,7 +141,7 @@ class PulseCalibration(object):
 
     def update_settings(self):
         """Update calibrated YAML with calibration parameters"""
-        config.yaml_dump(self.settings, config.configFile)
+        config.yaml_dump(self.saved_settings, config.configFile)
 
 class CavitySearch(PulseCalibration):
     def __init__(self, qubit_name, frequencies=np.linspace(4, 5, 100), **kwargs):
@@ -237,13 +239,13 @@ class RabiAmpCalibration(PulseCalibration):
 
     def update_settings(self):
         #casting to float since YAML was complaining?
-        self.settings['qubits'][self.qubit.label]['control']['pulse_params']['piAmp'] = round(float(self.pi_amp), 5)
-        self.settings['qubits'][self.qubit.label]['control']['pulse_params']['pi2Amp'] = round(float(self.pi2_amp), 5)
+        self.saved_settings['qubits'][self.qubit.label]['control']['pulse_params']['piAmp'] = round(float(self.pi_amp), 5)
+        self.saved_settings['qubits'][self.qubit.label]['control']['pulse_params']['pi2Amp'] = round(float(self.pi2_amp), 5)
         # a few contortions to get the right awg
-        AWG = self.settings['qubits'][self.qubit.label]['control']['AWG'].split(" ")[0]
-        amp_factor = self.settings['instruments'][AWG]['tx_channels']['12']['amp_factor']
-        self.settings['instruments'][AWG]['tx_channels']['12']['1']['offset'] += round(float(amp_factor*self.amp2offset*self.i_offset), 5)
-        self.settings['instruments'][AWG]['tx_channels']['12']['2']['offset'] += round(float(amp_factor*self.amp2offset*self.i_offset), 5)
+        AWG = self.saved_settings['qubits'][self.qubit.label]['control']['AWG'].split(" ")[0]
+        amp_factor = self.saved_settings['instruments'][AWG]['tx_channels']['12']['amp_factor']
+        self.saved_settings['instruments'][AWG]['tx_channels']['12']['1']['offset'] += round(float(amp_factor*self.amp2offset*self.i_offset), 5)
+        self.saved_settings['instruments'][AWG]['tx_channels']['12']['2']['offset'] += round(float(amp_factor*self.amp2offset*self.i_offset), 5)
         super(RabiAmpCalibration, self).update_settings()
 
 
@@ -303,9 +305,9 @@ class RamseyCalibration(PulseCalibration):
         else:
             fit_freq = round(orig_freq + self.added_detuning - 0.5*(fit_freq_A - 0.5*fit_freq_A + fit_freq_B), 10)
         if self.set_source:
-            self.settings['instruments'][qubit_source]['frequency'] = float(fit_freq)
+            self.saved_settings['instruments'][qubit_source]['frequency'] = float(fit_freq)
         else:
-            self.settings['qubits']['q1']['control']['frequency'] += float(fit_freq - orig_freq)
+            self.saved_settings['qubits']['q1']['control']['frequency'] += float(fit_freq - orig_freq)
         logger.info("Qubit set frequency = {} GHz".format(round(float(fit_freq/1e9),5)))
         return fit_freq
 
@@ -393,7 +395,7 @@ class PhaseEstimation(PulseCalibration):
 
     def update_settings(self):
         set_amp = 'pi2Amp' if isinstance(self, Pi2Calibration) else 'piAmp' if isinstance(self, PiCalibration) else 'amp'
-        self.settings['qubits'][self.qubit.label]['control']['pulse_params'][set_amp] = round(float(self.amplitude), 5)
+        self.saved_settings['qubits'][self.qubit.label]['control']['pulse_params'][set_amp] = round(float(self.amplitude), 5)
         super(PhaseEstimation, self).update_settings()
 
 class Pi2Calibration(PhaseEstimation):
@@ -417,44 +419,59 @@ class CRAmpCalibration_PhEst(PhaseEstimation):
 
 class DRAGCalibration(PulseCalibration):
     def __init__(self, qubit_name, deltas = np.linspace(-1,1,11), num_pulses = np.arange(16, 64, 4)):
-        super(DRAGCalibration, self).__init__(qubit_name)
         self.filename = 'DRAG/DRAG'
         self.deltas = deltas
         self.num_pulses = num_pulses
+        super(DRAGCalibration, self).__init__(qubit_name)
 
     def sequence(self):
         seqs = []
         for n in self.num_pulses:
-            seqs += [[X90(q, dragScaling = d), X90m(q, dragScaling = d)]*n + [X90(q, dragScaling = d), MEAS(q)] for d in self.deltas]
-        seqs += create_cal_seqs((q,),2)
+            seqs += [[X90(self.qubit, drag_scaling = d), X90m(self.qubit, drag_scaling = d)]*n + [X90(self.qubit, drag_scaling = d), MEAS(self.qubit)] for d in self.deltas]
+        seqs += create_cal_seqs((self.qubit,),2)
         return seqs
 
+    def init_plot(self):
+        plot = ManualPlotter("DRAG Cal", x_label=['DRAG parameter', 'Number of pulses'], y_label=['Amplitude (Arb. Units)', 'Fit DRAG parameter'], numplots = 2)
+        cmap = cm.viridis(np.linspace(0, 1, len(self.num_pulses)))
+        for n in range(len(self.num_pulses)):
+            plot.add_data_trace('Data_{}'.format(n), {'color': list(cmap[n])})
+            plot.add_fit_trace('Fit_{}'.format(n), {'color': list(cmap[n])})
+        plot.add_data_trace('Data_opt', subplot_num = 1) #TODO: error bars
+        return plot
+
     def calibrate(self):
+        # run twice for different DRAG parameter ranges
+        for k in range(2):
         #generate sequence
-        self.set()
-        #first run
-        data, _ = self.run()
-        #fit and analyze
-        opt_drag, error_drag = fit_drag(self.deltas, self.num_pulses, norm_data)
+            self.set()
+            #first run
+            data, _ = self.run()
+            finer_deltas = np.linspace(np.min(self.deltas), np.max(self.deltas), 4*len(self.deltas))
+            #normalize data with cals
+            data = 2*(data-np.mean(data[-4:-2]))/(np.mean(data[-4:-2])-np.mean(data[-2:])) + 1
+            data = data[:-4]
+            opt_drag, error_drag, popt_mat = fit_drag(data, self.deltas, self.num_pulses)
 
-        #generate sequence with new pulses and drag parameters
-        new_drag_step = 0.25*(max(self.deltas) - min(self.deltas))
-        self.deltas = np.range(opt_drag - new_drag_step, opt_drag + new_drag_step, len(self.deltas))
-        new_pulse_step = 2*(max(self.num_pulses)-min(self.num_pulses))/len(self.num_pulses)
-        self.num_pulses = np.arange(max(self.num_pulses) - new_pulse_step, max(self.num_pulses) + new_pulse_step*(len(self.num_pulses)-1), new_pulse_step)
-        self.set()
+            #plot
+            norm_data = data.reshape((len(self.num_pulses), len(self.deltas)))
+            for n in range(len(self.num_pulses)):
+                self.plot['Data_{}'.format(n)] = (self.deltas, norm_data[n, :])
+                finer_deltas = np.linspace(np.min(self.deltas), np.max(self.deltas), 4*len(self.deltas))
+                self.plot['Fit_{}'.format(n)] = (finer_deltas, sinf(finer_deltas, *popt_mat[:, n])) if n==0 else (finer_deltas, quadf(finer_deltas, *popt_mat[:3, n]))
+            self.plot["Data_opt"] = (self.num_pulses, opt_drag) #TODO: add error bars
 
-        #second run, finer range
-        data, _ = self.run()
-        opt_drag, error_drag = fit_drag(data)
-        #TODO: success condition
+            if k>0:
+                #generate sequence with new pulses and drag parameters
+                new_drag_step = 0.25*(max(self.deltas) - min(self.deltas))
+                self.deltas = np.arange(opt_drag[-1] - new_drag_step, opt_drag[-1] + new_drag_step, len(self.deltas))
+                new_pulse_step = 2*(max(self.num_pulses)-min(self.num_pulses))/len(self.num_pulses)
+                self.num_pulses = np.arange(max(self.num_pulses) - new_pulse_step, max(self.num_pulses) + new_pulse_step*(len(self.num_pulses)-1), new_pulse_step)
 
-        print("DRAG", opt_drag)
+        self.saved_settings['qubits'][self.qubit.label]['control']['pulse_params']['drag_scaling'] = round(float(opt_drag[-1]), 5)
 
-        self.settings['qubits'][self.qubit_names[0]]['pulseParams']['dragScaling'] = fitted_drag
-        self.update_settings()
+        return opt_drag[-1]
 
-        return fitted_drag
 class MeasCalibration(PulseCalibration):
     def __init__(self, qubit_name):
         super(MeasCalibration, self).__init__(qubit_name)
@@ -536,12 +553,9 @@ class CLEARCalibration(MeasCalibration):
                 self.eps2*=opt_scaling
 
         #update library (default amp1, amp2 for MEAS)
-        chan_settings['channelDict'][self.meas_name]['pulseParams']['amp1'] = self.eps1
-        chan_settings['channelDict'][self.meas_name]['pulseParams']['amp2'] = self.eps2
-        chan_settings['channelDict'][self.meas_name]['pulseParams']['step_length'] = self.tau
-        self.settings['qubits'][self.qubit.label]['measure']['pulse_params']['amp1'] = round(float(self.eps1), 5)
-        self.settings['qubits'][self.qubit.label]['measure']['pulse_params']['amp2'] = round(float(self.eps2), 5)
-        self.settings['qubits'][self.qubit.label]['measure']['pulse_params']['step_length'] = round(float(self.tau), 5)
+        self.saved_settings['qubits'][self.qubit.label]['measure']['pulse_params']['amp1'] = round(float(self.eps1), 5)
+        self.saved_settings['qubits'][self.qubit.label]['measure']['pulse_params']['amp2'] = round(float(self.eps2), 5)
+        self.saved_settings['qubits'][self.qubit.label]['measure']['pulse_params']['step_length'] = round(float(self.tau), 5)
         super(CLEARCalibration, self).update_settings()
 
 '''Two-qubit gate calibrations'''
@@ -572,7 +586,7 @@ class CRCalibration(PulseCalibration):
 
         #update CR channel
         CRchan = ChannelLibrary.EdgeFactory(*self.qubits)
-        self.settings['edges'][CRchan][str.lower(self.cal_type.name)] = opt_par
+        self.saved_settings['edges'][CRchan][str.lower(self.cal_type.name)] = opt_par
         self.update_settings()
 
         # Plot the result

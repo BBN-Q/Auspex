@@ -10,7 +10,7 @@ from auspex.instruments import KeysightM8190A, Scenario, Sequence
 from auspex.instruments import SR865
 # from auspex.instruments import Keithley2400
 from auspex.instruments import AMI430
-from auspex.instruments import Attenuator
+from auspex.instruments import RFMDAttenuator
 
 from PyDAQmx import *
 
@@ -41,17 +41,18 @@ def arb_voltage_lookup(arb_calib="calibration/AWG_20160901.csv"):
 
 class ResetSearchLockinExperiment(Experiment):
 
-    voltage    = OutputConnector()
-    field      = FloatParameter(default=0, unit="T")
-    duration   = FloatParameter(default=5e-9, unit="s")
+    voltage          = OutputConnector()
+    field            = FloatParameter(default=0, unit="T")
+    pulse_duration   = FloatParameter(default=5e-9, unit="s")
 
-    repeats         = 200
+    attempts         = 200
     amplitudes      = np.arange(-0.01, 0.011, 0.01) # Reset amplitudes
     samps_per_trig  = 5
-    settle_delay    = 50e-6
     circuit_attenuation = 20.0
+    res_reference = 1e3
     measure_current = 3e-6
     tc = 50e-6
+    fdB = 18
 
     # Avoid bit depoth problems by scaling here...
     # arb_scale = 0.1
@@ -70,11 +71,23 @@ class ResetSearchLockinExperiment(Experiment):
         descrip.data_name='voltage'
         descrip.add_axis(DataAxis("sample", range(self.samps_per_trig)))
         descrip.add_axis(DataAxis("amplitude", self.amplitudes))
-        descrip.add_axis(DataAxis("repeat", range(self.repeats)))
+        descrip.add_axis(DataAxis("repeat", range(self.attempts)))
         self.voltage.set_descriptor(descrip)
 
     def init_instruments(self):
+        # ===================
+        #    Setup the Lockin
+        # ===================
         self.lock.tc = self.tc
+        self.lock.filter_slope = self.fdB
+        self.lock.amp = self.res_reference * self.measure_current
+        time.sleep(10 * self.lock.measure_delay())
+        # Rescale lockin analogue output for NIDAQ
+        self.lock.r_offset_enable = True
+        self.lock.r_expand = 100
+        self.lock.auto_offset("R")
+        self.lock.r_offset = 0.995*self.lock.r_offset
+        time.sleep(10 * self.lock.measure_delay())
 
         self.mag.ramp()
 
@@ -86,7 +99,7 @@ class ResetSearchLockinExperiment(Experiment):
 
         self.analog_input = Task()
         self.read = int32()
-        self.buf_points = len(self.amplitudes)*self.samps_per_trig*self.repeats
+        self.buf_points = len(self.amplitudes)*self.samps_per_trig*self.attempts
         self.analog_input.CreateAIVoltageChan("Dev1/ai0", "", DAQmx_Val_Diff, -10.0, 10.0, DAQmx_Val_Volts, None)
         self.analog_input.CfgSampClkTiming("", 1e6, DAQmx_Val_Rising, DAQmx_Val_FiniteSamps, self.samps_per_trig)
         self.analog_input.CfgInputBuffer(self.buf_points)
@@ -96,7 +109,7 @@ class ResetSearchLockinExperiment(Experiment):
 
         # Assign methods
         self.field.assign_method(self.mag.set_field)
-        self.duration.assign_method(self.setup_AWG)
+        self.pulse_duration.assign_method(self.setup_AWG)
 
     def setup_AWG(self, *args):
         self.arb.abort()
@@ -113,7 +126,7 @@ class ResetSearchLockinExperiment(Experiment):
         self.arb.gate_mode = False
 
         def arb_pulse(amplitude, sample_rate=12e9):
-            pulse_points = int(self.duration.value*sample_rate)
+            pulse_points = int(self.pulse_duration.value*sample_rate)
 
             if pulse_points < 320:
                 wf = np.zeros(320)
@@ -138,11 +151,11 @@ class ResetSearchLockinExperiment(Experiment):
         nidaq_trig_segment_id = self.arb.define_waveform(len(nidaq_trig_wf))
         self.arb.upload_waveform(nidaq_trig_wf, nidaq_trig_segment_id)
 
-        settle_pts = int(640*np.ceil(self.settle_delay * 12e9 / 640))
+        settle_pts = int(640*np.ceil(self.lock.measure_delay() * 12e9 / 640))
         start_idxs = [0]
 
         scenario = Scenario()
-        seq = Sequence(sequence_loop_ct=int(self.repeats))
+        seq = Sequence(sequence_loop_ct=int(self.attempts))
         for si in segment_ids:
             # seq = Sequence(sequence_loop_ct=int(1))
             seq.add_waveform(si) # Apply switching pulse to the sample
@@ -181,11 +194,9 @@ class ResetSearchLockinExperiment(Experiment):
         except Exception as e:
             logger.warning("Warning failed to stop task. This is typical.")
             pass
+
         self.arb.stop()
-        # self.keith.current = 0.0
-        self.mag.disconnect()
-        # del self.mag
-        # mag.zero()
+        self.lock.amp = 0
 
 if __name__ == "__main__":
     sample_name = "CSHE-Die7-C6R7"
@@ -194,7 +205,7 @@ if __name__ == "__main__":
 
     exp = ResetSearchLockinExperiment()
     exp.field.value     = 0.007
-    exp.duration.value  = 5e-9
+    exp.pulse_duration.value  = 5e-9
     exp.measure_current = 3e-6
     amps = np.linspace(-0.95, 0.95, 75)
     amps = np.append(amps, np.flipud(amps))

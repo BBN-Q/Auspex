@@ -287,6 +287,8 @@ class QubitExpFactory(object):
         getattr(mce, cals[second_cal]).value = offset2
 
         mce.disconnect_instruments()
+        mce.plot_server.stop()
+
         if write_to_file:
             mce.write_to_file()
         logger.info(("Mixer calibration: I offset = {}, Q offset = {}, "
@@ -380,13 +382,19 @@ class QubitExpFactory(object):
             # Set number of segments in the digitizer
             instruments[dig_name]['nbr_segments'] = num_segments
 
+            # Find the enabled X6 stream selectors with the same channel as the receiver. Allow to plot/save raw/demod/int streams belonging to the same receiver
+            if calibration:
+                X6_stream_selectors = []
+            else:
+                X6_stream_selectors = [k for k,v in filters.items() if (v["type"] == 'X6StreamSelector' and v["source"] == filters[stream_sel_name]['source'] and v["enabled"] == True and v["channel"] == filters[stream_sel_name]["channel"] and v["dsp_channel"] == filters[stream_sel_name]["dsp_channel"])]
+
             # Enable the tree for single-shot fidelity experiment. Change stream_sel_name to raw (by default)
             writers = []
             plotters = []
             singleshot = []
             buffers = []
             for filt_name, filt in filters.items():
-                if filt_name == stream_sel_name:
+                if filt_name in [stream_sel_name] + X6_stream_selectors:
                     # Find descendants of the channel selector
                     chan_descendants = nx.descendants(dag, filt_name)
                     # Find endpoints within the descendants
@@ -434,26 +442,25 @@ class QubitExpFactory(object):
             else:
                 qubit_to_writer[qubit_name] = writers
 
-            if calibration:
-                writer_ancestors = []
-                plotter_ancestors = []
-                singleshot_ancestors = []
-                buffer_ancestors = []
-                # Trace back our ancestors, using plotters if no writers are available
-                if len(writers) == 1:
-                    writer_ancestors = nx.ancestors(dag, writers[0])
-                    # We will have gotten the digitizer, which should be removed since we're already taking care of it
-                    writer_ancestors.remove(dig_name)
-                if plotters:
-                    plotter_ancestors = set().union(*[nx.ancestors(dag, pl) for pl in plotters])
-                    plotter_ancestors.remove(dig_name)
-                if singleshot:
-                    singleshot_ancestors = set().union(*[nx.ancestors(dag, ss) for ss in singleshot])
-                    singleshot_ancestors.remove(dig_name)
-                if buffers:
-                    buffer_ancestors = set().union(*[nx.ancestors(dag, bf) for bf in buffers])
-                    buffer_ancestors.remove(dig_name)
-                filt_to_enable.extend(set().union(writer_ancestors, plotter_ancestors, singleshot_ancestors, buffer_ancestors))
+            writer_ancestors = []
+            plotter_ancestors = []
+            singleshot_ancestors = []
+            buffer_ancestors = []
+            # Trace back our ancestors, using plotters if no writers are available
+            if len(writers) == 1:
+                writer_ancestors = nx.ancestors(dag, writers[0])
+                # We will have gotten the digitizer, which should be removed since we're already taking care of it
+                writer_ancestors.remove(dig_name)
+            if plotters:
+                plotter_ancestors = set().union(*[nx.ancestors(dag, pl) for pl in plotters])
+                plotter_ancestors.remove(dig_name)
+            if singleshot:
+                singleshot_ancestors = set().union(*[nx.ancestors(dag, ss) for ss in singleshot])
+                singleshot_ancestors.remove(dig_name)
+            if buffers:
+                buffer_ancestors = set().union(*[nx.ancestors(dag, bf) for bf in buffers])
+                buffer_ancestors.remove(dig_name)
+            filt_to_enable.extend(set().union(writer_ancestors, plotter_ancestors, singleshot_ancestors, buffer_ancestors))
 
         if calibration:
             # One to one writers to qubits
@@ -472,23 +479,16 @@ class QubitExpFactory(object):
         for instr_name in inst_to_enable:
             instruments[instr_name]['enabled'] = True
 
-        if calibration:
-            for meas_name in filters.keys():
-                filters[meas_name]['enabled'] = False
-            for meas_name in filt_to_enable:
-                filters[meas_name]['enabled'] = True
-        else:
-            #disable single-shot filters and their output
-            for meas_name in filters.keys():
-                filt_source = filters[meas_name]["source"].split(" ")[0]
-                if filt_source != dig_name and "SingleShotMeasurement" in (filters[meas_name]["type"], filters[filt_source]['type']):
-                    filters[meas_name]['enabled'] = False
+        for meas_name in filters.keys():
+            filters[meas_name]['enabled'] = False
+        for meas_name in filt_to_enable:
+            filters[meas_name]['enabled'] = True
 
-            #label measurement with qubit name (assuming the convention "M-"+qubit_name)
-            for meas_name in filt_to_enable:
-                if filters[meas_name]["type"] == "WriteToHDF5":
-                    filters[meas_name]['groupname'] = writer_to_qubit[meas_name] \
-                        + "-" + filters[meas_name]['groupname']
+        #label measurement with qubit name (assuming the convention "M-"+qubit_name)
+        for meas_name in filt_to_enable:
+            if filters[meas_name]["type"] == "WriteToHDF5":
+                filters[meas_name]['groupname'] = writer_to_qubit[meas_name] \
+                    + "-" + filters[meas_name]['groupname']
 
         for instr_name, chan_data in meta_info['instruments'].items():
             instruments[instr_name]['enabled']  = True

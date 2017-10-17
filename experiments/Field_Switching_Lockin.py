@@ -25,15 +25,19 @@ class FieldSwitchingLockinExperiment(Experiment):
     field           = FloatParameter(default=0.0, unit="T")
     resistance      = OutputConnector(unit="Ohm")
 
+    # Default values for lockin measurement. These will need to be changed in a notebook to match the MR and switching current of the sample being measured
     res_reference = 1e3
-    vsource  = 10e-3
+    measure_current = 10e-6
+    fdB = 18
+    tc = 100e-3
     mag   = AMI430("192.168.5.109")
     lock  = SR865("USB0::0xB506::0x2000::002638::INSTR")
 
     def init_instruments(self):
         # Initialize lockin
-        self.lock.amp = self.vsource
-        self.lock.tc = 3
+        self.lock.amp = self.res_reference*self.measure_current
+        self.lock.tc = self.tc
+        self.lock.filter_slope = self.fdB
         self.mag.ramp()
         self.delay = self.lock.measure_delay()
         self.field.assign_method(self.mag.set_field)
