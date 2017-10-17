@@ -89,10 +89,10 @@ def yaml_dump(data, filename = "", flatten=False):
         with open(filename+".tmp", 'w+') as fid:
 
             yaml.dump(data, fid, Dumper=d)
-            # Upon success
-            move(filename+".tmp", filename)
-            with open(filename, 'r') as fid:
-                contents = fid.read()
+        # Upon success
+        move(filename+".tmp", filename)
+        with open(filename, 'r') as fid:
+            contents = fid.read()
         return contents
     else:
         # dump to an IO stream:
