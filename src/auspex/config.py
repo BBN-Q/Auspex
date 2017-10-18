@@ -45,7 +45,7 @@ class Include():
     def write(self):
         with open(self.filename+".tmp", 'w') as fid:
             yaml.dump(self.data, fid, Dumper=yaml.RoundTripDumper)
-        move(self.filename+".tmp", filename)
+        move(self.filename+".tmp", self.filename)
     def pop(self, key):
         return self.data.pop(key)
 
