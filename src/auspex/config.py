@@ -13,6 +13,7 @@ import os.path
 import sys
 import auspex.globals
 from shutil import move
+from io import StringIO
 try:
     import ruamel.yaml as yaml
 except:
@@ -42,8 +43,9 @@ class Include():
     def keys(self):
         return self.data.keys()
     def write(self):
-        with open(self.filename, 'w') as fid:
+        with open(self.filename+".tmp", 'w') as fid:
             yaml.dump(self.data, fid, Dumper=yaml.RoundTripDumper)
+        move(self.filename+".tmp", self.filename)
     def pop(self, key):
         return self.data.pop(key)
 
@@ -67,6 +69,10 @@ class Dumper(yaml.RoundTripDumper):
         data.write()
         return self.represent_scalar(u'!include', data.filename)
 
+class FlatDumper(yaml.RoundTripDumper):
+    def include(self, data):
+        return self.represent_mapping('tag:yaml.org,2002:map', data.data)
+
 def yaml_load(filename):
     with open(filename, 'r') as fid:
         Loader.add_constructor('!include', Loader.include)
@@ -75,12 +81,27 @@ def yaml_load(filename):
         load.dispose()
     return code
 
-def yaml_dump(data, filename):
-    with open(filename+".tmp", 'w+') as fid:
-        Dumper.add_representer(Include, Dumper.include)
-        yaml.dump(data, fid, Dumper=Dumper)
-    # Upon success
-    move(filename+".tmp", filename)
+def yaml_dump(data, filename = "", flatten=False):
+    d = Dumper if filename and not flatten else FlatDumper
+    d.add_representer(Include, d.include)
+
+    if filename:
+        with open(filename+".tmp", 'w+') as fid:
+
+            yaml.dump(data, fid, Dumper=d)
+        # Upon success
+        move(filename+".tmp", filename)
+        with open(filename, 'r') as fid:
+            contents = fid.read()
+        return contents
+    else:
+        # dump to an IO stream:
+        # note you need to use the FlatDumper for this to work
+        out = StringIO()
+        yaml.dump(data, out, Dumper=d)
+        ret_string = out.getvalue()
+        out.close()
+        return ret_string
 
 if not os.path.isfile(config_file):
     # build a config file from the template
@@ -89,7 +110,7 @@ if not os.path.isfile(config_file):
         template = json.load(ifid)
     cfg = {}
     for k,v in template.items():
-        cfg[k] = os.path.join(config_dir, v.replace("/my/path/to/", ""))
+        cfg[k] = os.path.join(root_path, v.replace("/my/path/to/", "examples/"))
 
     with open(config_file, 'w') as ofid:
         json.dump(cfg, ofid, indent=2)
