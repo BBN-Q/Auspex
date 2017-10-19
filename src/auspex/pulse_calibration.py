@@ -481,7 +481,8 @@ class MeasCalibration(PulseCalibration):
         self.meas_name = "M-" + qubit_name
 
 class CLEARCalibration(MeasCalibration):
-    ''' Calibration of cavity reset pulse
+    '''
+    Calibration of cavity reset pulse
     aux_qubit: auxiliary qubit used for CLEAR pulse
     kappa: cavity linewidth (angular frequency: 1/s)
     chi: half of the dispershive shift (angular frequency: 1/s)
@@ -548,7 +549,7 @@ class CLEARCalibration(MeasCalibration):
                 eps2 = self.eps2 if k==2 else xpoints[k]*self.eps2
                 #run for qubit in 0/1
                 for state in [0,1]:
-                    self.set(eps1 = eps1, eps2 = eps2, state = state)
+                    self.set(eps1 = eps1, eps2 = eps2, state = state, first_step = (ct==np.nonzero(self.cal_steps)[0][0] and k+state==0))
                     #analyze
                     data, _ = self.run()
                     norm_data = quick_norm_data(data)
