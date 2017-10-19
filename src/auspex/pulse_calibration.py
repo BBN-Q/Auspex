@@ -30,16 +30,18 @@ from matplotlib import cm
 import numpy as np
 from itertools import product
 
-def calibrate(calibrations, update_settings=True):
+def calibrate(calibrations, update_settings=True, cal_log = True):
     """Takes in a qubit (as a string) and list of calibrations (as instantiated classes).
     e.g. calibrate_pulses([RabiAmp("q1"), PhaseEstimation("q1")])"""
     for calibration in calibrations:
         if not isinstance(calibration, PulseCalibration):
             raise TypeError("calibrate_pulses was passed a calibration that is not actually a calibration.")
         try:
-            calibration.calibrate()
+            cal_result = calibration.calibrate()
             if update_settings:
                 calibration.update_settings()
+            if cal_log:
+                calibration.write_to_log(cal_result)
         except Exception as ex:
             logger.warning('Calibration {} could not complete: got exception: {}.'.format(type(calibration).__name__, ex))
             try:
@@ -151,15 +153,20 @@ class PulseCalibration(object):
     def write_to_log(self, cal_result):
         """Log calibration result"""
         logfile = os.path.join(config.LogDir, 'calibration_log.csv')
+        log_columns = ["frequency", "pi2Amp", "piAmp", "drag", "date", "time"]
         if os.path.isfile(logfile):
             lf = pd.read_csv(logfile, sep="\t")
         else:
             logger.info("Calibration log file created.")
-            log_columns = ["Frequency", "Pi2Amp", "PiAmp", "DRAG", "Date", "Time"]
             lf = pd.DataFrame(columns = log_columns)
-        #TODO: record current qubit settings, including those that were not just calibrated
-        #TODO: record two-qubit cals. Separate file?
-        lf = lf.append(pd.DataFrame(cal_result), columns = log_columns, ignore_index = True)
+        # Read the current (pre-cal) values for the parameters above
+        ctrl_settings = self.settings['qubits'][self.qubit_names[0]]['control']
+        cal_pars = {p: ctrl_settings[p] for p in log_columns}
+        # Update wit latest calibration
+        cal_pars[cal_result[0]] = cal_result[1]
+        #TODO: record two-qubit cals, prob. in a separate file
+        new_cal_entry = [cal_pars[p] for p in log_columns] + [time.strftime("%y%m%d"), time.strftime("%H%M%S")]
+        lf = lf.append(pd.DataFrame(new_cal_entry), columns = log_columns, ignore_index = True)
         lf.to_csv(logfile, sep="\t")
 
 class CavitySearch(PulseCalibration):
@@ -328,7 +335,7 @@ class RamseyCalibration(PulseCalibration):
         else:
             self.saved_settings['qubits']['q1']['control']['frequency'] += float(fit_freq - orig_freq)
         logger.info("Qubit set frequency = {} GHz".format(round(float(fit_freq/1e9),5)))
-        return fit_freq
+        return ('frequency', fit_freq)
 
 class PhaseEstimation(PulseCalibration):
     """Estimates pulse rotation angle from a sequence of P^k experiments, where
