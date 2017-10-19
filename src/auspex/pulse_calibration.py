@@ -17,6 +17,7 @@ import auspex.config as config
 from auspex.log import logger
 from copy import copy
 import os
+import pandas as pd
 
 from time import sleep
 
@@ -146,6 +147,20 @@ class PulseCalibration(object):
     def update_settings(self):
         """Update calibrated YAML with calibration parameters"""
         config.yaml_dump(self.saved_settings, config.configFile)
+
+    def write_to_log(self, cal_result):
+        """Log calibration result"""
+        logfile = os.path.join(config.LogDir, 'calibration_log.csv')
+        if os.path.isfile(logfile):
+            lf = pd.read_csv(logfile, sep="\t")
+        else:
+            logger.info("Calibration log file created.")
+            log_columns = ["Frequency", "Pi2Amp", "PiAmp", "DRAG", "Date", "Time"]
+            lf = pd.DataFrame(columns = log_columns)
+        #TODO: record current qubit settings, including those that were not just calibrated
+        #TODO: record two-qubit cals. Separate file?
+        lf = lf.append(pd.DataFrame(cal_result), columns = log_columns, ignore_index = True)
+        lf.to_csv(logfile, sep="\t")
 
 class CavitySearch(PulseCalibration):
     def __init__(self, qubit_name, frequencies=np.linspace(4, 5, 100), **kwargs):
