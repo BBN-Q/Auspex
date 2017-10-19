@@ -48,16 +48,11 @@ def calibrate(calibrations, update_settings=True):
             raise Exception("Calibration failure") from ex
         finally:
             sleep(0.1) #occasionally ZMQ barfs here
-            try:
-                calibration.exp.plot_server.stop()
-            except:
-                pass
-            try:
-                print("stopping extra server")
-                calibration.exp.extra_plot_server.stop()
-            except:
-                pass
-
+            if hasattr(calibration.exp, 'extra_plot_server'):
+                try:
+                    calibration.exp.extra_plot_server.stop()
+                except:
+                    pass
 
 class PulseCalibration(object):
     """Base class for calibration of qubit control pulses."""
