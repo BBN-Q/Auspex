@@ -19,7 +19,7 @@ from copy import copy
 import os
 import pandas as pd
 
-from time import sleep
+from time import *
 
 from auspex.exp_factory import QubitExpFactory
 from auspex.parameter import FloatParameter
@@ -30,7 +30,7 @@ from matplotlib import cm
 import numpy as np
 from itertools import product
 
-def calibrate(calibrations, update_settings=True, cal_log = True):
+def calibrate(calibrations, update_settings=True, cal_log = False):
     """Takes in a qubit (as a string) and list of calibrations (as instantiated classes).
     e.g. calibrate_pulses([RabiAmp("q1"), PhaseEstimation("q1")])"""
     for calibration in calibrations:
@@ -153,7 +153,7 @@ class PulseCalibration(object):
 
     def write_to_log(self, cal_result):
         """Log calibration result"""
-        logfile = os.path.join(config.LogDir, 'calibration_log.csv')
+        logfile = os.path.join(config.LogDir, self.qubit_names[0]+'_calibration_log.csv')
         log_columns = ["frequency", "pi2Amp", "piAmp", "drag_scaling", "date", "time"]
         if os.path.isfile(logfile):
             lf = pd.read_csv(logfile, sep="\t")
@@ -168,8 +168,8 @@ class PulseCalibration(object):
         # Update with latest calibration
         cal_pars[cal_result[0]] = cal_result[1]
         #TODO: record two-qubit cals, prob. in a separate file
-        new_cal_entry = [cal_pars[p] for p in log_columns] + [time.strftime("%y%m%d"), time.strftime("%H%M%S")]
-        lf = lf.append(pd.DataFrame(new_cal_entry), columns = log_columns, ignore_index = True)
+        new_cal_entry = [[cal_pars[p] for p in log_columns[:-2]] + [strftime("%y%m%d"), strftime("%H%M%S")]]
+        lf = lf.append(pd.DataFrame(new_cal_entry, columns = log_columns), ignore_index = True)
         lf.to_csv(logfile, sep="\t")
 
 class CavitySearch(PulseCalibration):
