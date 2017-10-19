@@ -99,7 +99,7 @@ class PulseCalibration(object):
             self.exp.extra_plot_server = extra_plot_server
         except:
             pass
-        [self.exp.add_manual_plotter(p) for p in self.plot] if isinstance(self.plot, list) else self.exp_add_manual_plotter(self.plot)
+        [self.exp.add_manual_plotter(p) for p in self.plot] if isinstance(self.plot, list) else self.exp.add_manual_plotter(self.plot)
         #sweep instruments for calibration
         for instr_to_set in instrs_to_set:
             par = FloatParameter()
