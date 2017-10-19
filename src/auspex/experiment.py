@@ -588,10 +588,10 @@ class Experiment(metaclass=MetaExperiment):
 
         from .plotting import MatplotServerThread
         plot_desc = {p.name: p.desc() for p in self.standard_plotters}
-        extra_plot_desc = {p.name: p.desc() for p in self.extra_plotters + self.manual_plotters}
         if not hasattr(self, "plot_server"):
             self.plot_server = MatplotServerThread(plot_desc)
-        if len(self.plotters) != len(self.standard_plotters) and not hasattr(self, "extra_plot_server"):
+        if len(self.plotters) > len(self.standard_plotters) and not hasattr(self, "extra_plot_server"):
+            extra_plot_desc = {p.name: p.desc() for p in self.extra_plotters + self.manual_plotters}
             self.extra_plot_server = MatplotServerThread(extra_plot_desc, status_port = self.plot_server.status_port+2, data_port = self.plot_server.data_port+2)
         for plotter in self.standard_plotters:
             plotter.plot_server = self.plot_server
