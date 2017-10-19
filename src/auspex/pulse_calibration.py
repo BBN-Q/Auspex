@@ -382,8 +382,7 @@ class PhaseEstimation(PulseCalibration):
         set_amp = 'pi2Amp' if isinstance(self, Pi2Calibration) else 'piAmp' if isinstance(self, PiCalibration) else 'amp'
         #TODO: add writers for variance if not existing
         while True:
-            if ct > 1:
-                self.set(first_step = False)
+            self.set(first_step = False)
             [phase, sigma] = phase_estimation(*self.run())
             logger.info("Phase: %.4f Sigma: %.4f"%(phase,sigma))
             # correct for some errors related to 2pi uncertainties
