@@ -149,7 +149,7 @@ def fit_drag(data, DRAG_vec, pulse_vec):
     xopt_vec = np.zeros(num_seqs)
     perr_vec = np.zeros(num_seqs)
     popt_mat = np.zeros((4, num_seqs))
-    data = data.reshape(len(data)//num_DRAG, num_DRAG, )
+    data = data.reshape(len(data)//num_DRAG, num_DRAG)
     #first fit sine to lowest n, for the full range
     data_n = data[1, :]
     T0 = 2*(DRAG_vec[np.argmax(data_n)] - DRAG_vec[np.argmin(data_n)]) #rough estimate of period
@@ -173,7 +173,7 @@ def fit_drag(data, DRAG_vec, pulse_vec):
         popt, pcov = curve_fit(quadf, curr_DRAG_vec, reduced_data_n, p0 = p0)
         perr_vec[ct] = np.sqrt(np.diag(pcov))[0]
         x_fine = np.linspace(min(curr_DRAG_vec), max(curr_DRAG_vec), 1001)
-        xopt_vec[ct] = x_fine[np.argmin(quadf(x_fine, *popt))]
+        xopt_vec[ct] = x_fine[np.argmin(quadf(x_fine, *popt))] #why not x0?
         popt_mat[:3,ct] = popt
     return xopt_vec, perr_vec, popt_mat
 
@@ -182,6 +182,7 @@ def sinf(x, f, A, phi, y0):
 
 def quadf(x, A, x0, b):
     return A*(x-x0)**2+b
+
 def fit_photon_number(xdata, ydata, params):
     ''' Fit number of measurement photons before a Ramsey. See McClure et al., Phys. Rev. App. 2016
     input params:
@@ -192,15 +193,21 @@ def fit_photon_number(xdata, ydata, params):
 	5 - exp(-t_meas/T1) (us), only if starting from |1> (to include relaxation during the 1st msm't)
 	6 - initial qubit state (0/1)
     '''
-    params[:2]*=2*pi # convert to angular frequencies
-    def model_0(t, p):
-        return (-np.imag(np.exp(-(1/params[3]+params[1]*1j)*t + (p[0]-p[1]*params[2]*(1-np.exp(-((params[0] + params[2]*1j)*t)))/(params[0]+params[2]*1j))*1j)))
-    if params[5] == 1:
-        def model(t, p):
-            return  params[4]*model_0(t, p) + (1-params[4])*model_0(t,[pn+k==0*np.pi for (k,pn) in enumerate(p)]) if params[5] == 1  else model_0(t, p)
+    params = [2*np.pi*p for p in params[:3]] + params[3:] # convert to angular frequencies
+    def model_0(t, pa, pb):
+        return (-np.imag(np.exp(-(1/params[3]+params[1]*1j)*t + (pa-pb*params[2]*(1-np.exp(-((params[0] + params[2]*1j)*t)))/(params[0]+params[2]*1j))*1j)))
+    def model(t, pa, pb):
+        return  params[4]*model_0(t, pa, pb) + (1-params[4])*model_0(t, pa+np.pi, pb) if params[5] == 1  else model_0(t, pa, pb)
     popt, pcov = curve_fit(model, xdata, ydata, p0 = [0, 1])
     perr = np.sqrt(np.diag(pcov))
-    return popt[1], perr[1]
+    finer_delays = np.linspace(np.min(xdata), np.max(xdata), 4*len(xdata))
+    fit_curve = model(finer_delays, *popt)
+    return popt[1], perr[1], (finer_delays, fit_curve)
+
+def fit_quad(xdata, ydata):
+    popt, pcov = curve_fit(quadf, xdata, ydata, p0 = [1, min(ydata), 0])
+    perr = np.sqrt(np.diag(pcov))
+    return popt, perr
 
 class CR_cal_type(Enum):
     LENGTH = 1

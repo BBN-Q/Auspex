@@ -27,6 +27,7 @@ from auspex.analysis.fits import *
 from auspex.analysis.helpers import normalize_data
 from matplotlib import cm
 import numpy as np
+from itertools import product
 
 def calibrate(calibrations, update_settings=True):
     """Takes in a qubit (as a string) and list of calibrations (as instantiated classes).
@@ -34,7 +35,6 @@ def calibrate(calibrations, update_settings=True):
     for calibration in calibrations:
         if not isinstance(calibration, PulseCalibration):
             raise TypeError("calibrate_pulses was passed a calibration that is not actually a calibration.")
-        calibration.set()
         try:
             calibration.calibrate()
             if update_settings:
@@ -99,9 +99,7 @@ class PulseCalibration(object):
             self.exp.extra_plot_server = extra_plot_server
         except:
             pass
-        if self.plot:
-            # Add the manual plotter and the update method to the experiment
-            self.exp.add_manual_plotter(self.plot)
+        [self.exp.add_manual_plotter(p) for p in self.plot] if isinstance(self.plot, list) else self.exp_add_manual_plotter(self.plot)
         #sweep instruments for calibration
         for instr_to_set in instrs_to_set:
             par = FloatParameter()
@@ -455,8 +453,7 @@ class DRAGCalibration(PulseCalibration):
             data, _ = self.run()
             finer_deltas = np.linspace(np.min(self.deltas), np.max(self.deltas), 4*len(self.deltas))
             #normalize data with cals
-            data = 2*(data-np.mean(data[-4:-2]))/(np.mean(data[-4:-2])-np.mean(data[-2:])) + 1
-            data = data[:-4]
+            data = quick_norm_data(data)
             opt_drag, error_drag, popt_mat = fit_drag(data, self.deltas, self.num_pulses)
 
             #plot
@@ -481,10 +478,11 @@ class DRAGCalibration(PulseCalibration):
 class MeasCalibration(PulseCalibration):
     def __init__(self, qubit_name):
         super(MeasCalibration, self).__init__(qubit_name)
-        self.meas_name = "M-" + qubit.name
+        self.meas_name = "M-" + qubit_name
 
 class CLEARCalibration(MeasCalibration):
-    ''' Calibration of cavity reset pulse
+    '''
+    Calibration of cavity reset pulse
     aux_qubit: auxiliary qubit used for CLEAR pulse
     kappa: cavity linewidth (angular frequency: 1/s)
     chi: half of the dispershive shift (angular frequency: 1/s)
@@ -510,59 +508,79 @@ class CLEARCalibration(MeasCalibration):
         self.T1factor = T1factor
         self.T2 = T2
         self.nsteps = nsteps
-        if not self.eps1:
+        if not eps1:
             # theoretical values as default
-            self.eps1 = (1 - 2*exp(kappa*t_empty/4)*np.cos(chi*t_empty/2))/(1+exp(kappa*t_empty/2)-2*exp(kappa*t_empty/4)*np.cos(chi*t_empty/2))
-            self.eps2 = 1/(1+exp(kappa*t_empty/2)-2*exp(kappa*t_empty/4)*np.cos(chi*t_empty/2))
+            self.eps1 = (1 - 2*np.exp(kappa*t_empty/4)*np.cos(chi*t_empty/2))/(1+np.exp(kappa*t_empty/2)-2*np.exp(kappa*t_empty/4)*np.cos(chi*t_empty/2))
+            self.eps2 = 1/(1+np.exp(kappa*t_empty/2)-2*np.exp(kappa*t_empty/4)*np.cos(chi*t_empty/2))
         self.cal_steps = cal_steps
 
     def sequence(self, **params):
         qM = QubitFactory(self.aux_qubit) #TODO: replace with MEAS(q) devoid of digitizer trigger
-        prep = X(q) if self.state else Id(q)
+        prep = X(self.qubit) if params['state'] else Id(self.qubit)
         seqs = [[prep, MEAS(qM, amp1 = params['eps1'], amp2 =  params['eps2'], step_length = self.tau), X90(self.qubit), Id(self.qubit,d), U90(self.qubit,phase = self.ramsey_freq*d),
         Id(self.qubit, self.meas_delay), MEAS(self.qubit)] for d in self.ramsey_delays]
         seqs += create_cal_seqs((self.qubit,), 2, delay = self.meas_delay)
         return seqs
 
-    def init_plot(self):
-        #TODO: see feature/DRAGcal-plots
-        pass
+    def init_plot(self): #keep in a single plot?
+        plot_raw = ManualPlotter("CLEAR Ramsey", x_label='Time (us)', y_label='<Z>')
+        plot_res = ManualPlotter("CLEAR Cal", x_label= ['eps1, eps2', 'eps1', 'eps2'], y_label=['Residual photons n0', '', ''], numplots=3)
+
+        plot_raw.add_data_trace('Data')
+        plot_raw.add_fit_trace('Fit')
+        for sweep_num, state in product([0,1,2], [0,1]):
+            plot_res.add_data_trace('sweep {}, state {}'.format(sweep_num, state), {'color': 'C{}'.format(state+1)}, sweep_num) #TODO: error bar
+            plot_res.add_fit_trace('Fit sweep {}, state {}'.format(sweep_num, state), {'color' : 'C{}'.format(state+1)}, sweep_num) #TODO
+        return [plot_raw, plot_res]
+
 
     def calibrate(self):
         for ct in range(3):
+            if not self.cal_steps[ct]:
+                continue
             #generate sequence
-            xpoints = linspace(1-self.cal_steps[ct], 1+self.cal_steps[ct], nsteps)
-            n0vec = np.zeros(nsteps)
-            err0vec = np.zeros(nsteps)
-            n1vec = np.zeros(nsteps)
-            err1vec = np.zeros(nsteps)
-            for k in range(nsteps):
+            xpoints = np.linspace(1-self.cal_steps[ct], 1+self.cal_steps[ct], self.nsteps)
+            n0vec = np.zeros(self.nsteps)
+            err0vec = np.zeros(self.nsteps)
+            n1vec = np.zeros(self.nsteps)
+            err1vec = np.zeros(self.nsteps)
+            for k in range(self.nsteps):
                 eps1 = self.eps1 if k==1 else xpoints[k]*self.eps1
                 eps2 = self.eps2 if k==2 else xpoints[k]*self.eps2
-                #run for qubit in 0
-                self.set(eps1 = eps1, eps2 = eps2, state = 0)
-                #analyze
-                data, _ = self.run()
-                n0vec[k], err0vec[k] = fit_photon_number(self.xpoints, data, [self.kappa, self.ramsey_freq, 2*self.chi, self.T2, self.T1factor, 0])
-                #qubit in 1
-                self.set(first_step = False, eps1 = eps1, eps2 = eps2, state = 1)
-                #analyze
-                data, _ = self.run()
-                n1vec[k], err1vec[k] = fit_photon_number(self.xpoints, data, [self.kappa, self.ramsey_freq, 2*self.chi, self.T2, self.T1factor, 1])
-            #fit for minimum photon number
-            x0 = min(n0vec)
-            x1 = min(n1vec)
-            opt_scaling = fit_CLEAR(xpoints, n0vec, n1vec, [x0, x1])
-            if ct==1 or ct==2:
-                self.eps1*=opt_scaling
-            if ct==1 or ct==3:
-                self.eps2*=opt_scaling
+                #run for qubit in 0/1
+                for state in [0,1]:
+                    self.set(eps1 = eps1, eps2 = eps2, state = state, first_step = (ct==np.nonzero(self.cal_steps)[0][0] and k+state==0))
+                    #analyze
+                    data, _ = self.run()
+                    norm_data = quick_norm_data(data)
+                    eval('n{}vec'.format(state))[k], eval('err{}vec'.format(state))[k], fit_curve = fit_photon_number(self.ramsey_delays, norm_data, [self.kappa, self.ramsey_freq, 2*self.chi, self.T2, self.T1factor, 0])
+                    #plot
+                    self.plot[0]['Data'] = (self.ramsey_delays, norm_data)
+                    self.plot[0]['Fit'] = fit_curve
+                    import pdb; pdb.set_trace()
+                    self.plot[1]['sweep {}, state 0'.format(ct)] = (xpoints, n0vec)
+                    self.plot[1]['sweep {}, state 1'.format(ct)] = (xpoints, n1vec)
 
-        #update library (default amp1, amp2 for MEAS)
-        self.saved_settings['qubits'][self.qubit.label]['measure']['pulse_params']['amp1'] = round(float(self.eps1), 5)
-        self.saved_settings['qubits'][self.qubit.label]['measure']['pulse_params']['amp2'] = round(float(self.eps2), 5)
-        self.saved_settings['qubits'][self.qubit.label]['measure']['pulse_params']['step_length'] = round(float(self.tau), 5)
-        super(CLEARCalibration, self).update_settings()
+            #fit for minimum photon number
+            popt_0,_ = fit_quad(xpoints, n0vec)
+            popt_1,_ = fit_quad(xpoints, n1vec)
+            finer_xpoints = np.linspace(np.min(xpoints), np.max(xpoints), 4*len(xpoints))
+            opt_scaling = np.mean(popt_0[0], popt_1[0])
+            logger.info("Optimal scaling factor for step {} = {}".format(ct+1, opt_scaling))
+
+            if ct<2:
+                self.eps1*=opt_scaling
+            if ct!=1:
+                self.eps2*=opt_scaling
+            self.plot[1]['Fit sweep {}, state 0'.format(ct)] = (finer_xpoints, quadf(finer_xpoints, popt_0))
+            self.plot[1]['Fit sweep {}, state 1'.format(ct)] = (finer_xpoints, quadf(finer_xpoints, popt_1))
+
+        def update_settings(self):
+            #update library (default amp1, amp2 for MEAS)
+            self.saved_settings['qubits'][self.qubit.label]['measure']['pulse_params']['amp1'] = round(float(self.eps1), 5)
+            self.saved_settings['qubits'][self.qubit.label]['measure']['pulse_params']['amp2'] = round(float(self.eps2), 5)
+            self.saved_settings['qubits'][self.qubit.label]['measure']['pulse_params']['step_length'] = round(float(self.tau), 5)
+            super(CLEARCalibration, self).update_settings()
 
 '''Two-qubit gate calibrations'''
 class CRCalibration(PulseCalibration):
@@ -755,3 +773,9 @@ def phase_estimation( data_in, vardata_in, verbose=False):
         sigma = np.maximum(np.abs(restrict(curGuess - lowerBound)), np.abs(restrict(curGuess - upperBound)))
 
     return phase, sigma
+
+def quick_norm_data(data): #TODO: generalize as in Qlab.jl
+    """Rescale data assuming 2 calibrations / single qubit state at the end of the sequence"""
+    data = 2*(data-np.mean(data[-4:-2]))/(np.mean(data[-4:-2])-np.mean(data[-2:])) + 1
+    data = data[:-4]
+    return data
