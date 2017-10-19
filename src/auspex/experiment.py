@@ -214,6 +214,9 @@ class Experiment(metaclass=MetaExperiment):
         # indicates whether the instruments are already connected
         self.instrs_connected = False
 
+        # indicates whether this is the first (or only) experiment in a series (e.g. for pulse calibrations)
+        self.first_exp = True
+
         # Things we can't metaclass
         self.output_connectors = {}
         for oc in self._output_connectors.keys():
@@ -424,11 +427,6 @@ class Experiment(metaclass=MetaExperiment):
         if not any([oc.descriptor.axes for oc in self.output_connectors.values()]):
             logger.warning("There do not appear to be any axes defined for this experiment!")
 
-        #connect all instruments
-        self.connect_instruments()
-        #initialize instruments
-        self.init_instruments()
-
         # Go find any writers
         self.writers = [n for n in self.nodes if isinstance(n, WriteToHDF5)]
         self.buffers = [n for n in self.nodes if isinstance(n, DataBuffer)]
@@ -455,7 +453,8 @@ class Experiment(metaclass=MetaExperiment):
         self.nodes = [n for n in self.nodes if not(hasattr(n, 'input_connectors') and        n.input_connectors['sink'].descriptor.num_dims()==0)]
 
         # Go and find any plotters
-        self.plotters = [n for n in self.nodes if isinstance(n, (Plotter, MeshPlotter, XYPlotter))]
+        self.standard_plotters = [n for n in self.nodes if isinstance(n, (Plotter, MeshPlotter, XYPlotter))]
+        self.plotters = copy.copy(self.standard_plotters)
 
         # We might have some additional plotters that are separate from
         # The asyncio filter pipeline
@@ -472,42 +471,14 @@ class Experiment(metaclass=MetaExperiment):
             if hasattr(n, 'final_init'):
                 n.final_init()
 
-        # Launch the bokeh-server if necessary.
+        # Launch plot servers.
         if len(self.plotters) > 0:
-            logger.debug("Found %d plotters", len(self.plotters))
-
-            from .plotting import MatplotServerThread
-
-            plot_desc = {p.name: p.desc() for p in self.plotters}
-            if not self.leave_plot_server_open or not hasattr(self, "plot_server"):
-                self.plot_server = MatplotServerThread(plot_desc)
-            for plotter in self.plotters:
-                plotter.plot_server = self.plot_server
-            time.sleep(0.5)
-            # Kill a previous plotter if desired.
-            if auspex.globals.single_plotter_mode and auspex.globals.last_plotter_process and not self.keep_instruments_connected:
-                pro = auspex.globals.last_plotter_process
-                if hasattr(os, 'setsid'): # Doesn't exist on windows
-                    try:
-                        os.kill(pro.pid, 0) # Raises an error if the PID doesn't exist
-                        os.killpg(os.getpgid(pro.pid), signal.SIGTERM) # Proceed to kill process group
-                    except OSError:
-                        logger.debug("No plotter to kill.")
-                else:
-                    try:
-                        pro.kill()
-                    except:
-                        logger.debug("No plotter to kill.")
-
-            client_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),"matplotlib-client.py")
-            if not self.keep_instruments_connected or not auspex.globals.last_plotter_process: #keep_instruments_connected is a flag for keeping the plot process running
-                if hasattr(os, 'setsid'):
-                    auspex.globals.last_plotter_process = subprocess.Popen(['python', client_path, 'localhost'],
-                                                                        env=os.environ.copy(), preexec_fn=os.setsid)
-                else:
-                    auspex.globals.last_plotter_process = subprocess.Popen(['python', client_path, 'localhost'],
-                                                                        env=os.environ.copy())
-            time.sleep(1)
+            self.init_plot_servers()
+        time.sleep(1)
+        #connect all instruments
+        self.connect_instruments()
+        #initialize instruments
+        self.init_instruments()
 
         def catch_ctrl_c(signum, frame):
             logger.info("Caught SIGINT. Shutting down.")
@@ -548,11 +519,12 @@ class Experiment(metaclass=MetaExperiment):
             except:
                 logger.debug("File probably already closed...")
 
-        try:
-            if len(self.plotters) > 0 and not self.leave_plot_server_open:
-                self.plot_server.stop()
-        except:
-            logger.warning("Could not stop plot server gracefully...")
+        if hasattr(self, 'plot_server'):
+            try:
+                if len(self.plotters) > 0: #and not self.leave_plot_server_open:
+                    self.plot_server.stop()
+            except:
+                logger.warning("Could not stop plot server gracefully...")
 
         self.shutdown_instruments()
 
@@ -610,3 +582,50 @@ class Experiment(metaclass=MetaExperiment):
 
         stream = self._extra_plots_to_streams[plotter]
         await stream.push_direct(data)
+
+    def init_plot_servers(self):
+        logger.debug("Found %d plotters", len(self.plotters))
+
+        from .plotting import MatplotServerThread
+        plot_desc = {p.name: p.desc() for p in self.standard_plotters}
+        extra_plot_desc = {p.name: p.desc() for p in self.extra_plotters + self.manual_plotters}
+        if not hasattr(self, "plot_server"):
+            self.plot_server = MatplotServerThread(plot_desc)
+        if len(self.plotters) != len(self.standard_plotters) and not hasattr(self, "extra_plot_server"):
+            self.extra_plot_server = MatplotServerThread(extra_plot_desc, status_port = self.plot_server.status_port+2, data_port = self.plot_server.data_port+2)
+        for plotter in self.standard_plotters:
+            plotter.plot_server = self.plot_server
+        for plotter in self.extra_plotters + self.manual_plotters:
+            plotter.plot_server = self.extra_plot_server
+        time.sleep(0.5)
+        # Kill a previous plotter if desired.
+        if auspex.globals.single_plotter_mode and auspex.globals.last_plotter_process:
+            pros = [auspex.globals.last_plotter_process]
+            if (not self.leave_plot_server_open or self.first_exp) and auspex.globals.last_extra_plotter_process:
+                pros += [auspex.globals.last_extra_plotter_process]
+            for pro in pros:
+                if hasattr(os, 'setsid'): # Doesn't exist on windows
+                    try:
+                        os.kill(pro.pid, 0) # Raises an error if the PID doesn't exist
+                        os.killpg(os.getpgid(pro.pid), signal.SIGTERM) # Proceed to kill process group
+                    except OSError:
+                        logger.debug("No plotter to kill.")
+                else:
+                    try:
+                        pro.kill()
+                    except:
+                        logger.debug("No plotter to kill.")
+
+        client_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),"matplotlib-client.py")
+        #if not auspex.globals.last_plotter_process:
+        if hasattr(os, 'setsid'):
+            auspex.globals.last_plotter_process = subprocess.Popen(['python', client_path, 'localhost'],
+                                                                env=os.environ.copy(), preexec_fn=os.setsid)
+        else:
+            auspex.globals.last_plotter_process = subprocess.Popen(['python', client_path, 'localhost'],
+                                                                env=os.environ.copy())
+        if hasattr(self, 'extra_plot_server') and (not auspex.globals.last_extra_plotter_process or not self.leave_plot_server_open or self.first_exp):
+            if hasattr(os, 'setsid'):
+                auspex.globals.last_extra_plotter_process = subprocess.Popen(['python', client_path, 'localhost', str(self.extra_plot_server.status_port), str(self.extra_plot_server.data_port)], env=os.environ.copy(), preexec_fn=os.setsid)
+            else:
+                auspex.globals.last_extra_plotter_process = subprocess.Popen(['python', client_path, 'localhost', str(self.extra_plot_server.status_port), str(self.extra_plot_server.data_port)], env=os.environ.copy())

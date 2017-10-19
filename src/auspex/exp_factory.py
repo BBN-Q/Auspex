@@ -244,6 +244,7 @@ class QubitExpFactory(object):
         logger.info("Found first pass I offset of {}.".format(I1_offset))
         mce.I_offset.value = I1_offset
 
+        mce.first_exp = False # slight misnomer to indicate that no new plot is needed
         sweep_offset("Q_offset", offset_pts)
         Q1_amps = np.array([x[1] for x in buff.get_data()])
         Q1_offset, xpts, ypts = find_null_offset(offset_pts, Q1_amps)
@@ -287,6 +288,8 @@ class QubitExpFactory(object):
         getattr(mce, cals[second_cal]).value = offset2
 
         mce.disconnect_instruments()
+        mce.extra_plot_server.stop()
+
         if write_to_file:
             mce.write_to_file()
         logger.info(("Mixer calibration: I offset = {}, Q offset = {}, "
