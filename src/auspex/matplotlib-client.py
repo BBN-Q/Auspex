@@ -281,7 +281,7 @@ class CanvasMesh(MplCanvas):
         return mesh
 
 class MatplotClientWindow(QtWidgets.QMainWindow):
-    def __init__(self, hostname=None):
+    def __init__(self, hostname=None, status_port=7771, data_port=7772):
         QtWidgets.QMainWindow.__init__(self)
         self.setAttribute(QtCore.Qt.WA_DeleteOnClose)
         self.setWindowTitle("Auspex Plotting")
@@ -308,14 +308,13 @@ class MatplotClientWindow(QtWidgets.QMainWindow):
         self.listener_thread = None
 
         if hostname:
-            self.open_connection(hostname)
+            self.open_connection(hostname, status_port, data_port)
 
-    def open_connection(self, address):
-        port = 7771
-        self.statusBar().showMessage("Open session to {}:{}".format(address, port), 2000)
+    def open_connection(self, address, status_port, data_port):
+        self.statusBar().showMessage("Open session to {}:{}".format(address, status_port), 2000)
         socket = self.context.socket(zmq.DEALER)
         socket.identity = "Matplotlib_Qt_Client".encode()
-        socket.connect("tcp://{}:{}".format(address, port))
+        socket.connect("tcp://{}:{}".format(address, status_port))
         socket.send(b"WHATSUP")
 
         poller = zmq.Poller()
@@ -344,7 +343,7 @@ class MatplotClientWindow(QtWidgets.QMainWindow):
             self.listener_thread.wait()
 
         self.listener_thread = QtCore.QThread()
-        self.Datalistener = DataListener(address)
+        self.Datalistener = DataListener(address, data_port)
         self.Datalistener.moveToThread(self.listener_thread)
         self.listener_thread.started.connect(self.Datalistener.loop)
         self.Datalistener.message.connect(self.data_signal_received)
@@ -441,8 +440,10 @@ if __name__ == '__main__':
         myappid = u'BBN.auspex.matplotlib-client.0001' # arbitrary string
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
 
+    if len(sys.argv) > 2:
+        sys.argv = sys.argv[:2] + [int(arg) for arg in sys.argv[2:]]
     if len(sys.argv) > 1:
-        aw = MatplotClientWindow(hostname=sys.argv[1])
+        aw = MatplotClientWindow(*sys.argv[1:])
     else:
         aw = MatplotClientWindow()
     aw.setWindowTitle("%s" % progname)
