@@ -102,7 +102,8 @@ class PulseCalibration(object):
             self.exp.extra_plot_server = extra_plot_server
         except:
             pass
-        [self.exp.add_manual_plotter(p) for p in self.plot] if isinstance(self.plot, list) else self.exp.add_manual_plotter(self.plot)
+        if self.plot:
+            [self.exp.add_manual_plotter(p) for p in self.plot] if isinstance(self.plot, list) else self.exp.add_manual_plotter(self.plot)
         #sweep instruments for calibration
         for instr_to_set in instrs_to_set:
             par = FloatParameter()
@@ -153,7 +154,7 @@ class PulseCalibration(object):
     def write_to_log(self, cal_result):
         """Log calibration result"""
         logfile = os.path.join(config.LogDir, 'calibration_log.csv')
-        log_columns = ["frequency", "pi2Amp", "piAmp", "drag", "date", "time"]
+        log_columns = ["frequency", "pi2Amp", "piAmp", "drag_scaling", "date", "time"]
         if os.path.isfile(logfile):
             lf = pd.read_csv(logfile, sep="\t")
         else:
@@ -161,8 +162,10 @@ class PulseCalibration(object):
             lf = pd.DataFrame(columns = log_columns)
         # Read the current (pre-cal) values for the parameters above
         ctrl_settings = self.settings['qubits'][self.qubit_names[0]]['control']
-        cal_pars = {p: ctrl_settings[p] for p in log_columns}
-        # Update wit latest calibration
+        cal_pars = {}
+        for ind, p in enumerate(log_columns[:-2]):
+            cal_pars[p] = ctrl_settings[p] if p in ctrl_settings else ctrl_settings['pulse_params'][p]
+        # Update with latest calibration
         cal_pars[cal_result[0]] = cal_result[1]
         #TODO: record two-qubit cals, prob. in a separate file
         new_cal_entry = [cal_pars[p] for p in log_columns] + [time.strftime("%y%m%d"), time.strftime("%H%M%S")]
@@ -382,7 +385,7 @@ class PhaseEstimation(PulseCalibration):
         set_amp = 'pi2Amp' if isinstance(self, Pi2Calibration) else 'piAmp' if isinstance(self, PiCalibration) else 'amp'
         #TODO: add writers for variance if not existing
         while True:
-            self.set(first_step = False)
+            self.set()
             [phase, sigma] = phase_estimation(*self.run())
             logger.info("Phase: %.4f Sigma: %.4f"%(phase,sigma))
             # correct for some errors related to 2pi uncertainties
@@ -416,7 +419,7 @@ class PhaseEstimation(PulseCalibration):
         logger.info("Found amplitude for {} calibration of: {}".format(type(self).__name__, amp))
 
         set_chan = self.qubit_names[0] if len(self.qubit_names) == 1 else ChannelLibrary.EdgeFactory(*self.qubits).label
-        return amp
+        return (set_amp, amp)
 
     def update_settings(self):
         set_amp = 'pi2Amp' if isinstance(self, Pi2Calibration) else 'piAmp' if isinstance(self, PiCalibration) else 'amp'
