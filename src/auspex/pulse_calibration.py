@@ -497,7 +497,7 @@ class DRAGCalibration(PulseCalibration):
 
         self.saved_settings['qubits'][self.qubit.label]['control']['pulse_params']['drag_scaling'] = round(float(opt_drag[-1]), 5)
 
-        return opt_drag[-1]
+        return ('drag_scaling', opt_drag[-1])
 
 class MeasCalibration(PulseCalibration):
     def __init__(self, qubit_name):
