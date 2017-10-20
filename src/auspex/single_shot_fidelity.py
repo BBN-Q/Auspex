@@ -24,6 +24,7 @@ from auspex.filters.plot import ManualPlotter
 from auspex.filters.singleshot import SingleShotMeasurement
 from auspex.analysis.fits import *
 from auspex.analysis.helpers import normalize_data
+import auspex.globals
 
 class SingleShotFidelityExperiment(QubitExperiment):
     """Experiment to measure single-shot measurement fidelity of a qubit."""
@@ -65,6 +66,7 @@ class SingleShotFidelityExperiment(QubitExperiment):
             QubitExpFactory.load_parameter_sweeps(experiment)
         self.ssf = self.find_single_shot_filter()
         self.leave_plot_server_open = True
+        auspex.globals.single_plotter_mode = True
 
     def run_sweeps(self):
         #For now, only update histograms if we don't have a parameter sweep.
