@@ -81,8 +81,11 @@ class SingleShotFidelityExperiment(QubitExperiment):
         if not self.sweeper.axes:
             self._update_histogram_plots()
 
-        if self.plotters:
-            self.plot_server.stop()
+        if hasattr(self, 'extra_plot_server'):
+            try:
+                self.extra_plot_server.stop()
+            except:
+                pass
 
         if self.sweeper.axes and self.optimize:
             #select the buffers/writers whose sources are singleshot filters
