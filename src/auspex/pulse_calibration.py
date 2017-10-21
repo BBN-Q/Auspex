@@ -68,7 +68,7 @@ class PulseCalibration(object):
         self.axis_descriptor = None
         self.cw_mode    = False
         self.saved_settings = config.yaml_load(config.configFile)
-        self.settings = self.saved_settings #make a copy for used during calibration
+        self.settings = copy(self.saved_settings) #make a copy for used during calibration
         self.quad = quad
         if quad == "real":
             self.quad_fun = np.real
