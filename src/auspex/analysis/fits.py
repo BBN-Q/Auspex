@@ -223,7 +223,6 @@ def fit_CR(xpoints, data, cal_type):
     x_fine = np.linspace(min(xpoints), max(xpoints), 1001)
     if cal_type == CR_cal_type.LENGTH:
         p0 = [1, 2*xpoints[-1], -np.pi/2, 0]
-        import pdb; pdb.set_trace()
         popt0, _ = curve_fit(sinf, xpoints, data0, p0 = p0)
         popt1, _ = curve_fit(sinf, xpoints, data1, p0 = p0)
         #find the first zero crossing
