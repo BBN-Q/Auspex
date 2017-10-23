@@ -647,52 +647,51 @@ class CRCalibration(PulseCalibration):
 
 class CRLenCalibration(CRCalibration):
     def __init__(self, qubit_names, lengths=np.linspace(20, 1020, 21)*1e-9, phase = 0, amp = 0.8, rise_fall = 40e-9, cal_type = CR_cal_type.LENGTH):
-        super(CRLenCalibration, self).__init__(qubit_names, lengths, phases, amps, rise_fall)
         self.cal_type = cal_type
+        super(CRLenCalibration, self).__init__(qubit_names, lengths, phase, amp, rise_fall)
 
     def sequence(self):
-        qc, qt = self.qubits[:]
+        qc, qt = self.qubit
         seqs = [[Id(qc)] + echoCR(qc, qt, length=l, phase = self.phases, amp=self.amps, riseFall=self.rise_fall).seq + [Id(qc), MEAS(qt)*MEAS(qc)]
         for l in self.lengths]+ [[X(qc)] + echoCR(qc, qt, length=l, phase= self.phases, amp=self.amps, riseFall=self.rise_fall).seq + [X(qc), MEAS(qt)*MEAS(qc)]
-        for l in self.lengths] + create_cal_seqs((qt,qc), calRepeats=2, measChans=(qt,qc))
+        for l in self.lengths] + create_cal_seqs((qt,qc), 2, measChans=(qt,qc))
 
         self.axis_descriptor=[
-            delay_descriptor(np.concatenate((lengths, lengths))),
-            cal_descriptor((qc, qt), 2)
+            delay_descriptor(np.concatenate((self.lengths, self.lengths))),
+            cal_descriptor(tuple(self.qubit), 2)
         ]
 
         return seqs
 
 class CRPhaseCalibration(CRCalibration):
     def __init__(self, qubit_names, phases = np.linspace(0,2*np.pi,21), amp = 0.8, rise_fall = 40e-9, cal_type = CR_cal_type.PHASE):
-        super(CRPhaseCalibration, self).__init__(qubit_names, lengths, phases, amps, rise_fall)
         self.phases = phases
         self.amps = amp
         self.rise_fall = rise_fall
+        super(CRPhaseCalibration, self).__init__(qubit_names, lengths, phases, amp, rise_fall)
         CRchan = ChannelLibrary.EdgeFactory(*self.qubits)
         length = CRchan.pulseParams['length']
 
     def sequence(self):
-        qc, qt = self.qubits[:]
+        qc, qt = self.qubit
         seqs = [[Id(qc)] + echoCR(qc, qt, length=length, phase=ph, amp=self.amp, riseFall=self.rise_fall).seq + [X90(qt)*Id(qc), MEAS(qt)*MEAS(qc)]
         for ph in self.phases]+ [[X(qc)] + echoCR(qc, qt, length=length, phase= ph, amp=self.amp, riseFall=self.rise_fall).seq + [X90(qt)*X(qc), MEAS(qt)*MEAS(qc)]
-        for ph in self.phases] + create_cal_seqs((qt,qc), calRepeats=2, measChans=(qt,qc))
+        for ph in self.phases] + create_cal_seqs((qt,qc), 2, measChans=(qt,qc))
 
         self.axis_descriptor = [
             {
                 'name': 'phase',
                 'unit': 'radians',
-                'points': list(phases)+list(phases),
+                'points': list(self.phases)+list(self.phases),
                 'partition': 1
             },
-            cal_descriptor((qc, qt), calRepeats)
+            cal_descriptor(tuple(self.qubit), 2)
         ]
 
         return seqs
 
 class CRAmpCalibration(CRCalibration):
-    def __init__(self, qubit_names, range = 0.2, amp = 0.8, rise_fall = 40e-9, num_CR = 1, cal_type = CR_cal_type.AMPLITUDE):
-        super(CRAmpCalibration, self).__init__(qubit_names, lengths, phases, amps, rise_fall)
+    def __init__(self, qubit_names, range = 0.2, phase = 0, amp = 0.8, rise_fall = 40e-9, num_CR = 1, cal_type = CR_cal_type.AMPLITUDE):
         if mod(num_CR, 2) == 0:
             logger.error('The number of ZX90 must be odd')
         self.rise_fall = rise_fall
@@ -700,22 +699,23 @@ class CRAmpCalibration(CRCalibration):
         self.amps = np.linspace(0.8*amp, 1.2*amp, 21)
         self.lengths = CRchan.pulseParams['length']
         self.phases = CRchan.pulseParams['phase']
+        super(CRAmpCalibration, self).__init__(qubit_names, lengths, phase, amps, rise_fall)
 
     def sequence(self):
-        qc, qt = self.qubits[:]
+        qc, qt = self.qubit
         CRchan = ChannelLibrary.EdgeFactory(qc, qt)
         seqs = [[Id(qc)] + num_CR*echoCR(qc, qt, length=self.length, phase=self.phase, amp=a, riseFall=self.rise_fall).seq + [Id(qc), MEAS(qt)*MEAS(qc)]
         for a in self.amps]+ [[X(qc)] + num_CR*echoCR(qc, qt, length=length, phase= self.phase, amp=a, riseFall=self.rise_fall).seq + [X(qc), MEAS(qt)*MEAS(qc)]
-        for a in self.amps] + create_cal_seqs((qt,qc), calRepeats=2, measChans=(qt,qc))
+        for a in self.amps] + create_cal_seqs((qt,qc), 2, measChans=(qt,qc))
 
         self.axis_descriptor = [
             {
                 'name': 'amplitude',
                 'unit': None,
-                'points': list(amps)+list(amps),
+                'points': list(self.amps)+list(self.amps),
                 'partition': 1
             },
-            cal_descriptor((qc, qt), calRepeats)
+            cal_descriptor(tuple(self.qubit), 2)
         ]
 
         return seqs
