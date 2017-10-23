@@ -153,21 +153,29 @@ class PulseCalibration(object):
 
     def write_to_log(self, cal_result):
         """Log calibration result"""
-        logfile = os.path.join(config.LogDir, self.qubit_names[0]+'_calibration_log.csv')
-        log_columns = ["frequency", "pi2Amp", "piAmp", "drag_scaling", "date", "time"]
+        logfile = os.path.join(config.LogDir, ''.join(self.qubit_names) + '_calibration_log.csv')
+        if len(self.qubit) == 1:
+            log_columns = ["frequency", "pi2Amp", "piAmp", "drag_scaling"]
+        elif len(self.qubit) == 2:
+            log_columns = ['length', 'phase', 'amp']
+        else:
+            logger.error('Calibrations not supported for >2-qubit gates')
+        log_columns+=['date', 'time']
         if os.path.isfile(logfile):
             lf = pd.read_csv(logfile, sep="\t")
         else:
             logger.info("Calibration log file created.")
             lf = pd.DataFrame(columns = log_columns)
         # Read the current (pre-cal) values for the parameters above
-        ctrl_settings = self.settings['qubits'][self.qubit_names[0]]['control']
+        if len(self.qubit) == 1:
+            ctrl_settings = self.settings['qubits'][self.qubit_names[0]]['control']
+        else:
+            ctrl_settings = self.settings['edges'][self.edge_name]
         cal_pars = {}
         for ind, p in enumerate(log_columns[:-2]):
             cal_pars[p] = ctrl_settings[p] if p in ctrl_settings else ctrl_settings['pulse_params'][p]
         # Update with latest calibration
         cal_pars[cal_result[0]] = cal_result[1]
-        #TODO: record two-qubit cals, prob. in a separate file
         new_cal_entry = [[cal_pars[p] for p in log_columns[:-2]] + [strftime("%y%m%d"), strftime("%H%M%S")]]
         lf = lf.append(pd.DataFrame(new_cal_entry, columns = log_columns), ignore_index = True)
         lf.to_csv(logfile, sep="\t")
@@ -614,6 +622,7 @@ class CRCalibration(PulseCalibration):
         self.amps = amp
         self.rise_fall = rise_fall
         self.filename = 'CR/CR'
+        self.edge_name = ChannelLibrary.EdgeFactory(*self.qubit).label
 
     def init_plot(self):
         plot = ManualPlotter("CR"+str.lower(self.cal_type.name)+"Fit", x_label=str.lower(self.cal_type.name), #TODO: add unit
@@ -636,15 +645,14 @@ class CRCalibration(PulseCalibration):
         # Plot the result
         xaxis = self.lengths if self.cal_type==CR_cal_type.LENGTH else self.phases if self.cal_type==CR_cal_type.PHASE else self.amps
         finer_xaxis = np.linspace(np.min(xaxis), np.max(xaxis), 4*len(xaxis))
-        import pdb; pdb.set_trace()
         self.plot["Data 0"] = (xaxis,       data_t[:len(data_t)//2])
         self.plot["Fit 0"] =  (finer_xaxis, sinf(finer_xaxis, *all_params_0))
         self.plot["Data 1"] = (xaxis,       data_t[len(data_t)//2:])
         self.plot["Fit 1"] =  (finer_xaxis, sinf(finer_xaxis, *all_params_1))
+        return (str.lower(self.cal_type.name), self.opt_par)
 
     def update_settings(self):
-        CRchan = ChannelLibrary.EdgeFactory(*self.qubit)
-        self.saved_settings['edges'][CRchan.label][str.lower(self.cal_type.name)] = round(float(self.opt_par), 5)
+        self.saved_settings['edges'][self.edge_name][str.lower(self.cal_type.name)] = round(float(self.opt_par), 5)
         super(CRCalibration, self).update_settings()
 
 class CRLenCalibration(CRCalibration):
