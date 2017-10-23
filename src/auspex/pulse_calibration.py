@@ -652,7 +652,7 @@ class CRCalibration(PulseCalibration):
         return (str.lower(self.cal_type.name), self.opt_par)
 
     def update_settings(self):
-        self.saved_settings['edges'][self.edge_name][str.lower(self.cal_type.name)] = round(float(self.opt_par), 5)
+        self.saved_settings['edges'][self.edge_name]['pulse_params'][str.lower(self.cal_type.name)] = float(self.opt_par)
         super(CRCalibration, self).update_settings()
 
 class CRLenCalibration(CRCalibration):
