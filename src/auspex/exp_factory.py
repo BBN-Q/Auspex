@@ -400,10 +400,10 @@ class QubitExpFactory(object):
                     chan_descendants = nx.descendants(dag, filt_name)
                     # Find endpoints within the descendants
                     endpoints = [n for n in chan_descendants if dag.in_degree(n) == 1 and dag.out_degree(n) == 0]
-                    # Find endpoints which are enabled writers, plotters or singleshot filters without an output
-                    writers += [e for e in endpoints if filters[e]["type"] == "WriteToHDF5" and (not hasattr(filters[e], "enabled") or filters[e]["enabled"])]
-                    plotters += [e for e in endpoints if filters[e]["type"] == "Plotter" and (not hasattr(filters[e], "enabled") or filters[e]["enabled"])]
-                    buffers += [e for e in endpoints if filters[e]["type"] == "DataBuffer" and (not hasattr(filters[e], "enabled") or filters[e]["enabled"])]
+                    # Find endpoints which are enabled writers, plotters or singleshot filters without an output. Disable outputs of single-shot filters when not used.
+                    writers += [e for e in endpoints if filters[e]["type"] == "WriteToHDF5" and (not hasattr(filters[e], "enabled") or filters[e]["enabled"]) and (not filters[filters[e]["source"].split(" ")[0]]['type'] == 'SingleShotMeasurement' or experiment.__class__.__name__ == "SingleShotFidelityExperiment")]
+                    plotters += [e for e in endpoints if filters[e]["type"] == "Plotter" and (not hasattr(filters[e], "enabled") or filters[e]["enabled"]) and (not filters[filters[e]["source"].split(" ")[0]]['type'] == 'SingleShotMeasurement' or experiment.__class__.__name__ == "SingleShotFidelityExperiment")]
+                    buffers += [e for e in endpoints if filters[e]["type"] == "DataBuffer" and (not hasattr(filters[e], "enabled") or filters[e]["enabled"]) and (not filters[filters[e]["source"].split(" ")[0]]['type'] == 'SingleShotMeasurement' or experiment.__class__.__name__ == "SingleShotFidelityExperiment")]
                     singleshot += [e for e in endpoints if filters[e]["type"] == "SingleShotMeasurement" and (not hasattr(filters[e], "enabled") or filters[e]["enabled"]) and experiment.__class__.__name__ == "SingleShotFidelityExperiment"]
             filt_to_enable.extend(set().union(writers, plotters, singleshot, buffers))
             if calibration:
