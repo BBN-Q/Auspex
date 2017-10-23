@@ -30,7 +30,7 @@ from matplotlib import cm
 import numpy as np
 from itertools import product
 
-def calibrate(calibrations, update_settings=True, cal_log = False):
+def calibrate(calibrations, update_settings=True, cal_log=True):
     """Takes in a qubit (as a string) and list of calibrations (as instantiated classes).
     e.g. calibrate_pulses([RabiAmp("q1"), PhaseEstimation("q1")])"""
     for calibration in calibrations:
@@ -581,7 +581,6 @@ class CLEARCalibration(MeasCalibration):
                     #plot
                     self.plot[0]['Data'] = (self.ramsey_delays, norm_data)
                     self.plot[0]['Fit'] = fit_curve
-                    import pdb; pdb.set_trace()
                     self.plot[1]['sweep {}, state 0'.format(ct)] = (xpoints, n0vec)
                     self.plot[1]['sweep {}, state 1'.format(ct)] = (xpoints, n1vec)
 
@@ -617,7 +616,8 @@ class CRCalibration(PulseCalibration):
         self.filename = 'CR/CR'
 
     def init_plot(self):
-        plot = ManualPlotter("CR"+str.lower(self.cal_type.name)+"Fit", x_label=str.lower(self.cal_type.name), y_label='$<Z_{'+self.qubit_names[1]+'}>$')
+        plot = ManualPlotter("CR"+str.lower(self.cal_type.name)+"Fit", x_label=str.lower(self.cal_type.name), #TODO: add unit
+        y_label='$<Z_{'+self.qubit_names[1]+'}>$')
         plot.add_data_trace("Data 0", {'color': 'C1'})
         plot.add_fit_trace("Fit 0", {'color': 'C1'})
         plot.add_data_trace("Data 1", {'color': 'C2'})
@@ -631,18 +631,20 @@ class CRCalibration(PulseCalibration):
         data, _ = self.run()
         data_t = data[qt]
         opt_par, all_params_0, all_params_1 = fit_CR(self.lengths, data_t, self.cal_type)
+        data_t = quick_norm_data(data_t)
 
         # Plot the result
         xaxis = self.lengths if self.cal_type==CR_cal_type.LENGTH else self.phases if self.cal_type==CR_cal_type.PHASE else self.amps
         finer_xaxis = np.linspace(np.min(xaxis), np.max(xaxis), 4*len(xaxis))
-        self.plot["Data 0"] = (xaxis,       data_t[:len(data_t)/2])
-        self.plot["Fit 0"] =  (finer_xaxis, sin_f(finer_lengths, *all_params_0))
-        self.plot["Data 1"] = (xaxis,       data_t[len(data_t)/2:])
-        self.plot["Fit 1"] =  (finer_xaxis, sin_f(finer_lengths, *all_params_1))
+        import pdb; pdb.set_trace()
+        self.plot["Data 0"] = (xaxis,       data_t[:len(data_t)//2])
+        self.plot["Fit 0"] =  (finer_xaxis, sinf(finer_xaxis, *all_params_0))
+        self.plot["Data 1"] = (xaxis,       data_t[len(data_t)//2:])
+        self.plot["Fit 1"] =  (finer_xaxis, sinf(finer_xaxis, *all_params_1))
 
     def update_settings(self):
-        CRchan = ChannelLibrary.EdgeFactory(*self.qubits)
-        self.saved_settings['edges'][CRchan][str.lower(self.cal_type.name)] = round(float(opt_par), 5)
+        CRchan = ChannelLibrary.EdgeFactory(*self.qubit)
+        self.saved_settings['edges'][CRchan.label][str.lower(self.cal_type.name)] = round(float(self.opt_par), 5)
         super(CRCalibration, self).update_settings()
 
 class CRLenCalibration(CRCalibration):
