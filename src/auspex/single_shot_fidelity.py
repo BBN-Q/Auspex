@@ -106,7 +106,12 @@ class SingleShotFidelityExperiment(QubitExperiment):
                         # go through the tree
                         param_key = param_key[key]
                     opt_value = float(dataset[axis.name][opt_ind])
-                    param_key[instr_tree[-1]] = opt_value
+                    # special case to set APS ch12 amplitudes
+                    if instr_tree[-1] == 'amplitude' and instr_tree[-2] in self.saved_settings['instruments'].keys():
+                        param_key['tx_channels']['12']['1']['amplitude'] = round(float(opt_value), 5)
+                        param_key['tx_channels']['12']['2']['amplitude'] = round(float(opt_value), 5)
+                    else:
+                        param_key[instr_tree[-1]] = opt_value
                     logger.info("Set{} to {}.".format(" ".join(str(x) for x in instr_tree),opt_value ))
                 config.yaml_dump(self.saved_settings, config.configFile)
 
