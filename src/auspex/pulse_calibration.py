@@ -30,7 +30,7 @@ from matplotlib import cm
 import numpy as np
 from itertools import product
 
-def calibrate(calibrations, update_settings=True, cal_log = False):
+def calibrate(calibrations, update_settings=True, cal_log=True):
     """Takes in a qubit (as a string) and list of calibrations (as instantiated classes).
     e.g. calibrate_pulses([RabiAmp("q1"), PhaseEstimation("q1")])"""
     for calibration in calibrations:
@@ -153,21 +153,29 @@ class PulseCalibration(object):
 
     def write_to_log(self, cal_result):
         """Log calibration result"""
-        logfile = os.path.join(config.LogDir, self.qubit_names[0]+'_calibration_log.csv')
-        log_columns = ["frequency", "pi2Amp", "piAmp", "drag_scaling", "date", "time"]
+        logfile = os.path.join(config.LogDir, ''.join(self.qubit_names) + '_calibration_log.csv')
+        if len(self.qubit) == 1:
+            log_columns = ["frequency", "pi2Amp", "piAmp", "drag_scaling"]
+        elif len(self.qubit) == 2:
+            log_columns = ['length', 'phase', 'amp']
+        else:
+            logger.error('Calibrations not supported for >2-qubit gates')
+        log_columns+=['date', 'time']
         if os.path.isfile(logfile):
             lf = pd.read_csv(logfile, sep="\t")
         else:
             logger.info("Calibration log file created.")
             lf = pd.DataFrame(columns = log_columns)
         # Read the current (pre-cal) values for the parameters above
-        ctrl_settings = self.settings['qubits'][self.qubit_names[0]]['control']
+        if len(self.qubit) == 1:
+            ctrl_settings = self.settings['qubits'][self.qubit_names[0]]['control']
+        else:
+            ctrl_settings = self.settings['edges'][self.edge_name]
         cal_pars = {}
         for ind, p in enumerate(log_columns[:-2]):
             cal_pars[p] = ctrl_settings[p] if p in ctrl_settings else ctrl_settings['pulse_params'][p]
         # Update with latest calibration
         cal_pars[cal_result[0]] = cal_result[1]
-        #TODO: record two-qubit cals, prob. in a separate file
         new_cal_entry = [[cal_pars[p] for p in log_columns[:-2]] + [strftime("%y%m%d"), strftime("%H%M%S")]]
         lf = lf.append(pd.DataFrame(new_cal_entry, columns = log_columns), ignore_index = True)
         lf.to_csv(logfile, sep="\t")
@@ -581,7 +589,6 @@ class CLEARCalibration(MeasCalibration):
                     #plot
                     self.plot[0]['Data'] = (self.ramsey_delays, norm_data)
                     self.plot[0]['Fit'] = fit_curve
-                    import pdb; pdb.set_trace()
                     self.plot[1]['sweep {}, state 0'.format(ct)] = (xpoints, n0vec)
                     self.plot[1]['sweep {}, state 1'.format(ct)] = (xpoints, n1vec)
 
@@ -615,9 +622,11 @@ class CRCalibration(PulseCalibration):
         self.amps = amp
         self.rise_fall = rise_fall
         self.filename = 'CR/CR'
+        self.edge_name = ChannelLibrary.EdgeFactory(*self.qubit).label
 
     def init_plot(self):
-        plot = ManualPlotter("CR"+str.lower(self.cal_type.name)+"Fit", x_label=str.lower(self.cal_type.name), y_label='$<Z_{'+self.qubit_names[1]+'}>$')
+        plot = ManualPlotter("CR"+str.lower(self.cal_type.name)+"Fit", x_label=str.lower(self.cal_type.name), #TODO: add unit
+        y_label='$<Z_{'+self.qubit_names[1]+'}>$')
         plot.add_data_trace("Data 0", {'color': 'C1'})
         plot.add_fit_trace("Fit 0", {'color': 'C1'})
         plot.add_data_trace("Data 1", {'color': 'C2'})
@@ -631,68 +640,68 @@ class CRCalibration(PulseCalibration):
         data, _ = self.run()
         data_t = data[qt]
         opt_par, all_params_0, all_params_1 = fit_CR(self.lengths, data_t, self.cal_type)
+        data_t = quick_norm_data(data_t)
 
         # Plot the result
         xaxis = self.lengths if self.cal_type==CR_cal_type.LENGTH else self.phases if self.cal_type==CR_cal_type.PHASE else self.amps
         finer_xaxis = np.linspace(np.min(xaxis), np.max(xaxis), 4*len(xaxis))
-        self.plot["Data 0"] = (xaxis,       data_t[:len(data_t)/2])
-        self.plot["Fit 0"] =  (finer_xaxis, sin_f(finer_lengths, *all_params_0))
-        self.plot["Data 1"] = (xaxis,       data_t[len(data_t)/2:])
-        self.plot["Fit 1"] =  (finer_xaxis, sin_f(finer_lengths, *all_params_1))
+        self.plot["Data 0"] = (xaxis,       data_t[:len(data_t)//2])
+        self.plot["Fit 0"] =  (finer_xaxis, sinf(finer_xaxis, *all_params_0))
+        self.plot["Data 1"] = (xaxis,       data_t[len(data_t)//2:])
+        self.plot["Fit 1"] =  (finer_xaxis, sinf(finer_xaxis, *all_params_1))
+        return (str.lower(self.cal_type.name), self.opt_par)
 
     def update_settings(self):
-        CRchan = ChannelLibrary.EdgeFactory(*self.qubits)
-        self.saved_settings['edges'][CRchan][str.lower(self.cal_type.name)] = round(float(opt_par), 5)
+        self.saved_settings['edges'][self.edge_name]['pulse_params'][str.lower(self.cal_type.name)] = float(self.opt_par)
         super(CRCalibration, self).update_settings()
 
 class CRLenCalibration(CRCalibration):
     def __init__(self, qubit_names, lengths=np.linspace(20, 1020, 21)*1e-9, phase = 0, amp = 0.8, rise_fall = 40e-9, cal_type = CR_cal_type.LENGTH):
-        super(CRLenCalibration, self).__init__(qubit_names, lengths, phases, amps, rise_fall)
         self.cal_type = cal_type
+        super(CRLenCalibration, self).__init__(qubit_names, lengths, phase, amp, rise_fall)
 
     def sequence(self):
-        qc, qt = self.qubits[:]
+        qc, qt = self.qubit
         seqs = [[Id(qc)] + echoCR(qc, qt, length=l, phase = self.phases, amp=self.amps, riseFall=self.rise_fall).seq + [Id(qc), MEAS(qt)*MEAS(qc)]
         for l in self.lengths]+ [[X(qc)] + echoCR(qc, qt, length=l, phase= self.phases, amp=self.amps, riseFall=self.rise_fall).seq + [X(qc), MEAS(qt)*MEAS(qc)]
-        for l in self.lengths] + create_cal_seqs((qt,qc), calRepeats=2, measChans=(qt,qc))
+        for l in self.lengths] + create_cal_seqs((qt,qc), 2, measChans=(qt,qc))
 
         self.axis_descriptor=[
-            delay_descriptor(np.concatenate((lengths, lengths))),
-            cal_descriptor((qc, qt), 2)
+            delay_descriptor(np.concatenate((self.lengths, self.lengths))),
+            cal_descriptor(tuple(self.qubit), 2)
         ]
 
         return seqs
 
 class CRPhaseCalibration(CRCalibration):
     def __init__(self, qubit_names, phases = np.linspace(0,2*np.pi,21), amp = 0.8, rise_fall = 40e-9, cal_type = CR_cal_type.PHASE):
-        super(CRPhaseCalibration, self).__init__(qubit_names, lengths, phases, amps, rise_fall)
         self.phases = phases
         self.amps = amp
         self.rise_fall = rise_fall
+        super(CRPhaseCalibration, self).__init__(qubit_names, lengths, phases, amp, rise_fall)
         CRchan = ChannelLibrary.EdgeFactory(*self.qubits)
         length = CRchan.pulseParams['length']
 
     def sequence(self):
-        qc, qt = self.qubits[:]
+        qc, qt = self.qubit
         seqs = [[Id(qc)] + echoCR(qc, qt, length=length, phase=ph, amp=self.amp, riseFall=self.rise_fall).seq + [X90(qt)*Id(qc), MEAS(qt)*MEAS(qc)]
         for ph in self.phases]+ [[X(qc)] + echoCR(qc, qt, length=length, phase= ph, amp=self.amp, riseFall=self.rise_fall).seq + [X90(qt)*X(qc), MEAS(qt)*MEAS(qc)]
-        for ph in self.phases] + create_cal_seqs((qt,qc), calRepeats=2, measChans=(qt,qc))
+        for ph in self.phases] + create_cal_seqs((qt,qc), 2, measChans=(qt,qc))
 
         self.axis_descriptor = [
             {
                 'name': 'phase',
                 'unit': 'radians',
-                'points': list(phases)+list(phases),
+                'points': list(self.phases)+list(self.phases),
                 'partition': 1
             },
-            cal_descriptor((qc, qt), calRepeats)
+            cal_descriptor(tuple(self.qubit), 2)
         ]
 
         return seqs
 
 class CRAmpCalibration(CRCalibration):
-    def __init__(self, qubit_names, range = 0.2, amp = 0.8, rise_fall = 40e-9, num_CR = 1, cal_type = CR_cal_type.AMPLITUDE):
-        super(CRAmpCalibration, self).__init__(qubit_names, lengths, phases, amps, rise_fall)
+    def __init__(self, qubit_names, range = 0.2, phase = 0, amp = 0.8, rise_fall = 40e-9, num_CR = 1, cal_type = CR_cal_type.AMPLITUDE):
         if mod(num_CR, 2) == 0:
             logger.error('The number of ZX90 must be odd')
         self.rise_fall = rise_fall
@@ -700,22 +709,23 @@ class CRAmpCalibration(CRCalibration):
         self.amps = np.linspace(0.8*amp, 1.2*amp, 21)
         self.lengths = CRchan.pulseParams['length']
         self.phases = CRchan.pulseParams['phase']
+        super(CRAmpCalibration, self).__init__(qubit_names, lengths, phase, amps, rise_fall)
 
     def sequence(self):
-        qc, qt = self.qubits[:]
+        qc, qt = self.qubit
         CRchan = ChannelLibrary.EdgeFactory(qc, qt)
         seqs = [[Id(qc)] + num_CR*echoCR(qc, qt, length=self.length, phase=self.phase, amp=a, riseFall=self.rise_fall).seq + [Id(qc), MEAS(qt)*MEAS(qc)]
         for a in self.amps]+ [[X(qc)] + num_CR*echoCR(qc, qt, length=length, phase= self.phase, amp=a, riseFall=self.rise_fall).seq + [X(qc), MEAS(qt)*MEAS(qc)]
-        for a in self.amps] + create_cal_seqs((qt,qc), calRepeats=2, measChans=(qt,qc))
+        for a in self.amps] + create_cal_seqs((qt,qc), 2, measChans=(qt,qc))
 
         self.axis_descriptor = [
             {
                 'name': 'amplitude',
                 'unit': None,
-                'points': list(amps)+list(amps),
+                'points': list(self.amps)+list(self.amps),
                 'partition': 1
             },
-            cal_descriptor((qc, qt), calRepeats)
+            cal_descriptor(tuple(self.qubit), 2)
         ]
 
         return seqs
