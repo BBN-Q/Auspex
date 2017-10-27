@@ -15,7 +15,7 @@ except:
 
 import auspex.config as config
 from auspex.log import logger
-from copy import deepcopy
+from copy import copy, deepcopy
 import os
 import pandas as pd
 
