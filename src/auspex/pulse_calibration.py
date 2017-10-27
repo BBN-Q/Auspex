@@ -15,7 +15,7 @@ except:
 
 import auspex.config as config
 from auspex.log import logger
-from copy import copy
+from copy import deepcopy
 import os
 import pandas as pd
 
@@ -68,7 +68,7 @@ class PulseCalibration(object):
         self.axis_descriptor = None
         self.cw_mode    = False
         self.saved_settings = config.yaml_load(config.configFile)
-        self.settings = copy(self.saved_settings) #make a copy for used during calibration
+        self.settings = deepcopy(self.saved_settings) #make a copy for used during calibration
         self.quad = quad
         if quad == "real":
             self.quad_fun = np.real

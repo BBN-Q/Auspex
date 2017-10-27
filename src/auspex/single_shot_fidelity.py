@@ -13,7 +13,7 @@ except:
     print("Could not load QGL.")
 # from QGL.BasicSequences.helpers import create_cal_seqs, time_descriptor, cal_descriptor
 import auspex.config as config
-from copy import copy
+from copy import deepcopy
 import os
 import json
 
@@ -45,7 +45,7 @@ class SingleShotFidelityExperiment(QubitExperiment):
         self.qubit     = [QubitFactory(qubit_name) for qubit_name in qubit_names] if isinstance(qubit_names, list) else QubitFactory(qubit_names)
         # make a copy of the settings to restore default
         self.saved_settings = config.yaml_load(config.configFile)
-        self.settings = copy(self.saved_settings)
+        self.settings = deepcopy(self.saved_settings)
         self.save_data = save_data
         self.calibration = True
         self.optimize = optimize
