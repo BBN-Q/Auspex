@@ -45,6 +45,7 @@ Which will automatically fetch and install all of the requirements. If you are u
 - pandas >= 0.18.1
 - networkx >= 1.11
 - matplotlib >= 2.0.0
+- cffi >= 1.10.0
 
 Qubit Experiments
 *****************
