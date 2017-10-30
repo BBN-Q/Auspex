@@ -1,3 +1,7 @@
+# Qubit configuration for the 21.1st century.
+# This example configuration will be used for
+# unit tests related to the QubitExpFactory.
+
 qubits:
   q1:
     measure:
