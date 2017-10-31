@@ -153,4 +153,4 @@ filters:
   partial-avg-buff:
     type: DataBuffer
     source: avg-q1 partial_average
-    enabled: true
+    enabled: false
