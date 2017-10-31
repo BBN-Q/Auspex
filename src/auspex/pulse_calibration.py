@@ -267,6 +267,8 @@ class RabiAmpCalibration(PulseCalibration):
         self.plot["I Fit"] = (self.amps, fitI)
         self.plot["Q Fit"] = (self.amps, fitQ)
 
+        return ('piAmp', self.pi_amp)
+
     def init_plot(self):
         plot = ManualPlotter("Rabi Amplitude Cal", x_label="I/Q Amplitude", y_label="{} (Arb. Units)".format(self.quad))
         plot.add_data_trace("I Data", {'color': 'C1'})
