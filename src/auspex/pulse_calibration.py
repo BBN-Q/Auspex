@@ -154,9 +154,9 @@ class PulseCalibration(object):
     def write_to_log(self, cal_result):
         """Log calibration result"""
         logfile = os.path.join(config.LogDir, ''.join(self.qubit_names) + '_calibration_log.csv')
-        if len(self.qubit) == 1:
+        if len(self.qubit_names) == 1:
             log_columns = ["frequency", "pi2Amp", "piAmp", "drag_scaling"]
-        elif len(self.qubit) == 2:
+        elif len(self.qubit_names) == 2:
             log_columns = ['length', 'phase', 'amp']
         else:
             logger.error('Calibrations not supported for >2-qubit gates')
@@ -167,7 +167,7 @@ class PulseCalibration(object):
             logger.info("Calibration log file created.")
             lf = pd.DataFrame(columns = log_columns)
         # Read the current (pre-cal) values for the parameters above
-        if len(self.qubit) == 1:
+        if len(self.qubit_names) == 1:
             ctrl_settings = self.settings['qubits'][self.qubit_names[0]]['control']
         else:
             ctrl_settings = self.settings['edges'][self.edge_name]
@@ -249,6 +249,7 @@ class RabiAmpCalibration(PulseCalibration):
             [[Ytheta(self.qubit, amp=a), MEAS(self.qubit)] for a in self.amps])
 
     def calibrate(self):
+        self.set()
         data, _ = self.run()
         N = len(data)
         piI, offI, fitI = fit_rabi(self.amps, data[0:N//2])
@@ -287,7 +288,7 @@ class RabiAmpCalibration(PulseCalibration):
 
 
 class RamseyCalibration(PulseCalibration):
-    def __init__(self, qubit_name, delays=np.linspace(0.0, 20.0, 41)*1e-6, two_freqs = False, added_detuning = 150e3, set_source = True):
+    def __init__(self, qubit_name, delays=np.linspace(0.0, 20.0, 41)*1e-6, two_freqs = False, added_detuning = 150e3, set_source = True, **kwargs):
         super(RamseyCalibration, self).__init__(qubit_name)
         self.filename = 'Ramsey/Ramsey'
         self.delays = delays
@@ -354,7 +355,7 @@ class PhaseEstimation(PulseCalibration):
     Kimmel et al, quant-ph/1502.02677 (2015). Every experiment i doubled.
     vardata should be the variance of the mean"""
 
-    def __init__(self, qubit_name, num_pulses= 1, amplitude= 0.1, direction = 'X'):
+    def __init__(self, qubit_name, num_pulses= 1, amplitude= 0.1, direction = 'X', **kwargs):
         """Phase estimation calibration. Direction is either 'X' or 'Y',
         num_pulses is log2(n) of the longest sequence n,
         and amplitude is self-exaplanatory."""
@@ -435,14 +436,14 @@ class PhaseEstimation(PulseCalibration):
         super(PhaseEstimation, self).update_settings()
 
 class Pi2Calibration(PhaseEstimation):
-    def __init__(self, qubit_name, num_pulses= 9):
-        super(Pi2Calibration, self).__init__(qubit_name, num_pulses = num_pulses)
+    def __init__(self, qubit_name, num_pulses= 9, **kwargs):
+        super(Pi2Calibration, self).__init__(qubit_name, num_pulses = num_pulses, **kwargs)
         self.amplitude = self.qubit.pulse_params['pi2Amp']
         self.target    = np.pi/2.0
 
 class PiCalibration(PhaseEstimation):
-    def __init__(self, qubit_name, num_pulses= 9):
-        super(PiCalibration, self).__init__(qubit_name, num_pulses = num_pulses)
+    def __init__(self, qubit_name, num_pulses= 9, **kwargs):
+        super(PiCalibration, self).__init__(qubit_name, num_pulses = num_pulses, **kwargs)
         self.amplitude = self.qubit.pulse_params['piAmp']
         self.target    = np.pi
 
