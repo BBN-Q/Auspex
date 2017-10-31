@@ -1,0 +1,4 @@
+{
+	"AWGDir": "./test/awg",
+	"ConfigurationFile": "./test/test_config.yml"
+}
