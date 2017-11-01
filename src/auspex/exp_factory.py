@@ -44,7 +44,7 @@ def correct_resource_name(resource_name):
         resource_name = resource_name.replace(k, v)
     return resource_name
 
-def quince():
+def quince(filepath = config.configFile):
     if (os.name == 'nt'):
         subprocess.Popen(['run-quince.bat', config.configFile], env=os.environ.copy())
     else:
@@ -238,7 +238,7 @@ class QubitExpFactory(object):
 
         sweep_offset("I_offset", offset_pts)
         I1_amps = np.array([x[1] for x in buff.get_data()])
-        I1_offset, xpts, ypts = find_null_offset(offset_pts, I1_amps)
+        I1_offset, xpts, ypts = find_null_offset(offset_pts[1:], I1_amps[1:])
         plt["I-offset"] = (offset_pts, I1_amps)
         plt["Fit I-offset"] = (xpts, ypts)
         logger.info("Found first pass I offset of {}.".format(I1_offset))
@@ -247,7 +247,7 @@ class QubitExpFactory(object):
         mce.first_exp = False # slight misnomer to indicate that no new plot is needed
         sweep_offset("Q_offset", offset_pts)
         Q1_amps = np.array([x[1] for x in buff.get_data()])
-        Q1_offset, xpts, ypts = find_null_offset(offset_pts, Q1_amps)
+        Q1_offset, xpts, ypts = find_null_offset(offset_pts[1:], Q1_amps[1:])
         plt["Q-offset"] = (offset_pts, Q1_amps)
         plt["Fit Q-offset"] = (xpts, ypts)
         logger.info("Found first pass Q offset of {}.".format(Q1_offset))
@@ -255,7 +255,7 @@ class QubitExpFactory(object):
 
         sweep_offset("I_offset", offset_pts)
         I2_amps = np.array([x[1] for x in buff.get_data()])
-        I2_offset, xpts, ypts = find_null_offset(offset_pts, I2_amps)
+        I2_offset, xpts, ypts = find_null_offset(offset_pts[1:], I2_amps[1:])
         plt["I-offset"] = (offset_pts, I2_amps)
         plt["Fit I-offset"] = (xpts, ypts)
         logger.info("Found second pass I offset of {}.".format(I2_offset))
@@ -273,7 +273,7 @@ class QubitExpFactory(object):
 
         sweep_offset(cals[first_cal], cal_pts[first_cal])
         amps1 = np.array([x[1] for x in buff.get_data()])
-        offset1, xpts, ypts = find_null_offset(cal_pts[first_cal], amps1, default=cal_defaults[first_cal])
+        offset1, xpts, ypts = find_null_offset(cal_pts[first_cal][1:], amps1[1:], default=cal_defaults[first_cal])
         plt2[cals[first_cal]] = (cal_pts[first_cal], amps1)
         plt2["Fit "+cals[first_cal]] = (xpts, ypts)
         logger.info("Found {} offset of {}.".format(first_cal, offset1))
@@ -281,7 +281,7 @@ class QubitExpFactory(object):
 
         sweep_offset(cals[second_cal], cal_pts[second_cal])
         amps2 = np.array([x[1] for x in buff.get_data()])
-        offset2, xpts, ypts = find_null_offset(cal_pts[second_cal], amps2, default=cal_defaults[second_cal])
+        offset2, xpts, ypts = find_null_offset(cal_pts[second_cal][1:], amps2[1:], default=cal_defaults[second_cal])
         plt2[cals[second_cal]] = (cal_pts[second_cal], amps2)
         plt2["Fit "+cals[second_cal]] = (xpts, ypts)
         logger.info("Found {} offset of {}.".format(second_cal, offset2))
