@@ -159,7 +159,7 @@ class WriteTestCase(unittest.TestCase):
     def test_writehdf5(self):
         exp = SweptTestExperiment()
         clear_test_data()
-        wr = WriteToHDF5("test_writehdf5.h5", save_settings = False)
+        wr = WriteToHDF5("test_writehdf5.h5", save_settings = True)
 
         edges = [(exp.voltage, wr.sink)]
         exp.set_graph(edges)
