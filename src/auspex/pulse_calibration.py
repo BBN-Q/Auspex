@@ -178,7 +178,7 @@ class PulseCalibration(object):
         cal_pars[cal_result[0]] = cal_result[1]
         new_cal_entry = [[cal_pars[p] for p in log_columns[:-2]] + [strftime("%y%m%d"), strftime("%H%M%S")]]
         lf = lf.append(pd.DataFrame(new_cal_entry, columns = log_columns), ignore_index = True)
-        lf.to_csv(logfile, sep="\t")
+        lf.to_csv(logfile, sep="\t", index= False)
 
 class CavitySearch(PulseCalibration):
     def __init__(self, qubit_name, frequencies=np.linspace(4, 5, 100), **kwargs):
