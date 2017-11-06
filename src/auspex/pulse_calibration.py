@@ -153,7 +153,7 @@ class PulseCalibration(object):
 
     def write_to_log(self, cal_result):
         """Log calibration result"""
-        logfile = os.path.join(config.LogDir, ''.join(self.qubit_names) + '_calibration_log.csv')
+        logfile = os.path.join(config.LogDir, ''.join(self.qubit_names) + '_calibration_log.tsv')
         if len(self.qubit_names) == 1:
             log_columns = ["frequency", "pi2Amp", "piAmp", "drag_scaling"]
         elif len(self.qubit_names) == 2:
