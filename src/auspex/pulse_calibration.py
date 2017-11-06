@@ -461,7 +461,7 @@ class CRAmpCalibration_PhEst(PhaseEstimation):
     def __init__(self, qubit_names, num_pulses= 9):
         super(CRAmpCalibration_PhEst, self).__init__(qubit_names, num_pulses = num_pulses)
         CRchan = ChannelLibrary.EdgeFactory(*self.qubits)
-        self.amplitude = CRchan.pulseParams['amp']
+        self.amplitude = CRchan.pulse_params['amp']
         self.target    = np.pi/2
 
 class DRAGCalibration(PulseCalibration):
@@ -689,14 +689,16 @@ class CRPhaseCalibration(CRCalibration):
         self.phases = phases
         self.amps = amp
         self.rise_fall = rise_fall
-        super(CRPhaseCalibration, self).__init__(qubit_names, lengths, phases, amp, rise_fall)
-        CRchan = ChannelLibrary.EdgeFactory(*self.qubits)
-        length = CRchan.pulseParams['length']
+        self.cal_type = cal_type
+        super(CRPhaseCalibration, self).__init__(qubit_names, 0, phases, amp, rise_fall)
+        CRchan = ChannelLibrary.EdgeFactory(*self.qubit)
+        self.lengths = CRchan.pulse_params['length']
+
 
     def sequence(self):
         qc, qt = self.qubit
-        seqs = [[Id(qc)] + echoCR(qc, qt, length=length, phase=ph, amp=self.amp, riseFall=self.rise_fall).seq + [X90(qt)*Id(qc), MEAS(qt)*MEAS(qc)]
-        for ph in self.phases]+ [[X(qc)] + echoCR(qc, qt, length=length, phase= ph, amp=self.amp, riseFall=self.rise_fall).seq + [X90(qt)*X(qc), MEAS(qt)*MEAS(qc)]
+        seqs = [[Id(qc)] + echoCR(qc, qt, length=self.lengths, phase=ph, amp=self.amps, riseFall=self.rise_fall).seq + [X90(qt)*Id(qc), MEAS(qt)*MEAS(qc)]
+        for ph in self.phases]+ [[X(qc)] + echoCR(qc, qt, length=self.lengths, phase= ph, amp=self.amps, riseFall=self.rise_fall).seq + [X90(qt)*X(qc), MEAS(qt)*MEAS(qc)]
         for ph in self.phases] + create_cal_seqs((qt,qc), 2, measChans=(qt,qc))
 
         self.axis_descriptor = [
@@ -716,16 +718,18 @@ class CRAmpCalibration(CRCalibration):
         if mod(num_CR, 2) == 0:
             logger.error('The number of ZX90 must be odd')
         self.rise_fall = rise_fall
-        amp = CRchan.pulseParams['amp']
+        self.cal_type = cal_type
+        super(CRAmpCalibration, self).__init__(qubit_names, 0, 0, 0, rise_fall)
+        CRchan = ChannelLibrary.EdgeFactory(*self.qubit)
+        amp = CRchan.pulse_params['amp']
         self.amps = np.linspace(0.8*amp, 1.2*amp, 21)
-        self.lengths = CRchan.pulseParams['length']
-        self.phases = CRchan.pulseParams['phase']
-        super(CRAmpCalibration, self).__init__(qubit_names, lengths, phase, amps, rise_fall)
+        self.lengths = CRchan.pulse_params['length']
+        self.phases = CRchan.pulse_params['phase']
 
     def sequence(self):
         qc, qt = self.qubit
         CRchan = ChannelLibrary.EdgeFactory(qc, qt)
-        seqs = [[Id(qc)] + num_CR*echoCR(qc, qt, length=self.length, phase=self.phase, amp=a, riseFall=self.rise_fall).seq + [Id(qc), MEAS(qt)*MEAS(qc)]
+        seqs = [[Id(qc)] + num_CR*echoCR(qc, qt, length=self.lengths, phase=self.phase, amp=a, riseFall=self.rise_fall).seq + [Id(qc), MEAS(qt)*MEAS(qc)]
         for a in self.amps]+ [[X(qc)] + num_CR*echoCR(qc, qt, length=length, phase= self.phase, amp=a, riseFall=self.rise_fall).seq + [X(qc), MEAS(qt)*MEAS(qc)]
         for a in self.amps] + create_cal_seqs((qt,qc), 2, measChans=(qt,qc))
 
