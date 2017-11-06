@@ -649,21 +649,21 @@ class CRCalibration(PulseCalibration):
         return plot
 
     def calibrate(self):
-        #generate sequence
+        # generate sequence
         self.set()
-        #run and load normalized data
+        # run and load normalized data
         data, _ = self.run(norm_pts = {self.qubit_names[0]: (0, 1), self.qubit_names[1]: (0, 2)})
         # select target qubit
         data_t = data[self.qubit_names[1]]
-
-        # Plot the result
+        # fit
+        self.opt_par, all_params_0, all_params_1 = fit_CR([self.lengths, self.phases, self.amps], data_t, self.cal_type)
+        # plot the result
         xaxis = self.lengths if self.cal_type==CR_cal_type.LENGTH else self.phases if self.cal_type==CR_cal_type.PHASE else self.amps
         finer_xaxis = np.linspace(np.min(xaxis), np.max(xaxis), 4*len(xaxis))
         self.plot["Data 0"] = (xaxis,       data_t[:len(data_t)//2])
-        self.opt_par, all_params_0, all_params_1 = fit_CR([self.lengths, self.phases, self.amps], data_t, self.cal_type)
-        self.plot["Fit 0"] =  (finer_xaxis, sinf(finer_xaxis, *all_params_0))
+        self.plot["Fit 0"] =  (finer_xaxis, np.polyval(all_params_0, finer_xaxis) if self.cal_type == CR_cal_type.AMPLITUDE else sinf(finer_xaxis, *all_params_0))
         self.plot["Data 1"] = (xaxis,       data_t[len(data_t)//2:])
-        self.plot["Fit 1"] =  (finer_xaxis, sinf(finer_xaxis, *all_params_1))
+        self.plot["Fit 1"] =  (finer_xaxis, np.polyval(all_params_1, finer_xaxis) if self.cal_type == CR_cal_type.AMPLITUDE else sinf(finer_xaxis, *all_params_1))
         return (str.lower(self.cal_type.name), self.opt_par)
 
     def update_settings(self):
@@ -719,7 +719,8 @@ class CRPhaseCalibration(CRCalibration):
 
 class CRAmpCalibration(CRCalibration):
     def __init__(self, qubit_names, range = 0.2, phase = 0, amp = 0.8, rise_fall = 40e-9, num_CR = 1, cal_type = CR_cal_type.AMPLITUDE):
-        if mod(num_CR, 2) == 0:
+        self.num_CR = num_CR
+        if num_CR % 2 == 0:
             logger.error('The number of ZX90 must be odd')
         self.rise_fall = rise_fall
         self.cal_type = cal_type
@@ -733,8 +734,8 @@ class CRAmpCalibration(CRCalibration):
     def sequence(self):
         qc, qt = self.qubit
         CRchan = ChannelLibrary.EdgeFactory(qc, qt)
-        seqs = [[Id(qc)] + num_CR*echoCR(qc, qt, length=self.lengths, phase=self.phase, amp=a, riseFall=self.rise_fall).seq + [Id(qc), MEAS(qt)*MEAS(qc)]
-        for a in self.amps]+ [[X(qc)] + num_CR*echoCR(qc, qt, length=length, phase= self.phase, amp=a, riseFall=self.rise_fall).seq + [X(qc), MEAS(qt)*MEAS(qc)]
+        seqs = [[Id(qc)] + self.num_CR*echoCR(qc, qt, length=self.lengths, phase=self.phases, amp=a, riseFall=self.rise_fall).seq + [Id(qc), MEAS(qt)*MEAS(qc)]
+        for a in self.amps]+ [[X(qc)] + self.num_CR*echoCR(qc, qt, length=self.lengths, phase= self.phases, amp=a, riseFall=self.rise_fall).seq + [X(qc), MEAS(qt)*MEAS(qc)]
         for a in self.amps] + create_cal_seqs((qt,qc), 2, measChans=(qt,qc))
 
         self.axis_descriptor = [

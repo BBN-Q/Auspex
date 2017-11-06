@@ -245,10 +245,8 @@ def fit_CR(xpoints, data, cal_type):
     elif cal_type == CR_cal_type.AMPLITUDE:
         xpoints = xpoints[2]
         x_fine = np.linspace(min(xpoints), max(xpoints), 1001)
-        popt0 = np.polyfit(xpoints, data0, 1)
+        popt0 = np.polyfit(xpoints, data0, 1) # tentatively linearize
         popt1 = np.polyfit(xpoints, data1, 1)
-        yfit0 = popt0[0]*x_fine+popt0[1]
-        yfit1 = popt1[0]*x_fine+popt1[1]
         #average between optimum amplitudes
         xopt = -(popt0[1]/popt0[0] + popt1[1]/popt1[0])/2
         logger.info('CR amplitude = {}'.format(xopt))
