@@ -347,7 +347,7 @@ class RamseyCalibration(PulseCalibration):
         if self.set_source:
             self.saved_settings['instruments'][qubit_source]['frequency'] = float(fit_freq)
         else:
-            self.saved_settings['qubits']['q1']['control']['frequency'] += float(fit_freq - orig_freq)
+            self.saved_settings['qubits'][self.qubit_names[0]]['control']['frequency'] += float(fit_freq - orig_freq)
         logger.info("Qubit set frequency = {} GHz".format(round(float(fit_freq/1e9),5)))
         return ('frequency', fit_freq)
 
