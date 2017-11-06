@@ -222,17 +222,17 @@ def fit_CR(xpoints, data, cal_type):
     data1 = data[len(data)//2:]
     x_fine = np.linspace(min(xpoints), max(xpoints), 1001)
     if cal_type == CR_cal_type.LENGTH:
-        p0 = [2*xpoints[-1], 1, np.pi/2, 0]
+        p0 = [1/(2*xpoints[-1]), 1, np.pi/2, 0]
         popt0, _ = curve_fit(sinf, xpoints, data0, p0 = p0)
         popt1, _ = curve_fit(sinf, xpoints, data1, p0 = p0)
         #find the first zero crossing
-        yfit0 = sinf(x_fine[:int(abs(popt0[1])/2/(xpoints[1]-xpoints[0]))], *popt0)
-        yfit1 = sinf(x_fine[:int(abs(popt1[1])/2/(xpoints[1]-xpoints[0]))], *popt1)
+        yfit0 = sinf(x_fine[:int(1/abs(popt0[0])/2/(x_fine[1]-x_fine[0]))], *popt0)
+        yfit1 = sinf(x_fine[:int(1/abs(popt1[0])/2/(x_fine[1]-x_fine[0]))], *popt1)
         #average between the two qc states, rounded to 10 ns
         xopt = round((x_fine[np.argmin(abs(yfit0))] + x_fine[np.argmin(abs(yfit1))])/2/10e-9)*10e-9
         logger.info('CR length = {} ns'.format(xopt*1e9))
     elif cal_type == CR_cal_type.PHASE:
-        p0 = [1, xpoints[-1], np.pi, 0]
+        p0 = [1/(xpoints[-1]), 1, np.pi, 0]
         popt0, _ = curve_fit(sinf, x_fine, data0, p0 = p0)
         popt1, _ = curve_fit(sinf, x_fine, data1, p0 = p0)
         #find the phase for maximum contrast

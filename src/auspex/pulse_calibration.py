@@ -651,13 +651,12 @@ class CRCalibration(PulseCalibration):
         data, _ = self.run(norm_pts = {self.qubit_names[0]: (0, 1), self.qubit_names[1]: (0, 2)})
         # select target qubit
         data_t = data[self.qubit_names[1]]
+        self.opt_par, all_params_0, all_params_1 = fit_CR(self.lengths, data_t, self.cal_type)
 
         # Plot the result
         xaxis = self.lengths if self.cal_type==CR_cal_type.LENGTH else self.phases if self.cal_type==CR_cal_type.PHASE else self.amps
         finer_xaxis = np.linspace(np.min(xaxis), np.max(xaxis), 4*len(xaxis))
         self.plot["Data 0"] = (xaxis,       data_t[:len(data_t)//2])
-        opt_par, all_params_0, all_params_1 = fit_CR(self.lengths, data_t, self.cal_type)
-
         self.plot["Fit 0"] =  (finer_xaxis, sinf(finer_xaxis, *all_params_0))
         self.plot["Data 1"] = (xaxis,       data_t[len(data_t)//2:])
         self.plot["Fit 1"] =  (finer_xaxis, sinf(finer_xaxis, *all_params_1))
