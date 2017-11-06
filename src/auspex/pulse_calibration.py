@@ -114,7 +114,7 @@ class PulseCalibration(object):
             else:
                 raise KeyError("Sweep values not defined.")
 
-    def run(self):
+    def run(self, norm_pts = None):
         self.exp.run_sweeps()
         data = {}
         var = {}
@@ -124,11 +124,16 @@ class PulseCalibration(object):
         for buff in self.exp.buffers:
             if self.exp.writer_to_qubit[buff.name] in self.qubit_names:
                 dataset, descriptor = buff.get_data(), buff.get_descriptor()
-                data[self.exp.writer_to_qubit[buff.name]] = self.quad_fun(dataset['Data'])
-                if 'Variance' in dataset.dtype.names:
-                    var[self.exp.writer_to_qubit[buff.name]] = dataset['Variance']/descriptor.metadata["num_averages"]
+                qubit_name = self.exp.writer_to_qubit[buff.name]
+                if norm_pts:
+                    buff_data = normalize_data(dataset, zero_id = norm_pts[qubit_name][0], one_id = norm_pts[qubit_name][1])
                 else:
-                    var[self.exp.writer_to_qubit[buff.name]] = None
+                    buff_data = dataset['Data']
+                data[qubit_name] = self.quad_fun(buff_data)
+                if 'Variance' in dataset.dtype.names:
+                    var[qubit_name] = dataset['Variance']/descriptor.metadata["num_averages"]
+                else:
+                    var[qubit_name] = None
 
         # Return data and variance of the mean
         if len(data) == 1:
@@ -642,16 +647,17 @@ class CRCalibration(PulseCalibration):
     def calibrate(self):
         #generate sequence
         self.set()
-        #run
-        data, _ = self.run()
-        data_t = data[qt]
-        opt_par, all_params_0, all_params_1 = fit_CR(self.lengths, data_t, self.cal_type)
-        data_t = quick_norm_data(data_t)
+        #run and load normalized data
+        data, _ = self.run(norm_pts = {self.qubit_names[0]: (0, 1), self.qubit_names[1]: (0, 2)})
+        # select target qubit
+        data_t = data[self.qubit_names[1]]
 
         # Plot the result
         xaxis = self.lengths if self.cal_type==CR_cal_type.LENGTH else self.phases if self.cal_type==CR_cal_type.PHASE else self.amps
         finer_xaxis = np.linspace(np.min(xaxis), np.max(xaxis), 4*len(xaxis))
         self.plot["Data 0"] = (xaxis,       data_t[:len(data_t)//2])
+        opt_par, all_params_0, all_params_1 = fit_CR(self.lengths, data_t, self.cal_type)
+
         self.plot["Fit 0"] =  (finer_xaxis, sinf(finer_xaxis, *all_params_0))
         self.plot["Data 1"] = (xaxis,       data_t[len(data_t)//2:])
         self.plot["Fit 1"] =  (finer_xaxis, sinf(finer_xaxis, *all_params_1))
