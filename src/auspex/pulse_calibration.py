@@ -169,11 +169,14 @@ class PulseCalibration(object):
         # Read the current (pre-cal) values for the parameters above
         if len(self.qubit_names) == 1:
             ctrl_settings = self.settings['qubits'][self.qubit_names[0]]['control']
+            ctrl_freq = self.settings['instruments'][ctrl_settings['generator']]['frequency']
         else:
             ctrl_settings = self.settings['edges'][self.edge_name]
         cal_pars = {}
         for ind, p in enumerate(log_columns[:-2]):
             cal_pars[p] = ctrl_settings[p] if p in ctrl_settings else ctrl_settings['pulse_params'][p]
+        if len(self.qubit_names) == 1:
+            cal_pars['frequency'] = ctrl_freq + ctrl_settings['frequency'] # actual qubit frequency
         # Update with latest calibration
         cal_pars[cal_result[0]] = cal_result[1]
         new_cal_entry = [[cal_pars[p] for p in log_columns[:-2]] + [strftime("%y%m%d"), strftime("%H%M%S")]]
@@ -345,11 +348,11 @@ class RamseyCalibration(PulseCalibration):
         else:
             fit_freq = round(orig_freq + self.added_detuning - 0.5*(fit_freq_A - 0.5*fit_freq_A + fit_freq_B), 10)
         if self.set_source:
-            self.saved_settings['instruments'][qubit_source]['frequency'] = float(fit_freq)
+            self.saved_settings['instruments'][qubit_source]['frequency'] = float(round(fit_freq))
         else:
-            self.saved_settings['qubits'][self.qubit_names[0]]['control']['frequency'] += float(fit_freq - orig_freq)
+            self.saved_settings['qubits'][self.qubit_names[0]]['control']['frequency'] += float(round(fit_freq - orig_freq))
         logger.info("Qubit set frequency = {} GHz".format(round(float(fit_freq/1e9),5)))
-        return ('frequency', fit_freq)
+        return ('frequency', self.saved_settings['instruments'][qubit_source]['frequency'] + self.saved_settings['qubits'][self.qubit_names[0]]['control']['frequency'])
 
 class PhaseEstimation(PulseCalibration):
     """Estimates pulse rotation angle from a sequence of P^k experiments, where
