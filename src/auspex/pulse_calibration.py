@@ -690,9 +690,6 @@ class CRLenCalibration(CRCalibration):
 
 class CRPhaseCalibration(CRCalibration):
     def __init__(self, qubit_names, phases = np.linspace(0,2*np.pi,21), amp = 0.8, rise_fall = 40e-9, cal_type = CR_cal_type.PHASE):
-        self.phases = phases
-        self.amps = amp
-        self.rise_fall = rise_fall
         self.cal_type = cal_type
         super(CRPhaseCalibration, self).__init__(qubit_names, 0, phases, amp, rise_fall)
         CRchan = ChannelLibrary.EdgeFactory(*self.qubit)
@@ -718,16 +715,14 @@ class CRPhaseCalibration(CRCalibration):
         return seqs
 
 class CRAmpCalibration(CRCalibration):
-    def __init__(self, qubit_names, range = 0.2, phase = 0, amp = 0.8, rise_fall = 40e-9, num_CR = 1, cal_type = CR_cal_type.AMPLITUDE):
+    def __init__(self, qubit_names, amp_range = 0.4, phase = 0, amp = 0.8, rise_fall = 40e-9, num_CR = 1, cal_type = CR_cal_type.AMPLITUDE):
         self.num_CR = num_CR
         if num_CR % 2 == 0:
             logger.error('The number of ZX90 must be odd')
-        self.rise_fall = rise_fall
         self.cal_type = cal_type
-        super(CRAmpCalibration, self).__init__(qubit_names, 0, 0, 0, rise_fall)
+        amps = np.linspace((1-amp_range/2)*amp, (1+amp_range/2)*amp, 21)
+        super(CRAmpCalibration, self).__init__(qubit_names, 0, 0, amps, rise_fall)
         CRchan = ChannelLibrary.EdgeFactory(*self.qubit)
-        amp = CRchan.pulse_params['amp']
-        self.amps = np.linspace(0.8*amp, 1.2*amp, 21)
         self.lengths = CRchan.pulse_params['length']
         self.phases = CRchan.pulse_params['phase']
 
