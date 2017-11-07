@@ -44,11 +44,11 @@ def correct_resource_name(resource_name):
         resource_name = resource_name.replace(k, v)
     return resource_name
 
-def quince(filepath = config.configFile):
+def quince(filepath = config.MeasFile):
     if (os.name == 'nt'):
-        subprocess.Popen(['run-quince.bat', config.configFile], env=os.environ.copy())
+        subprocess.Popen(['run-quince.bat', config.MeasFile], env=os.environ.copy())
     else:
-        subprocess.Popen(['run-quince.py', config.configFile], env=os.environ.copy())
+        subprocess.Popen(['run-quince.py', config.MeasFile], env=os.environ.copy())
 
 class QubitExperiment(Experiment):
     """Experiment with a specialized run method for qubit experiments run via the QubitExpFactory."""
@@ -163,7 +163,7 @@ class QubitExpFactory(object):
         to the data directory. If *repeats* is defined this will overide the
         number of segments gleaned from the meta_info"""
 
-        settings = config.yaml_load(config.configFile)
+        settings = config.yaml_load(config.MeasFile)
 
         # This is generally the behavior we want
         auspex.globals.single_plotter_mode = True

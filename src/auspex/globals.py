@@ -16,6 +16,6 @@ last_extra_plotter_process = None
 # Config directory
 config_file       = None
 AWGDir            = None
-ConfigurationFile = None
+MeasureFile       = None
 KernelDir         = None
 LogDir            = None
