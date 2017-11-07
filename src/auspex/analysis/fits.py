@@ -214,7 +214,7 @@ def fit_quad(xdata, ydata):
 class CR_cal_type(Enum):
     LENGTH = 1
     PHASE = 2
-    AMPLITUDE = 3
+    AMP = 3
 
 def fit_CR(xpoints, data, cal_type):
     """Fit CR calibration curves for variable pulse length, phase, or amplitude"""
@@ -242,7 +242,7 @@ def fit_CR(xpoints, data, cal_type):
         contrast = (sinf(x_fine, *popt0) - sinf(x_fine, *popt1))/2
         logger.info('CR contrast = {}'.format(max(contrast)))
         xopt = x_fine[np.argmax(contrast)] - np.pi
-    elif cal_type == CR_cal_type.AMPLITUDE:
+    elif cal_type == CR_cal_type.AMP:
         xpoints = xpoints[2]
         x_fine = np.linspace(min(xpoints), max(xpoints), 1001)
         popt0 = np.polyfit(xpoints, data0, 1) # tentatively linearize

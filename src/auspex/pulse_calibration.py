@@ -660,9 +660,9 @@ class CRCalibration(PulseCalibration):
         xaxis = self.lengths if self.cal_type==CR_cal_type.LENGTH else self.phases if self.cal_type==CR_cal_type.PHASE else self.amps
         finer_xaxis = np.linspace(np.min(xaxis), np.max(xaxis), 4*len(xaxis))
         self.plot["Data 0"] = (xaxis,       data_t[:len(data_t)//2])
-        self.plot["Fit 0"] =  (finer_xaxis, np.polyval(all_params_0, finer_xaxis) if self.cal_type == CR_cal_type.AMPLITUDE else sinf(finer_xaxis, *all_params_0))
+        self.plot["Fit 0"] =  (finer_xaxis, np.polyval(all_params_0, finer_xaxis) if self.cal_type == CR_cal_type.AMP else sinf(finer_xaxis, *all_params_0))
         self.plot["Data 1"] = (xaxis,       data_t[len(data_t)//2:])
-        self.plot["Fit 1"] =  (finer_xaxis, np.polyval(all_params_1, finer_xaxis) if self.cal_type == CR_cal_type.AMPLITUDE else sinf(finer_xaxis, *all_params_1))
+        self.plot["Fit 1"] =  (finer_xaxis, np.polyval(all_params_1, finer_xaxis) if self.cal_type == CR_cal_type.AMP else sinf(finer_xaxis, *all_params_1))
         return (str.lower(self.cal_type.name), self.opt_par)
 
     def update_settings(self):
@@ -714,7 +714,7 @@ class CRPhaseCalibration(CRCalibration):
         return seqs
 
 class CRAmpCalibration(CRCalibration):
-    def __init__(self, qubit_names, amp_range = 0.4, phase = 0, amp = 0.8, rise_fall = 40e-9, num_CR = 1, cal_type = CR_cal_type.AMPLITUDE):
+    def __init__(self, qubit_names, amp_range = 0.4, phase = 0, amp = 0.8, rise_fall = 40e-9, num_CR = 1, cal_type = CR_cal_type.AMP):
         self.num_CR = num_CR
         if num_CR % 2 == 0:
             logger.error('The number of ZX90 must be odd')
