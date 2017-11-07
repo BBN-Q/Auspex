@@ -640,8 +640,7 @@ class CRCalibration(PulseCalibration):
         self.edge_name = ChannelLibrary.EdgeFactory(*self.qubit).label
 
     def init_plot(self):
-        plot = ManualPlotter("CR"+str.lower(self.cal_type.name)+"Fit", x_label=str.lower(self.cal_type.name), #TODO: add unit
-        y_label='$<Z_{'+self.qubit_names[1]+'}>$')
+        plot = ManualPlotter("CR"+str.lower(self.cal_type.name)+"Fit", x_label=str.lower(self.cal_type.name), y_label='$<Z_{'+self.qubit_names[1]+'}>$', y_lim=(-1.02,1.02))
         plot.add_data_trace("Data 0", {'color': 'C1'})
         plot.add_fit_trace("Fit 0", {'color': 'C1'})
         plot.add_data_trace("Data 1", {'color': 'C2'})
