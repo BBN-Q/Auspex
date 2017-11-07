@@ -372,7 +372,7 @@ class PhaseEstimation(PulseCalibration):
     def __init__(self, qubit_name, num_pulses= 1, amplitude= 0.1, direction = 'X', **kwargs):
         """Phase estimation calibration. Direction is either 'X' or 'Y',
         num_pulses is log2(n) of the longest sequence n,
-        and amplitude is self-exaplanatory."""
+        and amplitude is self-explanatory."""
 
         super(PhaseEstimation, self).__init__(qubit_name)
         self.filename        = 'RepeatCal/RepeatCal'
@@ -385,11 +385,13 @@ class PhaseEstimation(PulseCalibration):
     def sequence(self):
         # Determine whether it is a single- or a two-qubit pulse calibration
         if isinstance(self.qubit, list):
-            cal_pulse = ZX90_CR(*self.qubits, amp=self.amplitude)
-            qubit = self.qubits[1] # qt
+            qubit = self.qubit[1]
+            self.chan = self.saved_settings['edges'][self.edge_name]['pulse_params']
         else:
-            cal_pulse = [Xtheta(self.qubit, amp=self.amplitude)]
+            self.chan = self.saved_settings['qubits'][self.qubit.label]['control']['pulse_params']
             qubit = self.qubit
+        # define cal_pulse with updated amplitude
+        cal_pulse = [ZX90_CR(*self.qubit, amp=self.amplitude)] if isinstance(self.qubit, list) else [Xtheta(self.qubit, amp=self.amplitude)]
         # Exponentially growing repetitions of the target pulse, e.g.
         # (1, 2, 4, 8, 16, 32, 64, 128, ...) x X90
         seqs = [cal_pulse*n for n in 2**np.arange(self.num_pulses+1)]
@@ -409,7 +411,19 @@ class PhaseEstimation(PulseCalibration):
         #TODO: add writers for variance if not existing
         while True:
             self.set()
+            if isinstance(self, CRAmpCalibration_PhEst):
+                #trick PulseCalibration to ignore the control qubit
+                temp_qubit = copy(self.qubit)
+                temp_qubit_names = copy(self.qubit_names)
+                self.qubit = self.qubit[1]
+                self.qubit_names.pop(0)
+
             [phase, sigma] = phase_estimation(*self.run())
+
+            if isinstance(self, CRAmpCalibration_PhEst):
+                self.qubit = copy(temp_qubit)
+                self.qubit_names = copy(temp_qubit_names)
+
             logger.info("Phase: %.4f Sigma: %.4f"%(phase,sigma))
             # correct for some errors related to 2pi uncertainties
             if np.sign(phase) != np.sign(amp):
@@ -440,13 +454,12 @@ class PhaseEstimation(PulseCalibration):
             #update amplitude
             self.amplitude = amp
         logger.info("Found amplitude for {} calibration of: {}".format(type(self).__name__, amp))
-
-        set_chan = self.qubit_names[0] if len(self.qubit_names) == 1 else ChannelLibrary.EdgeFactory(*self.qubits).label
+        #set_chan = self.qubit_names[0] if len(self.qubit) == 1 else ChannelLibrary.EdgeFactory(*self.qubits).label
         return (set_amp, amp)
 
     def update_settings(self):
         set_amp = 'pi2Amp' if isinstance(self, Pi2Calibration) else 'piAmp' if isinstance(self, PiCalibration) else 'amp'
-        self.saved_settings['qubits'][self.qubit.label]['control']['pulse_params'][set_amp] = round(float(self.amplitude), 5)
+        self.chan[set_amp] = round(float(self.amplitude), 5)
         super(PhaseEstimation, self).update_settings()
 
 class Pi2Calibration(PhaseEstimation):
@@ -464,9 +477,10 @@ class PiCalibration(PhaseEstimation):
 class CRAmpCalibration_PhEst(PhaseEstimation):
     def __init__(self, qubit_names, num_pulses= 9):
         super(CRAmpCalibration_PhEst, self).__init__(qubit_names, num_pulses = num_pulses)
-        CRchan = ChannelLibrary.EdgeFactory(*self.qubits)
-        self.amplitude = CRchan.pulse_params['amp']
+        self.CRchan = ChannelLibrary.EdgeFactory(*self.qubit)
+        self.amplitude = self.CRchan.pulse_params['amp']
         self.target    = np.pi/2
+        self.edge_name = self.CRchan.label
 
 class DRAGCalibration(PulseCalibration):
     def __init__(self, qubit_name, deltas = np.linspace(-1,1,11), num_pulses = np.arange(16, 64, 4)):
@@ -727,7 +741,6 @@ class CRAmpCalibration(CRCalibration):
 
     def sequence(self):
         qc, qt = self.qubit
-        CRchan = ChannelLibrary.EdgeFactory(qc, qt)
         seqs = [[Id(qc)] + self.num_CR*echoCR(qc, qt, length=self.lengths, phase=self.phases, amp=a, riseFall=self.rise_fall).seq + [Id(qc), MEAS(qt)*MEAS(qc)]
         for a in self.amps]+ [[X(qc)] + self.num_CR*echoCR(qc, qt, length=self.lengths, phase= self.phases, amp=a, riseFall=self.rise_fall).seq + [X(qc), MEAS(qt)*MEAS(qc)]
         for a in self.amps] + create_cal_seqs((qt,qc), 2, measChans=(qt,qc))
