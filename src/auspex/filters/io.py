@@ -168,12 +168,18 @@ class WriteToHDF5(Filter):
         compression = 'gzip' if self.compress else None
 
         # If desired, create the group in which the dataset and axes will reside
-        if self.create_group:
+        if self.groupname.value in self.file:
+            self.group = self.file[self.groupname.value]
+        elif self.create_group:
             self.group = self.file.create_group(self.groupname.value)
         else:
             self.group = self.file
 
-        self.data_group = self.group.create_group("data")
+        if not hasattr(self, 'data_group'):
+            if "data" not in self.group:
+                self.data_group = self.group.create_group("data")
+            else:
+                self.data_group = self.group["data"]
 
         # If desired, push experimental metadata into the h5 file
         if self.save_settings.value and 'header' not in self.file.keys(): # only save header once for multiple writers
@@ -181,7 +187,7 @@ class WriteToHDF5(Filter):
 
         # Create datasets for each stream
         dset_for_streams = {}
-        for stream in streams:
+        for stream in streams: # and variance
             dset = self.data_group.create_dataset(stream.descriptor.data_name, (expected_length,),
                                         dtype=stream.descriptor.dtype,
                                         chunks=True, maxshape=(None,),
@@ -198,9 +204,10 @@ class WriteToHDF5(Filter):
 
         # Create a table for the DataStreamDescriptor
         ref_dtype = h5py.special_dtype(ref=h5py.Reference)
-        self.descriptor = self.group.create_dataset("descriptor", (len(axes),), dtype=ref_dtype)
-        for k,v in desc.metadata.items():
-            self.descriptor.attrs[k] = v
+        if 'descriptor' not in self.group:
+            self.descriptor = self.group.create_dataset("descriptor", (len(axes),), dtype=ref_dtype)
+            for k,v in desc.metadata.items():
+                self.descriptor.attrs[k] = v
 
         # Create axis data sets for storing the base axes as well as the
         # full set of tuples. For the former we add
@@ -211,72 +218,72 @@ class WriteToHDF5(Filter):
                 name = "+".join(a.name)
             else:
                 name = a.name
+            if name not in self.group:
+                if a.unstructured:
+                    # Create another reference table to refer to the constituent axes
+                    unstruc_ref_dset = self.group.create_dataset(name, (len(a.name),), dtype=ref_dtype)
+                    unstruc_ref_dset.attrs['unstructured'] = True
 
-            if a.unstructured:
-                # Create another reference table to refer to the constituent axes
-                unstruc_ref_dset = self.group.create_dataset(name, (len(a.name),), dtype=ref_dtype)
-                unstruc_ref_dset.attrs['unstructured'] = True
+                    for j, (col_name, col_unit) in enumerate(zip(a.name, a.unit)):
+                        # Create table to store the axis value independently for each column
+                        unstruc_dset = self.group.create_dataset(col_name, (a.num_points(),), dtype=a.dtype)
+                        unstruc_ref_dset[j] = unstruc_dset.ref
+                        unstruc_dset[:] = a.points[:,j]
+                        unstruc_dset.attrs['unit'] = col_unit
+                        unstruc_dset.attrs['name'] = col_name
 
-                for j, (col_name, col_unit) in enumerate(zip(a.name, a.unit)):
-                    # Create table to store the axis value independently for each column
-                    unstruc_dset = self.group.create_dataset(col_name, (a.num_points(),), dtype=a.dtype)
-                    unstruc_ref_dset[j] = unstruc_dset.ref
-                    unstruc_dset[:] = a.points[:,j]
-                    unstruc_dset.attrs['unit'] = col_unit
-                    unstruc_dset.attrs['name'] = col_name
+                        # This stores the values taking during the experiment sweeps
+                        if self.store_tuples:
+                            dset = self.data_group.create_dataset(col_name, (expected_length,), dtype=a.dtype,
+                                                                 chunks=True, compression=compression, maxshape=(None,) )
+                            dset.attrs['unit'] = col_unit
+                            dset.attrs['is_data'] = False
+                            dset.attrs['name'] = col_name
+                            tuple_dset_for_axis_name[col_name] = dset
+
+                    self.descriptor[i] = self.group[name].ref
+                else:
+                    # This stores the axis values
+                    self.group.create_dataset(name, (a.num_points(),), dtype=a.dtype, maxshape=(None,) )
+                    self.group[name].attrs['unstructured'] = False
+                    self.group[name][:] = a.points
+                    self.group[name].attrs['unit'] = "None" if a.unit is None else a.unit
+                    self.group[name].attrs['name'] = a.name
+                    self.descriptor[i] = self.group[name].ref
 
                     # This stores the values taking during the experiment sweeps
                     if self.store_tuples:
-                        dset = self.data_group.create_dataset(col_name, (expected_length,), dtype=a.dtype,
-                                                             chunks=True, compression=compression, maxshape=(None,) )
-                        dset.attrs['unit'] = col_unit
+                        dset = self.data_group.create_dataset(name, (expected_length,), dtype=a.dtype,
+                                                              chunks=True, compression=compression, maxshape=(None,) )
+                        dset.attrs['unit'] = "None" if a.unit is None else a.unit
                         dset.attrs['is_data'] = False
-                        dset.attrs['name'] = col_name
-                        tuple_dset_for_axis_name[col_name] = dset
+                        dset.attrs['name'] = name
+                        tuple_dset_for_axis_name[name] = dset
 
-                self.descriptor[i] = self.group[name].ref
-            else:
-                # This stores the axis values
-                self.group.create_dataset(name, (a.num_points(),), dtype=a.dtype, maxshape=(None,) )
-                self.group[name].attrs['unstructured'] = False
-                self.group[name][:] = a.points
-                self.group[name].attrs['unit'] = "None" if a.unit is None else a.unit
-                self.group[name].attrs['name'] = a.name
-                self.descriptor[i] = self.group[name].ref
+                # Give the reader some warning about the usefulness of these axes
+                self.group[name].attrs['was_refined'] = False
+                if a.metadata is not None:
+                    if name + '_metadata' not in self.group:
+                        # Create the axis table for the metadata
+                        dset = self.group.create_dataset(name + "_metadata", (a.metadata.size,), dtype=np.uint8, maxshape=(None,) )
+                        dset[:] = a.metadata
+                        dset = self.group.create_dataset(name + "_metadata_enum", (a.metadata_enum.size,), dtype='S128', maxshape=(None,) )
+                        dset[:] = np.asarray(a.metadata_enum, dtype='S128')
 
-                # This stores the values taking during the experiment sweeps
-                if self.store_tuples:
-                    dset = self.data_group.create_dataset(name, (expected_length,), dtype=a.dtype,
-                                                          chunks=True, compression=compression, maxshape=(None,) )
-                    dset.attrs['unit'] = "None" if a.unit is None else a.unit
-                    dset.attrs['is_data'] = False
-                    dset.attrs['name'] = name
-                    tuple_dset_for_axis_name[name] = dset
+                        # Associate the metadata with the data axis
+                        self.group[name].attrs['metadata'] = self.group[name + "_metadata"].ref
+                        self.group[name].attrs['metadata_enum'] = self.group[name + "_metadata_enum"].ref
+                        self.group[name].attrs['name'] = name + "_metadata"
 
-            # Give the reader some warning about the usefulness of these axes
-            self.group[name].attrs['was_refined'] = False
-
-            if a.metadata is not None:
-                # Create the axis table for the metadata
-                dset = self.group.create_dataset(name + "_metadata", (a.metadata.size,), dtype=np.uint8, maxshape=(None,) )
-                dset[:] = a.metadata
-                dset = self.group.create_dataset(name + "_metadata_enum", (a.metadata_enum.size,), dtype='S128', maxshape=(None,) )
-                dset[:] = np.asarray(a.metadata_enum, dtype='S128')
-
-                # Associate the metadata with the data axis
-                self.group[name].attrs['metadata'] = self.group[name + "_metadata"].ref
-                self.group[name].attrs['metadata_enum'] = self.group[name + "_metadata_enum"].ref
-                self.group[name].attrs['name'] = name + "_metadata"
-
-                # Create the dataset that stores the individual tuple values
-                if self.store_tuples:
-                    dset = self.data_group.create_dataset(name + "_metadata" , (expected_length,),
-                                                          dtype=np.uint8, maxshape=(None,) )
-                    dset.attrs['name'] = name + "_metadata"
-                    tuple_dset_for_axis_name[name + "_metadata"] = dset
+                        # Create the dataset that stores the individual tuple values
+                        if self.store_tuples:
+                            dset = self.data_group.create_dataset(name + "_metadata" , (expected_length,),
+                                                                  dtype=np.uint8, maxshape=(None,) )
+                            dset.attrs['name'] = name + "_metadata"
+                            tuple_dset_for_axis_name[name + "_metadata"] = dset
 
         # Write all the tuples if this isn't adaptive
-        if self.store_tuples:
+        if self.store_tuples and tuple_dset_for_axis_name:
             if not desc.is_adaptive():
                 for i, a in enumerate(axis_names):
                     tuple_dset_for_axis_name[a][:] = tuples[a]
