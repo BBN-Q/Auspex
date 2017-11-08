@@ -3,18 +3,16 @@ import os
 import asyncio
 import time
 import numpy as np
+from QGL import *
 
 # Trick QGL and Auspex into using our local config
 # from QGL import config_location
 curr_dir = os.path.dirname(__file__)
 awg_dir  = os.path.abspath(os.path.join(curr_dir, "AWG" ))
-cfg_QGL_file = os.path.abspath(os.path.join(curr_dir, "test_QGL_config.json"))
 cfg_file = os.path.abspath(os.path.join(curr_dir, "test_config.yml"))
 
-import qgl_config_loc
-qgl_config_loc.config(cfg_QGL_file)
+ChannelLibrary(cfg_file)
 import auspex.config
-
 # Dummy mode
 import auspex.globals
 auspex.globals.auspex_dummy_mode = True
@@ -26,7 +24,6 @@ auspex.config.AWGDir     = awg_dir
 if not os.path.exists(awg_dir):
     os.makedirs(awg_dir)
 
-from QGL import *
 from auspex.exp_factory import QubitExpFactory
 
 class QubitExpFactoryTestCase(unittest.TestCase):
