@@ -65,6 +65,7 @@ class Averager(Filter):
         self.points_before_partial_average = None
         self.sum_so_far = None
         self.num_averages = None
+        self.passthrough = False
 
         self.quince_parameters = [self.axis]
 
@@ -89,6 +90,11 @@ class Averager(Filter):
         logger.debug("Averaging over axis #%d: %s", self.axis_num, self.axis.value)
 
         self.data_dims = descriptor_in.data_dims()
+        # If we only have a single point along this axis, then just pass the data straight through
+        if self.data_dims[self.axis_num] == 1:
+            logger.debug("Averaging over a singleton axis")
+            self.passthrough = True
+
         if self.axis_num == len(descriptor_in.axes) - 1:
             logger.debug("Performing scalar average!")
             self.points_before_partial_average = 1
@@ -164,6 +170,15 @@ class Averager(Filter):
         self.carry = np.zeros(0, dtype=self.final_average.descriptor.dtype)
 
     async def process_data(self, data):
+
+        if self.passthrough:
+            for os in self.final_average.output_streams:
+                await os.push(data)
+            for os in self.final_variance.output_streams:
+                await os.push(data*0.0)
+            for os in self.partial_average.output_streams:
+                await os.push(data)
+            return
 
         # TODO: handle unflattened data separately
         if len(data.shape) > 1:
