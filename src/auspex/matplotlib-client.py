@@ -194,6 +194,8 @@ class CanvasManual(MplCanvas):
                 ax.set_xlabel(desc['x_label'][k])
             if 'y_label' in desc.keys():
                 ax.set_ylabel(desc['y_label'][k])
+            if 'y_lim' in desc.keys() and desc['y_lim']:
+                ax.set_ylim(*desc['y_lim'])
         for trace in desc['traces']:  # relink traces and axes
             self.traces[trace['name']] = {'plot': self.axes[trace['axis_num']].plot([], label=trace['name'], **trace['matplotlib_kwargs'])[0], 'axis_num': trace['axis_num']}
         self.fig.tight_layout()

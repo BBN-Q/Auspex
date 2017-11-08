@@ -53,7 +53,8 @@ class MatplotServerThread(Thread):
         await self.data_sock.send_multipart(msg_contents)
 
     def send(self, name, *data, msg="data"):
-        self._loop.create_task(self._send(name, data, msg=msg))
+        if not self.stopped:
+            self._loop.create_task(self._send(name, data, msg=msg))
 
     def stop(self):
         self.send("irrelevant", np.array([]), msg="done")
