@@ -35,7 +35,6 @@ class QubitExpFactoryTestCase(unittest.TestCase):
     def test_create(self):
         qq = QubitFactory("q1")
         exp = QubitExpFactory.create(PulsedSpec(qq))
-        print(awg_dir)
         self.assertTrue(set(self.instrs).issubset(exp._instruments.keys())) # All instruments were loaded
         self.assertTrue(set(self.filts).issubset(exp.filters.keys())) # All filters were loaded
         self.assertTrue(set(self.qubits).issubset(exp.qubits))
@@ -51,6 +50,7 @@ class QubitExpFactoryTestCase(unittest.TestCase):
     def test_run_direct(self):
         qq = QubitFactory("q1")
         exp = QubitExpFactory.run(RabiAmp(qq, np.linspace(-1,1,21)))
+        #TODO: test something...
 
     # Figure out how to buffer a partial average for testing...
     @unittest.skip("Partial average for buffers to be fixed")
