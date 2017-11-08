@@ -322,7 +322,6 @@ class RamseyCalibration(PulseCalibration):
         orig_freq = self.settings['instruments'][qubit_source]['frequency']
         set_freq = round(orig_freq + self.added_detuning, 10)
         #plot settings
-        ramsey_f = ramsey_2f if self.two_freqs else ramsey_1f
         finer_delays = np.linspace(np.min(self.delays), np.max(self.delays), 4*len(self.delays))
         self.set()
         self.exp.settings['instruments'][qubit_source]['frequency'] = set_freq
@@ -331,6 +330,7 @@ class RamseyCalibration(PulseCalibration):
 
         # Plot the results
         self.plot["Data"] = (self.delays, data)
+        ramsey_f = ramsey_2f if len(fit_freqs) == 2 else ramsey_1f #1-freq fit if the 2-freq has failed
         self.plot["Fit"] = (finer_delays, ramsey_f(finer_delays, *all_params))
 
         #TODO: set conditions for success
@@ -345,6 +345,7 @@ class RamseyCalibration(PulseCalibration):
         # Plot the results
         self.init_plot()
         self.plot["Data"] = (self.delays, data)
+        ramsey_f = ramsey_2f if len(fit_freqs) == 2 else ramsey_1f
         self.plot["Fit"]  = (finer_delays, ramsey_f(finer_delays, *all_params))
 
         fit_freq_B = np.mean(fit_freqs)
