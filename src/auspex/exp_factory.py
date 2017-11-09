@@ -365,7 +365,7 @@ class QubitExpFactory(object):
         dag.add_edges_from(edges)
 
         inst_to_enable = []
-        filt_to_enable = []
+        filt_to_enable = set()
 
         # Find any writer endpoints of the receiver channels
         for receiver_name, num_segments in meta_info['receivers'].items():
@@ -410,7 +410,7 @@ class QubitExpFactory(object):
                     plotters += [e for e in endpoints if filters[e]["type"] == "Plotter" and (not hasattr(filters[e], "enabled") or filters[e]["enabled"]) and (not filters[filters[e]["source"].split(" ")[0]]['type'] == 'SingleShotMeasurement' or experiment.__class__.__name__ == "SingleShotFidelityExperiment")]
                     buffers += [e for e in endpoints if filters[e]["type"] == "DataBuffer" and (not hasattr(filters[e], "enabled") or filters[e]["enabled"]) and (not filters[filters[e]["source"].split(" ")[0]]['type'] == 'SingleShotMeasurement' or experiment.__class__.__name__ == "SingleShotFidelityExperiment")]
                     singleshot += [e for e in endpoints if filters[e]["type"] == "SingleShotMeasurement" and (not hasattr(filters[e], "enabled") or filters[e]["enabled"]) and experiment.__class__.__name__ == "SingleShotFidelityExperiment"]
-            filt_to_enable.extend(set().union(writers, plotters, singleshot, buffers))
+            filt_to_enable.update(set().union(writers, plotters, singleshot, buffers))
             if calibration:
                 # For calibrations the user should only have one writer enabled, otherwise we will be confused.
                 if len(writers) > 1:
@@ -466,18 +466,19 @@ class QubitExpFactory(object):
             if buffers:
                 buffer_ancestors = set().union(*[nx.ancestors(dag, bf) for bf in buffers])
                 buffer_ancestors.remove(dig_name)
-            filt_to_enable.extend(set().union(writer_ancestors, plotter_ancestors, singleshot_ancestors, buffer_ancestors))
+            filt_to_enable.update(set().union(writer_ancestors, plotter_ancestors, singleshot_ancestors, buffer_ancestors))
 
         if calibration:
             # One to one writers to qubits
-            writer_to_qubit = {v: k for k, v in qubit_to_writer.items()}
+            writer_to_qubit = {v: [k] for k, v in qubit_to_writer.items()}
         else:
-            # Many to one writers to qubits
+            # Many to one writers to qubits or viceversa
             writer_to_qubit = {}
             for q, ws in qubit_to_writer.items():
                 for w in ws:
-                    writer_to_qubit[w] = q
-
+                    if w not in writer_to_qubit:
+                        writer_to_qubit[w] = []
+                    writer_to_qubit[w].append(q)
         # Disable digitizers and APSs and then build ourself back up with the relevant nodes
         for instr_name in instruments.keys():
             if 'tx_channels' in instruments[instr_name].keys() or 'rx_channels' in instruments[instr_name].keys():
@@ -493,7 +494,7 @@ class QubitExpFactory(object):
         #label measurement with qubit name (assuming the convention "M-"+qubit_name)
         for meas_name in filt_to_enable:
             if filters[meas_name]["type"] == "WriteToHDF5":
-                filters[meas_name]['groupname'] = writer_to_qubit[meas_name] \
+                filters[meas_name]['groupname'] = ''.join(writer_to_qubit[meas_name]) \
                     + "-" + filters[meas_name]['groupname']
 
         for instr_name, chan_data in meta_info['instruments'].items():
