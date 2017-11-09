@@ -333,12 +333,17 @@ class QubitExpFactory(object):
         # Strip any spaces, since we only care about the general flow, and not any
         # named connectors.
         def strip_conn_name(text):
-            vals = text.strip().split()
-            if len(vals) == 0:
-                raise ValueError("Please disable filters with missing source.")
-            elif len(vals) > 2:
-                raise ValueError("Spaces are reserved to separate filters and connectors. Please rename {}.".format(text))
-            return vals[0]
+            val_list = []
+            # multiple sourcs are separated by commas
+            all_vals = text.strip().split(',')
+            for vals in all_vals:
+                val = vals.strip().split()
+                if len(val) == 0:
+                    raise ValueError("Please disable filters with missing source.")
+                elif len(val) > 2:
+                    raise ValueError("Spaces are reserved to separate filters and connectors. Please rename {}.".format(vals))
+                val_list.append(val[0])
+            return val_list
 
         # Graph edges for the measurement filters
         # switch stream selector to raw (by default) before building the graph
@@ -354,8 +359,8 @@ class QubitExpFactory(object):
                     stream_sel_name = s
                 else:
                     filters[s]['enabled'] = False
-
-        edges = [(strip_conn_name(v["source"]), k) for k,v in filters.items() if ("enabled" not in v.keys()) or v["enabled"]]
+        edges = [[(s, k) for s in strip_conn_name(v["source"])] for k,v in filters.items() if ("enabled" not in v.keys()) or v["enabled"]]
+        edges = [edge[0] for edge in edges] # flatten
         dag = nx.DiGraph()
         dag.add_edges_from(edges)
 
