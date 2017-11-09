@@ -136,6 +136,8 @@ class Averager(Filter):
 
         # Define variance axis descriptor
         descriptor_var = descriptor_in.copy()
+        if descriptor_var.dtype == np.complex128:
+            descriptor_var.dtype = np.float64
         descriptor_var.data_name = "Variance"
         descriptor_var.pop_axis(self.axis.value)
         if descriptor_var.unit:
