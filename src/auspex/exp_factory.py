@@ -359,8 +359,7 @@ class QubitExpFactory(object):
                     stream_sel_name = s
                 else:
                     filters[s]['enabled'] = False
-        edges = [[(s, k) for s in strip_conn_name(v["source"])] for k,v in filters.items() if ("enabled" not in v.keys()) or v["enabled"]]
-        edges = [edge[0] for edge in edges] # flatten
+        edges = [[(s, k) for s in strip_conn_name(v["source"])][0] for k,v in filters.items() if ("enabled" not in v.keys()) or v["enabled"]]
         dag = nx.DiGraph()
         dag.add_edges_from(edges)
 
