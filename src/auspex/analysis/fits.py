@@ -125,17 +125,22 @@ def fit_ramsey(xdata, ydata, two_freqs = False):
         # Initial KT estimation
         freqs, Tcs, amps = KT_estimation(ydata, xdata, 2)
         p0 = [*freqs, *abs(amps), *Tcs, *np.angle(amps), np.mean(ydata)]
-        popt, pcov = curve_fit(ramsey_2f, xdata, ydata, p0 = p0)
-        fopt = [popt[0], popt[1]]
-    else:
+        try:
+            popt, pcov = curve_fit(ramsey_2f, xdata, ydata, p0 = p0)
+            fopt = [popt[0], popt[1]]
+            perr = np.sqrt(np.diag(pcov))
+            ferr = perr[:2]
+            return fopt, ferr, popt
+        except:
+            logger.info('Two-frequency fit failed. Trying with single frequency.')
         # Initial KT estimation
-        freqs, Tcs, amps = KT_estimation(ydata, xdata, 1)
-        p0 = [freqs[0], abs(amps[0]), Tcs[0], np.angle(amps[0]), np.mean(ydata)]
-        popt, pcov = curve_fit(ramsey_1f, xdata, ydata, p0 = p0)
-        fopt = [popt[0]]
+    freqs, Tcs, amps = KT_estimation(ydata, xdata, 1)
+    p0 = [freqs[0], abs(amps[0]), Tcs[0], np.angle(amps[0]), np.mean(ydata)]
+    popt, pcov = curve_fit(ramsey_1f, xdata, ydata, p0 = p0)
+    fopt = [popt[0]]
     perr = np.sqrt(np.diag(pcov))
-    fopt = popt[:two_freqs+1]
-    ferr = perr[:two_freqs+1]
+    fopt = popt[:1]
+    ferr = perr[:1]
     return fopt, ferr, popt
 
 def ramsey_1f(x, f, A, tau, phi, y0):

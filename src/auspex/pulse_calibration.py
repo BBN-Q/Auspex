@@ -322,7 +322,6 @@ class RamseyCalibration(PulseCalibration):
         orig_freq = self.settings['instruments'][qubit_source]['frequency']
         set_freq = round(orig_freq + self.added_detuning, 10)
         #plot settings
-        ramsey_f = ramsey_2f if self.two_freqs else ramsey_1f
         finer_delays = np.linspace(np.min(self.delays), np.max(self.delays), 4*len(self.delays))
         self.set()
         self.exp.settings['instruments'][qubit_source]['frequency'] = set_freq
@@ -331,6 +330,7 @@ class RamseyCalibration(PulseCalibration):
 
         # Plot the results
         self.plot["Data"] = (self.delays, data)
+        ramsey_f = ramsey_2f if len(fit_freqs) == 2 else ramsey_1f #1-freq fit if the 2-freq has failed
         self.plot["Fit"] = (finer_delays, ramsey_f(finer_delays, *all_params))
 
         #TODO: set conditions for success
@@ -345,6 +345,7 @@ class RamseyCalibration(PulseCalibration):
         # Plot the results
         self.init_plot()
         self.plot["Data"] = (self.delays, data)
+        ramsey_f = ramsey_2f if len(fit_freqs) == 2 else ramsey_1f
         self.plot["Fit"]  = (finer_delays, ramsey_f(finer_delays, *all_params))
 
         fit_freq_B = np.mean(fit_freqs)
@@ -357,8 +358,8 @@ class RamseyCalibration(PulseCalibration):
         else:
             self.saved_settings['qubits'][self.qubit_names[0]]['control']['frequency'] += float(round(fit_freq - orig_freq))
             # update edges where this is the target qubit
-            for predecessor in ChannelLibrary.channelLib.connectivityG.predecessors(self.qubit):
-                edge = ChannelLibrary.channelLib.connectivityG.edge[predecessor][self.qubit]['channel']
+            for predecessor in ChannelLibraries.channelLib.connectivityG.predecessors(self.qubit):
+                edge = ChannelLibraries.channelLib.connectivityG.edge[predecessor][self.qubit]['channel']
                 self.saved_settings['edges'][edge.label]['frequency'] = self.saved_settings['qubits'][self.qubit_names[0]]['control']['frequency']
         logger.info("Qubit set frequency = {} GHz".format(round(float(fit_freq/1e9),5)))
         return ('frequency', self.saved_settings['instruments'][qubit_source]['frequency'] + self.saved_settings['qubits'][self.qubit_names[0]]['control']['frequency'])
@@ -454,7 +455,7 @@ class PhaseEstimation(PulseCalibration):
             #update amplitude
             self.amplitude = amp
         logger.info("Found amplitude for {} calibration of: {}".format(type(self).__name__, amp))
-        #set_chan = self.qubit_names[0] if len(self.qubit) == 1 else ChannelLibrary.EdgeFactory(*self.qubits).label
+        #set_chan = self.qubit_names[0] if len(self.qubit) == 1 else ChannelLibraries.EdgeFactory(*self.qubits).label
         return (set_amp, amp)
 
     def update_settings(self):
@@ -477,7 +478,7 @@ class PiCalibration(PhaseEstimation):
 class CRAmpCalibration_PhEst(PhaseEstimation):
     def __init__(self, qubit_names, num_pulses= 9):
         super(CRAmpCalibration_PhEst, self).__init__(qubit_names, num_pulses = num_pulses)
-        self.CRchan = ChannelLibrary.EdgeFactory(*self.qubit)
+        self.CRchan = ChannelLibraries.EdgeFactory(*self.qubit)
         self.amplitude = self.CRchan.pulse_params['amp']
         self.target    = np.pi/2
         self.edge_name = self.CRchan.label
@@ -651,7 +652,7 @@ class CRCalibration(PulseCalibration):
         self.amps = amp
         self.rise_fall = rise_fall
         self.filename = 'CR/CR'
-        self.edge_name = ChannelLibrary.EdgeFactory(*self.qubit).label
+        self.edge_name = ChannelLibraries.EdgeFactory(*self.qubit).label
 
     def init_plot(self):
         plot = ManualPlotter("CR"+str.lower(self.cal_type.name)+"Fit", x_label=str.lower(self.cal_type.name), y_label='$<Z_{'+self.qubit_names[1]+'}>$', y_lim=(-1.02,1.02))
@@ -705,7 +706,7 @@ class CRPhaseCalibration(CRCalibration):
     def __init__(self, qubit_names, phases = np.linspace(0,2*np.pi,21), amp = 0.8, rise_fall = 40e-9, cal_type = CR_cal_type.PHASE):
         self.cal_type = cal_type
         super(CRPhaseCalibration, self).__init__(qubit_names, 0, phases, amp, rise_fall)
-        CRchan = ChannelLibrary.EdgeFactory(*self.qubit)
+        CRchan = ChannelLibraries.EdgeFactory(*self.qubit)
         self.lengths = CRchan.pulse_params['length']
 
 
@@ -735,7 +736,7 @@ class CRAmpCalibration(CRCalibration):
         self.cal_type = cal_type
         amps = np.linspace((1-amp_range/2)*amp, (1+amp_range/2)*amp, 21)
         super(CRAmpCalibration, self).__init__(qubit_names, 0, 0, amps, rise_fall)
-        CRchan = ChannelLibrary.EdgeFactory(*self.qubit)
+        CRchan = ChannelLibraries.EdgeFactory(*self.qubit)
         self.lengths = CRchan.pulse_params['length']
         self.phases = CRchan.pulse_params['phase']
 
