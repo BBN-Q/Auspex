@@ -252,7 +252,7 @@ class Averager(Filter):
                     for os in self.final_average.output_streams + self.partial_average.output_streams:
                         await os.push(reshaped.mean(axis=self.mean_axis))
                     for os in self.final_variance.output_streams:
-                        await os.push(reshaped.var(axis=self.mean_axis, ddof=1)) # N-1 in the denominator
+                        await os.push(np.real(reshaped).var(axis=self.mean_axis, ddof=1)+1j*np.imag(reshaped).var(axis=self.mean_axis, ddof=1)) # N-1 in the denominator
                     self.sum_so_far[:]        = 0.0
                     self.current_avg_frame[:] = 0.0
                     self.completed_averages   = 0

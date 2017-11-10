@@ -131,7 +131,10 @@ class PulseCalibration(object):
                     buff_data = dataset['Data']
                 data[qubit_name] = self.quad_fun(buff_data)
                 if 'Variance' in dataset.dtype.names:
-                    var[qubit_name] = dataset['Variance']/descriptor.metadata["num_averages"]
+                    if self.quad in ['real', 'imag']:
+                        var[qubit_name] = self.quad_fun(dataset['Variance'])/descriptor.metadata["num_averages"]
+                    else:
+                        raise Exception('Variance of {} not available. Choose real or imag'.format(self.quad))
                 else:
                     var[qubit_name] = None
 
