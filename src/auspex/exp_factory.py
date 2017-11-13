@@ -399,6 +399,10 @@ class QubitExpFactory(object):
             plotters = []
             singleshot = []
             buffers = []
+
+            def check_endpoint(endpoint_name, endpoint_type):
+                source_type = filters[filters[endpoint_name]['source'].split(' ')[0]['type']
+                return filters[endpoint_name]['type'] == endpoint_type and (not hasattr(filters[endpoint_name], 'enabled') or filters[endpoint_name]['enabled'] and not (calibration and source_type == 'Correlator') and (not source_type == 'SingleShotMeasurement' or experiment.__class__.__name__ == 'SingleShotFidelityExperiment')]
             for filt_name, filt in filters.items():
                 if filt_name in [stream_sel_name] + X6_stream_selectors:
                     # Find descendants of the channel selector
@@ -406,10 +410,10 @@ class QubitExpFactory(object):
                     # Find endpoints within the descendants
                     endpoints = [n for n in chan_descendants if dag.in_degree(n) == 1 and dag.out_degree(n) == 0]
                     # Find endpoints which are enabled writers, plotters or singleshot filters without an output. Disable outputs of single-shot filters when not used.
-                    writers += [e for e in endpoints if filters[e]["type"] == "WriteToHDF5" and (not hasattr(filters[e], "enabled") or filters[e]["enabled"]) and (not filters[filters[e]["source"].split(" ")[0]]['type'] == 'SingleShotMeasurement' or experiment.__class__.__name__ == "SingleShotFidelityExperiment")]
-                    plotters += [e for e in endpoints if filters[e]["type"] == "Plotter" and (not hasattr(filters[e], "enabled") or filters[e]["enabled"]) and (not filters[filters[e]["source"].split(" ")[0]]['type'] == 'SingleShotMeasurement' or experiment.__class__.__name__ == "SingleShotFidelityExperiment")]
-                    buffers += [e for e in endpoints if filters[e]["type"] == "DataBuffer" and (not hasattr(filters[e], "enabled") or filters[e]["enabled"]) and (not filters[filters[e]["source"].split(" ")[0]]['type'] == 'SingleShotMeasurement' or experiment.__class__.__name__ == "SingleShotFidelityExperiment")]
-                    singleshot += [e for e in endpoints if filters[e]["type"] == "SingleShotMeasurement" and (not hasattr(filters[e], "enabled") or filters[e]["enabled"]) and experiment.__class__.__name__ == "SingleShotFidelityExperiment"]
+                    writers += [e for e in endpoints if check_endpoint(e, "WriteToHDF5")]
+                    plotters += [e for e in endpoints if check_endpoint(e, "Plotter")]
+                    buffers += [e for e in endpoints if check_endpoint(e, "DataBuffer")]
+                    singleshot += [e for e in endpoints if check_endpoint(e, "SingleShotMeasurement") and experiment.__class__.__name__ == "SingleShotFidelityExperiment"]
             filt_to_enable.update(set().union(writers, plotters, singleshot, buffers))
             if calibration:
                 # For calibrations the user should only have one writer enabled, otherwise we will be confused.
