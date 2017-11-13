@@ -24,6 +24,7 @@ from copy import deepcopy
 aps2_missing = False
 if auspex.globals.auspex_dummy_mode:
     fake_aps2 = True
+    aps2 = MagicMock()
 else:
     try:
         import aps2
