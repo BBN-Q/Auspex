@@ -401,8 +401,8 @@ class QubitExpFactory(object):
             buffers = []
 
             def check_endpoint(endpoint_name, endpoint_type):
-                source_type = filters[filters[endpoint_name]['source'].split(' ')[0]['type']
-                return filters[endpoint_name]['type'] == endpoint_type and (not hasattr(filters[endpoint_name], 'enabled') or filters[endpoint_name]['enabled'] and not (calibration and source_type == 'Correlator') and (not source_type == 'SingleShotMeasurement' or experiment.__class__.__name__ == 'SingleShotFidelityExperiment')]
+                source_type = filters[filters[endpoint_name]['source'].split(' ')[0]]['type']
+                return filters[endpoint_name]['type'] == endpoint_type and (not hasattr(filters[endpoint_name], 'enabled') or filters[endpoint_name]['enabled']) and not (calibration and source_type == 'Correlator') and (not source_type == 'SingleShotMeasurement' or experiment.__class__.__name__ == 'SingleShotFidelityExperiment')
             for filt_name, filt in filters.items():
                 if filt_name in [stream_sel_name] + X6_stream_selectors:
                     # Find descendants of the channel selector
