@@ -4,6 +4,7 @@ import asyncio
 import time
 import numpy as np
 from QGL import *
+import QGL.config
 
 # Trick QGL and Auspex into using our local config
 # from QGL import config_location
@@ -20,11 +21,10 @@ auspex.globals.auspex_dummy_mode = True
 
 auspex.config.configFile = cfg_file
 auspex.config.AWGDir     = awg_dir
-print(awg_dir)
+QGL.config.AWGDir = awg_dir
 
 # Create the AWG directory if it doesn't exist
 if not os.path.exists(awg_dir):
-    print('Created awg folder')
     os.makedirs(awg_dir)
 
 from auspex.exp_factory import QubitExpFactory
