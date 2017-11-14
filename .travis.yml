@@ -22,7 +22,7 @@ install:
   - source activate test-environment
   - export GIT_LFS_SKIP_SMUDGE=1
   - pip install git+https://github.com/BBN-Q/Adapt.git
-  - pip install git+https://github.com/BBN-Q/QGL.git
+  - pip install git+https://github.com/BBN-Q/QGL.git@test/qglconfig
   - pip install tqdm pyvisa coveralls ruamel.yaml watchdog scikit-learn
   - export GIT_LFS_SKIP_SMUDGE=0
   - conda install -c ecpy atom;
