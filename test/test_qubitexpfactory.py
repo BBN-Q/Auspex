@@ -7,7 +7,8 @@ from QGL import *
 
 # Trick QGL and Auspex into using our local config
 # from QGL import config_location
-curr_dir = os.path.dirname(__file__)
+curr_dir = os.path.dirname(os.path.abspath(__file__))
+curr_dir = curr_dir.replace('\\', '/')  # use unix-like convention
 awg_dir  = os.path.abspath(os.path.join(curr_dir, "AWG" ))
 cfg_file = os.path.abspath(os.path.join(curr_dir, "test_config.yml"))
 
