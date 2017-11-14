@@ -2,5 +2,5 @@
 	"AWGDir": "/my/path/to/AWG/",
 	"KernelDir": "/my/path/to/kernels/",
 	"LogDir": "/my/path/to/logs",
-	"ConfigurationFile": "/my/path/to/measure.yml"
+	"MeasureFile": "/my/path/to/measure.yml"
 }

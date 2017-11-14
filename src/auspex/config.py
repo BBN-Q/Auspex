@@ -124,10 +124,10 @@ if auspex.globals.AWGDir:
     AWGDir = os.path.abspath(auspex.globals.AWGDir)
 else:
     AWGDir = os.path.abspath(cfg['AWGDir'])
-if auspex.globals.ConfigurationFile:
-    configFile = os.path.abspath(auspex.globals.ConfigurationFile)
+if auspex.globals.MeasureFile:
+    MeasFile = os.path.abspath(auspex.globals.MeasureFile)
 else:
-    configFile = os.path.abspath(cfg['ConfigurationFile'])
+    MeasFile = os.path.abspath(cfg['MeasureFile'])
 if auspex.globals.KernelDir:
     KernelDir = os.path.abspath(auspex.globals.KernelDir)
 else:
@@ -144,6 +144,6 @@ if not os.path.isdir(LogDir):
 try:
     import QGL.config
     AWGDir = QGL.config.AWGDir
-    configFile = QGL.config.configFile
+    MeasFile = QGL.config.MeasFile
 except:
     pass

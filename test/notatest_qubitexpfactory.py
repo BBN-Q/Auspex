@@ -19,8 +19,8 @@ auspex.globals.auspex_dummy_mode = True
 
 # config_location.config(cfg_file)
 
-# QGL.config.configFile    = cfg_file
-auspex.config.configFile = cfg_file
+# QGL.config.MeasFile    = cfg_file
+auspex.config.MeasFile = cfg_file
 auspex.config.AWGDir     = awg_dir
 
 # Create the AWG directory if it doesn't exist
@@ -31,7 +31,7 @@ from auspex.exp_factory import QubitExpFactory
 
 import QGL.config
 QGL.config.AWGDir        = awg_dir
-QGL.config.configFile    = cfg_file
+QGL.config.MeasFile    = cfg_file
 from QGL import *
 
 class QubitExpFactoryTestCase(unittest.TestCase):
