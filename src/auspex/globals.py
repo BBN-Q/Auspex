@@ -14,7 +14,7 @@ last_plotter_process = None
 last_extra_plotter_process = None
 
 # Config directory
-config_file       = None
+meas_file         = None
 AWGDir            = None
 ConfigurationFile = None
 KernelDir         = None

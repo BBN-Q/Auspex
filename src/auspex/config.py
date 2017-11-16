@@ -9,7 +9,7 @@
 # This file is originally from PyQLab (http://github.com/bbn-q/PyQLab)
 
 import json
-import os.path
+import os, os.path
 import sys
 import auspex.globals
 from shutil import move
@@ -19,15 +19,19 @@ try:
 except:
     import ruamel_yaml as yaml
 
-# Run this code by importing config.py
-# Load the configuration from the json file and populate the global configuration dictionary
-if auspex.globals.config_file:
-    config_file = os.path.abspath(auspex.globals.config_file)
-else:
-    root_path   = os.path.dirname( os.path.abspath(__file__) )
-    root_path   = os.path.abspath(os.path.join(root_path, "../.." ))
-    config_dir  = os.path.join(root_path, 'config')
-    config_file = os.path.join(config_dir, 'config.json')
+meas_file = None
+AWGDir    = None
+KernelDir = None
+LogDir    = None
+
+def find_meas_file():
+    # First default to any manually set options in the globals
+    if auspex.globals.meas_file:
+        return os.path.abspath(auspex.globals.meas_file)
+    # Next use the meas file location in the environment variables
+    if os.getenv('BBN_CFG_FILE'):
+        return os.getenv('BBN_CFG_FILE')
+    raise Exception("Could not find the measurement file in the environment variables or the auspex globals.")
 
 class Include():
     def __init__(self, filename):
@@ -73,12 +77,40 @@ class FlatDumper(yaml.RoundTripDumper):
     def include(self, data):
         return self.represent_mapping('tag:yaml.org,2002:map', data.data)
 
-def yaml_load(filename):
+def load_meas_file(filename):
+    global LogDir, KernelDir, AWGDir, meas_file
+
+    meas_file = filename
+
     with open(filename, 'r') as fid:
         Loader.add_constructor('!include', Loader.include)
         load = Loader(fid)
         code = load.get_single_data()
         load.dispose()
+
+    # Get the config values out of the measure_file, but override with 
+    # any auspex.globals that are manually set.
+    # abspath allows the use of relative file names in the config file
+    if auspex.globals.AWGDir:
+        AWGDir = os.path.abspath(auspex.globals.AWGDir)
+    else:
+        AWGDir = os.path.abspath(code['config']['AWGDir'])
+
+    if auspex.globals.KernelDir:
+        KernelDir = os.path.abspath(auspex.globals.KernelDir)
+    else:
+        KernelDir = os.path.abspath(code['config']['KernelDir'])
+
+    if auspex.globals.LogDir:
+        LogDir = os.path.abspath(auspex.globals.LogDir)
+    else:
+        LogDir = os.path.abspath(code['config']['LogDir'])
+    
+    if not os.path.isdir(KernelDir):
+        os.mkdir(KernelDir)
+    if not os.path.isdir(LogDir):
+        os.mkdir(LogDir)
+
     return code
 
 def yaml_dump(data, filename = "", flatten=False):
@@ -102,48 +134,3 @@ def yaml_dump(data, filename = "", flatten=False):
         ret_string = out.getvalue()
         out.close()
         return ret_string
-
-if not os.path.isfile(config_file):
-    # build a config file from the template
-    template_file = os.path.join(config_dir, 'config.example.json')
-    with open(template_file, 'r') as ifid:
-        template = json.load(ifid)
-    cfg = {}
-    for k,v in template.items():
-        cfg[k] = os.path.join(root_path, v.replace("/my/path/to/", "examples/"))
-
-    with open(config_file, 'w') as ofid:
-        json.dump(cfg, ofid, indent=2)
-else:
-    with open(config_file, 'r') as f:
-        cfg = json.load(f)
-
-# pull out the variables
-# abspath allows the use of relative file names in the config file
-if auspex.globals.AWGDir:
-    AWGDir = os.path.abspath(auspex.globals.AWGDir)
-else:
-    AWGDir = os.path.abspath(cfg['AWGDir'])
-if auspex.globals.ConfigurationFile:
-    configFile = os.path.abspath(auspex.globals.ConfigurationFile)
-else:
-    configFile = os.path.abspath(cfg['ConfigurationFile'])
-if auspex.globals.KernelDir:
-    KernelDir = os.path.abspath(auspex.globals.KernelDir)
-else:
-    KernelDir = os.path.abspath(cfg['KernelDir'])
-if auspex.globals.LogDir:
-    LogDir = os.path.abspath(auspex.globals.LogDir)
-else:
-    LogDir = os.path.abspath(cfg['LogDir'])
-if not os.path.isdir(KernelDir):
-    os.mkdir(KernelDir)
-if not os.path.isdir(LogDir):
-    os.mkdir(LogDir)
-
-try:
-    import QGL.config
-    AWGDir = QGL.config.AWGDir
-    configFile = QGL.config.configFile
-except:
-    pass
