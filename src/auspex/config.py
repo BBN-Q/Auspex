@@ -29,8 +29,8 @@ def find_meas_file():
     if auspex.globals.meas_file:
         return os.path.abspath(auspex.globals.meas_file)
     # Next use the meas file location in the environment variables
-    if os.getenv('BBN_CFG_FILE'):
-        return os.getenv('BBN_CFG_FILE')
+    if os.getenv('BBN_MEAS_FILE'):
+        return os.getenv('BBN_MEAS_FILE')
     raise Exception("Could not find the measurement file in the environment variables or the auspex globals.")
 
 class Include():
