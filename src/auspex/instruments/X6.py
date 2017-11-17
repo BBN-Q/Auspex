@@ -154,7 +154,10 @@ class X6(Instrument):
         super(X6, self).set_all(settings_dict)
         # Set data for testing
         if self.ideal_data:
-            self.ideal_data = np.loadtxt(os.path.abspath(self.ideal_data+'.txt'))
+            try:
+                self.ideal_data = np.loadtxt(os.path.abspath(self.ideal_data+'.txt'))
+            except:
+                self.ideal_data = 0
         # perform channel setup
         for chan in self._channels:
             self.channel_setup(chan)
