@@ -24,6 +24,7 @@ from copy import deepcopy
 aps2_missing = False
 if auspex.globals.auspex_dummy_mode:
     fake_aps2 = True
+    aps2 = MagicMock()
 else:
     try:
         import aps2
@@ -215,8 +216,9 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
         self._sequence_filename = None
         self._mode = "RUN_SEQUENCE"
 
-        self._mode_dict = aps2.run_mode_dict
-        self._mode_inv_dict = {v: k for k, v in aps2.run_mode_dict.items()}
+        if not fake_aps2:
+            self._mode_dict = aps2.run_mode_dict
+            self._mode_inv_dict = {v: k for k, v in aps2.run_mode_dict.items()}
 
     def connect(self, resource_name=None):
         if resource_name is None and self.resource_name is None:
