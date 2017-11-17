@@ -19,14 +19,13 @@ qubits:
     control:
       AWG: BBNAPS2 12
       generator: Holz2
-      frequency: -50e6
-      pulse_params:
+      pulseParams:
         cutoff: 2.0
         length: 7.0e-08
-        pi2Amp: 0.49594
-        piAmp: 0.99188
-        shape_fun: drag
-        drag_scaling: 0.0
+        pi2Amp: 0.4
+        piAmp: 0.8
+        shapeFun: drag
+        dragScaling: 0.0
         sigma: 5.0e-09
 
 instruments:
@@ -109,14 +108,12 @@ instruments:
     type: HolzworthHS9000
     address: HS9004A-009-1
     power: -10
-    frequency: 6e9
     enabled: true
 
   Holz2:
     type: HolzworthHS9000
     address: HS9004A-009-2
     power: -10
-    frequency: 5e9
     enabled: true
 
 filters:
@@ -124,6 +121,7 @@ filters:
     type: X6StreamSelector
     source: X6-1
     stream_type: Raw
+    ideal_fake_data: .\\cal_fake_data
     channel: 1
     dsp_channel: 1
     enabled: true
@@ -134,46 +132,38 @@ filters:
     stream_type: Integrated
     channel: 1
     dsp_channel: 0
-    kernel: np.ones(1024, dtype=np.float64)
+    ideal_data: .\\cal_fake_data
+    kernel: np.ones(101)
     enabled: true
-
 
   Demod-q1:
     type: Channelizer
     source: q1-RawSS
+    simple_kernel: true
     decimation_factor: 4
     frequency: 10000000.0
     bandwidth: 5000000.0
-    enabled: true
+    enabled: false
 
   Int-q1:
     type: KernelIntegrator
     source: Demod-q1
     box_car_start: 5.0e-07
     box_car_stop: 9.0e-07
-    enabled: true
+    enabled: false
 
   avg-q1:
-    type: Averager
-    source: Int-q1
-    axis: round_robins
-    enabled: true
-
-  avg-q1-int:
     type: Averager
     source: q1-IntegratedSS
     axis: round_robins
     enabled: true
 
+
+
   final-avg-buff:
     type: DataBuffer
     source: avg-q1 final_average
     enabled: true
-
-  final-avgint-buff:
-    type: DataBuffer
-    source: avg-q1-int final_average
-    enabled: false
 
   partial-avg-buff:
     type: DataBuffer
@@ -185,28 +175,4 @@ filters:
     source: avg-q1 final_average
     plot_dims: 1
     plot_mode: real/imag
-    enabled: false
-
-  q1-DirectIntPlot:
-    type: Plotter
-    source: avg-q1-int final_average
-    plot_dims: 1
-    plot_mode: real/imag
-    enabled: false
-
-  q1-DirectIntPlot-unroll:
-    type: Plotter
-    source: q1-IntegratedSS final_average
-    plot_dims: 0
-    plot_mode: real/imag
-    enabled: false
-
-  WriteToHDF5_test:
-    source: avg-q1-int final_average
     enabled: true
-    compression: true
-    type: WriteToHDF5
-    filename: .\test
-    groupname: main
-    add_date: false
-    save_settings: false
