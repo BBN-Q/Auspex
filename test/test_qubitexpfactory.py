@@ -33,26 +33,28 @@ class QubitExpFactoryTestCase(unittest.TestCase):
 
     qubits = ["q1"]
     instrs = ['BBNAPS1', 'BBNAPS2', 'X6-1', 'Holz1', 'Holz2']
-    filts  = ['Demod-q1', 'Int-q1', 'avg-q1', 'final-avg-buff'] #'partial-avg-buff'
+    filts  = ['avg-q1-int', 'q1-WriteToHDF5'] #'partial-avg-buff'
+    nbr_round_robins = 20
 
     def test_create(self):
         qq = QubitFactory("q1")
-        exp = QubitExpFactory.create(PulsedSpec(qq))
+        exp = QubitExpFactory.create(PulsedSpec(qq), save_data = False)
         self.assertTrue(set(self.instrs).issubset(exp._instruments.keys())) # All instruments were loaded
         self.assertTrue(set(self.filts).issubset(exp.filters.keys())) # All filters were loaded
         self.assertTrue(set(self.qubits).issubset(exp.qubits))
-        self.assertTrue(len(exp._output_connectors["q1-RawSS"].descriptor.axes) == 2)
+        self.assertTrue(len(exp._output_connectors["q1-IntegratedSS"].descriptor.axes) == 1)
+        self.assertTrue(len(exp._output_connectors["q1-IntegratedSS"].descriptor.axes[0].points) == self.nbr_round_robins)
 
     def test_add_qubit_sweep(self):
         qq = QubitFactory("q1")
-        exp = QubitExpFactory.create(PulsedSpec(qq))
+        exp = QubitExpFactory.create(PulsedSpec(qq), save_data = False)
         exp.add_qubit_sweep("q1 measure frequency", np.linspace(6e9, 6.5e9, 500))
         self.assertTrue(len(exp._output_connectors["q1-IntegratedSS"].descriptor.axes[0].points) == 500)
         self.assertTrue(exp._output_connectors["q1-IntegratedSS"].descriptor.axes[0].points[-1] == 6.5e9)
 
     def test_run_direct(self):
         qq = QubitFactory("q1")
-        exp = QubitExpFactory.run(RabiAmp(qq, np.linspace(-1,1,21)))
+        exp = QubitExpFactory.run(RabiAmp(qq, np.linspace(-1,1,21)), save_data = False)
         buf = exp.buffers[0]
         ax = buf.descriptor.axes[0]
         self.assertTrue(buf.finished_processing)

@@ -50,7 +50,7 @@ class X6Channel(DigitizerChannel):
         self.channel_tuple  = (1,0,0)
 
         self.dtype = np.float64
-        self.ideal_data = 0
+        self.ideal_data = None
 
         if settings_dict:
             self.set_all(settings_dict)
@@ -157,7 +157,7 @@ class X6(Instrument):
             try:
                 self.ideal_data = np.loadtxt(os.path.abspath(self.ideal_data+'.txt'))
             except:
-                self.ideal_data = 0
+                self.ideal_data = None
         # perform channel setup
         for chan in self._channels:
             self.channel_setup(chan)
@@ -216,7 +216,9 @@ class X6(Instrument):
         # todo: other checking here
         self._channels.append(channel)
 
-    def spew_fake_data(self, ideal_datapoint=0):
+    def spew_fake_data(self, ideal_datapoint=None):
+        if not ideal_datapoint:
+            ideal_datapoint = 0
         for chan, wsock in self._chan_to_wsocket.items():
             if chan.stream_type == "Integrated":
                 length = 1
@@ -261,7 +263,7 @@ class X6(Instrument):
         if self.gen_fake_data:
             for j in range(self._lib.nbr_round_robins):
                 for i in range(self._lib.nbr_segments):
-                    if any(self.ideal_data):
+                    if self.ideal_data is not None:
                         #add ideal data for testing
                         self.spew_fake_data(self.ideal_data[i])
                     else:

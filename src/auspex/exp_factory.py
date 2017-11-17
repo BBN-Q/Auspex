@@ -142,11 +142,11 @@ class QubitExpFactory(object):
     will override some of the config values depending on the experiment being run."""
 
     @staticmethod
-    def run(meta_file=None, expname=None, calibration=False, cw_mode=False, repeats=None):
+    def run(meta_file=None, expname=None, calibration=False, save_data=True, cw_mode=False, repeats=None):
         """This passes all of the parameters given to the *create* method
         and then runs the experiment immediately."""
         exp = QubitExpFactory.create(meta_file=meta_file, expname=expname,
-                                     calibration=calibration, cw_mode=cw_mode,
+                                     calibration=calibration, save_data=save_data, cw_mode=cw_mode,
                                     repeats=repeats)
         exp.run_sweeps()
         return exp
