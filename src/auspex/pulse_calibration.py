@@ -118,9 +118,6 @@ class PulseCalibration(object):
         self.exp.run_sweeps()
         data = {}
         var = {}
-        writers = [self.exp.qubit_to_writer[qn] for qn in self.qubit_names]
-        data_buffers = [b for b in self.exp.buffers if b.name in writers]
-
         for buff in self.exp.buffers:
             if self.exp.writer_to_qubit[buff.name][0] in self.qubit_names:
                 dataset, descriptor = buff.get_data(), buff.get_descriptor()
