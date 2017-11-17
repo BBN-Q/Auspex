@@ -261,8 +261,8 @@ class RabiAmpCalibration(PulseCalibration):
         self.set()
         data, _ = self.run()
         N = len(data)
-        piI, offI, fitI = fit_rabi(self.amps, data[:N//2])
-        piQ, offQ, fitQ = fit_rabi(self.amps, data[N//2:])
+        piI, offI, poptI = fit_rabi(self.amps, data[:N//2])
+        piQ, offQ, poptQ = fit_rabi(self.amps, data[N//2:])
         #Arbitary extra division by two so that it doesn't push the offset too far.
         self.pi_amp = piI
         self.pi2_amp = piI/2.0
@@ -271,10 +271,11 @@ class RabiAmpCalibration(PulseCalibration):
         logger.info("Found X180 amplitude: {}".format(self.pi_amp))
         logger.info("Shifting I offset by: {}".format(self.i_offset))
         logger.info("Shifting Q offset by: {}".format(self.q_offset))
+        finer_amps = np.linspace(np.min(self.amps), np.max(self.amps), 4*len(self.amps))
         self.plot["I Data"] = (self.amps, data[:N//2])
         self.plot["Q Data"] = (self.amps, data[N//2:])
-        self.plot["I Fit"] = (self.amps, fitI)
-        self.plot["Q Fit"] = (self.amps, fitQ)
+        self.plot["I Fit"] = (finer_amps, rabi_model(finer_amps, *poptI))
+        self.plot["Q Fit"] = (finer_amps, rabi_model(finer_amps, *poptQ))
 
         return ('piAmp', self.pi_amp)
 

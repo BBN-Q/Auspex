@@ -91,6 +91,9 @@ def KT_estimation(data, times, order):
 
     return freqs, Tcs, amps
 
+def rabi_model(x, *p):
+    return p[0] - p[1]*np.cos(2*np.pi*p[2]*(x - p[3]))
+
 def fit_rabi(xdata, ydata):
     """Analyze Rabi amplitude data to find pi-pulse amplitude and phase offset.
         Arguments:
@@ -100,9 +103,6 @@ def fit_rabi(xdata, ydata):
             pi_amp: Fitted amplitude of pi pulsed
             offset: Fitted mixer offset
             fit_pts: Fitted points."""
-
-    def rabi_model(x, *p):
-        return p[0] - p[1]*np.cos(2*np.pi*p[2]*(x - p[3]))
 
     #seed Rabi frequency from largest FFT component
     N = len(ydata)
@@ -118,7 +118,7 @@ def fit_rabi(xdata, ydata):
     f_rabi = np.abs(popt[2])
     pi_amp = 0.5/f_rabi
     offset = popt[3]
-    return pi_amp, offset, rabi_model(xdata, *popt)
+    return pi_amp, offset, popt
 
 def fit_ramsey(xdata, ydata, two_freqs = False):
     if two_freqs:
