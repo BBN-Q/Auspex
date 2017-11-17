@@ -98,7 +98,7 @@ instruments:
     reference: external
     record_length: 1024
     nbr_segments: 1
-    nbr_round_robins: 4
+    nbr_round_robins: 20
     rx_channels:
       '1':
       '2':
