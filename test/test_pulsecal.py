@@ -39,43 +39,37 @@ from auspex.exp_factory import QubitExpFactory
 import auspex.pulse_calibration as cal
 
 
-def simulate_rabiAmp(num_steps = 20):
+def simulate_rabiAmp(num_steps = 20, over_rotation_factor = 0):
     """
     Simulate the output of a RabiAmp experiment of a given number of amp points.
     amps: array of points between [-1,1]
 
-    returns: [noisy data at amp points, actual params]
+    returns: ideal data
     """
-    #noiseScale = 0.4
-    overRotationFactor = 0.0
-    driveLim = (1+overRotationFactor)
-    #xpoints = np.linspace(-driveLim, driveLim, 101)
     amps = np.hstack((np.arange(-1, 0, 2./num_steps),
                         np.arange(2./num_steps, 1+2./num_steps, 2./num_steps)))
-    xpoints = amps * driveLim
+    xpoints = amps * (1+over_rotation_factor)
     ypoints = -np.cos(2*np.pi*xpoints/2.)
-
-    # hard code for now
-    piAmp = 0.8
-    pi2Amp = 0.4
-    # repeated twice for X and Y rotations * number of round robins (so far hardcoded to 2)
-    return np.tile(ypoints, 4)
+    # repeated twice for X and Y rotations
+    return np.tile(ypoints, 2)
 
 class SingleQubitCalTestCase(unittest.TestCase):
-        qubits = ["q1"]
-        instrs = ['BBNAPS1', 'BBNAPS2', 'X6-1', 'Holz1', 'Holz2']
-        filts  = ['Demod-q1', 'Int-q1', 'avg-q1', 'final-avg-buff']
-        q = QubitFactory('q1')
+    #qubits = ["q1"]
+    #instrs = ['BBNAPS1', 'BBNAPS2', 'X6-1', 'Holz1', 'Holz2']
+    #filts  = ['Demod-q1', 'Int-q1', 'avg-q1', 'final-avg-buff']
+    q = QubitFactory('q1')
+    test_settings = auspex.config.yaml_load(cfg_file)
 
-        def test_rabi_amp(self):
-            filename = './cal_fake_data.txt'
-            ideal_data = simulate_rabiAmp()
-            np.savetxt(filename, ideal_data)
-            rabi_cal = cal.RabiAmpCalibration('q1', num_steps = len(ideal_data)/4) #2 round robins
-            cal.calibrate([rabi_cal])
-            os.remove(filename)
-            self.assertAlmostEqual(rabi_cal.pi_amp,1,places=2)
-            self.assertAlmostEqual(rabi_cal.pi2_amp,0.5,places=2)
+    def test_rabi_amp(self):
+        nbr_round_robins = self.test_settings['instruments']['X6-1']['nbr_round_robins']
+        filename = './cal_fake_data.txt'
+        ideal_data = np.tile(simulate_rabiAmp(), nbr_round_robins)
+        np.savetxt(filename, ideal_data)
+        rabi_cal = cal.RabiAmpCalibration('q1', num_steps = len(ideal_data)/(2*nbr_round_robins))
+        cal.calibrate([rabi_cal])
+        os.remove(filename)
+        self.assertAlmostEqual(rabi_cal.pi_amp,1,places=2)
+        self.assertAlmostEqual(rabi_cal.pi2_amp,0.5,places=2)
 
 # def simulate_measurement(amp, target, numPulses):
 
