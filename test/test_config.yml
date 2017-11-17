@@ -7,7 +7,7 @@ qubits:
     measure:
       AWG: BBNAPS1 12
       trigger: BBNAPS1 12m1
-      receiver: q1-RawSS
+      receiver: q1-IntegratedSS
       generator: Holz1
       autodyne_freq: 10000000.0
       pulse_params:
@@ -17,15 +17,16 @@ qubits:
         shape_fun: tanh
         sigma: 1.0e-09
     control:
-      AWG: BBNAPS2 12  
+      AWG: BBNAPS2 12
       generator: Holz2
-      pulseParams:
+      frequency: -50e6
+      pulse_params:
         cutoff: 2.0
         length: 7.0e-08
-        pi2Amp: 0.4
-        piAmp: 0.8
-        shapeFun: drag
-        dragScaling: 0.0
+        pi2Amp: 0.49594
+        piAmp: 0.99188
+        shape_fun: drag
+        drag_scaling: 0.0
         sigma: 5.0e-09
 
 instruments:
@@ -36,7 +37,7 @@ instruments:
     address: 192.168.5.20
     seq_file: thing.h5
     trigger_interval: 5.0e-06
-    trigger: Internal
+    trigger_source: Internal
     delay: 0.0
     tx_channels:
       '12':
@@ -64,7 +65,7 @@ instruments:
     address: 192.168.5.21
     seq_file: thing2.h5
     trigger_interval: 5.0e-06
-    trigger: External
+    trigger_source: External
     delay: 0.0
     tx_channels:
       '12':
@@ -91,6 +92,7 @@ instruments:
     address: 0
     acquire_mode: digitizer
     gen_fake_data: true
+    ideal_data: .\\cal_fake_data
     reference: external
     record_length: 1024
     nbr_segments: 1
@@ -104,11 +106,15 @@ instruments:
     type: HolzworthHS9000
     address: HS9004A-009-1
     power: -10
+    frequency: 6e9
+    enabled: true
 
   Holz2:
     type: HolzworthHS9000
     address: HS9004A-009-2
     power: -10
+    frequency: 5e9
+    enabled: true
 
 filters:
   q1-RawSS:
@@ -116,6 +122,16 @@ filters:
     source: X6-1
     stream_type: Raw
     channel: '1'
+
+  q1-IntegratedSS:
+    type: X6StreamSelector
+    source: X6-1
+    stream_type: Integrated
+    channel: 1
+    dsp_channel: 0
+    kernel: np.ones(1024, dtype=np.float64)
+    enabled: true
+
 
   Demod-q1:
     type: Channelizer
@@ -135,11 +151,53 @@ filters:
     source: Int-q1
     axis: round_robins
 
+  avg-q1-int:
+    type: Averager
+    source: q1-IntegratedSS
+    axis: round_robins
+    enabled: true
+
   final-avg-buff:
     type: DataBuffer
     source: avg-q1 final_average
 
+  final-avgint-buff:
+    type: DataBuffer
+    source: avg-q1-int final_average
+    enabled: false
+
   partial-avg-buff:
     type: DataBuffer
-    source: avg-q1 partial_average    
-      
+    source: avg-q1 partial_average
+    enabled: false
+
+  q1-IntPlot:
+    type: Plotter
+    source: avg-q1 final_average
+    plot_dims: 1
+    plot_mode: real/imag
+    enabled: false
+
+  q1-DirectIntPlot:
+    type: Plotter
+    source: avg-q1-int final_average
+    plot_dims: 1
+    plot_mode: real/imag
+    enabled: false
+
+  q1-DirectIntPlot-unroll:
+    type: Plotter
+    source: q1-IntegratedSS final_average
+    plot_dims: 0
+    plot_mode: real/imag
+    enabled: false
+
+  WriteToHDF5_test:
+    source: avg-q1-int final_average
+    enabled: true
+    compression: true
+    type: WriteToHDF5
+    filename: .\test
+    groupname: main
+    add_date: false
+    save_settings: false
