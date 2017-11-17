@@ -217,7 +217,7 @@ class X6(Instrument):
         for chan, wsock in self._chan_to_wsocket.items():
             if chan.stream_type == "Integrated":
                 length = 1
-                data = 0.5 + 0.2*(np.random.random(length).astype(chan.dtype) + 1j*np.random.random(length).astype(chan.dtype)) + ideal_datapoint
+                data = 0.5 + 0.1*(np.random.random(length).astype(chan.dtype) + 1j*np.random.random(length).astype(chan.dtype)) + ideal_datapoint
             elif chan.stream_type == "Demodulated":
                 length = int(self._lib.record_length/32)
                 data = np.zeros(length, dtype=chan.dtype)
