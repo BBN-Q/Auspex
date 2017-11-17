@@ -84,7 +84,7 @@ class X6Channel(DigitizerChannel):
         else: #Raw
             demod_channel  = 0
             result_channel = 0
-            self.dtype = np.float64
+            self.dtype = np.float32
 
         self.channel_tuple = (int(self.phys_channel), int(demod_channel), int(result_channel))
 
@@ -205,12 +205,12 @@ class X6(Instrument):
         for chan, wsock in self._chan_to_wsocket.items():
             if chan.stream_type == "Integrated":
                 length = 1
-                data = 0.5 + 0.2*np.random.random(length).astype(chan.dtype)
+                data = 0.5 + 0.2*(np.random.random(length).astype(chan.dtype) + 1j*np.random.random(length).astype(chan.dtype))
             elif chan.stream_type == "Demodulated":
                 length = int(self._lib.record_length/32)
                 data = np.zeros(length, dtype=chan.dtype)
                 data[int(length/4):int(3*length/4)] = 1.0
-                data += 0.1*np.random.random(length)
+                data += 0.1*(np.random.random(length) + 1j*np.random.random(length))
             else: #Raw
                 length = int(self._lib.record_length/4)
                 signal = np.sin(np.linspace(0,10.0*np.pi,int(length/2)))
