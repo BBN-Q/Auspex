@@ -168,7 +168,7 @@ filters:
   final-avg-buff:
     type: DataBuffer
     source: avg-q1 final_average
-    enabled: true
+    enabled: false
 
   final-avgint-buff:
     type: DataBuffer
@@ -201,7 +201,7 @@ filters:
     plot_mode: real/imag
     enabled: false
 
-  WriteToHDF5_test:
+  q1-WriteToHDF5:
     source: avg-q1-int final_average
     enabled: true
     compression: true
