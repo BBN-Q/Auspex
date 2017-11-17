@@ -50,6 +50,7 @@ class X6Channel(DigitizerChannel):
         self.channel_tuple  = (1,0,0)
 
         self.dtype = np.float64
+        self.ideal_data = 0
 
         if settings_dict:
             self.set_all(settings_dict)
@@ -66,6 +67,8 @@ class X6Channel(DigitizerChannel):
             #        setattr(self, name, value)
             elif name == "channel":
                 setattr(self, 'phys_channel', int(value))
+            elif name == 'ideal_fake_data': # for testing purposes
+                self.ideal_data = np.loadtxt(os.path.abspath(value+'.txt'))
             else:
                 try:
                     setattr(self, name, value)
@@ -104,6 +107,7 @@ class X6(Instrument):
 
         self.last_timestamp = datetime.datetime.now()
         self.gen_fake_data = gen_fake_data
+        self.ideal_data = 0
 
         if fake_x6:
             self._lib = MagicMock()
@@ -143,6 +147,9 @@ class X6(Instrument):
     def set_all(self, settings_dict):
         # Call the non-channel commands
         super(X6, self).set_all(settings_dict)
+        # Set data for testing
+        if self.ideal_data:
+            self.ideal_data = np.loadtxt(os.path.abspath(self.ideal_data+'.txt'))
         # perform channel setup
         for chan in self._channels:
             self.channel_setup(chan)
@@ -201,11 +208,11 @@ class X6(Instrument):
         # todo: other checking here
         self._channels.append(channel)
 
-    def spew_fake_data(self):
+    def spew_fake_data(self, ideal_datapoint=0):
         for chan, wsock in self._chan_to_wsocket.items():
             if chan.stream_type == "Integrated":
                 length = 1
-                data = 0.5 + 0.2*np.random.random(length).astype(chan.dtype)
+                data = 0.5 + 0.2*(np.random.random(length).astype(chan.dtype) + 1j*np.random.random(length).astype(chan.dtype)) + ideal_datapoint
             elif chan.stream_type == "Demodulated":
                 length = int(self._lib.record_length/32)
                 data = np.zeros(length, dtype=chan.dtype)
@@ -244,9 +251,13 @@ class X6(Instrument):
 
     async def wait_for_acquisition(self, timeout=5):
         if self.gen_fake_data:
-            for i in range(self._lib.nbr_segments):
-                for j in range(self._lib.nbr_round_robins):
-                    self.spew_fake_data()
+            for j in range(self._lib.nbr_round_robins):
+                for i in range(self._lib.nbr_segments):
+                    if any(self.ideal_data):
+                        #add ideal data for testing
+                        self.spew_fake_data(self.ideal_data[i])
+                    else:
+                        self.spew_fake_data()
                     await asyncio.sleep(0.005)
         else:
             while not self.done():
