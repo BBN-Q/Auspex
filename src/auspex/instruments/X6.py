@@ -57,10 +57,15 @@ class X6Channel(DigitizerChannel):
 
     def set_all(self, settings_dict):
         for name, value in settings_dict.items():
-
-            if name == "kernel" and isinstance(value, str) and value:
-                #assume that the kernel is saved as a complex array
-                self.kernel = np.loadtxt(os.path.join(config.KernelDir, value+'.txt'), dtype=complex, converters={0: lambda s: complex(s.decode().replace('+-', '-'))})
+            if name == "kernel" and value:
+                #check if the kernel is given as an existing path or an expression to eval
+                if os.path.exists(os.path.join(config.KernelDir, value+'.txt')):
+                    self.kernel = np.loadtxt(os.path.join(config.KernelDir, value+'.txt'), dtype=complex, converters={0: lambda s: complex(s.decode().replace('+-', '-'))})
+                else:
+                    try:
+                        self.kernel = eval(value)
+                    except:
+                        raise ValueError('Kernel invalid. Provide a file name or an expression to evaluate')
             elif name == "kernel_bias" and isinstance(value, str) and value:
                 self.kernel_bias = eval(value)
             #elif hasattr(self, name):
