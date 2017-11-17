@@ -65,11 +65,15 @@ class SingleQubitCalTestCase(unittest.TestCase):
         filename = './cal_fake_data.txt'
         ideal_data = np.tile(simulate_rabiAmp(), nbr_round_robins)
         np.savetxt(filename, ideal_data)
-        rabi_cal = cal.RabiAmpCalibration('q1', num_steps = len(ideal_data)/(2*nbr_round_robins))
+        rabi_cal = cal.RabiAmpCalibration(self.q.label, num_steps = len(ideal_data)/(2*nbr_round_robins))
         cal.calibrate([rabi_cal])
         os.remove(filename)
         self.assertAlmostEqual(rabi_cal.pi_amp,1,places=2)
         self.assertAlmostEqual(rabi_cal.pi2_amp,0.5,places=2)
+        #test update_settings
+        new_settings = auspex.config.yaml_load(cfg_file)
+        self.assertAlmostEqual(rabi_cal.pi_amp, new_settings['qubits'][self.q.label]['control']['pulse_params']['piAmp'], places=4)
+        self.assertAlmostEqual(rabi_cal.pi2_amp, new_settings['qubits'][self.q.label]['control']['pulse_params']['pi2Amp'], places=4)
 
 # def simulate_measurement(amp, target, numPulses):
 
