@@ -248,6 +248,7 @@ class RabiAmpCalibration(PulseCalibration):
 
     def __init__(self, qubit_name, num_steps = 40, **kwargs):
         super(RabiAmpCalibration, self).__init__(qubit_name, **kwargs)
+        self.filename = 'Rabi/Rabi'
         if num_steps % 2 != 0:
             raise ValueError("Number of steps for RabiAmp calibration must be even!")
         #for now, only do one qubit at a time
@@ -274,7 +275,7 @@ class RabiAmpCalibration(PulseCalibration):
         logger.info("Shifting I offset by: {}".format(self.i_offset))
         logger.info("Shifting Q offset by: {}".format(self.q_offset))
         self.plot["I Data"] = (self.amps, data[0:N//2])
-        self.plot["Q Data"] = (self.amps, data[N//2-1:-1])
+        self.plot["Q Data"] = (self.amps, data[N//2:-1])
         self.plot["I Fit"] = (self.amps, fitI)
         self.plot["Q Fit"] = (self.amps, fitQ)
 
