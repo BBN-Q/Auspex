@@ -94,7 +94,7 @@ instruments:
     address: 0
     acquire_mode: digitizer
     gen_fake_data: true
-    ideal_data: .\\cal_fake_data
+    ideal_data: cal_fake_data
     reference: external
     record_length: 1024
     nbr_segments: 1
