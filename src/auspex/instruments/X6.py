@@ -73,7 +73,7 @@ class X6Channel(DigitizerChannel):
             elif name == "channel":
                 setattr(self, 'phys_channel', int(value))
             elif name == 'ideal_fake_data': # for testing purposes
-                self.ideal_data = np.loadtxt(os.path.abspath(value+'.txt'))
+                self.ideal_data = np.load(os.path.abspath(value+'.npy'))
             else:
                 try:
                     setattr(self, name, value)
@@ -155,7 +155,7 @@ class X6(Instrument):
         # Set data for testing
         if self.ideal_data:
             try:
-                self.ideal_data = np.loadtxt(os.path.abspath(self.ideal_data+'.txt'))
+                self.ideal_data = np.load(os.path.abspath(self.ideal_data+'.npy'))
             except:
                 self.ideal_data = None
         # perform channel setup
@@ -265,7 +265,10 @@ class X6(Instrument):
                 for i in range(self._lib.nbr_segments):
                     if self.ideal_data is not None:
                         #add ideal data for testing
-                        self.spew_fake_data(self.ideal_data[i])
+                        if hasattr(self, 'exp_step'):
+                            self.spew_fake_data(self.ideal_data[self.exp_step][i])
+                        else:
+                            self.spew_fake_data(self.ideal_data[i])
                     else:
                         self.spew_fake_data()
                     await asyncio.sleep(0.005)

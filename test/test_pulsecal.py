@@ -53,27 +53,52 @@ def simulate_rabiAmp(num_steps = 20, over_rotation_factor = 0):
     # repeated twice for X and Y rotations
     return np.tile(ypoints, 2)
 
+def simulate_ramsey(num_steps = 50, maxt = 50e-6, detuning = 100e3, T2 = 20e-6):
+    """
+    Simulate the output of a Ramsey experiment of a given number of time steps.
+    maxt: longest delay (s)
+    detuning: frequency detuning (Hz)
+    T2: 1/e decay time (s)
+
+    returns: ideal data
+    """
+
+    xpoints = np.linspace(0, maxt, num_steps)
+    ypoints = np.cos(2*np.pi*detuning*xpoints)*np.exp(-xpoints/T2)
+    return ypoints
+
 class SingleQubitCalTestCase(unittest.TestCase):
     #qubits = ["q1"]
     #instrs = ['BBNAPS1', 'BBNAPS2', 'X6-1', 'Holz1', 'Holz2']
     #filts  = ['Demod-q1', 'Int-q1', 'avg-q1', 'final-avg-buff']
     q = QubitFactory('q1')
     test_settings = auspex.config.yaml_load(cfg_file)
+    nbr_round_robins = test_settings['instruments']['X6-1']['nbr_round_robins']
+    filename = './cal_fake_data.npy'
 
     def test_rabi_amp(self):
-        nbr_round_robins = self.test_settings['instruments']['X6-1']['nbr_round_robins']
-        filename = './cal_fake_data.txt'
-        ideal_data = np.tile(simulate_rabiAmp(), nbr_round_robins)
-        np.savetxt(filename, ideal_data)
-        rabi_cal = cal.RabiAmpCalibration(self.q.label, num_steps = len(ideal_data)/(2*nbr_round_robins))
+        ideal_data = np.tile(simulate_rabiAmp(), self.nbr_round_robins)
+        np.save(self.filename, ideal_data)
+        rabi_cal = cal.RabiAmpCalibration(self.q.label, num_steps = len(ideal_data)/(2*self.nbr_round_robins))
         cal.calibrate([rabi_cal])
-        os.remove(filename)
+        os.remove(self.filename)
         self.assertAlmostEqual(rabi_cal.pi_amp,1,places=2)
         self.assertAlmostEqual(rabi_cal.pi2_amp,0.5,places=2)
         #test update_settings
         new_settings = auspex.config.yaml_load(cfg_file)
         self.assertAlmostEqual(rabi_cal.pi_amp, new_settings['qubits'][self.q.label]['control']['pulse_params']['piAmp'], places=4)
         self.assertAlmostEqual(rabi_cal.pi2_amp, new_settings['qubits'][self.q.label]['control']['pulse_params']['pi2Amp'], places=4)
+
+    def test_ramsey_set_source(self):
+        ideal_data = [np.tile(simulate_ramsey(), self.nbr_round_robins), np.tile(simulate_ramsey(detuning = 50e3), self.nbr_round_robins)]
+        np.save(self.filename, ideal_data)
+        ramsey_cal = cal.RamseyCalibration(self.q.label, num_steps = len(ideal_data[0])/(self.nbr_round_robins), added_detuning = 30e3)
+        cal.calibrate([ramsey_cal])
+        os.remove(self.filename)
+        self.assertAlmostEqual(ramsey_cal.fit_freq/1e9, (self.test_settings['instruments']['Holz2']['frequency'] + 50e3)/1e9, places=2)
+        #test update_settings
+        new_settings = auspex.config.yaml_load(cfg_file)
+
 
 # def simulate_measurement(amp, target, numPulses):
 
