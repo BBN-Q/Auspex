@@ -19,9 +19,9 @@ import auspex.config
 import auspex.globals
 auspex.globals.auspex_dummy_mode = True
 
-auspex.config.configFile = cfg_file
+auspex.config.meas_file  = cfg_file
 auspex.config.AWGDir     = awg_dir
-QGL.config.AWGDir = awg_dir
+QGL.config.AWGDir        = awg_dir
 
 # Create the AWG directory if it doesn't exist
 if not os.path.exists(awg_dir):

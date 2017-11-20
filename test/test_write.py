@@ -8,7 +8,7 @@
 
 import unittest
 import asyncio
-import os
+import os, shutil
 import glob
 import numpy as np
 import h5py
@@ -24,11 +24,15 @@ from auspex.filters.debug import Print
 from auspex.filters.io import WriteToHDF5
 from auspex.analysis.io import load_from_HDF5
 from auspex.log import logger
-from auspex.config import meas_file, load_meas_file, yaml_dump
+import auspex.config as config
+
+config.load_meas_file(config.find_meas_file())
 
 def clear_test_data():
     for file in glob.glob("test_*.h5"):
         os.remove(file)
+    for direc in glob.glob("test_writehdf5*"):
+        shutil.rmtree(direc)
 
 class SweptTestExperiment(Experiment):
     """Here the run loop merely spews data until it fills up the stream. """
@@ -176,7 +180,7 @@ class WriteTestCase(unittest.TestCase):
             self.assertTrue("Here the run loop merely spews" in f.attrs['exp_src'])
             self.assertTrue(f['main/data'].attrs['time_val'] == 0)
             self.assertTrue(f['main/data'].attrs['unit_freq'] == "Hz")
-            self.assertTrue(f['header'].attrs['settings'] == yaml_dump(load_meas_file(meas_file), flatten = True))
+            self.assertTrue(f['header'].attrs['settings'] == config.dump_meas_file(config.load_meas_file(config.meas_file), flatten = True))
 
         os.remove("test_writehdf5-0000.h5")
 
@@ -200,7 +204,7 @@ class WriteTestCase(unittest.TestCase):
             self.assertTrue("Here the run loop merely spews" in f.attrs['exp_src'])
             self.assertTrue(f['main/data'].attrs['time_val'] == 0)
             self.assertTrue(f['main/data'].attrs['unit_freq'] == "Hz")
-            self.assertTrue(f['header'].attrs['settings'] == yaml_dump(load_meas_file(meas_file), flatten = True))
+            self.assertTrue(f['header'].attrs['settings'] == config.dump_meas_file(config.load_meas_file(config.meas_file), flatten = True))
 
         os.remove("test_writehdf5-0000.h5")
 
@@ -380,11 +384,11 @@ class WriteTestCase(unittest.TestCase):
 
         os.remove("test_writehdf5_metadata_unstructured_adaptive-0000.h5")
 
-    def test_samefile_writehdf5(self):
+    def test_writehdf5_samefile(self):
         exp = SweptTestExperiment()
         clear_test_data()
-        wr1 = WriteToHDF5("test_samefile_writehdf5.h5", "group1")
-        wr2 = WriteToHDF5("test_samefile_writehdf5.h5", "group2")
+        wr1 = WriteToHDF5("test_writehdf5_samefile.h5", "group1")
+        wr2 = WriteToHDF5("test_writehdf5_samefile.h5", "group2")
 
         edges = [(exp.voltage, wr1.sink), (exp.current, wr2.sink)]
         exp.set_graph(edges)
@@ -392,8 +396,8 @@ class WriteTestCase(unittest.TestCase):
         exp.add_sweep(exp.field, np.linspace(0,100.0,4))
         exp.add_sweep(exp.freq, np.linspace(0,10.0,3))
         exp.run_sweeps()
-        self.assertTrue(os.path.exists("test_samefile_writehdf5-0000.h5"))
-        with h5py.File("test_samefile_writehdf5-0000.h5", 'r') as f:
+        self.assertTrue(os.path.exists("test_writehdf5_samefile-0000.h5"))
+        with h5py.File("test_writehdf5_samefile-0000.h5", 'r') as f:
             self.assertTrue(0.0 not in f['group1']['data']['voltage'])
             self.assertTrue(np.sum(f['group1/data/field']) == 5*3*np.sum(np.linspace(0,100.0,4)) )
             self.assertTrue(np.sum(f['group1/data/freq']) == 5*4*np.sum(np.linspace(0,10.0,3)) )
@@ -408,7 +412,7 @@ class WriteTestCase(unittest.TestCase):
             self.assertTrue(f['group2/data'].attrs['time_val'] == 0)
             self.assertTrue(f['group2/data'].attrs['unit_freq'] == "Hz")
 
-        os.remove("test_samefile_writehdf5-0000.h5")
+        os.remove("test_writehdf5_samefile-0000.h5")
 
     def test_writehdf5_complex(self):
         exp = SweptTestExperiment()

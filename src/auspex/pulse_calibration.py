@@ -67,7 +67,7 @@ class PulseCalibration(object):
         self.exp        = None
         self.axis_descriptor = None
         self.cw_mode    = False
-        self.saved_settings = config.yaml_load(config.configFile)
+        self.saved_settings = config.yaml_load(config.meas_file)
         self.settings = deepcopy(self.saved_settings) #make a copy for used during calibration
         self.quad = quad
         if quad == "real":
@@ -169,7 +169,7 @@ class PulseCalibration(object):
 
     def update_settings(self):
         """Update calibrated YAML with calibration parameters"""
-        config.yaml_dump(self.saved_settings, config.configFile)
+        config.dump_meas_file(self.saved_settings, config.meas_file)
 
     def write_to_log(self, cal_result):
         """Log calibration result"""

@@ -113,7 +113,7 @@ def load_meas_file(filename):
 
     return code
 
-def yaml_dump(data, filename = "", flatten=False):
+def dump_meas_file(data, filename = "", flatten=False):
     d = Dumper if filename and not flatten else FlatDumper
     d.add_representer(Include, d.include)
 
