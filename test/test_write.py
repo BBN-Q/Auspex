@@ -24,7 +24,7 @@ from auspex.filters.debug import Print
 from auspex.filters.io import WriteToHDF5
 from auspex.analysis.io import load_from_HDF5
 from auspex.log import logger
-from auspex.config import configFile, yaml_load, yaml_dump
+from auspex.config import meas_file, load_meas_file, yaml_dump
 
 def clear_test_data():
     for file in glob.glob("test_*.h5"):
@@ -176,7 +176,7 @@ class WriteTestCase(unittest.TestCase):
             self.assertTrue("Here the run loop merely spews" in f.attrs['exp_src'])
             self.assertTrue(f['main/data'].attrs['time_val'] == 0)
             self.assertTrue(f['main/data'].attrs['unit_freq'] == "Hz")
-            self.assertTrue(f['header'].attrs['settings'] == yaml_dump(yaml_load(configFile), flatten = True))
+            self.assertTrue(f['header'].attrs['settings'] == yaml_dump(load_meas_file(meas_file), flatten = True))
 
         os.remove("test_writehdf5-0000.h5")
 
@@ -200,7 +200,7 @@ class WriteTestCase(unittest.TestCase):
             self.assertTrue("Here the run loop merely spews" in f.attrs['exp_src'])
             self.assertTrue(f['main/data'].attrs['time_val'] == 0)
             self.assertTrue(f['main/data'].attrs['unit_freq'] == "Hz")
-            self.assertTrue(f['header'].attrs['settings'] == yaml_dump(yaml_load(configFile), flatten = True))
+            self.assertTrue(f['header'].attrs['settings'] == yaml_dump(load_meas_file(meas_file), flatten = True))
 
         os.remove("test_writehdf5-0000.h5")
 
