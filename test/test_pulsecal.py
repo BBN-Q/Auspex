@@ -53,7 +53,7 @@ def simulate_rabiAmp(num_steps = 20, over_rotation_factor = 0):
     # repeated twice for X and Y rotations
     return np.tile(ypoints, 2)
 
-def simulate_ramsey(num_steps = 50, maxt = 50e-6, detuning = 100e3, T2 = 20e-6):
+def simulate_ramsey(num_steps = 50, maxt = 50e-6, detuning = 100e3, T2 = 40e-6):
     """
     Simulate the output of a Ramsey experiment of a given number of time steps.
     maxt: longest delay (s)
@@ -90,14 +90,15 @@ class SingleQubitCalTestCase(unittest.TestCase):
         self.assertAlmostEqual(rabi_cal.pi2_amp, new_settings['qubits'][self.q.label]['control']['pulse_params']['pi2Amp'], places=4)
 
     def test_ramsey_set_source(self):
-        ideal_data = [np.tile(simulate_ramsey(), self.nbr_round_robins), np.tile(simulate_ramsey(detuning = 50e3), self.nbr_round_robins)]
+        ideal_data = [np.tile(simulate_ramsey(detuning = 90e3), self.nbr_round_robins), np.tile(simulate_ramsey(detuning = 45e3), self.nbr_round_robins)]
         np.save(self.filename, ideal_data)
-        ramsey_cal = cal.RamseyCalibration(self.q.label, num_steps = len(ideal_data[0])/(self.nbr_round_robins), added_detuning = 30e3)
+        ramsey_cal = cal.RamseyCalibration(self.q.label, num_steps = len(ideal_data[0])/(self.nbr_round_robins), added_detuning = 0e3, delays=np.linspace(0.0, 50.0, 50)*1e-6)
         cal.calibrate([ramsey_cal])
         os.remove(self.filename)
-        self.assertAlmostEqual(ramsey_cal.fit_freq/1e9, (self.test_settings['instruments']['Holz2']['frequency'] + 50e3)/1e9, places=2)
+        self.assertAlmostEqual(ramsey_cal.fit_freq/1e9, (self.test_settings['instruments']['Holz2']['frequency'] + 90e3)/1e9, places=4)
         #test update_settings
         new_settings = auspex.config.yaml_load(cfg_file)
+        self.assertAlmostEqual(ramsey_cal.fit_freq/1e9, new_settings['instruments']['Holz2']['frequency']/1e9, places=4)
 
 
 # def simulate_measurement(amp, target, numPulses):
