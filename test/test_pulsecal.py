@@ -77,9 +77,9 @@ class SingleQubitCalTestCase(unittest.TestCase):
     filename = './cal_fake_data.npy'
 
     def test_rabi_amp(self):
-        ideal_data = np.tile(simulate_rabiAmp(), self.nbr_round_robins)
+        ideal_data = [np.tile(simulate_rabiAmp(), self.nbr_round_robins)]
         np.save(self.filename, ideal_data)
-        rabi_cal = cal.RabiAmpCalibration(self.q.label, num_steps = len(ideal_data)/(2*self.nbr_round_robins))
+        rabi_cal = cal.RabiAmpCalibration(self.q.label, num_steps = len(ideal_data[0])/(2*self.nbr_round_robins))
         cal.calibrate([rabi_cal])
         os.remove(self.filename)
         self.assertAlmostEqual(rabi_cal.pi_amp,1,places=2)
