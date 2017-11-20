@@ -92,7 +92,7 @@ class SingleQubitCalTestCase(unittest.TestCase):
     def sim_ramsey(self, set_source = True):
         ideal_data = [np.tile(simulate_ramsey(detuning = 90e3), self.nbr_round_robins), np.tile(simulate_ramsey(detuning = 45e3), self.nbr_round_robins)]
         np.save(self.filename, ideal_data)
-        ramsey_cal = cal.RamseyCalibration(self.q.label, num_steps = len(ideal_data[0])/(self.nbr_round_robins), added_detuning = 0e3, delays=np.linspace(0.0, 50.0, 50)*1e-6, set_source = False)
+        ramsey_cal = cal.RamseyCalibration(self.q.label, num_steps = len(ideal_data[0])/(self.nbr_round_robins), added_detuning = 0e3, delays=np.linspace(0.0, 50.0, 50)*1e-6, set_source = set_source)
         cal.calibrate([ramsey_cal])
         os.remove(self.filename)
         return ramsey_cal
