@@ -153,11 +153,10 @@ class X6(Instrument):
         # Call the non-channel commands
         super(X6, self).set_all(settings_dict)
         # Set data for testing
-        if self.ideal_data:
-            try:
-                self.ideal_data = np.load(os.path.abspath(self.ideal_data+'.npy'))
-            except:
-                raise ValueError('File {} with expected data for unit testing does not exist.'.format(self.ideal_data))
+        try:
+            self.ideal_data = np.load(os.path.abspath(self.ideal_data+'.npy'))
+        except:
+            self.ideal_data = None
         # perform channel setup
         for chan in self._channels:
             self.channel_setup(chan)
