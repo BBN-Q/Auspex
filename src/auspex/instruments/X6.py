@@ -72,7 +72,7 @@ class X6Channel(DigitizerChannel):
             #        setattr(self, name, value)
             elif name == "channel":
                 setattr(self, 'phys_channel', int(value))
-            elif name == 'ideal_fake_data': # for testing purposes
+            elif name == 'ideal_data': # for testing purposes
                 self.ideal_data = np.load(os.path.abspath(value+'.npy'))
             else:
                 try:
@@ -112,7 +112,7 @@ class X6(Instrument):
 
         self.last_timestamp = datetime.datetime.now()
         self.gen_fake_data = gen_fake_data
-        self.ideal_data = 0
+        self.ideal_data = None
 
         if fake_x6:
             self._lib = MagicMock()
@@ -157,7 +157,7 @@ class X6(Instrument):
             try:
                 self.ideal_data = np.load(os.path.abspath(self.ideal_data+'.npy'))
             except:
-                self.ideal_data = None
+                raise ValueError('File {} with expected data for unit testing does not exist.'.format(self.ideal_data))
         # perform channel setup
         for chan in self._channels:
             self.channel_setup(chan)
