@@ -104,6 +104,7 @@ instruments:
       '2':
     streams: [raw, result1, result2]
     enabled: true
+    exp_step: 0
 
   Holz1:
     type: HolzworthHS9000
