@@ -87,7 +87,7 @@ class PulseCalibration(object):
         """Returns the sequence for the given calibration, must be overridden"""
         return [[Id(self.qubit), MEAS(self.qubit)]]
 
-    def set(self, instrs_to_set = [], first_step = True, **params):
+    def set(self, instrs_to_set = [], exp_step = 0, **params):
         try:
             extra_plot_server = self.exp.extra_plot_server
         except Exception as e:
@@ -97,7 +97,22 @@ class PulseCalibration(object):
             extra_plot_server = self.exp.extra_plot_server
         self.exp = QubitExpFactory.create(meta_file=meta_file, calibration=True, save_data=False, cw_mode=self.cw_mode)
         self.exp.leave_plot_server_open = True
-        self.exp.first_exp = first_step
+        self.exp.first_exp = not bool(exp_step)
+
+        #Update all instruments that need to keep track of experiment numnber. Adapted from https://stackoverflow.com/questions/9807634/find-all-occurrences-of-a-key-in-nested-python-dictionaries-and-lists
+        def find_all_items(obj, key):
+            ret = []
+            if key in obj:
+                out_path = obj
+                ret.append(out_path)
+            for k, v in obj.items():
+                if isinstance(v, dict):
+                    ret += find_all_items(v, key)
+            return ret
+
+        for k in find_all_items(self.exp.settings, 'exp_step'):
+            k['exp_step'] = exp_step
+
         try:
             self.exp.extra_plot_server = extra_plot_server
         except:
@@ -118,9 +133,6 @@ class PulseCalibration(object):
         self.exp.run_sweeps()
         data = {}
         var = {}
-        writers = [self.exp.qubit_to_writer[qn] for qn in self.qubit_names]
-        data_buffers = [b for b in self.exp.buffers if b.name in writers]
-
         for buff in self.exp.buffers:
             if self.exp.writer_to_qubit[buff.name][0] in self.qubit_names:
                 dataset, descriptor = buff.get_data(), buff.get_descriptor()
@@ -248,6 +260,7 @@ class RabiAmpCalibration(PulseCalibration):
 
     def __init__(self, qubit_name, num_steps = 40, **kwargs):
         super(RabiAmpCalibration, self).__init__(qubit_name, **kwargs)
+        self.filename = 'Rabi/Rabi'
         if num_steps % 2 != 0:
             raise ValueError("Number of steps for RabiAmp calibration must be even!")
         #for now, only do one qubit at a time
@@ -263,8 +276,8 @@ class RabiAmpCalibration(PulseCalibration):
         self.set()
         data, _ = self.run()
         N = len(data)
-        piI, offI, fitI = fit_rabi(self.amps, data[0:N//2])
-        piQ, offQ, fitQ = fit_rabi(self.amps, data[N//2-1:-1])
+        piI, offI, poptI = fit_rabi(self.amps, data[:N//2])
+        piQ, offQ, poptQ = fit_rabi(self.amps, data[N//2:])
         #Arbitary extra division by two so that it doesn't push the offset too far.
         self.pi_amp = piI
         self.pi2_amp = piI/2.0
@@ -273,10 +286,11 @@ class RabiAmpCalibration(PulseCalibration):
         logger.info("Found X180 amplitude: {}".format(self.pi_amp))
         logger.info("Shifting I offset by: {}".format(self.i_offset))
         logger.info("Shifting Q offset by: {}".format(self.q_offset))
-        self.plot["I Data"] = (self.amps, data[0:N//2])
-        self.plot["Q Data"] = (self.amps, data[N//2-1:-1])
-        self.plot["I Fit"] = (self.amps, fitI)
-        self.plot["Q Fit"] = (self.amps, fitQ)
+        finer_amps = np.linspace(np.min(self.amps), np.max(self.amps), 4*len(self.amps))
+        self.plot["I Data"] = (self.amps, data[:N//2])
+        self.plot["Q Data"] = (self.amps, data[N//2:])
+        self.plot["I Fit"] = (finer_amps, rabi_model(finer_amps, *poptI))
+        self.plot["Q Fit"] = (finer_amps, rabi_model(finer_amps, *poptQ))
 
         return ('piAmp', self.pi_amp)
 
@@ -339,7 +353,7 @@ class RamseyCalibration(PulseCalibration):
         #TODO: set conditions for success
         fit_freq_A = np.mean(fit_freqs) #the fit result can be one or two frequencies
         set_freq = round(orig_freq + self.added_detuning + fit_freq_A/2, 10)
-        self.set(first_step = False)
+        self.set(exp_step = 1)
         self.exp.settings['instruments'][qubit_source]['frequency'] = set_freq
         data, _ = self.run()
 
@@ -353,18 +367,18 @@ class RamseyCalibration(PulseCalibration):
 
         fit_freq_B = np.mean(fit_freqs)
         if fit_freq_B < fit_freq_A:
-            fit_freq = round(orig_freq + self.added_detuning + 0.5*(fit_freq_A + 0.5*fit_freq_A + fit_freq_B), 10)
+            self.fit_freq = round(orig_freq + self.added_detuning + 0.5*(fit_freq_A + 0.5*fit_freq_A + fit_freq_B), 10)
         else:
-            fit_freq = round(orig_freq + self.added_detuning - 0.5*(fit_freq_A - 0.5*fit_freq_A + fit_freq_B), 10)
+            self.fit_freq = round(orig_freq + self.added_detuning - 0.5*(fit_freq_A - 0.5*fit_freq_A + fit_freq_B), 10)
         if self.set_source:
-            self.saved_settings['instruments'][qubit_source]['frequency'] = float(round(fit_freq))
+            self.saved_settings['instruments'][qubit_source]['frequency'] = float(round(self.fit_freq))
         else:
-            self.saved_settings['qubits'][self.qubit_names[0]]['control']['frequency'] += float(round(fit_freq - orig_freq))
+            self.saved_settings['qubits'][self.qubit_names[0]]['control']['frequency'] += float(round(self.fit_freq - orig_freq))
             # update edges where this is the target qubit
             for predecessor in ChannelLibraries.channelLib.connectivityG.predecessors(self.qubit):
                 edge = ChannelLibraries.channelLib.connectivityG.edge[predecessor][self.qubit]['channel']
                 self.saved_settings['edges'][edge.label]['frequency'] = self.saved_settings['qubits'][self.qubit_names[0]]['control']['frequency']
-        logger.info("Qubit set frequency = {} GHz".format(round(float(fit_freq/1e9),5)))
+        logger.info("Qubit set frequency = {} GHz".format(round(float(self.fit_freq/1e9),5)))
         return ('frequency', self.saved_settings['instruments'][qubit_source]['frequency'] + self.saved_settings['qubits'][self.qubit_names[0]]['control']['frequency'])
 
 class PhaseEstimation(PulseCalibration):
@@ -513,7 +527,7 @@ class DRAGCalibration(PulseCalibration):
         # run twice for different DRAG parameter ranges
         for k in range(2):
         #generate sequence
-            self.set(first_step = not(bool(k)))
+            self.set(exp_step = k)
             #first run
             data, _ = self.run()
             finer_deltas = np.linspace(np.min(self.deltas), np.max(self.deltas), 4*len(self.deltas))
@@ -600,6 +614,7 @@ class CLEARCalibration(MeasCalibration):
 
 
     def calibrate(self):
+        cal_step = 0
         for ct in range(3):
             if not self.cal_steps[ct]:
                 continue
@@ -614,7 +629,7 @@ class CLEARCalibration(MeasCalibration):
                 eps2 = self.eps2 if k==2 else xpoints[k]*self.eps2
                 #run for qubit in 0/1
                 for state in [0,1]:
-                    self.set(eps1 = eps1, eps2 = eps2, state = state, first_step = (ct==np.nonzero(self.cal_steps)[0][0] and k+state==0))
+                    self.set(eps1 = eps1, eps2 = eps2, state = state, exp_step = cal_step)
                     #analyze
                     data, _ = self.run()
                     norm_data = quick_norm_data(data)
@@ -624,6 +639,7 @@ class CLEARCalibration(MeasCalibration):
                     self.plot[0]['Fit'] = fit_curve
                     self.plot[1]['sweep {}, state 0'.format(ct)] = (xpoints, n0vec)
                     self.plot[1]['sweep {}, state 1'.format(ct)] = (xpoints, n1vec)
+                    cal_step+=1
 
             #fit for minimum photon number
             popt_0,_ = fit_quad(xpoints, n0vec)

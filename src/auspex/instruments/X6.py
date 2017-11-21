@@ -50,22 +50,30 @@ class X6Channel(DigitizerChannel):
         self.channel_tuple  = (1,0,0)
 
         self.dtype = np.float64
+        self.ideal_data = None
 
         if settings_dict:
             self.set_all(settings_dict)
 
     def set_all(self, settings_dict):
         for name, value in settings_dict.items():
-
-            if name == "kernel" and isinstance(value, str) and value:
-                #assume that the kernel is saved as a complex array
-                self.kernel = np.loadtxt(os.path.join(config.KernelDir, value+'.txt'), dtype=complex, converters={0: lambda s: complex(s.decode().replace('+-', '-'))})
+            if name == "kernel" and value:
+                #check if the kernel is given as an existing path or an expression to eval
+                if os.path.exists(os.path.join(config.KernelDir, value+'.txt')):
+                    self.kernel = np.loadtxt(os.path.join(config.KernelDir, value+'.txt'), dtype=complex, converters={0: lambda s: complex(s.decode().replace('+-', '-'))})
+                else:
+                    try:
+                        self.kernel = eval(value)
+                    except:
+                        raise ValueError('Kernel invalid. Provide a file name or an expression to evaluate')
             elif name == "kernel_bias" and isinstance(value, str) and value:
                 self.kernel_bias = eval(value)
             #elif hasattr(self, name):
             #        setattr(self, name, value)
             elif name == "channel":
                 setattr(self, 'phys_channel', int(value))
+            elif name == 'ideal_data': # for testing purposes
+                self.ideal_data = np.load(os.path.abspath(value+'.npy'))
             else:
                 try:
                     setattr(self, name, value)
@@ -104,6 +112,7 @@ class X6(Instrument):
 
         self.last_timestamp = datetime.datetime.now()
         self.gen_fake_data = gen_fake_data
+        self.ideal_data = None
 
         if fake_x6:
             self._lib = MagicMock()
@@ -143,6 +152,11 @@ class X6(Instrument):
     def set_all(self, settings_dict):
         # Call the non-channel commands
         super(X6, self).set_all(settings_dict)
+        # Set data for testing
+        try:
+            self.ideal_data = np.load(os.path.abspath(self.ideal_data+'.npy'))
+        except:
+            self.ideal_data = None
         # perform channel setup
         for chan in self._channels:
             self.channel_setup(chan)
@@ -201,11 +215,17 @@ class X6(Instrument):
         # todo: other checking here
         self._channels.append(channel)
 
-    def spew_fake_data(self):
+    def spew_fake_data(self, ideal_datapoint=None):
+        """
+        Generate fake data on the stream. For unittest usage.
+        ideal_datapoint: mean of the expected signal for stream_type =  "Integrated".
+        """
+        if not ideal_datapoint:
+            ideal_datapoint = 0
         for chan, wsock in self._chan_to_wsocket.items():
             if chan.stream_type == "Integrated":
                 length = 1
-                data = 0.5 + 0.2*(np.random.random(length).astype(chan.dtype) + 1j*np.random.random(length).astype(chan.dtype))
+                data = 0.5 + 0.1*(np.random.random(length).astype(chan.dtype) + 1j*np.random.random(length).astype(chan.dtype)) + ideal_datapoint
             elif chan.stream_type == "Demodulated":
                 length = int(self._lib.record_length/32)
                 data = np.zeros(length, dtype=chan.dtype)
@@ -244,9 +264,16 @@ class X6(Instrument):
 
     async def wait_for_acquisition(self, timeout=5):
         if self.gen_fake_data:
-            for i in range(self._lib.nbr_segments):
-                for j in range(self._lib.nbr_round_robins):
-                    self.spew_fake_data()
+            for j in range(self._lib.nbr_round_robins):
+                for i in range(self._lib.nbr_segments):
+                    if self.ideal_data is not None:
+                        #add ideal data for testing
+                        if hasattr(self, 'exp_step'):
+                            self.spew_fake_data(self.ideal_data[self.exp_step][i])
+                        else:
+                            self.spew_fake_data(self.ideal_data[i])
+                    else:
+                        self.spew_fake_data()
                     await asyncio.sleep(0.005)
         else:
             while not self.done():
