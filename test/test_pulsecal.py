@@ -68,7 +68,13 @@ def simulate_ramsey(num_steps = 50, maxt = 50e-6, detuning = 100e3, T2 = 40e-6):
     return ypoints
 
 def simulate_phase_estimation(amp, target, numPulses):
+    """
+    Simulate the output of a PhaseEstimation experiment with NumPulses.
+    amp: initial pulse amplitude
+    target: target pulse amplitude 
 
+    returns: ideal data and variance
+    """
     idealAmp = 0.34
     noiseScale = 0.05
     polarization = 0.99 # residual polarization after each pulse
@@ -152,8 +158,10 @@ class SingleQubitCalTestCase(unittest.TestCase):
         new_settings = auspex.config.yaml_load(cfg_file)
         self.assertAlmostEqual((self.test_settings['qubits'][self.q.label]['control']['frequency']+90e3)/1e6, new_settings['qubits'][self.q.label]['control']['frequency']/1e6, places=4)
 
-    def test_simulated_measurement(self):
-
+    def test_phase_estimation(self):
+        """
+        Test generating data for phase estimation
+        """
         numPulses = 9
         amp = .55
         direction = 'X'
@@ -168,6 +176,9 @@ class SingleQubitCalTestCase(unittest.TestCase):
         self.assertAlmostEqual(sigma,0.0245,places=4)
 
     def test_pi_phase_estimation(self):
+        """
+        Test PiCalibration with phase estimation
+        """
 
         numPulses = 9
         amp = self.test_settings['qubits'][self.q.label]['control']['pulse_params']['piAmp']
