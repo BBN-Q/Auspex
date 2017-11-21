@@ -16,7 +16,6 @@ import asyncio
 import numpy as np
 import os
 
-import auspex.globals
 from auspex.log import logger
 import auspex.config as config
 from .instrument import Instrument, DigitizerChannel
@@ -24,7 +23,7 @@ from unittest.mock import MagicMock
 
 # Dirty trick to avoid loading libraries when scraping
 # This code using quince.
-if auspex.globals.auspex_dummy_mode:
+if config.auspex_dummy_mode:
     fake_x6 = True
 else:
     try:

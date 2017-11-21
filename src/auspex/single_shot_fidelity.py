@@ -24,7 +24,7 @@ from auspex.filters.plot import ManualPlotter
 from auspex.filters.singleshot import SingleShotMeasurement
 from auspex.analysis.fits import *
 from auspex.analysis.helpers import normalize_data
-import auspex.globals
+import auspex.config
 
 class SingleShotFidelityExperiment(QubitExperiment):
     """Experiment to measure single-shot measurement fidelity of a qubit."""

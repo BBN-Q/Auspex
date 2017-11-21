@@ -16,8 +16,8 @@ cfg_file = os.path.abspath(os.path.join(curr_dir, "test_config.yml"))
 ChannelLibrary(library_file=cfg_file)
 import auspex.config
 # Dummy mode
-import auspex.globals
-auspex.globals.auspex_dummy_mode = True
+import auspex.config as config
+config.auspex_dummy_mode = True
 
 auspex.config.meas_file  = cfg_file
 auspex.config.AWGDir     = awg_dir

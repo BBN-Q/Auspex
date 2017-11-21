@@ -17,13 +17,13 @@ import numpy as np
 
 from .instrument import Instrument, DigitizerChannel
 from auspex.log import logger
-import auspex.globals
+import auspex.config as config
 
 from unittest.mock import MagicMock
 
 # Dirty trick to avoid loading libraries when scraping
 # This code using quince.
-if auspex.globals.auspex_dummy_mode:
+if config.auspex_dummy_mode:
     fake_alazar = True
 else:
     try:

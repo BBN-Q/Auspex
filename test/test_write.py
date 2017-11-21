@@ -13,8 +13,8 @@ import glob
 import numpy as np
 import h5py
 
-import auspex.globals
-auspex.globals.auspex_dummy_mode = True
+import auspex.config as config
+config.auspex_dummy_mode = True
 
 from auspex.instruments.instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand
 from auspex.experiment import Experiment
@@ -24,7 +24,6 @@ from auspex.filters.debug import Print
 from auspex.filters.io import WriteToHDF5
 from auspex.analysis.io import load_from_HDF5
 from auspex.log import logger
-import auspex.config as config
 
 config.load_meas_file(config.find_meas_file())
 

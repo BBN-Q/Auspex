@@ -8,10 +8,8 @@
 #
 # This file is originally from PyQLab (http://github.com/bbn-q/PyQLab)
 
-import json
 import os, os.path
 import sys
-import auspex.globals
 from shutil import move
 from io import StringIO
 try:
@@ -19,15 +17,44 @@ try:
 except:
     import ruamel_yaml as yaml
 
+# Measurement yaml file
 meas_file = None
+
+# Where the AWG data is stored
 AWGDir    = None
+
+# Where 
 KernelDir = None
 LogDir    = None
 
+# Use when wanting to generate fake data
+# or to avoid loading libraries that may
+# interfere with desired operation. (e.g.
+# when scraping modules in Auspex)
+auspex_dummy_mode = False
+
+# If this is True, then close the last
+# plotter before starting a new one.
+single_plotter_mode = False
+
+# This holds a reference to the most
+# recent plotters.
+last_plotter_process = None
+last_extra_plotter_process = None
+
+# Config directory
+meas_file         = None
+AWGDir            = None
+ConfigurationFile = None
+KernelDir         = None
+LogDir            = None
+
+
 def find_meas_file():
+    global meas_file
     # First default to any manually set options in the globals
-    if auspex.globals.meas_file:
-        return os.path.abspath(auspex.globals.meas_file)
+    if meas_file:
+        return os.path.abspath(meas_file)
     # Next use the meas file location in the environment variables
     if os.getenv('BBN_MEAS_FILE'):
         return os.getenv('BBN_MEAS_FILE')
@@ -77,10 +104,13 @@ class FlatDumper(yaml.RoundTripDumper):
     def include(self, data):
         return self.represent_mapping('tag:yaml.org,2002:map', data.data)
 
-def load_meas_file(filename):
+def load_meas_file(filename=None):
     global LogDir, KernelDir, AWGDir, meas_file
 
-    meas_file = filename
+    if filename:
+        meas_file = filename
+    else:
+        meas_file = find_meas_file()
 
     with open(filename, 'r') as fid:
         Loader.add_constructor('!include', Loader.include)
@@ -88,28 +118,29 @@ def load_meas_file(filename):
         code = load.get_single_data()
         load.dispose()
 
-    # Get the config values out of the measure_file, but override with 
-    # any auspex.globals that are manually set.
-    # abspath allows the use of relative file names in the config file
-    if auspex.globals.AWGDir:
-        AWGDir = os.path.abspath(auspex.globals.AWGDir)
-    else:
+    # Get the config values out of the measure_file.
+    if not 'config' in code.keys():
+        raise KeyError("Could not find config section of the yaml file.")
+
+    if 'AWGDir' in code['config'].keys():
         AWGDir = os.path.abspath(code['config']['AWGDir'])
-
-    if auspex.globals.KernelDir:
-        KernelDir = os.path.abspath(auspex.globals.KernelDir)
     else:
+        raise KeyError("Could not find AWGDir in the YAML config section")
+
+    if 'KernelDir' in code['config'].keys():
         KernelDir = os.path.abspath(code['config']['KernelDir'])
-
-    if auspex.globals.LogDir:
-        LogDir = os.path.abspath(auspex.globals.LogDir)
     else:
+        raise KeyError("Could not find KernelDir in the YAML config section")
+
+    if 'LogDir' in code['config'].keys():
         LogDir = os.path.abspath(code['config']['LogDir'])
+    else:
+        raise KeyError("Could not find LogDir in the YAML config section")
     
-    if not os.path.isdir(KernelDir):
-        os.mkdir(KernelDir)
-    if not os.path.isdir(LogDir):
-        os.mkdir(LogDir)
+    # Create directories if necessary
+    for d in [KernelDir, LogDir]:
+        if not os.path.isdir(d):
+            os.mkdir(d)
 
     return code
 

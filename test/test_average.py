@@ -11,8 +11,8 @@ import asyncio
 import time
 import numpy as np
 
-import auspex.globals
-auspex.globals.auspex_dummy_mode = True
+import auspex.config as config
+config.auspex_dummy_mode = True
 
 from auspex.experiment import Experiment
 from auspex.parameter import FloatParameter

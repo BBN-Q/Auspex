@@ -13,8 +13,8 @@ import numpy as np
 
 from copy import copy, deepcopy
 
-import auspex.globals
-auspex.globals.auspex_dummy_mode = True
+import auspex.config as config
+config.auspex_dummy_mode = True
 
 from auspex.instruments.instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand
 from auspex.experiment import Experiment

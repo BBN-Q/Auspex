@@ -30,7 +30,7 @@ from auspex.sweep import Sweeper
 from auspex.stream import DataStream, DataAxis, SweepAxis, DataStreamDescriptor, InputConnector, OutputConnector
 from auspex.filters import Plotter, XYPlotter, MeshPlotter, ManualPlotter, WriteToHDF5, DataBuffer, Filter
 from auspex.log import logger
-import auspex.globals
+import auspex.config
 
 class ExpProgressBar(object):
     """ Display progress bar(s) on the terminal.
@@ -599,10 +599,10 @@ class Experiment(metaclass=MetaExperiment):
             plotter.plot_server = self.extra_plot_server
         time.sleep(0.5)
         # Kill a previous plotter if desired.
-        if auspex.globals.single_plotter_mode and auspex.globals.last_plotter_process:
-            pros = [auspex.globals.last_plotter_process]
-            if (not self.leave_plot_server_open or self.first_exp) and auspex.globals.last_extra_plotter_process:
-                pros += [auspex.globals.last_extra_plotter_process]
+        if auspex.config.single_plotter_mode and auspex.config.last_plotter_process:
+            pros = [auspex.config.last_plotter_process]
+            if (not self.leave_plot_server_open or self.first_exp) and auspex.config.last_extra_plotter_process:
+                pros += [auspex.config.last_extra_plotter_process]
             for pro in pros:
                 if hasattr(os, 'setsid'): # Doesn't exist on windows
                     try:
@@ -617,15 +617,15 @@ class Experiment(metaclass=MetaExperiment):
                         logger.debug("No plotter to kill.")
 
         client_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),"matplotlib-client.py")
-        #if not auspex.globals.last_plotter_process:
+        #if not auspex.config.last_plotter_process:
         if hasattr(os, 'setsid'):
-            auspex.globals.last_plotter_process = subprocess.Popen(['python', client_path, 'localhost'],
+            auspex.config.last_plotter_process = subprocess.Popen(['python', client_path, 'localhost'],
                                                                 env=os.environ.copy(), preexec_fn=os.setsid)
         else:
-            auspex.globals.last_plotter_process = subprocess.Popen(['python', client_path, 'localhost'],
+            auspex.config.last_plotter_process = subprocess.Popen(['python', client_path, 'localhost'],
                                                                 env=os.environ.copy())
-        if hasattr(self, 'extra_plot_server') and (not auspex.globals.last_extra_plotter_process or not self.leave_plot_server_open or self.first_exp):
+        if hasattr(self, 'extra_plot_server') and (not auspex.config.last_extra_plotter_process or not self.leave_plot_server_open or self.first_exp):
             if hasattr(os, 'setsid'):
-                auspex.globals.last_extra_plotter_process = subprocess.Popen(['python', client_path, 'localhost', str(self.extra_plot_server.status_port), str(self.extra_plot_server.data_port)], env=os.environ.copy(), preexec_fn=os.setsid)
+                auspex.config.last_extra_plotter_process = subprocess.Popen(['python', client_path, 'localhost', str(self.extra_plot_server.status_port), str(self.extra_plot_server.data_port)], env=os.environ.copy(), preexec_fn=os.setsid)
             else:
-                auspex.globals.last_extra_plotter_process = subprocess.Popen(['python', client_path, 'localhost', str(self.extra_plot_server.status_port), str(self.extra_plot_server.data_port)], env=os.environ.copy())
+                auspex.config.last_extra_plotter_process = subprocess.Popen(['python', client_path, 'localhost', str(self.extra_plot_server.status_port), str(self.extra_plot_server.data_port)], env=os.environ.copy())

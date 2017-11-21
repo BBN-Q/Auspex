@@ -45,11 +45,11 @@ def correct_resource_name(resource_name):
     return resource_name
 
 def quince(meas_file=None):
-    """Launch quince from the notebook as a subprocess. Assumes quince exists in the same python environment. 
-    If you are using virtual environments you may need to modify the shebang in run-quince.py or the python 
+    """Launch quince from the notebook as a subprocess. Assumes quince exists in the same python environment.
+    If you are using virtual environments you may need to modify the shebang in run-quince.py or the python
     interpreter in run-quince.bat to ensure that the quince is properly located and executed."""
     if not meas_file:
-        meas_file = config.find_meas_file() 
+        meas_file = config.find_meas_file()
     if (os.name == 'nt'):
         subprocess.Popen(['run-quince.bat', meas_file], env=os.environ.copy())
     else:
@@ -147,11 +147,11 @@ class QubitExpFactory(object):
     will override some of the config values depending on the experiment being run."""
 
     @staticmethod
-    def run(meta_file=None, expname=None, calibration=False, save_data=True, cw_mode=False, repeats=None):
+    def run(meta_file=None, meas_file=None, expname=None, calibration=False, cw_mode=False, repeats=None):
         """This passes all of the parameters given to the *create* method
         and then runs the experiment immediately."""
-        exp = QubitExpFactory.create(meta_file=meta_file, expname=expname,
-                                     calibration=calibration, save_data=save_data, cw_mode=cw_mode,
+        exp = QubitExpFactory.create(meta_file=meta_file, meas_file=meas_file, expname=expname,
+                                     calibration=calibration, cw_mode=cw_mode,
                                     repeats=repeats)
         exp.run_sweeps()
         return exp
@@ -169,8 +169,6 @@ class QubitExpFactory(object):
         number of segments gleaned from the meta_info"""
 
         # Figure out which config file we should use, defaulting to the supplied argument
-        if not meas_file:
-            meas_file = config.find_meas_file() 
         settings = config.load_meas_file(meas_file)
 
         # This is generally the behavior we want
