@@ -126,6 +126,8 @@ class SingleQubitCalTestCase(unittest.TestCase):
         new_settings = auspex.config.yaml_load(cfg_file)
         self.assertAlmostEqual(rabi_cal.pi_amp, new_settings['qubits'][self.q.label]['control']['pulse_params']['piAmp'], places=4)
         self.assertAlmostEqual(rabi_cal.pi2_amp, new_settings['qubits'][self.q.label]['control']['pulse_params']['pi2Amp'], places=4)
+        #restore original settings
+        auspex.config.yaml_dump(self.test_settings, cfg_file)
 
     def sim_ramsey(self, set_source = True):
         """
@@ -148,7 +150,8 @@ class SingleQubitCalTestCase(unittest.TestCase):
         #test update_settings
         new_settings = auspex.config.yaml_load(cfg_file)
         self.assertAlmostEqual(ramsey_cal.fit_freq/1e9, new_settings['instruments']['Holz2']['frequency']/1e9, places=4)
-
+        #restore original settings
+        auspex.config.yaml_dump(self.test_settings, cfg_file)
     def test_ramsey_set_qubit(self):
         """
         Test RamseyCalibration with qubit frequency setting.
@@ -157,7 +160,8 @@ class SingleQubitCalTestCase(unittest.TestCase):
         #test update_settings
         new_settings = auspex.config.yaml_load(cfg_file)
         self.assertAlmostEqual((self.test_settings['qubits'][self.q.label]['control']['frequency']+90e3)/1e6, new_settings['qubits'][self.q.label]['control']['frequency']/1e6, places=4)
-
+        #restore original settings
+        auspex.config.yaml_dump(self.test_settings, cfg_file)
     def test_phase_estimation(self):
         """
         Test generating data for phase estimation
@@ -209,7 +213,8 @@ class SingleQubitCalTestCase(unittest.TestCase):
         os.remove(self.filename)
         # NOTE: expected result is from the same input fed to the routine
         self.assertAlmostEqual(pi_cal.amplitude, amp, places=3)
-
+        #restore original settings
+        auspex.config.yaml_dump(self.test_settings, cfg_file)
 
 if __name__ == '__main__':
     unittest.main()
