@@ -159,7 +159,7 @@ class SingleQubitCalTestCase(unittest.TestCase):
         ramsey_cal = self.sim_ramsey(False)
         #test update_settings
         new_settings = auspex.config.yaml_load(cfg_file)
-        self.assertAlmostEqual((self.test_settings['qubits'][self.q.label]['control']['frequency']+90e3)/1e6, new_settings['qubits'][self.q.label]['control']['frequency']/1e6, places=4)
+        self.assertAlmostEqual((self.test_settings['qubits'][self.q.label]['control']['frequency']+90e3)/1e6, new_settings['qubits'][self.q.label]['control']['frequency']/1e6, places=2)
         #restore original settings
         auspex.config.yaml_dump(self.test_settings, cfg_file)
     def test_phase_estimation(self):
