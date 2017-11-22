@@ -24,7 +24,6 @@ import networkx as nx
 import auspex.config as config
 import auspex.instruments
 import auspex.filters
-import auspex.globals
 
 from auspex.log import logger
 from auspex.experiment import Experiment
