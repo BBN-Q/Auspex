@@ -67,7 +67,7 @@ class PulseCalibration(object):
         self.exp        = None
         self.axis_descriptor = None
         self.cw_mode    = False
-        self.saved_settings = config.yaml_load(config.meas_file)
+        self.saved_settings = config.load_meas_file(config.meas_file)
         self.settings = deepcopy(self.saved_settings) #make a copy for used during calibration
         self.quad = quad
         if quad == "real":
