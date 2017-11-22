@@ -171,7 +171,7 @@ class QubitExpFactory(object):
         settings = config.load_meas_file(meas_file)
 
         # This is generally the behavior we want
-        auspex.globals.single_plotter_mode = True
+        auspex.config.single_plotter_mode = True
 
         # Instantiate and perform all of our setup
         experiment = QubitExperiment()
@@ -207,8 +207,8 @@ class QubitExpFactory(object):
             For example, a mixer with -40dBc sideband supression at 1 degree of phase skew
             and 0.1 dB amplitude imbalance should calibrate the phase first.
         """
-        spm = auspex.globals.single_plotter_mode
-        auspex.globals.single_plotter_mode = True
+        spm = auspex.config.single_plotter_mode
+        auspex.config.single_plotter_mode = True
 
         def sweep_offset(name, pts):
             mce.clear_sweeps()
@@ -302,7 +302,7 @@ class QubitExpFactory(object):
                                                                         mce.Q_offset.value,
                                                                         mce.amplitude_factor.value,
                                                                         mce.phase_skew.value))
-        auspex.globals.single_plotter_mode = spm
+        auspex.config.single_plotter_mode = spm
 
     @staticmethod
     def load_meta_info(experiment, meta_file):

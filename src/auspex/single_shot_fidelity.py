@@ -67,7 +67,7 @@ class SingleShotFidelityExperiment(QubitExperiment):
             QubitExpFactory.load_parameter_sweeps(experiment)
         self.ssf = self.find_single_shot_filter()
         self.leave_plot_server_open = True
-        auspex.globals.single_plotter_mode = True
+        auspex.config.single_plotter_mode = True
 
     def run_sweeps(self):
         #For now, only update histograms if we don't have a parameter sweep.
