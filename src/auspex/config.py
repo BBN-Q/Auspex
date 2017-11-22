@@ -17,16 +17,6 @@ try:
 except:
     import ruamel_yaml as yaml
 
-# Measurement yaml file
-meas_file = None
-
-# Where the AWG data is stored
-AWGDir    = None
-
-# Where 
-KernelDir = None
-LogDir    = None
-
 # Use when wanting to generate fake data
 # or to avoid loading libraries that may
 # interfere with desired operation. (e.g.
