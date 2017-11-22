@@ -102,7 +102,7 @@ def load_meas_file(filename=None):
     else:
         meas_file = find_meas_file()
 
-    with open(filename, 'r') as fid:
+    with open(meas_file, 'r') as fid:
         Loader.add_constructor('!include', Loader.include)
         load = Loader(fid)
         code = load.get_single_data()
@@ -126,7 +126,7 @@ def load_meas_file(filename=None):
         LogDir = os.path.abspath(code['config']['LogDir'])
     else:
         raise KeyError("Could not find LogDir in the YAML config section")
-    
+
     # Create directories if necessary
     for d in [KernelDir, LogDir]:
         if not os.path.isdir(d):
