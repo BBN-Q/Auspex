@@ -1,0 +1,5 @@
+config:
+ AWGDir: /tmp/awg
+ KernelDir: /tmp/kern
+ LogDir: /tmp/alog
+ 
