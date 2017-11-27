@@ -427,8 +427,9 @@ class PhaseEstimation(PulseCalibration):
         amp = self.amplitude
         set_amp = 'pi2Amp' if isinstance(self, Pi2Calibration) else 'piAmp' if isinstance(self, PiCalibration) else 'amp'
         #TODO: add writers for variance if not existing
-        while True:
-            self.set()
+        done_flag = 0
+        while not done_flag:
+            self.set(exp_step = ct-1)
             if isinstance(self, CRAmpCalibration_PhEst):
                 #trick PulseCalibration to ignore the control qubit
                 temp_qubit = copy(self.qubit)
@@ -443,37 +444,13 @@ class PhaseEstimation(PulseCalibration):
                 self.qubit_names = copy(temp_qubit_names)
 
             logger.info("Phase: %.4f Sigma: %.4f"%(phase,sigma))
-            # correct for some errors related to 2pi uncertainties
-            if np.sign(phase) != np.sign(amp):
-                phase += np.sign(amp)*2*np.pi
-            angle_error = phase - self.target;
-            logger.info('Angle error: %.4f'%angle_error);
-
-            amp_target = self.target/phase * amp
-            amp_error = amp - amp_target
-            logger.info('Set amplitude: %.4f\n'%amp)
-            logger.info('Amplitude error: %.4f\n'%amp_error)
-
-            amp = amp_target
-            ct += 1
-
-            # check for stopping condition
-            phase_error = phase - self.target
-            if np.abs(phase_error) < 1e-2 or np.abs(phase_error/sigma) < 1 or ct > self.iteration_limit:
-                if np.abs(phase_error) < 1e-2:
-                    logger.info('Reached target rotation angle accuracy');
-                    self.amplitude = amp
-                elif abs(phase_error/sigma) < 1:
-                    logger.info('Reached phase uncertainty limit');
-                    self.amplitude = amp
-                else:
-                    logger.info('Hit max iteration count');
-                break
             #update amplitude
-            self.amplitude = amp
+            ct+=1
+            self.amplitude, done_flag = phase_to_amplitude(phase, sigma, self.amplitude, self.target, ct, self.iteration_limit)
+
         logger.info("Found amplitude for {} calibration of: {}".format(type(self).__name__, amp))
         #set_chan = self.qubit_names[0] if len(self.qubit) == 1 else ChannelLibraries.EdgeFactory(*self.qubits).label
-        return (set_amp, amp)
+        return (set_amp, self.amplitude)
 
     def update_settings(self):
         set_amp = 'pi2Amp' if isinstance(self, Pi2Calibration) else 'piAmp' if isinstance(self, PiCalibration) else 'amp'
@@ -854,6 +831,35 @@ def phase_estimation( data_in, vardata_in, verbose=False):
         sigma = np.maximum(np.abs(restrict(curGuess - lowerBound)), np.abs(restrict(curGuess - upperBound)))
 
     return phase, sigma
+
+def phase_to_amplitude(phase, sigma, amp, target, ct, iteration_limit=5):
+    # correct for some errors related to 2pi uncertainties
+    if np.sign(phase) != np.sign(amp):
+        phase += np.sign(amp)*2*np.pi
+    angle_error = phase - target;
+    logger.info('Angle error: %.4f'%angle_error);
+
+    amp_target = target/phase * amp
+    amp_error = amp - amp_target
+    logger.info('Set amplitude: %.4f\n'%amp)
+    logger.info('Amplitude error: %.4f\n'%amp_error)
+
+    amp = amp_target
+    done_flag = 0
+
+    # check for stopping condition
+    phase_error = phase - target
+    if np.abs(phase_error) < 1e-2 or np.abs(phase_error/sigma) < 1 or ct > iteration_limit:
+        if np.abs(phase_error) < 1e-2:
+            logger.info('Reached target rotation angle accuracy');
+            amplitude = amp
+        elif abs(phase_error/sigma) < 1:
+            logger.info('Reached phase uncertainty limit');
+            amplitude = amp
+        else:
+            logger.info('Hit max iteration count');
+        done_flag = 1
+    return amp, done_flag
 
 def quick_norm_data(data): #TODO: generalize as in Qlab.jl
     """Rescale data assuming 2 calibrations / single qubit state at the end of the sequence"""
