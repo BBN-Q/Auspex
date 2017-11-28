@@ -1,5 +1,150 @@
+# Qubit configuration for the 21.1st century.
+# This example configuration will be used for
+# unit tests related to the QubitExpFactory.
+
 config:
- AWGDir: /tmp/awg
- KernelDir: /tmp/kern
- LogDir: /tmp/alog
- 
+  AWGDir: /tmp/awg
+  KernelDir: /tmp/kern
+  LogDir: /tmp/alog
+
+qubits:
+  q1:
+    measure:
+      AWG: BBNAPS1 12
+      trigger: BBNAPS1 12m1
+      receiver: q1-RawSS
+      generator: Holz1
+      autodyne_freq: 10000000.0
+      pulse_params:
+        amp: 1.0
+        cutoff: 2.0
+        length: 5.0e-07
+        shape_fun: tanh
+        sigma: 1.0e-09
+    control:
+      AWG: BBNAPS2 12  
+      generator: Holz2
+      pulseParams:
+        cutoff: 2.0
+        length: 7.0e-08
+        pi2Amp: 0.4
+        piAmp: 0.8
+        shapeFun: drag
+        dragScaling: 0.0
+        sigma: 5.0e-09
+
+instruments:
+  BBNAPS1:
+    type: APS2
+    master: true
+    slave_trig: 12m4
+    address: 192.168.5.20
+    seq_file: thing.h5
+    trigger_interval: 5.0e-06
+    trigger: Internal
+    delay: 0.0
+    tx_channels:
+      '12':
+        phase_skew: -11.73
+        amp_factor: 0.898
+        '1':
+          offset: 0.1
+          amplitude: 0.9
+        '2':
+          offset: 0.02
+          amplitude: 0.8
+    markers:
+      12m1:
+        delay: -5.0e-08
+      12m2:
+        delay: 0.0
+      12m3:
+        delay: 0.0
+      12m4:
+        delay: 0.0
+
+  BBNAPS2:
+    type: APS2
+    master: false
+    address: 192.168.5.21
+    seq_file: thing2.h5
+    trigger_interval: 5.0e-06
+    trigger: External
+    delay: 0.0
+    tx_channels:
+      '12':
+        phase_skew: 10
+        amp_factor: 0.898
+        '1':
+          offset: 0.1
+          amplitude: 0.9
+        '2':
+          offset: 0.02
+          amplitude: 0.8
+    markers:
+      12m1:
+        delay: -5.0e-08
+      12m2:
+        delay: 0.0
+      12m3:
+        delay: 0.0
+      12m4:
+        delay: 0.0
+
+  X6-1:
+    type: X6
+    address: 0
+    acquire_mode: digitizer
+    gen_fake_data: true
+    reference: external
+    record_length: 1024
+    nbr_segments: 1
+    nbr_round_robins: 4
+    rx_channels:
+      '1':
+      '2':
+    streams: [raw, result1, result2]
+
+  Holz1:
+    type: HolzworthHS9000
+    address: HS9004A-009-1
+    power: -10
+
+  Holz2:
+    type: HolzworthHS9000
+    address: HS9004A-009-2
+    power: -10
+
+filters:
+  q1-RawSS:
+    type: X6StreamSelector
+    source: X6-1
+    stream_type: Raw
+    channel: '1'
+
+  Demod-q1:
+    type: Channelizer
+    source: q1-RawSS
+    decimation_factor: 4
+    frequency: 10000000.0
+    bandwidth: 5000000.0
+
+  Int-q1:
+    type: KernelIntegrator
+    source: Demod-q1
+    box_car_start: 5.0e-07
+    box_car_stop: 9.0e-07
+
+  avg-q1:
+    type: Averager
+    source: Int-q1
+    axis: round_robins
+
+  final-avg-buff:
+    type: DataBuffer
+    source: avg-q1 final_average
+
+  partial-avg-buff:
+    type: DataBuffer
+    source: avg-q1 partial_average    
+      
