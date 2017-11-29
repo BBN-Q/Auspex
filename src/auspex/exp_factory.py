@@ -146,17 +146,19 @@ class QubitExpFactory(object):
     will override some of the config values depending on the experiment being run."""
 
     @staticmethod
-    def run(meta_file=None, meas_file=None, expname=None, calibration=False, cw_mode=False, repeats=None):
+    def run(meta_file=None, meas_file=None, expname=None, calibration=False, save_data=True,
+           cw_mode=False, repeats=None):
         """This passes all of the parameters given to the *create* method
         and then runs the experiment immediately."""
         exp = QubitExpFactory.create(meta_file=meta_file, meas_file=meas_file, expname=expname,
-                                     calibration=calibration, cw_mode=cw_mode,
+                                     calibration=calibration, cw_mode=cw_mode, save_data=save_data,
                                     repeats=repeats)
         exp.run_sweeps()
         return exp
 
     @staticmethod
-    def create(meta_file=None, meas_file=None, expname=None, calibration=False, save_data = True, cw_mode=False, instr_filter = None, repeats=None):
+    def create(meta_file=None, meas_file=None, expname=None, calibration=False, save_data=True,
+               cw_mode=False, instr_filter=None, repeats=None):
         """Create the experiment, but do not run the sweeps. If *cw_mode* is specified
         the AWGs will be operated in continuous waveform mode, and will not be stopped
         and started between succesive sweep points. The *calibration* argument is used
