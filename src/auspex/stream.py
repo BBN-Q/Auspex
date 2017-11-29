@@ -584,6 +584,9 @@ class OutputConnector(object):
         # Determine whether we need to deal with adaptive sweeps
         self.has_adaptive_sweeps = False
 
+    def __len__(self):
+        return self.points_taken
+
     # We allow the connectors itself to posess
     # a descriptor, that it may pass
     def set_descriptor(self, descriptor):
