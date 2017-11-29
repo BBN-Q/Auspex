@@ -786,7 +786,8 @@ class QubitExpFactory(object):
 
             # Digitizer mode preserves round_robins, averager mode collapsing along them:
             if 'acquire_mode' not in source_instr_settings.keys() or source_instr_settings['acquire_mode'] == 'digitizer':
-                descrip.add_axis(DataAxis("round_robins", range(source_instr_settings['nbr_round_robins'])))
+                if source_instr_settings['nbr_round_robins'] > 1:
+                    descrip.add_axis(DataAxis("round_robins", range(source_instr_settings['nbr_round_robins'])))
 
             oc.set_descriptor(descrip)
 
