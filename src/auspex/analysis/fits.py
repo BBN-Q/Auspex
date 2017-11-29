@@ -143,6 +143,28 @@ def fit_ramsey(xdata, ydata, two_freqs = False):
     ferr = perr[:two_freqs+1]
     return fopt, ferr, popt, perr
 
+def cal_data(data, quad=np.real, qubit_name="q1", group_name="main", return_type=np.float32)
+    key = qubit_name + "-" + group_name
+
+    fields = data[key].dtype.fields.keys()
+    meta_field = [f for f in fields if 'metadata' in f][0]
+    ind_axis = meta_field.replace("_metadata", "")
+
+    ind0 = np.where(data[key][meta_field] == 0 )[0]
+    ind1 = np.where(data[key][meta_field] == 1 )[0]
+
+    dat = quad(data[key]["Data"])
+    zero_cal = np.mean(dat[ind0])
+    one_cal = np.mean(dat[ind1])
+
+    scale_factor = -(one_cal - zero_cal)/2
+
+    #assumes calibrations at the end only
+    y_dat = dat[:-(len(ind0) + len(ind1))]
+    x_dat = data[key][ind_axis][:-(len(ind0) + len(ind1))]
+    y_dat = (y_dat - zero_cal)/scale_factor + 1
+    return y_dat.astype(return_type), x_dat
+
 def ramsey_1f(x, f, A, tau, phi, y0):
     return A*np.exp(-x/tau)*np.cos(2*np.pi*f*x + phi) + y0
 
