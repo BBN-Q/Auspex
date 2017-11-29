@@ -139,9 +139,9 @@ def fit_ramsey(xdata, ydata, two_freqs = False):
     popt, pcov = curve_fit(ramsey_1f, xdata, ydata, p0 = p0)
     fopt = [popt[0]]
     perr = np.sqrt(np.diag(pcov))
-    fopt = popt[:1]
-    ferr = perr[:1]
-    return fopt, ferr, popt
+    fopt = popt[:two_freqs+1]
+    ferr = perr[:two_freqs+1]
+    return fopt, ferr, popt, perr
 
 def ramsey_1f(x, f, A, tau, phi, y0):
     return A*np.exp(-x/tau)*np.cos(2*np.pi*f*x + phi) + y0
