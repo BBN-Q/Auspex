@@ -398,9 +398,6 @@ class QubitExpFactory(object):
             # Enable the digitizer
             inst_to_enable.append(dig_name)
 
-            # Set number of segments in the digitizer
-            instruments[dig_name]['nbr_segments'] = num_segments
-
             # Find the enabled X6 stream selectors with the same channel as the receiver. Allow to plot/save raw/demod/int streams belonging to the same receiver
             if calibration:
                 X6_stream_selectors = []
