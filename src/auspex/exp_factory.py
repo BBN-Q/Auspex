@@ -32,7 +32,7 @@ from auspex.filters.io import DataBuffer
 from auspex.filters.plot import Plotter, ManualPlotter
 from auspex.instruments.instrument import Instrument, SCPIInstrument, CLibInstrument, DigitizerChannel
 from auspex.stream import OutputConnector, DataStreamDescriptor, DataAxis
-from auspex.experiment import FloatParameter
+from auspex.experiment import FloatParameter, IntParameter
 from auspex.instruments.X6 import X6Channel
 from auspex.instruments.alazar import AlazarChannel
 from auspex.mixer_calibration import MixerCalibrationExperiment, find_null_offset
@@ -102,6 +102,12 @@ class QubitExperiment(Experiment):
                }}
         QubitExpFactory.load_parameter_sweeps(self, manual_sweep_params=desc)
 
+    def add_avg_sweep(self, num_averages):
+        param = IntParameter()
+        param.name = "sw_avg"
+        setattr(self, param.name, param)
+        self._parameters[param.name] = param
+        self.add_sweep(param, range(num_averages))
 
     def shutdown_instruments(self):
         # remove socket readers
@@ -147,18 +153,18 @@ class QubitExpFactory(object):
 
     @staticmethod
     def run(meta_file=None, meas_file=None, expname=None, calibration=False, save_data=True,
-           cw_mode=False, repeats=None):
+           cw_mode=False, repeats=None, single_plotter=True):
         """This passes all of the parameters given to the *create* method
         and then runs the experiment immediately."""
         exp = QubitExpFactory.create(meta_file=meta_file, meas_file=meas_file, expname=expname,
                                      calibration=calibration, cw_mode=cw_mode, save_data=save_data,
-                                    repeats=repeats)
+                                    repeats=repeats, single_plotter=single_plotter)
         exp.run_sweeps()
         return exp
 
     @staticmethod
     def create(meta_file=None, meas_file=None, expname=None, calibration=False, save_data=True,
-               cw_mode=False, instr_filter=None, repeats=None):
+               cw_mode=False, instr_filter=None, repeats=None, single_plotter=True):
         """Create the experiment, but do not run the sweeps. If *cw_mode* is specified
         the AWGs will be operated in continuous waveform mode, and will not be stopped
         and started between succesive sweep points. The *calibration* argument is used
@@ -173,7 +179,7 @@ class QubitExpFactory(object):
         settings = config.load_meas_file(meas_file)
 
         # This is generally the behavior we want
-        auspex.config.single_plotter_mode = True
+        auspex.config.single_plotter_mode = single_plotter
 
         # Instantiate and perform all of our setup
         experiment = QubitExperiment()
