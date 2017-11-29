@@ -1,6 +1,14 @@
 auspex package
 ==============
 
+Subpackages
+-----------
+
+.. toctree::
+    auspex.analysis
+    auspex.filters
+    auspex.instruments
+
 auspex\.exp\_factory module
 ---------------------------
 .. _qubitexpfactory:
@@ -71,10 +79,4 @@ auspex\.sweep module
     :members:
     :undoc-members:
 
-Subpackages
------------
 
-.. toctree::
-    auspex.analysis
-    auspex.filters
-    auspex.instruments
