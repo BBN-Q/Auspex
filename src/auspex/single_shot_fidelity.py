@@ -24,7 +24,7 @@ from auspex.filters.plot import ManualPlotter
 from auspex.filters.singleshot import SingleShotMeasurement
 from auspex.analysis.fits import *
 from auspex.analysis.helpers import normalize_data
-import auspex.globals
+import auspex.config
 
 class SingleShotFidelityExperiment(QubitExperiment):
     """Experiment to measure single-shot measurement fidelity of a qubit."""
@@ -44,7 +44,7 @@ class SingleShotFidelityExperiment(QubitExperiment):
         self.qubit_names = qubit_names if isinstance(qubit_names, list) else [qubit_names]
         self.qubit     = [QubitFactory(qubit_name) for qubit_name in qubit_names] if isinstance(qubit_names, list) else QubitFactory(qubit_names)
         # make a copy of the settings to restore default
-        self.saved_settings = config.yaml_load(config.configFile)
+        self.saved_settings = config.yaml_load(config.meas_file)
         self.settings = deepcopy(self.saved_settings)
         self.save_data = save_data
         self.calibration = True
@@ -67,7 +67,7 @@ class SingleShotFidelityExperiment(QubitExperiment):
             QubitExpFactory.load_parameter_sweeps(experiment)
         self.ssf = self.find_single_shot_filter()
         self.leave_plot_server_open = True
-        auspex.globals.single_plotter_mode = True
+        auspex.config.single_plotter_mode = True
 
     def run_sweeps(self):
         #For now, only update histograms if we don't have a parameter sweep.
@@ -113,7 +113,7 @@ class SingleShotFidelityExperiment(QubitExperiment):
                     else:
                         param_key[instr_tree[-1]] = opt_value
                     logger.info("Set{} to {}.".format(" ".join(str(x) for x in instr_tree),opt_value ))
-                config.yaml_dump(self.saved_settings, config.configFile)
+                config.dump_meas_file(self.saved_settings, config.meas_file)
 
     def _update_histogram_plots(self):
         pdf_data = self.get_results()

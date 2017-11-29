@@ -132,13 +132,14 @@ class WriteToHDF5(Filter):
         fulldir = os.path.splitext(self.filename.value)[0]
         if not os.path.exists(fulldir):
             os.makedirs(fulldir)
-            config.yaml_dump(config.yaml_load(config.configFile), os.path.join(fulldir, os.path.split(config.configFile)[1]), flatten = True)
+            config.dump_meas_file(config.load_meas_file(config.meas_file), os.path.join(fulldir, os.path.split(config.meas_file)[1]), flatten = True)
 
     def save_yaml_h5(self):
         """ Save a copy of current experiment settings in the h5 metadata"""
         header = self.file.create_group("header")
         # load them dump to get the 'include' information
-        header.attrs['settings'] = config.yaml_dump(config.yaml_load(config.configFile), flatten = True)
+        header.attrs['settings'] = config.dump_meas_file(config.load_meas_file(config.meas_file), flatten = True)
+
 
     async def run(self):
         self.finished_processing = False

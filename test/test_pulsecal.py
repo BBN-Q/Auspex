@@ -19,17 +19,15 @@ import QGL.config
 curr_dir = os.path.dirname(os.path.abspath(__file__))
 curr_dir = curr_dir.replace('\\', '/')  # use unix-like convention
 awg_dir  = os.path.abspath(os.path.join(curr_dir, "AWG" ))
-cfg_file = os.path.abspath(os.path.join(curr_dir, "test_config.yml"))
+cfg_file = os.path.abspath(os.path.join(curr_dir, "test_measure.yml"))
 
 ChannelLibrary(library_file=cfg_file)
-import auspex.config
-# Dummy mode
-import auspex.globals
-auspex.globals.auspex_dummy_mode = True
 
-auspex.config.configFile = cfg_file
-auspex.config.AWGDir     = awg_dir
-QGL.config.AWGDir = awg_dir
+import auspex.config
+auspex.config.auspex_dummy_mode = True
+auspex.config.configFile        = cfg_file
+auspex.config.AWGDir            = awg_dir
+QGL.config.AWGDir               = awg_dir
 
 # Create the AWG directory if it doesn't exist
 if not os.path.exists(awg_dir):
@@ -106,7 +104,7 @@ class SingleQubitCalTestCase(unittest.TestCase):
     """
 
     q = QubitFactory('q1')
-    test_settings = auspex.config.yaml_load(cfg_file)
+    test_settings = auspex.config.load_meas_file(cfg_file)
     nbr_round_robins = test_settings['instruments']['X6-1']['nbr_round_robins']
     filename = './cal_fake_data.npy'
 
@@ -123,11 +121,11 @@ class SingleQubitCalTestCase(unittest.TestCase):
         self.assertAlmostEqual(rabi_cal.pi_amp,1,places=2)
         self.assertAlmostEqual(rabi_cal.pi2_amp,0.5,places=2)
         #test update_settings
-        new_settings = auspex.config.yaml_load(cfg_file)
+        new_settings = auspex.config.load_meas_file(cfg_file)
         self.assertAlmostEqual(rabi_cal.pi_amp, new_settings['qubits'][self.q.label]['control']['pulse_params']['piAmp'], places=4)
         self.assertAlmostEqual(rabi_cal.pi2_amp, new_settings['qubits'][self.q.label]['control']['pulse_params']['pi2Amp'], places=4)
         #restore original settings
-        auspex.config.yaml_dump(self.test_settings, cfg_file)
+        auspex.config.dump_meas_file(self.test_settings, cfg_file)
 
     def sim_ramsey(self, set_source = True):
         """
@@ -148,20 +146,20 @@ class SingleQubitCalTestCase(unittest.TestCase):
         ramsey_cal = self.sim_ramsey()
         self.assertAlmostEqual(ramsey_cal.fit_freq/1e9, (self.test_settings['instruments']['Holz2']['frequency'] + 90e3)/1e9, places=4)
         #test update_settings
-        new_settings = auspex.config.yaml_load(cfg_file)
+        new_settings = auspex.config.load_meas_file(cfg_file)
         self.assertAlmostEqual(ramsey_cal.fit_freq/1e9, new_settings['instruments']['Holz2']['frequency']/1e9, places=4)
         #restore original settings
-        auspex.config.yaml_dump(self.test_settings, cfg_file)
+        auspex.config.dump_meas_file(self.test_settings, cfg_file)
     def test_ramsey_set_qubit(self):
         """
         Test RamseyCalibration with qubit frequency setting.
         """
         ramsey_cal = self.sim_ramsey(False)
         #test update_settings
-        new_settings = auspex.config.yaml_load(cfg_file)
+        new_settings = auspex.config.load_meas_file(cfg_file)
         self.assertAlmostEqual((self.test_settings['qubits'][self.q.label]['control']['frequency']+90e3)/1e6, new_settings['qubits'][self.q.label]['control']['frequency']/1e6, places=2)
         #restore original settings
-        auspex.config.yaml_dump(self.test_settings, cfg_file)
+        auspex.config.dump_meas_file(self.test_settings, cfg_file)
     def test_phase_estimation(self):
         """
         Test generating data for phase estimation
@@ -212,9 +210,9 @@ class SingleQubitCalTestCase(unittest.TestCase):
         cal.calibrate([pi_cal])
         os.remove(self.filename)
         # NOTE: expected result is from the same input fed to the routine
-        self.assertAlmostEqual(pi_cal.amplitude, amp, places=3)
+        self.assertAlmostEqual(pi_cal.amplitude, amp, places=2)
         #restore original settings
-        auspex.config.yaml_dump(self.test_settings, cfg_file)
+        auspex.config.dump_meas_file(self.test_settings, cfg_file)
 
 if __name__ == '__main__':
     unittest.main()

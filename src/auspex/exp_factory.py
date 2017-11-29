@@ -24,7 +24,6 @@ import networkx as nx
 import auspex.config as config
 import auspex.instruments
 import auspex.filters
-import auspex.globals
 
 from auspex.log import logger
 from auspex.experiment import Experiment
@@ -44,11 +43,16 @@ def correct_resource_name(resource_name):
         resource_name = resource_name.replace(k, v)
     return resource_name
 
-def quince(filepath = config.configFile):
+def quince(meas_file=None):
+    """Launch quince from the notebook as a subprocess. Assumes quince exists in the same python environment.
+    If you are using virtual environments you may need to modify the shebang in run-quince.py or the python
+    interpreter in run-quince.bat to ensure that the quince is properly located and executed."""
+    if not meas_file:
+        meas_file = config.find_meas_file()
     if (os.name == 'nt'):
-        subprocess.Popen(['run-quince.bat', config.configFile], env=os.environ.copy())
+        subprocess.Popen(['run-quince.bat', meas_file], env=os.environ.copy())
     else:
-        subprocess.Popen(['run-quince.py', config.configFile], env=os.environ.copy())
+        subprocess.Popen(['run-quince.py', meas_file], env=os.environ.copy())
 
 class QubitExperiment(Experiment):
     """Experiment with a specialized run method for qubit experiments run via the QubitExpFactory."""
@@ -142,17 +146,19 @@ class QubitExpFactory(object):
     will override some of the config values depending on the experiment being run."""
 
     @staticmethod
-    def run(meta_file=None, expname=None, calibration=False, save_data=True, cw_mode=False, repeats=None):
+    def run(meta_file=None, meas_file=None, expname=None, calibration=False, save_data=True,
+           cw_mode=False, repeats=None):
         """This passes all of the parameters given to the *create* method
         and then runs the experiment immediately."""
-        exp = QubitExpFactory.create(meta_file=meta_file, expname=expname,
-                                     calibration=calibration, save_data=save_data, cw_mode=cw_mode,
+        exp = QubitExpFactory.create(meta_file=meta_file, meas_file=meas_file, expname=expname,
+                                     calibration=calibration, cw_mode=cw_mode, save_data=save_data,
                                     repeats=repeats)
         exp.run_sweeps()
         return exp
 
     @staticmethod
-    def create(meta_file=None, expname=None, calibration=False, save_data = True, cw_mode=False, instr_filter = None, repeats=None):
+    def create(meta_file=None, meas_file=None, expname=None, calibration=False, save_data=True,
+               cw_mode=False, instr_filter=None, repeats=None):
         """Create the experiment, but do not run the sweeps. If *cw_mode* is specified
         the AWGs will be operated in continuous waveform mode, and will not be stopped
         and started between succesive sweep points. The *calibration* argument is used
@@ -163,10 +169,11 @@ class QubitExpFactory(object):
         to the data directory. If *repeats* is defined this will overide the
         number of segments gleaned from the meta_info"""
 
-        settings = config.yaml_load(config.configFile)
+        # Figure out which config file we should use, defaulting to the supplied argument
+        settings = config.load_meas_file(meas_file)
 
         # This is generally the behavior we want
-        auspex.globals.single_plotter_mode = True
+        auspex.config.single_plotter_mode = True
 
         # Instantiate and perform all of our setup
         experiment = QubitExperiment()
@@ -202,8 +209,8 @@ class QubitExpFactory(object):
             For example, a mixer with -40dBc sideband supression at 1 degree of phase skew
             and 0.1 dB amplitude imbalance should calibrate the phase first.
         """
-        spm = auspex.globals.single_plotter_mode
-        auspex.globals.single_plotter_mode = True
+        spm = auspex.config.single_plotter_mode
+        auspex.config.single_plotter_mode = True
 
         def sweep_offset(name, pts):
             mce.clear_sweeps()
@@ -297,7 +304,7 @@ class QubitExpFactory(object):
                                                                         mce.Q_offset.value,
                                                                         mce.amplitude_factor.value,
                                                                         mce.phase_skew.value))
-        auspex.globals.single_plotter_mode = spm
+        auspex.config.single_plotter_mode = spm
 
     @staticmethod
     def load_meta_info(experiment, meta_file):

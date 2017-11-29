@@ -61,7 +61,7 @@ class MixerCalibrationExperiment(Experiment):
         if mixer not in ("measure", "control"):
             raise ValueError("Unknown mixer {}: must be either 'measure' or 'control'.".format(mixer))
             self.mixer = mixer
-        self.settings = config.yaml_load(config.configFile)
+        self.settings = config.yaml_load(config.meas_file)
         sa = [name for name, settings in self.settings['instruments'].items() if settings['type'] == 'SpectrumAnalyzer']
         if len(sa) > 1:
             raise ValueError("More than one spectrum analyzer is defined in the configuration file.")
@@ -97,7 +97,7 @@ class MixerCalibrationExperiment(Experiment):
         awg_settings['tx_channels'][self.chan][self.chan[0]]['offset'] = round(self.I_offset.value, 5)
         awg_settings['tx_channels'][self.chan][self.chan[1]]['offset'] = round(self.Q_offset.value, 5)
         self.settings['instruments'][self.AWG] = awg_settings
-        config.yaml_dump(self.settings, config.configFile)
+        config.dump_meas_file(self.settings, config.meas_file)
         logger.info("Mixer calibration for {}-{} written to experiment file.".format(self.AWG, self.chan))
 
     def _set_mixer_phase(self, phase):
