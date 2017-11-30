@@ -130,10 +130,9 @@ def fit_ramsey(xdata, ydata, two_freqs = False, AIC = True):
             fopt = [popt[0], popt[1]]
             perr = np.sqrt(np.diag(pcov))
             ferr = perr[:2]
-            fit_result_2 = (popt, perr) #[fopt, ferr, fopt]
+            fit_result_2 = (fopt, ferr, popt, perr)
             if not AIC:
-                return *fit_result_2
-            #return fopt, ferr, popt
+                return fit_result_2
         except:
             logger.info('Two-frequency fit failed. Trying with single frequency.')
         # Initial KT estimation
@@ -144,16 +143,16 @@ def fit_ramsey(xdata, ydata, two_freqs = False, AIC = True):
     perr = np.sqrt(np.diag(pcov))
     fopt = popt[:two_freqs+1]
     ferr = perr[:two_freqs+1]
-    fit_result_1 = (popt, perr)
+    fit_result_1 = (fopt, ferr, popt, perr)
     if two_freqs and AIC:
         def aicc(e, k, n):
             return 2*k+e+(k+1)*(k+1)/(n-k-2)
         try:
             aic = aicc(fit_result_2[1], 9, length(xdata)) - aicc(fit_result_1[1], 5, length(xdata))
-            return *fit_result_1 if aic > 0 else *fit_result_2
+            return fit_result_1 if aic > 0 else fit_result_2
         except:
             pass
-    return *fit_result_1
+    return fit_result_1
 
 def ramsey_1f(x, f, A, tau, phi, y0):
     return A*np.exp(-x/tau)*np.cos(2*np.pi*f*x + phi) + y0
