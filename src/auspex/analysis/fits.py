@@ -147,8 +147,10 @@ def fit_ramsey(xdata, ydata, two_freqs = False, AIC = True):
     if two_freqs and AIC:
         def aicc(e, k, n):
             return 2*k+e+(k+1)*(k+1)/(n-k-2)
+        def sq_error(xdata, popt, model):
+            return sum((model(xdata, *popt) - ydata)**2)
         try:
-            aic = aicc(fit_result_2[1], 9, length(xdata)) - aicc(fit_result_1[1], 5, length(xdata))
+            aic = aicc(sq_error(xdata, fit_result_2[2], ramsey_2f), 9, len(xdata)) - aicc(sq_error(xdata, fit_result_1[2], ramsey_1f), 5, len(xdata))
             return fit_result_1 if aic > 0 else fit_result_2
         except:
             pass
