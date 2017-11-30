@@ -46,6 +46,13 @@ auspex\.filters\.filter module
     :members:
     :undoc-members:
 
+auspex\.filters\.framer module
+------------------------------
+
+.. automodule:: auspex.filters.framer
+    :members:
+    :undoc-members:
+
 auspex\.filters\.integrator module
 ----------------------------------
 
