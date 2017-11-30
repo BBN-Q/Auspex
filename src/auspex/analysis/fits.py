@@ -141,8 +141,8 @@ def fit_ramsey(xdata, ydata, two_freqs = False, AIC = True):
     popt, pcov = curve_fit(ramsey_1f, xdata, ydata, p0 = p0)
     fopt = [popt[0]]
     perr = np.sqrt(np.diag(pcov))
-    fopt = popt[:two_freqs+1]
-    ferr = perr[:two_freqs+1]
+    fopt = [popt[0]]
+    ferr = [perr[0]]
     fit_result_1 = (fopt, ferr, popt, perr)
     if two_freqs and AIC:
         def aicc(e, k, n):
