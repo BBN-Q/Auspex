@@ -7,7 +7,7 @@ if sys.version_info < (3,6):
 
 setup(
     name='auspex',
-    version='0.1',
+    version='0.4',
     author='auspex Developers',
     package_dir={'':'src'},
     packages=[
