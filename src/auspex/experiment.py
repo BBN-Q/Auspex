@@ -531,10 +531,10 @@ class Experiment(metaclass=MetaExperiment):
         if not self.keep_instruments_connected:
             self.disconnect_instruments()
 
-    def add_axis(self, axis):
+    def add_axis(self, axis, position=0):
         for oc in self.output_connectors.values():
             logger.debug("Adding axis %s to connector %s.", axis, oc.name)
-            oc.descriptor.add_axis(axis)
+            oc.descriptor.add_axis(axis, position=position)
 
     def add_sweep(self, parameters, sweep_list, refine_func=None, callback_func=None, metadata=None):
         ax = SweepAxis(parameters, sweep_list, refine_func=refine_func, callback_func=callback_func, metadata=metadata)

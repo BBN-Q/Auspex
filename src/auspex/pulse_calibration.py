@@ -343,7 +343,7 @@ class RamseyCalibration(PulseCalibration):
         self.set()
         self.exp.settings['instruments'][qubit_source]['frequency'] = set_freq
         data, _ = self.run()
-        fit_freqs, fit_errs, all_params = fit_ramsey(self.delays, data, two_freqs = self.two_freqs)
+        fit_freqs, fit_errs, all_params, all_errs = fit_ramsey(self.delays, data, two_freqs = self.two_freqs)
 
         # Plot the results
         self.plot["Data"] = (self.delays, data)
@@ -357,7 +357,7 @@ class RamseyCalibration(PulseCalibration):
         self.exp.settings['instruments'][qubit_source]['frequency'] = set_freq
         data, _ = self.run()
 
-        fit_freqs, fit_errs, all_params = fit_ramsey(self.delays, data, two_freqs = self.two_freqs)
+        fit_freqs, fit_errs, all_params, all_errs = fit_ramsey(self.delays, data, two_freqs = self.two_freqs)
 
         # Plot the results
         self.init_plot()
