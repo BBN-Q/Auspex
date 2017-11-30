@@ -143,7 +143,7 @@ def fit_ramsey(xdata, ydata, two_freqs = False):
     ferr = perr[:two_freqs+1]
     return fopt, ferr, popt, perr
 
-def cal_data(data, quad=np.real, qubit_name="q1", group_name="main", return_type=np.float32)
+def cal_data(data, quad=np.real, qubit_name="q1", group_name="main", return_type=np.float32):
     key = qubit_name + "-" + group_name
 
     fields = data[key].dtype.fields.keys()
