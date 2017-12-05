@@ -24,12 +24,12 @@ qubits:
     control:
       AWG: BBNAPS2 12
       generator: Holz2
-      frequency: -49910002.0
+      frequency: -50e6
       pulse_params:
         cutoff: 2.0
         length: 7.0e-08
-        pi2Amp: 0.50045
-        piAmp: 1.0009
+        pi2Amp: 0.3
+        piAmp: 0.6
         shape_fun: drag
         drag_scaling: 0.0
         sigma: 5.0e-09
@@ -78,10 +78,10 @@ instruments:
         phase_skew: 10
         amp_factor: 0.898
         '1':
-          offset: 0.10022
+          offset: 0.1
           amplitude: 0.9
         '2':
-          offset: 0.020220000000000002
+          offset: 0.02
           amplitude: 0.8
     markers:
       12m1:
@@ -122,7 +122,7 @@ instruments:
     type: HolzworthHS9000
     address: HS9004A-009-2
     power: -10
-    frequency: 5000090023.0
+    frequency: 5000000000.0
     enabled: true
 
 filters:
