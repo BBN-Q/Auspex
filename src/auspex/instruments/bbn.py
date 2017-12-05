@@ -10,10 +10,9 @@ __all__ = ['APS2', 'DigitalAttenuator', 'SpectrumAnalyzer']
 
 from .instrument import Instrument, SCPIInstrument, VisaInterface, MetaInstrument
 from auspex.log import logger
-
+import auspex.config as config
 from types import MethodType
 from unittest.mock import MagicMock
-import auspex.globals
 from time import sleep
 from visa import VisaIOError
 import numpy as np
@@ -22,7 +21,7 @@ from copy import deepcopy
 # Dirty trick to avoid loading libraries when scraping
 # This code using quince.
 aps2_missing = False
-if auspex.globals.auspex_dummy_mode:
+if config.auspex_dummy_mode:
     fake_aps2 = True
     aps2 = MagicMock()
 else:

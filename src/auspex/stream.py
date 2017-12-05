@@ -243,11 +243,11 @@ class DataStreamDescriptor(object):
     def is_adaptive(self):
         return True in [a.refine_func is not None for a in self.axes]
 
-    def add_axis(self, axis):
+    def add_axis(self, axis, position=0):
         # Check if axis is DataAxis or SweepAxis (which inherits from DataAxis)
         if isinstance(axis, DataAxis):
             logger.debug("Adding DataAxis into DataStreamDescriptor: {}".format(axis))
-            self.axes.insert(0, axis)
+            self.axes.insert(position, axis)
         else:
             raise TypeError("Failed adding axis. Object is not DataAxis: {}".format(axis))
 
@@ -583,6 +583,9 @@ class OutputConnector(object):
 
         # Determine whether we need to deal with adaptive sweeps
         self.has_adaptive_sweeps = False
+
+    def __len__(self):
+        return self.points_taken
 
     # We allow the connectors itself to posess
     # a descriptor, that it may pass

@@ -11,17 +11,17 @@ import QGL.config
 curr_dir = os.path.dirname(os.path.abspath(__file__))
 curr_dir = curr_dir.replace('\\', '/')  # use unix-like convention
 awg_dir  = os.path.abspath(os.path.join(curr_dir, "AWG" ))
-cfg_file = os.path.abspath(os.path.join(curr_dir, "test_config.yml"))
+cfg_file = os.path.abspath(os.path.join(curr_dir, "test_measure.yml"))
 
 ChannelLibrary(library_file=cfg_file)
 import auspex.config
 # Dummy mode
-import auspex.globals
-auspex.globals.auspex_dummy_mode = True
+import auspex.config as config
+config.auspex_dummy_mode = True
 
-auspex.config.configFile = cfg_file
+auspex.config.meas_file  = cfg_file
 auspex.config.AWGDir     = awg_dir
-QGL.config.AWGDir = awg_dir
+QGL.config.AWGDir        = awg_dir
 
 # Create the AWG directory if it doesn't exist
 if not os.path.exists(awg_dir):

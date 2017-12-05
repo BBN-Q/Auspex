@@ -79,7 +79,7 @@ class Channelizer(Filter):
             axis_num = desc.axis_num(self.follow_axis.value)
             self.pts_before_freq_update = desc.num_points_through_axis(axis_num + 1)
             self.pts_before_freq_reset  = desc.num_points_through_axis(axis_num)
-            self.demod_freqs = desc.axes[axis_num].points
+            self.demod_freqs = desc.axes[axis_num].points - self.follow_freq_offset.value
             self.current_freq = 0
             self.update_references(self.current_freq)
         self.idx = 0
@@ -266,8 +266,8 @@ class Channelizer(Filter):
 
                 coeffs = self.filters[ct]
                 stacked_coeffs = np.concatenate(self.filters[ct])
-                out_r = np.empty_like(filtered_r)
-                out_i = np.empty_like(filtered_i)
+                out_r = np.empty_like(filtered_r).astype(np.float32)
+                out_i = np.empty_like(filtered_i).astype(np.float32)
                 libipp.filter_records_iir(stacked_coeffs, self.filters[ct][0].size-1, np.ascontiguousarray(filtered_r.astype(np.float32)), filtered_r.shape[-1], num_records, out_r)
                 libipp.filter_records_iir(stacked_coeffs, self.filters[ct][0].size-1, np.ascontiguousarray(filtered_i.astype(np.float32)), filtered_i.shape[-1], num_records, out_i)
 

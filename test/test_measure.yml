@@ -2,6 +2,11 @@
 # This example configuration will be used for
 # unit tests related to the QubitExpFactory.
 
+config:
+  AWGDir: /tmp/awg
+  KernelDir: /tmp/kern
+  LogDir: /tmp/alog
+
 qubits:
   q1:
     measure:
@@ -23,8 +28,8 @@ qubits:
       pulse_params:
         cutoff: 2.0
         length: 7.0e-08
-        pi2Amp: 0.4
-        piAmp: 0.8
+        pi2Amp: 0.3
+        piAmp: 0.6
         shape_fun: drag
         drag_scaling: 0.0
         sigma: 5.0e-09
@@ -110,14 +115,14 @@ instruments:
     type: HolzworthHS9000
     address: HS9004A-009-1
     power: -10
-    frequency: 6e9
+    frequency: 6000000000.0
     enabled: true
 
   Holz2:
     type: HolzworthHS9000
     address: HS9004A-009-2
     power: -10
-    frequency: 5e9
+    frequency: 5000000000.0
     enabled: true
 
 filters:
@@ -211,3 +216,4 @@ filters:
     groupname: main
     add_date: false
     save_settings: false
+
