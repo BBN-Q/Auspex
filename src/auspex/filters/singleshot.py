@@ -60,12 +60,6 @@ class SingleShotMeasurement(Filter):
             self.record_length = len(self.time_pts)
         except ValueError:
             raise ValueError("Single shot filter sink does not appear to have a time axis!")
-        try:
-            rr_num = self.descriptor.axis_num("round_robins")
-        except ValueError:
-            pass
-        if self.descriptor.axes[rr_num].num_points() > 1:
-            raise ValueError("Round robins for single shot filter should be set to 1!")
         self.num_segments = len(self.sink.descriptor.axes[self.descriptor.axis_num("segment")].points)
         self.ground_data = np.zeros((self.record_length, self.num_segments//2), dtype=np.complex)
         self.excited_data = np.zeros((self.record_length, self.num_segments//2), dtype=np.complex)

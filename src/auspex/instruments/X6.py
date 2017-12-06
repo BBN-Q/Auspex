@@ -91,7 +91,7 @@ class X6Channel(DigitizerChannel):
         else: #Raw
             demod_channel  = 0
             result_channel = 0
-            self.dtype = np.float32
+            self.dtype = np.float64
 
         self.channel_tuple = (int(self.phys_channel), int(demod_channel), int(result_channel))
 
