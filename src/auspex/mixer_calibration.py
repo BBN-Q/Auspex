@@ -61,7 +61,7 @@ class MixerCalibrationExperiment(Experiment):
         if mixer not in ("measure", "control"):
             raise ValueError("Unknown mixer {}: must be either 'measure' or 'control'.".format(mixer))
             self.mixer = mixer
-        self.settings = config.yaml_load(config.meas_file)
+        self.settings = config.load_meas_file(config.meas_file)
         sa = [name for name, settings in self.settings['instruments'].items() if settings['type'] == 'SpectrumAnalyzer']
         if len(sa) > 1:
             raise ValueError("More than one spectrum analyzer is defined in the configuration file.")
