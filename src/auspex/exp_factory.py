@@ -627,8 +627,8 @@ class QubitExpFactory(object):
         """Create parameter sweeps (non-segment sweeps) from the settings. Users can provide
         either a space-separated pair of *instr_name method_name* (i.e. *Holzworth1 power*)
         or specify a qubit property that auspex will try to link back to the relevant instrument.
-        (i.e. *q1 measure frequency* or *q2 control power*). Auspex will create a *SweepAxis*
-        for each parameter sweep, and add this axis to all output connectors."""
+        (i.e. *q1 measure frequency* or *q2 control amplitude 1*). Auspex will create a *SweepAxis*
+        for each parameter sweep, and add this axis to all output connectors. If a channel number (1 or 2) is specified, it only sets that channel in the pair"""
         if manual_sweep_params:
             sweeps = manual_sweep_params
             order = [list(sweeps.keys())[0]]
@@ -660,18 +660,23 @@ class QubitExpFactory(object):
                 target_info = par["target"].split()
                 if target_info[0] in experiment.qubits:
                     # We are sweeping a qubit, so we must lookup the instrument
-                    name, meas_or_control, prop = par["target"].split()
+                    target = par["target"].split()
+                    name, meas_or_control, prop = target[:3]
+                    if len(target) > 3:
+                        ch_ind = target[3]
                     qubit = qubits[name]
                     method_name = "set_{}".format(prop.lower())
 
                     # If sweeping frequency, we should allow for either mixed up signals or direct synthesis.
-                    # Sweeping power is always through the AWG channels.
+                    # Sweeping amplitude is always through the AWG channels.
                     if 'generator' in qubit[meas_or_control] and prop.lower() == "frequency":
                         name = qubit[meas_or_control]['generator']
                         instr = experiment._instruments[name]
                     else:
                         # Construct a function that sets a per-channel property
                         name, chan = qubit[meas_or_control]['AWG'].split()
+                        if len(target) > 3:
+                            chan = chan[int(ch_ind)-1]
                         instr = experiment._instruments[name]
 
                         def method(value, channel=chan, instr=instr, prop=prop.lower()):
