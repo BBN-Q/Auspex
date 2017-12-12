@@ -309,6 +309,7 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
         return self._mode
     @run_mode.setter
     def run_mode(self, mode):
+        mode = mode.upper()
         if mode not in self._mode_dict.values():
             raise ValueError("Unknown run mode {} for APS2 {}. Run mode must be one of {}.".format(mode, self.name, list(self._mode_dict.values())))
         else:
