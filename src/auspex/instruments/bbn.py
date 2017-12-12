@@ -282,6 +282,9 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
         except AttributeError as ex:
             raise ValueError("Channel waveform data must be a numpy array.") from ex
 
+    def trigger(self):
+        self.wrapper.trigger()
+
     @property
     def waveform_frequency(self):
         return self.wrapper.get_waveform_frequency()
