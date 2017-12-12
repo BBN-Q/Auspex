@@ -44,7 +44,7 @@ class SingleShotFidelityExperiment(QubitExperiment):
         self.qubit_names = qubit_names if isinstance(qubit_names, list) else [qubit_names]
         self.qubit     = [QubitFactory(qubit_name) for qubit_name in qubit_names] if isinstance(qubit_names, list) else QubitFactory(qubit_names)
         # make a copy of the settings to restore default
-        self.saved_settings = config.yaml_load(config.meas_file)
+        self.saved_settings = config.load_meas_file(config.meas_file)
         self.settings = deepcopy(self.saved_settings)
         self.save_data = save_data
         self.calibration = True

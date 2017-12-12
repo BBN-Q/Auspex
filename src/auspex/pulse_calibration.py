@@ -445,10 +445,10 @@ class PhaseEstimation(PulseCalibration):
 
             logger.info("Phase: %.4f Sigma: %.4f"%(phase,sigma))
             #update amplitude
-            ct+=1
             self.amplitude, done_flag = phase_to_amplitude(phase, sigma, self.amplitude, self.target, ct, self.iteration_limit)
+            ct+=1
 
-        logger.info("Found amplitude for {} calibration of: {}".format(type(self).__name__, amp))
+        logger.info("Found amplitude for {} calibration of: {}".format(type(self).__name__, self.amplitude))
         #set_chan = self.qubit_names[0] if len(self.qubit) == 1 else ChannelLibraries.EdgeFactory(*self.qubits).label
         return (set_amp, self.amplitude)
 
@@ -852,10 +852,8 @@ def phase_to_amplitude(phase, sigma, amp, target, ct, iteration_limit=5):
     if np.abs(phase_error) < 1e-2 or np.abs(phase_error/sigma) < 1 or ct > iteration_limit:
         if np.abs(phase_error) < 1e-2:
             logger.info('Reached target rotation angle accuracy');
-            amplitude = amp
         elif abs(phase_error/sigma) < 1:
             logger.info('Reached phase uncertainty limit');
-            amplitude = amp
         else:
             logger.info('Hit max iteration count');
         done_flag = 1

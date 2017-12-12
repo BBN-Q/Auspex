@@ -210,7 +210,7 @@ class SingleQubitCalTestCase(unittest.TestCase):
         cal.calibrate([pi_cal])
         os.remove(self.filename)
         # NOTE: expected result is from the same input fed to the routine
-        self.assertAlmostEqual(pi_cal.amplitude, amp, places=1)
+        self.assertAlmostEqual(pi_cal.amplitude, amp, places=3)
         #restore original settings
         auspex.config.dump_meas_file(self.test_settings, cfg_file)
 
