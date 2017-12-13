@@ -315,13 +315,14 @@ class RabiAmpCalibration(PulseCalibration):
 
 
 class RamseyCalibration(PulseCalibration):
-    def __init__(self, qubit_name, delays=np.linspace(0.0, 20.0, 41)*1e-6, two_freqs = False, added_detuning = 150e3, set_source = True, **kwargs):
+    def __init__(self, qubit_name, delays=np.linspace(0.0, 20.0, 41)*1e-6, two_freqs = False, added_detuning = 150e3, set_source = True, AIC = True, **kwargs):
         super(RamseyCalibration, self).__init__(qubit_name)
         self.filename = 'Ramsey/Ramsey'
         self.delays = delays
         self.two_freqs = two_freqs
         self.added_detuning = added_detuning
         self.set_source = set_source
+        self.AIC = AIC #Akaike information criterion for model choice
         self.axis_descriptor = [delay_descriptor(self.delays)]
 
     def sequence(self):
@@ -343,8 +344,7 @@ class RamseyCalibration(PulseCalibration):
         self.set()
         self.exp.settings['instruments'][qubit_source]['frequency'] = set_freq
         data, _ = self.run()
-        fit_freqs, fit_errs, all_params, all_errs = fit_ramsey(self.delays, data, two_freqs = self.two_freqs)
-
+        fit_freqs, fit_errs, all_params, all_errs = fit_ramsey(self.delays, data, two_freqs = self.two_freqs, AIC = self.AIC)
         # Plot the results
         self.plot["Data"] = (self.delays, data)
         ramsey_f = ramsey_2f if len(fit_freqs) == 2 else ramsey_1f #1-freq fit if the 2-freq has failed
@@ -357,7 +357,7 @@ class RamseyCalibration(PulseCalibration):
         self.exp.settings['instruments'][qubit_source]['frequency'] = set_freq
         data, _ = self.run()
 
-        fit_freqs, fit_errs, all_params, all_errs = fit_ramsey(self.delays, data, two_freqs = self.two_freqs)
+        fit_freqs, fit_errs, all_params, all_errs = fit_ramsey(self.delays, data, two_freqs = self.two_freqs, AIC = self.AIC)
 
         # Plot the results
         self.init_plot()

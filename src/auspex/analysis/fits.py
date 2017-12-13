@@ -120,7 +120,7 @@ def fit_rabi(xdata, ydata):
     offset = popt[3]
     return pi_amp, offset, popt
 
-def fit_ramsey(xdata, ydata, two_freqs = False):
+def fit_ramsey(xdata, ydata, two_freqs = False, AIC = True):
     if two_freqs:
         # Initial KT estimation
         freqs, Tcs, amps = KT_estimation(ydata, xdata, 2)
@@ -130,7 +130,9 @@ def fit_ramsey(xdata, ydata, two_freqs = False):
             fopt = [popt[0], popt[1]]
             perr = np.sqrt(np.diag(pcov))
             ferr = perr[:2]
-            return fopt, ferr, popt
+            fit_result_2 = (fopt, ferr, popt, perr)
+            if not AIC:
+                return fit_result_2
         except:
             logger.info('Two-frequency fit failed. Trying with single frequency.')
         # Initial KT estimation
@@ -139,31 +141,20 @@ def fit_ramsey(xdata, ydata, two_freqs = False):
     popt, pcov = curve_fit(ramsey_1f, xdata, ydata, p0 = p0)
     fopt = [popt[0]]
     perr = np.sqrt(np.diag(pcov))
-    fopt = popt[:two_freqs+1]
-    ferr = perr[:two_freqs+1]
-    return fopt, ferr, popt, perr
-
-def cal_data(data, quad=np.real, qubit_name="q1", group_name="main", return_type=np.float32):
-    key = qubit_name + "-" + group_name
-
-    fields = data[key].dtype.fields.keys()
-    meta_field = [f for f in fields if 'metadata' in f][0]
-    ind_axis = meta_field.replace("_metadata", "")
-
-    ind0 = np.where(data[key][meta_field] == 0 )[0]
-    ind1 = np.where(data[key][meta_field] == 1 )[0]
-
-    dat = quad(data[key]["Data"])
-    zero_cal = np.mean(dat[ind0])
-    one_cal = np.mean(dat[ind1])
-
-    scale_factor = -(one_cal - zero_cal)/2
-
-    #assumes calibrations at the end only
-    y_dat = dat[:-(len(ind0) + len(ind1))]
-    x_dat = data[key][ind_axis][:-(len(ind0) + len(ind1))]
-    y_dat = (y_dat - zero_cal)/scale_factor + 1
-    return y_dat.astype(return_type), x_dat
+    fopt = [popt[0]]
+    ferr = [perr[0]]
+    fit_result_1 = (fopt, ferr, popt, perr)
+    if two_freqs and AIC:
+        def aicc(e, k, n):
+            return 2*k+e+(k+1)*(k+1)/(n-k-2)
+        def sq_error(xdata, popt, model):
+            return sum((model(xdata, *popt) - ydata)**2)
+        try:
+            aic = aicc(sq_error(xdata, fit_result_2[2], ramsey_2f), 9, len(xdata)) - aicc(sq_error(xdata, fit_result_1[2], ramsey_1f), 5, len(xdata))
+            return fit_result_1 if aic > 0 else fit_result_2
+        except:
+            pass
+    return fit_result_1
 
 def ramsey_1f(x, f, A, tau, phi, y0):
     return A*np.exp(-x/tau)*np.cos(2*np.pi*f*x + phi) + y0
@@ -278,3 +269,25 @@ def fit_CR(xpoints, data, cal_type):
         xopt = -(popt0[1]/popt0[0] + popt1[1]/popt1[0])/2
         logger.info('CR amplitude = {}'.format(xopt))
     return xopt, popt0, popt1
+
+def cal_data(data, quad=np.real, qubit_name="q1", group_name="main", return_type=np.float32):
+    key = qubit_name + "-" + group_name
+
+    fields = data[key].dtype.fields.keys()
+    meta_field = [f for f in fields if 'metadata' in f][0]
+    ind_axis = meta_field.replace("_metadata", "")
+
+    ind0 = np.where(data[key][meta_field] == 0 )[0]
+    ind1 = np.where(data[key][meta_field] == 1 )[0]
+
+    dat = quad(data[key]["Data"])
+    zero_cal = np.mean(dat[ind0])
+    one_cal = np.mean(dat[ind1])
+
+    scale_factor = -(one_cal - zero_cal)/2
+
+    #assumes calibrations at the end only
+    y_dat = dat[:-(len(ind0) + len(ind1))]
+    x_dat = data[key][ind_axis][:-(len(ind0) + len(ind1))]
+    y_dat = (y_dat - zero_cal)/scale_factor + 1
+    return y_dat.astype(return_type), x_dat
