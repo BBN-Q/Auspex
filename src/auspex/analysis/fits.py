@@ -270,8 +270,30 @@ def fit_CR(xpoints, data, cal_type):
         logger.info('CR amplitude = {}'.format(xopt))
     return xopt, popt0, popt1
 
-def cal_data(data, quad=np.real, qubit_name="q1", group_name="main", return_type=np.float32):
-    key = qubit_name + "-" + group_name
+def cal_data(data, quad=np.real, qubit_name="q1", group_name="main", \
+        return_type=np.float32, key=""):
+    """
+    Rescale data to sigma_z expectation value based on calibration sequences.
+
+    Parameters:
+    -----------
+    data        : This should be the data formate returned by load_from_HDF5.
+                This is tuple of dictionaries ->
+                ({'q1-mian'} : array([(0.0+0.0j, ...), (...), ...]))
+    quad        : numpy function : This should be the quadrature where most of
+                the data can be found.  Options are: np.real, np.imag, np.abs
+                and np.angle
+    qubit_name  : string : Name of the qubit in the data file. Default is 'q1'
+    group_name  : string : Name of the HDF5 group to calibrate. Default is 'main'
+    return_type : numpy data type : Default is np.float32
+    key         : string : In the case where the dictionary keys don't conform
+                to the default format a string can be passed in specifying the
+                data key to scale.
+    """
+    if key:
+        pass
+    else:
+        key = qubit_name + "-" + group_name
 
     fields = data[key].dtype.fields.keys()
     meta_field = [f for f in fields if 'metadata' in f][0]
