@@ -132,6 +132,8 @@ def fit_ramsey(xdata, ydata, two_freqs = False, AIC = True):
             ferr = perr[:2]
             fit_result_2 = (fopt, ferr, popt, perr)
             if not AIC:
+                print('Using a two-frequency fit.')
+                print('T2 = {0:.3f} +/- {1:.3f}'.format(popt[2], perr[2]))
                 return fit_result_2
         except:
             logger.info('Two-frequency fit failed. Trying with single frequency.')
@@ -150,10 +152,20 @@ def fit_ramsey(xdata, ydata, two_freqs = False, AIC = True):
         def sq_error(xdata, popt, model):
             return sum((model(xdata, *popt) - ydata)**2)
         try:
-            aic = aicc(sq_error(xdata, fit_result_2[2], ramsey_2f), 9, len(xdata)) - aicc(sq_error(xdata, fit_result_1[2], ramsey_1f), 5, len(xdata))
-            return fit_result_1 if aic > 0 else fit_result_2
+            aic = aicc(sq_error(xdata, fit_result_2[2], ramsey_2f), 9, len(xdata)) \
+             - aicc(sq_error(xdata, fit_result_1[2], ramsey_1f), 5, len(xdata))
+            if aic > 0:
+                print('Using a one-frequency fit.')
+                print('T2 = {0:.3f} +/- {1:.3f}'.format(popt[2], perr[2]))
+                return fit_result_1
+            else:
+                print('Using a two-frequency fit.')
+                print('T2 = {0:.3f} +/- {1:.3f}'.format(fit_result_2[2,2], fit_result_2[3,2]))
+                return fit_result_2
         except:
             pass
+    print('Using a one-frequency fit.')
+    print('T2 = {0:.3f} +/- {1:.3f}'.format(popt[2], perr[2]))
     return fit_result_1
 
 def ramsey_1f(x, f, A, tau, phi, y0):
