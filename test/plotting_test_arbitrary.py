@@ -13,6 +13,7 @@ import datetime
 import sys
 import itertools
 
+import multiprocessing as mp
 import numpy as np
 import h5py
 import matplotlib.pyplot as plt
@@ -54,7 +55,9 @@ if __name__ == '__main__':
     plt  = ManualPlotter("Manual Plotting Test", x_label='X Thing', y_label='Y Thing')
     plt.add_data_trace("Example Data")
     plt.add_fit_trace("Example Fit")
-    buff = DataBuffer()
+
+    # buff = DataBuffer()
+    buff = DataBuffer(out_queue=mp.Queue())
 
     edges = [(exp.voltage, buff.sink)]
     exp.set_graph(edges)
@@ -71,7 +74,9 @@ if __name__ == '__main__':
     exp.add_sweep(exp.amplitude, np.linspace(-5.0, 5.0, 100))
     exp.run_sweeps()
 
-    ys = buff.get_data()['voltage']
+    # ys = buff.get_data()['voltage']
+    ys = buff.out_queue.get()['voltage']
+
     xs = buff.descriptor.axes[0].points
     plt["Example Data"] = (xs, ys)
     plt["Example Fit"]  = (xs, ys+0.1)

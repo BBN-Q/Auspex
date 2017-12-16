@@ -9,6 +9,7 @@
 import unittest
 import time
 import numpy as np
+import multiprocessing as mp
 
 import auspex.config as config
 config.auspex_dummy_mode = True
@@ -102,8 +103,8 @@ class AverageTestCase(unittest.TestCase):
         exp             = VarianceExperiment()
         printer_final   = Print(name="Final")
         avgr            = Averager('repeats', name="TestAverager")
-        var_buff        = DataBuffer(name='Variance Buffer')
-        mean_buff       = DataBuffer(name='Mean Buffer')
+        var_buff        = DataBuffer(name='Variance Buffer', out_queue=mp.Queue())
+        mean_buff       = DataBuffer(name='Mean Buffer', out_queue=mp.Queue())
 
         edges = [(exp.chan1,           avgr.sink),
                  (avgr.final_variance, printer_final.sink),
@@ -112,8 +113,12 @@ class AverageTestCase(unittest.TestCase):
 
         exp.set_graph(edges)
         exp.run_sweeps()
-        var_data  = var_buff.get_data()['Variance'].reshape(var_buff.descriptor.data_dims())
-        mean_data = mean_buff.get_data()['chan1'].reshape(mean_buff.descriptor.data_dims())
+
+        # var_data  = var_buff.get_data()['Variance'].reshape(var_buff.descriptor.data_dims())
+        # mean_data = mean_buff.get_data()['chan1'].reshape(mean_buff.descriptor.data_dims())
+        var_data  = var_buff.out_queue.get()['Variance'].reshape(var_buff.descriptor.data_dims())
+        mean_data = mean_buff.out_queue.get()['chan1'].reshape(mean_buff.descriptor.data_dims())
+
         orig_data = exp.vals.reshape(exp.chan1.descriptor.data_dims())
         self.assertTrue(np.abs(np.sum(mean_data - np.mean(orig_data, axis=0))) <= 1e-3)
         self.assertTrue(np.abs(np.sum(var_data - np.var(orig_data, axis=0, ddof=1))) <= 1e-3)

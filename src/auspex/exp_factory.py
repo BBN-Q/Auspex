@@ -230,7 +230,7 @@ class QubitExpFactory(object):
         amp_pts = np.linspace(amp_range[0], amp_range[1], nsteps)
         phase_pts = np.linspace(phase_range[0], phase_range[1], nsteps)
 
-        buff = DataBuffer()
+        buff = DataBuffer(out_queue=mp.Queue())
         plt = ManualPlotter(name="Mixer offset calibration", x_label='{} {} offset (V)'.format(qubit, mixer), y_label='Power (dBm)')
         plt.add_data_trace("I-offset", {'color': 'C1'})
         plt.add_data_trace("Q-offset", {'color': 'C2'})

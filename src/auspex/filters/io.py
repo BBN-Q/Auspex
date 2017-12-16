@@ -416,13 +416,15 @@ class DataBuffer(Filter):
 
     sink = InputConnector()
 
-    def __init__(self, store_tuples=True, **kwargs):
+    def __init__(self, store_tuples=True, out_queue=None, **kwargs):
         super(DataBuffer, self).__init__(**kwargs)
         self.quince_parameters = []
         self.sink.max_input_streams = 100
         self.store_tuples = store_tuples
         self._final_buffers = mp.Queue()
         self.final_buffers = None
+
+        self.out_queue = out_queue
 
     def final_init(self):
         self.w_idxs  = {s: 0 for s in self.sink.input_streams}
@@ -474,7 +476,6 @@ class DataBuffer(Filter):
                 break
 
             for stream in stream_results.keys():
-                print("Got data in buffer...")
                 data = stream_data[stream]
                 buffers[stream][self.w_idxs[stream]:self.w_idxs[stream]+data.size] = data
                 self.w_idxs[stream] += data.size
@@ -485,6 +486,15 @@ class DataBuffer(Filter):
 
         for s in streams:
             self._final_buffers.put(buffers[s])
+
+        # If we're using an mp Queue to return the results, put them in here
+        if self.out_queue:
+            self.out_queue.put(self.get_data())
+
+    def get_rdata(self):
+        if self.out_queue:
+            data = self.get_data()
+            self.out_queue.put(data)
 
     def get_data(self):
         streams = self.sink.input_streams
