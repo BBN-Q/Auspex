@@ -33,6 +33,19 @@ else:
         aps2_missing = True
         aps2 = MagicMock()
 
+aps1_missing = False
+if config.auspex_dummy_mode:
+    fake_aps1 = True
+    aps1 = MagicMock()
+else:
+    try:
+        import APS
+        fake_aps1 = False
+    except:
+        fake_aps1 = True
+        aps1_missing = True
+        aps1 = MagicMock()
+
 class DigitalAttenuator(SCPIInstrument):
     """BBN 3 Channel Instrument"""
     instrument_type = "Digital attenuator"
@@ -147,6 +160,179 @@ class MakeSettersGetters(MetaInstrument):
                 setattr(self, 'set_'+k, v.fset)
                 setattr(self, 'get_'+k, v.fget)
 
+class APS(Instruments, metaclass=MakeSettersGetters):
+    """BBN APSI or DACII"""
+    yaml_template = """
+    APS-Name:
+      type: APS               # Used by QGL and Auspex. QGL assumes XXXPattern for the pattern generator
+      enabled: true            # true or false, optional
+      master: true             # true or false
+      slave_trig:              # name of marker below, optional, i.e. 12m4. Used by QGL.
+      address:                 # IP address or hostname should be fine
+      trigger_interval: 0.0    # (s)
+      trigger_source: External # Internal, External, Software, or System
+      seq_file: test.h5        # optional sequence file
+      tx_channels:             # All transmit channels
+        '12':                  # Quadrature channel name (string)
+          phase_skew: 0.0      # (deg) - Used by QGL
+          amp_factor: 1.0      # Used by QGL
+          delay: 0.0           # (s) - Used by QGL
+          '1':
+            enabled: true
+            offset: 0.0
+            amplitude: 1.0
+          '2':
+            enabled: true
+            offset: 0.0
+            amplitude: 1.0
+         '34':                  # Quadrature channel name (string)
+           phase_skew: 0.0      # (deg) - Used by QGL
+           amp_factor: 1.0      # Used by QGL
+           delay: 0.0           # (s) - Used by QGL
+           '1':
+             enabled: true
+             offset: 0.0
+             amplitude: 1.0
+           '2':
+             enabled: true
+             offset: 0.0
+             amplitude: 1.0
+      markers:
+        1m1:
+          delay: 0.0         # (s)
+        2m1:
+          delay: 0.0
+        3m1:
+          delay: 0.0
+        4m1:
+          delay: 0.0
+
+                    """
+    def __init__(self, resource_name=None, name="Unlabled APS"):
+        self.name = name
+        self.resource_name = resource_name
+
+        if aps1_missing:
+            logger.warning("Could not load aps1 library")
+
+        if fake_aps2:
+            self.wrapper = MagicMock()
+        else:
+            self.wrapper = APS.APS()
+
+
+        self.run           = self.wrapper.run
+        self.stop          = self.wrapper.stop
+        self.connected     = False
+
+        self.read_register = self.wrapper.read_register
+
+        self._sequence_filename = None
+        self._mode = "RUN_SEQUENCE"
+
+        if not fake_aps2:
+            self._mode_dict = aps2.run_mode_dict
+            self._mode_inv_dict = {v: k for k, v in aps2.run_mode_dict.items()}
+
+    def connect(self, resource_name=None):
+        if resource_name is None and self.resource_name is None:
+            raise Exception("Must supply a resource name to 'connect' if the instrument was initialized without one.")
+        elif resource_name is not None:
+            self.resource_name = resource_name
+        self.wrapper.connect(self.resource_name)
+        self.connected = True
+
+    def disconnect(self):
+        if self.resource_name and self.connected:
+            self.stop()
+            self.wrapper.disconnect()
+            self.connected = False
+
+    def set_amplitude(self, chs, value):
+        if isinstance(chs, int) or len(chs)==1:
+            self.wrapper.set_amplitude(int(chs), value)
+        else:
+            self.wrapper.amplitude(int(chs[0]), value)
+            self.wrapper.amplitude(int(chs[1]), value)
+            self.wrapper.amplitude(int(chs[2]), value)
+            self.wrapper.amplitude(int(chs[3]), value)
+
+    def set_offset(self, chs, value):
+        if isinstance(chs, int) or len(chs)==1:
+            self.wrapper.set_amplitude(int(chs), value)
+        else:
+            self.wrapper.amplitude(int(chs[0]), value)
+            self.wrapper.amplitude(int(chs[1]), value)
+            self.wrapper.amplitude(int(chs[2]), value)
+            self.wrapper.amplitude(int(chs[3]), value)
+
+    def set_all(self, settings_dict, prefix=""):
+        raise NotImplementedError
+
+    def load_waveform(self, channel, data):
+        raise NotImplementedError
+
+    def trigger(self):
+        raise NotImplementedError
+
+    @property
+    def waveform_frequency(self):
+        raise NotImplementedError
+    @waveform_frequency.setter
+    def waveform_frequency(self, freq):
+        raise NotImplementedError
+
+    @property
+    def mixer_correction_matrix(self):
+        raise NotImplementedError
+    @mixer_correction_matrix.setter
+    def mixer_correction_matrix(self, matrix):
+        raise NotImplementedError
+
+    @property
+    def run_mode(self):
+        raise NotImplementedError
+    @run_mode.setter
+    def run_mode(self, mode):
+        raise NotImplementedError
+
+    @property
+    def trigger_source(self):
+        return self.wrapper.get_trigger_source()
+    @trigger_source.setter
+    def trigger_source(self, source):
+        source = source.lower()
+        if source in ["internal", "external"]:
+            self.wrapper.set_trigger_source(source)
+        else:
+            raise ValueError("Invalid trigger source specification.")
+
+    @property
+    def trigger_interval(self):
+        return self.wrapper.get_trigger_interval()
+    @trigger_interval.setter
+    def trigger_interval(self, value):
+        self.wrapper.set_trigger_interval(value)
+
+    @property
+    def seq_file(self):
+        return self._sequence_filename
+    @seq_file.setter
+    def seq_file(self, filename):
+        self.wrapper.load_config(filename)
+        self._sequence_filename = filename
+
+    @property
+    def sampling_rate(self):
+        raise NotImplementedError
+    @sampling_rate.setter
+    def sampling_rate(self, value):
+        raise NotImplementedError
+
+    @property
+    def fpga_temperature(self):
+        raise NotImplementedError
+
 class APS2(Instrument, metaclass=MakeSettersGetters):
     """BBN APS2"""
     instrument_type = "AWG"
@@ -195,7 +381,7 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
         if fake_aps2:
             self.wrapper = MagicMock()
         else:
-            self.wrapper = aps2.APS2()
+            self.wrapper = APS.APS()
 
         self.set_enabled   = self.wrapper.set_channel_enabled
         self.set_mixer_phase_skew = self.wrapper.set_mixer_phase_skew
