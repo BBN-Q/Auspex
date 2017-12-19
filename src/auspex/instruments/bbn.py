@@ -228,11 +228,14 @@ class APS(Instruments, metaclass=MakeSettersGetters):
         self.read_register = self.wrapper.read_register
 
         self._sequence_filename = None
-        self._mode = "RUN_SEQUENCE"
+        self._run_mode = "RUN_SEQUENCE"
+        self._repeat_mode = "TRIGGERED"
 
-        if not fake_aps2:
-            self._mode_dict = aps2.run_mode_dict
-            self._mode_inv_dict = {v: k for k, v in aps2.run_mode_dict.items()}
+        self._run_mode_dict = {1: 'RUN_SEQUENCE', 0:'RUN_WAVEFORM'}
+        self._run_mode_inv_dict = {v: k for k, v in aps2.run_mode_dict.items()}
+
+        self._repeat_mode_dict = {1: "CONTINUOUS", 0: "TRIGGERED"}
+        self._repeat_mode_inv_dict = {v: k for k, v in aps2.repeat_mode_dict.items()}
 
     def connect(self, resource_name=None):
         if resource_name is None and self.resource_name is None:
@@ -270,49 +273,78 @@ class APS(Instruments, metaclass=MakeSettersGetters):
         raise NotImplementedError
 
     def load_waveform(self, channel, data):
-        raise NotImplementedError
+        if channel not in (1, 2, 3, 4):
+            raise ValueError("Cannot load APS waveform {} on {} -- must be 1-4.".format(channel, self.name))
+        try:
+            self.wrapper.loadWaveform(channel, waveform)
+        except AttributeError as ex:
+            raise ValueError("Channel waveform data must be a numpy array.") from ex
+        except NameError as ex:
+            raise NameError("Channel data in incompatible type.") from ex
+
+    def load_waveform_from_file(self, channel, data):
+        if channel not in (1, 2, 3, 4):
+            raise ValueError("Cannot load APS waveform {} on {} -- must be 1-4.".format(channel, self.name))
+        #Warning: This is the one place in APS.py that does not subtract 1 from
+        #the channel number. I am doing it here, but it should probably be fixed
+        #in APS.py of libaps.
+        self.wrapper.load_waveform_from_file(channel-1, filename)
+
 
     def trigger(self):
-        raise NotImplementedError
+        raise NotImplementedError("Software trigger not present on APSI/DACII")
 
     @property
     def waveform_frequency(self):
-        raise NotImplementedError
-    @waveform_frequency.setter
-    def waveform_frequency(self, freq):
-        raise NotImplementedError
+        raise NotImplementedError("Hardware NCO not present on APSI/DACII")
 
     @property
     def mixer_correction_matrix(self):
-        raise NotImplementedError
-    @mixer_correction_matrix.setter
-    def mixer_correction_matrix(self, matrix):
-        raise NotImplementedError
+        raise NotImplementedError("Harware mixer correction not present on APSI/DACII")
 
     @property
     def run_mode(self):
-        raise NotImplementedError
+        return self._run_mode
     @run_mode.setter
     def run_mode(self, mode):
-        raise NotImplementedError
+        mode = mode.upper()
+        if mode not in self._run_mode_dict.values()""
+        if mode not in self._mode_dict.values():
+            raise ValueError("Unknown run mode {} for APS {}. Run mode must be one of {}.".format(mode, self.name, list(self._run_mode_dict.values())))
+        else:
+            self.wrapper.setRunMode(self._run_mode_inv_dict[mode])
+            self._mode = mode
+
+    @property
+    def repeat_mode(self):
+        return self._repeat_mode
+    @repeat_mode.setter
+    def repeat_mode(self, mode):
+        mode = mode.upper()
+        if mode not in self._repeat_mode_dict.values()""
+        if mode not in self._mode_dict.values():
+            raise ValueError("Unknown repeat mode {} for APS {}. Repeat mode must be one of {}.".format(mode, self.name, list(self._repeat_mode_dict.values())))
+        else:
+            self.wrapper.setRepeatMode(self._repeat_mode_inv_dict[mode])
+            self._mode = mode
 
     @property
     def trigger_source(self):
-        return self.wrapper.get_trigger_source()
+        return self.wrapper.triggerSource
     @trigger_source.setter
     def trigger_source(self, source):
         source = source.lower()
         if source in ["internal", "external"]:
-            self.wrapper.set_trigger_source(source)
+            self.wrapper.triggerSource = source
         else:
             raise ValueError("Invalid trigger source specification.")
 
     @property
     def trigger_interval(self):
-        return self.wrapper.get_trigger_interval()
+        return self.wrapper.triggerInterval
     @trigger_interval.setter
     def trigger_interval(self, value):
-        self.wrapper.set_trigger_interval(value)
+        self.wrapper.triggerInterval = value
 
     @property
     def seq_file(self):
@@ -324,14 +356,11 @@ class APS(Instruments, metaclass=MakeSettersGetters):
 
     @property
     def sampling_rate(self):
-        raise NotImplementedError
+        return self.wrapper.samplingRate
     @sampling_rate.setter
     def sampling_rate(self, value):
-        raise NotImplementedError
+        self.wrapper.samplingRate = freq
 
-    @property
-    def fpga_temperature(self):
-        raise NotImplementedError
 
 class APS2(Instrument, metaclass=MakeSettersGetters):
     """BBN APS2"""
@@ -463,7 +492,7 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
 
     def load_waveform(self, channel, data):
         if channel not in (1, 2):
-            raise ValueError("Cannot load APS waveform data to channel {} on {} -- must be 1 or 2.".format(channe, self.name))
+            raise ValueError("Cannot load APS waveform data to channel {} on {} -- must be 1 or 2.".format(channel, self.name))
         try:
             if data.dtype == np.int:
                 self.wrapper.set_waveform_int(channel-1, data.astype(np.int16))
