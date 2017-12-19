@@ -270,7 +270,37 @@ class APS(Instruments, metaclass=MakeSettersGetters):
             self.wrapper.amplitude(int(chs[3]), value)
 
     def set_all(self, settings_dict, prefix=""):
-        raise NotImplementedError
+        # Pop the channel settings
+        settings = deepcopy(settings_dict)
+        quad_channels = settings.pop('tx_channels')
+        # Call the non-channel commands
+        super(APS2, self).set_all(settings)
+
+        # Mandatory arguments
+        for key in ['address', 'seq_file', 'trigger_interval', 'trigger_source', 'master']:
+            if key not in settings.keys():
+                raise ValueError("Instrument {} configuration lacks mandatory key {}".format(self, key))
+
+        # We expect a dictionary of channel names and their properties
+        if '12' not in quad_channels.keys()
+            raise ValueError("APS {} expected to receive quad channel '12'".format(self))
+        if '34' not in quad_channels.keys()
+            raise ValueError("APS {} expected to receive quad channel '34'".format(self))
+
+        # Set the properties of individual hardware channels (offset, amplitude)
+        for chan_group in ('12', '34'):
+            quad_dict = quad_channels.pop(chan_group, None)
+            if not quad_dict:
+                raise ValueError("APS {} expected to receive quad channel '{}'".format(self, chan_group))
+            for chan_num, chan_name in enumerate(list(chan_group)):
+                chan_dict = quad_dict.pop(chan_name, None)
+                if not chan_dict:
+                    raise ValueError("Could not find channel {} in quadrature channel '{}' in settings for {}".format(chan_name, chan_group, self))
+                for chan_attr, value in chan_dict.items():
+                    try:
+                        getattr(self, 'set_' + chan_attr)(chan_num, value)
+                    except AttributeError:
+                        pass
 
     def load_waveform(self, channel, data):
         if channel not in (1, 2, 3, 4):
