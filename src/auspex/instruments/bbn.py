@@ -288,6 +288,9 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
         except AttributeError as ex:
             raise ValueError("Channel waveform data must be a numpy array.") from ex
 
+    def trigger(self):
+        self.wrapper.trigger()
+
     @property
     def waveform_frequency(self):
         return self.wrapper.get_waveform_frequency()
@@ -312,6 +315,7 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
         return self._mode
     @run_mode.setter
     def run_mode(self, mode):
+        mode = mode.upper()
         if mode not in self._mode_dict.values():
             raise ValueError("Unknown run mode {} for APS2 {}. Run mode must be one of {}.".format(mode, self.name, list(self._mode_dict.values())))
         else:
