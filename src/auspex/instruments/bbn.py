@@ -6,7 +6,7 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-__all__ = ['APS2', 'DigitalAttenuator', 'SpectrumAnalyzer']
+__all__ = ['APS', 'APS2', 'DigitalAttenuator', 'SpectrumAnalyzer']
 
 from .instrument import Instrument, SCPIInstrument, VisaInterface, MetaInstrument
 from auspex.log import logger
@@ -39,7 +39,7 @@ if config.auspex_dummy_mode:
     aps1 = MagicMock()
 else:
     try:
-        import APS
+        import APS as libaps
         fake_aps1 = False
     except:
         fake_aps1 = True
@@ -160,17 +160,19 @@ class MakeSettersGetters(MetaInstrument):
                 setattr(self, 'set_'+k, v.fset)
                 setattr(self, 'get_'+k, v.fget)
 
-class APS(Instruments, metaclass=MakeSettersGetters):
+class APS(Instrument, metaclass=MakeSettersGetters):
     """BBN APSI or DACII"""
+
+    instrument_type = "AWG"
     yaml_template = """
     APS-Name:
       type: APS               # Used by QGL and Auspex. QGL assumes XXXPattern for the pattern generator
       enabled: true            # true or false, optional
       master: true             # true or false
       slave_trig:              # name of marker below, optional, i.e. 12m4. Used by QGL.
-      address:                 # IP address or hostname should be fine
+      address:                 # APS serial number
       trigger_interval: 0.0    # (s)
-      trigger_source: External # Internal, External, Software, or System
+      trigger_source: External # Internal or External
       seq_file: test.h5        # optional sequence file
       tx_channels:             # All transmit channels
         '12':                  # Quadrature channel name (string)
@@ -206,8 +208,8 @@ class APS(Instruments, metaclass=MakeSettersGetters):
           delay: 0.0
         4m1:
           delay: 0.0
-
                     """
+
     def __init__(self, resource_name=None, name="Unlabled APS"):
         self.name = name
         self.resource_name = resource_name
@@ -218,8 +220,7 @@ class APS(Instruments, metaclass=MakeSettersGetters):
         if fake_aps2:
             self.wrapper = MagicMock()
         else:
-            self.wrapper = APS.APS()
-
+            self.wrapper = libaps.APS()
 
         self.run           = self.wrapper.run
         self.stop          = self.wrapper.stop
@@ -232,10 +233,10 @@ class APS(Instruments, metaclass=MakeSettersGetters):
         self._repeat_mode = "TRIGGERED"
 
         self._run_mode_dict = {1: 'RUN_SEQUENCE', 0:'RUN_WAVEFORM'}
-        self._run_mode_inv_dict = {v: k for k, v in aps2.run_mode_dict.items()}
+        self._run_mode_inv_dict = {v: k for k, v in self._run_mode_dict.items()}
 
         self._repeat_mode_dict = {1: "CONTINUOUS", 0: "TRIGGERED"}
-        self._repeat_mode_inv_dict = {v: k for k, v in aps2.repeat_mode_dict.items()}
+        self._repeat_mode_inv_dict = {v: k for k, v in self._repeat_mode_dict.items()}
 
     def connect(self, resource_name=None):
         if resource_name is None and self.resource_name is None:
@@ -280,12 +281,6 @@ class APS(Instruments, metaclass=MakeSettersGetters):
         for key in ['address', 'seq_file', 'trigger_interval', 'trigger_source', 'master']:
             if key not in settings.keys():
                 raise ValueError("Instrument {} configuration lacks mandatory key {}".format(self, key))
-
-        # We expect a dictionary of channel names and their properties
-        if '12' not in quad_channels.keys()
-            raise ValueError("APS {} expected to receive quad channel '12'".format(self))
-        if '34' not in quad_channels.keys()
-            raise ValueError("APS {} expected to receive quad channel '34'".format(self))
 
         # Set the properties of individual hardware channels (offset, amplitude)
         for chan_group in ('12', '34'):
@@ -338,8 +333,7 @@ class APS(Instruments, metaclass=MakeSettersGetters):
     @run_mode.setter
     def run_mode(self, mode):
         mode = mode.upper()
-        if mode not in self._run_mode_dict.values()""
-        if mode not in self._mode_dict.values():
+        if mode not in self._run_mode_dict.values():
             raise ValueError("Unknown run mode {} for APS {}. Run mode must be one of {}.".format(mode, self.name, list(self._run_mode_dict.values())))
         else:
             self.wrapper.setRunMode(self._run_mode_inv_dict[mode])
@@ -351,8 +345,7 @@ class APS(Instruments, metaclass=MakeSettersGetters):
     @repeat_mode.setter
     def repeat_mode(self, mode):
         mode = mode.upper()
-        if mode not in self._repeat_mode_dict.values()""
-        if mode not in self._mode_dict.values():
+        if mode not in self._repeat_mode_dict.values():
             raise ValueError("Unknown repeat mode {} for APS {}. Repeat mode must be one of {}.".format(mode, self.name, list(self._repeat_mode_dict.values())))
         else:
             self.wrapper.setRepeatMode(self._repeat_mode_inv_dict[mode])
