@@ -337,7 +337,7 @@ class APS(Instrument, metaclass=MakeSettersGetters):
             raise ValueError("Unknown run mode {} for APS {}. Run mode must be one of {}.".format(mode, self.name, list(self._run_mode_dict.values())))
         else:
             self.wrapper.setRunMode(self._run_mode_inv_dict[mode])
-            self._mode = mode
+            self._run_mode = mode
 
     @property
     def repeat_mode(self):
