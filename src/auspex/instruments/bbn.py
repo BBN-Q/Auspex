@@ -243,7 +243,7 @@ class APS(Instrument, metaclass=MakeSettersGetters):
             raise Exception("Must supply a resource name to 'connect' if the instrument was initialized without one.")
         elif resource_name is not None:
             self.resource_name = resource_name
-        self.wrapper.connect(self.resource_name)
+        self.wrapper.connect(bytes(self.resource_name, 'ascii') if type(self.resource_name) == str else self.resource_name)
         self.connected = True
 
     def disconnect(self):
