@@ -275,7 +275,7 @@ class APS(Instrument, metaclass=MakeSettersGetters):
         settings = deepcopy(settings_dict)
         quad_channels = settings.pop('tx_channels')
         # Call the non-channel commands
-        super(APS2, self).set_all(settings)
+        super(APS, self).set_all(settings)
 
         # Mandatory arguments
         for key in ['address', 'seq_file', 'trigger_interval', 'trigger_source', 'master']:
