@@ -349,7 +349,7 @@ class APS(Instrument, metaclass=MakeSettersGetters):
             raise ValueError("Unknown repeat mode {} for APS {}. Repeat mode must be one of {}.".format(mode, self.name, list(self._repeat_mode_dict.values())))
         else:
             self.wrapper.setRepeatMode(self._repeat_mode_inv_dict[mode])
-            self._mode = mode
+            self._repeat_mode = mode
 
     @property
     def trigger_source(self):
