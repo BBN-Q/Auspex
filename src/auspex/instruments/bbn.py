@@ -39,12 +39,12 @@ if config.auspex_dummy_mode:
     aps1 = MagicMock()
 else:
     try:
-        import APS as libaps
+        import aps as libaps
         fake_aps1 = False
     except:
         fake_aps1 = True
         aps1_missing = True
-        aps1 = MagicMock()
+        libaps = MagicMock()
 
 class DigitalAttenuator(SCPIInstrument):
     """BBN 3 Channel Instrument"""
@@ -215,9 +215,9 @@ class APS(Instrument, metaclass=MakeSettersGetters):
         self.resource_name = resource_name
 
         if aps1_missing:
-            logger.warning("Could not load aps1 library")
+            logger.warning("Could not load aps1 library!")
 
-        if fake_aps2:
+        if fake_aps1:
             self.wrapper = MagicMock()
         else:
             self.wrapper = libaps.APS()
@@ -231,6 +231,7 @@ class APS(Instrument, metaclass=MakeSettersGetters):
         self._sequence_filename = None
         self._run_mode = "RUN_SEQUENCE"
         self._repeat_mode = "TRIGGERED"
+        self._sampling_rate = 1200
 
         self._run_mode_dict = {1: 'RUN_SEQUENCE', 0:'RUN_WAVEFORM'}
         self._run_mode_inv_dict = {v: k for k, v in self._run_mode_dict.items()}
@@ -238,13 +239,24 @@ class APS(Instrument, metaclass=MakeSettersGetters):
         self._repeat_mode_dict = {1: "CONTINUOUS", 0: "TRIGGERED"}
         self._repeat_mode_inv_dict = {v: k for k, v in self._repeat_mode_dict.items()}
 
+
+    def _initialize(self):
+        if self.connected:
+            self.wrapper.init(force=True)
+            self.run_mode = self._run_mode
+            self.repeat_mode = self._repeat_mode
+            self.sampling_rate = self._sampling_rate
+        else:
+            raise IOError('Cannot initialize an unconnected APS!')
+
     def connect(self, resource_name=None):
         if resource_name is None and self.resource_name is None:
             raise Exception("Must supply a resource name to 'connect' if the instrument was initialized without one.")
         elif resource_name is not None:
             self.resource_name = resource_name
-        self.wrapper.connect(bytes(self.resource_name, 'ascii') if type(self.resource_name) == str else self.resource_name)
+        self.wrapper.connect(self.resource_name)
         self.connected = True
+        self._initialize()
 
     def disconnect(self):
         if self.resource_name and self.connected:
@@ -301,7 +313,7 @@ class APS(Instrument, metaclass=MakeSettersGetters):
         if channel not in (1, 2, 3, 4):
             raise ValueError("Cannot load APS waveform {} on {} -- must be 1-4.".format(channel, self.name))
         try:
-            self.wrapper.loadWaveform(channel, waveform)
+            self.wrapper.load_waveform(channel, waveform)
         except AttributeError as ex:
             raise ValueError("Channel waveform data must be a numpy array.") from ex
         except NameError as ex:
@@ -310,9 +322,6 @@ class APS(Instrument, metaclass=MakeSettersGetters):
     def load_waveform_from_file(self, channel, data):
         if channel not in (1, 2, 3, 4):
             raise ValueError("Cannot load APS waveform {} on {} -- must be 1-4.".format(channel, self.name))
-        #Warning: This is the one place in APS.py that does not subtract 1 from
-        #the channel number. I am doing it here, but it should probably be fixed
-        #in APS.py of libaps.
         self.wrapper.load_waveform_from_file(channel-1, filename)
 
 
@@ -336,7 +345,8 @@ class APS(Instrument, metaclass=MakeSettersGetters):
         if mode not in self._run_mode_dict.values():
             raise ValueError("Unknown run mode {} for APS {}. Run mode must be one of {}.".format(mode, self.name, list(self._run_mode_dict.values())))
         else:
-            self.wrapper.setRunMode(self._run_mode_inv_dict[mode])
+            for ch in (1,2,3,4):
+                self.wrapper.set_run_mode(ch, self._run_mode_inv_dict[mode])
             self._run_mode = mode
 
     @property
@@ -348,26 +358,24 @@ class APS(Instrument, metaclass=MakeSettersGetters):
         if mode not in self._repeat_mode_dict.values():
             raise ValueError("Unknown repeat mode {} for APS {}. Repeat mode must be one of {}.".format(mode, self.name, list(self._repeat_mode_dict.values())))
         else:
-            self.wrapper.setRepeatMode(self._repeat_mode_inv_dict[mode])
+            for ch in (1,2,3,4):
+                self.wrapper.set_repeat_mode(ch, self._repeat_mode_inv_dict[mode])
             self._repeat_mode = mode
 
     @property
     def trigger_source(self):
-        return self.wrapper.triggerSource
+        return self.wrapper.trigger_source
     @trigger_source.setter
     def trigger_source(self, source):
         source = source.lower()
-        if source in ["internal", "external"]:
-            self.wrapper.triggerSource = source
-        else:
-            raise ValueError("Invalid trigger source specification.")
+        self.wrapper.trigger_source = source
 
     @property
     def trigger_interval(self):
-        return self.wrapper.triggerInterval
+        return self.wrapper.trigger_interval
     @trigger_interval.setter
     def trigger_interval(self, value):
-        self.wrapper.triggerInterval = value
+        self.wrapper.trigger_interval = value
 
     @property
     def seq_file(self):
@@ -379,10 +387,10 @@ class APS(Instrument, metaclass=MakeSettersGetters):
 
     @property
     def sampling_rate(self):
-        return self.wrapper.samplingRate
+        return self.wrapper.sampling_rate
     @sampling_rate.setter
-    def sampling_rate(self, value):
-        self.wrapper.samplingRate = freq
+    def sampling_rate(self, freq):
+        self.wrapper.sampling_rate = freq
 
 
 class APS2(Instrument, metaclass=MakeSettersGetters):
