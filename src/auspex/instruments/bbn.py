@@ -40,6 +40,9 @@ if config.auspex_dummy_mode:
 else:
     try:
         import aps as libaps
+        if libaps.APS_PY_WRAPPER_VERSION < 1.4:
+            logger.warning("Old version of libaps found. Using MagicMock instead.")
+            raise ImportError
         fake_aps1 = False
     except:
         fake_aps1 = True
