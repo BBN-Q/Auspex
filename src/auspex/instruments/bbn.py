@@ -47,6 +47,7 @@ else:
     except:
         fake_aps1 = True
         aps1_missing = True
+        logger.warning("Could not load aps library.  Using MagicMock instead.")
         libaps = MagicMock()
 
 class DigitalAttenuator(SCPIInstrument):
@@ -444,7 +445,7 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
         if fake_aps2:
             self.wrapper = MagicMock()
         else:
-            self.wrapper = APS.APS()
+            self.wrapper = aps2.APS2()
 
         self.set_enabled   = self.wrapper.set_channel_enabled
         self.set_mixer_phase_skew = self.wrapper.set_mixer_phase_skew
