@@ -47,7 +47,7 @@ else:
     except:
         fake_aps1 = True
         aps1_missing = True
-        logger.warning("Could not load aps library.  Using MagicMock instead.")
+        logger.warning("Could not load libaps library.  Using MagicMock instead.")
         libaps = MagicMock()
 
 class DigitalAttenuator(SCPIInstrument):
