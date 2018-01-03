@@ -41,13 +41,11 @@ else:
     try:
         import aps as libaps
         if libaps.APS_PY_WRAPPER_VERSION < 1.4:
-            logger.warning("Old version of libaps found. Using MagicMock instead.")
-            raise ImportError
+            raise ImportError("Old version of libaps found. Please update.")
         fake_aps1 = False
     except:
         fake_aps1 = True
         aps1_missing = True
-        logger.warning("Could not load libaps library.  Using MagicMock instead.")
         libaps = MagicMock()
 
 class DigitalAttenuator(SCPIInstrument):
