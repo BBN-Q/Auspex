@@ -139,6 +139,18 @@ class ExperimentGraph(object):
 
         self.dag = dag
 
+class TimedTask(asyncio.Task):
+
+    def __init__(self, *args, **kwargs):
+        super(TimedTask, self).__init__(*args, **kwargs)
+        self.cputime = 0.0
+
+    def _step(self, *args, **kwargs):
+        start = time.time()
+        result = super()._step(*args, **kwargs)
+        self.cputime += time.time() - start
+        return result
+
 class MetaExperiment(type):
     """Meta class to bake the instrument objects into a class description
     """
@@ -184,6 +196,9 @@ class Experiment(metaclass=MetaExperiment):
 
         # This holds the experiment graph
         self.graph = None
+
+        # If this is True, print the time each filter took
+        self.profile_filters = False
 
         # This holds a reference to a matplotlib server instance
         # for plotting, if there is one.
@@ -250,6 +265,8 @@ class Experiment(metaclass=MetaExperiment):
 
         # Create the asyncio measurement loop
         self.loop = asyncio.get_event_loop()
+        task_factory = lambda loop, coro: TimedTask(coro, loop=loop)
+        self.loop.set_task_factory(task_factory)
 
         # Based on the logging level, infer whether we want asyncio debug
         do_debug = logger.getEffectiveLevel() <= logging.DEBUG
@@ -494,11 +511,13 @@ class Experiment(metaclass=MetaExperiment):
         other_nodes = self.nodes[:]
         other_nodes.extend(self.extra_plotters)
         other_nodes.remove(self)
-        tasks = [n.run() for n in other_nodes]
+        coroutines = [n.run() for n in other_nodes]
+        coroutines.append(self.sweep())
 
-        tasks.append(self.sweep())
+        futures = [asyncio.ensure_future(c, loop=self.loop) for c in coroutines]
+
         try:
-            self.loop.run_until_complete(asyncio.gather(*tasks))
+            self.loop.run_until_complete(asyncio.gather(*futures))
             self.loop.run_until_complete(asyncio.sleep(1))
         except Exception as e:
             logger.exception("message")
@@ -506,6 +525,11 @@ class Experiment(metaclass=MetaExperiment):
         for plot, callback in zip(self.manual_plotters, self.manual_plotter_callbacks):
             if callback:
                 callback(plot)
+
+        if self.profile_filters:
+            total = sum([f.cputime for f in futures[:-1]])
+            for n, f in zip(other_nodes, futures[:-1]):
+                print("{} took {:.4f}, or {:.2f}%".format(n, f.cputime, 100.0*f.cputime/total))
 
         self.shutdown()
 
