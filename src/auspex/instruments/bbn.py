@@ -6,7 +6,7 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-__all__ = ['APS2', 'DigitalAttenuator', 'SpectrumAnalyzer']
+__all__ = ['APS', 'APS2', 'DigitalAttenuator', 'SpectrumAnalyzer']
 
 from .instrument import Instrument, SCPIInstrument, VisaInterface, MetaInstrument
 from auspex.log import logger
@@ -32,6 +32,21 @@ else:
         fake_aps2 = True
         aps2_missing = True
         aps2 = MagicMock()
+
+aps1_missing = False
+if config.auspex_dummy_mode:
+    fake_aps1 = True
+    aps1 = MagicMock()
+else:
+    try:
+        import aps as libaps
+        if libaps.APS_PY_WRAPPER_VERSION < 1.4:
+            raise ImportError("Old version of libaps found. Please update.")
+        fake_aps1 = False
+    except:
+        fake_aps1 = True
+        aps1_missing = True
+        libaps = MagicMock()
 
 class DigitalAttenuator(SCPIInstrument):
     """BBN 3 Channel Instrument"""
@@ -146,6 +161,239 @@ class MakeSettersGetters(MetaInstrument):
                 logger.debug("Adding '%s' command to APS", k)
                 setattr(self, 'set_'+k, v.fset)
                 setattr(self, 'get_'+k, v.fget)
+
+class APS(Instrument, metaclass=MakeSettersGetters):
+    """BBN APSI or DACII"""
+
+    instrument_type = "AWG"
+    yaml_template = """
+    APS-Name:
+      type: APS               # Used by QGL and Auspex. QGL assumes XXXPattern for the pattern generator
+      enabled: true            # true or false, optional
+      master: true             # true or false
+      slave_trig:              # name of marker below, optional, i.e. 12m4. Used by QGL.
+      address:                 # APS serial number
+      trigger_interval: 0.0    # (s)
+      trigger_source: External # Internal or External
+      seq_file: test.h5        # optional sequence file
+      tx_channels:             # All transmit channels
+        '12':                  # Quadrature channel name (string)
+          phase_skew: 0.0      # (deg) - Used by QGL
+          amp_factor: 1.0      # Used by QGL
+          delay: 0.0           # (s) - Used by QGL
+          '1':
+            enabled: true
+            offset: 0.0
+            amplitude: 1.0
+          '2':
+            enabled: true
+            offset: 0.0
+            amplitude: 1.0
+         '34':                  # Quadrature channel name (string)
+           phase_skew: 0.0      # (deg) - Used by QGL
+           amp_factor: 1.0      # Used by QGL
+           delay: 0.0           # (s) - Used by QGL
+           '1':
+             enabled: true
+             offset: 0.0
+             amplitude: 1.0
+           '2':
+             enabled: true
+             offset: 0.0
+             amplitude: 1.0
+      markers:
+        1m1:
+          delay: 0.0         # (s)
+        2m1:
+          delay: 0.0
+        3m1:
+          delay: 0.0
+        4m1:
+          delay: 0.0
+                    """
+
+    def __init__(self, resource_name=None, name="Unlabled APS"):
+        self.name = name
+        self.resource_name = resource_name
+
+        if aps1_missing:
+            logger.warning("Could not load aps1 library!")
+
+        if fake_aps1:
+            self.wrapper = MagicMock()
+        else:
+            self.wrapper = libaps.APS()
+
+        self.run           = self.wrapper.run
+        self.stop          = self.wrapper.stop
+        self.connected     = False
+
+        self.read_register = self.wrapper.read_register
+
+        self._sequence_filename = None
+        self._run_mode = "RUN_SEQUENCE"
+        self._repeat_mode = "TRIGGERED"
+        self._sampling_rate = 1200
+
+        self._run_mode_dict = {1: 'RUN_SEQUENCE', 0:'RUN_WAVEFORM'}
+        self._run_mode_inv_dict = {v: k for k, v in self._run_mode_dict.items()}
+
+        self._repeat_mode_dict = {1: "CONTINUOUS", 0: "TRIGGERED"}
+        self._repeat_mode_inv_dict = {v: k for k, v in self._repeat_mode_dict.items()}
+
+
+    def _initialize(self):
+        if self.connected:
+            self.wrapper.init(force=True)
+            self.run_mode = self._run_mode
+            self.repeat_mode = self._repeat_mode
+            self.sampling_rate = self._sampling_rate
+        else:
+            raise IOError('Cannot initialize an unconnected APS!')
+
+    def connect(self, resource_name=None):
+        if resource_name is None and self.resource_name is None:
+            raise Exception("Must supply a resource name to 'connect' if the instrument was initialized without one.")
+        elif resource_name is not None:
+            self.resource_name = resource_name
+        self.wrapper.connect(self.resource_name)
+        self.connected = True
+        self._initialize()
+
+    def disconnect(self):
+        if self.resource_name and self.connected:
+            self.stop()
+            self.wrapper.disconnect()
+            self.connected = False
+
+    def set_amplitude(self, chs, value):
+        if isinstance(chs, int) or len(chs)==1:
+            self.wrapper.set_amplitude(int(chs), value)
+        else:
+            self.wrapper.set_amplitude(int(chs[0]), value)
+            self.wrapper.set_amplitude(int(chs[2]), value)
+            self.wrapper.set_amplitude(int(chs[3]), value)
+            self.wrapper.set_amplitude(int(chs[1]), value)
+
+    def set_offset(self, chs, value):
+        if isinstance(chs, int) or len(chs)==1:
+            self.wrapper.set_amplitude(int(chs), value)
+        else:
+            self.wrapper.set_amplitude(int(chs[0]), value)
+            self.wrapper.set_amplitude(int(chs[1]), value)
+            self.wrapper.set_amplitude(int(chs[2]), value)
+            self.wrapper.set_amplitude(int(chs[3]), value)
+
+    def set_all(self, settings_dict, prefix=""):
+        # Pop the channel settings
+        settings = deepcopy(settings_dict)
+        quad_channels = settings.pop('tx_channels')
+        # Call the non-channel commands
+        super(APS, self).set_all(settings)
+
+        # Mandatory arguments
+        for key in ['address', 'seq_file', 'trigger_interval', 'trigger_source', 'master']:
+            if key not in settings.keys():
+                raise ValueError("Instrument {} configuration lacks mandatory key {}".format(self, key))
+
+        # Set the properties of individual hardware channels (offset, amplitude)
+        for chan_group in ('12', '34'):
+            quad_dict = quad_channels.pop(chan_group, None)
+            if not quad_dict:
+                raise ValueError("APS {} expected to receive quad channel '{}'".format(self, chan_group))
+            for chan_num, chan_name in enumerate(list(chan_group)):
+                chan_dict = quad_dict.pop(chan_name, None)
+                if not chan_dict:
+                    raise ValueError("Could not find channel {} in quadrature channel '{}' in settings for {}".format(chan_name, chan_group, self))
+                for chan_attr, value in chan_dict.items():
+                    try:
+                        getattr(self, 'set_' + chan_attr)(chan_num, value)
+                    except AttributeError:
+                        pass
+
+    def load_waveform(self, channel, data):
+        if channel not in (1, 2, 3, 4):
+            raise ValueError("Cannot load APS waveform {} on {} -- must be 1-4.".format(channel, self.name))
+        try:
+            self.wrapper.load_waveform(channel, waveform)
+        except AttributeError as ex:
+            raise ValueError("Channel waveform data must be a numpy array.") from ex
+        except NameError as ex:
+            raise NameError("Channel data in incompatible type.") from ex
+
+    def load_waveform_from_file(self, channel, data):
+        if channel not in (1, 2, 3, 4):
+            raise ValueError("Cannot load APS waveform {} on {} -- must be 1-4.".format(channel, self.name))
+        self.wrapper.load_waveform_from_file(channel-1, filename)
+
+
+    def trigger(self):
+        raise NotImplementedError("Software trigger not present on APSI/DACII")
+
+    @property
+    def waveform_frequency(self):
+        raise NotImplementedError("Hardware NCO not present on APSI/DACII")
+
+    @property
+    def mixer_correction_matrix(self):
+        raise NotImplementedError("Harware mixer correction not present on APSI/DACII")
+
+    @property
+    def run_mode(self):
+        return self._run_mode
+    @run_mode.setter
+    def run_mode(self, mode):
+        mode = mode.upper()
+        if mode not in self._run_mode_dict.values():
+            raise ValueError("Unknown run mode {} for APS {}. Run mode must be one of {}.".format(mode, self.name, list(self._run_mode_dict.values())))
+        else:
+            for ch in (1,2,3,4):
+                self.wrapper.set_run_mode(ch, self._run_mode_inv_dict[mode])
+            self._run_mode = mode
+
+    @property
+    def repeat_mode(self):
+        return self._repeat_mode
+    @repeat_mode.setter
+    def repeat_mode(self, mode):
+        mode = mode.upper()
+        if mode not in self._repeat_mode_dict.values():
+            raise ValueError("Unknown repeat mode {} for APS {}. Repeat mode must be one of {}.".format(mode, self.name, list(self._repeat_mode_dict.values())))
+        else:
+            for ch in (1,2,3,4):
+                self.wrapper.set_repeat_mode(ch, self._repeat_mode_inv_dict[mode])
+            self._repeat_mode = mode
+
+    @property
+    def trigger_source(self):
+        return self.wrapper.trigger_source
+    @trigger_source.setter
+    def trigger_source(self, source):
+        source = source.lower()
+        self.wrapper.trigger_source = source
+
+    @property
+    def trigger_interval(self):
+        return self.wrapper.trigger_interval
+    @trigger_interval.setter
+    def trigger_interval(self, value):
+        self.wrapper.trigger_interval = value
+
+    @property
+    def seq_file(self):
+        return self._sequence_filename
+    @seq_file.setter
+    def seq_file(self, filename):
+        self.wrapper.load_config(filename)
+        self._sequence_filename = filename
+
+    @property
+    def sampling_rate(self):
+        return self.wrapper.sampling_rate
+    @sampling_rate.setter
+    def sampling_rate(self, freq):
+        self.wrapper.sampling_rate = freq
+
 
 class APS2(Instrument, metaclass=MakeSettersGetters):
     """BBN APS2"""
@@ -277,7 +525,7 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
 
     def load_waveform(self, channel, data):
         if channel not in (1, 2):
-            raise ValueError("Cannot load APS waveform data to channel {} on {} -- must be 1 or 2.".format(channe, self.name))
+            raise ValueError("Cannot load APS waveform data to channel {} on {} -- must be 1 or 2.".format(channel, self.name))
         try:
             if data.dtype == np.int:
                 self.wrapper.set_waveform_int(channel-1, data.astype(np.int16))
