@@ -71,6 +71,10 @@ class X6Channel(DigitizerChannel):
             #        setattr(self, name, value)
             elif name == "channel":
                 setattr(self, 'phys_channel', int(value))
+            elif name == 'threshold':
+                setattr(self, 'threshold', value)
+            elif name == 'threshold_invert':
+                setattr(self, 'threshold_invert', bool(value))
             elif name == 'ideal_data': # for testing purposes
                 self.ideal_data = np.load(os.path.abspath(value+'.npy'))
             else:
