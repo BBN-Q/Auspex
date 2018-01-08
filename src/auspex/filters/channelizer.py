@@ -164,7 +164,7 @@ class Channelizer(Filter):
         self.filters[2]  = (b,a)
 
     def update_descriptors(self):
-        logger.debug('Updating Channelizer "%s" descriptors based on input descriptor: %s.', self.name, self.sink.descriptor)
+        logger.debug('Updating Channelizer "%s" descriptors based on input descriptor: %s.', self.filter_name, self.sink.descriptor)
 
         # extract record time sampling
         self.time_pts = self.sink.descriptor.axes[-1].points
@@ -191,7 +191,7 @@ class Channelizer(Filter):
             if os.end_connector is not None:
                 os.end_connector.update_descriptors()
 
-    async def process_data(self, data):
+    def process_data(self, data):
 
         # Append any data carried from the last run
         if self.carry.size > 0:
@@ -286,7 +286,7 @@ class Channelizer(Filter):
 
             # push to ouptut connectors
             for os in self.source.output_streams:
-                await os.push(filtered)
+                os.push(filtered)
 
 class LibChannelizerFallback(object):
     @staticmethod

@@ -32,7 +32,7 @@ class Sweeper(object):
         self.axes.append(axis)
         logger.debug("Add sweep axis to sweeper object: {}".format(axis))
 
-    async def update(self):
+    def update(self):
         """ Update the levels """
         logger.debug("Sweeper updates values.")
         imax = len(self.axes)-1
@@ -45,7 +45,7 @@ class Sweeper(object):
                 i += 1
             # Need to update parameters from outer --> inner axis
             for j in range(i,-1,-1):
-                await self.axes[j].update()
+                self.axes[j].update()
 
         # At this point all of the updates should have happened
         # return the current coordinates of the sweep. Return the
@@ -67,10 +67,10 @@ class Sweeper(object):
     def is_adaptive(self):
         return True in [a.refine_func is not None for a in self.axes]
 
-    async def check_for_refinement(self):
+    def check_for_refinement(self):
         refined_axes = []
         for a in self.axes:
-            if await a.check_for_refinement():
+            if a.check_for_refinement():
                 refined_axes.append(a.name)
                 break
         if len(refined_axes) > 1:

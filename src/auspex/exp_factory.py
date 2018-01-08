@@ -17,6 +17,7 @@ import asyncio
 import base64
 import datetime
 import subprocess
+import multiprocessing as mp
 
 import numpy as np
 import networkx as nx
@@ -72,12 +73,16 @@ class QubitExperiment(Experiment):
         except:
             logger.warning("No AWG is specified as the master.")
 
-        # attach digitizer stream sockets to output connectors
+        # Start socket listening processes
+        self.dig_listeners = []
         for chan, dig in self.chan_to_dig.items():
             socket = dig.get_socket(chan)
             oc = self.chan_to_oc[chan]
-            self.loop.add_reader(socket, dig.receive_data, chan, oc)
-
+            self.dig_listeners.append(mp.Process(target=dig.receive_data, args=(chan, oc)) )
+            # self.loop.add_reader(socket, dig.receive_data, chan, oc)
+        for listener in self.dig_listeners:
+            listener.start()
+        print("after set up listener")
         if self.cw_mode:
             for awg in self.awgs:
                 awg.run()
@@ -110,33 +115,37 @@ class QubitExperiment(Experiment):
         self.add_sweep(param, range(num_averages))
 
     def shutdown_instruments(self):
-        # remove socket readers
+        # remove socket listeners
+        for dlist in self.dig_listeners:
+            dlist.join()
         if self.cw_mode:
             for awg in self.awgs:
                 awg.stop()
         for chan, dig in self.chan_to_dig.items():
             socket = dig.get_socket(chan)
-            self.loop.remove_reader(socket)
+            # self.loop.remove_reader(socket)
         for name, instr in self._instruments.items():
             instr.disconnect()
 
-    async def run(self):
+    def run(self):
         """This is run for each step in a sweep."""
         for dig in self.digitizers:
             dig.acquire()
-        await asyncio.sleep(0.75)
+        # await asyncio.sleep(0.75)
         if not self.cw_mode:
             for awg in self.awgs:
                 awg.run()
-
+        print("after run")
         # Wait for all of the acquisitions to complete
         timeout = 10
-        try:
-            await asyncio.gather(*[dig.wait_for_acquisition(timeout) for dig in self.digitizers])
-        except Exception as e:
-            logger.error("Received exception %s in run loop. Bailing", repr(e))
-            self.shutdown()
-            sys.exit(0)
+        for dig in self.digitizers:
+            dig.wait_for_acquisition(timeout)
+        # try:
+            # await asyncio.gather(*[dig.wait_for_acquisition(timeout) for dig in self.digitizers])
+        # except Exception as e:
+        #     logger.error("Received exception %s in run loop. Bailing", repr(e))
+        #     self.shutdown()
+        #     sys.exit(0)
 
         for dig in self.digitizers:
             dig.stop()

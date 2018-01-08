@@ -74,7 +74,7 @@ class Averager(Filter):
         self.update_interval = 0.5
 
     def update_descriptors(self):
-        logger.debug('Updating averager "%s" descriptors based on input descriptor: %s.', self.name, self.sink.descriptor)
+        logger.debug('Updating averager "%s" descriptors based on input descriptor: %s.', self.filter_name, self.sink.descriptor)
         descriptor_in = self.sink.descriptor
         names = [a.name for a in descriptor_in.axes]
 
@@ -169,15 +169,15 @@ class Averager(Filter):
         # BUT we may get something longer at any given time!
         self.carry = np.zeros(0, dtype=self.final_average.descriptor.dtype)
 
-    async def process_data(self, data):
+    def process_data(self, data):
 
         if self.passthrough:
             for os in self.final_average.output_streams:
-                await os.push(data)
+                os.push(data)
             for os in self.final_variance.output_streams:
-                await os.push(data*0.0)
+                os.push(data*0.0)
             for os in self.partial_average.output_streams:
-                await os.push(data)
+                os.push(data)
             return
 
         # TODO: handle unflattened data separately
@@ -216,13 +216,13 @@ class Averager(Filter):
                         os.descriptor.visited_tuples = np.append(os.descriptor.visited_tuples, reduced_tuples)
 
                 for os in self.final_average.output_streams:
-                    await os.push(averaged)
+                    os.push(averaged)
 
                 for os in self.final_variance.output_streams:
-                    await os.push(reshaped.var(axis=self.mean_axis, ddof=1)) # N-1 in the denominator
+                    os.push(reshaped.var(axis=self.mean_axis, ddof=1)) # N-1 in the denominator
 
                 for os in self.partial_average.output_streams:
-                    await os.push(averaged)
+                    os.push(averaged)
 
             # Maybe we can fill a partial frame
             elif data.size - idx >= self.points_before_partial_average:
@@ -250,9 +250,9 @@ class Averager(Filter):
                 if self.completed_averages == self.num_averages:
                     reshaped = self.current_avg_frame.reshape(partial_reshape_dims)
                     for os in self.final_average.output_streams + self.partial_average.output_streams:
-                        await os.push(reshaped.mean(axis=self.mean_axis))
+                        os.push(reshaped.mean(axis=self.mean_axis))
                     for os in self.final_variance.output_streams:
-                        await os.push(np.real(reshaped).var(axis=self.mean_axis, ddof=1)+1j*np.imag(reshaped).var(axis=self.mean_axis, ddof=1)) # N-1 in the denominator
+                        os.push(np.real(reshaped).var(axis=self.mean_axis, ddof=1)+1j*np.imag(reshaped).var(axis=self.mean_axis, ddof=1)) # N-1 in the denominator
                     self.sum_so_far[:]        = 0.0
                     self.current_avg_frame[:] = 0.0
                     self.completed_averages   = 0
@@ -261,7 +261,7 @@ class Averager(Filter):
                     # Emit a partial average since we've accumulated enough data
                     if (time.time() - self.last_update >= self.update_interval):
                         for os in self.partial_average.output_streams:
-                            await os.push(self.sum_so_far/self.completed_averages)
+                            os.push(self.sum_so_far/self.completed_averages)
                         self.last_update = time.time()
 
             # otherwise just add it to the carry

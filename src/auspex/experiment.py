@@ -11,7 +11,7 @@ import time
 import copy
 import itertools
 import logging
-import asyncio
+import multiprocessing as mp
 import signal
 import sys
 import numbers
@@ -104,10 +104,9 @@ class ExpProgressBar(object):
             num_data = num_data % self.chunk_sizes[i]
 
 class ExperimentGraph(object):
-    def __init__(self, edges, loop):
+    def __init__(self, edges):
         self.dag = None
         self.edges = []
-        self.loop = loop
         self.create_graph(edges)
 
     def dfs_edges(self):
@@ -130,8 +129,7 @@ class ExperimentGraph(object):
         dag = nx.DiGraph()
         self.edges = []
         for edge in edges:
-            obj = DataStream(name="{}_TO_{}".format(edge[0].name, edge[1].name),
-                             loop=self.loop)
+            obj = DataStream(name="{}_TO_{}".format(edge[0].name, edge[1].name))
             edge[0].add_output_stream(obj)
             edge[1].add_input_stream(obj)
             self.edges.append(obj)
@@ -248,12 +246,9 @@ class Experiment(metaclass=MetaExperiment):
             self._parameters_instance[n] = new_inst
         self._parameters = self._parameters_instance
 
-        # Create the asyncio measurement loop
-        self.loop = asyncio.get_event_loop()
 
         # Based on the logging level, infer whether we want asyncio debug
         do_debug = logger.getEffectiveLevel() <= logging.DEBUG
-        self.loop.set_debug(do_debug)
 
         # Run the stream init
         self.init_streams()
@@ -266,7 +261,7 @@ class Experiment(metaclass=MetaExperiment):
             if ee.parent not in unique_nodes:
                 unique_nodes.append(ee.parent)
         self.nodes = unique_nodes
-        self.graph = ExperimentGraph(edges, self.loop)
+        self.graph = ExperimentGraph(edges)
 
     def init_streams(self):
         """Establish the base descriptors for any internal data streams and connectors."""
@@ -289,7 +284,7 @@ class Experiment(metaclass=MetaExperiment):
             logger.warning("No stream is found for progress bars. Create a dummy bar.")
             self.progressbar = ExpProgressBar(None, num=num, notebook=notebook)
 
-    async def run(self):
+    def run(self):
         """This is the inner measurement loop, which is the smallest unit that
         is repeated across various sweep variables. For more complicated run control
         than can be provided by the automatic sweeping, the full experimental
@@ -323,15 +318,15 @@ class Experiment(metaclass=MetaExperiment):
             oc.descriptor.visited_tuples = []
             oc.update_descriptors()
 
-    async def declare_done(self):
+    def declare_done(self):
         for oc in self.output_connectors.values():
             for os in oc.output_streams:
-                await os.push_event("done")
+                os.push_event("done")
         for p in self.extra_plotters:
             stream = self._extra_plots_to_streams[p]
-            await stream.push_event("done")
+            stream.push_event("done")
 
-    async def sweep(self):
+    def sweep(self):
         # Set any static parameters
         static_params = [p for p in self._parameters.values() if p not in self.sweeper.swept_parameters()]
         for p in static_params:
@@ -339,7 +334,7 @@ class Experiment(metaclass=MetaExperiment):
 
         # Keep track of the previous values
         logger.debug("Waiting for filters.")
-        await asyncio.sleep(0.1)
+        # await time.sleep(0.1)
         last_param_values = None
         logger.debug("Starting experiment sweep.")
 
@@ -347,7 +342,7 @@ class Experiment(metaclass=MetaExperiment):
         while True:
             # Increment the sweeper, which returns a list of the current
             # values of the SweepAxes (no DataAxes).
-            sweep_values = await self.sweeper.update()
+            sweep_values = self.sweeper.update()
 
             if self.sweeper.is_adaptive():
                 # Add the new tuples to the stream descriptors
@@ -367,13 +362,13 @@ class Experiment(metaclass=MetaExperiment):
 
             # Run the procedure
             # logger.debug("Starting a new run.")
-            await self.run()
+            self.run()
 
             # See if the axes want to extend themselves
-            refined_axis = await self.sweeper.check_for_refinement()
+            refined_axis = self.sweeper.check_for_refinement()
             if refined_axis is not None:
                 for oc in self.output_connectors.values():
-                     await oc.push_event("refined", refined_axis)
+                     oc.push_event("refined", refined_axis)
 
             # Update progress bars
             if self.progressbar is not None:
@@ -381,25 +376,25 @@ class Experiment(metaclass=MetaExperiment):
 
             # Finish up, checking to see whether we've received all of our data
             if self.sweeper.done():
-                sleep_time = 0
-                while not self.filters_finished():
-                    await asyncio.sleep(1)
-                    sleep_time += 1
-                    if sleep_time == 5:
-                        logger.info("Still waiting for filters to finish. Did the experiment produce the expected amount of data?")
-                        for n in self.nodes:
-                            if isinstance(n, Filter):
-                                logger.info("  {} done: {}".format(n, n.finished_processing))
-                        print({n: n.finished_processing for n in self.nodes if isinstance(n, Filter)})
+                # sleep_time = 0
+                # while not self.filters_finished():
+                #     time.sleep(1)
+                #     sleep_time += 1
+                #     if sleep_time == 5:
+                #         logger.info("Still waiting for filters to finish. Did the experiment produce the expected amount of data?")
+                #         for n in self.nodes:
+                #             if isinstance(n, Filter):
+                #                 logger.info("  {} done: {}".format(n, n.finished_processing))
+                #         print({n: n.finished_processing for n in self.nodes if isinstance(n, Filter)})
 
-                    if sleep_time >= 20:
-                        logger.warning("Filters not stopped after 20 seconds, bailing.")
-                        break
-                await self.declare_done()
+                #     if sleep_time >= 20:
+                #         logger.warning("Filters not stopped after 20 seconds, bailing.")
+                #         break
+                self.declare_done()
                 break
 
     def filters_finished(self):
-        return all([n.finished_processing for n in self.nodes if isinstance(n, Filter)])
+        return all([not n.is_alive() for n in self.nodes if isinstance(n, Filter)])
 
     def connect_instruments(self):
         # Connect the instruments to their resources
@@ -466,7 +461,6 @@ class Experiment(metaclass=MetaExperiment):
         # Call any final initialization on the filter pipeline
         for n in self.nodes + self.extra_plotters:
             n.experiment = self
-            n.loop       = self.loop
             # n.executor   = self.executor
             if hasattr(n, 'final_init'):
                 n.final_init()
@@ -494,14 +488,16 @@ class Experiment(metaclass=MetaExperiment):
         other_nodes = self.nodes[:]
         other_nodes.extend(self.extra_plotters)
         other_nodes.remove(self)
-        tasks = [n.run() for n in other_nodes]
+        
+        # Start the filter processes
+        for n in other_nodes:
+            n.start()
 
-        tasks.append(self.sweep())
-        try:
-            self.loop.run_until_complete(asyncio.gather(*tasks))
-            self.loop.run_until_complete(asyncio.sleep(1))
-        except Exception as e:
-            logger.exception("message")
+        self.sweep()
+
+        for n in other_nodes:
+            n.shutdown()
+            n.join()
 
         for plot, callback in zip(self.manual_plotters, self.manual_plotter_callbacks):
             if callback:
@@ -522,7 +518,10 @@ class Experiment(metaclass=MetaExperiment):
         if hasattr(self, 'plot_server'):
             try:
                 if len(self.plotters) > 0: #and not self.leave_plot_server_open:
-                    self.plot_server.stop()
+                    self.plot_server.shutdown()
+                    self.plot_server.join()
+                    self.plot_desc_server.shutdown()
+                    self.plot_desc_server.join()
             except:
                 logger.warning("Could not stop plot server gracefully...")
 
@@ -577,26 +576,33 @@ class Experiment(metaclass=MetaExperiment):
         self.manual_plotters.append(plotter)
         self.manual_plotter_callbacks.append(callback)
 
-    async def push_to_plot(self, plotter, data):
+    def push_to_plot(self, plotter, data):
         """Push data to a direct plotter."""
-
         stream = self._extra_plots_to_streams[plotter]
-        await stream.push_direct(data)
+        stream.push_direct(data)
 
     def init_plot_servers(self):
         logger.debug("Found %d plotters", len(self.plotters))
 
-        from .plotting import MatplotServerThread
+        from .plotting import PlotDataServerProcess, PlotDescServerProcess
         plot_desc = {p.name: p.desc() for p in self.standard_plotters}
         if not hasattr(self, "plot_server"):
-            self.plot_server = MatplotServerThread(plot_desc)
-        if len(self.plotters) > len(self.standard_plotters) and not hasattr(self, "extra_plot_server"):
-            extra_plot_desc = {p.name: p.desc() for p in self.extra_plotters + self.manual_plotters}
-            self.extra_plot_server = MatplotServerThread(extra_plot_desc, status_port = self.plot_server.status_port+2, data_port = self.plot_server.data_port+2)
+            self.plot_queue  = mp.Queue()
+            self.plot_desc_server = PlotDescServerProcess(plot_desc)
+            self.plot_desc_server.start()
+            self.plot_server = PlotDataServerProcess(self.plot_queue)
+            self.plot_server.start()
+        else:
+            while not self.plot_queue.empty():
+                self.plot_queue.get()
+        # if len(self.plotters) > len(self.standard_plotters) and not hasattr(self, "extra_plot_server"):
+        #     extra_plot_desc = {p.name: p.desc() for p in self.extra_plotters + self.manual_plotters}
+        #     self.extra_plot_queue  = mp.Queue()
+        #     self.extra_plot_server = MatplotServerProcess(self.extra_plot_queue, extra_plot_desc, status_port = self.plot_server.status_port+2, data_port = self.plot_server.data_port+2)
         for plotter in self.standard_plotters:
-            plotter.plot_server = self.plot_server
+            plotter.plot_queue = self.plot_queue
         for plotter in self.extra_plotters + self.manual_plotters:
-            plotter.plot_server = self.extra_plot_server
+            plotter.plot_queue = self.extra_plot_queue
         time.sleep(0.5)
         # Kill a previous plotter if desired.
         if auspex.config.single_plotter_mode and auspex.config.last_plotter_process:

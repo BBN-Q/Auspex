@@ -6,7 +6,7 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-import asyncio
+import multiprocessing as mp
 import logging
 import numbers
 import itertools
@@ -174,7 +174,7 @@ class SweepAxis(DataAxis):
 
         logger.debug("Created {}".format(self.__repr__()))
 
-    async def update(self):
+    def update(self):
         """ Update value after each run.
         """
         if self.step < self.num_points():
@@ -189,13 +189,12 @@ class SweepAxis(DataAxis):
             self.step += 1
             self.done = False
 
-    async def check_for_refinement(self):
+    def check_for_refinement(self):
         if not self.done and self.step==self.num_points():
             # Check to see if we need to perform any refinements
-            await asyncio.sleep(0.1)
             logger.debug("Refining on axis {}".format(self.name))
             if self.refine_func:
-                if not await self.refine_func(self, self.experiment):
+                if not self.refine_func(self, self.experiment):
                     # Returns false if no refinements needed, otherwise adds points to list
                     self.step = 0
                     self.done = True
@@ -446,17 +445,15 @@ class DataStreamDescriptor(object):
 
 class DataStream(object):
     """A stream of data"""
-    def __init__(self, name=None, unit=None, loop=None, compression="none"):
+    def __init__(self, name=None, unit=None):
         super(DataStream, self).__init__()
-        self.queue = asyncio.Queue(loop=loop)
-        self.loop = loop
+        self.queue = mp.Queue()
         self.name = name
         self.unit = unit
         self.points_taken = 0
         self.descriptor = None
         self.start_connector = None
         self.end_connector = None
-        self.compression = compression
 
     def set_descriptor(self, descriptor):
         if isinstance(descriptor,DataStreamDescriptor):
@@ -493,7 +490,7 @@ class DataStream(object):
         return "<DataStream(name={}, completion={}%, descriptor={})>".format(
             self.name, self.percent_complete(), self.descriptor)
 
-    async def push(self, data):
+    def push(self, data):
         if hasattr(data, 'size'):
             self.points_taken += data.size
         else:
@@ -505,26 +502,16 @@ class DataStream(object):
                     self.points_taken += 1
                 except:
                     raise ValueError("Got data {} that is neither an array nor a float".format(data))
-        if self.compression == 'zlib':
-            message = {"type": "data", "compression": "zlib", "data": zlib.compress(pickle.dumps(data, -1))}
-        else:
-            message = {"type": "data", "compression": "none", "data": data}
 
-        # This can be replaced with some other serialization method
-        # and also should support sending via zmq.
-        await self.queue.put(message)
+        message = {"type": "data", "data": data}
+        self.queue.put(message)
 
-    async def push_event(self, event_type, data=None):
-        message = {"type": "event", "compression": "none", "event_type": event_type, "data": data}
-        await self.queue.put(message)
-
-    async def push_direct(self, data):
-        message = {"type": "data_direct", "compression": "none", "data": data}
-        await self.queue.put(message)
+    def push_event(self, event_type, data=None):
+        message = {"type": "event", "event_type": event_type, "data": data}
+        self.queue.put(message)
 
 
 # These connectors are where we attached the DataStreams
-
 class InputConnector(object):
     def __init__(self, name="", parent=None, datatype=None, max_input_streams=1):
         self.name = name
@@ -612,7 +599,7 @@ class OutputConnector(object):
     def done(self):
         return all([stream.done() for stream in self.output_streams])
 
-    async def push(self, data):
+    def push(self, data):
         if hasattr(data, 'size'):
             self.points_taken += data.size
         elif isinstance(data, numbers.Number):
@@ -620,11 +607,11 @@ class OutputConnector(object):
         else:
             self.points_taken += len(data)
         for stream in self.output_streams:
-            await stream.push(data)
+            stream.push(data)
 
-    async def push_event(self, event_type, data=None):
+    def push_event(self, event_type, data=None):
         for stream in self.output_streams:
-            await stream.push_event(event_type, data)
+            stream.push_event(event_type, data)
 
     def __repr__(self):
         return "<OutputConnector(name={})>".format(self.name)

@@ -11,8 +11,7 @@ __all__ = ['WriteToHDF5', 'DataBuffer', 'ProgressBar']
 import asyncio, concurrent
 import itertools
 import h5py
-import pickle
-import zlib
+import queue
 import numpy as np
 import os.path
 import time
@@ -337,8 +336,6 @@ class WriteToHDF5(Filter):
 
             elif message_type == 'data':
                 message_data = [message['data'] for message in messages]
-                message_comp = [message['compression'] for message in messages]
-                message_data = [pickle.loads(zlib.decompress(dat)) if comp == 'zlib' else dat for comp, dat in zip(message_comp, message_data)]
                 message_data = [dat if hasattr(dat, 'size') else np.array([dat]) for dat in message_data]  # Convert single values to arrays
 
                 for ii in range(len(message_data)):
@@ -390,7 +387,7 @@ class DataBuffer(Filter):
         self.buffers = {s: np.empty(s.descriptor.expected_num_points(), dtype=s.descriptor.dtype) for s in self.sink.input_streams}
         self.w_idxs  = {s: 0 for s in self.sink.input_streams}
 
-    async def run(self):
+    def run(self):
         self.finished_processing = False
         streams = self.sink.input_streams
 
@@ -406,29 +403,31 @@ class DataBuffer(Filter):
         # Store whether streams are done
         stream_done = {s: False for s in streams}
 
-        while True:
+        while not self.exit.is_set():
+            try:
+                stream_results = {stream: stream.queue.get(True, 0.2) for stream in streams}
+            except queue.Empty as e:
+                continue
 
-            futures = {
-                asyncio.ensure_future(stream.queue.get()): stream
-                for stream in streams
-            }
+            # futures = {
+            #     asyncio.ensure_future(stream.queue.get()): stream
+            #     for stream in streams
+            # }
 
-            # Deal with non-equal number of messages using timeout
-            responses, pending = await asyncio.wait(futures, return_when=asyncio.FIRST_COMPLETED, timeout=2.0)
+            # # Deal with non-equal number of messages using timeout
+            # responses, pending = await asyncio.wait(futures, return_when=asyncio.FIRST_COMPLETED, timeout=2.0)
 
-            # Construct the inverse lookup, results in {stream: result}
-            stream_results = {futures[res]: res.result() for res in list(responses)}
+            # # Construct the inverse lookup, results in {stream: result}
+            # stream_results = {futures[res]: res.result() for res in list(responses)}
 
-            # Cancel the futures
-            for pend in list(pending):
-                pend.cancel()
+            # # Cancel the futures
+            # for pend in list(pending):
+            #     pend.cancel()
 
             # Add any new data to the
             for stream, message in stream_results.items():
                 message_type = message['type']
                 message_data = message['data']
-                message_comp = message['compression']
-                message_data = pickle.loads(zlib.decompress(message_data)) if message_comp == 'zlib' else message_data
                 message_data = message_data if hasattr(message_data, 'size') else np.array([message_data])
                 if message_type == 'event':
                     if message['event_type'] == 'done':
