@@ -28,7 +28,7 @@ from auspex.instruments.instrument import Instrument
 from auspex.parameter import ParameterGroup, FloatParameter, IntParameter, Parameter
 from auspex.sweep import Sweeper
 from auspex.stream import DataStream, DataAxis, SweepAxis, DataStreamDescriptor, InputConnector, OutputConnector
-from auspex.filters import Plotter, XYPlotter, MeshPlotter, ManualPlotter, WriteToHDF5, DataBuffer, Filter
+from auspex.filters import Plotter, XYPlotter, MeshPlotter, ManualPlotter, WriteToHDF5, H5Handler, DataBuffer, Filter
 from auspex.log import logger
 import auspex.config
 
@@ -420,20 +420,21 @@ class Experiment(metaclass=MetaExperiment):
         self.files = []
 
         # Check for redundancy in filenames, and share plot file objects
+        self.h5_handlers = []
         for filename in set(self.filenames):
             wrs = [w for w in self.writers if w.filename.value == filename]
-            lock = mp.Lock() # Create a lock for avoiding simultaneous writes
 
             # Let the first writer with this filename create the file...
             wrs[0].file = wrs[0].new_file()
-            wrs[0].lock = lock
+            wrs[0].queue = mp.Queue()
+            self.h5_handlers.append(H5Handler(wrs[0].filename.value, wrs[0].queue))
             self.files.append(wrs[0].file)
 
             # Make the rest of the writers use this same file object
             for w in wrs[1:]:
                 w.file = wrs[0].file
+                w.queue = wrs[0].queue
                 w.filename.value = wrs[0].filename.value
-                w.lock = lock
 
         # Remove the nodes with 0 dimension
         self.nodes = [n for n in self.nodes if not(hasattr(n, 'input_connectors') and        n.input_connectors['sink'].descriptor.num_dims()==0)]
@@ -455,6 +456,10 @@ class Experiment(metaclass=MetaExperiment):
             # n.executor   = self.executor
             if hasattr(n, 'final_init'):
                 n.final_init()
+
+        # Close file objects and create file handler processes for H5 writers
+        for file in self.files:
+            file.close()
 
         # Launch plot servers.
         if len(self.plotters) > 0:
@@ -478,6 +483,7 @@ class Experiment(metaclass=MetaExperiment):
         # in the list of tasks.
         self.other_nodes = self.nodes[:]
         self.other_nodes.extend(self.extra_plotters)
+        self.other_nodes.extend(self.h5_handlers)
         self.other_nodes.remove(self)
         
         # Start the filter processes
