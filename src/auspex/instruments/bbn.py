@@ -498,30 +498,32 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
     def set_all(self, settings_dict, prefix=""):
         # Pop the channel settings
         settings = deepcopy(settings_dict)
-        quad_channels = settings.pop('tx_channels')
+        if 'tx_channels' in settings:
+            quad_channels = settings.pop('tx_channels')
         # Call the non-channel commands
         super(APS2, self).set_all(settings)
 
-        # Mandatory arguments
-        for key in ['address', 'seq_file', 'trigger_interval', 'trigger_source', 'master']:
-            if key not in settings.keys():
-                raise ValueError("Instrument {} configuration lacks mandatory key {}".format(self, key))
+        if 'tx_channels' in settings:
+            # Mandatory arguments
+            for key in ['address', 'seq_file', 'trigger_interval', 'trigger_source', 'master']:
+                if key not in settings.keys():
+                    raise ValueError("Instrument {} configuration lacks mandatory key {}".format(self, key))
 
-        # We expect a dictionary of channel names and their properties
-        main_quad_dict = quad_channels.pop('12', None)
-        if not main_quad_dict:
-            raise ValueError("APS2 {} expected to receive quad channel '12'".format(self))
+            # We expect a dictionary of channel names and their properties
+            main_quad_dict = quad_channels.pop('12', None)
+            if not main_quad_dict:
+                raise ValueError("APS2 {} expected to receive quad channel '12'".format(self))
 
-        # Set the properties of individual hardware channels (offset, amplitude)
-        for chan_num, chan_name in enumerate(['1', '2']):
-            chan_dict = main_quad_dict.pop(chan_name, None)
-            if not chan_dict:
-                raise ValueError("Could not find channel {} in quadrature channel 12 in settings for {}".format(chan_name, self))
-            for chan_attr, value in chan_dict.items():
-                try:
-                    getattr(self, 'set_' + chan_attr)(chan_num, value)
-                except AttributeError:
-                    pass
+            # Set the properties of individual hardware channels (offset, amplitude)
+            for chan_num, chan_name in enumerate(['1', '2']):
+                chan_dict = main_quad_dict.pop(chan_name, None)
+                if not chan_dict:
+                    raise ValueError("Could not find channel {} in quadrature channel 12 in settings for {}".format(chan_name, self))
+                for chan_attr, value in chan_dict.items():
+                    try:
+                        getattr(self, 'set_' + chan_attr)(chan_num, value)
+                    except AttributeError:
+                        pass
 
     def load_waveform(self, channel, data):
         if channel not in (1, 2):
