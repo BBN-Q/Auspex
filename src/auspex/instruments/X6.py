@@ -12,7 +12,6 @@ import time
 import socket
 import struct
 import datetime
-import asyncio
 import numpy as np
 import os
 
@@ -239,29 +238,35 @@ class X6(Instrument):
             wsock.send(struct.pack('n', length*data.dtype.itemsize) + data.tostring())
 
     def receive_data(self, channel, oc):
-        # push data from a socket into an OutputConnector (oc)
-        self.last_timestamp = datetime.datetime.now()
-        # wire format is just: [size, buffer...]
         sock = self._chan_to_rsocket[channel]
-        # TODO receive 4 or 8 bytes depending on sizeof(size_t)
-        msg = sock.recv(8)
-        # reinterpret as int (size_t)
-        msg_size = struct.unpack('n', msg)[0]
-        buf = sock.recv(msg_size, socket.MSG_WAITALL)
-        if len(buf) != msg_size:
-            logger.error("Channel %s socket msg shorter than expected" % channel.channel)
-            logger.error("Expected %s bytes, received %s bytes" % (msg_size, len(buf)))
-            # assume that we cannot recover, so stop listening.
-            loop = asyncio.get_event_loop()
-            loop.remove_reader(sock)
-            return
-        data = np.frombuffer(buf, dtype=channel.dtype)
-        asyncio.ensure_future(oc.push(data))
+        while True:       
+            # push data from a socket into an OutputConnector (oc)
+            # wire format is just: [size, buffer...]
+            # TODO receive 4 or 8 bytes depending on sizeof(size_t)
+            try:
+                msg = sock.recv(8)
+            except:
+                logger.error("%s timed out.", self.name)
+                raise Exception("X6 timed out.")
+                break
+
+            # reinterpret as int (size_t)
+            msg_size = struct.unpack('n', msg)[0]
+            buf = sock.recv(msg_size, socket.MSG_WAITALL)
+            if len(buf) != msg_size:
+                logger.error("Channel %s socket msg shorter than expected" % channel.channel)
+                logger.error("Expected %s bytes, received %s bytes" % (msg_size, len(buf)))
+                # assume that we cannot recover, so stop listening.
+                # loop = asyncio.get_event_loop()
+                # loop.remove_reader(sock)
+                return
+            data = np.frombuffer(buf, dtype=channel.dtype)
+            oc.push(data)
 
     def get_buffer_for_channel(self, channel):
         return self._lib.transfer_stream(*channel.channel)
 
-    async def wait_for_acquisition(self, timeout=5):
+    def wait_for_acquisition(self, timeout=5):
         if self.gen_fake_data:
             for j in range(self._lib.nbr_round_robins):
                 for i in range(self._lib.nbr_segments):
@@ -273,13 +278,13 @@ class X6(Instrument):
                             self.spew_fake_data(self.ideal_data[i])
                     else:
                         self.spew_fake_data()
-                    await asyncio.sleep(0.005)
+                    time.sleep(0.005)
         else:
             while not self.done():
                 if (datetime.datetime.now() - self.last_timestamp).seconds > timeout:
                     logger.error("Digitizer %s timed out.", self.name)
                     break
-                await asyncio.sleep(0.1)
+                time.sleep(0.1)
 
     # pass thru properties
     @property
