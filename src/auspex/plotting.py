@@ -10,6 +10,7 @@ import multiprocessing as mp
 import json
 import zmq
 import queue
+import time
 import numpy as np
 from auspex.log import logger
 
@@ -32,16 +33,17 @@ class PlotDescServerProcess(mp.Process):
 
         # Loop and accept messages
         while not self.exit.is_set():
-            socks = dict(self.poller.poll())
+            socks = dict(self.poller.poll(100))
             if socks.get(self.sock) == zmq.POLLIN:
                 ident, msg = self.sock.recv_multipart()
                 if msg == b"WHATSUP":
                     self.sock.send_multipart([ident, b"HI!", json.dumps(self.plot_desc).encode('utf8')])
+        self.sock.close()
+        self.context.destroy()
 
     def shutdown(self):
         self.exit.set()
-        self.sock.close()
-        self.context.destroy()
+        self.join()
 
 class PlotDataServerProcess(mp.Process):
 
@@ -66,6 +68,8 @@ class PlotDataServerProcess(mp.Process):
                 self.send(message)
             except queue.Empty as e:
                 continue
+        self.sock.close()
+        self.context.destroy()
 
     def send(self, message):
         data = message['data']
@@ -86,5 +90,5 @@ class PlotDataServerProcess(mp.Process):
 
     def shutdown(self):
         self.exit.set()
-        self.sock.close()
-        self.context.destroy()
+        self.join()
+

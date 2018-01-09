@@ -519,9 +519,7 @@ class Experiment(metaclass=MetaExperiment):
             try:
                 if len(self.plotters) > 0: #and not self.leave_plot_server_open:
                     self.plot_server.shutdown()
-                    self.plot_server.join()
                     self.plot_desc_server.shutdown()
-                    self.plot_desc_server.join()
             except:
                 logger.warning("Could not stop plot server gracefully...")
 

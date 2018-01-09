@@ -13,6 +13,7 @@ import socket
 import struct
 import datetime
 import numpy as np
+import multiprocessing as mp
 import os
 
 from auspex.log import logger
@@ -111,6 +112,8 @@ class X6(Instrument):
         self.last_timestamp = datetime.datetime.now()
         self.gen_fake_data = gen_fake_data
         self.ideal_data = None
+
+        self.timeout = 10.0
 
         if fake_x6:
             self._lib = MagicMock()
@@ -237,18 +240,19 @@ class X6(Instrument):
                 data += 0.1*np.random.random(length)
             wsock.send(struct.pack('n', length*data.dtype.itemsize) + data.tostring())
 
-    def receive_data(self, channel, oc):
+    def receive_data(self, channel, oc, exit):
         sock = self._chan_to_rsocket[channel]
-        while True:       
+        sock.settimeout(1)
+        last_timestamp = datetime.datetime.now()
+        while not exit.is_set():       
             # push data from a socket into an OutputConnector (oc)
             # wire format is just: [size, buffer...]
             # TODO receive 4 or 8 bytes depending on sizeof(size_t)
             try:
                 msg = sock.recv(8)
+                last_timestamp = datetime.datetime.now()
             except:
-                logger.error("%s timed out.", self.name)
-                raise Exception("X6 timed out.")
-                break
+                continue
 
             # reinterpret as int (size_t)
             msg_size = struct.unpack('n', msg)[0]
@@ -256,9 +260,6 @@ class X6(Instrument):
             if len(buf) != msg_size:
                 logger.error("Channel %s socket msg shorter than expected" % channel.channel)
                 logger.error("Expected %s bytes, received %s bytes" % (msg_size, len(buf)))
-                # assume that we cannot recover, so stop listening.
-                # loop = asyncio.get_event_loop()
-                # loop.remove_reader(sock)
                 return
             data = np.frombuffer(buf, dtype=channel.dtype)
             oc.push(data)

@@ -73,14 +73,14 @@ class QubitExperiment(Experiment):
         except:
             logger.warning("No AWG is specified as the master.")
 
-        # Start socket listening processes
-        self.dig_listeners = []
+        # Start socket listening processes, store as keys in a dictionary with exit commands as values
+        self.dig_listeners = {}
         for chan, dig in self.chan_to_dig.items():
             socket = dig.get_socket(chan)
             oc = self.chan_to_oc[chan]
-            self.dig_listeners.append(mp.Process(target=dig.receive_data, args=(chan, oc)) )
-            # self.loop.add_reader(socket, dig.receive_data, chan, oc)
-        for listener in self.dig_listeners:
+            exit = mp.Event()
+            self.dig_listeners[mp.Process(target=dig.receive_data, args=(chan, oc, exit))] = exit
+        for listener in self.dig_listeners.keys():
             listener.start()
         if self.cw_mode:
             for awg in self.awgs:
@@ -115,8 +115,9 @@ class QubitExperiment(Experiment):
 
     def shutdown_instruments(self):
         # remove socket listeners
-        for dlist in self.dig_listeners:
-            dlist.join()
+        for listener, exit in self.dig_listeners.items():
+            exit.set()
+            listener.join()
         if self.cw_mode:
             for awg in self.awgs:
                 awg.stop()

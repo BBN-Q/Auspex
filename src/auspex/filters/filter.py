@@ -138,6 +138,7 @@ class Filter(Process, metaclass=MetaFilter):
                     if not self.finished_processing:
                         logger.warning("Filter {} being asked to finish before being done processing.".format(self.filter_name))
                     self.on_done()
+                    self.exit.set()
                     break
                 elif message['event_type'] == 'refined':
                     self.refine(message_data)
@@ -151,6 +152,9 @@ class Filter(Process, metaclass=MetaFilter):
 
             elif message['type'] == 'data_direct':
                 self.process_direct(message_data)
+
+            # for ic in self.input_connectors.values():
+            #     print(self.filter_name, "-->", ic.input_streams[0].percent_complete())
 
             # If we have gotten all our data and process_data has returned, then we are done!
             if all([v.done() for v in self.input_connectors.values()]):
