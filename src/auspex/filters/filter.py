@@ -43,9 +43,9 @@ class MetaFilter(type):
 class Filter(Process, metaclass=MetaFilter):
     """Any node on the graph that takes input streams with optional output streams"""
 
-    def __init__(self, name=None, **kwargs):
+    def __init__(self, filter_name=None, **kwargs):
         super(Filter, self).__init__()
-        self.filter_name = name
+        self.filter_name = filter_name
         self.input_connectors = {}
         self.output_connectors = {}
         self.parameters = {}
