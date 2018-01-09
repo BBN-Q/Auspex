@@ -97,8 +97,6 @@ class Plotter(Filter):
         elif self.plot_dims.value == 2:
             self.plot_queue.put({'name': self.filter_name, 'msg':'data', 'data': [self.x_values, self.y_values, self.plot_buffer.copy()]})
 
-        print("send from plotter", self.filter_name, id(self.plot_queue))
-
     def process_data(self, data):
         # If we get more than enough data, pause to update the plot if necessary
         if (self.idx + data.size) > self.points_before_clear:
