@@ -585,7 +585,7 @@ class Experiment(metaclass=MetaExperiment):
         logger.debug("Found %d plotters", len(self.plotters))
 
         from .plotting import PlotDataServerProcess, PlotDescServerProcess
-        plot_desc = {p.name: p.desc() for p in self.standard_plotters}
+        plot_desc = {p.filter_name: p.desc() for p in self.standard_plotters}
         if not hasattr(self, "plot_server"):
             self.plot_queue  = mp.Queue()
             self.plot_desc_server = PlotDescServerProcess(plot_desc)
@@ -595,10 +595,13 @@ class Experiment(metaclass=MetaExperiment):
         else:
             while not self.plot_queue.empty():
                 self.plot_queue.get()
-        # if len(self.plotters) > len(self.standard_plotters) and not hasattr(self, "extra_plot_server"):
-        #     extra_plot_desc = {p.name: p.desc() for p in self.extra_plotters + self.manual_plotters}
-        #     self.extra_plot_queue  = mp.Queue()
-        #     self.extra_plot_server = MatplotServerProcess(self.extra_plot_queue, extra_plot_desc, status_port = self.plot_server.status_port+2, data_port = self.plot_server.data_port+2)
+        if len(self.plotters) > len(self.standard_plotters) and not hasattr(self, "extra_plot_server"):
+            extra_plot_desc = {p.filter_name: p.desc() for p in self.extra_plotters + self.manual_plotters}
+            self.extra_plot_queue  = mp.Queue()
+            self.extra_plot_desc_server = PlotDescServerProcess(plot_desc, port=self.plot_desc_server+2)
+            self.extra_plot_desc_server.start()
+            self.extra_plot_server = PlotDataServerProcess(port=self.plot_server+2)
+            self.extra_plot_server.start()
         for plotter in self.standard_plotters:
             plotter.plot_queue = self.plot_queue
         for plotter in self.extra_plotters + self.manual_plotters:

@@ -82,7 +82,6 @@ class QubitExperiment(Experiment):
             # self.loop.add_reader(socket, dig.receive_data, chan, oc)
         for listener in self.dig_listeners:
             listener.start()
-        print("after set up listener")
         if self.cw_mode:
             for awg in self.awgs:
                 awg.run()
@@ -123,7 +122,6 @@ class QubitExperiment(Experiment):
                 awg.stop()
         for chan, dig in self.chan_to_dig.items():
             socket = dig.get_socket(chan)
-            # self.loop.remove_reader(socket)
         for name, instr in self._instruments.items():
             instr.disconnect()
 
@@ -135,17 +133,11 @@ class QubitExperiment(Experiment):
         if not self.cw_mode:
             for awg in self.awgs:
                 awg.run()
-        print("after run")
+
         # Wait for all of the acquisitions to complete
         timeout = 10
         for dig in self.digitizers:
             dig.wait_for_acquisition(timeout)
-        # try:
-            # await asyncio.gather(*[dig.wait_for_acquisition(timeout) for dig in self.digitizers])
-        # except Exception as e:
-        #     logger.error("Received exception %s in run loop. Bailing", repr(e))
-        #     self.shutdown()
-        #     sys.exit(0)
 
         for dig in self.digitizers:
             dig.stop()
@@ -834,7 +826,7 @@ class QubitExpFactory(object):
 
             if filt_type in module_map:
                 filt = module_map[filt_type](**settings)
-                filt.name = name
+                filt.filter_name = name
                 filters[name] = filt
                 logger.debug("Found filter class %s for '%s' when loading experiment settings.", filt_type, name)
             else:
