@@ -202,9 +202,12 @@ class Experiment(metaclass=MetaExperiment):
         # Furthermore, keep references to all of the file writers.
         # If multiple writers request acces to the same filename, they
         # should share the same file object and write in separate
-        # hdf5 groups.
-        self.writers = []
-        self.buffers = []
+        # hdf5 groups. Since we are now using multiprocessing, we need to
+        # be careful to avoid concurrent operations since HDF5 does not
+        # support threaded/concurrent write access.
+        self.writers    = []
+        self.buffers    = []
+        self.hdf5_locks = []
 
         # ExpProgressBar object to display progress bars
         self.progressbar = None
@@ -361,7 +364,6 @@ class Experiment(metaclass=MetaExperiment):
                     oc.descriptor.visited_tuples = oc.descriptor.visited_tuples + flattened_list
 
             # Run the procedure
-            # logger.debug("Starting a new run.")
             self.run()
 
             # See if the axes want to extend themselves
@@ -376,20 +378,6 @@ class Experiment(metaclass=MetaExperiment):
 
             # Finish up, checking to see whether we've received all of our data
             if self.sweeper.done():
-                # sleep_time = 0
-                # while not self.filters_finished():
-                #     time.sleep(1)
-                #     sleep_time += 1
-                #     if sleep_time == 5:
-                #         logger.info("Still waiting for filters to finish. Did the experiment produce the expected amount of data?")
-                #         for n in self.nodes:
-                #             if isinstance(n, Filter):
-                #                 logger.info("  {} done: {}".format(n, n.finished_processing))
-                #         print({n: n.finished_processing for n in self.nodes if isinstance(n, Filter)})
-
-                #     if sleep_time >= 20:
-                #         logger.warning("Filters not stopped after 20 seconds, bailing.")
-                #         break
                 self.declare_done()
                 break
 
@@ -434,15 +422,18 @@ class Experiment(metaclass=MetaExperiment):
         # Check for redundancy in filenames, and share plot file objects
         for filename in set(self.filenames):
             wrs = [w for w in self.writers if w.filename.value == filename]
+            lock = mp.Lock() # Create a lock for avoiding simultaneous writes
 
             # Let the first writer with this filename create the file...
             wrs[0].file = wrs[0].new_file()
+            wrs[0].lock = lock
             self.files.append(wrs[0].file)
 
             # Make the rest of the writers use this same file object
             for w in wrs[1:]:
                 w.file = wrs[0].file
                 w.filename.value = wrs[0].filename.value
+                w.lock = lock
 
         # Remove the nodes with 0 dimension
         self.nodes = [n for n in self.nodes if not(hasattr(n, 'input_connectors') and        n.input_connectors['sink'].descriptor.num_dims()==0)]
@@ -485,19 +476,15 @@ class Experiment(metaclass=MetaExperiment):
         # We want to wait for the sweep method above,
         # not the experiment's run method, so replace this
         # in the list of tasks.
-        other_nodes = self.nodes[:]
-        other_nodes.extend(self.extra_plotters)
-        other_nodes.remove(self)
+        self.other_nodes = self.nodes[:]
+        self.other_nodes.extend(self.extra_plotters)
+        self.other_nodes.remove(self)
         
         # Start the filter processes
-        for n in other_nodes:
+        for n in self.other_nodes:
             n.start()
 
         self.sweep()
-
-        for n in other_nodes:
-            n.shutdown()
-            n.join()
 
         for plot, callback in zip(self.manual_plotters, self.manual_plotter_callbacks):
             if callback:
@@ -507,6 +494,10 @@ class Experiment(metaclass=MetaExperiment):
 
     def shutdown(self):
         logger.debug("Shutting Down!")
+        for n in self.other_nodes:
+            n.shutdown()
+            n.join()
+
         for f in self.files:
             try:
                 logger.debug("Closing %s", f)

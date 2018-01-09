@@ -8,7 +8,6 @@
 
 __all__ = ['WriteToHDF5', 'DataBuffer', 'ProgressBar']
 
-import asyncio, concurrent
 import itertools
 import h5py
 import queue
@@ -45,12 +44,15 @@ class WriteToHDF5(Filter):
         if groupname:
             self.groupname.value = groupname
         self.points_taken = 0
+
         self.file = None
         self.group = None
+        self.lock = None
+
         self.store_tuples = store_tuples
         self.create_group = True
         self.up_to_date = False
-        self.sink.max_input_streams = 100
+        # self.sink.max_input_streams = 100
         self.add_date.value = add_date
         self.save_settings.value = save_settings
         self.exp_log = exp_log
@@ -140,7 +142,11 @@ class WriteToHDF5(Filter):
         header.attrs['settings'] = config.dump_meas_file(config.load_meas_file(config.meas_file), flatten = True)
 
 
-    async def run(self):
+    def run(self, file=None):
+        # Use this to pass working file objects
+        if file:
+            self.file=file
+
         self.finished_processing = False
         streams    = self.sink.input_streams
         stream     = streams[0]
@@ -168,12 +174,15 @@ class WriteToHDF5(Filter):
         compression = 'gzip' if self.compress else None
 
         # If desired, create the group in which the dataset and axes will reside
+        
+        self.lock.acquire() # ==== LOCK ==== LOCK ==== LOCK ==== LOCK ==== LOCK ==== LOCK ==== LOCK 
         if self.create_group:
             self.group = self.file.create_group(self.groupname.value)
         else:
             self.group = self.file
 
         self.data_group = self.group.create_group("data")
+
 
         # If desired, push experimental metadata into the h5 file
         if self.save_settings.value and 'header' not in self.file.keys(): # only save header once for multiple writers
@@ -281,27 +290,27 @@ class WriteToHDF5(Filter):
                 for i, a in enumerate(axis_names):
                     tuple_dset_for_axis_name[a][:] = tuples[a]
 
+        self.lock.release() # ==== END LOCK ==== END LOCK ==== END LOCK ==== END LOCK ==== END LOCK ====  
+
         # Write pointer
         w_idx = 0
 
-        while True:
-            # Wait for all of the acquisition to complete
-            # Against at least some peoples rational expectations, asyncio.wait doesn't return Futures
-            # in the order of the iterable it was passed, but perhaps just in order of completion. So,
-            # we construct a dictionary in order that that can be mapped back where we need them:
-            futures = {
-                asyncio.ensure_future(stream.queue.get()): stream
-                for stream in streams
-            }
+        while not self.exit.is_set():
+            # Wait for each stream to have data before proceeding
 
-            responses, _ = await asyncio.wait(futures)
-
-            # Construct the inverse lookup
-            response_for_stream = {futures[res]: res for res in list(responses)}
-            messages = [response_for_stream[stream].result() for stream in streams]
+            msg_by_stream = {stream: None for stream in streams}
+            while any([v is None for v in msg_by_stream.values()]) and not self.exit.is_set():
+                for stream in msg_by_stream.keys():
+                    if not msg_by_stream[stream]:
+                        try:
+                            msg_by_stream[stream] = stream.queue.get(True, 0.2)
+                        except queue.Empty as e:
+                            continue
 
             # Ensure we aren't getting different types of messages at the same time.
+            messages = list(msg_by_stream.values())
             message_types = [m['type'] for m in messages]
+
             try:
                 if len(set(message_types)) > 1:
                     raise ValueError("Writer received concurrent messages with different message types {}".format([m['type'] for m in messages]))
@@ -309,7 +318,7 @@ class WriteToHDF5(Filter):
                 import ipdb; ipdb.set_trace()
 
             # Infer the type from the first message
-            message_type = messages[0]['type']
+            message_type = message_types[0]
 
             # If we receive a message
             if message_type == 'event':
@@ -321,6 +330,7 @@ class WriteToHDF5(Filter):
 
                     # Resize the data set
                     num_new_points = desc.num_new_points_through_axis(refined_axis)
+                    self.lock.acquire() # ==== LOCK ==== LOCK ==== LOCK ==== LOCK ==== LOCK ==== LOCK
                     for stream in streams:
                         dset_for_streams[stream].resize((len(dset_for_streams[streams[0]])+num_new_points,))
 
@@ -332,7 +342,7 @@ class WriteToHDF5(Filter):
                     # the full set of tuples. The user should know this, so let's mark the
                     # descriptor axes accordingly.
                     self.group[name].attrs['was_refined'] = True
-
+                    self.lock.release() # ==== END LOCK ==== END LOCK ==== END LOCK ==== END LOCK
 
             elif message_type == 'data':
                 message_data = [message['data'] for message in messages]
@@ -348,6 +358,7 @@ class WriteToHDF5(Filter):
                 logger.debug('%s "%s" received %d points', self.__class__.__name__, self.name, message_data[0].size)
                 logger.debug("Now has %d of %d points.", stream.points_taken, stream.num_points())
 
+                self.lock.acquire() # ==== LOCK ==== LOCK ==== LOCK ==== LOCK ==== LOCK ==== LOCK
                 self.up_to_date = (w_idx == dset_for_streams[streams[0]].len())
 
                 # Write the data
@@ -362,6 +373,8 @@ class WriteToHDF5(Filter):
                             tuple_dset_for_axis_name[axis_name][w_idx:w_idx+d.size] = tuples[axis_name][w_idx:w_idx+d.size]
 
                 self.file.flush()
+                self.lock.release() # ==== END LOCK ==== END LOCK ==== END LOCK ==== END LOCK
+
                 w_idx += message_data[0].size
                 self.points_taken = w_idx
 
@@ -371,6 +384,8 @@ class WriteToHDF5(Filter):
             # If we have gotten all our data and process_data has returned, then we are done!
             if np.all([v.done() for v in self.input_connectors.values()]):
                 self.finished_processing = True
+
+        print("Writer done!")
 
 class DataBuffer(Filter):
     """Writes data to IO."""
