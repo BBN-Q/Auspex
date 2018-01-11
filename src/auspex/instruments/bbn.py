@@ -605,3 +605,7 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
     @property
     def fpga_temperature(self):
         return self.wrapper.get_fpga_temperature()
+
+class TDM(APS2):
+    def set_all(self, settings_dict):
+        super(APS2, self).set_all(settings_dict)
