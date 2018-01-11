@@ -498,7 +498,7 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
     def set_all(self, settings_dict, prefix=""):
         # Pop the channel settings
         settings = deepcopy(settings_dict)
-        if 'tx_channels' in settings: # identify a TDM
+        if 'tx_channels' in settings:
             quad_channels = settings.pop('tx_channels')
         # Call the non-channel commands
         super(APS2, self).set_all(settings)
