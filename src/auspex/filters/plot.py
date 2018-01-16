@@ -167,7 +167,6 @@ class MeshPlotter(Filter):
 
     def on_done(self):
         self.plot_queue.put({'name': self.filter_name, 'data': [np.array([])], "msg": "done"})
-        time.sleep(0.1)
 
 class XYPlotter(Filter):
     sink_x = InputConnector()
@@ -259,7 +258,7 @@ class XYPlotter(Filter):
         self.idx = 0
         self.idy = 0
 
-    def run(self):
+    def main(self):
         while True:
             # Wait for all of the acquisition to complete, avoid asyncio.wait because of random return order...
             message_x = self.stream_x.queue.get()

@@ -36,6 +36,6 @@ def delaunay_refine_from_file(writer, x_name, y_name, z_name, max_points=500, cr
             data = np.array([xs, ys, zs]).transpose()            
             experiment.push_to_plot(plotter, data)
 
-        time.sleep(0.02)
+        # time.sleep(0.02)
         return True
     return refine_func

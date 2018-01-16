@@ -20,11 +20,12 @@ import zlib
 from auspex.parameter import Parameter, FilenameParameter
 from auspex.stream import DataStreamDescriptor, InputConnector, OutputConnector
 from auspex.log import logger
+import auspex.config as config
 from .filter import Filter
 
 
 class ElementwiseFilter(Filter):
-    """Asynchronously perform elementwise operations on multiple streams:
+    """Perform elementwise operations on multiple streams:
     e.g. multiply or add all streams element-by-element"""
 
     sink        = InputConnector()
@@ -61,7 +62,7 @@ class ElementwiseFilter(Filter):
         self.source.descriptor = self.descriptor
         self.source.update_descriptors()
 
-    async def run(self):
+    def main(self):
         self.finished_processing = False
         streams = self.sink.input_streams
 
@@ -75,39 +76,43 @@ class ElementwiseFilter(Filter):
         # Store whether streams are done
         stream_done = {s: False for s in streams}
 
-        while True:
-            # Wait for all of the acquisition to complete
-            # Against at least some peoples rational expectations, asyncio.wait doesn't return Futures
-            # in the order of the iterable it was passed, but perhaps just in order of completion. So,
-            # we construct a dictionary in order that that can be mapped back where we need them:
+        while not self.exit.is_set():
+            # Wait for all of the streams to have messages in their queues
 
-            futures = {
-                asyncio.ensure_future(stream.queue.get()): stream
-                for stream in streams
-            }
+            msg_by_stream = {stream: None for stream in streams}
+            while any([v is None for v in msg_by_stream.values()]) and not self.exit.is_set():
+                for stream in msg_by_stream.keys():
+                    if not msg_by_stream[stream]:
+                        try:
+                            msg_by_stream[stream] = stream.queue.get(True, 0.1)
+                        except queue.Empty as e:
+                            continue
 
-            # Deal with non-equal number of messages using timeout
-            responses, pending = await asyncio.wait(futures, return_when=asyncio.FIRST_COMPLETED, timeout=2.0)
+            # futures = {
+            #     asyncio.ensure_future(stream.queue.get()): stream
+            #     for stream in streams
+            # }
 
-            # Construct the inverse lookup, results in {stream: result}
-            stream_results = {futures[res]: res.result() for res in list(responses)}
+            # # Deal with non-equal number of messages using timeout
+            # responses, pending = asyncio.wait(futures, return_when=asyncio.FIRST_COMPLETED, timeout=2.0)
 
-            # Cancel the futures
-            for pend in list(pending):
-                pend.cancel()
+            # # Construct the inverse lookup, results in {stream: result}
+            # stream_results = {futures[res]: res.result() for res in list(responses)}
+
+            # # Cancel the futures
+            # for pend in list(pending):
+            #     pend.cancel()
 
             # Add any new data to the
-            for stream, message in stream_results.items():
+            for stream, message in msg_by_stream.items():
                 message_type = message['type']
                 message_data = message['data']
-                message_comp = message['compression']
-                message_data = pickle.loads(zlib.decompress(message_data)) if message_comp == 'zlib' else message_data
                 message_data = message_data if hasattr(message_data, 'size') else np.array([message_data])
                 if message_type == 'event':
                     if message['event_type'] == 'done':
                         stream_done[stream] = True
                     elif message['event_type'] == 'refine':
-                        logger.warning("Correlator doesn't handle refinement yet!")
+                        logger.warning("ElementwiseFilter doesn't handle refinement yet!")
 
                 elif message_type == 'data':
                     stream_data[stream] = np.concatenate((stream_data[stream], message_data.flatten()))
@@ -115,7 +120,7 @@ class ElementwiseFilter(Filter):
             if False not in stream_done.values():
                 for oc in self.output_connectors.values():
                     for os in oc.output_streams:
-                        await os.push_event("done")
+                        os.push_event("done")
                 logger.debug('%s "%s" is done', self.__class__.__name__, self.name)
                 break
 
@@ -126,7 +131,7 @@ class ElementwiseFilter(Filter):
             for nd in new_data[1:]:
                 result = self.operation()(result, nd)
             if result.size > 0:
-                await self.source.push(result)
+                self.source.push(result)
 
             # Add data to carry_data if necessary
             for stream in stream_data.keys():

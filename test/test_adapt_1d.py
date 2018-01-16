@@ -7,9 +7,9 @@
 #    http://www.apache.org/licenses/LICENSE-2.0
 
 import unittest
-import asyncio
 import os
 import numpy as np
+import time
 import h5py
 from adapt.refine import refine_1D
 
@@ -42,14 +42,14 @@ class SweptTestExperiment(Experiment):
     def __repr__(self):
         return "<SweptTestExperiment>"
 
-    async def run(self):
+    def run(self):
         logger.debug("Data taker running (inner loop)")
-        await asyncio.sleep(0.002)
+        time.sleep(0.002)
 
         def ideal_tc(t, tc=9.0, k=20.0):
             return t*1.0/(1.0 + np.exp(-k*(t-tc)))
 
-        await self.resistance.push(ideal_tc(self.temperature.value))
+        self.resistance.push(ideal_tc(self.temperature.value))
         # logger.debug("Stream pushed points {}.".format(data_row))
         # logger.debug("Stream has filled {} of {} points".format(self.resistance.points_taken, self.resistance.num_points() ))
 
@@ -64,7 +64,7 @@ class Adapt1DTestCase(unittest.TestCase):
         edges = [(exp.resistance, wr.sink)]
         exp.set_graph(edges)
 
-        async def rf(sweep_axis, exp):
+        def rf(sweep_axis, exp):
             logger.debug("Running refinement function.")
             temps = wr.group['data']['temperature'][:]
             ress  = wr.group['data']['resistance'][:]

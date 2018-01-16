@@ -17,6 +17,9 @@ try:
 except:
     import ruamel_yaml as yaml
 
+# Profiling
+profile = False
+
 # Use when wanting to generate fake data
 # or to avoid loading libraries that may
 # interfere with desired operation. (e.g.

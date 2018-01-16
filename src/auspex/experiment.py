@@ -207,7 +207,6 @@ class Experiment(metaclass=MetaExperiment):
         # support threaded/concurrent write access.
         self.writers    = []
         self.buffers    = []
-        self.hdf5_locks = []
 
         # ExpProgressBar object to display progress bars
         self.progressbar = None
@@ -427,13 +426,15 @@ class Experiment(metaclass=MetaExperiment):
             # Let the first writer with this filename create the file...
             wrs[0].file = wrs[0].new_file()
             wrs[0].queue = mp.Queue()
-            self.h5_handlers.append(H5Handler(wrs[0].filename.value, wrs[0].queue))
+            wrs[0].ret_queue = mp.Queue()
+            self.h5_handlers.append(H5Handler(wrs[0].filename.value, wrs[0].queue, wrs[0].ret_queue))
             self.files.append(wrs[0].file)
 
             # Make the rest of the writers use this same file object
             for w in wrs[1:]:
                 w.file = wrs[0].file
                 w.queue = wrs[0].queue
+                w.ret_queue = wrs[0].ret_queue
                 w.filename.value = wrs[0].filename.value
 
         # Remove the nodes with 0 dimension

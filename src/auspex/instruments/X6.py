@@ -216,13 +216,11 @@ class X6(Instrument):
         # todo: other checking here
         self._channels.append(channel)
 
-    def spew_fake_data(self, ideal_datapoint=None):
+    def spew_fake_data(self, ideal_datapoint=0):
         """
         Generate fake data on the stream. For unittest usage.
         ideal_datapoint: mean of the expected signal for stream_type =  "Integrated".
         """
-        if not ideal_datapoint:
-            ideal_datapoint = 0
         for chan, wsock in self._chan_to_wsocket.items():
             if chan.stream_type == "Integrated":
                 length = 1

@@ -7,12 +7,12 @@
 #    http://www.apache.org/licenses/LICENSE-2.0
 
 import unittest
-import asyncio
 import time
 import numpy as np
 
 import auspex.config as config
 config.auspex_dummy_mode = True
+config.profile = True
 
 from auspex.experiment import Experiment
 from auspex.parameter import FloatParameter
@@ -47,13 +47,13 @@ class TestExperiment(Experiment):
         self.chan2.add_axis(DataAxis("samples", list(range(self.samples))))
         self.chan2.add_axis(DataAxis("trials", list(range(self.num_trials))))
 
-    async def run(self):
+    def run(self):
         logger.debug("Data taker running (inner loop)")
         time_step = 0.1
-        await asyncio.sleep(0.002)
+        time.sleep(0.002)
         data_row = np.ones(self.samples*self.num_trials) + 0.1*np.random.random(self.samples*self.num_trials)
         self.time_val += time_step
-        await self.chan1.push(data_row)
+        self.chan1.push(data_row)
         logger.debug("Stream pushed points {}.".format(data_row))
         logger.debug("Stream has filled {} of {} points".format(self.chan1.points_taken, self.chan1.num_points() ))
 
@@ -76,12 +76,12 @@ class VarianceExperiment(Experiment):
         self.chan1.add_axis(DataAxis("trials", list(range(self.trials))))
         self.chan1.add_axis(DataAxis("repeats", list(range(self.repeats))))
 
-    async def run(self):
+    def run(self):
         logger.debug("Data taker running (inner loop)")
-        await asyncio.sleep(0.002)
+        time.sleep(0.002)
         data_row = self.vals[self.idx:self.idx+(self.samples*self.trials*self.repeats)]
         self.idx += (self.samples*self.trials*self.repeats)
-        await self.chan1.push(data_row)
+        self.chan1.push(data_row)
         logger.debug("Stream pushed points {}.".format(data_row))
         logger.debug("Stream has filled {} of {} points".format(self.chan1.points_taken, self.chan1.num_points() ))
 
@@ -112,11 +112,9 @@ class AverageTestCase(unittest.TestCase):
 
         exp.set_graph(edges)
         exp.run_sweeps()
-
         var_data  = var_buff.get_data()['Variance'].reshape(var_buff.descriptor.data_dims())
         mean_data = mean_buff.get_data()['chan1'].reshape(mean_buff.descriptor.data_dims())
         orig_data = exp.vals.reshape(exp.chan1.descriptor.data_dims())
-
         self.assertTrue(np.abs(np.sum(mean_data - np.mean(orig_data, axis=0))) <= 1e-3)
         self.assertTrue(np.abs(np.sum(var_data - np.var(orig_data, axis=0, ddof=1))) <= 1e-3)
 

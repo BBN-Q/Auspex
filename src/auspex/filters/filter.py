@@ -9,6 +9,7 @@
 __all__ = ['Filter']
 
 from multiprocessing import Process, Event
+import cProfile
 import queue
 import copy
 import numpy as np
@@ -16,6 +17,7 @@ import numpy as np
 from auspex.parameter import Parameter
 from auspex.stream import DataStream, InputConnector, OutputConnector
 from auspex.log import logger
+import auspex.config
 
 class MetaFilter(type):
     """Meta class to bake the input/output connectors into a Filter class description
@@ -107,6 +109,16 @@ class Filter(Process, metaclass=MetaFilter):
         self.exit.set()
 
     def run(self):
+        if auspex.config.profile:
+            if not self.filter_name:
+                name = "Unlabeled"
+            else:
+                name = self.filter_name
+            cProfile.runctx('self.main()', globals(), locals(), 'prof-%s-%s.prof' % (self.__class__.__name__, name))
+        else:
+            self.main()
+
+    def main(self):
         """
         Generic run method which waits on a single stream and calls `process_data` on any new_data
         """

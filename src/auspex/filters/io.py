@@ -29,9 +29,10 @@ import auspex.config as config
 from tqdm import tqdm, tqdm_notebook
 
 class H5Handler(mp.Process):
-    def __init__(self, filename, queue):
+    def __init__(self, filename, queue, return_queue):
         super(H5Handler, self).__init__()
         self.queue = queue
+        self.return_queue = return_queue
         self.exit = mp.Event()
         self.filename = filename
 
@@ -48,6 +49,8 @@ class H5Handler(mp.Process):
             file[args[1]].resize((len(file[args[1]])+args[2],))
         elif args[0] == "set_attr":
             file[args[1]].attrs[args[2]] = args[3]
+        elif args[0] == "get_data":
+            self.return_queue.put((args[1], file[args[1]]))
 
     def run(self):
         with h5py.File(self.filename, "r+", libver="latest") as file:
@@ -78,7 +81,8 @@ class WriteToHDF5(Filter):
 
         self.file = None
         self.group = None
-        self.queue = None
+        self.queue = None # For putting values in files
+        self.ret_queue = None # For returning values to files
 
         self.data_write_paths  = {}
         self.tuple_write_paths = {}
@@ -110,7 +114,7 @@ class WriteToHDF5(Filter):
         desc       = stream.descriptor
         axes       = desc.axes
         params     = desc.params
-        axis_names = desc.axis_names(with_metadata=True)
+        self.axis_names = desc.axis_names(with_metadata=True)
 
         self.file.attrs['exp_src'] = desc._exp_src
         num_axes = len(axes)
@@ -147,7 +151,7 @@ class WriteToHDF5(Filter):
 
         # Write params into attrs
         for k,v in params.items():
-            if k not in axis_names:
+            if k not in self.axis_names:
                 self.data_group.attrs[k] = v
 
         # Create a table for the DataStreamDescriptor
@@ -233,7 +237,7 @@ class WriteToHDF5(Filter):
         # Write all the tuples if this isn't adaptive
         if self.store_tuples:
             if not desc.is_adaptive():
-                for i, a in enumerate(axis_names):
+                for i, a in enumerate(self.axis_names):
                     # import pdb; pdb.set_trace()
                     self.file[self.tuple_write_paths[a]][:] = tuples[a]
 
@@ -253,10 +257,14 @@ class WriteToHDF5(Filter):
 
         # Set the file number to the maximum in the current folder + 1
         filenums = []
+        # import pdb; pdb.set_trace()
         if os.path.exists(dirname):
             for f in os.listdir(dirname):
-                if ext in f:
-                    filenums += [int(re.findall('-(\d{4})\.', f)[0])] if os.path.isfile(os.path.join(dirname, f)) else []
+                if ext in f and os.path.isfile(os.path.join(dirname, f)):
+                    nums = re.findall('-(\d{4})\.', f)
+                    if len(nums) > 0:
+                        filenums.append(int(nums[0]))
+                    # filenums += [int(re.findall('-(\d{4})\.', f)[0])] if os.path.isfile(os.path.join(dirname, f)) else []
 
         i = max(filenums) + 1 if filenums else 0
         return "{}-{:04d}{}".format(basename,i,ext)
@@ -311,8 +319,7 @@ class WriteToHDF5(Filter):
         # load them dump to get the 'include' information
         header.attrs['settings'] = config.dump_meas_file(config.load_meas_file(config.meas_file), flatten = True)
 
-
-    def run(self):
+    def main(self):
         self.finished_processing = False
 
         streams = self.sink.input_streams
@@ -357,7 +364,7 @@ class WriteToHDF5(Filter):
                         self.queue.put(("increase_size", self.data_write_paths[stream], num_new_points,))
 
                     if self.store_tuples:
-                        for an in axis_names:
+                        for an in self.axis_names:
                             self.queue.put(("increase_size", self.tuple_write_paths[an], num_new_points,))
 
                     # Generally speaking the descriptors are now insufficient to reconstruct
@@ -390,8 +397,8 @@ class WriteToHDF5(Filter):
                 if self.store_tuples:
                     if desc.is_adaptive():
                         tuples = desc.tuples()
-                        for axis_name in axis_names:
-                            self.queue.put(("write", tuple_write_paths[axis_name], w_idx, w_idx+d.size, tuples[axis_name][w_idx:w_idx+d.size]))
+                        for axis_name in self.axis_names:
+                            self.queue.put(("write", self.tuple_write_paths[axis_name], w_idx, w_idx+d.size, tuples[axis_name][w_idx:w_idx+d.size]))
                             # self.tuple_write_paths[axis_name][w_idx:w_idx+d.size] = tuples[axis_name][w_idx:w_idx+d.size]
 
                 w_idx += message_data[0].size
@@ -414,20 +421,22 @@ class DataBuffer(Filter):
         self.quince_parameters = []
         self.sink.max_input_streams = 100
         self.store_tuples = store_tuples
+        self._final_buffers = mp.Queue()
+        self.final_buffers = None
 
     def final_init(self):
-        self.buffers = {s: np.empty(s.descriptor.expected_num_points(), dtype=s.descriptor.dtype) for s in self.sink.input_streams}
         self.w_idxs  = {s: 0 for s in self.sink.input_streams}
+        self.descriptor = self.sink.input_streams[0].descriptor
 
-    def run(self):
+    def main(self):
         self.finished_processing = False
         streams = self.sink.input_streams
+
+        buffers = {s: np.empty(s.descriptor.expected_num_points(), dtype=s.descriptor.dtype) for s in self.sink.input_streams}
 
         for s in streams[1:]:
             if not np.all(s.descriptor.expected_tuples() == streams[0].descriptor.expected_tuples()):
                 raise ValueError("Multiple streams connected to DataBuffer must have matching descriptors.")
-
-        self.descriptor = streams[0].descriptor
 
         # Buffers for stream data
         stream_data = {s: np.zeros(0, dtype=self.sink.descriptor.dtype) for s in streams}
@@ -441,22 +450,7 @@ class DataBuffer(Filter):
             except queue.Empty as e:
                 continue
 
-            # futures = {
-            #     asyncio.ensure_future(stream.queue.get()): stream
-            #     for stream in streams
-            # }
-
-            # # Deal with non-equal number of messages using timeout
-            # responses, pending = await asyncio.wait(futures, return_when=asyncio.FIRST_COMPLETED, timeout=2.0)
-
-            # # Construct the inverse lookup, results in {stream: result}
-            # stream_results = {futures[res]: res.result() for res in list(responses)}
-
-            # # Cancel the futures
-            # for pend in list(pending):
-            #     pend.cancel()
-
-            # Add any new data to the
+            # Add any new data to the buffers
             for stream, message in stream_results.items():
                 message_type = message['type']
                 message_data = message['data']
@@ -467,10 +461,10 @@ class DataBuffer(Filter):
                     elif message['event_type'] == 'refined':
                         # Single we don't have much structure here we simply
                         # create a new buffer and paste the old buffer into it
-                        old_buffer = self.buffers[stream]
+                        old_buffer = buffers[stream]
                         new_size   = stream.descriptor.num_points()
-                        self.buffers[stream] = np.empty(stream.descriptor.num_points(), dtype=stream.descriptor.dtype)
-                        self.buffers[stream][:old_buffer.size] = old_buffer
+                        buffers[stream] = np.empty(stream.descriptor.num_points(), dtype=stream.descriptor.dtype)
+                        buffers[stream][:old_buffer.size] = old_buffer
 
                 elif message_type == 'data':
                     stream_data[stream] = message_data.flatten()
@@ -480,18 +474,25 @@ class DataBuffer(Filter):
                 break
 
             for stream in stream_results.keys():
+                print("Got data in buffer...")
                 data = stream_data[stream]
-
-                self.buffers[stream][self.w_idxs[stream]:self.w_idxs[stream]+data.size] = data
+                buffers[stream][self.w_idxs[stream]:self.w_idxs[stream]+data.size] = data
                 self.w_idxs[stream] += data.size
 
             # If we have gotten all our data and process_data has returned, then we are done!
             if np.all([v.done() for v in self.input_connectors.values()]):
                 self.finished_processing = True
 
+        for s in streams:
+            self._final_buffers.put(buffers[s])
+
     def get_data(self):
         streams = self.sink.input_streams
         desc = streams[0].descriptor
+
+                # Get the data from the queue if necessary
+        if not self.final_buffers:
+            self.final_buffers = {s: self._final_buffers.get() for s in streams}
 
         # Set the dtype for the parameter columns
         if self.store_tuples:
@@ -502,14 +503,14 @@ class DataBuffer(Filter):
         # Extend the dtypes for each data column
         for stream in streams:
             dtype.append((stream.descriptor.data_name, stream.descriptor.dtype))
-        data = np.empty(self.buffers[streams[0]].size, dtype=dtype)
+        data = np.empty(self.final_buffers[streams[0]].size, dtype=dtype)
 
         if self.store_tuples:
             tuples = desc.tuples(as_structured_array=True)
             for a in desc.axis_names(with_metadata=True):
                 data[a] = tuples[a]
         for stream in streams:
-            data[stream.descriptor.data_name] = self.buffers[stream]
+            data[stream.descriptor.data_name] = self.final_buffers[stream]
         return data
 
     def get_descriptor(self):
@@ -534,7 +535,13 @@ class ProgressBar(Filter):
         self.bars   = []
         self.w_id   = 0
 
-    async def run(self):
+    def run(self):
+        if config.profile:
+            cProfile.runctx('self.main()', globals(), locals(), 'prof-%s.prof' % self.filter_name)
+        else:
+            self.main()
+
+    def main(self):
         self.stream = self.sink.input_streams[0]
         axes = self.stream.descriptor.axes
         num_axes = len(axes)
@@ -549,11 +556,11 @@ class ProgressBar(Filter):
             else:
                 self.bars.append(tqdm(total=totals[i]/chunk_sizes[i]))
         self.w_id   = 0
-        while True:
+        while not self.exit.is_set():
             if self.stream.done() and self.w_id==self.stream.num_points():
                 break
 
-            new_data = np.array(await self.stream.queue.get()).flatten()
+            new_data = np.array(self.stream.queue.get()).flatten()
             while self.stream.queue.qsize() > 0:
                 new_data = np.append(new_data, np.array(self.stream.queue.get_nowait()).flatten())
             self.w_id += new_data.size
