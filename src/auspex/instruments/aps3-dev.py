@@ -6,11 +6,11 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-__all__ = ['APS3']
+__all__ = ['APS3', 'KCU105_Board']
 
 from .instrument import Instrument, SCPIInstrument, VisaInterface, MetaInstrument
-from auspex.log import logger
-import auspex.config as config
+#from auspex.log import logger
+#import auspex.config as config
 from types import MethodType
 from unittest.mock import MagicMock
 from time import sleep
@@ -20,7 +20,7 @@ import socket, collections
 from struct import pack, iter_unpack
 from copy import deepcopy
 
-class KCU105_Board(Instrument):
+class KCU105_Board(object):
 
     PORT = 0xbb4e #BBN, of course
 
@@ -44,7 +44,7 @@ class KCU105_Board(Instrument):
             self.socket.close()
 
     def send_bytes(self, data):
-        if ininstance(data, collections.Iterable):
+        if isinstance(data, collections.Iterable):
             return self.socket.sendall(b''.join([pack("!I", _) for _ in data]))
         else:
             return self.socket.sendall(pack("!I", data))
@@ -77,13 +77,13 @@ class KCU105_Board(Instrument):
         for ct in range(datagrams_written):
             if ct == datagrams_written:
                 words_written = len(data)-((datagrams_written-1)*max_ct)
-            else
+            else:
                 words_written = max_ct
             assert (results[2*ct-1] == 0x80800000 + words_written)
             assert (results[2*ct] == addr)
             addr += 4 * words_written
 
-    def read_memory(addr, num_words):
+    def read_memory(self, addr, num_words):
         datagram = [0x10000000 + num_words, addr]
         self.send_bytes(datagram)
         resp_header = self.recv_bytes(2 * 2) #2 bytes per word
@@ -92,7 +92,7 @@ class KCU105_Board(Instrument):
 
 
 
-class APS3(KCU105_Board, metaclass=MakeSettersGetters):
+class APS3(KCU105_Board):
 
     instrument_type = "AWG"
 
