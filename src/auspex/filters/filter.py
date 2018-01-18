@@ -57,7 +57,8 @@ class Filter(Process, metaclass=MetaFilter):
         self.exit = Event()
 
         # For objectively measuring doneness
-        self.finished_processing = False
+        self.finished_processing = Event()
+        self.finished_processing.clear()
 
         # For signaling to Quince that something is wrong
         self.out_of_spec = False
@@ -123,7 +124,7 @@ class Filter(Process, metaclass=MetaFilter):
         Generic run method which waits on a single stream and calls `process_data` on any new_data
         """
         logger.debug('Running "%s" run loop', self.filter_name)
-        self.finished_processing = False
+        self.finished_processing.clear()
         input_stream = getattr(self, self._input_connectors[0]).input_streams[0]
 
         while not self.exit.is_set():
@@ -147,7 +148,7 @@ class Filter(Process, metaclass=MetaFilter):
 
                 # Check to see if we're done
                 if message['event_type'] == 'done':
-                    if not self.finished_processing:
+                    if not self.finished_processing.is_set():
                         logger.warning("Filter {} being asked to finish before being done processing.".format(self.filter_name))
                     self.on_done()
                     self.exit.set()
@@ -170,7 +171,7 @@ class Filter(Process, metaclass=MetaFilter):
 
             # If we have gotten all our data and process_data has returned, then we are done!
             if all([v.done() for v in self.input_connectors.values()]):
-                self.finished_processing = True
+                self.finished_processing.set()
 
     def process_data(self, data):
         """Process data coming through the filter pipeline"""

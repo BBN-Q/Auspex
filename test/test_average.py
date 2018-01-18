@@ -9,7 +9,6 @@
 import unittest
 import time
 import numpy as np
-import multiprocessing as mp
 
 import auspex.config as config
 config.auspex_dummy_mode = True
@@ -103,8 +102,8 @@ class AverageTestCase(unittest.TestCase):
         exp             = VarianceExperiment()
         printer_final   = Print(name="Final")
         avgr            = Averager('repeats', name="TestAverager")
-        var_buff        = DataBuffer(name='Variance Buffer', out_queue=mp.Queue())
-        mean_buff       = DataBuffer(name='Mean Buffer', out_queue=mp.Queue())
+        var_buff        = DataBuffer(name='Variance Buffer')
+        mean_buff       = DataBuffer(name='Mean Buffer')
 
         edges = [(exp.chan1,           avgr.sink),
                  (avgr.final_variance, printer_final.sink),

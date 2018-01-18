@@ -63,7 +63,7 @@ class ElementwiseFilter(Filter):
         self.source.update_descriptors()
 
     def main(self):
-        self.finished_processing = False
+        self.finished_processing.clear()
         streams = self.sink.input_streams
 
         for s in streams[1:]:
@@ -142,4 +142,4 @@ class ElementwiseFilter(Filter):
 
             # If we have gotten all our data and process_data has returned, then we are done!
             if all([v.done() for v in self.input_connectors.values()]):
-                self.finished_processing = True
+                self.finished_processing.set()

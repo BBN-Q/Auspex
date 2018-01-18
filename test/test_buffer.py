@@ -11,7 +11,6 @@ import asyncio
 import os
 import numpy as np
 import h5py
-import multiprocessing
 
 import auspex.config as config
 config.auspex_dummy_mode = True
@@ -107,8 +106,7 @@ class BufferTestCase(unittest.TestCase):
     def test_buffer(self):
         exp = SweptTestExperiment()
 
-        # db  = DataBuffer()
-        db  = DataBuffer(out_queue=multiprocessing.Queue())
+        db  = DataBuffer()
 
         edges = [(exp.voltage, db.sink)]
         exp.set_graph(edges)
@@ -128,8 +126,7 @@ class BufferTestCase(unittest.TestCase):
     def test_buffer_multi(self):
         exp = SweptTestExperiment()
 
-        # db  = DataBuffer()
-        db  = DataBuffer(out_queue=multiprocessing.Queue())
+        db  = DataBuffer()
 
         edges = [(exp.voltage, db.sink), (exp.current, db.sink)]
         exp.set_graph(edges)
@@ -150,8 +147,7 @@ class BufferTestCase(unittest.TestCase):
 
     def test_buffer_metadata(self):
         exp = SweptTestExperimentMetadata()
-        # db  = DataBuffer()
-        db  = DataBuffer(out_queue=multiprocessing.Queue())
+        db  = DataBuffer()
 
         edges = [(exp.voltage, db.sink)]
         exp.set_graph(edges)

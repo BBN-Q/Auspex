@@ -13,7 +13,6 @@ import datetime
 import sys
 import itertools
 
-import multiprocessing as mp
 import numpy as np
 import h5py
 import matplotlib.pyplot as plt
@@ -56,15 +55,14 @@ if __name__ == '__main__':
     plt.add_data_trace("Example Data")
     plt.add_fit_trace("Example Fit")
 
-    # buff = DataBuffer()
-    buff = DataBuffer(out_queue=mp.Queue())
+    buff = DataBuffer()
 
     edges = [(exp.voltage, buff.sink)]
     exp.set_graph(edges)
 
     # Create a plotter callback
     def plot_me(plot):
-        ys = buff.get_data()['voltage']
+        ys = buff.out_queue.get()['voltage']
         xs = buff.descriptor.axes[0].points
         plot["Example Data"] = (xs, ys)
         plot["Example Fit"]  = (xs, ys+0.1)

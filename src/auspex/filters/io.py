@@ -320,7 +320,7 @@ class WriteToHDF5(Filter):
         header.attrs['settings'] = config.dump_meas_file(config.load_meas_file(config.meas_file), flatten = True)
 
     def main(self):
-        self.finished_processing = False
+        self.finished_processing.clear()
 
         streams = self.sink.input_streams
         desc = streams[0].descriptor
@@ -409,14 +409,14 @@ class WriteToHDF5(Filter):
 
             # If we have gotten all our data and process_data has returned, then we are done!
             if np.all([v.done() for v in self.input_connectors.values()]):
-                self.finished_processing = True
+                self.finished_processing.set()
 
 class DataBuffer(Filter):
     """Writes data to IO."""
 
     sink = InputConnector()
 
-    def __init__(self, store_tuples=True, out_queue=None, **kwargs):
+    def __init__(self, store_tuples=True, **kwargs):
         super(DataBuffer, self).__init__(**kwargs)
         self.quince_parameters = []
         self.sink.max_input_streams = 100
@@ -424,14 +424,14 @@ class DataBuffer(Filter):
         self._final_buffers = mp.Queue()
         self.final_buffers = None
 
-        self.out_queue = out_queue
+        self.out_queue = mp.Queue() # This seems to work, somewhat surprisingly
 
     def final_init(self):
         self.w_idxs  = {s: 0 for s in self.sink.input_streams}
         self.descriptor = self.sink.input_streams[0].descriptor
 
     def main(self):
-        self.finished_processing = False
+        self.finished_processing.clear()
         streams = self.sink.input_streams
 
         buffers = {s: np.empty(s.descriptor.expected_num_points(), dtype=s.descriptor.dtype) for s in self.sink.input_streams}
@@ -482,7 +482,7 @@ class DataBuffer(Filter):
 
             # If we have gotten all our data and process_data has returned, then we are done!
             if np.all([v.done() for v in self.input_connectors.values()]):
-                self.finished_processing = True
+                self.finished_processing.set()
 
         for s in streams:
             self._final_buffers.put(buffers[s])

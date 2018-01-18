@@ -450,6 +450,7 @@ class DataStream(object):
         self.queue = mp.Queue()
         self.name = name
         self.unit = unit
+        self.points_taken_lock = mp.Lock()
         self.points_taken = mp.Value('i', 0) # Using shared memory since these are used in filter processes
         self.descriptor = None
         self.start_connector = None
@@ -470,17 +471,20 @@ class DataStream(object):
             return 0
 
     def done(self):
-        return self.points_taken.value >= self.num_points()
+        with self.points_taken_lock:
+            return self.points_taken.value >= self.num_points()
 
     def percent_complete(self):
         if (self.descriptor is not None) and self.num_points()>0:
-            return 100.0*self.points_taken.value/self.num_points()
+            with self.points_taken_lock:
+                return 100.0*self.points_taken.value/self.num_points()
         else:
             return 0.0
 
     def reset(self):
         self.descriptor.reset()
-        self.points_taken.value = 0
+        with self.points_taken_lock:
+            self.points_taken.value = 0
         while not self.queue.empty():
             self.queue.get_nowait()
         if self.start_connector is not None:
@@ -491,17 +495,18 @@ class DataStream(object):
             self.name, self.percent_complete(), self.descriptor)
 
     def push(self, data):
-        if hasattr(data, 'size'):
-            self.points_taken.value += data.size
-        else:
-            try:
-                self.points_taken.value += len(data)
-            except:
+        with self.points_taken_lock:
+            if hasattr(data, 'size'):
+                self.points_taken.value += data.size
+            else:
                 try:
-                    junk = data + 1.0
-                    self.points_taken.value += 1
+                    self.points_taken.value += len(data)
                 except:
-                    raise ValueError("Got data {} that is neither an array nor a float".format(data))
+                    try:
+                        junk = data + 1.0
+                        self.points_taken.value += 1
+                    except:
+                        raise ValueError("Got data {} that is neither an array nor a float".format(data))
 
         message = {"type": "data", "data": data}
         self.queue.put(message)

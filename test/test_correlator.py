@@ -5,7 +5,6 @@ import unittest
 import asyncio
 import time
 import numpy as np
-import multiprocessing as mp
 
 import auspex.config as config
 config.auspex_dummy_mode = True
@@ -64,8 +63,7 @@ class CorrelatorTestCase(unittest.TestCase):
         exp   = CorrelatorExperiment()
         corr  = Correlator()
 
-        # buff  = DataBuffer()
-        buff  = DataBuffer(out_queue=mp.Queue())
+        buff  = DataBuffer()
 
         edges = [(exp.chan1,   corr.sink),
                  (exp.chan2,   corr.sink),

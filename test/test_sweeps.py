@@ -80,10 +80,10 @@ class SweepTestCase(unittest.TestCase):
         exp.add_sweep(exp.freq, np.linspace(0,10.0,3))
         exp.run_sweeps()
 
-        logger.debug("Run test: logger.debuger ended up with %d points.", pri.sink.input_streams[0].points_taken)
-        logger.debug("Run test: voltage ended up with %d points.", exp.voltage.output_streams[0].points_taken)
+        logger.debug("Run test: logger.debuger ended up with %d points." % pri.sink.input_streams[0].points_taken.value)
+        logger.debug("Run test: voltage ended up with %d points." % exp.voltage.num_points())
 
-        self.assertTrue(pri.sink.input_streams[0].points_taken == exp.voltage.num_points())
+        self.assertTrue(pri.sink.input_streams[0].points_taken.value == exp.voltage.num_points())
 
     def test_run_sweep(self):
         exp = SweptTestExperiment()

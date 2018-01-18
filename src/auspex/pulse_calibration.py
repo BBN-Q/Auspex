@@ -135,7 +135,7 @@ class PulseCalibration(object):
         var = {}
         for buff in self.exp.buffers:
             if self.exp.writer_to_qubit[buff.name][0] in self.qubit_names:
-                dataset, descriptor = buff.get_data(), buff.get_descriptor()
+                dataset, descriptor = buff.out_queue.get(), buff.get_descriptor()
                 qubit_name = self.exp.writer_to_qubit[buff.name][0]
                 if norm_pts:
                     buff_data = normalize_data(dataset, zero_id = norm_pts[qubit_name][0], one_id = norm_pts[qubit_name][1])

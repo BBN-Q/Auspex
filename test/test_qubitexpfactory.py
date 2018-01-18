@@ -57,8 +57,8 @@ class QubitExpFactoryTestCase(unittest.TestCase):
         exp = QubitExpFactory.run(RabiAmp(qq, np.linspace(-1,1,21)), save_data = False)
         buf = exp.buffers[0]
         ax = buf.descriptor.axes[0]
-        self.assertTrue(buf.finished_processing)
-        self.assertTrue(len(buf.get_data()) == 21)
+        self.assertTrue(buf.finished_processing.is_set())
+        self.assertTrue(len(buf.out_queue.get()) == 21)
         self.assertTrue((ax.points == np.linspace(-1,1,21)).all())
         self.assertTrue(ax.name == 'amplitude')
 
@@ -67,8 +67,8 @@ class QubitExpFactoryTestCase(unittest.TestCase):
     def test_final_vs_partial_avg(self):
         qq = QubitFactory("q1")
         exp = QubitExpFactory.run(RabiAmp(qq, np.linspace(-1,1,21)))
-        fab = exp.filters['final-avg-buff'].get_data()['Data']
-        pab = exp.filters['partial-avg-buff'].get_data()['Data']
+        fab = exp.filters['final-avg-buff'].out_queue.get()['Data']
+        pab = exp.filters['partial-avg-buff'].out_queue.get()['Data']
         self.assertTrue(np.abs(np.sum(fab-pab)) < 1e-8)
 
 if __name__ == '__main__':
