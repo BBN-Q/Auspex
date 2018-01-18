@@ -230,7 +230,7 @@ class QubitExpFactory(object):
         amp_pts = np.linspace(amp_range[0], amp_range[1], nsteps)
         phase_pts = np.linspace(phase_range[0], phase_range[1], nsteps)
 
-        buff = DataBuffer(out_queue=mp.Queue())
+        buff = DataBuffer()
         plt = ManualPlotter(name="Mixer offset calibration", x_label='{} {} offset (V)'.format(qubit, mixer), y_label='Power (dBm)')
         plt.add_data_trace("I-offset", {'color': 'C1'})
         plt.add_data_trace("Q-offset", {'color': 'C2'})
@@ -252,7 +252,7 @@ class QubitExpFactory(object):
         mce.set_graph(edges)
 
         sweep_offset("I_offset", offset_pts)
-        I1_amps = np.array([x[1] for x in buff.get_data()])
+        I1_amps = np.array([x[1] for x in buff.out_queue.get()])
         try:
             I1_offset, xpts, ypts = find_null_offset(offset_pts[1:], I1_amps[1:])
         except:
@@ -265,7 +265,7 @@ class QubitExpFactory(object):
 
         mce.first_exp = False # slight misnomer to indicate that no new plot is needed
         sweep_offset("Q_offset", offset_pts)
-        Q1_amps = np.array([x[1] for x in buff.get_data()])
+        Q1_amps = np.array([x[1] for x in buff.out_queue.get()])
         try:
             Q1_offset, xpts, ypts = find_null_offset(offset_pts[1:], Q1_amps[1:])
         except:
@@ -277,7 +277,7 @@ class QubitExpFactory(object):
         mce.Q_offset.value = Q1_offset
 
         sweep_offset("I_offset", offset_pts)
-        I2_amps = np.array([x[1] for x in buff.get_data()])
+        I2_amps = np.array([x[1] for x in buff.out_queue.get()])
         try:
             I2_offset, xpts, ypts = find_null_offset(offset_pts[1:], I2_amps[1:])
         except:
@@ -299,7 +299,7 @@ class QubitExpFactory(object):
         mce.sideband_modulation = True
 
         sweep_offset(cals[first_cal], cal_pts[first_cal])
-        amps1 = np.array([x[1] for x in buff.get_data()])
+        amps1 = np.array([x[1] for x in buff.out_queue.get()])
         try:
             offset1, xpts, ypts = find_null_offset(cal_pts[first_cal][1:], amps1[1:], default=cal_defaults[first_cal])
         except:
@@ -311,7 +311,7 @@ class QubitExpFactory(object):
         getattr(mce, cals[first_cal]).value = offset1
 
         sweep_offset(cals[second_cal], cal_pts[second_cal])
-        amps2 = np.array([x[1] for x in buff.get_data()])
+        amps2 = np.array([x[1] for x in buff.out_queue.get()])
         offset2, xpts, ypts = find_null_offset(cal_pts[second_cal][1:], amps2[1:], default=cal_defaults[second_cal])
         plt2[cals[second_cal]] = (cal_pts[second_cal], amps2)
         plt2["Fit "+cals[second_cal]] = (xpts, ypts)
