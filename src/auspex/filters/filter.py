@@ -10,6 +10,7 @@ __all__ = ['Filter']
 
 from multiprocessing import Process, Event
 import cProfile
+import time
 import queue
 import copy
 import numpy as np
@@ -45,9 +46,9 @@ class MetaFilter(type):
 class Filter(Process, metaclass=MetaFilter):
     """Any node on the graph that takes input streams with optional output streams"""
 
-    def __init__(self, filter_name=None, **kwargs):
+    def __init__(self, name=None, **kwargs):
         super(Filter, self).__init__()
-        self.filter_name = filter_name
+        self.filter_name = name
         self.input_connectors = {}
         self.output_connectors = {}
         self.parameters = {}
@@ -127,51 +128,60 @@ class Filter(Process, metaclass=MetaFilter):
         self.finished_processing.clear()
         input_stream = getattr(self, self._input_connectors[0]).input_streams[0]
 
+        stream_done = False
+        stream_points = 0
+
         while not self.exit.is_set():
-            try:
-                message = input_stream.queue.get(True, 0.2)
-            except queue.Empty as e:
-                continue
+            # Try to pull all messages in the queue. queue.empty() is not reliable, so we 
+            # ask for forgiveness rather than permission.
+            messages = []
 
-            message_type = message['type']
-            message_data = message['data']
-
-            # If we receive a message
-            if message['type'] == 'event':
-                logger.debug('%s "%s" received event "%s"', self.__class__.__name__, self.filter_name, message_data)
-
-                # Propagate along the graph
-                for oc in self.output_connectors.values():
-                    for os in oc.output_streams:
-                        logger.debug('%s "%s" pushed event "%s" to %s, %s', self.__class__.__name__, self.filter_name, message_data, oc, os)
-                        os.queue.put(message)
-
-                # Check to see if we're done
-                if message['event_type'] == 'done':
-                    if not self.finished_processing.is_set():
-                        logger.warning("Filter {} being asked to finish before being done processing.".format(self.filter_name))
-                    self.on_done()
-                    self.exit.set()
+            while not self.exit.is_set():
+                try:
+                    messages.append(input_stream.queue.get(False))
+                except queue.Empty as e:
+                    time.sleep(0.002)
                     break
-                elif message['event_type'] == 'refined':
-                    self.refine(message_data)
 
-            elif message['type'] == 'data':
-                if not hasattr(message_data, 'size'):
-                    message_data = np.array([message_data])
-                logger.debug('%s "%s" received %d points.', self.__class__.__name__, self.filter_name, message_data.size)
-                logger.debug("Now has %d of %d points.", input_stream.points_taken, input_stream.num_points())
-                self.process_data(message_data.flatten())
+            for message in messages:
+                message_type = message['type']
+                message_data = message['data']
 
-            elif message['type'] == 'data_direct':
-                self.process_direct(message_data)
+                if message['type'] == 'event':
+                    logger.debug('%s "%s" received event "%s"', self.__class__.__name__, self.filter_name, message_data)
 
-            # for ic in self.input_connectors.values():
-            #     print(self.filter_name, "-->", ic.input_streams[0].percent_complete())
+                    # Propagate along the graph
+                    for oc in self.output_connectors.values():
+                        for os in oc.output_streams:
+                            logger.debug('%s "%s" pushed event "%s" to %s, %s', self.__class__.__name__, self.filter_name, message_data, oc, os)
+                            os.queue.put(message)
 
-            # If we have gotten all our data and process_data has returned, then we are done!
-            if all([v.done() for v in self.input_connectors.values()]):
-                self.finished_processing.set()
+                    # Check to see if we're done
+                    if message['event_type'] == 'done':
+                        if not self.finished_processing.is_set():
+                            logger.warning("Filter {} being asked to finish before being done processing. ({} of {})".format(self.filter_name,stream_points,input_stream.num_points()))
+                        self.exit.set()
+                        self.finished_processing.set()
+                        break
+                    elif message['event_type'] == 'refined':
+                        self.refine(message_data)
+
+                elif message['type'] == 'data':
+                    if not hasattr(message_data, 'size'):
+                        message_data = np.array([message_data])
+                    logger.debug('%s "%s" received %d points.', self.__class__.__name__, self.filter_name, message_data.size)
+                    logger.debug("Now has %d of %d points.", input_stream.points_taken.value, input_stream.num_points())
+                    stream_points += len(message_data.flatten())
+                    self.process_data(message_data.flatten())
+
+                elif message['type'] == 'data_direct':
+                    self.process_direct(message_data)
+
+                if stream_points == input_stream.num_points():
+                    self.finished_processing.set()
+
+        # When we've finished, either prematurely or as expected
+        self.on_done()
 
     def process_data(self, data):
         """Process data coming through the filter pipeline"""

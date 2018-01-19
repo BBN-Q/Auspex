@@ -8,7 +8,6 @@
 
 __all__ = ['Print', 'Passthrough']
 
-import asyncio, concurrent
 import numpy as np
 
 from .filter import Filter

@@ -8,14 +8,12 @@
 
 __all__ = ['ElementwiseFilter']
 
-import asyncio, concurrent
+import queue
 import h5py
 import itertools
 import numpy as np
 import os.path
-import pickle
 import time
-import zlib
 
 from auspex.parameter import Parameter, FilenameParameter
 from auspex.stream import DataStreamDescriptor, InputConnector, OutputConnector
@@ -32,8 +30,8 @@ class ElementwiseFilter(Filter):
     source      = OutputConnector()
     filter_name = "GenericElementwise" # To identify subclasses when naming data streams
 
-    def __init__(self, **kwargs):
-        super(ElementwiseFilter, self).__init__(**kwargs)
+    def __init__(self, filter_name=None, **kwargs):
+        super(ElementwiseFilter, self).__init__(filter_name=filter_name, **kwargs)
         self.sink.max_input_streams = 100
         self.quince_parameters = []
 
@@ -56,7 +54,8 @@ class ElementwiseFilter(Filter):
             return
 
         self.descriptor = self.sink.descriptor.copy()
-        self.descriptor.data_name = self.filter_name
+        if self.filter_name:
+            self.descriptor.data_name = self.filter_name
         if self.descriptor.unit:
             self.descriptor.unit = self.descriptor.unit + "^{}".format(len(self.sink.input_streams))
         self.source.descriptor = self.descriptor
@@ -74,55 +73,38 @@ class ElementwiseFilter(Filter):
         stream_data = {s: np.zeros(0, dtype=self.sink.descriptor.dtype) for s in streams}
 
         # Store whether streams are done
-        stream_done = {s: False for s in streams}
+        streams_done      = {s: False for s in streams}
+        points_per_stream = {s: 0 for s in streams}
 
         while not self.exit.is_set():
-            # Wait for all of the streams to have messages in their queues
+            
+            # Try to pull all messages in the queue. queue.empty() is not reliable, so we 
+            # ask for forgiveness rather than permission.
+            msgs_by_stream = {s: [] for s in streams}
 
-            msg_by_stream = {stream: None for stream in streams}
-            while any([v is None for v in msg_by_stream.values()]) and not self.exit.is_set():
-                for stream in msg_by_stream.keys():
-                    if not msg_by_stream[stream]:
-                        try:
-                            msg_by_stream[stream] = stream.queue.get(True, 0.1)
-                        except queue.Empty as e:
-                            continue
+            for stream in streams[::-1]:
+                while not self.exit.is_set():
+                    try:
+                        msgs_by_stream[stream].append(stream.queue.get(False))
+                    except queue.Empty as e:
+                        time.sleep(0.002)
+                        break
 
-            # futures = {
-            #     asyncio.ensure_future(stream.queue.get()): stream
-            #     for stream in streams
-            # }
-
-            # # Deal with non-equal number of messages using timeout
-            # responses, pending = asyncio.wait(futures, return_when=asyncio.FIRST_COMPLETED, timeout=2.0)
-
-            # # Construct the inverse lookup, results in {stream: result}
-            # stream_results = {futures[res]: res.result() for res in list(responses)}
-
-            # # Cancel the futures
-            # for pend in list(pending):
-            #     pend.cancel()
-
-            # Add any new data to the
-            for stream, message in msg_by_stream.items():
-                message_type = message['type']
-                message_data = message['data']
-                message_data = message_data if hasattr(message_data, 'size') else np.array([message_data])
-                if message_type == 'event':
-                    if message['event_type'] == 'done':
-                        stream_done[stream] = True
-                    elif message['event_type'] == 'refine':
-                        logger.warning("ElementwiseFilter doesn't handle refinement yet!")
-
-                elif message_type == 'data':
-                    stream_data[stream] = np.concatenate((stream_data[stream], message_data.flatten()))
-
-            if False not in stream_done.values():
-                for oc in self.output_connectors.values():
-                    for os in oc.output_streams:
-                        os.push_event("done")
-                logger.debug('%s "%s" is done', self.__class__.__name__, self.name)
-                break
+            # Process many messages for each stream
+            for stream, messages in msgs_by_stream.items():
+                for message in messages:
+                    message_type = message['type']
+                    message_data = message['data']
+                    message_data = message_data if hasattr(message_data, 'size') else np.array([message_data])
+                    if message_type == 'event':
+                        if message['event_type'] == 'done':
+                            streams_done[stream] = True
+                        elif message['event_type'] == 'refine':
+                            logger.warning("ElementwiseFilter doesn't handle refinement yet!")
+                    elif message_type == 'data':
+                        # Add any old data...
+                        points_per_stream[stream] += len(message_data.flatten())
+                        stream_data[stream] = np.concatenate((stream_data[stream], message_data.flatten()))
 
             # Now process the data with the elementwise operation
             smallest_length = min([d.size for d in stream_data.values()])
@@ -140,6 +122,7 @@ class ElementwiseFilter(Filter):
                 else:
                     stream_data[stream] = np.zeros(0, dtype=self.sink.descriptor.dtype)
 
-            # If we have gotten all our data and process_data has returned, then we are done!
-            if all([v.done() for v in self.input_connectors.values()]):
+            # If the amount of data processed is equal to the num points in the stream, we are done
+            if all([pts == s.num_points() for s, pts in points_per_stream.items()]):
                 self.finished_processing.set()
+

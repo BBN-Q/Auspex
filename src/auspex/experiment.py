@@ -381,7 +381,7 @@ class Experiment(metaclass=MetaExperiment):
                 break
 
     def filters_finished(self):
-        return all([not n.is_alive() for n in self.nodes if isinstance(n, Filter)])
+        return all([n.finished_processing.is_set() for n in self.other_nodes if isinstance(n, Filter)])
 
     def connect_instruments(self):
         # Connect the instruments to their resources
@@ -496,6 +496,13 @@ class Experiment(metaclass=MetaExperiment):
         for plot, callback in zip(self.manual_plotters, self.manual_plotter_callbacks):
             if callback:
                 callback(plot)
+
+        time.sleep(1)
+        while not self.filters_finished():
+            logger.info("Waiting for filters to finish...")
+            # for n in self.other_nodes:
+            #     print(n, n.finished_processing.is_set() )
+            time.sleep(1)
 
         self.shutdown()
 
