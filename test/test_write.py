@@ -7,7 +7,6 @@
 #    http://www.apache.org/licenses/LICENSE-2.0
 
 import unittest
-import asyncio
 import os, shutil
 import glob
 import numpy as np
@@ -69,18 +68,18 @@ class SweptTestExperiment(Experiment):
     def __repr__(self):
         return "<SweptTestExperiment>"
 
-    async def run(self):
+    def run(self):
         # logger.debug("Data taker running (inner loop)")
         time_step = 0.1
-        await asyncio.sleep(0.001)
+        time.sleep(0.001)
         data_row = np.sin(2*np.pi*self.time_val)*np.ones(self.samples) + 0.1*np.random.random(self.samples)
         self.time_val += time_step
         if self.is_complex:
-            await self.voltage.push(np.array(data_row + 0.5j*data_row, dtype=np.complex128))
-            await self.current.push(np.array(np.sin(2*np.pi*self.time_val) + 0.1*np.random.random(1) + 0.5j*np.random.random(1), dtype=np.complex128))
+            self.voltage.push(np.array(data_row + 0.5j*data_row, dtype=np.complex128))
+            self.current.push(np.array(np.sin(2*np.pi*self.time_val) + 0.1*np.random.random(1) + 0.5j*np.random.random(1), dtype=np.complex128))
         else:
-            await self.voltage.push(data_row)
-            await self.current.push(np.sin(2*np.pi*self.time_val) + 0.1*np.random.random(1))
+            self.voltage.push(data_row)
+            self.current.push(np.sin(2*np.pi*self.time_val) + 0.1*np.random.random(1))
         # logger.debug("Stream pushed points {}.".format(data_row))
         # logger.debug("Stream has filled {} of {} points".format(self.voltage.points_taken, self.voltage.num_points() ))
 
@@ -112,13 +111,13 @@ class SweptTestExperimentMetadata(Experiment):
     def __repr__(self):
         return "<SweptTestExperimentMetadata>"
 
-    async def run(self):
+    def run(self):
         time_step = 0.1
-        await asyncio.sleep(0.002)
+        time.sleep(0.002)
         data_row = np.sin(2*np.pi*self.time_val)*np.ones(self.samples) + 0.1*np.random.random(self.samples)
         self.time_val += time_step
-        await self.voltage.push(data_row)
-        await self.current.push(np.sin(2*np.pi*self.time_val) + 0.1*np.random.random(1))
+        self.voltage.push(data_row)
+        self.current.push(np.sin(2*np.pi*self.time_val) + 0.1*np.random.random(1))
 
 class SweptTestExperiment2(Experiment):
     """Here the run loop merely spews data until it fills up the stream. """
@@ -149,13 +148,13 @@ class SweptTestExperiment2(Experiment):
     def __repr__(self):
         return "<SweptTestExperiment2>"
 
-    async def run(self):
+    def run(self):
         time_step = 0.1
-        await asyncio.sleep(0.002)
+        time.sleep(0.002)
         data_row = np.sin(2*np.pi*self.time_val)*np.ones(self.samples) + 0.1*np.random.random(self.samples)
         self.time_val += time_step
-        await self.voltage.push(data_row)
-        await self.current.push(-0.1*data_row)
+        self.voltage.push(data_row)
+        self.current.push(-0.1*data_row)
 
 class WriteTestCase(unittest.TestCase):
 
@@ -348,7 +347,7 @@ class WriteTestCase(unittest.TestCase):
                   [67, 3.6]]
         md = ["data"]*9
 
-        async def rf(sweep_axis, exp):
+        def rf(sweep_axis, exp):
             logger.debug("Running refinement function.")
             if sweep_axis.num_points() >= 12:
                 return False
@@ -466,7 +465,7 @@ class WriteTestCase(unittest.TestCase):
         edges = [(exp.voltage, wr.sink)]
         exp.set_graph(edges)
 
-        async def rf(sweep_axis, exp):
+        def rf(sweep_axis, exp):
             num_points = 5
             logger.debug("Running refinement function.")
             if sweep_axis.num_points() >= num_points:
@@ -537,7 +536,7 @@ class WriteTestCase(unittest.TestCase):
                   [67, 3.6],
                   [68, 1.2]]
 
-        async def rf(sweep_axis, exp):
+        def rf(sweep_axis, exp):
             logger.debug("Running refinement function.")
             if sweep_axis.num_points() >= 30:
                 return False
