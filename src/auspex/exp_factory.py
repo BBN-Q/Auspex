@@ -13,7 +13,6 @@ import importlib
 import pkgutil
 import inspect
 import re
-import asyncio
 import base64
 import datetime
 import subprocess
@@ -130,7 +129,6 @@ class QubitExperiment(Experiment):
         """This is run for each step in a sweep."""
         for dig in self.digitizers:
             dig.acquire()
-        # await asyncio.sleep(0.75)
         if not self.cw_mode:
             for awg in self.awgs:
                 awg.run()

@@ -259,8 +259,8 @@ class XYPlotter(Filter):
         self.idy = 0
 
     def main(self):
-        while True:
-            # Wait for all of the acquisition to complete, avoid asyncio.wait because of random return order...
+        while not self.exit.is_set():
+            # 
             message_x = self.stream_x.queue.get()
             message_y = self.stream_y.queue.get()
             messages = [message_x, message_y]

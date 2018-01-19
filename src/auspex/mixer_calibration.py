@@ -14,7 +14,7 @@ import json
 import numpy as np
 from scipy.optimize import curve_fit
 import time
-from asyncio import sleep
+from time import sleep
 
 from auspex.log import logger
 from auspex.experiment import FloatParameter, IntParameter, Experiment
@@ -171,5 +171,5 @@ class MixerCalibrationExperiment(Experiment):
     def init_streams(self):
         pass
 
-    async def run(self):
-        await self.amplitude.push(self._instruments[self.sa].peak_amplitude())
+    def run(self):
+        self.amplitude.push(self._instruments[self.sa].peak_amplitude())
