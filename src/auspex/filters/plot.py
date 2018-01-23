@@ -387,4 +387,4 @@ class ManualPlotter(object):
         self.set_data(trace_name, data_tuple[0], data_tuple[1])
 
     def set_data(self, trace_name, xdata, ydata):
-        self.plot_queue.put({"name": self.filter_name + ":" + trace_name, "x": xdata, "y": ydata})
+        self.plot_queue.put({"name": self.filter_name + ":" + trace_name, "msg": "data", "data": [xdata, ydata]})

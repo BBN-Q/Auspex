@@ -134,9 +134,9 @@ class PulseCalibration(object):
         data = {}
         var = {}
         for buff in self.exp.buffers:
-            if self.exp.writer_to_qubit[buff.name][0] in self.qubit_names:
+            if self.exp.writer_to_qubit[buff.filter_name][0] in self.qubit_names:
                 dataset, descriptor = buff.out_queue.get(), buff.get_descriptor()
-                qubit_name = self.exp.writer_to_qubit[buff.name][0]
+                qubit_name = self.exp.writer_to_qubit[buff.filter_name][0]
                 if norm_pts:
                     buff_data = normalize_data(dataset, zero_id = norm_pts[qubit_name][0], one_id = norm_pts[qubit_name][1])
                 else:
@@ -360,7 +360,7 @@ class RamseyCalibration(PulseCalibration):
         fit_freqs, fit_errs, all_params, all_errs = fit_ramsey(self.delays, data, two_freqs = self.two_freqs, AIC = self.AIC)
 
         # Plot the results
-        self.init_plot()
+        self.plot = self.init_plot()
         self.plot["Data"] = (self.delays, data)
         ramsey_f = ramsey_2f if len(fit_freqs) == 2 else ramsey_1f
         self.plot["Fit"]  = (finer_delays, ramsey_f(finer_delays, *all_params))

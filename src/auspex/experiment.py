@@ -601,9 +601,9 @@ class Experiment(metaclass=MetaExperiment):
         if len(self.plotters) > len(self.standard_plotters) and not hasattr(self, "extra_plot_server"):
             extra_plot_desc = {p.filter_name: p.desc() for p in self.extra_plotters + self.manual_plotters}
             self.extra_plot_queue  = mp.Queue()
-            self.extra_plot_desc_server = PlotDescServerProcess(plot_desc, port=self.plot_desc_server+2)
+            self.extra_plot_desc_server = PlotDescServerProcess(extra_plot_desc, port=self.plot_desc_server.port+2)
             self.extra_plot_desc_server.start()
-            self.extra_plot_server = PlotDataServerProcess(port=self.plot_server+2)
+            self.extra_plot_server = PlotDataServerProcess(self.extra_plot_queue, port=self.plot_server.port+2)
             self.extra_plot_server.start()
         for plotter in self.standard_plotters:
             plotter.plot_queue = self.plot_queue
@@ -638,6 +638,10 @@ class Experiment(metaclass=MetaExperiment):
                                                                 env=os.environ.copy())
         if hasattr(self, 'extra_plot_server') and (not auspex.config.last_extra_plotter_process or not self.leave_plot_server_open or self.first_exp):
             if hasattr(os, 'setsid'):
-                auspex.config.last_extra_plotter_process = subprocess.Popen(['python', client_path, 'localhost', str(self.extra_plot_server.status_port), str(self.extra_plot_server.data_port)], env=os.environ.copy(), preexec_fn=os.setsid)
+                auspex.config.last_extra_plotter_process = subprocess.Popen(['python', client_path, 'localhost',
+                                                                str(self.extra_plot_desc_server.port), str(self.extra_plot_server.port)],
+                                                                env=os.environ.copy(), preexec_fn=os.setsid)
             else:
-                auspex.config.last_extra_plotter_process = subprocess.Popen(['python', client_path, 'localhost', str(self.extra_plot_server.status_port), str(self.extra_plot_server.data_port)], env=os.environ.copy())
+                auspex.config.last_extra_plotter_process = subprocess.Popen(['python', client_path, 'localhost',
+                                                                str(self.extra_plot_desc_server.port), str(self.extra_plot_server.port)],
+                                                                env=os.environ.copy())

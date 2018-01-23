@@ -411,9 +411,10 @@ class MatplotClientWindow(QtWidgets.QMainWindow):
             self.statusBar().showMessage("Exception while plotting {}. Length of data: {}".format(e, len(data)), 1000)
 
     def switch_toolbar(self):
-        for toolbar in self.toolbars:
-            toolbar.setVisible(False)
-        self.toolbars[self.tabs.currentIndex()].setVisible(True)
+        if len(self.toolbars) > 0:
+            for toolbar in self.toolbars:
+                toolbar.setVisible(False)
+            self.toolbars[self.tabs.currentIndex()].setVisible(True)
 
     def fileQuit(self):
         self.close()
