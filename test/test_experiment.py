@@ -67,15 +67,15 @@ class TestExperiment(Experiment):
         self.chan1.add_axis(DataAxis("samples", list(range(self.samples))))
         self.chan2.add_axis(DataAxis("trials", list(range(self.num_trials))))
 
-    async def run(self):
+    def run(self):
         logger.debug("Data taker running (inner loop)")
         time_step = 0.1
-        await asyncio.sleep(0.002)
+        asyncio.sleep(0.002)
         data_row = np.sin(2*np.pi*self.time_val)*np.ones(self.samples) + 0.1*np.random.random(self.samples)
         self.time_val += time_step
-        await self.chan1.push(data_row)
+        self.chan1.push(data_row)
         data_row = np.sin(2*np.pi*self.time_val)*np.ones(self.num_trials) + 0.1*np.random.random(self.num_trials)
-        await self.chan2.push(data_row)
+        self.chan2.push(data_row)
         logger.debug("Stream pushed points {}.".format(data_row))
         logger.debug("Stream has filled {} of {} points".format(self.chan1.points_taken, self.chan1.num_points() ))
 
