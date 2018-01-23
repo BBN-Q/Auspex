@@ -10,31 +10,28 @@ import unittest
 import os
 import time
 import numpy as np
-from QGL import *
-import QGL.config
+
+# Create the temp directories if they don't exist
+for d in ["awg", "kern", "alog"]:
+    if not os.path.exists("/tmp/"+d):
+        os.makedirs("/tmp/"+d)
 
 # Trick QGL and Auspex into using our local config
 # from QGL import config_location
 curr_dir = os.path.dirname(os.path.abspath(__file__))
 curr_dir = curr_dir.replace('\\', '/')  # use unix-like convention
-awg_dir  = os.path.abspath(os.path.join(curr_dir, "AWG" ))
 cfg_file = os.path.abspath(os.path.join(curr_dir, "test_measure.yml"))
+os.environ["BBN_MEAS_FILE"] = cfg_file
 
-ChannelLibrary(library_file=cfg_file)
-
+import QGL.config
 import auspex.config
 auspex.config.auspex_dummy_mode = True
-auspex.config.configFile        = cfg_file
-auspex.config.AWGDir            = awg_dir
-QGL.config.AWGDir               = awg_dir
 
-# Create the AWG directory if it doesn't exist
-if not os.path.exists(awg_dir):
-    os.makedirs(awg_dir)
-
+from QGL import *
 from auspex.exp_factory import QubitExpFactory
 import auspex.pulse_calibration as cal
 
+ChannelLibrary(library_file=cfg_file)
 
 def simulate_rabiAmp(num_steps = 20, over_rotation_factor = 0):
     """

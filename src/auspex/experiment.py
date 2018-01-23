@@ -500,8 +500,9 @@ class Experiment(metaclass=MetaExperiment):
         time.sleep(1)
         while not self.filters_finished():
             logger.info("Waiting for filters to finish...")
-            # for n in self.other_nodes:
-            #     print(n, n.finished_processing.is_set() )
+            for n in self.other_nodes:
+                if isinstance(n, Filter):
+                    print(n, n.finished_processing.is_set() )
             time.sleep(1)
 
         self.shutdown()
@@ -522,11 +523,16 @@ class Experiment(metaclass=MetaExperiment):
 
         if hasattr(self, 'plot_server'):
             try:
-                if len(self.plotters) > 0: #and not self.leave_plot_server_open:
-                    self.plot_server.shutdown()
-                    self.plot_desc_server.shutdown()
+                self.plot_server.shutdown()
+                self.plot_desc_server.shutdown()
             except:
                 logger.warning("Could not stop plot server gracefully...")
+        if hasattr(self, 'extra_plot_server'):
+            try:
+                self.extra_plot_server.shutdown()
+                self.extra_plot_desc_server.shutdown()
+            except:
+                logger.warning("Could not stop extra plot server gracefully...")
 
         self.shutdown_instruments()
 
@@ -589,26 +595,26 @@ class Experiment(metaclass=MetaExperiment):
 
         from .plotting import PlotDataServerProcess, PlotDescServerProcess
         plot_desc = {p.filter_name: p.desc() for p in self.standard_plotters}
-        if not hasattr(self, "plot_server"):
+
+        if len(self.standard_plotters) > 0:
             self.plot_queue  = mp.Queue()
             self.plot_desc_server = PlotDescServerProcess(plot_desc)
             self.plot_desc_server.start()
             self.plot_server = PlotDataServerProcess(self.plot_queue)
             self.plot_server.start()
-        else:
-            while not self.plot_queue.empty():
-                self.plot_queue.get()
-        if len(self.plotters) > len(self.standard_plotters) and not hasattr(self, "extra_plot_server"):
+            for plotter in self.standard_plotters:
+                plotter.plot_queue = self.plot_queue
+
+        if (len(self.extra_plotters) + len(self.manual_plotters)) > 0:
             extra_plot_desc = {p.filter_name: p.desc() for p in self.extra_plotters + self.manual_plotters}
             self.extra_plot_queue  = mp.Queue()
-            self.extra_plot_desc_server = PlotDescServerProcess(extra_plot_desc, port=self.plot_desc_server.port+2)
+            self.extra_plot_desc_server = PlotDescServerProcess(extra_plot_desc, port=7773)
             self.extra_plot_desc_server.start()
-            self.extra_plot_server = PlotDataServerProcess(self.extra_plot_queue, port=self.plot_server.port+2)
+            self.extra_plot_server = PlotDataServerProcess(self.extra_plot_queue, port=7774)
             self.extra_plot_server.start()
-        for plotter in self.standard_plotters:
-            plotter.plot_queue = self.plot_queue
-        for plotter in self.extra_plotters + self.manual_plotters:
-            plotter.plot_queue = self.extra_plot_queue
+            for plotter in self.extra_plotters + self.manual_plotters:
+                plotter.plot_queue = self.extra_plot_queue
+            
         time.sleep(0.5)
         # Kill a previous plotter if desired.
         if auspex.config.single_plotter_mode and auspex.config.last_plotter_process:
@@ -630,18 +636,15 @@ class Experiment(metaclass=MetaExperiment):
 
         client_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),"matplotlib-client.py")
         #if not auspex.config.last_plotter_process:
-        if hasattr(os, 'setsid'):
-            auspex.config.last_plotter_process = subprocess.Popen(['python', client_path, 'localhost'],
-                                                                env=os.environ.copy(), preexec_fn=os.setsid)
-        else:
-            auspex.config.last_plotter_process = subprocess.Popen(['python', client_path, 'localhost'],
-                                                                env=os.environ.copy())
-        if hasattr(self, 'extra_plot_server') and (not auspex.config.last_extra_plotter_process or not self.leave_plot_server_open or self.first_exp):
-            if hasattr(os, 'setsid'):
+        
+        preexec_fn = os.setsid if hasattr(os, 'setsid') else None
+        if not auspex.config.last_plotter_process:
+            if hasattr(self, 'plot_server'):
+                auspex.config.last_plotter_process = subprocess.Popen(['python', client_path, 'localhost'],
+                                                                        env=os.environ.copy(), preexec_fn=preexec_fn)
+
+        if not auspex.config.last_extra_plotter_process:
+            if hasattr(self, 'extra_plot_server') and (not auspex.config.last_extra_plotter_process or not self.leave_plot_server_open or self.first_exp):
                 auspex.config.last_extra_plotter_process = subprocess.Popen(['python', client_path, 'localhost',
-                                                                str(self.extra_plot_desc_server.port), str(self.extra_plot_server.port)],
-                                                                env=os.environ.copy(), preexec_fn=os.setsid)
-            else:
-                auspex.config.last_extra_plotter_process = subprocess.Popen(['python', client_path, 'localhost',
-                                                                str(self.extra_plot_desc_server.port), str(self.extra_plot_server.port)],
-                                                                env=os.environ.copy())
+                                                                    str(7773), str(7774)], env=os.environ.copy(), preexec_fn=preexec_fn)
+      

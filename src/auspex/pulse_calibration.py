@@ -51,11 +51,12 @@ def calibrate(calibrations, update_settings=True, cal_log=True):
             raise Exception("Calibration failure") from ex
         finally:
             sleep(0.1) #occasionally ZMQ barfs here
-            if hasattr(calibration.exp, 'extra_plot_server'):
-                try:
-                    calibration.exp.extra_plot_server.stop()
-                except:
-                    pass
+            # if hasattr(calibration.exp, 'extra_plot_server'):
+            #     try:
+            #         calibration.exp.extra_plot_server.shutdown()
+            #         calibration.exp.extra_plot_desc_server.shutdown()
+            #     except Exception as e:
+            #         print("Exception while shutting down fitting plots:", e)
 
 class PulseCalibration(object):
     """Base class for calibration of qubit control pulses."""
@@ -360,7 +361,7 @@ class RamseyCalibration(PulseCalibration):
         fit_freqs, fit_errs, all_params, all_errs = fit_ramsey(self.delays, data, two_freqs = self.two_freqs, AIC = self.AIC)
 
         # Plot the results
-        self.plot = self.init_plot()
+        # self.plot = self.init_plot()
         self.plot["Data"] = (self.delays, data)
         ramsey_f = ramsey_2f if len(fit_freqs) == 2 else ramsey_1f
         self.plot["Fit"]  = (finer_delays, ramsey_f(finer_delays, *all_params))

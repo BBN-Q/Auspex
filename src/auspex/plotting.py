@@ -25,21 +25,24 @@ class PlotDescServerProcess(mp.Process):
         self.exit = mp.Event()
 
     def run(self):
-        self.context = zmq.Context()
-        self.sock = self.context.socket(zmq.ROUTER)
-        self.sock.bind("tcp://*:%s" % self.port)
-        self.poller = zmq.Poller()
-        self.poller.register(self.sock, zmq.POLLIN)
+        try:
+            self.context = zmq.Context()
+            self.sock = self.context.socket(zmq.ROUTER)
+            self.sock.bind("tcp://*:%s" % self.port)
+            self.poller = zmq.Poller()
+            self.poller.register(self.sock, zmq.POLLIN)
 
-        # Loop and accept messages
-        while not self.exit.is_set():
-            socks = dict(self.poller.poll(100))
-            if socks.get(self.sock) == zmq.POLLIN:
-                ident, msg = self.sock.recv_multipart()
-                if msg == b"WHATSUP":
-                    self.sock.send_multipart([ident, b"HI!", json.dumps(self.plot_desc).encode('utf8')])
-        self.sock.close()
-        self.context.destroy()
+            # Loop and accept messages
+            while not self.exit.is_set():
+                socks = dict(self.poller.poll(100))
+                if socks.get(self.sock) == zmq.POLLIN:
+                    ident, msg = self.sock.recv_multipart()
+                    if msg == b"WHATSUP":
+                        self.sock.send_multipart([ident, b"HI!", json.dumps(self.plot_desc).encode('utf8')])
+            self.sock.close()
+            self.context.destroy()
+        except Exception as e:
+            logger.warning("PlotDescServerProcess failed with exception {}".format(e))
 
     def shutdown(self):
         self.exit.set()
@@ -57,19 +60,22 @@ class PlotDataServerProcess(mp.Process):
         self.exit = mp.Event()
 
     def run(self):
-        self.context = zmq.Context()
-        self.sock = self.context.socket(zmq.PUB)
-        self.sock.bind("tcp://*:%s" % self.port)
-        
-        # Loop and accept messages
-        while not self.exit.is_set():
-            try:
-                message = self.data_queue.get(True, 0.02)
-                self.send(message)
-            except queue.Empty as e:
-                continue
-        self.sock.close()
-        self.context.destroy()
+        try:
+            self.context = zmq.Context()
+            self.sock = self.context.socket(zmq.PUB)
+            self.sock.bind("tcp://*:%s" % self.port)
+            
+            # Loop and accept messages
+            while not self.exit.is_set():
+                try:
+                    message = self.data_queue.get(True, 0.02)
+                    self.send(message)
+                except queue.Empty as e:
+                    continue
+            self.sock.close()
+            self.context.destroy()
+        except Exception as e:
+            logger.warning("PlotDataServerProcess failed with exception {}".format(e))
 
     def send(self, message):
         data = message['data']

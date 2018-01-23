@@ -356,6 +356,9 @@ class ManualPlotter(object):
         self.numplots     = numplots
         self.traces = []
 
+        # This will hold the matplot server
+        self.plot_queue = None
+
     def add_trace(self, name, matplotlib_kwargs={}, subplot_num = 0):
         self.traces.append({'name': name, 'axis_num' : subplot_num, 'matplotlib_kwargs': matplotlib_kwargs})
 
