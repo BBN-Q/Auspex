@@ -50,7 +50,7 @@ class H5Handler(mp.Process):
         elif args[0] == "set_attr":
             file[args[1]].attrs[args[2]] = args[3]
         elif args[0] == "get_data":
-            self.return_queue.put((args[1], file[args[1]]))
+            self.return_queue.put((args[1], file[args[1]][:]))
 
     def run(self):
         with h5py.File(self.filename, "r+", libver="latest") as file:
