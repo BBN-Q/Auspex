@@ -77,7 +77,6 @@ class WriteToHDF5(Filter):
             self.filename.value = filename
         if groupname:
             self.groupname.value = groupname
-        self.points_taken = 0
 
         self.file = None
         self.group = None
@@ -89,7 +88,7 @@ class WriteToHDF5(Filter):
 
         self.store_tuples = store_tuples
         self.up_to_date = False
-        # self.sink.max_input_streams = 100
+        self.sink.max_input_streams = 100
         self.add_date.value = add_date
         self.save_settings.value = save_settings
         self.exp_log = exp_log
@@ -319,96 +318,100 @@ class WriteToHDF5(Filter):
         # load them dump to get the 'include' information
         header.attrs['settings'] = config.dump_meas_file(config.load_meas_file(config.meas_file), flatten = True)
 
+    def get_data(self, data_path):
+        """Request data back from the file handler. Data_path is given with respect to root: e.g. /data/voltage"""
+        if self.finished_processing.is_set():
+            logger.info("Not yet implemented. Please load the file directly")
+        else:
+            self.queue.put(("get_data", data_path))
+            time.sleep(0.1)
+            try:
+                path, data = self.ret_queue.get(True, 5.0)
+                if path != data_path:
+                    logger.warning("Retrieved data path {} doesn't match requested path {}".format(path, data_path))
+                return data
+            except queue.Empty:
+                logger.warning("Could not retrieve dataset within 5 seconds")
+
     def main(self):
         self.finished_processing.clear()
 
         streams = self.sink.input_streams
         desc = streams[0].descriptor
+        got_done_msg = {s: False for s in streams}
 
         # Write pointer
-        w_idx = 0
+        w_idx = {s: 0 for s in streams}
 
         while not self.exit.is_set():
-            # Wait for each stream to have data before proceeding
+            # Try to pull all messages in the queue. queue.empty() is not reliable, so we 
+            # ask for forgiveness rather than permission.
+            msgs_by_stream = {s: [] for s in streams}
 
-            msg_by_stream = {stream: None for stream in streams}
-            while any([v is None for v in msg_by_stream.values()]) and not self.exit.is_set():
-                for stream in msg_by_stream.keys():
-                    if not msg_by_stream[stream]:
-                        try:
-                            msg_by_stream[stream] = stream.queue.get(True, 0.1)
-                        except queue.Empty as e:
-                            continue
+            for stream in streams[::-1]:
+                while not self.exit.is_set():
+                    try:
+                        msgs_by_stream[stream].append(stream.queue.get(False))
+                    except queue.Empty as e:
+                        time.sleep(0.002)
+                        break
 
-            # Ensure we aren't getting different types of messages at the same time.
-            messages = list(msg_by_stream.values())
-            message_types = [m['type'] for m in messages]
+            # Process many messages for each stream
+            for stream, messages in msgs_by_stream.items():
+                for message in messages:
 
-            if len(set(message_types)) > 1:
-                raise ValueError("Writer received concurrent messages with different message types {}".format([m['type'] for m in messages]))
+                    # If we receive a message
+                    if message['type'] == 'event':
+                        logger.debug('%s "%s" received event of type "%s"', self.__class__.__name__, self.name, message['event_type'])
+                        if message['event_type'] == 'done':
+                            got_done_msg[stream] = True
+                        elif message['event_type'] == 'refined':
+                            refined_axis = message['data']
 
-            # Infer the type from the first message
-            message_type = message_types[0]
+                            # Resize the data set
+                            num_new_points = desc.num_new_points_through_axis(refined_axis)
+                            for stream in streams:
+                                self.queue.put(("increase_size", self.data_write_paths[stream], num_new_points,))
 
-            # If we receive a message
-            if message_type == 'event':
-                logger.debug('%s "%s" received event of type "%s"', self.__class__.__name__, self.name, message_type)
-                if messages[0]['event_type'] == 'done':
-                    break
-                elif messages[0]['event_type'] == 'refined':
-                    refined_axis = messages[0]['data']
+                            if self.store_tuples:
+                                for an in self.axis_names:
+                                    self.queue.put(("increase_size", self.tuple_write_paths[an], num_new_points,))
 
-                    # Resize the data set
-                    num_new_points = desc.num_new_points_through_axis(refined_axis)
-                    for stream in streams:
-                        self.queue.put(("increase_size", self.data_write_paths[stream], num_new_points,))
+                            # Generally speaking the descriptors are now insufficient to reconstruct
+                            # the full set of tuples. The user should know this, so let's mark the
+                            # descriptor axes accordingly.
+                            # TODO: self.group[name].attrs['was_refined'] = True
 
-                    if self.store_tuples:
-                        for an in self.axis_names:
-                            self.queue.put(("increase_size", self.tuple_write_paths[an], num_new_points,))
+                    elif message['type'] == 'data':
 
-                    # Generally speaking the descriptors are now insufficient to reconstruct
-                    # the full set of tuples. The user should know this, so let's mark the
-                    # descriptor axes accordingly.
-                    # TODO: self.group[name].attrs['was_refined'] = True
+                        message_data = message['data']
 
-            elif message_type == 'data':
-                message_data = [message['data'] for message in messages]
-                message_data = [dat if hasattr(dat, 'size') else np.array([dat]) for dat in message_data]  # Convert single values to arrays
+                        if not hasattr(message_data, 'size'):
+                            message_data = np.array([message_data])
+                        message_data = message_data.flatten()
 
-                for ii in range(len(message_data)):
-                    if not hasattr(message_data[ii], 'size'):
-                        message_data[ii] = np.array([message_data[ii]])
-                    message_data[ii] = message_data[ii].flatten()
-                    if message_data[ii].size != message_data[0].size:
-                        raise ValueError("Writer received data of unequal length.")
+                        logger.debug('%s "%s" received %d points', self.__class__.__name__, self.name, message_data.size)
+                        # logger.debug("Now has %d of %d points.", stream.points_taken.value, stream.num_points())
 
-                logger.debug('%s "%s" received %d points', self.__class__.__name__, self.name, message_data[0].size)
-                logger.debug("Now has %d of %d points.", stream.points_taken, stream.num_points())
+                        # Write the data
+                        self.queue.put(("write", self.data_write_paths[stream], w_idx[stream], w_idx[stream]+message_data.size, message_data))
 
-                # self.up_to_date = (w_idx == dset_for_streams[streams[0]].len())
+                        # Write the coordinate tuples
+                        if self.store_tuples:
+                            if desc.is_adaptive():
+                                tuples = desc.tuples()
+                                for axis_name in self.axis_names:
+                                    self.queue.put(("write", self.tuple_write_paths[axis_name], w_idx[stream], w_idx[stream]+message_data.size,
+                                                    tuples[axis_name][w_idx[stream]:w_idx[stream]+message_data.size]))
 
-                # Write the data
-                for s, d in zip(streams, message_data):
-                    self.queue.put(("write", self.data_write_paths[s], w_idx, w_idx+d.size, d))
-                    # dset_for_streams[s][w_idx:w_idx+d.size] = d
+                        w_idx[stream] += message_data.size
+                        self.points_taken = w_idx[stream]
 
-                # Write the coordinate tuples
-                if self.store_tuples:
-                    if desc.is_adaptive():
-                        tuples = desc.tuples()
-                        for axis_name in self.axis_names:
-                            self.queue.put(("write", self.tuple_write_paths[axis_name], w_idx, w_idx+d.size, tuples[axis_name][w_idx:w_idx+d.size]))
-                            # self.tuple_write_paths[axis_name][w_idx:w_idx+d.size] = tuples[axis_name][w_idx:w_idx+d.size]
-
-                w_idx += message_data[0].size
-                self.points_taken = w_idx
-
-                logger.debug("HDF5: Write index at %d", w_idx)
-                logger.debug("HDF5: %s has written %d points", stream.name, w_idx)
+                        logger.debug("HDF5: Write index at %d", w_idx[stream])
+                        logger.debug("HDF5: %s has written %d points", stream.name, w_idx[stream])
 
             # If we have gotten all our data and process_data has returned, then we are done!
-            if np.all([v.done() for v in self.input_connectors.values()]):
+            if np.all(got_done_msg.values()) and np.all([v.done() for v in self.input_connectors.values()]):
                 self.finished_processing.set()
 
 class DataBuffer(Filter):
