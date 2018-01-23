@@ -12,7 +12,7 @@ import numpy as np
 
 import auspex.config as config
 config.auspex_dummy_mode = True
-config.profile = True
+config.profile = False
 
 from auspex.experiment import Experiment
 from auspex.parameter import FloatParameter
