@@ -29,7 +29,7 @@ import auspex.config
 class SingleShotFidelityExperiment(QubitExperiment):
     """Experiment to measure single-shot measurement fidelity of a qubit."""
 
-    def __init__(self, qubit_names, num_shots=10000, expname=None, meta_file=None, save_data=False, optimize=False, set_threshold = True, stream_type = 'Raw'):
+    def __init__(self, qubit_names, num_shots=10000, expname=None, meta_file=None, save_data=False, optimize=False, set_threshold = True, stream_type = 'Raw', single_plotter=auspex.config.single_plotter_mode):
         """Create a single shot fidelity measurement experiment. Assumes that there is a single shot measurement
         filter in the filter pipeline.
         Arguments:
@@ -38,7 +38,9 @@ class SingleShotFidelityExperiment(QubitExperiment):
             expname: Experiment name for data saving.
             meta_file: Meta file for defining custom single-shot fidelity experiment.
             save_data: If true, will save the raw or demodulated data.
-            optimize: if true, will set the swept parameters to their optimum values"""
+            optimize: if true, will set the swept parameters to their optimum values
+            stream_type: choose the stream for fidelity measurements.  This will typically be the Raw stream.
+            spm: single_plotter_mode take the default value from config.py unless it's overridden"""
 
         super(SingleShotFidelityExperiment, self).__init__()
         self.qubit_names = qubit_names if isinstance(qubit_names, list) else [qubit_names]
@@ -68,7 +70,7 @@ class SingleShotFidelityExperiment(QubitExperiment):
             QubitExpFactory.load_parameter_sweeps(experiment)
         self.ssf = self.find_single_shot_filter()
         self.leave_plot_server_open = True
-        auspex.config.single_plotter_mode = True
+        auspex.config.single_plotter_mode = single_plotter
 
     def run_sweeps(self):
         #For now, only update histograms if we don't have a parameter sweep.
