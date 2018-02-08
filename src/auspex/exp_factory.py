@@ -305,7 +305,7 @@ class QubitExpFactory(object):
             return
         plt2[cals[first_cal]] = (cal_pts[first_cal], amps1)
         plt2["Fit "+cals[first_cal]] = (xpts, ypts)
-        logger.info("Found {} offset of {}.".format(first_cal, offset1))
+        logger.info("Found {} of {}.".format(str.replace(cals[first_cal], '_', ' '), offset1))
         getattr(mce, cals[first_cal]).value = offset1
 
         sweep_offset(cals[second_cal], cal_pts[second_cal])
@@ -313,7 +313,7 @@ class QubitExpFactory(object):
         offset2, xpts, ypts = find_null_offset(cal_pts[second_cal][1:], amps2[1:], default=cal_defaults[second_cal])
         plt2[cals[second_cal]] = (cal_pts[second_cal], amps2)
         plt2["Fit "+cals[second_cal]] = (xpts, ypts)
-        logger.info("Found {} offset of {}.".format(second_cal, offset2))
+        logger.info("Found {} of {}.".format(str.replace(cals[first_cal], '_', ' '), offset2))
         getattr(mce, cals[second_cal]).value = offset2
 
         mce.disconnect_instruments()
@@ -548,16 +548,19 @@ class QubitExpFactory(object):
             #ovverride data axis with repeated number of segments
             data_axis['points'] = np.tile(data_axis['points'], experiment.repeats)
 
-        # See if there are multiple partitions, and therefore metadata
-        if len(desc) > 1:
-            meta_axis = desc[1] # Metadata will always be the second axis
+        # Search for calibration axis, i.e., metadata
+        axis_names = [d['name'] for d in desc]
+        if 'calibration' in axis_names:
+            meta_axis = desc[axis_names.index('calibration')]
             # There should be metadata for each cal describing what it is
-            metadata = ['data']*len(data_axis['points']) + meta_axis['points']
-
-            # Pad the data axis with dummy equidistant x-points for the extra calibration points
-            avg_step = (data_axis['points'][-1] - data_axis['points'][0])/(len(data_axis['points'])-1)
-            points = np.append(data_axis['points'], data_axis['points'][-1] + (np.arange(len(meta_axis['points']))+1)*avg_step)
-
+            if len(desc)>1:
+                metadata = ['data']*len(data_axis['points']) + meta_axis['points']
+                # Pad the data axis with dummy equidistant x-points for the extra calibration points
+                avg_step = (data_axis['points'][-1] - data_axis['points'][0])/(len(data_axis['points'])-1)
+                points = np.append(data_axis['points'], data_axis['points'][-1] + (np.arange(len(meta_axis['points']))+1)*avg_step)
+            else:
+                metadata = meta_axis['points'] # data may consist of calibration points only
+                points = np.arange(len(metadata)) # dummy axis for plotting purposes
             # If there's only one segment we can ignore this axis
             if len(points) > 1:
                 experiment.segment_axis = DataAxis(data_axis['name'], points, unit=data_axis['unit'], metadata=metadata)
