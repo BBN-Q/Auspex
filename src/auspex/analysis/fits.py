@@ -122,7 +122,51 @@ def fit_rabi(xdata, ydata):
     offset = popt[3]
     return pi_amp, offset, popt
 
-def fit_ramsey(xdata, ydata, two_freqs = False, AIC = True):
+def fit_t1(xdata, ydata, showPlot=False):
+    """
+    Fit simple single qubit T1.
+
+    Parameters
+    ----------
+    xdata : time points (array like)
+    ydata : scaled y-points (array like)
+    showPlot : plot the result (boolean)
+
+    Returns
+    -------
+    popt : fit parameters for the T1 model p0*np.exp(-x/p1) + p2 (array like)
+    perr : sqrt of the popt covariance matrix diagonal  (array like)
+    """
+
+    amp = np.max(ydata)
+    offset = ydata[-1]
+    t1 = xdata[np.size(ydata) // 3]# assume T1 is 1/3 of the length of the scan
+
+    popt, pcov = curve_fit(t1_model, xdata, ydata, [amp, t1, offset])
+    perr = np.sqrt(np.diag(pcov))
+
+    t1_fit = popt[1]
+    t1_fit_error = perr[1]
+
+    if showPlot:
+        xpts = np.arange(xdata[0],xdata[-1],1000)
+
+        plt.plot(xdata,ydata,'.',markersize=1.0, label='data')
+        plt.plot(xpts, t1_model(xpts, *popt), label='fit')
+        plt.xlabel('time [ns]')
+        plt.ylabel(r'<$\sigma_z$>')
+        plt.legend()
+        plt.annotate(r'$T_1$ = {:.2e}  {} {:.2e} $\mu s$'.format( \
+        popt[1]/1e3, chr(177), perr[1]/1e3), xy=(0.4, 0.10), \
+                     xycoords='axes fraction', size=12)
+
+    print(r'T1 = {:.2e}  {} {:.2e} us'.format(popt[1]/1e3, \
+                    chr(177), perr[1]/1e3))
+    return popt, perr
+
+def t1_model(x, A, tau, y0):
+    return A*np.exp(-x/tau) + y0
+
     if two_freqs:
         # Initial KT estimation
         freqs, Tcs, amps = KT_estimation(ydata, xdata, 2)
