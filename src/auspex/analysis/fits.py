@@ -235,7 +235,7 @@ def fit_ramsey(xdata, ydata, two_freqs = False, AIC = True, showPlot=False):
                     plot_ramsey(xdata, ydata, popt, perr, fit_model=fit_model)
                 print('Using a two-frequency fit.')
                 print('T2 = {0:.1f} {} {1:.1f} us'.format(popt[2]/1e3, \
-                    chr(177) perr[2]/1e3))
+                    chr(177), perr[2]/1e3))
                 return fit_result_2
         except:
             fit_model = ramsey_1f
@@ -296,8 +296,7 @@ def plot_ramsey(xdata, ydata, popt, perr, fit_model=ramsey_1f):
     xpts = np.linspace(xdata[0],xdata[-4],num=1000)
 
     plt.plot(xdata,ydata,'.',markersize=3.0, label='data')
-    plt.plot(xpts, fit_model(xpts, *popt), label='fit'), \
-    label='fit')
+    plt.plot(xpts, fit_model(xpts, *popt), label='fit')
     plt.xlabel('time [ns]')
     plt.ylabel(r'<$\sigma_z$>')
     plt.legend()
