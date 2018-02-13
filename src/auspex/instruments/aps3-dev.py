@@ -6,7 +6,7 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-__all__ = ['APS3', 'KCU105_Board']
+__all__ = ['APS3', 'KCU105']
 
 from .instrument import Instrument, MetaInstrument, is_valid_ipv4
 from .bbn import MakeSettersGetters
@@ -24,7 +24,7 @@ from copy import deepcopy
 import h5py
 import fractions
 
-class KCU105_Board(object):
+class KCU105(object):
 
     PORT = 0xbb4e #BBN, of course
 
@@ -42,9 +42,10 @@ class KCU105_Board(object):
             raise IOError("KCU105 Board is not connected!")
 
     def connect(self, ip_addr="192.168.2.200"):
-        self.ip_addr = resource_name
+        self.ip_addr = ip_addr
         self.socket = socket.socket(family=socket.AF_INET, type=socket.SOCK_STREAM)
         self.socket.connect((self.ip_addr, self.PORT))
+        self.connected = True
 
     def disconnect(self):
         if self.connected:
@@ -59,10 +60,7 @@ class KCU105_Board(object):
 
     def recv_bytes(self, size):
         data = [x[0] for x in iter_unpack("!I", self.socket.recv(size))]
-        if len(data) == 1:
-            return data[0]
-        else:
-            return data
+        return data
 
     def write_memory(self, addr, data):
         self._check_connected()
@@ -74,31 +72,31 @@ class KCU105_Board(object):
         while(len(data) - idx > 0):
             ct_left = len(data) - idx
             ct = ct_left if (ct_left < max_ct) else max_ct
-            datagram =  [cmd + ct, addr, data[idx:idx+ct]]
+            datagram =  [cmd + ct, addr]
+            datagram.extend(data[idx:idx+ct])
             self.send_bytes(datagram)
             datagrams_written += 1
             idx += ct
             addr += ct*4
-
         #read back and check
-        results = self.recv_bytes(2 * 2 * datagrams_written)
+        results = self.recv_bytes(2 * 4 * datagrams_written)
         addr = init_addr
-        for ct in range(datagrams_written):
+        for ct in range(datagrams_written-1):
             if ct == datagrams_written:
                 words_written = len(data)-((datagrams_written-1)*max_ct)
             else:
                 words_written = max_ct
-            assert (results[2*ct-1] == 0x80800000 + words_written)
-            assert (results[2*ct] == addr)
+            assert (results[2*ct] == 0x80800000 + words_written)
+            assert (results[2*ct+1] == addr)
             addr += 4 * words_written
 
     def read_memory(self, addr, num_words):
         self._check_connected()
         datagram = [0x10000000 + num_words, addr]
         self.send_bytes(datagram)
-        resp_header = self.recv_bytes(2 * 2) #2 bytes per word
-        print(hex(resp_header))
-        return self.recv_bytes(2 * num_words) #2 bytes per word
+        resp_header = self.recv_bytes(2 * 4) #4 bytes per word
+        #print([hex(x) for x in resp_header])
+        return self.recv_bytes(4 * num_words) #4 bytes per word
 
 CSR_AXI_ADDR = 0x44a00000
 CSR_CONTROL_OFFSET = 0x00
@@ -132,7 +130,7 @@ class APS3(Instrument, metaclass=MakeSettersGetters):
         self.resource_name = resource_name
 
         self.connected = False
-        self.board = KCU105_Board()
+        self.board = KCU105()
 
         self.dac_clock = 5e9
         self.nco_frequency = 0
@@ -146,6 +144,10 @@ class APS3(Instrument, metaclass=MakeSettersGetters):
         if is_valid_ipv4(self.resource_name):
             self.board.connect(ip_addr = resource_name)
             self.connected = True
+
+    def disconnect(self):
+        if self.connected:
+            self.board.disconnect()
 
     def set_all(self, settings_dict, prefix=""):
         settings = deepcopy(settings_dict)
@@ -232,7 +234,7 @@ class APS3(Instrument, metaclass=MakeSettersGetters):
         return self._dac_clock
     @dac_clock.setter
     def dac_clock(self, clock):
-        self._dac_clock = dac_clock
+        self._dac_clock = clock
 
     @property
     def dac_mode(self):
@@ -249,13 +251,18 @@ class APS3(Instrument, metaclass=MakeSettersGetters):
     @nco_frequency.setter
     def nco_frequency(self, freq):
         self._nco = freq
-        mod_frac = fractions.Fraction(int(freq), int(self.dac_clock))
-        M = mod_frac.numerator
-        N = mod_frac.denominator
-        X = int(2**48 / N)
-        Y = M*2**48 - X*N
-        A = fractions.Fraction(Y, N).numerator
-        B = fractions.Fraction(Y, N).denominator
+        if freq < self.dac_clock / 2**48:
+            X = 1
+            A = 0
+            B = 1
+        else:
+            mod_frac = fractions.Fraction(int(freq), int(self.dac_clock))
+            M = mod_frac.numerator
+            N = mod_frac.denominator
+            X = int(2**48 / N)
+            Y = M*2**48 - X*N
+            A = fractions.Fraction(Y, N).numerator
+            B = fractions.Fraction(Y, N).denominator
 
         assert B > 0
         assert A < B
@@ -270,7 +277,7 @@ class APS3(Instrument, metaclass=MakeSettersGetters):
         self.board.write_memory(CSR_AXI_ADDR + CSR_TRIGGER_INTERVAL_OFFSET, [num_clcks - 0x2])
 
     def get_csr_value(self):
-        return self.board.read_memory(CSR_AXI_ADDR + CSR_CONTROL_OFFSET, 1)
+        return self.board.read_memory(CSR_AXI_ADDR + CSR_CONTROL_OFFSET, 1)[0]
 
     def run(self):
         csr_val = self.get_csr_value()
