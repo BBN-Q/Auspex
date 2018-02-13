@@ -1,12 +1,7 @@
 #from . import bbn
 #import auspex.config
 from auspex.log import logger
-<<<<<<< HEAD
-#from QGL import *
-#ChannelLibrary()
-=======
 from QGL import *
->>>>>>> origin/master
 
 def pulse_marker(marker_name, length = 100e-9):
     """ Utility to generate a square pulse on a APS2 marker. Used for instance to switch a signal between spectrum analyzer and input line
