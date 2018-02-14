@@ -163,7 +163,7 @@ def fit_rabi_width(xdata, ydata, showPlot=False):
         plt.xlabel('time [ns]')
         plt.ylabel(r'<$\sigma_z$>')
         plt.legend()
-        plt.annotate(r'$T_1$ = {:.2e}  {} {:.2e} $\mu s$'.format( \
+        plt.annotate(r'$T_1$ = {0:.2e}  {1} {2:.2e} $\mu s$'.format( \
         popt[1]/1e3, chr(177), perr[1]/1e3), xy=(0.4, 0.10), \
                      xycoords='axes fraction', size=12)
 
@@ -206,11 +206,11 @@ def fit_t1(xdata, ydata, showPlot=False):
         plt.xlabel('time [ns]')
         plt.ylabel(r'<$\sigma_z$>')
         plt.legend()
-        plt.annotate(r'$T_1$ = {:.2e}  {} {:.2e} $\mu s$'.format( \
+        plt.annotate(r'$T_1$ = {0:.2e}  {1} {2:.2e} $\mu s$'.format( \
         popt[1]/1e3, chr(177), perr[1]/1e3), xy=(0.4, 0.10), \
                      xycoords='axes fraction', size=12)
 
-    print(r'T1 = {:.2e}  {} {:.2e} us'.format(popt[1]/1e3, \
+    print(r'T1 = {0:.2e}  {1} {2:.2e} us'.format(popt[1]/1e3, \
                     chr(177), perr[1]/1e3))
     return t1_fit, t1_fit_error
 
@@ -234,7 +234,7 @@ def fit_ramsey(xdata, ydata, two_freqs = False, AIC = True, showPlot=False):
                 if showPlot:
                     plot_ramsey(xdata, ydata, popt, perr, fit_model=fit_model)
                 print('Using a two-frequency fit.')
-                print('T2 = {0:.1f} {} {1:.1f} us'.format(popt[2]/1e3, \
+                print('T2 = {0:.3f} {1} {2:.3f} us'.format(popt[2]/1e3, \
                     chr(177), perr[2]/1e3))
                 return fit_result_2
         except:
@@ -264,14 +264,14 @@ def fit_ramsey(xdata, ydata, two_freqs = False, AIC = True, showPlot=False):
                 if showPlot:
                     plot_ramsey(xdata, ydata, popt, perr, fit_model=fit_model)
                 print('Using a one-frequency fit.')
-                print('T2 = {0:.1f} {} {1:.1f} us'.format(popt[2]/1e3, \
+                print('T2 = {0:.3f} {1} {2:.3f} us'.format(popt[2]/1e3, \
                     chr(177), perr[2]/1e3))
                 return fit_result_1
             else:
                 if showPlot:
                     plot_ramsey(xdata, ydata, popt, perr, fit_model=fit_model)
                 print('Using a two-frequency fit.')
-                print('T2 = {0:.1f} {} {1:.1f}us'.format( \
+                print('T2 = {0:.3f} {1} {2:.3f}us'.format( \
                     fit_result_2[2,2]/1e3, chr(177), fit_result_2[3,2]/1e3))
                 return fit_result_2
         except:
@@ -281,7 +281,7 @@ def fit_ramsey(xdata, ydata, two_freqs = False, AIC = True, showPlot=False):
         plot_ramsey(xdata, ydata, popt, perr, fit_model=fit_model)
 
     print('Using a one-frequency fit.')
-    print('T2 = {0:.3f} {} {1:.3f} us'.format(popt[2]/1e3, chr(177), \
+    print('T2 = {0:.3f} {1} {2:.3f} us'.format(popt[2]/1e3, chr(177), \
         perr[2]/1e3))
     return fit_result_1
 
@@ -462,8 +462,8 @@ def fit_single_qubit_rb(data, lengths, showPlot=False):
     popt, pcov = curve_fit(rb_model, lengths, avg_points, [0.5, 0.01, 0.5])
     perr = np.sqrt(np.diag(pcov))
 
-    ave_infidelity = popt[1] / 2
-    ave_infidelity_err = perr[1] / 2
+    avg_infidelity = popt[1] / 2
+    avg_infidelity_err = perr[1] / 2
 
     if showPlot:
         plt.plot(xpts,data,'.',markersize=0.7, label='data')
@@ -479,8 +479,8 @@ def fit_single_qubit_rb(data, lengths, showPlot=False):
                      xycoords='axes fraction', size=12) # hack the pm symbol
 
     print(r'Average error rate: r = {:.2e} {} {:.2e}'.format( \
-    ave_infidelity, chr(177), ave_infidelity_err))
-    return popt, pcov
+    avg_infidelity, chr(177), avg_infidelity_err))
+    return avg_infidelity, avg_infidelity_err, popt, pcov
 
 def cal_scale(data):
     """
