@@ -289,8 +289,8 @@ class RabiAmpCalibration(PulseCalibration):
         finer_amps = np.linspace(np.min(self.amps), np.max(self.amps), 4*len(self.amps))
         self.plot["I Data"] = (self.amps, data[:N//2])
         self.plot["Q Data"] = (self.amps, data[N//2:])
-        self.plot["I Fit"] = (finer_amps, rabi_model(finer_amps, *poptI))
-        self.plot["Q Fit"] = (finer_amps, rabi_model(finer_amps, *poptQ))
+        self.plot["I Fit"] = (finer_amps, rabi_amp_model(finer_amps, *poptI))
+        self.plot["Q Fit"] = (finer_amps, rabi_amp_model(finer_amps, *poptQ))
 
         return ('piAmp', self.pi_amp)
 
