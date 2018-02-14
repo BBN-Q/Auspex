@@ -6,7 +6,18 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-import multiprocessing as mp
+
+import os
+import sys
+
+if sys.platform == 'win32' or 'NOFORKING' in os.environ:
+    import threading as mp
+    from queue import Queue
+else:
+    import multiprocessing as mp
+    from multiprocessing import Queue
+from multiprocessing import Value
+
 import logging
 import numbers
 import itertools
@@ -447,11 +458,11 @@ class DataStream(object):
     """A stream of data"""
     def __init__(self, name=None, unit=None):
         super(DataStream, self).__init__()
-        self.queue = mp.Queue()
+        self.queue = Queue()
         self.name = name
         self.unit = unit
         self.points_taken_lock = mp.Lock()
-        self.points_taken = mp.Value('i', 0) # Using shared memory since these are used in filter processes
+        self.points_taken = Value('i', 0) # Using shared memory since these are used in filter processes
         self.descriptor = None
         self.start_connector = None
         self.end_connector = None

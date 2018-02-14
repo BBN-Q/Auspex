@@ -6,7 +6,17 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-import multiprocessing as mp
+
+import os
+import sys
+
+if sys.platform == 'win32' or 'NOFORKING' in os.environ:
+    from threading import Thread as Process
+    from threading import Event
+else:
+    from multiprocessing import Process
+    from multiprocessing import Event
+
 import json
 import zmq
 import queue
@@ -14,7 +24,7 @@ import time
 import numpy as np
 from auspex.log import logger
 
-class PlotDescServerProcess(mp.Process):
+class PlotDescServerProcess(Process):
 
     def __init__(self, plot_desc={}, port = 7771):
         super(PlotDescServerProcess, self).__init__()
@@ -22,7 +32,7 @@ class PlotDescServerProcess(mp.Process):
         self.port = port
 
         # Event for killing the server properly
-        self.exit = mp.Event()
+        self.exit = Event()
 
     def run(self):
         try:
@@ -48,7 +58,7 @@ class PlotDescServerProcess(mp.Process):
         self.exit.set()
         self.join()
 
-class PlotDataServerProcess(mp.Process):
+class PlotDataServerProcess(Process):
 
     def __init__(self, data_queue, port = 7772):
         super(PlotDataServerProcess, self).__init__()
@@ -57,7 +67,7 @@ class PlotDataServerProcess(mp.Process):
         self.daemon = True
 
         # Event for killing the filter properly
-        self.exit = mp.Event()
+        self.exit = Event()
 
     def run(self):
         try:

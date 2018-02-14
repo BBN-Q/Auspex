@@ -13,7 +13,6 @@ import socket
 import struct
 import datetime
 import numpy as np
-import multiprocessing as mp
 import os
 
 from auspex.log import logger

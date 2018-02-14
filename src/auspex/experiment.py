@@ -6,16 +6,21 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
+import os
+import sys
+
+if sys.platform == 'win32' or 'NOFORKING' in os.environ:
+    from queue import Queue as Queue
+else:
+    from multiprocessing import Queue as Queue
+
 import inspect
 import time
 import copy
 import itertools
 import logging
-import multiprocessing as mp
 import signal
-import sys
 import numbers
-import os
 import subprocess
 
 import numpy as np
@@ -425,8 +430,8 @@ class Experiment(metaclass=MetaExperiment):
 
             # Let the first writer with this filename create the file...
             wrs[0].file = wrs[0].new_file()
-            wrs[0].queue = mp.Queue()
-            wrs[0].ret_queue = mp.Queue()
+            wrs[0].queue = Queue()
+            wrs[0].ret_queue = Queue()
             self.h5_handlers.append(H5Handler(wrs[0].filename.value, wrs[0].queue, wrs[0].ret_queue))
             self.files.append(wrs[0].file)
 
@@ -597,7 +602,7 @@ class Experiment(metaclass=MetaExperiment):
         plot_desc = {p.filter_name: p.desc() for p in self.standard_plotters}
 
         if len(self.standard_plotters) > 0:
-            self.plot_queue  = mp.Queue()
+            self.plot_queue  = Queue()
             self.plot_desc_server = PlotDescServerProcess(plot_desc)
             self.plot_desc_server.start()
             self.plot_server = PlotDataServerProcess(self.plot_queue)
@@ -607,7 +612,7 @@ class Experiment(metaclass=MetaExperiment):
 
         if (len(self.extra_plotters) + len(self.manual_plotters)) > 0:
             extra_plot_desc = {p.filter_name: p.desc() for p in self.extra_plotters + self.manual_plotters}
-            self.extra_plot_queue  = mp.Queue()
+            self.extra_plot_queue  = Queue()
             self.extra_plot_desc_server = PlotDescServerProcess(extra_plot_desc, port=7773)
             self.extra_plot_desc_server.start()
             self.extra_plot_server = PlotDataServerProcess(self.extra_plot_queue, port=7774)

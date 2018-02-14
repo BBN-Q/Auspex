@@ -8,7 +8,16 @@
 
 __all__ = ['Filter']
 
-from multiprocessing import Process, Event
+import os
+import sys
+
+if sys.platform == 'win32' or 'NOFORKING' in os.environ:
+    from threading import Thread as Process
+    from threading import Event
+else:
+    from multiprocessing import Process
+    from multiprocessing import Event
+
 import cProfile
 import time
 import queue

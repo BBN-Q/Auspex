@@ -8,6 +8,18 @@
 
 __all__ = ['WriteToHDF5', 'H5Handler', 'DataBuffer', 'ProgressBar']
 
+import os
+import sys
+
+if sys.platform == 'win32' or 'NOFORKING' in os.environ:
+    import threading as mp
+    from threading import Thread as Process
+    from queue import Queue
+else:
+    import multiprocessing as mp
+    from multiprocessing import Process
+    from multiprocessing import Queue
+
 import itertools
 import h5py
 import queue
@@ -16,7 +28,6 @@ import os.path
 import time
 import re
 import pandas as pd
-import multiprocessing as mp
 from shutil import copyfile
 from ruamel.yaml import YAML
 
@@ -28,7 +39,7 @@ import auspex.config as config
 
 from tqdm import tqdm, tqdm_notebook
 
-class H5Handler(mp.Process):
+class H5Handler(Process):
     def __init__(self, filename, queue, return_queue):
         super(H5Handler, self).__init__()
         self.queue = queue
@@ -424,10 +435,10 @@ class DataBuffer(Filter):
         self.quince_parameters = []
         self.sink.max_input_streams = 100
         self.store_tuples = store_tuples
-        self._final_buffers = mp.Queue()
+        self._final_buffers = Queue()
         self.final_buffers = None
 
-        self.out_queue = mp.Queue() # This seems to work, somewhat surprisingly
+        self.out_queue = Queue() # This seems to work, somewhat surprisingly
 
     def final_init(self):
         self.w_idxs  = {s: 0 for s in self.sink.input_streams}

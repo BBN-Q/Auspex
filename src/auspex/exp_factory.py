@@ -6,9 +6,17 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-import json
-import sys
 import os
+import sys
+
+if sys.platform == 'win32' or 'NOFORKING' in os.environ:
+    from threading import Thread as Process
+    from threading import Event
+else:
+    from multiprocessing import Process
+    from multiprocessing import Event
+
+import json
 import importlib
 import pkgutil
 import inspect
@@ -16,7 +24,6 @@ import re
 import base64
 import datetime
 import subprocess
-import multiprocessing as mp
 
 import numpy as np
 import networkx as nx
@@ -77,8 +84,8 @@ class QubitExperiment(Experiment):
         for chan, dig in self.chan_to_dig.items():
             socket = dig.get_socket(chan)
             oc = self.chan_to_oc[chan]
-            exit = mp.Event()
-            self.dig_listeners[mp.Process(target=dig.receive_data, args=(chan, oc, exit))] = exit
+            exit = Event()
+            self.dig_listeners[Process(target=dig.receive_data, args=(chan, oc, exit))] = exit
         for listener in self.dig_listeners.keys():
             listener.start()
         if self.cw_mode:
