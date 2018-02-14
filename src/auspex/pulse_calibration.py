@@ -276,8 +276,8 @@ class RabiAmpCalibration(PulseCalibration):
         self.set()
         data, _ = self.run()
         N = len(data)
-        piI, offI, poptI = fit_rabi(self.amps, data[:N//2])
-        piQ, offQ, poptQ = fit_rabi(self.amps, data[N//2:])
+        piI, offI, poptI = fit_rabi_amp(self.amps, data[:N//2])
+        piQ, offQ, poptQ = fit_rabi_amp(self.amps, data[N//2:])
         #Arbitary extra division by two so that it doesn't push the offset too far.
         self.pi_amp = piI
         self.pi2_amp = piI/2.0
