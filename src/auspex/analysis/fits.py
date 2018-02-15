@@ -4,7 +4,9 @@ from numpy.fft import fft
 from scipy.linalg import svd, eig, inv, pinv
 from enum import Enum
 from auspex.log import logger
+import matplotlib.pyplot as plt
 
+plt.style.use('ggplot')
 
 def hilbert(signal):
     # construct the Hilbert transform of the signal via the FFT
@@ -281,6 +283,84 @@ def fit_CR(xpoints, data, cal_type):
         xopt = -(popt0[1]/popt0[0] + popt1[1]/popt1[0])/2
         logger.info('CR amplitude = {}'.format(xopt))
     return xopt, popt0, popt1
+
+def rb_model(x, *p):
+    """Simple one qubit randomized benchmarking model"""
+    return p[0] * (1-p[1])**x + p[2]
+
+def fit_single_qubit_rb(data, lengths, showPlot=False):
+    """
+    Fit simple single qubit RB.  The average error rate will be printed
+
+    Parameters
+    ----------
+    data : scaled RB data as <z> expectation values (array like)
+    lengths : a list of the numbers of cliffords used
+            (i.e. [4, 8, 16, ...]) (array like)
+    showPlot : plot the result (boolean)
+
+    Returns
+    -------
+    popt : fit parameters for the RB model p0*(1-p1)^n + p2 (array like)
+    pcov : covariance matrix of popt (array like)
+    """
+    repeats = len(data)//len(lengths)
+    xpts = np.repeat(lengths[:],repeats)
+
+    data_points = np.reshape(data,(len(lengths),repeats))
+    avg_points = np.mean(np.reshape(data,(len(lengths),repeats)),1)
+    errors = np.std(data_points,1)
+
+    fidelity = 0.5 * (1-data_points)
+    avg_fidelity = 0.5 * (1-avg_points)
+
+    popt, pcov = curve_fit(rb_model, lengths, avg_points, [0.5, 0.01, 0.5])
+    perr = np.sqrt(np.diag(pcov))
+
+    ave_infidelity = popt[1] / 2
+    ave_infidelity_err = perr[1] / 2
+
+    if showPlot:
+        plt.plot(xpts,data,'.',markersize=0.7, label='data')
+        plt.errorbar(lengths, avg_points, yerr=errors/np.sqrt(len(lengths)),\
+        fmt='*', elinewidth=2.0, capsize=4.0, label='mean')
+        plt.plot(range(lengths[-1]), rb_model(range(lengths[-1]), *popt), \
+        label='fit')
+        plt.xlabel('Clifford number')
+        plt.ylabel(r'<$\sigma_z$>')
+        plt.legend()
+        plt.annotate(r'avg. error rate r = {:.2e}  {} {:.2e}'.format( \
+        popt[1]/2, chr(177), perr[1]/2), xy=(0.05, 0.10), \
+                     xycoords='axes fraction', size=12) # hack the pm symbol
+
+    print(r'Average error rate: r = {:.2e} {} {:.2e}'.format( \
+    ave_infidelity, chr(177), ave_infidelity_err))
+    return popt, pcov
+
+def cal_scale(data):
+    """
+    Scale the data assuming 4 cal points
+
+    Parameters
+    ----------
+    data : unscaled data with cal points
+
+    Returns
+    -------
+    data : scaled data array
+    """
+    # assume with have 2 cal repeats
+    # TO-DO: make this general!!
+    numRepeats = 2
+    pi_cal = np.mean(data[-1*numRepeats:])
+    zero_cal = np.mean(data[-2*numRepeats:-1*numRepeats])
+
+    # negative to convert to <z>
+    scale_factor = -(pi_cal - zero_cal) / 2
+    data = data[:-2*numRepeats]
+    data = (data - zero_cal)/scale_factor + 1
+
+    return data
 
 def cal_data(data, quad=np.real, qubit_name="q1", group_name="main", \
         return_type=np.float32, key=""):

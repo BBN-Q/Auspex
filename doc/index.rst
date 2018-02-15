@@ -35,7 +35,7 @@ And subsequently installed using pip::
 	cd auspex
 	pip install -e .
 
-Which will automatically fetch and install all of the requirements. If you are using an anaconda python distribution, some of the requirements should be install with *conda install*. The following, from *requirements.txt*, are required by Auspex:
+Which will automatically fetch and install all of the requirements. If you are using an anaconda python distribution, some of the requirements should be install with *conda install* (like ruamel_yaml for example). The following, from *requirements.txt*, are required by Auspex:
 
 - numpy >= 1.11.1
 - scipy >= 0.17.1
@@ -46,6 +46,7 @@ Which will automatically fetch and install all of the requirements. If you are u
 - networkx >= 1.11
 - matplotlib >= 2.0.0
 - cffi >= 1.10.0
+- ruamel_yaml >= 0.11.14
 - scikit-learn >= 1.16 
 
 Qubit Experiments
