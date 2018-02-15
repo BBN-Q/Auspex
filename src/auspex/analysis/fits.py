@@ -93,18 +93,17 @@ def KT_estimation(data, times, order):
 
     return freqs, Tcs, amps
 
-def rabi_model(x, *p):
-    return p[0] - p[1]*np.cos(2*np.pi*p[2]*(x - p[3]))
-
-def fit_rabi(xdata, ydata):
-    """Analyze Rabi amplitude data to find pi-pulse amplitude and phase offset.
+def fit_rabi_amp(xdata, ydata, showPlot=False):
+    """
+    Analyze Rabi amplitude data to find pi-pulse amplitude and phase offset.
         Arguments:
             xdata: ndarray of calibration amplitudes. length should be even.
             ydata: measurement amplitudes
         Returns:
             pi_amp: Fitted amplitude of pi pulsed
             offset: Fitted mixer offset
-            fit_pts: Fitted points."""
+            fit_pts: Fitted points.
+    """
 
     #seed Rabi frequency from largest FFT component
     N = len(ydata)
@@ -116,13 +115,109 @@ def fit_rabi(xdata, ydata):
     phase_0 = 0
     if ydata[N//2 - 1] > offset_0:
         amp_0 = -amp_0
-    popt, _ = curve_fit(rabi_model, xdata, ydata, [offset_0, amp_0, f_0, phase_0])
+    popt, _ = curve_fit(rabi_amp_model, xdata, ydata, \
+        [offset_0, amp_0, f_0, phase_0])
     f_rabi = np.abs(popt[2])
     pi_amp = 0.5/f_rabi
     offset = popt[3]
     return pi_amp, offset, popt
 
-def fit_ramsey(xdata, ydata, two_freqs = False, AIC = True):
+def rabi_amp_model(x, *p):
+    return p[0] - p[1]*np.cos(2*np.pi*p[2]*(x - p[3]))
+
+def fit_rabi_width(xdata, ydata, showPlot=False):
+    """
+    Fit a simple Rabi oscillation experiment.
+
+    Parameters
+    ----------
+    xdata : time points (array like)
+    ydata : y-points (array like)
+    showPlot : plot the result (boolean)
+
+    Returns
+    -------
+    popt : fit parameters for the Rabi oscillation model \
+            p0 + p1*np.exp(-x/p2)*np.cos(2*np.pi*p[3]*(x - p[4])) (array like)
+    perr : sqrt of the popt covariance matrix diagonal  (array like)
+    """
+
+    frabi, Tcs, amps = KT_estimation(ydata, xdata, 1)
+    offset = np.average(xdata)
+    amp = np.max(ydata)
+    trabi = xdata[np.size(ydata) // 3]# assume Trabi is 1/3 of the scan
+    phase = 90.0
+
+    popt, pcov = curve_fit(rabi_width_model, xdata, ydata, \
+                [offset, amp, trabi, frabi, phase])
+    perr = np.sqrt(np.diag(pcov))
+
+    trabi_fit = popt[2]
+    trabi_fit_error = perr[2]
+
+    if showPlot:
+        xpts = np.linspace(xdata[0],xdata[-1],num=1000)
+
+        plt.plot(xdata,ydata,'.',markersize=1.0, label='data')
+        plt.plot(xpts, rabi_width_model(xpts, *popt), label='fit')
+        plt.xlabel('time [ns]')
+        plt.ylabel(r'<$\sigma_z$>')
+        plt.legend()
+        plt.annotate(r'$T_1$ = {0:.2e}  {1} {2:.2e} $\mu s$'.format( \
+        popt[1]/1e3, chr(177), perr[1]/1e3), xy=(0.4, 0.10), \
+                     xycoords='axes fraction', size=12)
+
+    return trabi_fit, trabi_fit_error
+
+def rabi_width_model(x, *p):
+    return p[0] + p[1]*np.exp(-x/p[2])*np.cos(2*np.pi*p[3]*(x - p[4]))
+
+def fit_t1(xdata, ydata, showPlot=False):
+    """
+    Fit simple single qubit T1.
+
+    Parameters
+    ----------
+    xdata : time points (array like)
+    ydata : scaled y-points (array like)
+    showPlot : plot the result (boolean)
+
+    Returns
+    -------
+    popt : fit parameters for the T1 model p0*np.exp(-x/p1) + p2 (array like)
+    perr : sqrt of the popt covariance matrix diagonal  (array like)
+    """
+
+    amp = np.max(ydata)
+    offset = ydata[-1]
+    t1 = xdata[np.size(ydata) // 3]# assume T1 is 1/3 of the length of the scan
+
+    popt, pcov = curve_fit(t1_model, xdata, ydata, [amp, t1, offset])
+    perr = np.sqrt(np.diag(pcov))
+
+    t1_fit = popt[1]
+    t1_fit_error = perr[1]
+
+    if showPlot:
+        xpts = np.linspace(xdata[0],xdata[-1],num=1000)
+
+        plt.plot(xdata,ydata,'.',markersize=1.0, label='data')
+        plt.plot(xpts, t1_model(xpts, *popt), label='fit')
+        plt.xlabel('time [ns]')
+        plt.ylabel(r'<$\sigma_z$>')
+        plt.legend()
+        plt.annotate(r'$T_1$ = {0:.2e}  {1} {2:.2e} $\mu s$'.format( \
+        popt[1]/1e3, chr(177), perr[1]/1e3), xy=(0.4, 0.10), \
+                     xycoords='axes fraction', size=12)
+
+    print(r'T1 = {0:.2e}  {1} {2:.2e} us'.format(popt[1]/1e3, \
+                    chr(177), perr[1]/1e3))
+    return t1_fit, t1_fit_error
+
+def t1_model(x, *p):
+    return p[0]*np.exp(-x/p[1]) + p[2]
+
+def fit_ramsey(xdata, ydata, two_freqs = False, AIC = True, showPlot=False):
     if two_freqs:
         # Initial KT estimation
         freqs, Tcs, amps = KT_estimation(ydata, xdata, 2)
@@ -133,11 +228,17 @@ def fit_ramsey(xdata, ydata, two_freqs = False, AIC = True):
             perr = np.sqrt(np.diag(pcov))
             ferr = perr[:2]
             fit_result_2 = (fopt, ferr, popt, perr)
+            fit_model = ramsey_2f
+
             if not AIC:
+                if showPlot:
+                    plot_ramsey(xdata, ydata, popt, perr, fit_model=fit_model)
                 print('Using a two-frequency fit.')
-                print('T2 = {0:.1f} +/- {1:.1f} us'.format(popt[2]*1e3, perr[2]*1e3))
+                print('T2 = {0:.3f} {1} {2:.3f} us'.format(popt[2]/1e3, \
+                    chr(177), perr[2]/1e3))
                 return fit_result_2
         except:
+            fit_model = ramsey_1f
             logger.info('Two-frequency fit failed. Trying with single frequency.')
         # Initial KT estimation
     freqs, Tcs, amps = KT_estimation(ydata, xdata, 1)
@@ -148,33 +249,77 @@ def fit_ramsey(xdata, ydata, two_freqs = False, AIC = True):
     fopt = [popt[0]]
     ferr = [perr[0]]
     fit_result_1 = (fopt, ferr, popt, perr)
+    fit_model = ramsey_1f
+
     if two_freqs and AIC:
         def aicc(e, k, n):
             return 2*k+e+(k+1)*(k+1)/(n-k-2)
         def sq_error(xdata, popt, model):
             return sum((model(xdata, *popt) - ydata)**2)
         try:
-            aic = aicc(sq_error(xdata, fit_result_2[2], ramsey_2f), 9, len(xdata)) \
+            aic = aicc(sq_error(xdata, fit_result_2[2], ramsey_2f), 9, \
+                len(xdata)) \
              - aicc(sq_error(xdata, fit_result_1[2], ramsey_1f), 5, len(xdata))
             if aic > 0:
+                if showPlot:
+                    plot_ramsey(xdata, ydata, popt, perr, fit_model=fit_model)
                 print('Using a one-frequency fit.')
-                print('T2 = {0:.1f} +/- {1:.1f} us'.format(popt[2]*1e3, perr[2]*1e3))
+                print('T2 = {0:.3f} {1} {2:.3f} us'.format(popt[2]/1e3, \
+                    chr(177), perr[2]/1e3))
                 return fit_result_1
             else:
+                if showPlot:
+                    plot_ramsey(xdata, ydata, popt, perr, fit_model=fit_model)
                 print('Using a two-frequency fit.')
-                print('T2 = {0:.1f} +/- {1:.1f} us'.format(fit_result_2[2,2]*1e3, fit_result_2[3,2]*1e3))
+                print('T2 = {0:.3f} {1} {2:.3f}us'.format( \
+                    fit_result_2[2,2]/1e3, chr(177), fit_result_2[3,2]/1e3))
                 return fit_result_2
         except:
             pass
+
+    if showPlot:
+        plot_ramsey(xdata, ydata, popt, perr, fit_model=fit_model)
+
     print('Using a one-frequency fit.')
-    print('T2 = {0:.3f} +/- {1:.3f}'.format(popt[2], perr[2]))
+    print('T2 = {0:.3f} {1} {2:.3f} us'.format(popt[2]/1e3, chr(177), \
+        perr[2]/1e3))
     return fit_result_1
 
 def ramsey_1f(x, f, A, tau, phi, y0):
     return A*np.exp(-x/tau)*np.cos(2*np.pi*f*x + phi) + y0
 
 def ramsey_2f(x, f1, f2, A1, A2, tau1, tau2, phi1, phi2, y0):
-    return ramsey_1f(x, f1, A1, tau1, phi1, y0/2) + ramsey_1f(x, f2, A2, tau2, phi2, y0/2)
+    return ramsey_1f(x, f1, A1, tau1, phi1, y0/2) + \
+        ramsey_1f(x, f2, A2, tau2, phi2, y0/2)
+
+def plot_ramsey(xdata, ydata, popt, perr, fit_model=ramsey_1f):
+    xpts = np.linspace(xdata[0],xdata[-4],num=1000)
+
+    plt.plot(xdata,ydata,'.',markersize=3.0, label='data')
+    plt.plot(xpts, fit_model(xpts, *popt), label='fit')
+    plt.xlabel('time [ns]')
+    plt.ylabel(r'<$\sigma_z$>')
+    plt.legend()
+    if fit_model == ramsey_1f:
+        plt.annotate(r'$T_2$ = {:.2e}  {} {:.2e} $\mu s$'.format( \
+        popt[2]/1e3, chr(177), perr[2]/1e3), xy=(0.4, 0.15), \
+                     xycoords='axes fraction', size=12)
+        plt.annotate(r'$f_1$ = {:.2e}  {} {:.2e} MHz'.format( \
+        popt[0]*1e3, chr(177), perr[0]*1e3), xy=(0.4, 0.05), \
+                     xycoords='axes fraction', size=12)
+    else:
+        plt.annotate(r'$T^{1}_{2}$ = {:.2e}  {} {:.2e} $\mu s$'.format( \
+        popt[4]/1e3, chr(177), perr[4]/1e3), xy=(0.4, 0.35), \
+                     xycoords='axes fraction', size=10)
+        plt.annotate(r'$T^{2}_{2}$ = {:.2e}  {} {:.2e} $\mu s$'.format( \
+        popt[5]/1e3, chr(177), perr[5]/1e3), xy=(0.4, 0.25), \
+                     xycoords='axes fraction', size=10)
+        plt.annotate(r'$f_1$ = {:.2e}  {} {:.2e} MHz'.format( \
+        popt[0]*1e3, chr(177), perr[0]*1e3), xy=(0.4, 0.05), \
+                     xycoords='axes fraction', size=10)
+        plt.annotate(r'$f_2$ = {:.2e}  {} {:.2e} MHz'.format( \
+        popt[1]*1e3, chr(177), perr[1]*1e3), xy=(0.4, 0.05), \
+                     xycoords='axes fraction', size=10)
 
 def fit_drag(data, DRAG_vec, pulse_vec):
     """Fit calibration curves vs DRAG parameter, for variable number of pulses"""
@@ -317,8 +462,8 @@ def fit_single_qubit_rb(data, lengths, showPlot=False):
     popt, pcov = curve_fit(rb_model, lengths, avg_points, [0.5, 0.01, 0.5])
     perr = np.sqrt(np.diag(pcov))
 
-    ave_infidelity = popt[1] / 2
-    ave_infidelity_err = perr[1] / 2
+    avg_infidelity = popt[1] / 2
+    avg_infidelity_err = perr[1] / 2
 
     if showPlot:
         plt.plot(xpts,data,'.',markersize=0.7, label='data')
@@ -334,8 +479,8 @@ def fit_single_qubit_rb(data, lengths, showPlot=False):
                      xycoords='axes fraction', size=12) # hack the pm symbol
 
     print(r'Average error rate: r = {:.2e} {} {:.2e}'.format( \
-    ave_infidelity, chr(177), ave_infidelity_err))
-    return popt, pcov
+    avg_infidelity, chr(177), avg_infidelity_err))
+    return avg_infidelity, avg_infidelity_err, popt, pcov
 
 def cal_scale(data):
     """
