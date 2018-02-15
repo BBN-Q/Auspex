@@ -200,6 +200,7 @@ class Experiment(metaclass=MetaExperiment):
         self.manual_plotters = [] # Plotters using neither streams nor the pipeline
         self.manual_plotter_callbacks = [] # These are called at the end of run
         self._extra_plots_to_streams = {}
+        self.single_plotter_mode = auspex.config.single_plotter_mode
 
         # Furthermore, keep references to all of the file writers.
         # If multiple writers request acces to the same filename, they
@@ -599,7 +600,7 @@ class Experiment(metaclass=MetaExperiment):
             plotter.plot_server = self.extra_plot_server
         time.sleep(0.5)
         # Kill a previous plotter if desired.
-        if auspex.config.single_plotter_mode and auspex.config.last_plotter_process:
+        if self.single_plotter_mode and auspex.config.last_plotter_process:
             pros = [auspex.config.last_plotter_process]
             if (not self.leave_plot_server_open or self.first_exp) and auspex.config.last_extra_plotter_process:
                 pros += [auspex.config.last_extra_plotter_process]

@@ -152,8 +152,9 @@ class QubitExpFactory(object):
     will override some of the config values depending on the experiment being run."""
 
     @staticmethod
-    def run(meta_file=None, meas_file=None, expname=None, calibration=False, save_data=True,
-           cw_mode=False, repeats=None, single_plotter=auspex.config.single_plotter_mode):
+    def run(meta_file=None, meas_file=None, expname=None, calibration=False, \
+        save_data=True, cw_mode=False, repeats=None, \
+        single_plotter=auspex.config.single_plotter_mode):
         """This passes all of the parameters given to the *create* method
         and then runs the experiment immediately."""
 
@@ -161,9 +162,10 @@ class QubitExpFactory(object):
         spm = auspex.config.single_plotter_mode
         auspex.config.single_plotter_mode = single_plotter
 
-        exp = QubitExpFactory.create(meta_file=meta_file, meas_file=meas_file, expname=expname,
-                                     calibration=calibration, cw_mode=cw_mode, save_data=save_data,
-                                    repeats=repeats)
+        exp = QubitExpFactory.create(meta_file=meta_file, meas_file=meas_file, \
+            expname=expname, calibration=calibration, cw_mode=cw_mode, \
+            save_data=save_data, repeats=repeats, \
+            single_plotter=single_plotter)
         exp.run_sweeps()
 
         # set the plotting mode back to the default value
@@ -171,8 +173,9 @@ class QubitExpFactory(object):
         return exp
 
     @staticmethod
-    def create(meta_file=None, meas_file=None, expname=None, calibration=False, save_data=True,
-               cw_mode=False, instr_filter=None, repeats=None):
+    def create(meta_file=None, meas_file=None, expname=None, \
+        calibration=False, save_data=True, cw_mode=False, instr_filter=None, \
+        repeats=None, single_plotter=single_plotter):
         """Create the experiment, but do not run the sweeps. If *cw_mode* is specified
         the AWGs will be operated in continuous waveform mode, and will not be stopped
         and started between succesive sweep points. The *calibration* argument is used
@@ -195,6 +198,8 @@ class QubitExpFactory(object):
         experiment.cw_mode         = cw_mode
         experiment.calibration     = calibration
         experiment.repeats         = repeats
+
+        experiment.single_plotter_mode = single_plotter
 
         if meta_file:
             QubitExpFactory.load_meta_info(experiment, meta_file)
