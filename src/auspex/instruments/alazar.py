@@ -21,6 +21,25 @@ import auspex.config as config
 
 from unittest.mock import MagicMock
 
+# win32 doesn't support MSG_WAITALL, so on windows we
+# need to do things a slower, less efficient way.
+# (we could optimize this, if performance becomes a problem)
+#
+# TODO: this code is repeated in the X6 driver.
+#
+if sys.platform == 'win32':
+    def sock_recvall(s, data_len):
+        buf = bytearray()
+        while data_len > 0:
+            new = s.recv(data_len)
+            data_len -= len(new)
+            buf.extend(new)
+        return bytes(buf)
+else:
+    def sock_recvall(s, data_len):
+        return s.recv(data_len, socket.MSG_WAITALL)
+
+
 # Dirty trick to avoid loading libraries when scraping
 # This code using quince.
 if config.auspex_dummy_mode:
@@ -140,7 +159,7 @@ class AlazarATS9870(Instrument):
         msg = sock.recv(8)
         # reinterpret as int (size_t)
         msg_size = struct.unpack('n', msg)[0]
-        buf = sock.recv(msg_size, socket.MSG_WAITALL)
+        buf = sock_recvall(sock, msg_size)
         if len(buf) != msg_size:
             logger.error("Channel %s socket msg shorter than expected" % channel.channel)
             logger.error("Expected %s bytes, received %s bytes" % (msg_size, len(buf)))
