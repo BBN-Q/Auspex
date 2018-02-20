@@ -121,6 +121,10 @@ class APS3(Instrument, metaclass=MakeSettersGetters):
             tx_channels:
               '1':
                 enabled: true
+            markers:
+              1m1:
+                delay: 0.0
+
     """
 
     instrument_type = "AWG"
@@ -166,7 +170,7 @@ class APS3(Instrument, metaclass=MakeSettersGetters):
 
     def _load_waves_from_file(self, filename):
 
-        with h5py.File(filename, "w") as f:
+        with h5py.File(filename, "r") as f:
 
             target = FID['/'].attrs['target hardware']
             if not (isinstance(target, str) and (target == "APS3")):
@@ -273,7 +277,7 @@ class APS3(Instrument, metaclass=MakeSettersGetters):
         print("NCO Modulus B: {}".format(B))
 
     def set_trigger_interval(self, interval):
-        num_clcks = np.uint32(interval * CLOCK_FREQ)
+        num_clcks = np.uint32(interval * self.dac_clock)
         self.board.write_memory(CSR_AXI_ADDR + CSR_TRIGGER_INTERVAL_OFFSET, [num_clcks - 0x2])
 
     def get_csr_value(self):
