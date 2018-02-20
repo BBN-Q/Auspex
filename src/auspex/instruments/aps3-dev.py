@@ -24,6 +24,55 @@ from copy import deepcopy
 import h5py
 import fractions
 
+def pack_aps3_waveform(wave):
+
+    N = len(wave)
+    assert N % 8 == 0
+    quad_ct = int(N/8)
+
+
+    wave *= ((1 << 15) - 1) #scale to size
+    wf_re = np.int16(np.real(wave))
+    wf_im = np.int16(np.real(wave))
+
+    packed_wf = np.empty(N, np.uint32).fill(0xBAAA_AAAD)
+
+    def pack_byte(b, pos):
+        return ((np.int32(b).view(np.uint32) & 0x0000_00FF) << 8 * pos)
+
+    # for eight lanes:
+    # * lane 0 = I0 real 15 downto 8
+    # * lane 1 = I0 real  7 downto 0
+    # * lane 2 = I1 real 15 downto 8
+    # * lane 3 = I1 real  7 downto 0
+    # * lane 4 = Q0 imag 15 downto 8
+    # * lane 5 = Q0 imag  7 downto 0
+    # * lane 6 = Q1 imag 15 downto 8
+    # * lane 7 = Q1  imag  7 downto 0
+    for ct in range(0, 8, N-9):
+        #Lane 0 I0 real MSB 15 downto 8
+        packed_wf[ct] = np.bitwise_or.reduce(np.fromiter((pack_byte(wf_re[ct + 2*x] >> 8, x) for x in range(4)), dtype=np.uint32))
+        #Lane 1 I0 real MSB 7 downto 0
+        packed_wf[ct+1] = np.bitwise_or.reduce(np.fromiter((pack_byte(wf_re[ct + 2*x], x) for x in range(4)), dtype=np.uint32))
+
+        #Lane 2 I1 real MSB 15 downto 8
+        packed_wf[ct+2] = np.bitwise_or.reduce(np.fromiter((pack_byte(wf_re[ct+1 + 2*x] >> 8, x) for x in range(4)), dtype=np.uint32))
+        #Lane 3 I1 real MSB 7 downto 0
+        packed_wf[ct+3] = np.bitwise_or.reduce(np.fromiter((pack_byte(wf_re[ct+1 + 2*x], x) for x in range(4)), dtype=np.uint32))
+
+        #Lane 4 I0 imag MSB 15 downto 8
+        packed_wf[ct+4] = np.bitwise_or.reduce(np.fromiter((pack_byte(wf_im[ct + 2*x] >> 8, x) for x in range(4)), dtype=np.uint32))
+        #Lane 5 I0 imag MSB 7 downto 0
+        packed_wf[ct+5] = np.bitwise_or.reduce(np.fromiter((pack_byte(wf_im[ct + 2*x], x) for x in range(4)), dtype=np.uint32))
+
+        #Lane 6 I1 imag MSB 15 downto 8
+        packed_wf[ct+6] = np.bitwise_or.reduce(np.fromiter((pack_byte(wf_im[ct+1 + 2*x] >> 8, x) for x in range(4)), dtype=np.uint32))
+        #Lane 7 I1 imag MSB 7 downto 0
+        packed_wf[ct+7] = np.bitwise_or.reduce(np.fromiter((pack_byte(wf_im[ct+1 + 2*x], x) for x in range(4)), dtype=np.uint32))
+
+    return packed_wf
+
+
 class KCU105(object):
 
     PORT = 0xbb4e #BBN, of course
@@ -179,12 +228,17 @@ class APS3(Instrument, metaclass=MakeSettersGetters):
             self.num_seq = FID['/'].attrs['num sequences']
             self.marker_delay = FID['/'].attrs['marker delay']
 
-            waves = FID['waveforms']
+            wf_lengths = FID['seq_lens'][:]
 
-        if self.num_seq != len(waves):
+        if self.num_seq != len(wf_lengths):
             raise ValueError("Sequence file attributes and waveform data out of sync!")
 
-        N = len(waves)
+        waves = []
+        for ct in range(self.num_seq):
+            wave.append(FID['seq_data_{:d}'.format(ct)])
+
+        waves = [pack_aps3_waveform(wf) for wf in waves]
+
         wf_lengths = np.array([len(wf) for wf in waves], dtype=np.uint32)
         N_pad = ((2*N-1)|15) + 1
         header = np.zeros(N_pad, dtype=np.uint32)
@@ -198,7 +252,7 @@ class APS3(Instrument, metaclass=MakeSettersGetters):
         self.board.write_memory(SDRAM_AXI_ADDR, header)
         addr = 4 * N_pad
         for wf in waves:
-            self.board.write_memory(SDRAM_AXI_ADDR, wf)
+            self.board.write_memory(SDRAM_AXI_ADDR + addr, wf)
             addr += 4*len(wf)
 
         self.setup_waveform()
