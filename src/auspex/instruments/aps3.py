@@ -35,7 +35,8 @@ def pack_aps3_waveform(wave):
     wf_re = np.int16(np.real(wave))
     wf_im = np.int16(np.real(wave))
 
-    packed_wf = np.empty(N, np.uint32).fill(0xBAAA_AAAD)
+    packed_wf = np.empty(N, np.uint32)
+    packed_wf.fill(0xBAAA_AAAD)
 
     def pack_byte(b, pos):
         return ((np.int32(b).view(np.uint32) & 0x0000_00FF) << 8 * pos)
@@ -219,7 +220,7 @@ class APS3(Instrument, metaclass=MakeSettersGetters):
 
     def _load_waves_from_file(self, filename):
 
-        with h5py.File(filename, "r") as f:
+        with h5py.File(filename, "r") as FID:
 
             target = FID['/'].attrs['target hardware']
             if not (isinstance(target, str) and (target == "APS3")):
@@ -230,25 +231,26 @@ class APS3(Instrument, metaclass=MakeSettersGetters):
 
             wf_lengths = FID['seq_lens'][:]
 
-        if self.num_seq != len(wf_lengths):
-            raise ValueError("Sequence file attributes and waveform data out of sync!")
+            if self.num_seq != len(wf_lengths):
+                raise ValueError("Sequence file attributes and waveform data out of sync!")
 
-        waves = []
-        for ct in range(self.num_seq):
-            wave.append(FID['seq_data_{:d}'.format(ct)])
+            waves = []
+            for ct in range(self.num_seq):
+                waves.append(FID['seq_data_{:d}'.format(ct)][:])
 
         waves = [pack_aps3_waveform(wf) for wf in waves]
 
+        N = self.num_seq
         wf_lengths = np.array([len(wf) for wf in waves], dtype=np.uint32)
         N_pad = ((2*N-1)|15) + 1
         header = np.zeros(N_pad, dtype=np.uint32)
         addr = 4 * N_pad
         wf_addrs = np.array([], dtype=np.uint32)
         for wf in waves:
-            wf_addrs.append(addr, np.uint32(addr))
+            wf_addrs = np.append(wf_addrs, np.uint32(addr))
             addr += 4*len(wf)
-        header[0:N-1] = wf_lengths
-        header[N:2*N-1] = wf_addrs
+        header[0:N] = wf_lengths
+        header[N:2*N] = wf_addrs
         self.board.write_memory(SDRAM_AXI_ADDR, header)
         addr = 4 * N_pad
         for wf in waves:
@@ -263,7 +265,7 @@ class APS3(Instrument, metaclass=MakeSettersGetters):
         return self._sequence_filename
     @seq_file.setter
     def seq_file(self, filename):
-        self._sequence_filename = sequence_filename
+        self._sequence_filename = filename
         self._load_waves_from_file(filename)
 
     @property
