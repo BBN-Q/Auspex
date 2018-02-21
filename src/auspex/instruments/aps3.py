@@ -24,6 +24,33 @@ from copy import deepcopy
 import h5py
 import fractions
 
+def read_aps3_file(filename):
+
+    with h5py.File(filename, "r") as FID:
+
+        target = FID['/'].attrs['target hardware']
+        if not (isinstance(target, str) and (target == "APS3")):
+            raise IOError("Invalid sequence file!")
+
+        num_seq = FID['/'].attrs['num sequences']
+        marker_delay = FID['/'].attrs['marker delay']
+        wf_lengths = FID['seq_lens'][:]
+
+        if num_seq != len(wf_lengths):
+            raise ValueError("Sequence file attributes and waveform data out of sync!")
+
+        waves = []
+        for ct in range(num_seq):
+            waves.append(FID['seq_data_{:d}'.format(ct)][:])
+
+    out = {'num_seq': num_seq,
+                'marker_delay': marker_delay,
+                'wf_lengths': wf_lengths,
+                'waves': waves}
+    return out
+
+
+
 def pack_aps3_waveform(wave):
 
     N = len(wave)
