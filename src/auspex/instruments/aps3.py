@@ -31,9 +31,9 @@ def pack_aps3_waveform(wave):
     quad_ct = int(N/8)
 
 
-    wave *= ((1 << 15) - 1) #scale to size
-    wf_re = np.int16(np.real(wave))
-    wf_im = np.int16(np.real(wave))
+    wf_scaled = wave * ((1 << 15) - 1) #scale to size
+    wf_re = np.int16(np.around(np.real(wf_scaled)))
+    wf_im = np.int16(np.around(np.imag(wf_scaled)))
 
     packed_wf = np.empty(N, np.uint32)
     packed_wf.fill(0xBAAA_AAAD)
@@ -50,7 +50,7 @@ def pack_aps3_waveform(wave):
     # * lane 5 = Q0 imag  7 downto 0
     # * lane 6 = Q1 imag 15 downto 8
     # * lane 7 = Q1  imag  7 downto 0
-    for ct in range(0, 8, N-9):
+    for ct in range(0, N-8, 8):
         #Lane 0 I0 real MSB 15 downto 8
         packed_wf[ct] = np.bitwise_or.reduce(np.fromiter((pack_byte(wf_re[ct + 2*x] >> 8, x) for x in range(4)), dtype=np.uint32))
         #Lane 1 I0 real MSB 7 downto 0
