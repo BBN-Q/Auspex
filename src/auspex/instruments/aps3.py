@@ -8,6 +8,7 @@
 
 __all__ = ['APS3', 'KCU105']
 
+from auspex.log import logger
 from .instrument import Instrument, MetaInstrument, is_valid_ipv4
 from .bbn import MakeSettersGetters
 #from auspex.log import logger
@@ -23,6 +24,14 @@ from copy import deepcopy
 
 import h5py
 import fractions
+
+pack_cython = False
+try:
+    from auspex.cython_modules.aps3_wavepack import pack_aps3_waveform_c
+    pack_cython = True
+except ImportError:
+    logger.warning('Could not import Cython APS3 waveform packer, falling back to pure Python version.')
+    pack_cython = False
 
 def read_aps3_file(filename):
 
@@ -82,17 +91,14 @@ def pack_aps3_waveform(wave):
         packed_wf[ct] = np.bitwise_or.reduce(np.fromiter((pack_byte(wf_re[ct + 2*x] >> 8, x) for x in range(4)), dtype=np.uint32))
         #Lane 1 I0 real MSB 7 downto 0
         packed_wf[ct+1] = np.bitwise_or.reduce(np.fromiter((pack_byte(wf_re[ct + 2*x], x) for x in range(4)), dtype=np.uint32))
-
         #Lane 2 I1 real MSB 15 downto 8
         packed_wf[ct+2] = np.bitwise_or.reduce(np.fromiter((pack_byte(wf_re[ct+1 + 2*x] >> 8, x) for x in range(4)), dtype=np.uint32))
         #Lane 3 I1 real MSB 7 downto 0
         packed_wf[ct+3] = np.bitwise_or.reduce(np.fromiter((pack_byte(wf_re[ct+1 + 2*x], x) for x in range(4)), dtype=np.uint32))
-
         #Lane 4 I0 imag MSB 15 downto 8
         packed_wf[ct+4] = np.bitwise_or.reduce(np.fromiter((pack_byte(wf_im[ct + 2*x] >> 8, x) for x in range(4)), dtype=np.uint32))
         #Lane 5 I0 imag MSB 7 downto 0
         packed_wf[ct+5] = np.bitwise_or.reduce(np.fromiter((pack_byte(wf_im[ct + 2*x], x) for x in range(4)), dtype=np.uint32))
-
         #Lane 6 I1 imag MSB 15 downto 8
         packed_wf[ct+6] = np.bitwise_or.reduce(np.fromiter((pack_byte(wf_im[ct+1 + 2*x] >> 8, x) for x in range(4)), dtype=np.uint32))
         #Lane 7 I1 imag MSB 7 downto 0
@@ -265,7 +271,10 @@ class APS3(Instrument, metaclass=MakeSettersGetters):
             for ct in range(self.num_seq):
                 waves.append(FID['seq_data_{:d}'.format(ct)][:])
 
-        waves = [pack_aps3_waveform(wf) for wf in waves]
+        if pack_cython:
+            waves = [pack_aps3_waveform_c(wf) for wf in waves]
+        else:
+            waves = [pack_aps3_waveform(wf) for wf in waves]
 
         N = self.num_seq
         wf_lengths = np.array([len(wf) for wf in waves], dtype=np.uint32)
