@@ -17,6 +17,7 @@ import asyncio
 import base64
 import datetime
 import subprocess
+import time
 
 import numpy as np
 import networkx as nx
@@ -82,6 +83,8 @@ class QubitExperiment(Experiment):
             for awg in self.awgs:
                 awg.run()
 
+        time.sleep(1)
+
     def add_qubit_sweep(self, property_name, values):
         """
         Add a *ParameterSweep* to the experiment. By the time this experiment exists, it has already been run
@@ -130,7 +133,7 @@ class QubitExperiment(Experiment):
                 awg.run()
 
         # Wait for all of the acquisitions to complete
-        timeout = 10
+        timeout = 30
         try:
             await asyncio.gather(*[dig.wait_for_acquisition(timeout) for dig in self.digitizers])
         except Exception as e:
