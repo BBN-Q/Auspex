@@ -190,13 +190,15 @@ class APS3(Instrument, metaclass=MakeSettersGetters):
         self.nco_frequency = 0
         self.dac_mode = "MIX"
 
+        self.num_rr = 0xFFFF #this sets to board to play in "infinite-loop" mode
+
     def connect(self, resource_name=None):
         if resource_name is None and self.resource_name is None:
             raise Exception("Must supply a resource name to `connect` if the instrument was initialized without one.")
         elif resource_name is not None:
             self.resource_name = resource_name
         if is_valid_ipv4(self.resource_name):
-            self.board.connect(ip_addr = resource_name)
+            self.board.connect(ip_addr = self.resource_name)
             self.connected = True
 
     def disconnect(self):
@@ -229,6 +231,8 @@ class APS3(Instrument, metaclass=MakeSettersGetters):
             self.num_seq = FID['/'].attrs['num sequences']
             self.marker_delay = FID['/'].attrs['marker delay']
 
+            #self.marker_delay = 1600
+
             wf_lengths = FID['seq_lens'][:]
 
             if self.num_seq != len(wf_lengths):
@@ -258,6 +262,8 @@ class APS3(Instrument, metaclass=MakeSettersGetters):
             addr += 4*len(wf)
 
         self.setup_waveform()
+
+        sleep(0.1)
 
 
     @property
@@ -305,12 +311,7 @@ class APS3(Instrument, metaclass=MakeSettersGetters):
             raise ValueError("Unrecognized AD9164 DAC mode.")
         self._dac_mode = mode
 
-    @property
-    def nco_frequency(self):
-        return self._nco
-    @nco_frequency.setter
-    def nco_frequency(self, freq):
-        self._nco = freq
+    def _get_nco_params(self, freq, print=False):
         if freq < self.dac_clock / 2**48:
             X = 1
             A = 0
@@ -327,12 +328,25 @@ class APS3(Instrument, metaclass=MakeSettersGetters):
         assert B > 0
         assert A < B
 
-        print("NCO switching not yet implemented in Auspex... ")
-        print("NCO FTW: {}".format(hex(X)))
-        print("NCO Modulus A: {}".format(A))
-        print("NCO Modulus B: {}".format(B))
+        if print:
+            print("NCO switching not yet implemented in Auspex... ")
+            print("NCO FTW: {}".format(hex(X)))
+            print("NCO Modulus A: {}".format(A))
+            print("NCO Modulus B: {}".format(B))
 
-    def set_trigger_interval(self, interval):
+    @property
+    def nco_frequency(self):
+        return self._nco
+    @nco_frequency.setter
+    def nco_frequency(self, freq):
+        self._nco = freq
+
+    @property
+    def trigger_interval(self):
+        num_clcks = self.board.read_memory(CSR_AXI_ADDR + CSR_TRIGGER_INTERVAL_OFFSET, 1)[0]
+        return int(num_clcks) / self.dac_clock
+    @trigger_interval.setter
+    def trigger_interval(self, interval):
         num_clcks = np.uint32(interval * self.dac_clock)
         self.board.write_memory(CSR_AXI_ADDR + CSR_TRIGGER_INTERVAL_OFFSET, [num_clcks - 0x2])
 
