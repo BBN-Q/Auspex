@@ -151,7 +151,9 @@ class PulseCalibration(object):
                     elif self.quad == 'amp':
                         var[qubit_name] = (realvar + imagvar) / N
                     elif self.quad == 'phase':
-                        # take the approach from Qlab
+                        # take the approach from Qlab assuming the noise is
+                        # Gaussian in both quadratures i.e. 'circular' in the 
+                        # IQ plane.
                         stddata = np.sqrt(realvar + imagvar)
                         stdtheta = 180/np.pi * 2 * np.arctan(stddata \
                             / abs(data[qubit_name]))
