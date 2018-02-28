@@ -1,5 +1,7 @@
 import unittest
 import os
+import glob
+import shutil
 import time
 import numpy as np
 from QGL import *
@@ -28,6 +30,12 @@ if not os.path.exists(awg_dir):
 
 from auspex.exp_factory import QubitExpFactory
 
+def clear_test_data():
+    for file in glob.glob("test_*.h5"):
+        os.remove(file)
+    for direc in glob.glob("test_writehdf5*"):
+        shutil.rmtree(direc)
+
 class QubitExpFactoryTestCase(unittest.TestCase):
 
     qubits = ["q1"]
@@ -52,6 +60,7 @@ class QubitExpFactoryTestCase(unittest.TestCase):
         self.assertTrue(exp._output_connectors["q1-IntegratedSS"].descriptor.axes[0].points[-1] == 6.5e9)
 
     def test_run_direct(self):
+        clear_test_data()
         qq = QubitFactory("q1")
         exp = QubitExpFactory.run(RabiAmp(qq, np.linspace(-1,1,21)), save_data = False)
         buf = exp.buffers[0]
@@ -64,6 +73,7 @@ class QubitExpFactoryTestCase(unittest.TestCase):
     # Figure out how to buffer a partial average for testing...
     @unittest.skip("Partial average for buffers to be fixed")
     def test_final_vs_partial_avg(self):
+        clear_test_data()
         qq = QubitFactory("q1")
         exp = QubitExpFactory.run(RabiAmp(qq, np.linspace(-1,1,21)))
         fab = exp.filters['final-avg-buff'].out_queue.get()['Data']
