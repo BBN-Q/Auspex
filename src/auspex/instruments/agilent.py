@@ -10,6 +10,7 @@ __all__ = ['Agilent33220A', 'Agilent34970A', 'AgilentE8363C', 'AgilentN5183A', '
 
 import socket
 import time
+import copy
 import re
 import numpy as np
 from .instrument import SCPIInstrument, Command, StringCommand, FloatCommand, IntCommand, is_valid_ipv4
@@ -81,7 +82,210 @@ class Agilent33220A(SCPIInstrument):
     def trigger(self):
         self.interface.write("*TRG")
 
+class Segment(object):
+    def __init__(self,name,data=[],dac=False,control="once",repeat=0,mkr_mode="maintain",mkr_pts=4):
+        self.name = name
+        self.data = data
+        self.dac = dac
+        self.control = control
+        self.repeat = repeat
+        self.mkr_mode = mkr_mode
+        self.mkr_pts = mkr_pts
 
+    def self_check(self):
+        N = len(self.data)
+        if N<8:
+            logger.error("Waveform %s must have at least 8 points" %self.name)
+            return False
+        else:
+            if self.mkr_pts < 4:
+                self.mkr_pts = 4
+                logger.warning("Marker points of waveform %s is less than 4. Set to 4." %self.name)
+            if self.mkr_pts > N-3:
+                self.mkr_pts = N-3
+                logger.warning("Marker points of waveform %s is longer than lenght-3 = %d. Set to lenght-3." %(self.name,N-3))
+            return True
+
+    def update(self,**kwargs):
+        for k,v in kwargs.items():
+            if k in ["name","data","control","repeat","mkr_mode","mkr_pts"]:
+                logger.info("Set %s.%s = %s" %(self.name,k,v))
+                getattr(self,k) = v
+            else:
+                logger.warning("Key %s is not valid for Segment %s. Ignore." %(k,self.name))
+        return self.self_check()
+
+class Segments(object):
+    def __init__(self,name):
+        self.name = name
+        self.segments = []
+
+    def add_segment(self,segment,**kwargs):
+        """ Create a copy of the segment, update its values, then add to the sequence.
+        The copy and update are to allow reuse of the same segment with different configurations.
+        For safety, avoid reuse, but add different segment objects to the sequence.
+        """
+        seg = copy.copy(segment)
+        if seg.update(**kwargs):
+            log.info("Add segment %s into sequence %s" %(seg.name,self.name))
+            self.segments.append(seg)
+
+    def get_descriptor(self):
+        descriptor = '"%s"' %self.name
+        for seg in self.segments:
+            descriptor += ',"%s",%d,%s,%s,%d' %(seg.name,seg.repeat,seg.control,seg.mkr_mode,seg.mkr_pts)
+        N = len(descriptor)
+        n = int(np.log10(N))+1
+        descriptor = "#%d%d%s" %(n,N,descriptor)
+        logger.info("Block descriptor for sequence %s: %s" %(self.name,descriptor))
+        return descriptor
+
+
+class Agilent33500B(SCPIInstrument):
+    """ Agilent/Keysight 33500 series 2-channel Arbitrary Waveform Generator
+
+    Replacement model for 33220 series with some changes and additional functionality
+    """
+    def __init__(self, resource_name=None, *args, **kwargs):
+        super(Agilent33500B, self).__init__(resource_name, *args, **kwargs)
+        self.name = "Agilent 33500B AWG"
+
+    def connect(self, resource_name=None, interface_type=None):
+        if resource_name is not None:
+            self.resource_name = resource_name
+        #If we only have an IP address then tack on the raw socket port to the VISA resource string
+        if is_valid_ipv4(self.resource_name):
+            self.resource_name += "::5025::SOCKET"
+        super(Agilent33220A, self).connect(resource_name=self.resource_name, interface_type=interface_type)
+        self.interface._resource.read_termination = u"\n"
+        self.interface._resource.write_termination = u"\n"
+        self.interface._resource.timeout = 3000 #seem to have trouble timing out on first query sometimes
+
+    FUNCTION_MAP = {"Sine": "SIN",
+                    "Square": "SQU",
+                    "Triangle": "TRI",
+                    "Ramp": "RAMP",
+                    "Pulse": "PULS",
+                    "PRBS": "PRBS",
+                    "Noise": "NOIS",
+                    "DC": "DC",
+                    "User": "ARB"}
+    frequency = FloatCommand(scpi_string="SOURce{channel:d}:FREQuency",additional_args=['channel'])
+    # FUNCtion subsystem
+    function = StringCommand(scpi_string="SOURce{channel:d}:FUNCtion",
+                                value_map = FUNCTION_MAP,additional_args=['channel'])
+    ramp_symmetry = FloatCommand(scpi_string="FUNCtion:RAMP:SYMMetry")
+    # When function is Pulse:
+    pulse_width = FloatCommand(scpi_string="SOURce{channel:d}:FUNCtion:PULSe:WIDTh",
+                                additional_args=['channel'])
+    pulse_period = FloatCommand(scpi_string="SOURce{channel:d}:FUNCtion:PULSe:PERiod",
+                                additional_args=['channel'])
+    pulse_edge = FloatCommand(scpi_string="SOURce{channel:d}:FUNCtion:PULSe:TRANsition",
+                                additional_args=['channel'])
+    pulse_dcyc = IntCommand(scpi_string="SOURce{channel:d}:FUNCtion:PULSe:DCYCle",
+                                additional_args=['channel'])
+    # When function is ARBitrary:
+    arb_load = StringCommand(scpi_string="SOURce{channel:d}:FUNCtion:ARBitrary",
+                                additional_args=['channel'])
+    arb_advance = StringCommand(scpi_string="SOURce{channel:d}:FUNCtion:ARBitrary:ADVance",
+                                allowed_values=["Trigger","Srate"],
+                                additional_args=['channel'])
+    arb_frequency = FloatCommand(scpi_string="SOURce{channel:d}:FUNCtion:ARBitrary:FREQuency",
+                                additional_args=['channel'])
+    arb_amplitude = FloatCommand(scpi_string="SOURce{channel:d}:FUNCtion:ARBitrary:PTPeak",
+                                additional_args=['channel'])
+    arb_sample = IntegerCommand(scpi_string="SOURce{channel:d}:FUNCtion:ARBitrary:SRATe",
+                                additional_args=['channel'])
+    # VOLTage subsystem
+    amplitude = FloatCommand(scpi_string="SOURce{channel:d}:VOLT",
+                            additional_args=['channel'])
+    dc_offset = FloatCommand(scpi_string="SOURce{channel:d}:VOLT:OFFSET",
+                            additional_args=['channel'])
+    auto_range = Command(scpi_string="SOURce{channel:d}:VOLTage:RANGe:AUTO",
+                            value_map={True: "1", False: "0"},
+                            additional_args=['channel'])
+    load_resistance = FloatCommand(scpi_string="SOURce{channel:d}:OUTPut:LOAD",
+                            additional_args=['channel'])
+    low_voltage = FloatCommand(scpi_string="SOURce{channel:d}:VOLTage:LOW",
+                            additional_args=['channel'])
+    high_voltage = FloatCommand(scpi_string="SOURce{channel:d}:VOLTage:HIGH",
+                            additional_args=['channel'])
+    output_units = Command(scpi_string="SOURce{channel:d}:VOLTage:UNIT?",
+                            value_map={"Vpp" : "VPP", "Vrms" : "VRMS", "dBm" : "DBM"},
+                                                    additional_args=['channel'])
+    # Output subsystem
+    output = Command(scpi_string="OUTP{channel:d}", value_map={True: "1", False: "0"},
+                            additional_args=['channel'])
+    load = FloatCommand(scpi_string="OUTP{channel:d}:LOAD", value_range=[1,1e4],
+                            additional_args=['channel'])
+    output_gated = Command(scpi_string="OUTP{channel:d}:MODE", value_map={True:"GATed", False:"NORMal"},
+                            additional_args=['channel'])
+    polarity = Command(scpi_string="OUTP{channel:d}:POL",
+                            value_map = {1 : "NORMal", -1 : "INVerted"},
+                            additional_args=['channel'])
+    output_sync = Command(scpi_string="OUTP{channel:d}:SYNC",
+                            value_map = {True: "ON", False: "OFF"},
+                            additional_args=['channel'])
+    sync_mode = StringCommand(scpi_string="OUTP{channel:d}:SYNC:MODE",
+                            allowed_values = ["Normal","Carrier","Marker"],
+                            additional_args=['channel'])
+    sync_polarity = Command(scpi_string="OUTP{channel:d}:SYNC:POL",
+                            value_map = {1 : "NORMal", -1 : "INVerted"},
+                            additional_args=['channel'])
+    sync_source = Command(scpi_string="OUTP:SYNC:SOURce",
+                            value_map = {1 : "CH1", 1 : "CH2"})
+    output_trigger = Command(scpi_string="OUTP:TRIGger", value_map={True:1, False:0})
+    output_trigger_source = Command(scpi_string="OUTP:TRIGger:SOURce",
+                        value_map = {1: "CH1", 2: "CH2"})
+    output_trigger_slope = StringCommand(scpi_string="OUTP:TRIGger:SLOPe",
+                                value_map = {"Positive": "POS", "Negative": "NEG"})
+    #Trigger, Burst, etc...
+    burst_state = Command(scpi_string="SOURce{channel:d}:BURSt:STATE",
+                                value_map = {True: 1, False: 0},
+                                additional_args=['channel'])
+    burst_cycles = FloatCommand(scpi_string="SOURce{channel:d}:BURSt:NCYCles",
+                            additional_args=['channel'])
+    burst_mode = StringCommand(scpi_string="SOURce{channel:d}:BURSt:MODE",
+                                value_map = {"Triggered": "TRIG", "Gated": "GAT"},
+                            additional_args=['channel'])
+    trigger_source = StringCommand(scpi_string="TRIGger:SOURce",
+                        value_map = {"Internal": "IMM", "External": "EXT", "Bus": "BUS"})
+    trigger_slope = StringCommand(scpi_string="TRIGger:SLOPe",
+                                value_map = {"Positive": "POS", "Negative": "NEG"})
+    # Data subsystem
+    sequence = StringCommand(scpi_string="SOURce{channel:d}:DATA:SEQuence",
+                            additional_args=['channel'])
+    def clear_waveform(self,channel=1):
+        """ Clear all waveforms loaded in the memory """
+        logger.info("Clear all waveforms loaded in the memory of instrument: %s" %self.name)
+        self.interface.write("SOURce%d:DATA:VOLatile:CLEar" %channel)
+
+    def upload_waveform(self,data,channel=1,name="mywaveform",dac=False):
+        """ Load the data into a waveform memory """
+        N = len(data)
+        n = int(np.log10(N))+1
+        log.info("Upload waveform %s to instrument %s, channel %d" %(name,self.name,channel))
+        if dac:
+            self.interface.write_binary_values("SOURce%s:DATA:ARBitrary1:DAC %s,#%d%d" %(channel,name,n,N),
+                                                data, datatype='f', is_big_endian=False)
+        else:
+            self.interface.write_binary_values("SOURce%s:DATA:ARBitrary1 %s,#%d%d" %(channel,name,n,N),
+                                                data, datatype='d', is_big_endian=False)
+
+    def upload_sequence(self,segments,channel=1):
+        """ Upload a sequence to the instrument """
+        # Upload each segment
+        for seg in segments.segments:
+            self.upload_waveform(seg.data,channel=channel,name=seg.name,dac=seg.dac)
+        # Now upload the sequence
+        logger.info("Upload sequence %s to instrument %s" %(segments.name,self.name))
+        self.sequence = segments.get_descriptor()
+
+    def arb_sync(self):
+        self.interface.write("FUNCtion:ARBitrary:SYNChronize")
+
+    def trigger(self,channel=1):
+        self.interface.write("TRIGger%d" %channel)
 
 class Agilent34970A(SCPIInstrument):
     """Agilent 34970A MUX"""
