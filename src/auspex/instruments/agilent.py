@@ -6,7 +6,7 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-__all__ = ['Agilent33220A', 'Agilent34970A', 'AgilentE8363C', 'AgilentN5183A', 'AgilentE9010A']
+__all__ = ['Agilent33220A', 'Agilent33500B', 'Agilent34970A', 'AgilentE8363C', 'AgilentN5183A', 'AgilentE9010A']
 
 import socket
 import time
@@ -82,69 +82,11 @@ class Agilent33220A(SCPIInstrument):
     def trigger(self):
         self.interface.write("*TRG")
 
-class Segment(object):
-    def __init__(self,name,data=[],dac=False,control="once",repeat=0,mkr_mode="maintain",mkr_pts=4):
-        self.name = name
-        self.data = data
-        self.dac = dac
-        self.control = control
-        self.repeat = repeat
-        self.mkr_mode = mkr_mode
-        self.mkr_pts = mkr_pts
-
-    def self_check(self):
-        N = len(self.data)
-        if N<8:
-            logger.error("Waveform %s must have at least 8 points" %self.name)
-            return False
-        else:
-            if self.mkr_pts < 4:
-                self.mkr_pts = 4
-                logger.warning("Marker points of waveform %s is less than 4. Set to 4." %self.name)
-            if self.mkr_pts > N-3:
-                self.mkr_pts = N-3
-                logger.warning("Marker points of waveform %s is longer than lenght-3 = %d. Set to lenght-3." %(self.name,N-3))
-            return True
-
-    def update(self,**kwargs):
-        for k,v in kwargs.items():
-            if k in ["name","data","control","repeat","mkr_mode","mkr_pts"]:
-                logger.info("Set %s.%s = %s" %(self.name,k,v))
-                getattr(self,k) = v
-            else:
-                logger.warning("Key %s is not valid for Segment %s. Ignore." %(k,self.name))
-        return self.self_check()
-
-class Segments(object):
-    def __init__(self,name):
-        self.name = name
-        self.segments = []
-
-    def add_segment(self,segment,**kwargs):
-        """ Create a copy of the segment, update its values, then add to the sequence.
-        The copy and update are to allow reuse of the same segment with different configurations.
-        For safety, avoid reuse, but add different segment objects to the sequence.
-        """
-        seg = copy.copy(segment)
-        if seg.update(**kwargs):
-            log.info("Add segment %s into sequence %s" %(seg.name,self.name))
-            self.segments.append(seg)
-
-    def get_descriptor(self):
-        descriptor = '"%s"' %self.name
-        for seg in self.segments:
-            descriptor += ',"%s",%d,%s,%s,%d' %(seg.name,seg.repeat,seg.control,seg.mkr_mode,seg.mkr_pts)
-        N = len(descriptor)
-        n = int(np.log10(N))+1
-        descriptor = "#%d%d%s" %(n,N,descriptor)
-        logger.info("Block descriptor for sequence %s: %s" %(self.name,descriptor))
-        return descriptor
-
 
 class Agilent33500B(SCPIInstrument):
     """ Agilent/Keysight 33500 series 2-channel Arbitrary Waveform Generator
 
-    Replacement model for 33220 series with some changes and additional functionality
+    Replacement model for 33220 series with some changes and additional sequencing functionality
     """
     def __init__(self, resource_name=None, *args, **kwargs):
         super(Agilent33500B, self).__init__(resource_name, *args, **kwargs)
@@ -189,13 +131,14 @@ class Agilent33500B(SCPIInstrument):
                                 additional_args=['channel'])
     arb_advance = StringCommand(scpi_string="SOURce{channel:d}:FUNCtion:ARBitrary:ADVance",
                                 allowed_values=["Trigger","Srate"],
-                                additional_args=['channel'])
+                                additional_args=['channel'],
+                                doc="Advance mode to the next point: 'Trigger' or 'Srate' (Sample Rate)")
     arb_frequency = FloatCommand(scpi_string="SOURce{channel:d}:FUNCtion:ARBitrary:FREQuency",
                                 additional_args=['channel'])
     arb_amplitude = FloatCommand(scpi_string="SOURce{channel:d}:FUNCtion:ARBitrary:PTPeak",
                                 additional_args=['channel'])
-    arb_sample = IntegerCommand(scpi_string="SOURce{channel:d}:FUNCtion:ARBitrary:SRATe",
-                                additional_args=['channel'])
+    arb_sample = IntCommand(scpi_string="SOURce{channel:d}:FUNCtion:ARBitrary:SRATe",
+                                additional_args=['channel'],doc="Sample Rate")
     # VOLTage subsystem
     amplitude = FloatCommand(scpi_string="SOURce{channel:d}:VOLT",
                             additional_args=['channel'])
@@ -204,20 +147,19 @@ class Agilent33500B(SCPIInstrument):
     auto_range = Command(scpi_string="SOURce{channel:d}:VOLTage:RANGe:AUTO",
                             value_map={True: "1", False: "0"},
                             additional_args=['channel'])
-    load_resistance = FloatCommand(scpi_string="SOURce{channel:d}:OUTPut:LOAD",
-                            additional_args=['channel'])
     low_voltage = FloatCommand(scpi_string="SOURce{channel:d}:VOLTage:LOW",
                             additional_args=['channel'])
     high_voltage = FloatCommand(scpi_string="SOURce{channel:d}:VOLTage:HIGH",
                             additional_args=['channel'])
     output_units = Command(scpi_string="SOURce{channel:d}:VOLTage:UNIT?",
                             value_map={"Vpp" : "VPP", "Vrms" : "VRMS", "dBm" : "DBM"},
-                                                    additional_args=['channel'])
+                            additional_args=['channel'])
     # Output subsystem
     output = Command(scpi_string="OUTP{channel:d}", value_map={True: "1", False: "0"},
                             additional_args=['channel'])
     load = FloatCommand(scpi_string="OUTP{channel:d}:LOAD", value_range=[1,1e4],
-                            additional_args=['channel'])
+                            additional_args=['channel'],
+                            doc="Expected load resistance, 1-10k")
     output_gated = Command(scpi_string="OUTP{channel:d}:MODE", value_map={True:"GATed", False:"NORMal"},
                             additional_args=['channel'])
     polarity = Command(scpi_string="OUTP{channel:d}:POL",
@@ -255,37 +197,122 @@ class Agilent33500B(SCPIInstrument):
     # Data subsystem
     sequence = StringCommand(scpi_string="SOURce{channel:d}:DATA:SEQuence",
                             additional_args=['channel'])
+
     def clear_waveform(self,channel=1):
         """ Clear all waveforms loaded in the memory """
-        logger.info("Clear all waveforms loaded in the memory of instrument: %s" %self.name)
+        logger.info("Clear all waveforms loaded in the memory of %s" %self.name)
         self.interface.write("SOURce%d:DATA:VOLatile:CLEar" %channel)
 
     def upload_waveform(self,data,channel=1,name="mywaveform",dac=False):
-        """ Load the data into a waveform memory """
+        """ Load the data into a waveform memory
+
+        dac: True if values are converted to integer already
+        """
         N = len(data)
         n = int(np.log10(N))+1
         log.info("Upload waveform %s to instrument %s, channel %d" %(name,self.name,channel))
         if dac:
             self.interface.write_binary_values("SOURce%s:DATA:ARBitrary1:DAC %s,#%d%d" %(channel,name,n,N),
-                                                data, datatype='f', is_big_endian=False)
+                                                data, datatype='d', is_big_endian=False)
         else:
             self.interface.write_binary_values("SOURce%s:DATA:ARBitrary1 %s,#%d%d" %(channel,name,n,N),
-                                                data, datatype='d', is_big_endian=False)
+                                                data, datatype='f', is_big_endian=False)
 
-    def upload_sequence(self,segments,channel=1):
+    def upload_sequence(self,sequence,channel=1):
         """ Upload a sequence to the instrument """
         # Upload each segment
-        for seg in segments.segments:
+        for seg in sequence.segments:
             self.upload_waveform(seg.data,channel=channel,name=seg.name,dac=seg.dac)
         # Now upload the sequence
-        logger.info("Upload sequence %s to instrument %s" %(segments.name,self.name))
-        self.sequence = segments.get_descriptor()
+        descriptor = sequence.get_descriptor()
+        logger.info("Upload sequence %s to %s: %s" %(sequence.name,self.name,descriptor))
+        self.sequence = descriptor
 
     def arb_sync(self):
+        """ Restart the sequences and synchronize them """
         self.interface.write("FUNCtion:ARBitrary:SYNChronize")
 
     def trigger(self,channel=1):
         self.interface.write("TRIGger%d" %channel)
+
+    def abort(self):
+        self.interface.write("ABORt")
+
+    # Subclasses of Agilent33500B
+    class Segment(object):
+        def __init__(self,name,data=[],dac=False,control="once",repeat=0,mkr_mode="maintain",mkr_pts=4):
+            """ Information of a segment/waveform
+
+            dac: True if data is converted to integer already
+            control: once - play once
+                    onceWaitTrig - play once then wait for trigger
+                    repeat - repeat a number of times (repeat count)
+                    repeatInf - repeat forever until stopped
+                    repeatTilTrig - repeat until triggered then advance
+            repeat: number of repeats if control == repeat
+            mkr_mode: marker mode: maintain-maintaincurrentmarkerstateatstartofsegment
+                                lowAtStart-forcemarkerlowatstartofsegment
+                                highAtStart-forcemarkerhighatstartofsegment
+                                highAtStartGoLow-forcemarkerhighatstartofsegmentandthenlowatmarkerposition
+            mkr_pts: marker points
+            """
+            self.name = name
+            self.data = data
+            self.dac = dac
+            self.control = control
+            self.repeat = repeat
+            self.mkr_mode = mkr_mode
+            self.mkr_pts = mkr_pts
+
+        def self_check(self):
+            N = len(self.data)
+            if N<8:
+                logger.error("Waveform %s must have at least 8 points" %self.name)
+                return False
+            else:
+                if self.mkr_pts < 4:
+                    self.mkr_pts = 4
+                    logger.warning("Marker points of waveform %s is less than 4. Set to 4." %self.name)
+                if self.mkr_pts > N-3:
+                    self.mkr_pts = N-3
+                    logger.warning("Marker points of waveform %s is longer than lenght-3 = %d. Set to lenght-3." %(self.name,N-3))
+                return True
+
+        def update(self,**kwargs):
+            for k,v in kwargs.items():
+                if k in ["name","data","control","repeat","mkr_mode","mkr_pts"]:
+                    logger.info("Set %s.%s = %s" %(self.name,k,v))
+                    getattr(self,k) = v
+                else:
+                    logger.warning("Key %s is not valid for Segment %s. Ignore." %(k,self.name))
+            return self.self_check()
+
+    class Sequence(object):
+        def __init__(self,name):
+            self.name = name
+            self.segments = []
+
+        def add_segment(self,segment,**kwargs):
+            """ Create a copy of the segment, update its values, then add to the sequence.
+            The copy and update are to allow reuse of the same segment with different configurations.
+            For safety, avoid reuse, but add different segment objects to the sequence.
+            """
+            seg = copy.copy(segment)
+            if seg.update(**kwargs):
+                log.info("Add segment %s into sequence %s" %(seg.name,self.name))
+                self.segments.append(seg)
+
+        def get_descriptor(self):
+            """ Return block descriptor to upload to the instrument """
+            descriptor = '"%s"' %self.name
+            for seg in self.segments:
+                descriptor += ',"%s",%d,%s,%s,%d' %(seg.name,seg.repeat,seg.control,seg.mkr_mode,seg.mkr_pts)
+            N = len(descriptor)
+            n = int(np.log10(N))+1
+            descriptor = "#%d%d%s" %(n,N,descriptor)
+            logger.info("Block descriptor for sequence %s: %s" %(self.name,descriptor))
+            return descriptor
+
 
 class Agilent34970A(SCPIInstrument):
     """Agilent 34970A MUX"""
