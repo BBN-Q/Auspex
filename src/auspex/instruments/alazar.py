@@ -13,6 +13,7 @@ import socket
 import struct
 import datetime
 import asyncio
+import sys
 import numpy as np
 
 from .instrument import Instrument, DigitizerChannel
