@@ -38,12 +38,13 @@ if config.auspex_dummy_mode:
     fake_aps1 = True
     aps1 = MagicMock()
 else:
-    try:
-        import aps as libaps
-        if libaps.APS_PY_WRAPPER_VERSION < 1.4:
-            raise ImportError("Old version of libaps found. Please update.")
-        fake_aps1 = False
-    except:
+    #try:
+        #import aps as libaps
+        #if libaps.APS_PY_WRAPPER_VERSION < 1.4:
+        #    raise ImportError("Old version of libaps found. Please update.")
+        #fake_aps1 = False
+    #except:
+    if True:
         fake_aps1 = True
         aps1_missing = True
         libaps = MagicMock()

@@ -189,7 +189,10 @@ class PulseCalibration(object):
         # Read the current (pre-cal) values for the parameters above
         if len(self.qubit_names) == 1:
             ctrl_settings = self.settings['qubits'][self.qubit_names[0]]['control']
-            ctrl_freq = self.settings['instruments'][ctrl_settings['generator']]['frequency']
+            try:
+                ctrl_freq = self.settings['instruments'][ctrl_settings['generator']]['frequency']
+            except:
+                pass #TODO: nasty hack for APS3... fixme!
         else:
             ctrl_settings = self.settings['edges'][self.edge_name]
         cal_pars = {}
@@ -308,9 +311,10 @@ class RabiAmpCalibration(PulseCalibration):
         self.saved_settings['qubits'][self.qubit.label]['control']['pulse_params']['pi2Amp'] = round(float(self.pi2_amp), 5)
         # a few contortions to get the right awg
         AWG = self.saved_settings['qubits'][self.qubit.label]['control']['AWG'].split(" ")[0]
-        amp_factor = self.saved_settings['instruments'][AWG]['tx_channels']['12']['amp_factor']
-        self.saved_settings['instruments'][AWG]['tx_channels']['12']['1']['offset'] += round(float(amp_factor*self.amp2offset*self.i_offset), 5)
-        self.saved_settings['instruments'][AWG]['tx_channels']['12']['2']['offset'] += round(float(amp_factor*self.amp2offset*self.i_offset), 5)
+        if '12' in self.saved_settings['instruments'][AWG]['tx_channels'].keys():
+            amp_factor = self.saved_settings['instruments'][AWG]['tx_channels']['12']['amp_factor']
+            self.saved_settings['instruments'][AWG]['tx_channels']['12']['1']['offset'] += round(float(amp_factor*self.amp2offset*self.i_offset), 5)
+            self.saved_settings['instruments'][AWG]['tx_channels']['12']['2']['offset'] += round(float(amp_factor*self.amp2offset*self.i_offset), 5)
         super(RabiAmpCalibration, self).update_settings()
 
 

@@ -117,7 +117,6 @@ class KCU105(object):
     def __del__(self):
         if self.connected:
             self.connected = False
-            self.socket.shutdown()
             self.socket.close()
 
     def _check_connected(self):
@@ -142,7 +141,12 @@ class KCU105(object):
             return self.socket.sendall(pack("!I", data))
 
     def recv_bytes(self, size):
-        data = [x[0] for x in iter_unpack("!I", self.socket.recv(size))]
+        ans = self.socket.recv(size)
+        while True:
+            if len(ans) == size:
+                break
+            ans += self.socket.recv(8)
+        data = [x[0] for x in iter_unpack("!I", ans)]
         return data
 
     def write_memory(self, addr, data):
@@ -164,11 +168,12 @@ class KCU105(object):
         #read back and check
         results = self.recv_bytes(2 * 4 * datagrams_written)
         addr = init_addr
-        for ct in range(datagrams_written-1):
-            if ct == datagrams_written:
-                words_written = len(data)-((datagrams_written-1)*max_ct)
+        for ct in range(datagrams_written):
+            if ct+1 == datagrams_written:
+                words_written = len(data)-((datagrams_written-1) * max_ct)
             else:
                 words_written = max_ct
+            #print("Wrote {} words in {} datagrams: {}".format(words_written, datagrams_written, [hex(_) for _ in results]))
             assert (results[2*ct] == 0x80800000 + words_written)
             assert (results[2*ct+1] == addr)
             addr += 4 * words_written
@@ -223,6 +228,8 @@ class APS3(Instrument, metaclass=MakeSettersGetters):
         self.nco_frequency = 0
         self.dac_mode = "MIX"
 
+        self.fake_seq_file = False
+
         self.num_rr = 0xFFFF #this sets to board to play in "infinite-loop" mode
 
     def connect(self, resource_name=None):
@@ -254,7 +261,7 @@ class APS3(Instrument, metaclass=MakeSettersGetters):
             pass #for now do nothing as channels do not yet have individual properties....
 
     def _load_waves_from_file(self, filename):
-
+        print(filename)
         with h5py.File(filename, "r") as FID:
 
             target = FID['/'].attrs['target hardware']
@@ -262,7 +269,7 @@ class APS3(Instrument, metaclass=MakeSettersGetters):
                 raise IOError("Invalid sequence file!")
 
             self.num_seq = FID['/'].attrs['num sequences']
-            self.marker_delay = FID['/'].attrs['marker delay']
+            self.marker_delay = 2512 #FID['/'].attrs['marker delay']
 
             #self.marker_delay = 1600
 
@@ -299,7 +306,16 @@ class APS3(Instrument, metaclass=MakeSettersGetters):
 
         self.setup_waveform()
 
+        logger.info("Waveforms loaded.")
+
         sleep(0.1)
+
+    @property
+    def fake_seq_file(self):
+        return self._fake_seq_file
+    @fake_seq_file.setter
+    def fake_seq_file(self, load):
+        self._fake_seq_file = bool(load)
 
 
     @property
@@ -308,7 +324,10 @@ class APS3(Instrument, metaclass=MakeSettersGetters):
     @seq_file.setter
     def seq_file(self, filename):
         self._sequence_filename = filename
-        self._load_waves_from_file(filename)
+        if not self._fake_seq_file:
+            self._load_waves_from_file(filename)
+        else:
+            print("Didn't actually load a sequence file...")
 
     @property
     def num_seq(self):
