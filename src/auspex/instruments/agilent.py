@@ -98,7 +98,7 @@ class Agilent33500B(SCPIInstrument):
         #If we only have an IP address then tack on the raw socket port to the VISA resource string
         if is_valid_ipv4(self.resource_name):
             self.resource_name += "::5025::SOCKET"
-        super(Agilent33220A, self).connect(resource_name=self.resource_name, interface_type=interface_type)
+        super(Agilent33500B, self).connect(resource_name=self.resource_name, interface_type=interface_type)
         self.interface._resource.read_termination = u"\n"
         self.interface._resource.write_termination = u"\n"
         self.interface._resource.timeout = 3000 #seem to have trouble timing out on first query sometimes
@@ -127,7 +127,7 @@ class Agilent33500B(SCPIInstrument):
     pulse_dcyc = IntCommand(scpi_string="SOURce{channel:d}:FUNCtion:PULSe:DCYCle",
                                 additional_args=['channel'])
     # When function is ARBitrary:
-    arb_load = StringCommand(scpi_string="SOURce{channel:d}:FUNCtion:ARBitrary",
+    arb_upload = StringCommand(scpi_string="SOURce{channel:d}:FUNCtion:ARBitrary",
                                 additional_args=['channel'])
     arb_advance = StringCommand(scpi_string="SOURce{channel:d}:FUNCtion:ARBitrary:ADVance",
                                 allowed_values=["Trigger","Srate"],
@@ -137,7 +137,7 @@ class Agilent33500B(SCPIInstrument):
                                 additional_args=['channel'])
     arb_amplitude = FloatCommand(scpi_string="SOURce{channel:d}:FUNCtion:ARBitrary:PTPeak",
                                 additional_args=['channel'])
-    arb_sample = IntCommand(scpi_string="SOURce{channel:d}:FUNCtion:ARBitrary:SRATe",
+    arb_sample = FloatCommand(scpi_string="SOURce{channel:d}:FUNCtion:ARBitrary:SRATe",
                                 additional_args=['channel'],doc="Sample Rate")
     # VOLTage subsystem
     amplitude = FloatCommand(scpi_string="SOURce{channel:d}:VOLT",
@@ -151,7 +151,7 @@ class Agilent33500B(SCPIInstrument):
                             additional_args=['channel'])
     high_voltage = FloatCommand(scpi_string="SOURce{channel:d}:VOLTage:HIGH",
                             additional_args=['channel'])
-    output_units = Command(scpi_string="SOURce{channel:d}:VOLTage:UNIT?",
+    output_units = Command(scpi_string="SOURce{channel:d}:VOLTage:UNIT",
                             value_map={"Vpp" : "VPP", "Vrms" : "VRMS", "dBm" : "DBM"},
                             additional_args=['channel'])
     # Output subsystem
@@ -163,27 +163,27 @@ class Agilent33500B(SCPIInstrument):
     output_gated = Command(scpi_string="OUTP{channel:d}:MODE", value_map={True:"GATed", False:"NORMal"},
                             additional_args=['channel'])
     polarity = Command(scpi_string="OUTP{channel:d}:POL",
-                            value_map = {1 : "NORMal", -1 : "INVerted"},
+                            value_map = {1 : "NORM", -1 : "INV"},
                             additional_args=['channel'])
     output_sync = Command(scpi_string="OUTP{channel:d}:SYNC",
-                            value_map = {True: "ON", False: "OFF"},
+                            value_map = {True: "1", False: "0"},
                             additional_args=['channel'])
     sync_mode = StringCommand(scpi_string="OUTP{channel:d}:SYNC:MODE",
                             allowed_values = ["Normal","Carrier","Marker"],
                             additional_args=['channel'])
     sync_polarity = Command(scpi_string="OUTP{channel:d}:SYNC:POL",
-                            value_map = {1 : "NORMal", -1 : "INVerted"},
+                            value_map = {1 : "NORM", -1 : "INV"},
                             additional_args=['channel'])
     sync_source = Command(scpi_string="OUTP:SYNC:SOURce",
-                            value_map = {1 : "CH1", 1 : "CH2"})
-    output_trigger = Command(scpi_string="OUTP:TRIGger", value_map={True:1, False:0})
+                            value_map = {1 : "CH1", 2 : "CH2"})
+    output_trigger = Command(scpi_string="OUTP:TRIGger", value_map={True:'1', False:'0'})
     output_trigger_source = Command(scpi_string="OUTP:TRIGger:SOURce",
                         value_map = {1: "CH1", 2: "CH2"})
     output_trigger_slope = StringCommand(scpi_string="OUTP:TRIGger:SLOPe",
                                 value_map = {"Positive": "POS", "Negative": "NEG"})
     #Trigger, Burst, etc...
     burst_state = Command(scpi_string="SOURce{channel:d}:BURSt:STATE",
-                                value_map = {True: 1, False: 0},
+                                value_map = {True: '1', False: '0'},
                                 additional_args=['channel'])
     burst_cycles = FloatCommand(scpi_string="SOURce{channel:d}:BURSt:NCYCles",
                             additional_args=['channel'])
@@ -204,13 +204,40 @@ class Agilent33500B(SCPIInstrument):
         self.interface.write("SOURce%d:DATA:VOLatile:CLEar" %channel)
 
     def upload_waveform(self,data,channel=1,name="mywaveform",dac=False):
-        """ Load the data into a waveform memory
+        """ Load string-converted data into a waveform memory
+
+        dac: True if values are converted to integer already
+        """
+        logger.info("Set ARB sample number of channel %d to match with the length of data: %d" %(channel,len(data)))
+        self.set_arb_sample(len(data),channel=channel)
+        logger.info("Upload waveform %s to instrument %s, channel %d" %(name,self.name,channel))
+        if dac:
+            dac_str = ":DAC"
+        else:
+            dac_str = ""
+        # convert array into string
+        data_str = ','.join([str(item) for item in data])
+        self.interface.write("SOURce%s:DATA:ARBitrary1%s %s,%s" %(channel,dac_str,name,data_str))
+        # Check if successfully uploaded or not
+        data_pts = float(self.interface.query("SOURce%s:DATA:ATTR:POIN? %s" %(channel,name))
+        if data_pts == len(data):
+            logger.debug("Successfully uploaded waveform %s to instrument %s, channel %d" %(name,self.name,channel))
+            return True
+        else:
+            logger.error("Failed uploading waveform %s to instrument %s, channel %d" %(name,self.name,channel))
+            return False
+
+    def upload_waveform_binary(self,data,channel=1,name="mywaveform",dac=False):
+        """ NOT YET WORKING - DO NOT USE
+        Load binary data into a waveform memory
 
         dac: True if values are converted to integer already
         """
         N = len(data)
         n = int(np.log10(N))+1
-        log.info("Upload waveform %s to instrument %s, channel %d" %(name,self.name,channel))
+        logger.info("Set ARB sample number of channel %d to match with the length of data: %d" %(channel,N))
+        self.set_arb_sample(N,channel=channel)
+        logger.info("Upload waveform %s to instrument %s, channel %d" %(name,self.name,channel))
         if dac:
             self.interface.write_binary_values("SOURce%s:DATA:ARBitrary1:DAC %s,#%d%d" %(channel,name,n,N),
                                                 data, datatype='d', is_big_endian=False)
@@ -282,7 +309,7 @@ class Agilent33500B(SCPIInstrument):
             for k,v in kwargs.items():
                 if k in ["name","data","control","repeat","mkr_mode","mkr_pts"]:
                     logger.info("Set %s.%s = %s" %(self.name,k,v))
-                    getattr(self,k) = v
+                    setattr(self,k,v)
                 else:
                     logger.warning("Key %s is not valid for Segment %s. Ignore." %(k,self.name))
             return self.self_check()
@@ -299,7 +326,7 @@ class Agilent33500B(SCPIInstrument):
             """
             seg = copy.copy(segment)
             if seg.update(**kwargs):
-                log.info("Add segment %s into sequence %s" %(seg.name,self.name))
+                logger.info("Add segment %s into sequence %s" %(seg.name,self.name))
                 self.segments.append(seg)
 
         def get_descriptor(self):
