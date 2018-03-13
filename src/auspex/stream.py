@@ -200,18 +200,32 @@ class SweepAxis(DataAxis):
             self.step += 1
             self.done = False
 
-    def check_for_refinement(self):
+    def check_for_refinement(self, output_connectors_dict):
+        """Check to see if we need to perform any refinements. If there is a refine_func 
+        and it returns a list of points, then we need to extend the axes. Otherwise, if the
+        refine_func returns None or false, then we reset the axis to its original set of points. If
+        there is no refine_func then we don't do anything at all."""
+
         if not self.done and self.step==self.num_points():
-            # Check to see if we need to perform any refinements
             logger.debug("Refining on axis {}".format(self.name))
             if self.refine_func:
-                if not self.refine_func(self, self.experiment):
+                points = self.refine_func(self, self.experiment)
+                print("Points:", points)
+                if points is None or points is False:
                     # Returns false if no refinements needed, otherwise adds points to list
                     self.step = 0
                     self.done = True
                     self.reset()
-                    logger.debug("Sweep Axis '{}' complete.".format(self.name))
+                    logger.info("Sweep Axis '{}' complete.".format(self.name))
+                    # Push to ocs, which should push to processes
+                    for oc in output_connectors_dict.values():
+                        oc.push_event("refined", (self.name, True, self.original_points)) # axis name, reset, points
                     return False
+                print("Main thread: Adding points")
+                self.add_points(points)
+                self.done = False
+                for oc in output_connectors_dict.values():
+                    oc.push_event("refined", (self.name, False, points)) # axis name, reset, points
                 return True
             else:
                 self.step = 0

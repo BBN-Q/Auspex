@@ -53,7 +53,6 @@ class H5Handler(Process):
     def process_queue_item(self, args, file):
         if args[0] == "write":
             file[args[1]][args[2]:args[3]] = args[4]
-            file.flush()
         elif args[0] == "resize":
             file[args[1]].resize(args[2])
         elif args[0] == "increase_size":
@@ -62,6 +61,8 @@ class H5Handler(Process):
             file[args[1]].attrs[args[2]] = args[3]
         elif args[0] == "get_data":
             self.return_queue.put((args[1], file[args[1]][:]))
+        elif args[0] == "flush":
+            file.flush()
 
     def run(self):
         with h5py.File(self.filename, "r+", libver="latest") as file:
@@ -306,28 +307,31 @@ class WriteToHDF5(Filter):
 
     def write_to_log(self):
         """ Record the experiment in a log file """
-        logfile = os.path.join(config.LogDir, "experiment_log.tsv")
-        if os.path.isfile(logfile):
-            lf = pd.read_csv(logfile, sep="\t")
-        else:
-            logger.info("Experiment log file created.")
-            lf = pd.DataFrame(columns = ["Filename", "Date", "Time"])
-        lf = lf.append(pd.DataFrame([[self.filename.value, time.strftime("%y%m%d"), time.strftime("%H:%M:%S")]],columns=["Filename", "Date", "Time"]),ignore_index=True)
-        lf.to_csv(logfile, sep = "\t", index = False)
+        if config.LogDir:
+            logfile = os.path.join(config.LogDir, "experiment_log.tsv")
+            if os.path.isfile(logfile):
+                lf = pd.read_csv(logfile, sep="\t")
+            else:
+                logger.info("Experiment log file created.")
+                lf = pd.DataFrame(columns = ["Filename", "Date", "Time"])
+            lf = lf.append(pd.DataFrame([[self.filename.value, time.strftime("%y%m%d"), time.strftime("%H:%M:%S")]],columns=["Filename", "Date", "Time"]),ignore_index=True)
+            lf.to_csv(logfile, sep = "\t", index = False)
 
     def save_yaml(self):
         """ Save a copy of current experiment settings """
-        head = os.path.dirname(self.filename.value)
-        fulldir = os.path.splitext(self.filename.value)[0]
-        if not os.path.exists(fulldir):
-            os.makedirs(fulldir)
-            config.dump_meas_file(config.load_meas_file(config.meas_file), os.path.join(fulldir, os.path.split(config.meas_file)[1]), flatten = True)
+        if config.meas_file:
+            head = os.path.dirname(self.filename.value)
+            fulldir = os.path.splitext(self.filename.value)[0]
+            if not os.path.exists(fulldir):
+                os.makedirs(fulldir)
+                config.dump_meas_file(config.load_meas_file(config.meas_file), os.path.join(fulldir, os.path.split(config.meas_file)[1]), flatten = True)
 
     def save_yaml_h5(self):
         """ Save a copy of current experiment settings in the h5 metadata"""
-        header = self.file.create_group("header")
-        # load them dump to get the 'include' information
-        header.attrs['settings'] = config.dump_meas_file(config.load_meas_file(config.meas_file), flatten = True)
+        if config.meas_file:
+            header = self.file.create_group("header")
+            # load them dump to get the 'include' information
+            header.attrs['settings'] = config.dump_meas_file(config.load_meas_file(config.meas_file), flatten = True)
 
     def get_data(self, data_path):
         """Request data back from the file handler. Data_path is given with respect to root: e.g. /data/voltage"""
@@ -344,6 +348,19 @@ class WriteToHDF5(Filter):
             except queue.Empty:
                 logger.warning("Could not retrieve dataset within 5 seconds")
 
+    # def refine(self, refine_data):
+    #     """Try to deal with a refinement along the given axes."""
+    #     axis_name, reset_axis, points = refine_data
+
+    #     for ax in self.sink.input_streams[0].descriptor.axes:
+    #         if ax.name == axis_name:
+    #             if reset_axis:
+    #                 ax.reset()
+    #             else:
+    #                 print("adding points in IO", points)
+    #                 # Extending axis
+    #                 ax.add_points(points)
+
     def main(self):
         self.finished_processing.clear()
 
@@ -353,8 +370,11 @@ class WriteToHDF5(Filter):
 
         # Write pointer
         w_idx = {s: 0 for s in streams}
+        points_taken = {s: 0 for s in streams}
+        i = 0
 
-        while not self.exit.is_set():
+        while not self.exit.is_set():# and not self.finished_processing.is_set():
+            i +=1
             # Try to pull all messages in the queue. queue.empty() is not reliable, so we 
             # ask for forgiveness rather than permission.
             msgs_by_stream = {s: [] for s in streams}
@@ -373,25 +393,38 @@ class WriteToHDF5(Filter):
 
                     # If we receive a message
                     if message['type'] == 'event':
-                        logger.debug('%s "%s" received event of type "%s"', self.__class__.__name__, self.name, message['event_type'])
+                        # logger.info('%s "%s" received event of type "%s"', self.__class__.__name__, self.name, message['event_type'])
                         if message['event_type'] == 'done':
                             got_done_msg[stream] = True
                         elif message['event_type'] == 'refined':
-                            refined_axis = message['data']
+                            message_data = message['data']
+                            self.refine(message_data)
+                            # refined_axis, reset_axis, points = message_data
 
-                            # Resize the data set
-                            num_new_points = desc.num_new_points_through_axis(refined_axis)
-                            for stream in streams:
-                                self.queue.put(("increase_size", self.data_write_paths[stream], num_new_points,))
+                            # Resize the data set if there are new points
+                            # if not reset_axis:
+                                # num_new_points = desc.num_new_points_through_axis(refined_axis)
+                                # logger.info("New points %d" % num_new_points)
+                                # for stream in streams:
+                                #     self.queue.put(("increase_size", self.data_write_paths[stream], num_new_points,))
 
-                            if self.store_tuples:
-                                for an in self.axis_names:
-                                    self.queue.put(("increase_size", self.tuple_write_paths[an], num_new_points,))
+                                # if self.store_tuples:
+                                #     for an in self.axis_names:
+                                #         print(("increase_size", self.tuple_write_paths[an], num_new_points,))
+                                #         self.queue.put(("increase_size", self.tuple_write_paths[an], num_new_points,))
 
                             # Generally speaking the descriptors are now insufficient to reconstruct
                             # the full set of tuples. The user should know this, so let's mark the
                             # descriptor axes accordingly.
                             # TODO: self.group[name].attrs['was_refined'] = True
+                        elif message['event_type'] == 'new_tuples':
+                            num_new_points = self.process_new_tuples(desc, message['data'])
+                            # print("\t***************** new points *********L ", num_new_points)
+                            for stream in streams:
+                                self.queue.put(("increase_size", self.data_write_paths[stream], num_new_points,))
+                            if self.store_tuples:
+                                for an in self.axis_names:
+                                    self.queue.put(("increase_size", self.tuple_write_paths[an], num_new_points,))
 
                     elif message['type'] == 'data':
 
@@ -401,29 +434,50 @@ class WriteToHDF5(Filter):
                             message_data = np.array([message_data])
                         message_data = message_data.flatten()
 
-                        logger.debug('%s "%s" received %d points', self.__class__.__name__, self.name, message_data.size)
-                        # logger.debug("Now has %d of %d points.", stream.points_taken.value, stream.num_points())
+                        # logger.info('%s "%s" received %d points', self.__class__.__name__, self.name, message_data.size)
+                        # logger.debug("Now has %d of %d points.", stpoints_taken.value, stream.num_points())
 
                         # Write the data
+                        # print("\t", ("write data", self.data_write_paths[stream], w_idx[stream], w_idx[stream]+message_data.size, message_data))
                         self.queue.put(("write", self.data_write_paths[stream], w_idx[stream], w_idx[stream]+message_data.size, message_data))
 
                         # Write the coordinate tuples
                         if self.store_tuples:
                             if desc.is_adaptive():
-                                tuples = desc.tuples()
+                                tuples = desc.tuples() ###################################### I'm broken!!!!!!!!!
+                                # print("\tTUPLES IN IO", tuples)
                                 for axis_name in self.axis_names:
+                                    # print("\t", ("write tuple", self.tuple_write_paths[axis_name], w_idx[stream], w_idx[stream]+message_data.size,
+                                                    # tuples[axis_name][w_idx[stream]:w_idx[stream]+message_data.size]))
                                     self.queue.put(("write", self.tuple_write_paths[axis_name], w_idx[stream], w_idx[stream]+message_data.size,
                                                     tuples[axis_name][w_idx[stream]:w_idx[stream]+message_data.size]))
 
+                        self.queue.put(("flush",))
                         w_idx[stream] += message_data.size
-                        self.points_taken = w_idx[stream]
+                        points_taken[stream] = w_idx[stream]
 
                         logger.debug("HDF5: Write index at %d", w_idx[stream])
                         logger.debug("HDF5: %s has written %d points", stream.name, w_idx[stream])
 
-            # If we have gotten all our data and process_data has returned, then we are done!
-            if np.all(got_done_msg.values()) and np.all([v.done() for v in self.input_connectors.values()]):
+                    # If we have gotten all our data and process_data has returned, then we are done!
+                    # if not True in [ic.descriptor.is_adaptive() for ic in self.input_connectors.values()]:
+            # for stream in streams:
+            #     print("\t", stream.name, "taken", points_taken[stream], "points", len(desc.visited_tuples))
+
+
+            # print("\tDone msgs:", got_done_msg.values())
+            # print("\tStreams done", [(s.done(),points_taken[s],s.num_points()) for s in streams], [v.done() for v in self.input_connectors.values()])
+            # if np.all([s.num_points() == points_taken[s] for s in streams]):
+            #     print("\t******************")
+            #     self.finished_processing.set()
+            # print("\tFallback check > 20", [ i>20 for s in streams])
+            # if np.any([ i>20 for s in streams]):
+            #     self.finished_processing.set()
+            #     break
+            if np.all(list(got_done_msg.values())) and np.all([len(desc.visited_tuples) == points_taken[s] for s in streams]):
                 self.finished_processing.set()
+                break
+        print("\tIO HAS FINSHED THE LOOP")
 
 class DataBuffer(Filter):
     """Writes data to IO."""

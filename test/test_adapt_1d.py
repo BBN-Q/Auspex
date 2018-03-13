@@ -55,7 +55,7 @@ class SweptTestExperiment(Experiment):
 
 class Adapt1DTestCase(unittest.TestCase):
     
-    @unittest.skip("Adaptive sweeps not yet working in multiprocessing.")
+    # @unittest.skip("Adaptive sweeps not yet working in multiprocessing.")
     def test_writehdf5_1D_adaptive_sweep(self):
         exp = SweptTestExperiment()
         if os.path.exists("test_writehdf5_1D_adaptive-0000.h5"):
@@ -67,21 +67,22 @@ class Adapt1DTestCase(unittest.TestCase):
 
         def rf(sweep_axis, exp):
             logger.info("Running refinement function.")
-            temps = wr.get_data("/main/data/temperature")
-            ress  = wr.get_data("/main/data/resistance")
+            time.sleep(1)
+            # temps = wr.get_data("/main/data/temperature")
+            # ress  = wr.get_data("/main/data/resistance")
+            # logger.info("Temps: {}".format(temps))
+            # logger.info("Ress: {}".format(ress))
 
-            logger.info("Temps: {}".format(temps))
-            logger.info("Ress: {}".format(ress))
-
-            new_temps = refine_1D(temps, ress, all_points=False, criterion="difference", threshold = "one_sigma")
+            # new_temps = refine_1D(temps, ress, all_points=False, criterion="difference", threshold = "one_sigma")
+            temps = sweep_axis.points
+            new_temps = np.array([10*np.random.random()])
 
             logger.info("New temperature values: {}".format(new_temps))
             if new_temps.size + temps.size > 15:
                 return False
 
-            sweep_axis.add_points(new_temps)
             logger.info("Axis points are now: {}".format(sweep_axis.points))
-            return True
+            return new_temps
 
         exp.add_sweep(exp.temperature, np.linspace(0,20,5), refine_func=rf)
         exp.run_sweeps()

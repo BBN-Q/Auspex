@@ -14,11 +14,14 @@ import sys
 if sys.platform == 'win32' or 'NOFORKING' in os.environ:
     from threading import Thread as Process
     from threading import Event
+    from queue import Queue
 else:
     from multiprocessing import Process
     from multiprocessing import Event
+    from multiprocessing import Queue as Queue
 
 import cProfile
+import itertools
 import time
 import queue
 import copy
@@ -140,7 +143,7 @@ class Filter(Process, metaclass=MetaFilter):
         stream_done = False
         stream_points = 0
 
-        while not self.exit.is_set():
+        while not self.exit.is_set() and not self.finished_processing.is_set():
             # Try to pull all messages in the queue. queue.empty() is not reliable, so we 
             # ask for forgiveness rather than permission.
             messages = []
@@ -174,6 +177,11 @@ class Filter(Process, metaclass=MetaFilter):
                         break
                     elif message['event_type'] == 'refined':
                         self.refine(message_data)
+                        continue
+
+                    elif message['event_type'] == 'new_tuples':
+                        self.process_new_tuples(input_stream.descriptor, message_data)
+                        break
 
                 elif message['type'] == 'data':
                     if not hasattr(message_data, 'size'):
@@ -186,8 +194,10 @@ class Filter(Process, metaclass=MetaFilter):
                 elif message['type'] == 'data_direct':
                     self.process_direct(message_data)
 
+                print("Stream points", stream_points, "input_stream points", input_stream.num_points())
                 if stream_points == input_stream.num_points():
                     self.finished_processing.set()
+                    break
 
         # When we've finished, either prematurely or as expected
         self.on_done()
@@ -200,6 +210,47 @@ class Filter(Process, metaclass=MetaFilter):
         """Process direct data, ignore things like the data descriptors."""
         pass
 
-    def refine(self, axis):
+    def process_new_tuples(self, descriptor, message_data):
+        axis_names, sweep_values = message_data
+        # logger.info(" PROCESSING NEW TUPLES %s, %s, %s" % (descriptor, axis_names, sweep_values))
+        # All the axis names for this connector
+        ic_axis_names = [ax.name for ax in descriptor.axes]
+        # The sweep values from sweep axes that are present (axes may have been dropped)
+        sweep_values = [sv for an, sv in zip(axis_names, sweep_values) if an in ic_axis_names]
+        # print("Sweep values", sweep_values)
+        vals = [a for a in descriptor.data_axis_values()]
+        # print("Data values", vals)
+        if sweep_values:
+            vals  = [[v] for v in sweep_values] + vals
+
+        # Create the outer product of axes
+        nested_list    = list(itertools.product(*vals))
+        flattened_list = [tuple((val for sublist in line for val in sublist)) for line in nested_list]
+        # print("NEW TUPLES IN FILTER:", flattened_list)
+        descriptor.visited_tuples = descriptor.visited_tuples + flattened_list
+        print("Descriptor visited tuples now ", descriptor.visited_tuples)
+
+        for oc in self.output_connectors.values():
+            oc.push_event("new_tuples", message_data)
+
+        return len(flattened_list)
+
+    def refine(self, refine_data):
         """Try to deal with a refinement along the given axes."""
-        pass
+        axis_name, reset_axis, points = refine_data
+        print("Filter refining: ", refine_data)
+
+        for ic in self.input_connectors.values():
+            print(ic.descriptor)
+            print(ic.input_streams)
+            # print("Updating:" [ic.descriptor] + [s.descriptor for s in ic.input_streams])
+            for desc in [ic.descriptor] + [s.descriptor for s in ic.input_streams]:
+                for ax in desc.axes:
+                    if ax.name == axis_name:
+                        if reset_axis:
+                            ax.points = points
+                        else:
+                            ax.points = np.append(ax.points, points)
+
+        for oc in self.output_connectors.values():
+            oc.push_event("refined", refine_data)
