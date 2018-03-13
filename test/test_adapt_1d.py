@@ -68,14 +68,14 @@ class Adapt1DTestCase(unittest.TestCase):
         def rf(sweep_axis, exp):
             logger.info("Running refinement function.")
             time.sleep(1)
-            # temps = wr.get_data("/main/data/temperature")
-            # ress  = wr.get_data("/main/data/resistance")
-            # logger.info("Temps: {}".format(temps))
-            # logger.info("Ress: {}".format(ress))
+            temps = wr.get_data("/main/data/temperature")
+            ress  = wr.get_data("/main/data/resistance")
+            logger.info("Temps: {}".format(temps))
+            logger.info("Ress: {}".format(ress))
 
-            # new_temps = refine_1D(temps, ress, all_points=False, criterion="difference", threshold = "one_sigma")
-            temps = sweep_axis.points
-            new_temps = np.array([10*np.random.random()])
+            new_temps = refine_1D(temps, ress, all_points=False, criterion="difference", threshold = "one_sigma")
+            # temps = sweep_axis.points
+            # new_temps = np.array([10*np.random.random()])
 
             logger.info("New temperature values: {}".format(new_temps))
             if new_temps.size + temps.size > 15:
