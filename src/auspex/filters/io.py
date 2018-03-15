@@ -56,7 +56,6 @@ class H5Handler(Process):
         elif args[0] == "resize":
             file[args[1]].resize(args[2])
         elif args[0] == "resize_to":
-            print("\tRESIZING:",(args[2],))
             if args[2] > len(file[args[1]]):
                 file[args[1]].resize((args[2],))
         elif args[0] == "set_attr":
@@ -139,7 +138,6 @@ class WriteToHDF5(Filter):
             # All of the combinations for the present values of the sweep parameters only
             tuples = desc.expected_tuples(with_metadata=True, as_structured_array=True)
         expected_length = desc.expected_num_points()
-        print("EXPECTED LENGTH:", expected_length)
 
         compression = 'gzip' if self.compress else None
 
@@ -424,9 +422,14 @@ class WriteToHDF5(Filter):
                         logger.debug("HDF5: %s has written %d points", stream.name, w_idx[stream])
 
             # If we have gotten all our data and process_data has returned, then we are done!
-            if np.all(list(got_done_msg.values())) and np.all([len(desc.visited_tuples) == points_taken[s] for s in streams]):
-                self.finished_processing.set()
-                break
+            if desc.is_adaptive():
+                if np.all(list(got_done_msg.values())) and np.all([len(desc.visited_tuples) == points_taken[s] for s in streams]):
+                    self.finished_processing.set()
+                    break
+            else:
+                if np.all(list(got_done_msg.values())) and np.all([v.done() for v in self.input_connectors.values()]):
+                    self.finished_processing.set()
+                    break      
 
 class DataBuffer(Filter):
     """Writes data to IO."""

@@ -64,7 +64,6 @@ class Filter(Process, metaclass=MetaFilter):
         self.input_connectors = {}
         self.output_connectors = {}
         self.parameters = {}
-        self.experiment = None # Keep a reference to the parent experiment
 
         # Event for killing the filter properly
         self.exit = Event()
@@ -139,6 +138,7 @@ class Filter(Process, metaclass=MetaFilter):
         logger.debug('Running "%s" run loop', self.filter_name)
         self.finished_processing.clear()
         input_stream = getattr(self, self._input_connectors[0]).input_streams[0]
+        desc = input_stream.descriptor
 
         stream_done = False
         stream_points = 0
@@ -194,10 +194,18 @@ class Filter(Process, metaclass=MetaFilter):
                 elif message['type'] == 'data_direct':
                     self.process_direct(message_data)
 
-                print("Stream points", stream_points, "input_stream points", input_stream.num_points())
-                if stream_points == input_stream.num_points():
+                # if stream_points == input_stream.num_points():
+                #     self.finished_processing.set()
+                #     break
+            # If we have gotten all our data and process_data has returned, then we are done!
+            if desc.is_adaptive():
+                if stream_done and np.all([len(desc.visited_tuples) == points_taken[s] for s in streams]):
                     self.finished_processing.set()
                     break
+            else:
+                if stream_done and np.all([v.done() for v in self.input_connectors.values()]):
+                    self.finished_processing.set()
+                    break      
 
         # When we've finished, either prematurely or as expected
         self.on_done()
@@ -212,23 +220,18 @@ class Filter(Process, metaclass=MetaFilter):
 
     def process_new_tuples(self, descriptor, message_data):
         axis_names, sweep_values = message_data
-        # logger.info(" PROCESSING NEW TUPLES %s, %s, %s" % (descriptor, axis_names, sweep_values))
         # All the axis names for this connector
         ic_axis_names = [ax.name for ax in descriptor.axes]
         # The sweep values from sweep axes that are present (axes may have been dropped)
         sweep_values = [sv for an, sv in zip(axis_names, sweep_values) if an in ic_axis_names]
-        # print("Sweep values", sweep_values)
         vals = [a for a in descriptor.data_axis_values()]
-        # print("Data values", vals)
         if sweep_values:
             vals  = [[v] for v in sweep_values] + vals
 
         # Create the outer product of axes
         nested_list    = list(itertools.product(*vals))
         flattened_list = [tuple((val for sublist in line for val in sublist)) for line in nested_list]
-        # print("NEW TUPLES IN FILTER:", flattened_list)
         descriptor.visited_tuples = descriptor.visited_tuples + flattened_list
-        print("Descriptor visited tuples now ", descriptor.visited_tuples)
 
         for oc in self.output_connectors.values():
             oc.push_event("new_tuples", message_data)
@@ -238,12 +241,8 @@ class Filter(Process, metaclass=MetaFilter):
     def refine(self, refine_data):
         """Try to deal with a refinement along the given axes."""
         axis_name, reset_axis, points = refine_data
-        print("Filter refining: ", refine_data)
 
         for ic in self.input_connectors.values():
-            print(ic.descriptor)
-            print(ic.input_streams)
-            # print("Updating:" [ic.descriptor] + [s.descriptor for s in ic.input_streams])
             for desc in [ic.descriptor] + [s.descriptor for s in ic.input_streams]:
                 for ax in desc.axes:
                     if ax.name == axis_name:

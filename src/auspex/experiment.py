@@ -319,14 +319,10 @@ class Experiment(metaclass=MetaExperiment):
                 if hasattr(self,k):
                     v = getattr(self,k)
                     oc.descriptor.add_param(k, v)
-            # if not self.sweeper.is_adaptive():
-            #     oc.descriptor.visited_tuples = oc.descriptor.expected_tuples(with_metadata=True, as_structured_array=False)
-            # else:
             oc.descriptor.visited_tuples = []
             oc.update_descriptors()
 
     def declare_done(self):
-        print("Declaring done")
         for oc in self.output_connectors.values():
             for os in oc.output_streams:
                 os.push_event("done")
@@ -342,17 +338,10 @@ class Experiment(metaclass=MetaExperiment):
 
         # Keep track of the previous values
         logger.debug("Waiting for filters.")
-        # await time.sleep(0.1)
         last_param_values = None
         logger.debug("Starting experiment sweep.")
-        i = 0
-        # done = True
+
         while True:
-            i += 1
-            if i>20:
-                print("Main process: FUCKOFFFFFFFFF BAILING")
-                self.declare_done()
-                break
             # Increment the sweeper, which returns a list of the current
             # values of the SweepAxes (no DataAxes).
             sweep_values, axis_names = self.sweeper.update()
@@ -383,7 +372,6 @@ class Experiment(metaclass=MetaExperiment):
             # directly to the output_connecters as messages that will be passed
             # through the filter pipeline.
             self.sweeper.check_for_refinement(self.output_connectors)
-            print("Main process: checked for refinement")
 
             # Update progress bars
             if self.progressbar is not None:
@@ -391,7 +379,6 @@ class Experiment(metaclass=MetaExperiment):
 
             # Finish up, checking to see whether we've received all of our data
             if self.sweeper.done():
-                print("Main process: sweeper is done")
                 self.declare_done()
                 break
 
@@ -468,8 +455,6 @@ class Experiment(metaclass=MetaExperiment):
 
         # Call any final initialization on the filter pipeline
         for n in self.nodes + self.extra_plotters:
-            n.experiment = self
-            # n.executor   = self.executor
             if hasattr(n, 'final_init'):
                 n.final_init()
 

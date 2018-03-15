@@ -34,11 +34,10 @@ class Sweeper(object):
 
     def update(self):
         """ Update the levels """
-        logger.debug("Sweeper updates values.")
         imax = len(self.axes)-1
         if imax < 0:
             logger.debug("There are no sweep axis, only data axes.")
-            return None
+            return None, None
         else:
             i=0
             while i<imax and self.axes[i].step==0:

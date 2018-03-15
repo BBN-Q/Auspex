@@ -210,18 +210,16 @@ class SweepAxis(DataAxis):
             logger.debug("Refining on axis {}".format(self.name))
             if self.refine_func:
                 points = self.refine_func(self, self.experiment)
-                print("Points:", points)
                 if points is None or points is False:
                     # Returns false if no refinements needed, otherwise adds points to list
                     self.step = 0
                     self.done = True
                     self.reset()
-                    logger.info("Sweep Axis '{}' complete.".format(self.name))
+                    logger.debug("Sweep Axis '{}' complete.".format(self.name))
                     # Push to ocs, which should push to processes
                     for oc in output_connectors_dict.values():
                         oc.push_event("refined", (self.name, True, self.original_points)) # axis name, reset, points
                     return False
-                print("Main thread: Adding points")
                 self.add_points(points)
                 self.done = False
                 for oc in output_connectors_dict.values():

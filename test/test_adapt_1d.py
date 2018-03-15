@@ -50,8 +50,6 @@ class SweptTestExperiment(Experiment):
             return t*1.0/(1.0 + np.exp(-k*(t-tc)))
 
         self.resistance.push(ideal_tc(self.temperature.value))
-        # logger.debug("Stream pushed points {}.".format(data_row))
-        # logger.debug("Stream has filled {} of {} points".format(self.resistance.points_taken, self.resistance.num_points() ))
 
 class Adapt1DTestCase(unittest.TestCase):
     
@@ -66,22 +64,19 @@ class Adapt1DTestCase(unittest.TestCase):
         exp.set_graph(edges)
 
         def rf(sweep_axis, exp):
-            logger.info("Running refinement function.")
-            time.sleep(1)
+            time.sleep(0.1)
             temps = wr.get_data("/main/data/temperature")
             ress  = wr.get_data("/main/data/resistance")
-            logger.info("Temps: {}".format(temps))
-            logger.info("Ress: {}".format(ress))
+            logger.debug("Temps: {}".format(temps))
+            logger.debug("Ress: {}".format(ress))
 
             new_temps = refine_1D(temps, ress, all_points=False, criterion="difference", threshold = "one_sigma")
-            # temps = sweep_axis.points
-            # new_temps = np.array([10*np.random.random()])
 
-            logger.info("New temperature values: {}".format(new_temps))
+            logger.debug("New temperature values: {}".format(new_temps))
             if new_temps.size + temps.size > 15:
                 return False
 
-            logger.info("Axis points are now: {}".format(sweep_axis.points))
+            logger.debug("Axis points are now: {}".format(sweep_axis.points))
             return new_temps
 
         exp.add_sweep(exp.temperature, np.linspace(0,20,5), refine_func=rf)
