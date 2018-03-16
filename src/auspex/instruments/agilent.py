@@ -219,7 +219,7 @@ class Agilent33500B(SCPIInstrument):
         data_str = ','.join([str(item) for item in data])
         self.interface.write("SOURce%s:DATA:ARBitrary1%s %s,%s" %(channel,dac_str,name,data_str))
         # Check if successfully uploaded or not
-        data_pts = float(self.interface.query("SOURce%s:DATA:ATTR:POIN? %s" %(channel,name)))
+        data_pts = float(self.interface.query("SOURce%s:DATA:ATTR:POIN? %s" %(channel,name))
         if data_pts == len(data):
             logger.debug("Successfully uploaded waveform %s to instrument %s, channel %d" %(name,self.name,channel))
             return True

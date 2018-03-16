@@ -13,6 +13,3 @@ config/config.json
 *.prof
 *.bak
 .DS*
-src/auspex/instruments/agilent.py
-src/auspex/instruments/agilent.py
-src/auspex/instruments/agilent.py

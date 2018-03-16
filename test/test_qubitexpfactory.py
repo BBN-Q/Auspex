@@ -34,7 +34,7 @@ class QubitExpFactoryTestCase(unittest.TestCase):
     qubits = ["q1"]
     instrs = ['BBNAPS1', 'BBNAPS2', 'X6-1', 'Holz1', 'Holz2']
     filts  = ['avg-q1-int', 'q1-WriteToHDF5'] #'partial-avg-buff'
-    nbr_round_robins = 50
+    nbr_round_robins = 20
 
     def test_create(self):
         qq = QubitFactory("q1")
