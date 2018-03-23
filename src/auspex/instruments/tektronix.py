@@ -9,7 +9,7 @@
 __all__ = ['DPO72004C']
 
 from auspex.log import logger
-from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand
+from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand, is_valid_ipv4
 import numpy as np
 
 class DPO72004C(SCPIInstrument):
@@ -30,11 +30,22 @@ class DPO72004C(SCPIInstrument):
     record_length   = IntCommand(get_string="HOR:ACQLENGTH?;")
     record_duration = FloatCommand(get_string="HOR:ACQDURATION?;")
 
-    def __init__(self, resource_name, *args, **kwargs):
-        resource_name += "::4000::SOCKET" #user guide recommends HiSLIP protocol
+    def __init__(self, resource_name=None, *args, **kwargs):
+        # resource_name += "::4000::SOCKET" #user guide recommends HiSLIP protocol
+        # super(DPO72004C, self).__init__(resource_name, *args, **kwargs)
+        # self.name = "Tektronix DPO72004C Oscilloscope"
+        # self.interface._resource.read_termination = u"\n"
         super(DPO72004C, self).__init__(resource_name, *args, **kwargs)
-        self.name = "Tektronix DPO72004C Oscilloscope"
-        self.interface._resource.read_termination = u"\n"
+        self.name = "DPO72004C Oscilloscope"
+
+    def connect(self, resource_name=None, interface_type=None):
+        if resource_name is not None:
+            self.resource_name = resource_name
+        #If we only have an IP address then tack on the raw socket port to the VISA resource string
+        if is_valid_ipv4(self.resource_name):
+            self.resource_name += "::4000::SOCKET" #user guide recommends HiSLIP protocol
+        super(DPO72004C, self).connect(resource_name=self.resource_name, interface_type=interface_type)
+        self.interface._resource.read_termination = u"\n" 
 
     def clear(self):
         self.interface.write("CLEAR ALL;")
