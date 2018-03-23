@@ -14,8 +14,9 @@ import numpy as np
 
 class DPO72004C(SCPIInstrument):
     """Tektronix DPO72004C Oscilloscope"""
-    encoding   = StringCommand(get_string="DAT:ENC;", set_string="DAT:ENC {:s};",
+    encoding   = StringCommand(get_string="DAT:ENC?;", set_string="DAT:ENC {:s};",
                         allowed_values=["ASCI","RIB","RPB","FPB","SRI","SRP","SFP"])
+    source_channel = IntCommand(get_string="DAT:SOU?;", set_string="DAT:SOU {:s};",value_map={1:"CH1",2:"CH2",3:"CH3",4:"CH4"})
     byte_depth = IntCommand(get_string="WFMOutpre:BYT_Nr?;",
                             set_string="WFMOutpre:BYT_Nr {:d};", allowed_values=[1,2,4,8])
     data_start = IntCommand(get_string="DAT:STAR?;", set_string="DAT:STAR {:d};")
@@ -55,10 +56,8 @@ class DPO72004C(SCPIInstrument):
         This doesn't actually seem to work, strangely."""
         self.interface.write("DAT SNAp;")
 
-    def get_curve(self, channel=1, byte_depth=2):
-        channel_string = "CH{:d}".format(channel)
-        self.interface.write("DAT:SOU {:s};".format(channel_string))
-        self.source_channel = 1
+    def get_trace(self, channel=1, byte_depth=2):
+        self.source_channel = channel
         self.encoding = "SRI" # Signed ints
 
         record_length = self.record_length
@@ -68,21 +67,18 @@ class DPO72004C(SCPIInstrument):
         self.byte_depth = byte_depth
         strf_from_depth = {1: 'b', 2: 'h', 4: 'l', 8: 'q'}
 
-        curve = self.interface.query_binary_values("CURVe?;", datatype=strf_from_depth[byte_depth])
+        vals = self.interface.query_binary_values("CURVe?;", datatype=strf_from_depth[byte_depth])
         scale = self.interface.value('WFMO:YMU?;')
         offset = self.interface.value('WFMO:YOF?;')
-        curve = (curve - offset)*scale
-        if self.fast_frame:
-            curve.resize((self.num_fast_frames, record_length))
-        return curve
-
-    def get_timebase(self):
-        return np.linspace(0, self.record_duration, self.record_length)
+        vals = (vals - offset)*scale
+        vals = vals.reshape((vals.size,))
+        time = np.linspace(0, self.record_duration, self.record_length)
+        # if self.fast_frame:
+        #     vals.resize((self.num_fast_frames, record_length))
+        return (time,vals)
 
     def get_fastaq_curve(self, channel=1):
-        channel_string = "CH{:d}".format(channel)
-        self.interface.write("DAT:SOU {:s};".format(channel_string))
-        self.source_channel = 1
+        self.source_channel = channel
         self.encoding = "SRP" # Unsigned ints
         self.byte_depth  = 8
         self.data_start = 1
