@@ -19,7 +19,6 @@ import time
 import re
 import pandas as pd
 from shutil import copyfile
-from ruamel.yaml import YAML
 
 from .filter import Filter
 from auspex.parameter import Parameter, FilenameParameter, BoolParameter
