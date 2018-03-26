@@ -101,7 +101,7 @@ class Agilent33500B(SCPIInstrument):
         super(Agilent33500B, self).connect(resource_name=self.resource_name, interface_type=interface_type)
         self.interface._resource.read_termination = u"\n"
         self.interface._resource.write_termination = u"\n"
-        self.interface._resource.timeout = 3000 #seem to have trouble timing out on first query sometimes
+        self.interface._resource.timeout = 5000 #seem to have trouble timing out on first query sometimes
 
     FUNCTION_MAP = {"Sine": "SIN",
                     "Square": "SQU",
@@ -127,7 +127,7 @@ class Agilent33500B(SCPIInstrument):
     pulse_dcyc = IntCommand(scpi_string="SOURce{channel:d}:FUNCtion:PULSe:DCYCle",
                                 additional_args=['channel'])
     # When function is ARBitrary:
-    arb_upload = StringCommand(scpi_string="SOURce{channel:d}:FUNCtion:ARBitrary",
+    arb_waveform = StringCommand(scpi_string="SOURce{channel:d}:FUNCtion:ARBitrary",
                                 additional_args=['channel'])
     arb_advance = StringCommand(scpi_string="SOURce{channel:d}:FUNCtion:ARBitrary:ADVance",
                                 allowed_values=["Trigger","Srate"],
@@ -198,19 +198,26 @@ class Agilent33500B(SCPIInstrument):
     sequence = StringCommand(scpi_string="SOURce{channel:d}:DATA:SEQuence",
                             additional_args=['channel'])
 
+    def set_infinite_load(self, channel=1):
+        self.interface.write("OUTP{channel:d}:LOAD INF".format(channel=channel))
+
     def clear_waveform(self,channel=1):
         """ Clear all waveforms loaded in the memory """
-        logger.info("Clear all waveforms loaded in the memory of %s" %self.name)
+        logger.debug("Clear all waveforms loaded in the memory of %s" %self.name)
         self.interface.write("SOURce%d:DATA:VOLatile:CLEar" %channel)
 
-    def upload_waveform(self,data,channel=1,name="mywaveform",dac=False):
+    def upload_waveform(self,data,channel=1,name="mywaveform",dac=True):
         """ Load string-converted data into a waveform memory
 
         dac: True if values are converted to integer already
         """
-        logger.info("Set ARB sample number of channel %d to match with the length of data: %d" %(channel,len(data)))
-        self.set_arb_sample(len(data),channel=channel)
-        logger.info("Upload waveform %s to instrument %s, channel %d" %(name,self.name,channel))
+        name = name[:12] # Arb waveform name at most 12 characters
+        N = len(data)
+        if N<8 or N>65536:
+            log.error("Data has invalid length = %d. Cannot upload waveform." %N)
+            return False
+
+        logger.debug("Upload waveform %s to instrument %s, channel %d" %(name,self.name,channel))
         if dac:
             dac_str = ":DAC"
         else:
@@ -218,32 +225,40 @@ class Agilent33500B(SCPIInstrument):
         # convert array into string
         data_str = ','.join([str(item) for item in data])
         self.interface.write("SOURce%s:DATA:ARBitrary1%s %s,%s" %(channel,dac_str,name,data_str))
-        # Check if successfully uploaded or not
-        data_pts = float(self.interface.query("SOURce%s:DATA:ATTR:POIN? %s" %(channel,name)))
-        if data_pts == len(data):
-            logger.debug("Successfully uploaded waveform %s to instrument %s, channel %d" %(name,self.name,channel))
-            return True
-        else:
-            logger.error("Failed uploading waveform %s to instrument %s, channel %d" %(name,self.name,channel))
-            return False
+        # # Check if successfully uploaded or not
+        # time.sleep(1)
+        # import pdb; pdb.set_trace()
+        # data_pts = int(self.interface.query("SOURce%s:DATA:ATTR:POIN? %s" %(channel,name)))
+        # if data_pts==N:
+        #     logger.debug("Successfully uploaded waveform %s to instrument %s, channel %d" %(name,self.name,channel))
+        #     return True
+        # else:
+        #     logger.error("Failed uploading waveform %s to instrument %s, channel %d" %(name,self.name,channel))
+        #     return False
 
-    def upload_waveform_binary(self,data,channel=1,name="mywaveform",dac=False):
+    def upload_waveform_binary(self,data,channel=1,name="mywaveform",dac=True):
         """ NOT YET WORKING - DO NOT USE
         Load binary data into a waveform memory
 
         dac: True if values are converted to integer already
         """
-        N = len(data)
-        n = int(np.log10(N))+1
-        logger.info("Set ARB sample number of channel %d to match with the length of data: %d" %(channel,N))
-        self.set_arb_sample(N,channel=channel)
-        logger.info("Upload waveform %s to instrument %s, channel %d" %(name,self.name,channel))
+        name = name[:12] # Arb waveform name at most 12 characters
+        wf = []
         if dac:
+            N = len(data)*2
+            n = int(np.log10(N))+1
+            for datum in data:
+                wf.append(datum >> 8)
+                wf.append(datum % 1<<8)
+            logger.debug("Upload waveform %s to instrument %s, channel %d" %(name,self.name,channel))
             self.interface.write_binary_values("SOURce%s:DATA:ARBitrary1:DAC %s,#%d%d" %(channel,name,n,N),
-                                                data, datatype='d', is_big_endian=False)
+                                                wf, datatype='', is_big_endian=False)
         else:
-            self.interface.write_binary_values("SOURce%s:DATA:ARBitrary1 %s,#%d%d" %(channel,name,n,N),
-                                                data, datatype='f', is_big_endian=False)
+            N = len(data)*4
+            n = int(np.log10(N))+1
+            print("Not yet implemented")
+            # self.interface.write_binary_values("SOURce%s:DATA:ARBitrary1 %s,#%d%d" %(channel,name,n,N),
+            #                                     data, datatype='f', is_big_endian=False)
 
     def upload_sequence(self,sequence,channel=1):
         """ Upload a sequence to the instrument """
@@ -308,7 +323,7 @@ class Agilent33500B(SCPIInstrument):
         def update(self,**kwargs):
             for k,v in kwargs.items():
                 if k in ["name","data","control","repeat","mkr_mode","mkr_pts"]:
-                    logger.info("Set %s.%s = %s" %(self.name,k,v))
+                    logger.debug("Set %s.%s = %s" %(self.name,k,v))
                     setattr(self,k,v)
                 else:
                     logger.warning("Key %s is not valid for Segment %s. Ignore." %(k,self.name))
