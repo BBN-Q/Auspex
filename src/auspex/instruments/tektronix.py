@@ -6,13 +6,13 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-__all__ = ['DPO72004C']
+__all__ = ['TekDPO72004C','TekAWG5014']
 
 from auspex.log import logger
 from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand, is_valid_ipv4
 import numpy as np
 
-class DPO72004C(SCPIInstrument):
+class TekDPO72004C(SCPIInstrument):
     """Tektronix DPO72004C Oscilloscope"""
     encoding   = StringCommand(get_string="DAT:ENC?;", set_string="DAT:ENC {:s};",
                         allowed_values=["ASCI","RIB","RPB","FPB","SRI","SRP","SFP"])
@@ -36,8 +36,8 @@ class DPO72004C(SCPIInstrument):
         # super(DPO72004C, self).__init__(resource_name, *args, **kwargs)
         # self.name = "Tektronix DPO72004C Oscilloscope"
         # self.interface._resource.read_termination = u"\n"
-        super(DPO72004C, self).__init__(resource_name, *args, **kwargs)
-        self.name = "DPO72004C Oscilloscope"
+        super(TekDPO72004C, self).__init__(resource_name, *args, **kwargs)
+        self.name = "Tektronix DPO72004C Oscilloscope"
 
     def connect(self, resource_name=None, interface_type=None):
         if resource_name is not None:
@@ -45,7 +45,7 @@ class DPO72004C(SCPIInstrument):
         #If we only have an IP address then tack on the raw socket port to the VISA resource string
         if is_valid_ipv4(self.resource_name):
             self.resource_name += "::4000::SOCKET" #user guide recommends HiSLIP protocol
-        super(DPO72004C, self).connect(resource_name=self.resource_name, interface_type=interface_type)
+        super(TekDPO72004C, self).connect(resource_name=self.resource_name, interface_type=interface_type)
         self.interface._resource.read_termination = u"\n" 
 
     def clear(self):
@@ -88,3 +88,91 @@ class DPO72004C(SCPIInstrument):
 
     def get_math_curve(self, channel=1):
         pass
+
+
+
+class TekAWG5014(SCPIInstrument):
+    """Tektronix AWG 5014"""
+
+    CHANNEL = 1 # Default Channel 
+
+    def __init__(self, resource_name=None, *args, **kwargs):
+        super(TekAWG5014, self).__init__(resource_name, *args, **kwargs)
+        self.name = "Tektronix AWG 5014"
+
+    def connect(self, resource_name=None, interface_type=None):
+        if resource_name is not None:
+            self.resource_name = resource_name
+        #If we only have an IP address then tack on the raw socket port to the VISA resource string
+        if is_valid_ipv4(self.resource_name):
+            self.resource_name += "::4000::SOCKET" #LAN must be enabled and Port must be defined in GPIB/LAN Configuration on instrument
+        super(TekAWG5014, self).connect(resource_name=self.resource_name, interface_type=interface_type)
+        self.interface._resource.read_termination = u"\n" 
+
+    # Select Active Channel
+
+    @property
+    def channel(self):
+        return self.CHANNEL
+
+    @configlist.setter
+    def channel(self, channel=1):
+        if channel not in range(1,self.interface.query_ascii_values("AWGCONTROL:CONFIGURE:CNUMBER?",converter=u'd')+1):
+            raise ValueError("Channel must be integer between 1 and {}".format(self.interface.query_ascii_values("AWGCONTROL:CONFIGURE:CNUMBER?",converter=u'd')))
+        else:
+             self.CHANNEL = channel
+
+    # Channel Amplitude
+
+    @property
+    def amplitude(self):
+
+        query_str = "SOURCE{}:VOLTAGE:AMPLITUDE?".format(self.CHANNEL)
+        return self.interface.query_ascii_values(query_str, converter=u'd')
+
+    @amplitude.setter
+    def amplitude(self, val):
+ 
+        if (val>2) or (val<20e-3): 
+            raise ValueError("Amplitude must be between 0.02 and 2 Volts pk-pk.")
+        else:
+            self.interface.write(("SOURCE{}:VOLTAGE:AMPLITUDE {}".format(self.CHANNEL,val))
+
+    # Channel Offset
+
+    @property
+    def offset(self):
+
+        query_str = "SOURCE{}:VOLTAGE:OFFSET?".format(self.CHANNEL)
+        return self.interface.query_ascii_values(query_str, converter=u'd')
+
+    @offset.setter
+    def offset(self, val):
+
+        self.interface.write(("SOURCE{}:VOLTAGE:OFFSET {}".format(self.CHANNEL,val))
+
+    # Channel High Voltage
+
+    @property
+    def high(self):
+
+        query_str = "SOURCE{}:VOLTAGE:HIGH?".format(self.CHANNEL)
+        return self.interface.query_ascii_values(query_str, converter=u'd')
+
+    @high.setter
+    def high(self, val):
+ 
+        self.interface.write(("SOURCE{}:VOLTAGE:HIGH {}".format(self.CHANNEL,val))
+
+    # Channel Low Voltage
+
+    @property
+    def low(self):
+
+        query_str = "SOURCE{}:VOLTAGE:LOW?".format(self.CHANNEL)
+        return self.interface.query_ascii_values(query_str, converter=u'd')
+
+    @low.setter
+    def low(self, val):
+ 
+        self.interface.write(("SOURCE{}:VOLTAGE:LOW {}".format(self.CHANNEL,val))
