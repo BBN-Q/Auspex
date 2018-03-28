@@ -15,7 +15,6 @@ import datetime
 import asyncio
 import sys
 import numpy as np
-import sys
 
 from .instrument import Instrument, DigitizerChannel
 from auspex.log import logger
