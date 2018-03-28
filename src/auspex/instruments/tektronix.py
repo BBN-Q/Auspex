@@ -107,7 +107,8 @@ class TekAWG5014(SCPIInstrument):
         if is_valid_ipv4(self.resource_name):
             self.resource_name += "::4000::SOCKET" #LAN must be enabled and Port must be defined in GPIB/LAN Configuration on instrument
         super(TekAWG5014, self).connect(resource_name=self.resource_name, interface_type=interface_type)
-        self.interface._resource.read_termination = u"\n" 
+        self.interface._resource.read_termination = u"\r" 
+        self.interface._resource.write_termination = u"\n"
 
     # Select Active Channel
 
@@ -115,10 +116,10 @@ class TekAWG5014(SCPIInstrument):
     def channel(self):
         return self.CHANNEL
 
-    @configlist.setter
+    @channel.setter
     def channel(self, channel=1):
-        if channel not in range(1,self.interface.query_ascii_values("AWGCONTROL:CONFIGURE:CNUMBER?",converter=u'd')+1):
-            raise ValueError("Channel must be integer between 1 and {}".format(self.interface.query_ascii_values("AWGCONTROL:CONFIGURE:CNUMBER?",converter=u'd')))
+        if channel not in range(1,self.interface.query_ascii_values("AWGCONTROL:CONFIGURE:CNUMBER?",converter=u'd')[0]+1):
+            raise ValueError("Channel must be integer between 1 and {}".format(self.interface.query_ascii_values("AWGCONTROL:CONFIGURE:CNUMBER?",converter=u'd')[0]))
         else:
              self.CHANNEL = channel
 
@@ -127,52 +128,51 @@ class TekAWG5014(SCPIInstrument):
     @property
     def amplitude(self):
 
-        query_str = "SOURCE{}:VOLTAGE:AMPLITUDE?".format(self.CHANNEL)
-        return self.interface.query_ascii_values(query_str, converter=u'd')
+        query_str = "SOURCE{:d}:VOLTAGE:AMPLITUDE?".format(self.CHANNEL)
+        return self.interface.query_ascii_values(query_str, converter=u'e')[0]
 
     @amplitude.setter
-    def amplitude(self, val):
+    def amplitude(self, val=2e-2):
  
-        if (val>2) or (val<20e-3): 
+        if (val>2) or (val<2e-2): 
             raise ValueError("Amplitude must be between 0.02 and 2 Volts pk-pk.")
         else:
-            self.interface.write(("SOURCE{}:VOLTAGE:AMPLITUDE {}".format(self.CHANNEL,val))
+            self.interface.write(("SOURCE{:d}:VOLTAGE:AMPLITUDE {:E}".format(self.CHANNEL,val)))
 
     # Channel Offset
-
     @property
     def offset(self):
 
-        query_str = "SOURCE{}:VOLTAGE:OFFSET?".format(self.CHANNEL)
-        return self.interface.query_ascii_values(query_str, converter=u'd')
+        query_str = "SOURCE{:d}:VOLTAGE:OFFSET?".format(self.CHANNEL)
+        return self.interface.query_ascii_values(query_str, converter=u'e')[0]
 
     @offset.setter
     def offset(self, val):
 
-        self.interface.write(("SOURCE{}:VOLTAGE:OFFSET {}".format(self.CHANNEL,val))
+        self.interface.write(("SOURCE{:d}:VOLTAGE:OFFSET {:E}".format(self.CHANNEL,val)))
 
     # Channel High Voltage
 
     @property
     def high(self):
 
-        query_str = "SOURCE{}:VOLTAGE:HIGH?".format(self.CHANNEL)
-        return self.interface.query_ascii_values(query_str, converter=u'd')
+        query_str = "SOURCE{:d}:VOLTAGE:HIGH?".format(self.CHANNEL)
+        return self.interface.query_ascii_values(query_str, converter=u'e')[0]
 
     @high.setter
     def high(self, val):
  
-        self.interface.write(("SOURCE{}:VOLTAGE:HIGH {}".format(self.CHANNEL,val))
+        self.interface.write(("SOURCE{:d}:VOLTAGE:HIGH {:E}".format(self.CHANNEL,val)))
 
     # Channel Low Voltage
 
     @property
     def low(self):
 
-        query_str = "SOURCE{}:VOLTAGE:LOW?".format(self.CHANNEL)
-        return self.interface.query_ascii_values(query_str, converter=u'd')
+        query_str = "SOURCE{:d}:VOLTAGE:LOW?".format(self.CHANNEL)
+        return self.interface.query_ascii_values(query_str, converter=u'e')[0]
 
     @low.setter
     def low(self, val):
  
-        self.interface.write(("SOURCE{}:VOLTAGE:LOW {}".format(self.CHANNEL,val))
+        self.interface.write(("SOURCE{:d}:VOLTAGE:LOW {:E}".format(self.CHANNEL,val)))
