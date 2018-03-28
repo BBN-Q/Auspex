@@ -34,11 +34,10 @@ class Sweeper(object):
 
     def update(self):
         """ Update the levels """
-        logger.debug("Sweeper updates values.")
         imax = len(self.axes)-1
         if imax < 0:
             logger.debug("There are no sweep axis, only data axes.")
-            return None
+            return None, None
         else:
             i=0
             while i<imax and self.axes[i].step==0:
@@ -51,7 +50,9 @@ class Sweeper(object):
         # return the current coordinates of the sweep. Return the
         # reversed list since we store "innermost" axes last.
         values = []
+        names  = []
         for a in self.axes[::-1]:
+            names.append(a.name)
             if a.metadata is not None:
                 if type(a.value) in [np.ndarray, list]:
                     values.append(tuple(list(a.value) + [a.metadata_value]))
@@ -62,23 +63,19 @@ class Sweeper(object):
                     values.append(tuple(a.value))
                 else:
                     values.append((a.value,))
-        return values
+        return values, names
 
     def is_adaptive(self):
         return True in [a.refine_func is not None for a in self.axes]
 
-    def check_for_refinement(self):
+    def check_for_refinement(self, output_connectors_dict):
         refined_axes = []
         for a in self.axes:
-            if a.check_for_refinement():
+            if a.check_for_refinement(output_connectors_dict):
                 refined_axes.append(a.name)
                 break
         if len(refined_axes) > 1:
             raise Exception("More than one axis trying to refine simultaneously. This cannot be tolerated.")
-        elif len(refined_axes) == 1:
-            return refined_axes[0]
-        else:
-            return None
 
     def done(self):
         return np.all([a.done for a in self.axes])

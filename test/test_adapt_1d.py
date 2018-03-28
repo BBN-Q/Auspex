@@ -50,12 +50,10 @@ class SweptTestExperiment(Experiment):
             return t*1.0/(1.0 + np.exp(-k*(t-tc)))
 
         self.resistance.push(ideal_tc(self.temperature.value))
-        # logger.debug("Stream pushed points {}.".format(data_row))
-        # logger.debug("Stream has filled {} of {} points".format(self.resistance.points_taken, self.resistance.num_points() ))
 
 class Adapt1DTestCase(unittest.TestCase):
     
-    @unittest.skip("Adaptive sweeps not yet working in multiprocessing.")
+    # @unittest.skip("Adaptive sweeps not yet working in multiprocessing.")
     def test_writehdf5_1D_adaptive_sweep(self):
         exp = SweptTestExperiment()
         if os.path.exists("test_writehdf5_1D_adaptive-0000.h5"):
@@ -66,22 +64,20 @@ class Adapt1DTestCase(unittest.TestCase):
         exp.set_graph(edges)
 
         def rf(sweep_axis, exp):
-            logger.info("Running refinement function.")
+            time.sleep(0.1)
             temps = wr.get_data("/main/data/temperature")
             ress  = wr.get_data("/main/data/resistance")
-
-            logger.info("Temps: {}".format(temps))
-            logger.info("Ress: {}".format(ress))
+            logger.debug("Temps: {}".format(temps))
+            logger.debug("Ress: {}".format(ress))
 
             new_temps = refine_1D(temps, ress, all_points=False, criterion="difference", threshold = "one_sigma")
 
-            logger.info("New temperature values: {}".format(new_temps))
+            logger.debug("New temperature values: {}".format(new_temps))
             if new_temps.size + temps.size > 15:
                 return False
 
-            sweep_axis.add_points(new_temps)
-            logger.info("Axis points are now: {}".format(sweep_axis.points))
-            return True
+            logger.debug("Axis points are now: {}".format(sweep_axis.points))
+            return new_temps
 
         exp.add_sweep(exp.temperature, np.linspace(0,20,5), refine_func=rf)
         exp.run_sweeps()

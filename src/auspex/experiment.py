@@ -319,9 +319,6 @@ class Experiment(metaclass=MetaExperiment):
                 if hasattr(self,k):
                     v = getattr(self,k)
                     oc.descriptor.add_param(k, v)
-            # if not self.sweeper.is_adaptive():
-            #     oc.descriptor.visited_tuples = oc.descriptor.expected_tuples(with_metadata=True, as_structured_array=False)
-            # else:
             oc.descriptor.visited_tuples = []
             oc.update_descriptors()
 
@@ -341,15 +338,13 @@ class Experiment(metaclass=MetaExperiment):
 
         # Keep track of the previous values
         logger.debug("Waiting for filters.")
-        # await time.sleep(0.1)
         last_param_values = None
         logger.debug("Starting experiment sweep.")
 
-        done = True
         while True:
             # Increment the sweeper, which returns a list of the current
             # values of the SweepAxes (no DataAxes).
-            sweep_values = self.sweeper.update()
+            sweep_values, axis_names = self.sweeper.update()
 
             if self.sweeper.is_adaptive():
                 # Add the new tuples to the stream descriptors
@@ -360,21 +355,23 @@ class Experiment(metaclass=MetaExperiment):
                     vals = [a for a in oc.descriptor.data_axis_values()]
                     if sweep_values:
                         vals  = [[v] for v in sweep_values] + vals
-
                     # Find all coordinate tuples and update the list of
                     # tuples that the experiment has probed.
                     nested_list    = list(itertools.product(*vals))
                     flattened_list = [tuple((val for sublist in line for val in sublist)) for line in nested_list]
-                    oc.descriptor.visited_tuples = oc.descriptor.visited_tuples + flattened_list
+                    oc.descriptor.visited_tuples = oc.descriptor.visited_tuples + flattened_list                    
+                    
+                    # Since the filters are in separate processes, pass them the same
+                    # information so that they may perform the same operations.
+                    oc.push_event("new_tuples", (axis_names, sweep_values,))
 
             # Run the procedure
             self.run()
 
-            # See if the axes want to extend themselves
-            refined_axis = self.sweeper.check_for_refinement()
-            if refined_axis is not None:
-                for oc in self.output_connectors.values():
-                     oc.push_event("refined", refined_axis)
+            # See if the axes want to extend themselves. They will push updates
+            # directly to the output_connecters as messages that will be passed
+            # through the filter pipeline.
+            self.sweeper.check_for_refinement(self.output_connectors)
 
             # Update progress bars
             if self.progressbar is not None:
@@ -458,8 +455,6 @@ class Experiment(metaclass=MetaExperiment):
 
         # Call any final initialization on the filter pipeline
         for n in self.nodes + self.extra_plotters:
-            n.experiment = self
-            # n.executor   = self.executor
             if hasattr(n, 'final_init'):
                 n.final_init()
 

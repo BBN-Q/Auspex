@@ -53,15 +53,17 @@ class H5Handler(Process):
     def process_queue_item(self, args, file):
         if args[0] == "write":
             file[args[1]][args[2]:args[3]] = args[4]
-            file.flush()
         elif args[0] == "resize":
             file[args[1]].resize(args[2])
-        elif args[0] == "increase_size":
-            file[args[1]].resize((len(file[args[1]])+args[2],))
+        elif args[0] == "resize_to":
+            if args[2] > len(file[args[1]]):
+                file[args[1]].resize((args[2],))
         elif args[0] == "set_attr":
             file[args[1]].attrs[args[2]] = args[3]
         elif args[0] == "get_data":
             self.return_queue.put((args[1], file[args[1]][:]))
+        elif args[0] == "flush":
+            file.flush()
 
     def run(self):
         with h5py.File(self.filename, "r+", libver="latest") as file:
@@ -306,28 +308,31 @@ class WriteToHDF5(Filter):
 
     def write_to_log(self):
         """ Record the experiment in a log file """
-        logfile = os.path.join(config.LogDir, "experiment_log.tsv")
-        if os.path.isfile(logfile):
-            lf = pd.read_csv(logfile, sep="\t")
-        else:
-            logger.info("Experiment log file created.")
-            lf = pd.DataFrame(columns = ["Filename", "Date", "Time"])
-        lf = lf.append(pd.DataFrame([[self.filename.value, time.strftime("%y%m%d"), time.strftime("%H:%M:%S")]],columns=["Filename", "Date", "Time"]),ignore_index=True)
-        lf.to_csv(logfile, sep = "\t", index = False)
+        if config.LogDir:
+            logfile = os.path.join(config.LogDir, "experiment_log.tsv")
+            if os.path.isfile(logfile):
+                lf = pd.read_csv(logfile, sep="\t")
+            else:
+                logger.info("Experiment log file created.")
+                lf = pd.DataFrame(columns = ["Filename", "Date", "Time"])
+            lf = lf.append(pd.DataFrame([[self.filename.value, time.strftime("%y%m%d"), time.strftime("%H:%M:%S")]],columns=["Filename", "Date", "Time"]),ignore_index=True)
+            lf.to_csv(logfile, sep = "\t", index = False)
 
     def save_yaml(self):
         """ Save a copy of current experiment settings """
-        head = os.path.dirname(self.filename.value)
-        fulldir = os.path.splitext(self.filename.value)[0]
-        if not os.path.exists(fulldir):
-            os.makedirs(fulldir)
-            config.dump_meas_file(config.load_meas_file(config.meas_file), os.path.join(fulldir, os.path.split(config.meas_file)[1]), flatten = True)
+        if config.meas_file:
+            head = os.path.dirname(self.filename.value)
+            fulldir = os.path.splitext(self.filename.value)[0]
+            if not os.path.exists(fulldir):
+                os.makedirs(fulldir)
+                config.dump_meas_file(config.load_meas_file(config.meas_file), os.path.join(fulldir, os.path.split(config.meas_file)[1]), flatten = True)
 
     def save_yaml_h5(self):
         """ Save a copy of current experiment settings in the h5 metadata"""
-        header = self.file.create_group("header")
-        # load them dump to get the 'include' information
-        header.attrs['settings'] = config.dump_meas_file(config.load_meas_file(config.meas_file), flatten = True)
+        if config.meas_file:
+            header = self.file.create_group("header")
+            # load them dump to get the 'include' information
+            header.attrs['settings'] = config.dump_meas_file(config.load_meas_file(config.meas_file), flatten = True)
 
     def get_data(self, data_path):
         """Request data back from the file handler. Data_path is given with respect to root: e.g. /data/voltage"""
@@ -353,8 +358,11 @@ class WriteToHDF5(Filter):
 
         # Write pointer
         w_idx = {s: 0 for s in streams}
+        points_taken = {s: 0 for s in streams}
+        i = 0
 
-        while not self.exit.is_set():
+        while not self.exit.is_set():# and not self.finished_processing.is_set():
+            i +=1
             # Try to pull all messages in the queue. queue.empty() is not reliable, so we 
             # ask for forgiveness rather than permission.
             msgs_by_stream = {s: [] for s in streams}
@@ -373,25 +381,19 @@ class WriteToHDF5(Filter):
 
                     # If we receive a message
                     if message['type'] == 'event':
-                        logger.debug('%s "%s" received event of type "%s"', self.__class__.__name__, self.name, message['event_type'])
+                        # logger.info('%s "%s" received event of type "%s"', self.__class__.__name__, self.name, message['event_type'])
                         if message['event_type'] == 'done':
                             got_done_msg[stream] = True
                         elif message['event_type'] == 'refined':
-                            refined_axis = message['data']
-
-                            # Resize the data set
-                            num_new_points = desc.num_new_points_through_axis(refined_axis)
+                            message_data = message['data']
+                            self.refine(message_data)
+                        elif message['event_type'] == 'new_tuples':
+                            num_new_points = self.process_new_tuples(desc, message['data'])
                             for stream in streams:
-                                self.queue.put(("increase_size", self.data_write_paths[stream], num_new_points,))
-
+                                self.queue.put(("resize_to", self.data_write_paths[stream], len(desc.visited_tuples),))
                             if self.store_tuples:
                                 for an in self.axis_names:
-                                    self.queue.put(("increase_size", self.tuple_write_paths[an], num_new_points,))
-
-                            # Generally speaking the descriptors are now insufficient to reconstruct
-                            # the full set of tuples. The user should know this, so let's mark the
-                            # descriptor axes accordingly.
-                            # TODO: self.group[name].attrs['was_refined'] = True
+                                    self.queue.put(("resize_to", self.tuple_write_paths[an], len(desc.visited_tuples),))
 
                     elif message['type'] == 'data':
 
@@ -400,9 +402,6 @@ class WriteToHDF5(Filter):
                         if not hasattr(message_data, 'size'):
                             message_data = np.array([message_data])
                         message_data = message_data.flatten()
-
-                        logger.debug('%s "%s" received %d points', self.__class__.__name__, self.name, message_data.size)
-                        # logger.debug("Now has %d of %d points.", stream.points_taken.value, stream.num_points())
 
                         # Write the data
                         self.queue.put(("write", self.data_write_paths[stream], w_idx[stream], w_idx[stream]+message_data.size, message_data))
@@ -415,15 +414,22 @@ class WriteToHDF5(Filter):
                                     self.queue.put(("write", self.tuple_write_paths[axis_name], w_idx[stream], w_idx[stream]+message_data.size,
                                                     tuples[axis_name][w_idx[stream]:w_idx[stream]+message_data.size]))
 
+                        self.queue.put(("flush",))
                         w_idx[stream] += message_data.size
-                        self.points_taken = w_idx[stream]
+                        points_taken[stream] = w_idx[stream]
 
                         logger.debug("HDF5: Write index at %d", w_idx[stream])
                         logger.debug("HDF5: %s has written %d points", stream.name, w_idx[stream])
 
             # If we have gotten all our data and process_data has returned, then we are done!
-            if np.all(got_done_msg.values()) and np.all([v.done() for v in self.input_connectors.values()]):
-                self.finished_processing.set()
+            if desc.is_adaptive():
+                if np.all(list(got_done_msg.values())) and np.all([len(desc.visited_tuples) == points_taken[s] for s in streams]):
+                    self.finished_processing.set()
+                    break
+            else:
+                if np.all(list(got_done_msg.values())) and np.all([v.done() for v in self.input_connectors.values()]):
+                    self.finished_processing.set()
+                    break      
 
 class DataBuffer(Filter):
     """Writes data to IO."""
