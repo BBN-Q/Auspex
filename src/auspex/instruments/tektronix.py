@@ -95,6 +95,10 @@ class TekAWG5014(SCPIInstrument):
     """Tektronix AWG 5014"""
 
     CHANNEL = 1 # Default Channel 
+    MARKER = 1 # Default Marker
+    ONOFF_VALUES    = ['ON', 'OFF']
+
+    runmode = StringCommand(scpi_string="AWGCONTROL:RMODE",allowed_values=['CONT','TRIG','GAT','SEQ','ENH'])
 
     def __init__(self, resource_name=None, *args, **kwargs):
         super(TekAWG5014, self).__init__(resource_name, *args, **kwargs)
@@ -110,8 +114,27 @@ class TekAWG5014(SCPIInstrument):
         self.interface._resource.read_termination = u"\r" 
         self.interface._resource.write_termination = u"\n"
 
-    # Select Active Channel
+    # Run Selected Waveforms
+    def run(self):
+        self.interface.write("AWGCONTROL:RUN")
 
+    # Stop Waveforms
+    def stop(self):
+        self.interface.write("AWGCONTROL:STOP")
+
+    # Load Waveform
+    def loadwaveform(self,name,points):
+
+        if name is not None: 
+            self.interface.write("WLIST:WAVEFORM:DELETE {:s}".format(name))
+            self.interface.write("WLIST:WAVEFORM:NEW {:s}, {:d}, INT".format(name,len(points)))
+            self.interface.write_binary_values("WLIST:WAVEFORM:DATA {:s},".format(name),points,dataype='d',is_big_endian=False)
+
+        else: 
+            raise ValueError("No Name given for Waveform.")
+
+
+    # Select Channel
     @property
     def channel(self):
         return self.CHANNEL
@@ -121,10 +144,39 @@ class TekAWG5014(SCPIInstrument):
         if channel not in range(1,self.interface.query_ascii_values("AWGCONTROL:CONFIGURE:CNUMBER?",converter=u'd')[0]+1):
             raise ValueError("Channel must be integer between 1 and {}".format(self.interface.query_ascii_values("AWGCONTROL:CONFIGURE:CNUMBER?",converter=u'd')[0]))
         else:
-             self.CHANNEL = channel
+            self.CHANNEL = channel
+
+    # Select Marker
+    @property
+    def marker(self):
+        return self.MARKER
+
+    @marker.setter
+    def marker(self, marker=1):
+        if marker not in range(1,3):
+            raise ValueError("Marker must be 1 or 2")
+        else:
+            self.MARKER = marker
+
+    # Channel Output 
+    @property
+    def output(self):
+
+        query_str = "OUTPUT{:d}:STATE?".format(self.CHANNEL)
+        if self.interface.query_ascii_values(query_str, converter=u'd')[0] == 0: 
+            return 'OFF'
+        else: 
+            return 'ON'
+
+    @output.setter
+    def output(self, val='OFF'):
+
+        if val not in self.ONOFF_VALUES: 
+            raise ValueError("Channel Output must be ON or OFF.")
+        self.interface.write("OUTPUT{:d}:STATE {:s}".format(self.CHANNEL,val))
+
 
     # Channel Amplitude
-
     @property
     def amplitude(self):
 
@@ -152,7 +204,6 @@ class TekAWG5014(SCPIInstrument):
         self.interface.write(("SOURCE{:d}:VOLTAGE:OFFSET {:E}".format(self.CHANNEL,val)))
 
     # Channel High Voltage
-
     @property
     def high(self):
 
@@ -165,7 +216,6 @@ class TekAWG5014(SCPIInstrument):
         self.interface.write(("SOURCE{:d}:VOLTAGE:HIGH {:E}".format(self.CHANNEL,val)))
 
     # Channel Low Voltage
-
     @property
     def low(self):
 
@@ -176,3 +226,108 @@ class TekAWG5014(SCPIInstrument):
     def low(self, val):
  
         self.interface.write(("SOURCE{:d}:VOLTAGE:LOW {:E}".format(self.CHANNEL,val)))
+
+    # Channel Skew
+    @property
+    def skew(self):
+
+        query_str = "SOURCE{:d}:SKEW?".format(self.CHANNEL)
+        return self.interface.query_ascii_values(query_str, converter=u'e')[0]
+
+    @skew.setter
+    def skew(self, val=0):
+ 
+        if abs(val)>100e-12: 
+            raise ValueError("Skew must be <= 100 ps")
+        else:
+            self.interface.write(("SOURCE{:d}:SKEW {:E}".format(self.CHANNEL,val)))
+
+    # Channel Sampling Frequency
+    @property
+    def frequency(self):
+
+        query_str = "SOURCE{:d}:FREQUENCY?".format(self.CHANNEL)
+        return self.interface.query_ascii_values(query_str, converter=u'e')[0]
+
+    @frequency.setter
+    def frequency(self, val=1.2e9):
+ 
+        if (val<10e6) or (val>1.2e9): 
+            raise ValueError("Sampling Frequency must be between 10 MHz and 1.2 GHz.")
+        else: 
+            self.interface.write(("SOURCE{:d}:FREQUENCY {:E}".format(self.CHANNEL,val)))
+
+    # Channel Waveform
+    @property
+    def waveform(self):
+
+        query_str = "SOURCE{:d}:WAVEFORM?".format(self.CHANNEL)
+        return self.interface.query_ascii_values(query_str, converter=u's')[0].strip()
+
+    @waveform.setter
+    def waveform(self, val):
+ 
+        self.interface.write(("SOURCE{:d}:WAVEFORM {:s}".format(self.CHANNEL,val)))
+
+    # Marker Amplitude
+    @property
+    def marker_amplitude(self):
+
+        query_str = "SOURCE{:d}:MARKER{:d}:VOLT:AMPLITUDE?".format(self.CHANNEL,self.MARKER)
+        return self.interface.query_ascii_values(query_str, converter=u'e')[0]
+
+    @marker_amplitude.setter
+    def marker_amplitude(self, val=2e-2):
+ 
+        if (val>2) or (val<2e-2): 
+            raise ValueError("Amplitude must be between 0.02 and 2 Volts pk-pk.")
+        else:
+            self.interface.write(("SOURCE{:d}:MARKER{:d}:VOLT:AMPLITUDE {:E}".format(self.CHANNEL,self.MARKER,val)))
+
+    # Marker Offset
+    @property
+    def marker_offset(self):
+
+        query_str = "SOURCE{:d}:MARKER{:d}:VOLT:OFFSET?".format(self.CHANNEL,self.MARKER)
+        return self.interface.query_ascii_values(query_str, converter=u'e')[0]
+
+    @marker_offset.setter
+    def marker_offset(self, val):
+
+        self.interface.write(("SOURCE{:d}:MARKER{:d}:VOLT:OFFSET {:E}".format(self.CHANNEL,self.MARKER,val)))
+
+    # Marker High Voltage
+    @property
+    def marker_high(self):
+
+        query_str = "SOURCE{:d}:MARKER{:d}:VOLT:HIGH?".format(self.CHANNEL,self.MARKER)
+        return self.interface.query_ascii_values(query_str, converter=u'e')[0]
+
+    @marker_high.setter
+    def marker_high(self, val):
+ 
+        self.interface.write(("SOURCE{:d}:MARKER{:d}:VOLT:HIGH {:E}".format(self.CHANNEL,self.MARKER,val)))
+
+    # Marker Low Voltage
+    @property
+    def marker_low(self):
+
+        query_str = "SOURCE{:d}:MARKER{:d}:VOLT:LOW?".format(self.CHANNEL,self.MARKER)
+        return self.interface.query_ascii_values(query_str, converter=u'e')[0]
+
+    @marker_low.setter
+    def marker_low(self, val):
+ 
+        self.interface.write(("SOURCE{:d}:MARKER{:d}:VOLT:LOW {:E}".format(self.CHANNEL,self.MARKER,val)))
+
+    # Marker Delay
+    @property
+    def marker_delay(self):
+
+        query_str = "SOURCE{:d}:MARKER{:d}:DELAY?".format(self.CHANNEL,self.MARKER)
+        return self.interface.query_ascii_values(query_str, converter=u'e')[0]
+
+    @marker_delay.setter
+    def marker_delay(self, val):
+ 
+        self.interface.write(("SOURCE{:d}:MARKER{:d}:DELAY {:E}".format(self.CHANNEL,self.MARKER,val)))
