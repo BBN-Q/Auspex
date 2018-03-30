@@ -14,9 +14,14 @@ import numpy as np
 
 class TekDPO72004C(SCPIInstrument):
     """Tektronix DPO72004C Oscilloscope"""
+
+    MEAS = 1 # Default Measurement 
+    MEAS_TYPES = ['AMP','ARE','BUR','CAR','CME','CRM','DEL','DISTDU','EXTINCTDB','EXTINCTPCT','EXTINCTRATIO','EYEH','EYEWI','FALL','FREQ','HIGH','HIT','LOW','MAX','MEAN','MED','MINI','NCRO','NDU','NOV','NWI','PBAS','PCRO','PCTCRO','PDU','PEAKH','PERI','PHA','PK2P','PKPKJ','PKPN','POV','PTOP','PWI','QFAC','RIS','RMS','RMSJ','RMSN','SIGMA1','SIGMA2','SIGMA3','SIXS','SNR','STD','WAVEFORMS']
+    SOURCES = ['CH1','CH2','CH3','CH4','MATH1','MATH2','MATH3','MATH4','REF1','REF2','REF3','REF4','HIS']
+
     encoding   = StringCommand(get_string="DAT:ENC?;", set_string="DAT:ENC {:s};",
                         allowed_values=["ASCI","RIB","RPB","FPB","SRI","SRP","SFP"])
-    source_channel = IntCommand(get_string="DAT:SOU?;", set_string="DAT:SOU {:s};",value_map={1:"CH1",2:"CH2",3:"CH3",4:"CH4"})
+    channel = IntCommand(get_string="DAT:SOU?;", set_string="DAT:SOU {:s};",value_map={1:"CH1",2:"CH2",3:"CH3",4:"CH4"})
     byte_depth = IntCommand(get_string="WFMOutpre:BYT_Nr?;",
                             set_string="WFMOutpre:BYT_Nr {:d};", allowed_values=[1,2,4,8])
     data_start = IntCommand(get_string="DAT:STAR?;", set_string="DAT:STAR {:d};")
@@ -30,6 +35,11 @@ class TekDPO72004C(SCPIInstrument):
 
     record_length   = IntCommand(get_string="HOR:ACQLENGTH?;")
     record_duration = FloatCommand(get_string="HOR:ACQDURATION?;")
+
+    # Acquistion options and control
+    num_averages = IntCommand(get_string="ACQUIRE:NUMAVG?;",set_string="ACQUIRE:NUMAVE {:d};")
+    run = IntCommand(get_string="ACQUIRE:STATE?;",set_string="ACQUIRE:STATE {:d};",value_map={'OFF':0,'ON':1})
+    acquire = StringCommand(get_sting="ACQUIRE:STOPAFTER?;",set_string="ACQUIRE:STOPAFTER {:s};",value_map={'RUNST':'CONT','SEQ':'SINGLE'}) #Trying to make this a little more intuitive for the user
 
     def __init__(self, resource_name=None, *args, **kwargs):
         # resource_name += "::4000::SOCKET" #user guide recommends HiSLIP protocol
@@ -56,18 +66,52 @@ class TekDPO72004C(SCPIInstrument):
         This doesn't actually seem to work, strangely."""
         self.interface.write("DAT SNAp;")
 
-    def get_trace(self, channel=1, byte_depth=2):
-        self.source_channel = channel
+    # Acquistion options and control
+    num_averages = IntCommand(get_string="ACQUIRE:NUMAVG?;",set_string="ACQUIRE:NUMAVE {:d};")
+
+    # Turn acquisition ON/OFF
+    @property 
+    def run(self):
+        if self.interface.query_ascii_values("ACQUIRE:STATE?",converter=u'd')[0] == 0:
+            return 'OFF'
+        else: 
+            return 'ON'
+
+    @run.setter
+    def run(self,val='OFF'):
+        if val not in ['ON','OFF']:
+            raise ValueError("Run must be ON or OFF.")
+        else: 
+            self.interface.write("ACQUIRE:STATE {:s}".format(val))
+
+    # Set Acquisition to single or continuous
+    @property
+    def acquire(self):
+        return self.interface.query_ascii_values("ACQUIRE:STOPAFTER?",converter=u's')[0]
+
+    @acquire.setter
+    def acquire(self,val='SEQ'):
+        if val not in ['RUNST','SEQ']:
+            raise ValueError("Acquisition must be RUNST (continuous) or SEQ (single).")
+        else: 
+            self.interface.write("ACQUIRE:STOPAFTER {:s}".format(val))
+
+    # Get number of aquisitions since last reset
+    @property
+    def acquire_num(self):
+        return self.interface.query_ascii_values("ACQUIRE:NUMAC?",converter=u'd')[0]
+
+    # Get Waveform trace
+    def get_trace(self):
         self.encoding = "SRI" # Signed ints
 
         record_length = self.record_length
         self.data_start = 1
         self.data_stop  = record_length
 
-        self.byte_depth = byte_depth
         strf_from_depth = {1: 'b', 2: 'h', 4: 'l', 8: 'q'}
 
-        vals = self.interface.query_binary_values("CURVe?;", datatype=strf_from_depth[byte_depth])
+        vals = self.interface.query_binary_values("CURVe?;", datatype=strf_from_depth[self.byte_depth])
         scale = self.interface.value('WFMO:YMU?;')
         offset = self.interface.value('WFMO:YOF?;')
         vals = (vals - offset)*scale
@@ -86,8 +130,78 @@ class TekDPO72004C(SCPIInstrument):
         curve = self.interface.query_binary_values("CURVe?;", datatype='Q').reshape((1000,252))
         return curve
 
-    def get_math_curve(self, channel=1):
-        pass
+    # Select Measurement
+    @property
+    def measurement(self): 
+        return self.MEAS
+
+    @measurement.setter
+    def measurement(self, measurement=1):
+        if measurement not in range(1,9):
+            raise ValueError("Measurement assignment must be 1 through 8.")
+        else:
+            self.MEAS = measurement
+
+    # Measurement Type
+    @property
+    def measurement_type(self): 
+        return self.interface.query_ascii_values("MEASUREMENT:MEAS{:d}:TYP?".format(self.MEAS),converter=u's')[0]
+
+    @measurement_type.setter
+    def measurement_type(self, mtype='AMP'):
+        if mtype not in MEAS_TYPES:
+            raise ValueError(("Measurement Type must be "+'|'.join(['{}']*len(self.MEAS_TYPES))).format(*self.MEAS_TYPES))
+        else:
+            self.interface.write("MEASUREMENT:MEAS{:d}:TYP {:s}".format(self.MEAS,mtype))
+
+    # Measurement Source1
+    @property
+    def measurement_source1(self): 
+        return self.interface.query_ascii_values("MEASUREMENT:MEAS{:d}:SOU1?".format(self.MEAS),converter=u's')[0]
+
+    @measurement_source1.setter
+    def measurement_source1(self, source):
+        if source is None: 
+            source='CH{:d}'.format(self.channel)
+        if source not in SOURCES:
+            raise ValueError(("Measurement Type must be "+'|'.join(['{}']*len(self.SOURCES))).format(*self.SOURCES))
+        else:
+            self.interface.write("MEASUREMENT:MEAS{:d}:SOU1 {:s}".format(self.MEAS,source))
+
+    # Measurement Source2
+    @property
+    def measurement_source2(self): 
+        return self.interface.query_ascii_values("MEASUREMENT:MEAS{:d}:SOU2?".format(self.MEAS),converter=u's')[0]
+
+    @measurement_source2.setter
+    def measurement_source2(self, source):
+        if source is None: 
+            source='CH{:d}'.format(self.channel)
+        if source not in SOURCES:
+            raise ValueError(("Measurement Type must be "+'|'.join(['{}']*len(self.SOURCES))).format(*self.SOURCES))
+        else:
+            self.interface.write("MEASUREMENT:MEAS{:d}:SOU2 {:s}".format(self.MEAS,source))
+
+    # Measurement Mean
+    @property
+    def measurement_mean(self): 
+        return self.interface.query_ascii_values("MEASUREMENT:MEAS{:d}:MEAN?".format(self.MEAS),converter=u'e')[0]
+
+    # Measurement Standard Deviation
+    @property
+    def measurement_std(self): 
+        return self.interface.query_ascii_values("MEASUREMENT:MEAS{:d}:STD?".format(self.MEAS),converter=u'e')[0]
+
+    # Measurement Max
+    @property
+    def measurement_max(self): 
+        return self.interface.query_ascii_values("MEASUREMENT:MEAS{:d}:MAX?".format(self.MEAS),converter=u'e')[0]
+
+    # Measurement Min
+    @property
+    def measurement_min(self): 
+        return self.interface.query_ascii_values("MEASUREMENT:MEAS{:d}:MIN?".format(self.MEAS),converter=u'e')[0]
+
 
 
 
