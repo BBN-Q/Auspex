@@ -38,8 +38,6 @@ class TekDPO72004C(SCPIInstrument):
 
     # Acquistion options and control
     num_averages = IntCommand(get_string="ACQUIRE:NUMAVG?;",set_string="ACQUIRE:NUMAVE {:d};")
-    run = IntCommand(get_string="ACQUIRE:STATE?;",set_string="ACQUIRE:STATE {:d};",value_map={'OFF':0,'ON':1})
-    acquire = StringCommand(get_sting="ACQUIRE:STOPAFTER?;",set_string="ACQUIRE:STOPAFTER {:s};",value_map={'RUNST':'CONT','SEQ':'SINGLE'}) #Trying to make this a little more intuitive for the user
 
     def __init__(self, resource_name=None, *args, **kwargs):
         # resource_name += "::4000::SOCKET" #user guide recommends HiSLIP protocol
