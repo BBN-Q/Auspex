@@ -200,7 +200,7 @@ def phase_diagram_mesh(points, values,
     cb.set_label("Probability",size=16)
     return mesh
 
-def crossover_pairs(points, values, threshold):
+def crossover_pairs(points, values, threshold=0.5):
     """ Find all pairs of points whose values are on the two sides of threshold """
     mesh = scaled_Delaunay(points)
     nb_indices, indptr = mesh.vertex_neighbor_vertices
