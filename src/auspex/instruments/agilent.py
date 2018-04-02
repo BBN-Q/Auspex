@@ -225,16 +225,14 @@ class Agilent33500B(SCPIInstrument):
         # convert array into string
         data_str = ','.join([str(item) for item in data])
         self.interface.write("SOURce%s:DATA:ARBitrary1%s %s,%s" %(channel,dac_str,name,data_str))
-        # # Check if successfully uploaded or not
-        # time.sleep(1)
-        # import pdb; pdb.set_trace()
-        # data_pts = int(self.interface.query("SOURce%s:DATA:ATTR:POIN? %s" %(channel,name)))
-        # if data_pts==N:
-        #     logger.debug("Successfully uploaded waveform %s to instrument %s, channel %d" %(name,self.name,channel))
-        #     return True
-        # else:
-        #     logger.error("Failed uploading waveform %s to instrument %s, channel %d" %(name,self.name,channel))
-        #     return False
+        # Check if successfully uploaded or not
+        data_pts = int(self.interface.query("SOURce%s:DATA:ATTR:POIN? %s" %(channel,name)))
+        if data_pts==N:
+            logger.debug("Successfully uploaded waveform %s to instrument %s, channel %d" %(name,self.name,channel))
+            return True
+        else:
+            logger.error("Failed uploading waveform %s to instrument %s, channel %d" %(name,self.name,channel))
+            return False
 
     def upload_waveform_binary(self,data,channel=1,name="mywaveform",dac=True):
         """ NOT YET WORKING - DO NOT USE
@@ -245,20 +243,30 @@ class Agilent33500B(SCPIInstrument):
         name = name[:12] # Arb waveform name at most 12 characters
         wf = []
         if dac:
-            N = len(data)*2
-            n = int(np.log10(N))+1
+            N = len(data)*2 # 2 bytes for each point
+            n = int(np.log10(N))+1 # Number of digits of N
             for datum in data:
                 wf.append(datum >> 8)
                 wf.append(datum % 1<<8)
-            logger.debug("Upload waveform %s to instrument %s, channel %d" %(name,self.name,channel))
+            wf = np.array(wf,dtype='int8')
+            logger.debug("Upload waveform %s to instrument %s, channel %d: %s" %(name,self.name,channel,wf))
             self.interface.write_binary_values("SOURce%s:DATA:ARBitrary1:DAC %s,#%d%d" %(channel,name,n,N),
-                                                wf, datatype='', is_big_endian=False)
+                                                wf, datatype='b', is_big_endian=False)
         else:
             N = len(data)*4
             n = int(np.log10(N))+1
-            print("Not yet implemented")
+            logger.error("upload float waveform: Not yet implemented")
+            return False
             # self.interface.write_binary_values("SOURce%s:DATA:ARBitrary1 %s,#%d%d" %(channel,name,n,N),
             #                                     data, datatype='f', is_big_endian=False)
+        # Check if successfully uploaded or not
+        data_pts = int(self.interface.query("SOURce%s:DATA:ATTR:POIN? %s" %(channel,name)))
+        if data_pts==len(data):
+            logger.debug("Successfully uploaded waveform %s to instrument %s, channel %d" %(name,self.name,channel))
+            return True
+        else:
+            logger.error("Failed uploading waveform %s to instrument %s, channel %d" %(name,self.name,channel))
+            return False
 
     def upload_sequence(self,sequence,channel=1):
         """ Upload a sequence to the instrument """
