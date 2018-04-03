@@ -252,6 +252,7 @@ class Agilent33500B(SCPIInstrument):
 
         dac: True if values are converted to integer already
         """
+        logger.warning("Binary upload is under development. May not work as intended. Please consider using ASCII upload: upload_waveform()")
         N = len(data)
         if N<8 or N>16e6:
             log.error("Data has invalid length = %d. Must be between 8 and 16M. Cannot upload waveform." %N)
@@ -275,8 +276,13 @@ class Agilent33500B(SCPIInstrument):
         n = int(np.log10(N))+1 # Number of digits of N
         # Split 2-byte integer into 2 separate bytes
         for datum in data:
-            wf.append(datum >> 8)
-            wf.append(datum % 1<<8)
+            if datum>0:
+                wf.append(datum >> 8)
+                wf.append(datum % 1<<8)
+            else:
+                datum = -datum
+                wf.append(-(datum >> 8))
+                wf.append(-(datum % 1<<8))
         wf = np.array(wf,dtype='int8') # Force datatype to 8-bit integer
         logger.debug("Upload waveform %s to instrument %s, channel %d: %s" %(name,self.name,channel,wf))
         self.interface.write_binary_values("SOURce%s:DATA:ARBitrary1:DAC %s,#%d%d" %(channel,name,n,N),
@@ -290,7 +296,7 @@ class Agilent33500B(SCPIInstrument):
             logger.error("Failed uploading waveform %s to instrument %s, channel %d" %(name,self.name,channel))
             return False
 
-    def upload_sequence(self,sequence,channel=1,binary=True):
+    def upload_sequence(self,sequence,channel=1,binary=False):
         """ Upload a sequence to the instrument """
         # Upload each segment
         if binary:
