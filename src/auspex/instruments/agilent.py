@@ -211,19 +211,31 @@ class Agilent33500B(SCPIInstrument):
 
         dac: True if values are converted to integer already
         """
-        name = name[:12] # Arb waveform name at most 12 characters
+        # Check number of data points
         N = len(data)
         if N<8 or N>65536:
-            log.error("Data has invalid length = %d. Cannot upload waveform." %N)
+            log.error("Data has invalid length = %d. Must be between 8 and 65536. Cannot upload waveform." %N)
             return False
-
-        logger.debug("Upload waveform %s to instrument %s, channel %d" %(name,self.name,channel))
-        if dac:
+        # Check length of waveform length, must be <=12
+        if len(name)>12:
+            logger.warning("Waveform length is larger than the limit of 12. Will be clipped off: %s --> %s" \
+                            %(name,name[:12]))
+        name = name[:12] # Arb waveform name at most 12 characters
+        if dac: # Data points are integer
             dac_str = ":DAC"
-        else:
+            # Values must be within -32767 and 32767
+            if abs(np.max(data))>32767:
+                logger.warning("Some points out of range [-32767,32767] will be clipped off.")
+            data = [int(max(min(datum,32767),-32767)) for datum in data]
+        else: # Data points are float
             dac_str = ""
+            # Values must be within -1 and 1
+            if abs(np.max(data))>1:
+                logger.warning("Some points out of range [-1,1] will be clipped off.")
+            data = [max(min(datum,1),-1) for datum in data]
         # convert array into string
         data_str = ','.join([str(item) for item in data])
+        logger.debug("Upload waveform %s to instrument %s, channel %d: %s" %(name,self.name,channel,data))
         self.interface.write("SOURce%s:DATA:ARBitrary1%s %s,%s" %(channel,dac_str,name,data_str))
         # Check if successfully uploaded or not
         data_pts = int(self.interface.query("SOURce%s:DATA:ATTR:POIN? %s" %(channel,name)))
@@ -240,25 +252,35 @@ class Agilent33500B(SCPIInstrument):
 
         dac: True if values are converted to integer already
         """
-        name = name[:12] # Arb waveform name at most 12 characters
-        wf = []
-        if dac:
-            N = len(data)*2 # 2 bytes for each point
-            n = int(np.log10(N))+1 # Number of digits of N
-            for datum in data:
-                wf.append(datum >> 8)
-                wf.append(datum % 1<<8)
-            wf = np.array(wf,dtype='int8')
-            logger.debug("Upload waveform %s to instrument %s, channel %d: %s" %(name,self.name,channel,wf))
-            self.interface.write_binary_values("SOURce%s:DATA:ARBitrary1:DAC %s,#%d%d" %(channel,name,n,N),
-                                                wf, datatype='b', is_big_endian=False)
-        else:
-            N = len(data)*4
-            n = int(np.log10(N))+1
-            logger.error("upload float waveform: Not yet implemented")
+        N = len(data)
+        if N<8 or N>16e6:
+            log.error("Data has invalid length = %d. Must be between 8 and 16M. Cannot upload waveform." %N)
             return False
-            # self.interface.write_binary_values("SOURce%s:DATA:ARBitrary1 %s,#%d%d" %(channel,name,n,N),
-            #                                     data, datatype='f', is_big_endian=False)
+        # Check length of waveform length, must be <=12
+        if len(name)>12:
+            logger.warning("Waveform length is larger than the limit of 12. Will be clipped off: %s --> %s" \
+                            %(name,name[:12]))
+        name = name[:12] # Arb waveform name at most 12 characters
+        # We don't support float values, so must convert to integer
+        if not dac:
+            logger.warning("We current do not support uploading float values. Waveform values will be converted to integer.")
+            # Convert to integer option (dac=True)
+            data = [datum*32767 for datum in data]
+        # Values must be within -32767 and 32767
+        if abs(np.max(data))>32767:
+            logger.warning("Some points out of range [-32767,32767] will be clipped off.")
+        data = [int(max(min(datum,32767),-32767)) for datum in data]
+        wf = []
+        N = N*2 # 2 bytes for each point
+        n = int(np.log10(N))+1 # Number of digits of N
+        # Split 2-byte integer into 2 separate bytes
+        for datum in data:
+            wf.append(datum >> 8)
+            wf.append(datum % 1<<8)
+        wf = np.array(wf,dtype='int8') # Force datatype to 8-bit integer
+        logger.debug("Upload waveform %s to instrument %s, channel %d: %s" %(name,self.name,channel,wf))
+        self.interface.write_binary_values("SOURce%s:DATA:ARBitrary1:DAC %s,#%d%d" %(channel,name,n,N),
+                                            wf, datatype='b', is_big_endian=False)
         # Check if successfully uploaded or not
         data_pts = int(self.interface.query("SOURce%s:DATA:ATTR:POIN? %s" %(channel,name)))
         if data_pts==len(data):
@@ -268,15 +290,19 @@ class Agilent33500B(SCPIInstrument):
             logger.error("Failed uploading waveform %s to instrument %s, channel %d" %(name,self.name,channel))
             return False
 
-    def upload_sequence(self,sequence,channel=1):
+    def upload_sequence(self,sequence,channel=1,binary=True):
         """ Upload a sequence to the instrument """
         # Upload each segment
-        for seg in sequence.segments:
-            self.upload_waveform(seg.data,channel=channel,name=seg.name,dac=seg.dac)
+        if binary:
+            for seg in sequence.segments:
+                self.upload_waveform_binary(seg.data,channel=channel,name=seg.name,dac=seg.dac)
+        else:
+            for seg in sequence.segments:
+                self.upload_waveform(seg.data,channel=channel,name=seg.name,dac=seg.dac)
         # Now upload the sequence
         descriptor = sequence.get_descriptor()
-        logger.info("Upload sequence %s to %s: %s" %(sequence.name,self.name,descriptor))
-        self.sequence = descriptor
+        logger.debug("Upload sequence %s to %s: %s" %(sequence.name,self.name,descriptor))
+        self.set_sequence(descriptor,channel=channel)
 
     def arb_sync(self):
         """ Restart the sequences and synchronize them """
@@ -290,7 +316,7 @@ class Agilent33500B(SCPIInstrument):
 
     # Subclasses of Agilent33500B
     class Segment(object):
-        def __init__(self,name,data=[],dac=False,control="once",repeat=0,mkr_mode="maintain",mkr_pts=4):
+        def __init__(self,name,data=[],dac=True,control="once",repeat=0,mkr_mode="maintain",mkr_pts=4):
             """ Information of a segment/waveform
 
             dac: True if data is converted to integer already
@@ -349,7 +375,7 @@ class Agilent33500B(SCPIInstrument):
             """
             seg = copy.copy(segment)
             if seg.update(**kwargs):
-                logger.info("Add segment %s into sequence %s" %(seg.name,self.name))
+                logger.debug("Add segment %s into sequence %s" %(seg.name,self.name))
                 self.segments.append(seg)
 
         def get_descriptor(self):
@@ -360,7 +386,7 @@ class Agilent33500B(SCPIInstrument):
             N = len(descriptor)
             n = int(np.log10(N))+1
             descriptor = "#%d%d%s" %(n,N,descriptor)
-            logger.info("Block descriptor for sequence %s: %s" %(self.name,descriptor))
+            logger.debug("Block descriptor for sequence %s: %s" %(self.name,descriptor))
             return descriptor
 
 
