@@ -159,8 +159,8 @@ class SingleShotMeasurement(Filter):
             logger.info("Found best integration time at {} out of {} decimated points.".format(best_idx, num_times))
             #redo calculation with KDEs to get a more accurate estimate
             bins = np.linspace(I_mins[best_idx], I_maxes[best_idx], 100)
-            g_KDE = gaussian_kde(int_ground_I[best_idx, :])
-            e_KDE = gaussian_kde(int_excited_I[best_idx, :])
+            g_KDE = gaussian_kde(ground_I[best_idx, :])
+            e_KDE = gaussian_kde(excited_I[best_idx, :])
             g_PDF = g_KDE(bins)
             e_PDF = e_KDE(bins)
         else:

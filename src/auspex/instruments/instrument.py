@@ -127,9 +127,9 @@ class IntCommand(Command):
         """Convert the instrument's returned values to something conveniently accessed
         through python."""
         if self.python_to_instr is None:
-            return int(get_value_instrument)
+            return int(float(get_value_instrument))
         else:
-            return int(self.instr_to_python[get_value_instrument])
+            return int(float(self.instr_to_python[get_value_instrument]))
 
 class RampCommand(FloatCommand):
     """For quantities that are to be ramped from present to desired value. These will always be floats..."""
@@ -230,7 +230,7 @@ class SCPIInstrument(Instrument):
 
         if interface_type is None:
             # Load the dummy interface, unless we see that GPIB is in the resource string
-            if any([x in self.resource_name for x in ["GPIB", "USB", "SOCKET", "hislip", "inst0", "COM"]]):
+            if any([x in self.resource_name for x in ["GPIB", "USB", "SOCKET", "hislip", "inst0", "COM", "TCPIP"]]):
                 interface_type = "VISA"
 
         try:

@@ -143,24 +143,10 @@ class PulseCalibration(object):
                     buff_data = dataset['Data']
                 data[qubit_name] = self.quad_fun(buff_data)
                 if 'Variance' in dataset.dtype.names:
-                    realvar = np.real(dataset['Variance'])
-                    imagvar = np.imag(dataset['Variance'])
-                    N = descriptor.metadata["num_averages"]
                     if self.quad in ['real', 'imag']:
-                        var[qubit_name] = self.quad_fun(dataset['Variance']) / N
-                    elif self.quad == 'amp':
-                        var[qubit_name] = (realvar + imagvar) / N
-                    elif self.quad == 'phase':
-                        # take the approach from Qlab assuming the noise is
-                        # Gaussian in both quadratures i.e. 'circular' in the 
-                        # IQ plane.
-                        stddata = np.sqrt(realvar + imagvar)
-                        stdtheta = 180/np.pi * 2 * np.arctan(stddata \
-                            / abs(data[qubit_name]))
-                        var[qubit_name] = (stdtheta**2) / N
+                        var[qubit_name] = self.quad_fun(dataset['Variance'])/descriptor.metadata["num_averages"]
                     else:
-                        raise Exception('Variance of {} not available. Choose \
-                            amp, phase, real or imag'.format(self.quad))
+                        raise Exception('Variance of {} not available. Choose real or imag'.format(self.quad))
                 else:
                     var[qubit_name] = None
 
