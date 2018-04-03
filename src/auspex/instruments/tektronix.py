@@ -56,9 +56,11 @@ class TekDPO72004C(SCPIInstrument):
         super(TekDPO72004C, self).connect(resource_name=self.resource_name, interface_type=interface_type)
         self.interface._resource.read_termination = u"\n" 
 
+    @property
     def clear(self):
         self.interface.write("CLEAR ALL;")
 
+    @property
     def snap(self):
         """Sets the start and stop points to the the current front panel display.
         This doesn't actually seem to work, strangely."""
@@ -100,6 +102,7 @@ class TekDPO72004C(SCPIInstrument):
         return self.interface.query_ascii_values("ACQUIRE:NUMAC?",converter=u'd')[0]
 
     # Get Waveform trace
+    @property
     def get_trace(self):
         self.encoding = "SRI" # Signed ints
 
@@ -227,10 +230,12 @@ class TekAWG5014(SCPIInstrument):
         self.interface._resource.write_termination = u"\n"
 
     # Run Selected Waveforms
+    @property
     def run(self):
         self.interface.write("AWGCONTROL:RUN")
 
     # Stop Waveforms
+    @property
     def stop(self):
         self.interface.write("AWGCONTROL:STOP")
 

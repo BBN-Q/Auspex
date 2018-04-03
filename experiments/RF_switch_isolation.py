@@ -37,57 +37,136 @@ class RF_Switch_Isolation(Experiment):
 	rise_time_std = OutputConnector(unit="seconds")
 	fall_time	= OutputConnector(unit="seconds")
 	fall_time_std = OutputConnector(unit="seconds")
+	width = OutputConnector(unit="seconds")
+	width_std = OutputConnector(unit="seconds")
 	demod_amp	= OutputConnector(unit="volts")
 	demod_amp_std = OutputConnector(unit="volts")
 	demod_wf = OutputConnector(unit="volts")
 	raw_wf = OutputConnector(unit="volts")
 
 	#Instrument Resources
-	sys.path.append("C:/Users/qlab/Documents/dll/")
+	sys.path.append("C:/Users/qlab/Documents/dll/") # needed for the Labbrick driver
 
 	awg			= TekAWG5014('192.168.5.100')
 	scope		= TekDPO72004C('128.33.89.89')
 	brick		= Labbrick('1686')
 
+	#Experiment Configuration
+	AWGCHAN = 1 #AWG Output Channel
+	DRIVEWF = '50MHz_square' #AWG Waveform
+
+	DEMODCHAN = 4 #Demod signal scope channel
+	RAWCHAN = 3 #Raw signal scope channel
+	NAVG = 106 #Scope Averages
+	NACQ = 10000 #Scope Acquisitions
+
+	TRANSFREQ = 6e9 #Transmission frequency of Labbrick (should be greater than LP Filter)
+	TRANSPWR = 0 #Transmission power in dBm (Depends on Amps, Attenuation and Mixer)
+
+
 	def init_streams(self):
 
-		# Since Mux sweeps over channels itself, channel number must be added explicitly as a data axis to each measurement
-		self.sheet_res.add_axis(DataAxis("channel",CHAN_LIST))
-		self.temp_A.add_axis(DataAxis("channel",CHAN_LIST))
-		self.temp_B.add_axis(DataAxis("channel",CHAN_LIST))
-		self.sys_time.add_axis(DataAxis("channel",CHAN_LIST))
+		# Since Scope "sweeps" time on its own, time base must be added explicitly as a data axis for each wf measurement
+		# Time base is manually adjusted by experimenter
+		TIMEBASE = np.linspace(0, self.record_duration, self.record_length)
+		self.demod_wf.add_axis(DataAxis("channel",TIMEBASE))
+		self.raw_wf.add_axis(DataAxis("channel",TIMEBASE))
 
 	def init_instruments(self):
 
-		print("Initializing Instrument: {}".format(self.mux.interface.IDN()))
+		print("Initializing Instrument: {}".format(self.awg.interface.IDN()))
 
-		self.mux.scanlist = CHAN_LIST
-		self.mux.configlist = self.mux.scanlist
-		self.mux.resistance_wire = 4
-		self.mux.resistance_range = RES_RANGE
-		self.mux.resistance_resolution = PLC
-		self.mux.resistance_zcomp = ZCOMP
+		self.awg.channel = self.CHANNEL
+		self.awg.stop
+		self.awg.output = 'OFF'
+		self.awg.amplitude = 0.02
+		self.awg.offset = 0
+		self.awg.runmode = 'CONT'
+		self.awg.waveform = self.DRIVEWF
 
-		print("Initializing Instrument: {}".format(self.lakeshore.interface.IDN()))
+		print("Initializing Instrument: {}".format(self.scope.interface.IDN()))
 
-		self.lakeshore.config_sense_A	= A_CONFIG
-		self.lakeshore.config_sense_B	= B_CONFIG
-		self.lakeshore.range_htr_1		= 0
-		self.lakeshore.range_htr_2		= 0
-		self.lakeshore.mout_htr_1		= 0
-		self.lakeshore.mout_htr_2		= 0
+		self.scope.run = 'OFF'
+		self.scope.clear
 
-		self.index.assign_method(int)
+		self.scope.channel = self.DEMODCHAN
+		self.scope.measurement = 1	#Set 1 as Amplitude measurement
+		self.scope.measurement_source1 = 'CH{:d}'.format(self.DEMODCHAN)
+		self.scope.measurement_type = 'AMP'
+
+		self.scope.measurement = 2	#Set 2 as rise time measurement
+		self.scope.measurement_source1 = 'CH{:d}'.format(self.DEMODCHAN)
+		self.scope.measurement_type = 'RIS'
+
+		self.scope.measurement = 3	#Set 3 as fall time measurement
+		self.scope.measurement_source1 = 'CH{:d}'.format(self.DEMODCHAN)
+		self.scope.measurement_type = 'FALL'
+
+		self.scope.measurement = 4	#Set 4 as pulse width meassurement
+		self.scope.measurement_source1 = 'CH{:d}'.format(self.DEMODCHAN)
+		self.scope.measurement_type = 'PWI'
+
+		self.scope.num_averages = self.NAVG
+		self.scope.acquire = 'RUNST' #setup scope for continuous acquisition
+
+		print("Initializing Instrument Labbrick ID: {}".format(self.brick.device_id))
+
+		self.brick.output = 'OFF'
+		self.brick.frequency = self.TRANSFREQ
+		self.brick.power = self.TRANSPWR
+		self.brick.output = 'ON'
+
+
+		def set_drive_amp(amp): 
+
+			self.awg.channel = self.AWGCHAN
+			self.awg.stop
+			self.awg.output = 'OFF'
+			self.awg.amplitude = amp 
+			self.awg.offset = amp/2
+			self.awg.output = 'ON'
+
+
+		self.drive_amp.assign_method(set_drive_amp)
 
 
 	async def run(self):
 
-		self.mux.scan()
+		self.scope.clear
+		self.scope.run = 'ON'
+		await asyncio.sleep(0.01)
+		self.awg.run
 
-		# Everything needs len(chan_list) copies since sheet_res is read in len(chan_list) at a time. This preserves the dimensionality of the data
-		await self.temp_A.push([self.lakeshore.Temp("A")]*len(CHAN_LIST))
-		await self.temp_B.push([self.lakeshore.Temp("B")]*len(CHAN_LIST))
-		await self.sys_time.push([time.time()]*len(CHAN_LIST))
+		while self.scope.acquire_num < self.NACQ:
+			await asyncio.sleep(0.1)
 
-		await asyncio.sleep(4*len(CHAN_LIST)*PLC/60)
-		await self.sheet_res.push(self.mux.read())
+		self.scope.run = 'OFF'
+		self.awg.stop
+
+		self.scope.measurement = 1
+		await self.demod_amp.push(self.scope.measurement_mean)
+		await self.demod_amp_std.push(self.scope.measurement_std)
+
+		self.scope.measurement = 2
+		await self.rise_time.push(self.scope.measurement_mean)
+		await self.rise_time_std.push(self.scope.measurement_std)
+
+		self.scope.measurement = 3
+		await self.fall_time.push(self.scope.measurement_mean)
+		await self.fall_time_std.push(self.scope.measurement_std)
+
+		self.scope.measurement = 4
+		await self.demod_amp.push(self.scope.measurement_mean)
+		await self.demod_amp_std.push(self.scope.measurement_std)
+
+		self.scope.channel = self.DEMODCHAN
+		[time,vals_demod] = self.scope.get_trace
+		await self.demod_wf.push(vals_demod)
+
+		self.scope.channel = self.RAWCHAN
+		[time,vals_raw] = self.scope.get_trace
+		await self.raw_wf.push(vals_raw)
+
+
+
+
