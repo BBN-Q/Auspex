@@ -56,7 +56,7 @@ class RF_Switch_Isolation(Experiment):
 	DRIVEWF = '50MHz_square' #AWG Waveform
 
 	DEMODCHAN = 4 #Demod signal scope channel
-	RAWCHAN = 3 #Raw signal scope channel
+	RAWCHAN = 1 #Raw signal scope channel
 	NAVG = 106 #Scope Averages
 	NACQ = 10000 #Scope Acquisitions
 
@@ -64,11 +64,11 @@ class RF_Switch_Isolation(Experiment):
 	TRANSPWR = 0 #Transmission power in dBm (Depends on Amps, Attenuation and Mixer)
 
 
-	def init_streams(self):
+	def init_streams_custom(self):
 
 		# Since Scope "sweeps" time on its own, time base must be added explicitly as a data axis for each wf measurement
 		# Time base is manually adjusted by experimenter
-		TIMEBASE = np.linspace(0, self.record_duration, self.record_length)
+		TIMEBASE = np.linspace(0, self.scope.record_duration, self.scope.record_length)
 		self.demod_wf.add_axis(DataAxis("channel",TIMEBASE))
 		self.raw_wf.add_axis(DataAxis("channel",TIMEBASE))
 
@@ -76,7 +76,7 @@ class RF_Switch_Isolation(Experiment):
 
 		print("Initializing Instrument: {}".format(self.awg.interface.IDN()))
 
-		self.awg.channel = self.CHANNEL
+		self.awg.channel = self.AWGCHAN
 		self.awg.stop
 		self.awg.output = 'OFF'
 		self.awg.amplitude = 0.02
@@ -117,7 +117,7 @@ class RF_Switch_Isolation(Experiment):
 		self.brick.output = 'ON'
 
 
-		def set_drive_amp(amp): 
+		def set_drive_amp(self,amp): 
 
 			self.awg.channel = self.AWGCHAN
 			self.awg.stop
