@@ -85,7 +85,7 @@ class SCPICommand(Command):
     def parse(self):
         super(SCPICommand, self).parse()
 
-        for a in ['scpi_string', 'get_string', 'set_string', 'additional_args']:
+        for a in ['scpi_string', 'get_string', 'set_string']:
             if a in self.kwargs:
                 setattr(self, a, self.kwargs.pop(a))
             else:
@@ -291,12 +291,20 @@ def add_command_SCPI(instr, name, cmd):
     new_cmd.parse()
 
     def fget(self, **kwargs):
-        val = self.interface.query( new_cmd.get_string.format( **kwargs ) )
+        # Merge defaut keyword arguments with those from users
+        all_kwargs = new_cmd.kwargs.copy()
+        for k in kwargs:
+            all_kwargs[k] = kwargs[k]
+        val = self.interface.query( new_cmd.get_string.format( **all_kwargs ) )
         if new_cmd.get_delay is not None:
             time.sleep(new_cmd.get_delay)
         return new_cmd.convert_get(val)
 
     def fset(self, val, **kwargs):
+        # Merge defaut keyword arguments with those from users
+        all_kwargs = new_cmd.kwargs.copy()
+        for k in kwargs:
+            all_kwargs[k] = kwargs[k]
         if new_cmd.value_range is not None:
             if (val < new_cmd.value_range[0]) or (val > new_cmd.value_range[1]):
                 err_msg = "The value {} is outside of the allowable range {} specified for instrument '{}'.".format(val, new_cmd.value_range, self.name)
@@ -321,20 +329,15 @@ def add_command_SCPI(instr, name, cmd):
         else:
             # Go straight to the desired value
             set_value = new_cmd.convert_set(val)
-            self.interface.write(new_cmd.set_string.format(set_value, **kwargs))
+            self.interface.write(new_cmd.set_string.format(set_value, **all_kwargs))
             if new_cmd.set_delay is not None:
                 time.sleep(new_cmd.set_delay)
 
     # Add getter and setter methods for passing around
-    if new_cmd.additional_args is None:
-        # We add properties in this case since not additional arguments are required
-        # Using None prevents deletion or setting/getting unsettable/gettable attributes
-        setattr(instr, name, property(fget if new_cmd.get_string else None, fset if new_cmd.set_string else None, None, new_cmd.doc))
-
-    # In this case we can't create a property given additional arguments
+    # Using None prevents deletion or setting/getting unsettable/gettable attributes
+    setattr(instr, name, property(fget if new_cmd.get_string else None, fset if new_cmd.set_string else None, None, new_cmd.doc))
     if new_cmd.get_string:
         setattr(instr, "get_" + name, fget)
-
     if new_cmd.set_string:
         setattr(instr, "set_" + name, fset)
 
