@@ -21,6 +21,29 @@ class Interface(object):
     def close(self):
         pass
 
+class DummyInterface(Interface):
+    """ A dummy interface for testing.
+    Default: generate a sine wave
+    """
+    def __init__(self,resource=np.sin):
+        super(DummyInterface, self).__init__()
+        self.resource = resource
+        self._val = 0
+    def write(self, value):
+        logger.debug("Writing '%s'" % value)
+    def query(self, value):
+        logger.debug("Querying '%s'" % value)
+        if value == ":output?;":
+            return True
+        self._val = self._val + 1
+        return self.resource(self._val/100.0)
+    def values(self, query):
+        logger.debug("Returning values %s" % query)
+        return float(self.query(query))
+    def close(self):
+        self._val = 0
+        self.resource = lambda x: None
+
 class VisaInterface(Interface):
     """PyVISA interface for communicating with instruments."""
     def __init__(self, resource_name):
@@ -80,7 +103,7 @@ class VisaInterface(Interface):
         return self._resource.query("*TST?") # Self-Test Query
     def WAI(self):
         self._resource.write("*WAI") # Wait-to-Continue Command
-        
+
 class PrologixInterface(VisaInterface):
     """Prologix-Ethernet interface for communicating with remote GPIB instruments."""
     def __init__(self, resource_name):
