@@ -263,7 +263,7 @@ class SCPIInstrument(Instrument):
     # This solution from http://stackoverflow.com/questions/3603502/prevent-creating-new-attributes-outside-init
 
     def __setattr__(self, key, value):
-        if self.__isfrozen and not hasattr(self, key):
+        if self.__isfrozen and (key not in self.__dir__()):
             raise TypeError( "{} has a frozen class. Cannot access attribute {}".format(self, key) )
         object.__setattr__(self, key, value)
 
