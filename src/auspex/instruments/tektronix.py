@@ -150,7 +150,7 @@ class TekDPO72004C(SCPIInstrument):
 
     @measurement_type.setter
     def measurement_type(self, mtype='AMP'):
-        if mtype not in MEAS_TYPES:
+        if mtype not in self.MEAS_TYPES:
             raise ValueError(("Measurement Type must be "+'|'.join(['{}']*len(self.MEAS_TYPES))).format(*self.MEAS_TYPES))
         else:
             self.interface.write("MEASUREMENT:MEAS{:d}:TYP {:s}".format(self.MEAS,mtype))
@@ -164,7 +164,7 @@ class TekDPO72004C(SCPIInstrument):
     def measurement_source1(self, source):
         if source is None: 
             source='CH{:d}'.format(self.channel)
-        if source not in SOURCES:
+        if source not in self.SOURCES:
             raise ValueError(("Measurement Type must be "+'|'.join(['{}']*len(self.SOURCES))).format(*self.SOURCES))
         else:
             self.interface.write("MEASUREMENT:MEAS{:d}:SOU1 {:s}".format(self.MEAS,source))
@@ -178,7 +178,7 @@ class TekDPO72004C(SCPIInstrument):
     def measurement_source2(self, source):
         if source is None: 
             source='CH{:d}'.format(self.channel)
-        if source not in SOURCES:
+        if source not in self.SOURCES:
             raise ValueError(("Measurement Type must be "+'|'.join(['{}']*len(self.SOURCES))).format(*self.SOURCES))
         else:
             self.interface.write("MEASUREMENT:MEAS{:d}:SOU2 {:s}".format(self.MEAS,source))

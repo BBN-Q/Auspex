@@ -37,8 +37,6 @@ class RF_Switch_Isolation(Experiment):
 	rise_time_std = OutputConnector(unit="seconds")
 	fall_time	= OutputConnector(unit="seconds")
 	fall_time_std = OutputConnector(unit="seconds")
-	width = OutputConnector(unit="seconds")
-	width_std = OutputConnector(unit="seconds")
 	demod_amp	= OutputConnector(unit="volts")
 	demod_amp_std = OutputConnector(unit="volts")
 	demod_wf = OutputConnector(unit="volts")
@@ -53,7 +51,8 @@ class RF_Switch_Isolation(Experiment):
 
 	#Experiment Configuration
 	AWGCHAN = 1 #AWG Output Channel
-	DRIVEWF = '50MHz_square' #AWG Waveform
+	DRIVEWF = '"*Square10"' #AWG Waveform
+	WFREQ = 500e6 #Sampling frequency
 
 	DEMODCHAN = 4 #Demod signal scope channel
 	RAWCHAN = 1 #Raw signal scope channel
@@ -69,8 +68,8 @@ class RF_Switch_Isolation(Experiment):
 		# Since Scope "sweeps" time on its own, time base must be added explicitly as a data axis for each wf measurement
 		# Time base is manually adjusted by experimenter
 		TIMEBASE = np.linspace(0, self.scope.record_duration, self.scope.record_length)
-		self.demod_wf.add_axis(DataAxis("channel",TIMEBASE))
-		self.raw_wf.add_axis(DataAxis("channel",TIMEBASE))
+		self.demod_wf.add_axis(DataAxis("timebase",TIMEBASE))
+		self.raw_wf.add_axis(DataAxis("timebase",TIMEBASE))
 
 	def init_instruments(self):
 
@@ -83,6 +82,7 @@ class RF_Switch_Isolation(Experiment):
 		self.awg.offset = 0
 		self.awg.runmode = 'CONT'
 		self.awg.waveform = self.DRIVEWF
+		self.awg.frequency = self.WFREQ
 
 		print("Initializing Instrument: {}".format(self.scope.interface.IDN()))
 
@@ -102,22 +102,23 @@ class RF_Switch_Isolation(Experiment):
 		self.scope.measurement_source1 = 'CH{:d}'.format(self.DEMODCHAN)
 		self.scope.measurement_type = 'FALL'
 
-		self.scope.measurement = 4	#Set 4 as pulse width meassurement
-		self.scope.measurement_source1 = 'CH{:d}'.format(self.DEMODCHAN)
-		self.scope.measurement_type = 'PWI'
-
 		self.scope.num_averages = self.NAVG
 		self.scope.acquire = 'RUNST' #setup scope for continuous acquisition
+		self.scope.run = 'ON'
 
 		print("Initializing Instrument Labbrick ID: {}".format(self.brick.device_id))
 
-		self.brick.output = 'OFF'
+		self.brick.output = "OFF"
 		self.brick.frequency = self.TRANSFREQ
 		self.brick.power = self.TRANSPWR
-		self.brick.output = 'ON'
+		self.brick.output = "ON"
 
+		print("Lab Brick is {} @ {}GHz, {}dBm".format(self.brick.output,self.brick.frequency/1e9,self.brick.power))
 
-		def set_drive_amp(self,amp): 
+		if (self.brick.output != 'ON') or (self.brick.frequency != self.TRANSFREQ) or (self.brick.power != self.TRANSPWR): 
+			raise ValueError("Trouble communicating with Labbrick, manually power cycle and restart.")
+
+		def set_drive_amp(amp): 
 
 			self.awg.channel = self.AWGCHAN
 			self.awg.stop
@@ -132,32 +133,30 @@ class RF_Switch_Isolation(Experiment):
 
 	async def run(self):
 
+		self.awg.stop
 		self.scope.clear
-		self.scope.run = 'ON'
-		await asyncio.sleep(0.01)
+		await asyncio.sleep(0.1)
 		self.awg.run
 
 		while self.scope.acquire_num < self.NACQ:
 			await asyncio.sleep(0.1)
 
-		self.scope.run = 'OFF'
 		self.awg.stop
+		await asyncio.sleep(0.1)
 
 		self.scope.measurement = 1
 		await self.demod_amp.push(self.scope.measurement_mean)
 		await self.demod_amp_std.push(self.scope.measurement_std)
 
+		await asyncio.sleep(0.1)
 		self.scope.measurement = 2
 		await self.rise_time.push(self.scope.measurement_mean)
 		await self.rise_time_std.push(self.scope.measurement_std)
 
+		await asyncio.sleep(0.1)
 		self.scope.measurement = 3
 		await self.fall_time.push(self.scope.measurement_mean)
 		await self.fall_time_std.push(self.scope.measurement_std)
-
-		self.scope.measurement = 4
-		await self.demod_amp.push(self.scope.measurement_mean)
-		await self.demod_amp_std.push(self.scope.measurement_std)
 
 		self.scope.channel = self.DEMODCHAN
 		[time,vals_demod] = self.scope.get_trace
@@ -166,6 +165,19 @@ class RF_Switch_Isolation(Experiment):
 		self.scope.channel = self.RAWCHAN
 		[time,vals_raw] = self.scope.get_trace
 		await self.raw_wf.push(vals_raw)
+
+	def shutdown_instruments(self):
+
+		print("Shutting Down Instruments...")
+		self.awg.channel = self.AWGCHAN
+		self.awg.stop
+		self.awg.output = 'OFF'
+
+		self.brick.output = "OFF"
+
+		self.awg.disconnect()
+		self.scope.disconnect()
+		self.brick.disconnect()
 
 
 
