@@ -152,7 +152,7 @@ class PulseCalibration(object):
                         var[qubit_name] = (realvar + imagvar) / N
                     elif self.quad == 'phase':
                         # take the approach from Qlab assuming the noise is
-                        # Gaussian in both quadratures i.e. 'circular' in the 
+                        # Gaussian in both quadratures i.e. 'circular' in the
                         # IQ plane.
                         stddata = np.sqrt(realvar + imagvar)
                         stdtheta = 180/np.pi * 2 * np.arctan(stddata \
@@ -492,7 +492,7 @@ class CRAmpCalibration_PhEst(PhaseEstimation):
         self.edge_name = self.CRchan.label
 
 class DRAGCalibration(PulseCalibration):
-    def __init__(self, qubit_name, deltas = np.linspace(-1,1,11), num_pulses = np.arange(16, 64, 4)):
+    def __init__(self, qubit_name, deltas = np.linspace(-1,1,21), num_pulses = np.arange(8, 48, 4)):
         self.filename = 'DRAG/DRAG'
         self.deltas = deltas
         self.num_pulses = num_pulses
@@ -516,7 +516,8 @@ class DRAGCalibration(PulseCalibration):
 
     def calibrate(self):
         # run twice for different DRAG parameter ranges
-        for k in range(2):
+        steps = 2
+        for k in range(steps):
         #generate sequence
             self.set(exp_step = k)
             #first run
@@ -531,18 +532,18 @@ class DRAGCalibration(PulseCalibration):
             for n in range(len(self.num_pulses)):
                 self.plot['Data_{}'.format(n)] = (self.deltas, norm_data[n, :])
                 finer_deltas = np.linspace(np.min(self.deltas), np.max(self.deltas), 4*len(self.deltas))
-                self.plot['Fit_{}'.format(n)] = (finer_deltas, sinf(finer_deltas, *popt_mat[:, n])) if n==0 else (finer_deltas, quadf(finer_deltas, *popt_mat[:3, n]))
+                self.plot['Fit_{}'.format(n)] = (finer_deltas, quadf(finer_deltas, *popt_mat[:, n]))
             self.plot["Data_opt"] = (self.num_pulses, opt_drag) #TODO: add error bars
 
-            if k>0:
+            if k < steps-1:
                 #generate sequence with new pulses and drag parameters
                 new_drag_step = 0.25*(max(self.deltas) - min(self.deltas))
-                self.deltas = np.arange(opt_drag[-1] - new_drag_step, opt_drag[-1] + new_drag_step, len(self.deltas))
-                new_pulse_step = 2*(max(self.num_pulses)-min(self.num_pulses))/len(self.num_pulses)
+                self.deltas = np.linspace(opt_drag[-1] - new_drag_step, opt_drag[-1] + new_drag_step, len(self.deltas))
+                new_pulse_step = int(np.floor(2*(max(self.num_pulses)-min(self.num_pulses))/len(self.num_pulses)))
                 self.num_pulses = np.arange(max(self.num_pulses) - new_pulse_step, max(self.num_pulses) + new_pulse_step*(len(self.num_pulses)-1), new_pulse_step)
 
         self.saved_settings['qubits'][self.qubit.label]['control']['pulse_params']['drag_scaling'] = round(float(opt_drag[-1]), 5)
-
+        self.drag = opt_drag[-1]
         return ('drag_scaling', opt_drag[-1])
 
 class MeasCalibration(PulseCalibration):
