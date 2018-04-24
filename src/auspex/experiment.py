@@ -155,7 +155,10 @@ class MetaExperiment(type):
         self._output_connectors = {}
 
         # Parse ourself
-        self._exp_src = inspect.getsource(self)
+        try:
+            self._exp_src = inspect.getsource(self)
+        except:
+            self._exp_src = "Cannot get source codes"
 
         for k,v in dct.items():
             if isinstance(v, Instrument):
