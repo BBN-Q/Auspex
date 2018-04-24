@@ -381,7 +381,8 @@ class QubitExpFactory(object):
             if len(receivers) > 1:
                 raise NotImplementedError("Single shot fidelity for more than one qubit is not yet implemented.")
             stream_sel_name_orig = receivers[0][0].replace('RecvChan-', '')
-            X6_stream_selectors = [k for k,v in filters.items() if v["type"] == 'X6StreamSelector' and v["source"] == filters[stream_sel_name_orig]['source'] and v['channel'] == filters[stream_sel_name_orig]['channel']]
+            X6_stream_selectors = [k for k,v in filters.items() if v["type"] == 'X6StreamSelector' and v["source"] == filters[stream_sel_name_orig]['source']\
+             and v['channel'] == filters[stream_sel_name_orig]['channel'] and v["dsp_channel"] == filters[stream_sel_name_orig]["dsp_channel"]]
             for s in X6_stream_selectors:
                 if filters[s]['stream_type'] == experiment.ss_stream_type:
                     filters[s]['enabled'] = True
