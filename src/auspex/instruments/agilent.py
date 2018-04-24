@@ -447,3 +447,7 @@ class AgilentE9010A(SCPIInstrument):
     def restart_sweep(self):
         """ Aborts current sweep and restarts. """
         self.interface.write(":INITiate:RESTart")
+
+    @property
+    def power(self):
+        return self.interface.query_ascii_values("MEAS:CHP:CHP?",converter='e')[0]
