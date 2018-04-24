@@ -41,14 +41,15 @@ class ExpProgressBar(object):
         For running in Jupyter Notebook:
     Needs to open '_tqdm_notebook.py',\
     search for 'n = int(s[:npos])'\
-    then replace it with 'n = float(s[:npos])'
+    then replace it with 'n = int(float(s[:npos]))'
     """
-    def __init__(self, stream=None, num=0, notebook=False):
+    def __init__(self, stream=None, num=0, notebook=False, close=True):
         super(ExpProgressBar,self).__init__()
         logger.debug("initialize the progress bars.")
         self.stream = stream
         self.num = num
         self.notebook = notebook
+        self.nb_close = close
         # self.reset(stream=stream)
 
     def reset(self, stream=None):
@@ -93,7 +94,7 @@ class ExpProgressBar(object):
             if num_data == 0:
                 # Reset the progress bar with a new one
                 if self.notebook:
-                    self.bars[i].sp(close=True)
+                    self.bars[i].sp(close=self.nb_close)
                     self.bars[i] = tqdm_notebook(total=self.totals[i]/self.chunk_sizes[i])
                 else:
                     self.bars[i].close()
@@ -280,14 +281,14 @@ class Experiment(metaclass=MetaExperiment):
         """Gets run after a sweep ends, or when the program is terminated."""
         pass
 
-    def init_progressbar(self, num=0, notebook=False):
+    def init_progressbar(self, num=0, notebook=False, close=True):
         """ initialize the progress bars."""
         oc = list(self.output_connectors.values())
         if len(oc)>0:
-            self.progressbar = ExpProgressBar(oc[0].output_streams[0], num=num, notebook=notebook)
+            self.progressbar = ExpProgressBar(oc[0].output_streams[0], num=num, notebook=notebook, close=close)
         else:
             logger.warning("No stream is found for progress bars. Create a dummy bar.")
-            self.progressbar = ExpProgressBar(None, num=num, notebook=notebook)
+            self.progressbar = ExpProgressBar(None, num=num, notebook=notebook, close=close)
 
     async def run(self):
         """This is the inner measurement loop, which is the smallest unit that
