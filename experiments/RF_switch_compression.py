@@ -17,7 +17,8 @@ import time
 import datetime
 import sys
 
-#Experimental Topology
+# Experiment sweeps frequency and source power via a programmable attenuator to measure compression of device response with input power and frequency
+# Experimental Topology
 # BNC Source -> Fixed Attenuator -> Digital Attenuator -> S1 RF switch -> S2 RF Switch -> Spectrum Analyzer
 
 class RF_Switch_Compression(Experiment):
@@ -32,7 +33,7 @@ class RF_Switch_Compression(Experiment):
 	#Instrument Resources
 	atten = DigitalAttenuator('COM3') #Serial port must be checked with each CPU reboot
 	source = BNC845('192.168.5.161') #Use BNC GUI to determine IP
-	spec = AgilentE9010A('')
+	spec = AgilentE9010A('192.168.5.103')
 
 
 	def init_instruments(self):
@@ -48,4 +49,5 @@ class RF_Switch_Compression(Experiment):
 
 		self.spec.frequency_span = 0
 		self.spec.frequency_center = self.inputfreq
+		await self.outputpow.push(self.spec.power)
 
