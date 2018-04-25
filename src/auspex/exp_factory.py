@@ -188,7 +188,6 @@ class QubitExpFactory(object):
         experiment.save_data       = save_data
         experiment.name            = expname
         experiment.cw_mode         = cw_mode
-        experiment.calibration     = calibration
         experiment.repeats         = repeats
 
         if meta_file:
