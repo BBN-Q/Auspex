@@ -284,6 +284,8 @@ def fit_ramsey(xdata, ydata, two_freqs = False, AIC = True, showPlot=False, forc
         print('Using a one-frequency fit.')
         print('T2 = {0:.3f} {1} {2:.3f} us'.format(popt[2]/1e3, chr(177), \
             perr[2]/1e3))
+
+    if fit_model == ramsey_1f:
         return fit_result_1
 
 def ramsey_1f(x, f, A, tau, phi, y0):
