@@ -484,8 +484,9 @@ class QubitExpFactory(object):
             singleshot_ancestors = []
             buffer_ancestors = []
             # Trace back our ancestors, using plotters if no writers are available
-            if len(writers) == 1:
-                writer_ancestors = nx.ancestors(dag, writers[0])
+            if writers:
+                writer_ancestors = set().union(*[nx.ancestors(dag, wr) for wr in writers])
+                #writer_ancestors = nx.ancestors(dag, writers[0])
                 # We will have gotten the digitizer, which should be removed since we're already taking care of it
                 writer_ancestors.remove(dig_name)
             if plotters:
