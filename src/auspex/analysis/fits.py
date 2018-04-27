@@ -217,25 +217,25 @@ def fit_t1(xdata, ydata, showPlot=False):
 def t1_model(x, *p):
     return p[0]*np.exp(-x/p[1]) + p[2]
 
-def fit_ramsey(xdata, ydata, two_freqs = False, AIC = True, showPlot=False):
+def fit_ramsey(xdata, ydata, two_freqs = False, AIC = True, showPlot=False, force=False):
     if two_freqs:
         # Initial KT estimation
         freqs, Tcs, amps = KT_estimation(ydata, xdata, 2)
         p0 = [*freqs, *abs(amps), *Tcs, *np.angle(amps), np.mean(ydata)]
         try:
-            popt, pcov = curve_fit(ramsey_2f, xdata, ydata, p0 = p0)
-            fopt = [popt[0], popt[1]]
-            perr = np.sqrt(np.diag(pcov))
-            ferr = perr[:2]
-            fit_result_2 = (fopt, ferr, popt, perr)
+            popt2, pcov2 = curve_fit(ramsey_2f, xdata, ydata, p0 = p0)
+            fopt2 = [popt2[0], popt2[1]]
+            perr2 = np.sqrt(np.diag(pcov2))
+            ferr2 = perr2[:2]
+            fit_result_2 = (fopt2, ferr2, popt2, perr2)
             fit_model = ramsey_2f
 
             if not AIC:
                 if showPlot:
-                    plot_ramsey(xdata, ydata, popt, perr, fit_model=fit_model)
+                    plot_ramsey(xdata, ydata, popt2, perr2, fit_model=fit_model)
                 print('Using a two-frequency fit.')
-                print('T2 = {0:.3f} {1} {2:.3f} us'.format(popt[2]/1e3, \
-                    chr(177), perr[2]/1e3))
+                print('T2 = {0:.3f} {1} {2:.3f} us'.format(popt2[4]/1e3, \
+                    chr(177), perr2[4]/1e3))
                 return fit_result_2
         except:
             fit_model = ramsey_1f
@@ -260,7 +260,7 @@ def fit_ramsey(xdata, ydata, two_freqs = False, AIC = True, showPlot=False):
             aic = aicc(sq_error(xdata, fit_result_2[2], ramsey_2f), 9, \
                 len(xdata)) \
              - aicc(sq_error(xdata, fit_result_1[2], ramsey_1f), 5, len(xdata))
-            if aic > 0:
+            if aic > 0 and not force:
                 if showPlot:
                     plot_ramsey(xdata, ydata, popt, perr, fit_model=fit_model)
                 print('Using a one-frequency fit.')
@@ -268,8 +268,9 @@ def fit_ramsey(xdata, ydata, two_freqs = False, AIC = True, showPlot=False):
                     chr(177), perr[2]/1e3))
                 return fit_result_1
             else:
+                fit_model = ramsey_2f
                 if showPlot:
-                    plot_ramsey(xdata, ydata, popt, perr, fit_model=fit_model)
+                    plot_ramsey(xdata, ydata, popt2, perr2, fit_model=fit_model)
                 print('Using a two-frequency fit.')
                 print('T2 = {0:.3f} {1} {2:.3f}us'.format( \
                     fit_result_2[2,2]/1e3, chr(177), fit_result_2[3,2]/1e3))
@@ -277,13 +278,15 @@ def fit_ramsey(xdata, ydata, two_freqs = False, AIC = True, showPlot=False):
         except:
             pass
 
-    if showPlot:
+    if not two_freqs and showPlot:
         plot_ramsey(xdata, ydata, popt, perr, fit_model=fit_model)
 
-    print('Using a one-frequency fit.')
-    print('T2 = {0:.3f} {1} {2:.3f} us'.format(popt[2]/1e3, chr(177), \
-        perr[2]/1e3))
-    return fit_result_1
+        print('Using a one-frequency fit.')
+        print('T2 = {0:.3f} {1} {2:.3f} us'.format(popt[2]/1e3, chr(177), \
+            perr[2]/1e3))
+
+    if fit_model == ramsey_1f:
+        return fit_result_1
 
 def ramsey_1f(x, f, A, tau, phi, y0):
     return A*np.exp(-x/tau)*np.cos(2*np.pi*f*x + phi) + y0
@@ -308,16 +311,16 @@ def plot_ramsey(xdata, ydata, popt, perr, fit_model=ramsey_1f):
         popt[0]*1e3, chr(177), perr[0]*1e3), xy=(0.4, 0.05), \
                      xycoords='axes fraction', size=12)
     else:
-        plt.annotate(r'$T^{1}_{2}$ = {:.2e}  {} {:.2e} $\mu s$'.format( \
+        plt.annotate(r'$T^1_2$ = {0:.2e}  {1} {2:.2e} $\mu s$'.format( \
         popt[4]/1e3, chr(177), perr[4]/1e3), xy=(0.4, 0.35), \
                      xycoords='axes fraction', size=10)
-        plt.annotate(r'$T^{2}_{2}$ = {:.2e}  {} {:.2e} $\mu s$'.format( \
+        plt.annotate(r'$T^2_2$ = {0:.2e}  {1} {2:.2e} $\mu s$'.format( \
         popt[5]/1e3, chr(177), perr[5]/1e3), xy=(0.4, 0.25), \
                      xycoords='axes fraction', size=10)
-        plt.annotate(r'$f_1$ = {:.2e}  {} {:.2e} MHz'.format( \
-        popt[0]*1e3, chr(177), perr[0]*1e3), xy=(0.4, 0.05), \
+        plt.annotate(r'$f_1$ = {0:.2e}  {1} {2:.2e} MHz'.format( \
+        popt[0]*1e3, chr(177), perr[0]*1e3), xy=(0.4, 0.15), \
                      xycoords='axes fraction', size=10)
-        plt.annotate(r'$f_2$ = {:.2e}  {} {:.2e} MHz'.format( \
+        plt.annotate(r'$f_2$ = {0:.2e}  {1} {2:.2e} MHz'.format( \
         popt[1]*1e3, chr(177), perr[1]*1e3), xy=(0.4, 0.05), \
                      xycoords='axes fraction', size=10)
 
