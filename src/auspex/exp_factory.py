@@ -654,7 +654,9 @@ class QubitExpFactory(object):
         else:
             sweeps = experiment.settings['sweeps']
             order = experiment.settings['sweepOrder']
-        qubits = experiment.settings['qubits']
+        channels = experiment.settings['qubits']
+        if 'edges' in experiment.settings:
+            channels.update(experiment.settings['edges'])
 
         for name in order:
             par = sweeps[name]
@@ -677,23 +679,28 @@ class QubitExpFactory(object):
 
                 # Figure our what we are sweeping
                 target_info = par["target"].split()
-                if target_info[0] in experiment.qubits:
+                if target_info[0] in channels:
                     # We are sweeping a qubit, so we must lookup the instrument
                     target = par["target"].split()
-                    name, meas_or_control, prop = target[:3]
-                    if len(target) > 3:
-                        ch_ind = target[3]
-                    qubit = qubits[name]
+                    if target_info[0] in experiment.qubits:
+                        name, meas_or_control, prop = target[:3]
+                        isqubit = True
+                    else:
+                        name, prop = target[:2]
+                        isqubit = False
+                    if len(target) > 2 + isqubit:
+                        ch_ind = target[2 + isqubit]
+                    channel_params = channels[name][meas_or_control] if isqubit else channels[name]
                     method_name = "set_{}".format(prop.lower())
 
                     # If sweeping frequency, we should allow for either mixed up signals or direct synthesis.
                     # Sweeping amplitude is always through the AWG channels.
-                    if 'generator' in qubit[meas_or_control] and prop.lower() == "frequency":
-                        name = qubit[meas_or_control]['generator']
+                    if 'generator' in channel_params and prop.lower() == "frequency":
+                        name = channel_params['generator']
                         instr = experiment._instruments[name]
                     else:
                         # Construct a function that sets a per-channel property
-                        name, chan = qubit[meas_or_control]['AWG'].split()
+                        name, chan = channel_params['AWG'].split()
                         if len(target) > 3:
                             chan = chan[int(ch_ind)-1]
                         instr = experiment._instruments[name]
