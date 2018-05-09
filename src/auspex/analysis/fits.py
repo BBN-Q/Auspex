@@ -142,7 +142,7 @@ def fit_rabi_width(xdata, ydata, showPlot=False):
     perr : sqrt of the popt covariance matrix diagonal  (array like)
     """
 
-    frabi, Tcs, amps = KT_estimation(ydata, xdata, 1)
+    frabi, Tcs, amps = KT_estimation(ydata-mean(ydata), xdata, 1)
     offset = np.average(xdata)
     amp = np.max(ydata)
     trabi = xdata[np.size(ydata) // 3]# assume Trabi is 1/3 of the scan
@@ -220,10 +220,10 @@ def t1_model(x, *p):
 def fit_ramsey(xdata, ydata, two_freqs = False, AIC = True, showPlot=False, force=False):
     if two_freqs:
         # Initial KT estimation
-        freqs, Tcs, amps = KT_estimation(ydata, xdata, 2)
+        freqs, Tcs, amps = KT_estimation(ydata-mean(ydata), xdata, 2)
         p0 = [*freqs, *abs(amps), *Tcs, *np.angle(amps), np.mean(ydata)]
         try:
-            popt2, pcov2 = curve_fit(ramsey_2f, xdata, ydata, p0 = p0)
+            popt2, pcov2 = curve_fit(ramsey_2f, xdata, ydata, p0 = p0, maxfev=5000)
             fopt2 = [popt2[0], popt2[1]]
             perr2 = np.sqrt(np.diag(pcov2))
             ferr2 = perr2[:2]
@@ -234,14 +234,14 @@ def fit_ramsey(xdata, ydata, two_freqs = False, AIC = True, showPlot=False, forc
                 if showPlot:
                     plot_ramsey(xdata, ydata, popt2, perr2, fit_model=fit_model)
                 print('Using a two-frequency fit.')
-                print('T2 = {0:.3f} {1} {2:.3f} us'.format(popt2[4]/1e3, \
-                    chr(177), perr2[4]/1e3))
+                print('T2 = {0:.3f} {1} {2:.3f} us'.format(popt2[4]*1e6, \
+                    chr(177), perr2[4]*1e6))
                 return fit_result_2
         except:
             fit_model = ramsey_1f
             logger.info('Two-frequency fit failed. Trying with single frequency.')
         # Initial KT estimation
-    freqs, Tcs, amps = KT_estimation(ydata, xdata, 1)
+    freqs, Tcs, amps = KT_estimation(ydata-mean(ydata), xdata, 1)
     p0 = [freqs[0], abs(amps[0]), Tcs[0], np.angle(amps[0]), np.mean(ydata)]
     popt, pcov = curve_fit(ramsey_1f, xdata, ydata, p0 = p0)
     fopt = [popt[0]]
@@ -264,8 +264,8 @@ def fit_ramsey(xdata, ydata, two_freqs = False, AIC = True, showPlot=False, forc
                 if showPlot:
                     plot_ramsey(xdata, ydata, popt, perr, fit_model=fit_model)
                 print('Using a one-frequency fit.')
-                print('T2 = {0:.3f} {1} {2:.3f} us'.format(popt[2]/1e3, \
-                    chr(177), perr[2]/1e3))
+                print('T2 = {0:.3f} {1} {2:.3f} us'.format(popt[2]*1e6, \
+                    chr(177), perr[2]*1e6))
                 return fit_result_1
             else:
                 fit_model = ramsey_2f
