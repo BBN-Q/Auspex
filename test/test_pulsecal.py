@@ -215,14 +215,15 @@ class SingleQubitCalTestCase(unittest.TestCase):
                 break
         #save simulated data
         np.save(self.filename, ideal_data)
-        for quad in ['real', 'imag', 'amp', 'phase']:
-            # Verify output matches what was previously seen by matlab
-            pi_cal = cal.PiCalibration(self.q.label, numPulses, quad=quad)
-            cal.calibrate([pi_cal])
-            # NOTE: expected result is from the same input fed to the routine
-            self.assertAlmostEqual(pi_cal.amplitude, amp, places=3)
-            #restore original settings
-            auspex.config.dump_meas_file(self.test_settings, cfg_file)
+        # Test for one of the quadrature or amp/phase randomly
+        quad = np.random.choice(['real', 'imag', 'amp', 'phase'])
+        # Verify output matches what was previously seen by matlab
+        pi_cal = cal.PiCalibration(self.q.label, numPulses, quad=quad)
+        cal.calibrate([pi_cal])
+        # NOTE: expected result is from the same input fed to the routine
+        self.assertAlmostEqual(pi_cal.amplitude, amp, places=3)
+        #restore original settings
+        auspex.config.dump_meas_file(self.test_settings, cfg_file)
         os.remove(self.filename)
 
     def test_drag(self):
