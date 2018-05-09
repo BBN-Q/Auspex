@@ -142,7 +142,7 @@ def fit_rabi_width(xdata, ydata, showPlot=False):
     perr : sqrt of the popt covariance matrix diagonal  (array like)
     """
 
-    frabi, Tcs, amps = KT_estimation(ydata-mean(ydata), xdata, 1)
+    frabi, Tcs, amps = KT_estimation(ydata-np.mean(ydata), xdata, 1)
     offset = np.average(xdata)
     amp = np.max(ydata)
     trabi = xdata[np.size(ydata) // 3]# assume Trabi is 1/3 of the scan
@@ -220,7 +220,7 @@ def t1_model(x, *p):
 def fit_ramsey(xdata, ydata, two_freqs = False, AIC = True, showPlot=False, force=False):
     if two_freqs:
         # Initial KT estimation
-        freqs, Tcs, amps = KT_estimation(ydata-mean(ydata), xdata, 2)
+        freqs, Tcs, amps = KT_estimation(ydata-np.mean(ydata), xdata, 2)
         p0 = [*freqs, *abs(amps), *Tcs, *np.angle(amps), np.mean(ydata)]
         try:
             popt2, pcov2 = curve_fit(ramsey_2f, xdata, ydata, p0 = p0, maxfev=5000)
@@ -241,7 +241,7 @@ def fit_ramsey(xdata, ydata, two_freqs = False, AIC = True, showPlot=False, forc
             fit_model = ramsey_1f
             logger.info('Two-frequency fit failed. Trying with single frequency.')
         # Initial KT estimation
-    freqs, Tcs, amps = KT_estimation(ydata-mean(ydata), xdata, 1)
+    freqs, Tcs, amps = KT_estimation(ydata-np.mean(ydata), xdata, 1)
     p0 = [freqs[0], abs(amps[0]), Tcs[0], np.angle(amps[0]), np.mean(ydata)]
     popt, pcov = curve_fit(ramsey_1f, xdata, ydata, p0 = p0)
     fopt = [popt[0]]
