@@ -390,7 +390,7 @@ class RamseyCalibration(PulseCalibration):
             self.saved_settings['qubits'][self.qubit_names[0]]['control']['frequency'] += float(round(self.fit_freq - orig_freq))
             # update edges where this is the target qubit
             for predecessor in ChannelLibraries.channelLib.connectivityG.predecessors(self.qubit):
-                edge = ChannelLibraries.channelLib.connectivityG.edge[predecessor][self.qubit]['channel']
+                edge = ChannelLibraries.channelLib.connectivityG[predecessor][self.qubit]['channel']
                 self.saved_settings['edges'][edge.label]['frequency'] = self.saved_settings['qubits'][self.qubit_names[0]]['control']['frequency']
         logger.info("Qubit set frequency = {} GHz".format(round(float(self.fit_freq/1e9),5)))
         return ('frequency', self.saved_settings['instruments'][qubit_source]['frequency'] + self.saved_settings['qubits'][self.qubit_names[0]]['control']['frequency'])
@@ -740,7 +740,7 @@ class CRPhaseCalibration(CRCalibration):
         return seqs
 
 class CRAmpCalibration(CRCalibration):
-    def __init__(self, qubit_names, amp_range = 0.4, phase = 0, amp = 0.8, rise_fall = 40e-9, num_CR = 1, cal_type = CR_cal_type.AMP):
+    def __init__(self, qubit_names, amp_range = 0.4, amp = 0.8, rise_fall = 40e-9, num_CR = 1, cal_type = CR_cal_type.AMP):
         self.num_CR = num_CR
         if num_CR % 2 == 0:
             logger.error('The number of ZX90 must be odd')
