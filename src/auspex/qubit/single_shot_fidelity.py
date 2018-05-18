@@ -18,7 +18,8 @@ import os
 import json
 
 from auspex.log import logger
-from auspex.exp_factory import QubitExpFactory, QubitExperiment
+from .qubit_exp_factory import QubitExpFactory
+from .qubit_exp import QubitExperiment
 from auspex.parameter import FloatParameter
 from auspex.filters.plot import ManualPlotter
 from auspex.filters.singleshot import SingleShotMeasurement
