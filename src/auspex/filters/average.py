@@ -15,7 +15,7 @@ import numpy as np
 from .filter import Filter
 from auspex.log import logger
 from auspex.parameter import Parameter
-from auspex.stream import InputConnector, OutputConnector
+from auspex.stream import InputConnector, OutputConnector, DataAxis
 
 def view_fields(a, names):
     """
@@ -119,6 +119,10 @@ class Averager(Filter):
         descriptor = descriptor_in.copy()
         self.num_averages = descriptor.pop_axis(self.axis.value).num_points()
         logger.debug("Number of partial averages is %d", self.num_averages)
+
+        if len(descriptor.axes) == 0:
+            # We will be left with only a single point here!
+            descriptor.add_axis(DataAxis("result", [0]))
 
         self.sum_so_far                 = np.zeros(self.avg_dims, dtype=descriptor.dtype)
         self.current_avg_frame          = np.zeros(self.points_before_final_average, dtype=descriptor.dtype)
