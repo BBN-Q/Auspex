@@ -13,6 +13,3 @@ config/config.json
 *.prof
 *.bak
 .DS*
-/experiments
-/notebooks
-/calibration
