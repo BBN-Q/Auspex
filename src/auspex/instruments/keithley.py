@@ -45,12 +45,30 @@ class Keithley2400(SCPIInstrument):
         self.interface.write(":SYST:BEEP {:g}, {:g}".format(freq, dur))
 
     # One must configure the measurement before the source to avoid potential range issues
-    def conf_meas_res(self, NPLC=1, res_range=1000.0, auto_range=True):
+    def conf_meas_res(self, NPLC=1, res_range=1000.0, auto_range=True, concurrent=None):
+        if concurrent is not None:
+            if concurrent:
+                self.interface.write(":sens:func:conc 1")
+            else:
+                self.interface.write(":sens:func:conc 0")
         self.interface.write(":sens:func \"res\";:sens:res:mode man;:sens:res:nplc {:f};:form:elem res;".format(NPLC))
         if auto_range:
             self.interface.write(":sens:res:rang:auto 1;")
         else:
             self.interface.write(":sens:res:rang:auto 0;:sens:res:rang {:g}".format(res_range))
+
+    # One must configure the measurement before the source to avoid potential range issues
+    def conf_meas_volt(self, NPLC=1, volt_range=1000.0, auto_range=True, concurrent=None):
+        if concurrent is not None:
+            if concurrent:
+                self.interface.write(":sens:func:conc 1")
+            else:
+                self.interface.write(":sens:func:conc 0")
+        self.interface.write(":sens:func \"volt\";:sens:volt:nplc {:f};:form:elem volt;".format(NPLC))
+        if auto_range:
+            self.interface.write(":sens:volt:rang:auto 1;")
+        else:
+            self.interface.write(":sens:volt:rang:auto 0;:sens:volt:rang {:g}".format(volt_range))
 
     def conf_src_curr(self, comp_voltage=0.1, curr_range=1.0e-3, auto_range=True):
         if auto_range:
