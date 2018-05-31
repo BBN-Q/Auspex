@@ -277,12 +277,12 @@ class APS(Instrument, metaclass=MakeSettersGetters):
 
     def set_offset(self, chs, value):
         if isinstance(chs, int) or len(chs)==1:
-            self.wrapper.set_amplitude(int(chs), value)
+            self.wrapper.set_offset(int(chs), value)
         else:
-            self.wrapper.set_amplitude(int(chs[0]), value)
-            self.wrapper.set_amplitude(int(chs[1]), value)
-            self.wrapper.set_amplitude(int(chs[2]), value)
-            self.wrapper.set_amplitude(int(chs[3]), value)
+            self.wrapper.set.offset(int(chs[0]), value)
+            self.wrapper.set.offset(int(chs[1]), value)
+            self.wrapper.set.offset(int(chs[2]), value)
+            self.wrapper.set.offset(int(chs[3]), value)
 
     def set_all(self, settings_dict, prefix=""):
         # Pop the channel settings
