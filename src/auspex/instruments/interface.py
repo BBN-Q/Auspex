@@ -30,7 +30,7 @@ class VisaInterface(Interface):
                 visa_loc = 'C:\\windows\\system32\\visa64.dll'
                 rm = visa.ResourceManager(visa_loc)
             else:
-                rm = visa.ResourceManager("@py")
+                rm = visa.ResourceManager()
             self._resource = rm.open_resource(resource_name)
         except:
             raise Exception("Unable to create the resource '%s'" % resource_name)
@@ -80,7 +80,7 @@ class VisaInterface(Interface):
         return self._resource.query("*TST?") # Self-Test Query
     def WAI(self):
         self._resource.write("*WAI") # Wait-to-Continue Command
-        
+
 class PrologixInterface(VisaInterface):
     """Prologix-Ethernet interface for communicating with remote GPIB instruments."""
     def __init__(self, resource_name):
