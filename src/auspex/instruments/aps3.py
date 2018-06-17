@@ -228,9 +228,11 @@ class APS3(Instrument, metaclass=MakeSettersGetters):
         self.nco_frequency = 0
         self.dac_mode = "MIX"
 
+        self.pclk = 3.125e8 #JESD PCLK. See p. 36 of datasheet.
+
         self.fake_seq_file = False
 
-        self.num_rr = 0xFFFF #this sets to board to play in "infinite-loop" mode
+        self.num_rr = 1024 #this sets to board to play in "infinite-loop" mode
 
     def connect(self, resource_name=None):
         if resource_name is None and self.resource_name is None:
@@ -269,9 +271,8 @@ class APS3(Instrument, metaclass=MakeSettersGetters):
                 raise IOError("Invalid sequence file!")
 
             self.num_seq = FID['/'].attrs['num sequences']
-            self.marker_delay = 2512 #FID['/'].attrs['marker delay']
-
-            #self.marker_delay = 1600
+            #self.marker_delay = 2500 #FID['/'].attrs['marker delay']
+            self.marker_delay = 2496
 
             wf_lengths = FID['seq_lens'][:]
 
@@ -399,11 +400,12 @@ class APS3(Instrument, metaclass=MakeSettersGetters):
     @property
     def trigger_interval(self):
         num_clcks = self.board.read_memory(CSR_AXI_ADDR + CSR_TRIGGER_INTERVAL_OFFSET, 1)[0]
-        return int(num_clcks) / self.dac_clock
+        return int(num_clcks) / self.pclk
     @trigger_interval.setter
     def trigger_interval(self, interval):
-        num_clcks = np.uint32(interval * self.dac_clock)
-        self.board.write_memory(CSR_AXI_ADDR + CSR_TRIGGER_INTERVAL_OFFSET, [num_clcks - 0x2])
+        #factor of 4 comes from the fact that the JESD PCLK is 1/4 the DAC clock.
+        num_clcks = np.uint32(interval * self.pclk)
+        self.board.write_memory(CSR_AXI_ADDR + CSR_TRIGGER_INTERVAL_OFFSET, [num_clcks-0x2])
 
     def get_csr_value(self):
         return self.board.read_memory(CSR_AXI_ADDR + CSR_CONTROL_OFFSET, 1)[0]
@@ -413,6 +415,7 @@ class APS3(Instrument, metaclass=MakeSettersGetters):
         self.board.write_memory(CSR_AXI_ADDR + CSR_CONTROL_OFFSET, [csr_val | (1 << 16)])
 
     def stop(self):
+        print("stopping aps3...")
         csr_val = self.get_csr_value()
         self.board.write_memory(CSR_AXI_ADDR + CSR_CONTROL_OFFSET, [csr_val | (0xF << 16)])
 
