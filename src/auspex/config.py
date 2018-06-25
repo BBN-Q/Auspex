@@ -39,6 +39,13 @@ ConfigurationFile = None
 KernelDir         = None
 LogDir            = None
 
+# The db file, where the channel libraries are stored
+db_file        = None
+
+def load_db():
+    global db_file
+    if os.getenv('BBN_DB'):
+        db_file = os.getenv("BBN_DB")
 
 def find_meas_file():
     global meas_file
