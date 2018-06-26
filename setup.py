@@ -17,6 +17,7 @@ setup(
     description='Automated system for python-based experiments.',
     long_description=open('README.md').read(),
     install_requires=[
+        "bbndb >= 0.1",
         "numpy >= 1.11.1",
         "scipy >= 0.17.1",
         "PyVISA >= 1.8",
@@ -28,5 +29,6 @@ setup(
         "ruamel_yaml >= 0.11.14",
         "psutil >= 5.0.0",
         "pyzmq >= 16.0.0"
+        # "pony >= 0.7.4", # This needs to be 0.7.4-dev
     ]
 )
