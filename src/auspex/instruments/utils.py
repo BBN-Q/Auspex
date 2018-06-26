@@ -5,11 +5,16 @@ import inspect
 from . import bbn
 import auspex.config
 from auspex.log import logger
-from auspex.exp_factory import correct_resource_name
 from auspex.instruments.instrument import Instrument, SCPIInstrument, CLibInstrument, DigitizerChannel
 # from QGL import *
 
 __all__  = ['InstrumentFactory']
+
+def correct_resource_name(resource_name):
+    substs = {"USB::": "USB0::", }
+    for k, v in substs.items():
+        resource_name = resource_name.replace(k, v)
+    return resource_name
 
 def pulse_marker(marker_name, length = 100e-9):
     """ Utility to generate a square pulse on a APS2 marker. Used for instance to switch a signal between spectrum analyzer and input line
