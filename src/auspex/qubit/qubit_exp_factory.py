@@ -17,6 +17,7 @@ import asyncio
 import base64
 import datetime
 import subprocess
+import copy
 from pony.orm import *
 
 import numpy as np
@@ -79,7 +80,7 @@ class QubitExpFactory(object):
         with open(self.meta_file, 'r') as FID:
             self.meta_info = json.load(FID)
 
-        # Make database connection
+        # Make database bbndb.auspex.connection
         db_provider  = self.meta_info['database_info']['db_provider']
         db_filename  = self.meta_info['database_info']['db_filename']
         library_name = self.meta_info['database_info']['library_name']
@@ -100,12 +101,13 @@ class QubitExpFactory(object):
 
         # Restrict to current qubits, channels, etc. involved in this actual experiment
         # Based on the meta info
-        self.qubits = list(self.channelDatabase.channels.filter(lambda x: x.label in self.meta_info["qubits"]))
-        self.measurements = list(self.channelDatabase.channels.filter(lambda x: x.label in self.meta_info["measurements"]))
-        self.phys_chans = list(set([e.phys_chan for e in self.qubits + self.measurements]))
-        self.awgs = list(set([e.phys_chan.awg for e in self.qubits + self.measurements]))
-        self.receivers = list(set([e.receiver_chan for e in self.measurements]))
-        self.digitizers = list(set([e.receiver_chan.digitizer for e in self.measurements]))
+        self.controlled_qubits = list(self.channelDatabase.channels.filter(lambda x: x.label in self.meta_info["qubits"]))
+        self.measurements      = list(self.channelDatabase.channels.filter(lambda x: x.label in self.meta_info["measurements"]))
+        self.measured_qubits   = list(self.channelDatabase.channels.filter(lambda x: "M-"+x.label in self.meta_info["measurements"]))
+        self.phys_chans        = list(set([e.phys_chan for e in self.controlled_qubits + self.measurements]))
+        self.awgs              = list(set([e.phys_chan.awg for e in self.controlled_qubits + self.measurements]))
+        self.receivers         = list(set([e.receiver_chan for e in self.measurements]))
+        self.digitizers        = list(set([e.receiver_chan.digitizer for e in self.measurements]))
 
         # Add the waveform file info to the qubits
         for awg in self.awgs:
@@ -115,28 +117,28 @@ class QubitExpFactory(object):
         self.meas_graph = nx.DiGraph()
 
         # Build a mapping of qubits to receivers, construct qubit proxies
-        receivers_by_qubit = {self.channelDatabase.channels.filter(lambda x: x.label == e.label[2:]).first(): e.receiver_chan for e in self.measurements}
-        qubit_proxies = {q: bbndb.auspex.QubitProxy(self, q.label) for q in self.qubits}
-        stream_info_by_qubit = {q.label: r.digitizer.stream_types for q,r in receivers_by_qubit.items()}
+        self.receivers_by_qubit = {self.channelDatabase.channels.filter(lambda x: x.label == e.label[2:]).first(): e.receiver_chan for e in self.measurements}
+        self.qubit_proxies = {q: bbndb.auspex.QubitProxy(self, q.label) for q in self.measured_qubits + self.controlled_qubits}
+        self.stream_info_by_qubit = {q.label: r.digitizer.stream_types for q,r in self.receivers_by_qubit.items()}
 
-        for q, r in receivers_by_qubit.items():
-            qp = qubit_proxies[q]
-            print([st.strip() for st in r.digitizer.stream_types.split(",")])  # Available streams stored as a string in the database
+        for q, r in self.receivers_by_qubit.items():
+            qp = self.qubit_proxies[q]
             qp.available_streams = [st.strip() for st in r.digitizer.stream_types.split(",")]
             qp.stream_type = qp.available_streams[-1]
             
-        for qp in qubit_proxies.values():
-            qp.auto_create_pipeline()
+        for q in self.receivers_by_qubit.keys():
+            self.qubit_proxies[q].auto_create_pipeline()
+
         commit()
         
     def qubit(self, qubit_name):
-        return self._qubit_proxies[qubit_name]
+        return {q.label: qp for q,qp in self.qubit_proxies.items()}[qubit_name]
 
     def save_pipeline(self, name):
-        cs = [Connection(pipeline_name=name, node1=n1, node2=n2) for n1, n2 in self.meas_graph.edges()]
+        cs = [bbndb.auspex.Connection(pipeline_name=name, node1=n1, node2=n2) for n1, n2 in self.meas_graph.edges()]
     
     def load_pipeline(self, pipeline_name):
-        cs = select(c for c in Connection if c.pipeline_name==pipeline_name)
+        cs = select(c for c in bbndb.auspex.Connection if c.pipeline_name==pipeline_name)
         if len(cs) == 0:
             print(f"No results for pipeline {pipeline_name}")
             return
@@ -149,7 +151,7 @@ class QubitExpFactory(object):
         """If a pipeline name is specified query the database, otherwise show the 
         current pipeline."""
         if pipeline_name:
-            cs = select(c for c in Connection if c.pipeline_name==pipeline_name)
+            cs = select(c for c in bbndb.auspex.Connection if c.pipeline_name==pipeline_name)
             if len(cs) == 0:
                 print(f"No results for pipeline {pipeline_name}")
                 return
@@ -160,13 +162,35 @@ class QubitExpFactory(object):
             graph = self.meas_graph
             
         labels = {n: n.label() for n in graph.nodes()}
-        colors = ["#3182bd" if isinstance(n, QubitProxy) else "#ff9933" for n in graph.nodes()]
+        colors = ["#3182bd" if isinstance(n, bbndb.auspex.QubitProxy) else "#ff9933" for n in graph.nodes()]
         plot_graph(graph, labels, colors=colors)
     
     def reset_pipelines(self):
-        for qp in self._qubit_proxies.values():
+        for qp in self.qubit_proxies.values():
             qp.clear_pipeline()
             qp.auto_create_pipeline()
     
     def show_connectivity(self):
         pass
+
+def plot_graph(graph, labels, prog="dot", colors='r'):
+    import matplotlib.pyplot as plt
+
+    pos = nx.drawing.nx_pydot.graphviz_layout(graph, prog=prog)
+    
+    # Create position copies for shadows, and shift shadows
+    pos_shadow = copy.copy(pos)
+    pos_labels = copy.copy(pos)
+    for idx in pos_shadow.keys():
+        pos_shadow[idx] = (pos_shadow[idx][0] + 0.01, pos_shadow[idx][1] - 0.01)
+        pos_labels[idx] = (pos_labels[idx][0] + 0, pos_labels[idx][1] + 20 )
+    nx.draw_networkx_nodes(graph, pos_shadow, node_size=100, node_color='k', alpha=0.5)
+    nx.draw_networkx_nodes(graph, pos, node_size=100, node_color=colors, linewidths=1, alpha=1.0)
+    nx.draw_networkx_edges(graph, pos, width=1)
+    nx.draw_networkx_labels(graph, pos_labels, labels)
+    
+    ax = plt.gca()
+    ax.axis('off')
+    ax.set_xlim((ax.get_xlim()[0]-20.0, ax.get_xlim()[1]+20.0))
+    ax.set_ylim((ax.get_ylim()[0]-20.0, ax.get_ylim()[1]+20.0))
+    plt.show()
