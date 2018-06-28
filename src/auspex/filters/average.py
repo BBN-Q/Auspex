@@ -56,6 +56,7 @@ class Averager(Filter):
     partial_average = OutputConnector()
     final_average   = OutputConnector()
     final_variance  = OutputConnector()
+    final_counts    = OutputConnector()
     axis            = Parameter()
 
     def __init__(self, axis=None, **kwargs):
@@ -66,6 +67,8 @@ class Averager(Filter):
         self.sum_so_far = None
         self.num_averages = None
         self.passthrough = False
+        self.excited_counts = None
+        self.ground_counts = None
 
         self.quince_parameters = [self.axis]
 
@@ -124,6 +127,7 @@ class Averager(Filter):
         self.current_avg_frame          = np.zeros(self.points_before_final_average, dtype=descriptor.dtype)
         self.partial_average.descriptor = descriptor
         self.final_average.descriptor   = descriptor
+        self.excited_counts             = np.zeros(self.data_dims, dtype=np.int64)
 
         # We can update the visited_tuples upfront if none
         # of the sweeps are adaptive...
@@ -149,6 +153,15 @@ class Averager(Filter):
         descriptor_var.metadata["num_averages"] = self.num_averages
         self.final_variance.descriptor= descriptor_var
 
+        # Define counts axis descriptor
+        descriptor_count = descriptor_in.copy()
+        descriptor_count.data_name = "Counts"
+        descriptor_count.pop_axis(self.axis.value)
+        if descriptor_count.unit:
+            descriptor_count.unit = "counts"
+        descriptor_var.metadata["num_counts"] = self.num_averages
+        self.final_counts.descriptor = descriptor_count
+
         if not descriptor_in.is_adaptive():
             descriptor_var.visited_tuples = np.core.records.fromrecords(flattened_list, dtype=desc_out_dtype)
         else:
@@ -156,6 +169,10 @@ class Averager(Filter):
 
         for stream in self.final_variance.output_streams:
             stream.set_descriptor(descriptor_var)
+            stream.end_connector.update_descriptors()
+
+        for stream in self.final_counts.output_streams:
+            stream.set_descriptor(descriptor_count)
             stream.end_connector.update_descriptors()
 
     def final_init(self):
@@ -195,13 +212,17 @@ class Averager(Filter):
         while idx < data.size:
             #check whether we have enough data to fill an averaging frame
             if data.size - idx >= self.points_before_final_average:
-                # logger.debug("Have {} points, enough for final avg.".format(data.size))
+                logger.debug("Have {} points, enough for final avg.".format(data.size))
                 # How many chunks can we process at once?
                 num_chunks = int((data.size - idx)/self.points_before_final_average)
                 new_points = num_chunks*self.points_before_final_average
                 reshaped   = data[idx:idx+new_points].reshape(self.reshape_dims)
                 averaged   = reshaped.mean(axis=self.mean_axis)
                 idx       += new_points
+
+                # do state assignment
+                #states     = np.zeros(self.data_dims)
+                states     = [1 for i in data if np.real(data[i]) > self.experiment.threshold]
 
                 if self.sink.descriptor.is_adaptive():
                     new_tuples = self.sink.descriptor.tuples()[self.idx_global:self.idx_global + new_points]
@@ -215,6 +236,10 @@ class Averager(Filter):
                     for os in self.final_average.output_streams + self.final_variance.output_streams + self.partial_average.output_streams:
                         os.descriptor.visited_tuples = np.append(os.descriptor.visited_tuples, reduced_tuples)
 
+                # sum thresholded counts
+                self.excited_counts = np.add(self.excited_counts, states)
+                self.ground_counts = np.subtract(np.repeats([self.num_averages], self.data_dims), self.excited_counts)
+
                 for os in self.final_average.output_streams:
                     await os.push(averaged)
 
@@ -223,6 +248,10 @@ class Averager(Filter):
 
                 for os in self.partial_average.output_streams:
                     await os.push(averaged)
+
+                logger.debug("Excited counts are %s", self.excited_counts)
+                for os in self.counts.output_streams:
+                    await os.push((self.excited_counts, self.ground_counts))
 
             # Maybe we can fill a partial frame
             elif data.size - idx >= self.points_before_partial_average:
