@@ -14,8 +14,8 @@ import numpy as np
 
 from .filter import Filter
 from auspex.log import logger
-from auspex.parameter import Parameter
-from auspex.stream import InputConnector, OutputConnector
+from auspex.parameter import Parameter, FloatParameter
+from auspex.stream import InputConnector, OutputConnector, DataStreamDescriptor, DataAxis
 
 def view_fields(a, names):
     """
@@ -58,19 +58,19 @@ class Averager(Filter):
     final_variance  = OutputConnector()
     final_counts    = OutputConnector()
     axis            = Parameter()
-    threshold       = Parameter()
+    threshold       = FloatParameter()
 
-    def __init__(self, axis=None, **kwargs):
+    def __init__(self, axis=None, threshold=0.5, **kwargs):
         super(Averager, self).__init__(**kwargs)
         self.axis.value = axis
+        self.threshold.value = threshold
         self.points_before_final_average   = None
         self.points_before_partial_average = None
         self.sum_so_far = None
         self.num_averages = None
         self.passthrough = False
-        self.threshold = threshold
-        self.excited_counts = None
-        self.ground_counts = None
+        # self.excited_counts = None
+        # self.ground_counts = None
 
         self.quince_parameters = [self.axis, self.threshold]
         #self.quince_parameters = [self.axis]
@@ -159,7 +159,9 @@ class Averager(Filter):
         # Define counts axis descriptor
         descriptor_count = descriptor_in.copy()
         descriptor_count.data_name = "Counts"
+        descriptor_count.dtype = np.float64
         descriptor_count.pop_axis(self.axis.value)
+        descriptor_count.add_axis(DataAxis("state", [0,1]),position=0)
         if descriptor_count.unit:
             descriptor_count.unit = "counts"
         descriptor_count.metadata["num_counts"] = self.num_averages
@@ -224,8 +226,10 @@ class Averager(Filter):
                 idx       += new_points
 
                 # do state assignment
-                states     = np.zeros(self.data_dims)
-                states     = [1 for i in data if np.real(data[i]) > self.experiment.threshold]
+                # states     = np.zeros(self.data_dims)
+                excited_states = (np.real(reshaped) > self.threshold.value).sum(axis=self.mean_axis)
+                #excited_states = (np.real(reshaped) > self.threshold.value)
+                ground_states = self.num_averages - excited_states
 
                 if self.sink.descriptor.is_adaptive():
                     new_tuples = self.sink.descriptor.tuples()[self.idx_global:self.idx_global + new_points]
@@ -240,11 +244,11 @@ class Averager(Filter):
                         os.descriptor.visited_tuples = np.append(os.descriptor.visited_tuples, reduced_tuples)
 
                 # sum thresholded counts
-                if np.size(self.excited_counts) != np.size(states):
-                    raise ValueError('Number of state assignments do not match number of expected counts')
-                self.excited_counts = np.add(self.excited_counts, states)
-                self.ground_counts = np.subtract(np.repeats([self.num_averages], self.data_dims), self.excited_counts)
-                logger.debug("Ground counts are %s", self.ground_counts)
+                # if np.size(self.excited_counts) != np.size(states):
+                #     raise ValueError('Number of state assignments do not match number of expected counts')
+                # self.excited_counts = np.add(self.excited_counts, states)
+                # self.ground_counts = np.subtract(np.repeats([self.num_averages], self.data_dims), self.excited_counts)
+                # logger.debug("Ground counts are %s", self.ground_counts)
 
                 for os in self.final_average.output_streams:
                     await os.push(averaged)
@@ -255,12 +259,13 @@ class Averager(Filter):
                 for os in self.partial_average.output_streams:
                     await os.push(averaged)
 
-                logger.debug("Excited counts are %s", self.excited_counts)
-                print('outputing count numbers {} and {}.'.format(self.excited_counts, self.ground_counts))
-                if [i != self.num_averages for i in np.add(self.excited_counts, self.ground_counts)]:
-                    raise ValueError('Total number of counts not equal to ground + excited in experiment')
-                for os in self.counts.output_streams:
-                    await os.push((self.excited_counts, self.ground_counts))
+                # logger.debug("Excited counts are %s", self.excited_counts)
+                # print('outputing count numbers {} and {}.'.format(self.excited_counts, self.ground_counts))
+                # if [i != self.num_averages for i in np.add(self.excited_counts, self.ground_counts)]:
+                    # raise ValueError('Total number of counts not equal to ground + excited in experiment')
+                for os in self.final_counts.output_streams:
+                    await os.push(ground_states)
+                    await os.push(excited_states)
 
             # Maybe we can fill a partial frame
             elif data.size - idx >= self.points_before_partial_average:
@@ -292,14 +297,12 @@ class Averager(Filter):
                     for os in self.final_variance.output_streams:
                         await os.push(np.real(reshaped).var(axis=self.mean_axis, ddof=1)+1j*np.imag(reshaped).var(axis=self.mean_axis, ddof=1)) # N-1 in the denominator
                     # do state assignment
-                    #import pdb; pdb.set_trace()
-                    states                   = np.zeros(self.data_dims)
-                    one_indicies             = np.real(data) > self.threshold
-                    states[one_indicies]     = 1
-                    self.excited_counts = np.add(self.excited_counts, states)
-                    self.ground_counts = np.subtract(np.repeats([self.num_averages], self.data_dims), self.excited_counts)
-                    for os in self.counts.output_streams:
-                        await os.push((self.excited_counts, self.ground_counts))
+                    excited_states = (np.real(reshaped) < self.threshold.value).sum(axis=self.mean_axis)
+                    #excited_states = (np.real(reshaped) < self.threshold.value) # may want to save single shots in the future
+                    ground_states  = self.num_averages - excited_states
+                    for os in self.final_counts.output_streams:
+                        await os.push(ground_states)
+                        await os.push(excited_states)
                     self.sum_so_far[:]        = 0.0
                     self.current_avg_frame[:] = 0.0
                     self.completed_averages   = 0
