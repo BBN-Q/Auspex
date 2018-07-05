@@ -1,11 +1,21 @@
 from auspex.log import logger
 from auspex.experiment import Experiment
+from auspex.stream import DataStream, DataAxis, SweepAxis, DataStreamDescriptor, InputConnector, OutputConnector
 
 import asyncio
 
-
 class QubitExperiment(Experiment):
     """Experiment with a specialized run method for qubit experiments run via the QubitExpFactory."""
+    
+    def add_connector(self, qubit):
+        logger.debug(f"Adding {qubit.qubit_name} output connector to experiment.")
+        oc = OutputConnector(name=qubit.qubit_name, parent=self)
+        self._output_connectors[qubit.qubit_name] = oc
+        self.output_connectors[qubit.qubit_name] = oc
+        # self._output_connectors_by_qubit[qubit] = oc
+        setattr(self, qubit.qubit_name, oc)
+        return oc
+
     def init_instruments(self):
         for name, instr in self._instruments.items():
             instr_par = self.settings['instruments'][name]

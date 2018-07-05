@@ -29,21 +29,14 @@ import auspex.filters
 import bbndb
 from .qubit_exp import QubitExperiment
 from auspex.log import logger
-# import auspex.filters.db as filter_db
 
-
-# from auspex.experiment import Experiment
-# from auspex.filters.filter import Filter
-# from auspex.filters.io import DataBuffer
-# from auspex.filters.plot import Plotter, ManualPlotter
-# from auspex.instruments.instrument import Instrument, SCPIInstrument, CLibInstrument, DigitizerChannel
-# from auspex.stream import OutputConnector, DataStreamDescriptor, DataAxis
-# from auspex.experiment import FloatParameter, IntParameter
-# from auspex.instruments.X6 import X6Channel
-# from auspex.instruments.alazar import AlazarChannel
-# from auspex.mixer_calibration import MixerCalibrationExperiment, find_null_offset
-
-stream_hierarchy = [bbndb.auspex.Demodulate, bbndb.auspex.Integrate, bbndb.auspex.Average, bbndb.auspex.OutputProxy]
+# stream_hierarchy = [bbndb.auspex.Demodulate, bbndb.auspex.Integrate, bbndb.auspex.Average, bbndb.auspex.OutputProxy]
+# filter_map = {
+#     bbndb.auspex.Demodulate: auspex.filters.Channelizer,       
+#     bbndb.auspex.Average: auspex.filters.Averager,          
+#     bbndb.auspex.Integrate: auspex.filters.KernelIntegrator,
+#     bbndb.auspex.Write: auspex.filters.WriteToHDF5
+# }    
 
 def correct_resource_name(resource_name):
     substs = {"USB::": "USB0::", }
@@ -53,7 +46,8 @@ def correct_resource_name(resource_name):
 
 class QubitExpFactory(object):
     """Create and run Qubit Experiments."""
-    def __init__(self):
+    def __init__(self, pipeline=None):
+        self.pipeline = pipeline
 
         if bbndb.database:
             self.db = bbndb.database
@@ -74,6 +68,14 @@ class QubitExpFactory(object):
 
             # self.db.bind('sqlite', filename=self.database_file, create_db=True)
             # self.db.generate_mapping(create_tables=True)
+       
+        self.stream_hierarchy = [bbndb.auspex.Demodulate, bbndb.auspex.Integrate, bbndb.auspex.Average, bbndb.auspex.OutputProxy]
+        self.filter_map = {
+            bbndb.auspex.Demodulate: auspex.filters.Channelizer,       
+            bbndb.auspex.Average: auspex.filters.Averager,          
+            bbndb.auspex.Integrate: auspex.filters.KernelIntegrator,
+            bbndb.auspex.Write: auspex.filters.WriteToHDF5
+        }    
 
     def create(self, meta_file):
         self.meta_file = meta_file
@@ -113,7 +115,7 @@ class QubitExpFactory(object):
         for awg in self.awgs:
             awg.sequence_file = self.meta_info['instruments'][awg.label]
 
-        # BUILD GRAPH #
+        # Build graphs
         self.meas_graph = nx.DiGraph()
 
         # Build a mapping of qubits to receivers, construct qubit proxies
@@ -125,12 +127,45 @@ class QubitExpFactory(object):
             qp = self.qubit_proxies[q]
             qp.available_streams = [st.strip() for st in r.digitizer.stream_types.split(",")]
             qp.stream_type = qp.available_streams[-1]
-            
-        for q in self.receivers_by_qubit.keys():
-            self.qubit_proxies[q].auto_create_pipeline()
-
-        commit()
         
+        # If no pipeline is defined, assumed we want to generate it automatically
+        if self.pipeline is None:
+            for q in self.receivers_by_qubit.keys():
+                self.qubit_proxies[q].auto_create_pipeline()
+            commit()
+
+        # Now a pipeline exists, so we create Auspex filters from the proxy filters in the db
+        exp = QubitExperiment()
+
+        proxy_to_filter = {}
+        connector_by_qp = {}
+
+        for mq in self.measured_qubits:
+            mqp = self.qubit_proxies[mq]
+            connector_by_qp[mqp] = exp.add_connector(mqp)
+            # nx.algorithms.dag.descendants(self.exp.meas_graph, self)
+
+        for node in self.meas_graph.nodes():
+            if isinstance(node, bbndb.auspex.FilterProxy):
+                new_filt = self.filter_map[type(node)]()
+                new_filt.configure_with_proxy(node)
+                proxy_to_filter[node] = new_filt
+        
+        graph_edges = []
+        for node1, node2 in self.meas_graph.edges():
+            if isinstance(node1, bbndb.auspex.FilterProxy):
+                filt1 = proxy_to_filter[node1]
+                oc   = filt1.output_connectors["source"]
+            elif isinstance(node1, bbndb.auspex.QubitProxy):
+                oc   = connector_by_qp[node1]
+            filt2 = proxy_to_filter[node2]
+            ic   = filt2.input_connectors["sink"]
+            graph_edges.append([oc, ic])
+
+        exp.set_graph(graph_edges)
+
+        return exp
+
     def qubit(self, qubit_name):
         return {q.label: qp for q,qp in self.qubit_proxies.items()}[qubit_name]
 
@@ -194,3 +229,5 @@ def plot_graph(graph, labels, prog="dot", colors='r'):
     ax.set_xlim((ax.get_xlim()[0]-20.0, ax.get_xlim()[1]+20.0))
     ax.set_ylim((ax.get_ylim()[0]-20.0, ax.get_ylim()[1]+20.0))
     plt.show()
+
+
