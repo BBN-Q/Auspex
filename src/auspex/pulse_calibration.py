@@ -391,7 +391,8 @@ class RamseyCalibration(PulseCalibration):
             # update edges where this is the target qubit
             for predecessor in ChannelLibraries.channelLib.connectivityG.predecessors(self.qubit):
                 edge = ChannelLibraries.channelLib.connectivityG[predecessor][self.qubit]['channel']
-                self.saved_settings['edges'][edge.label]['frequency'] = self.saved_settings['qubits'][self.qubit_names[0]]['control']['frequency']
+                edge_source = self.saved_settings['edges'][edge.label]['generator']
+                self.saved_settings['edges'][edge.label]['frequency'] = self.saved_settings['qubits'][self.qubit_names[0]]['control']['frequency'] + (self.saved_settings['instruments'][qubit_source]['frequency'] - self.saved_settings['instruments'][edge_source]['frequency'])
         logger.info("Qubit set frequency = {} GHz".format(round(float(self.fit_freq/1e9),5)))
         return ('frequency', self.saved_settings['instruments'][qubit_source]['frequency'] + self.saved_settings['qubits'][self.qubit_names[0]]['control']['frequency'])
 
