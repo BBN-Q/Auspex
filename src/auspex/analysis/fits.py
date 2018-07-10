@@ -332,14 +332,14 @@ def fit_drag(data, DRAG_vec, pulse_vec):
     perr_vec = np.zeros(num_seqs)
     popt_mat = np.zeros((3, num_seqs))
     data = data.reshape(len(data)//num_DRAG, num_DRAG)
-    popt_mat[:, 0] = [1, DRAG_vec[data[0,:].argmin()], 0]
+    popt_mat[:, 0] = [1, min(data[0,:]), 0]
     for ct in range(len(pulse_vec)):
         #quadratic fit with increasingly narrower range
         data_n = data[ct, :]
         p0 = popt_mat[:, max(0,ct-1)]
         if ct > 0:
             #recenter for next fit
-            closest_ind =np.argmin(abs(DRAG_vec - p0[1]))
+            closest_ind =np.argmin(abs(DRAG_vec - popt_mat[1, ct]))
             fit_range = int(np.round(0.5*num_DRAG*pulse_vec[0]/pulse_vec[ct]))
             curr_DRAG_vec = DRAG_vec[max(0, closest_ind - fit_range) : min(num_DRAG-1, closest_ind + fit_range)]
             reduced_data_n = data_n[max(0, closest_ind - fit_range) : min(num_DRAG-1, closest_ind + fit_range)]

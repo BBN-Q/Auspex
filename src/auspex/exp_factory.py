@@ -309,21 +309,14 @@ class QubitExpFactory(object):
 
         sweep_offset(cals[second_cal], cal_pts[second_cal])
         amps2 = np.array([x[1] for x in buff.get_data()])
-        try:
-            offset2, xpts, ypts = find_null_offset(cal_pts[second_cal][1:], amps2[1:], default=cal_defaults[second_cal])
-        except:
-            mce.extra_plot_server.stop()
-            return
+        offset2, xpts, ypts = find_null_offset(cal_pts[second_cal][1:], amps2[1:], default=cal_defaults[second_cal])
         plt2[cals[second_cal]] = (cal_pts[second_cal], amps2)
         plt2["Fit "+cals[second_cal]] = (xpts, ypts)
         logger.info("Found {} of {}.".format(str.replace(cals[first_cal], '_', ' '), offset2))
         getattr(mce, cals[second_cal]).value = offset2
 
         mce.disconnect_instruments()
-        try:
-            mce.extra_plot_server.stop()
-        except:
-            logger.info('Mixer plot server was not successfully stopped.')
+        mce.extra_plot_server.stop()
 
         if write_to_file:
             mce.write_to_file()
