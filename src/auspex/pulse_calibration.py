@@ -356,7 +356,7 @@ class RamseyCalibration(PulseCalibration):
         #plot settings
         finer_delays = np.linspace(np.min(self.delays), np.max(self.delays), 4*len(self.delays))
         if self.set_source:
-            self.exp.settings['instruments'][qubit_source]['frequency'] = set_freq
+            self.settings['instruments'][qubit_source]['frequency'] = set_freq
         else:
             self.settings['qubits'][self.qubit.label]['control']['frequency'] += float(self.added_detuning)
         self.set()
@@ -374,7 +374,7 @@ class RamseyCalibration(PulseCalibration):
         else:
             self.settings['qubits'][self.qubit.label]['control']['frequency'] += float(fit_freq_A/2)
         self.set(exp_step = 1)
-        self.exp.settings['instruments'][qubit_source]['frequency'] = set_freq
+        self.settings['instruments'][qubit_source]['frequency'] = set_freq
         data, _ = self.run()
 
         fit_freqs, fit_errs, all_params, all_errs = fit_ramsey(self.delays, data, two_freqs = self.two_freqs, AIC = self.AIC)
