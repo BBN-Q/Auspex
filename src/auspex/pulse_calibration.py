@@ -369,7 +369,7 @@ class RamseyCalibration(PulseCalibration):
 
         #TODO: set conditions for success
         fit_freq_A = np.mean(fit_freqs) #the fit result can be one or two frequencies
-        if self.set_source():
+        if self.set_source:
             set_freq = round(orig_freq + self.added_detuning + fit_freq_A/2, 10)
         else:
             self.settings['qubits'][self.qubit.label]['control']['frequency'] += float(fit_freq_A/2)
