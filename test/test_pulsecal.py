@@ -187,7 +187,7 @@ class SingleQubitCalTestCase(unittest.TestCase):
         self.assertAlmostEqual(phase,-1.2012,places=4)
         self.assertAlmostEqual(sigma,0.0245,places=4)
 
-    def test_pi_phase_estimation_imag(self):
+    def test_pi_phase_estimation(self):
         """
         Test PiCalibration with phase estimation
         """
@@ -215,125 +215,16 @@ class SingleQubitCalTestCase(unittest.TestCase):
                 break
         #save simulated data
         np.save(self.filename, ideal_data)
+        # Test for one of the quadrature or amp/phase randomly
+        quad = np.random.choice(['real', 'imag', 'amp', 'phase'])
         # Verify output matches what was previously seen by matlab
-        pi_cal = cal.PiCalibration(self.q.label, numPulses, quad='imag')
+        pi_cal = cal.PiCalibration(self.q.label, numPulses, quad=quad)
         cal.calibrate([pi_cal])
-        os.remove(self.filename)
         # NOTE: expected result is from the same input fed to the routine
         self.assertAlmostEqual(pi_cal.amplitude, amp, places=3)
         #restore original settings
         auspex.config.dump_meas_file(self.test_settings, cfg_file)
-
-        def test_pi_phase_estimation_amp(self):
-            """
-            Test PiCalibration with phase estimation
-            """
-
-            numPulses = 9
-            amp = self.test_settings['qubits'][self.q.label]['control']['pulse_params']['piAmp']
-            direction = 'X'
-            target = np.pi
-
-            # NOTE: this function is a place holder to simulate an AWG generating
-            # a sequence and a digitizer receiving the sequence.  This function
-            # is passed into the optimize_amplitude routine to be able to update
-            # the amplitude as part of the optimization loop.
-            def update_data(amp, ct):
-                    data, vardata =  simulate_phase_estimation(amp, target, numPulses)
-                    phase, sigma = cal.phase_estimation(data, vardata, verbose=False)
-                    amp, done_flag = cal.phase_to_amplitude(phase, sigma, amp, target, ct)
-                    return amp, data, done_flag
-
-            done_flag = 0
-            for ct in range(5): #max iterations
-                amp, data, done_flag = update_data(amp, ct)
-                ideal_data = data if not ct else np.vstack((ideal_data, data))
-                if done_flag:
-                    break
-            #save simulated data
-            np.save(self.filename, ideal_data)
-            # Verify output matches what was previously seen by matlab
-            pi_cal = cal.PiCalibration(self.q.label, numPulses, quad='amp')
-            cal.calibrate([pi_cal])
-            os.remove(self.filename)
-            # NOTE: expected result is from the same input fed to the routine
-            self.assertAlmostEqual(pi_cal.amplitude, amp, places=3)
-            #restore original settings
-            auspex.config.dump_meas_file(self.test_settings, cfg_file)
-
-        def test_pi_phase_estimation_real(self):
-            """
-            Test PiCalibration with phase estimation
-            """
-
-            numPulses = 9
-            amp = self.test_settings['qubits'][self.q.label]['control']['pulse_params']['piAmp']
-            direction = 'X'
-            target = np.pi
-
-            # NOTE: this function is a place holder to simulate an AWG generating
-            # a sequence and a digitizer receiving the sequence.  This function
-            # is passed into the optimize_amplitude routine to be able to update
-            # the amplitude as part of the optimization loop.
-            def update_data(amp, ct):
-                    data, vardata =  simulate_phase_estimation(amp, target, numPulses)
-                    phase, sigma = cal.phase_estimation(data, vardata, verbose=False)
-                    amp, done_flag = cal.phase_to_amplitude(phase, sigma, amp, target, ct)
-                    return amp, data, done_flag
-
-            done_flag = 0
-            for ct in range(5): #max iterations
-                amp, data, done_flag = update_data(amp, ct)
-                ideal_data = data if not ct else np.vstack((ideal_data, data))
-                if done_flag:
-                    break
-            #save simulated data
-            np.save(self.filename, ideal_data)
-            # Verify output matches what was previously seen by matlab
-            pi_cal = cal.PiCalibration(self.q.label, numPulses, quad='real')
-            cal.calibrate([pi_cal])
-            os.remove(self.filename)
-            # NOTE: expected result is from the same input fed to the routine
-            self.assertAlmostEqual(pi_cal.amplitude, amp, places=3)
-            #restore original settings
-            auspex.config.dump_meas_file(self.test_settings, cfg_file)
-
-        def test_pi_phase_estimation_phase(self):
-            """
-            Test PiCalibration with phase estimation
-            """
-
-            numPulses = 9
-            amp = self.test_settings['qubits'][self.q.label]['control']['pulse_params']['piAmp']
-            direction = 'X'
-            target = np.pi
-
-            # NOTE: this function is a place holder to simulate an AWG generating
-            # a sequence and a digitizer receiving the sequence.  This function
-            # is passed into the optimize_amplitude routine to be able to update
-            # the amplitude as part of the optimization loop.
-            def update_data(amp, ct):
-                    data, vardata =  simulate_phase_estimation(amp, target, numPulses)
-                    phase, sigma = cal.phase_estimation(data, vardata, verbose=False)
-                    amp, done_flag = cal.phase_to_amplitude(phase, sigma, amp, target, ct)
-                    return amp, data, done_flag
-
-            done_flag = 0
-            for ct in range(5): #max iterations
-                amp, data, done_flag = update_data(amp, ct)
-                ideal_data = data if not ct else np.vstack((ideal_data, data))
-                if done_flag:
-                    break
-            #save simulated data
-            np.save(self.filename, ideal_data)
-            # Verify output matches what was previously seen by matlab
-            pi_cal = cal.PiCalibration(self.q.label, numPulses, quad='phase')
-            cal.calibrate([pi_cal])
-            os.remove(self.filename)
-            # NOTE: expected result is from the same input fed to the routine
-            self.assertAlmostEqual(pi_cal.amplitude, amp, places=3)
-            #restore original settings
-            auspex.config.dump_meas_file(self.test_settings, cfg_file)
+        os.remove(self.filename)
 
     def test_drag(self):
         """
