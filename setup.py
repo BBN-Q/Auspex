@@ -28,6 +28,7 @@ setup(
         "ruamel_yaml >= 0.11.14",
         "psutil >= 5.0.0",
         "cffi >= 1.11.5",
+        "sklearn >= 0.19.1",
         "pyzmq >= 16.0.0"
     ]
 )
