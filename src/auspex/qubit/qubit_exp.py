@@ -19,9 +19,10 @@ class QubitExperiment(Experiment):
 
     def init_instruments(self):
         for name, instr in self._instruments.items():
-            instr_par = self.settings['instruments'][name]
-            logger.debug("Setting instr %s with params %s.", name, instr_par)
-            instr.set_all(instr_par)
+            # instr_par = self.settings['instruments'][name]
+            # logger.debug("Setting instr %s with params %s.", name, instr_par)
+            # instr.set_all(instr_par)
+            instr.configure_with_dict(instr.params)
 
         self.digitizers = [v for _, v in self._instruments.items() if "Digitizer" in v.instrument_type]
         self.awgs       = [v for _, v in self._instruments.items() if "AWG" in v.instrument_type]
@@ -75,12 +76,27 @@ class QubitExperiment(Experiment):
             if thing.phys_chan.generator:
                 # Mixed up to final frequency
                 name  = thing.phys_chan.generator.label
-                print(self.sources, name)
-                # instr = experiment._instruments[name]
+                instr = list(filter(lambda x: x.name == name, self._instruments.values()))[0]
+                method = None
             else:
                 # Direct synthesis
-                pass
+                name  = thing.phys_chan.awg.label
+                instr = list(filter(lambda x: x.name == name, self._instruments.values()))[0]
+                def method(value, channel=chan, instr=instr, prop=prop.lower()):
+                    # e.g. keysight.set_amplitude("ch1", 0.5)
+                    getattr(instr, "set_"+prop)(chan, value)
 
+        if method:
+            # Custom method
+            param.assign_method(method)
+        else:
+            # Get method by name
+            if hasattr(instr, "set_"+attribute):
+                param.assign_method(getattr(instr, "set_"+attribute)) # Couple the parameter to the instrument
+            else:
+                raise ValueError("The instrument {} has no method {}".format(name, "set_"+attribute))
+        # param.instr_tree = [instr.name, attribute] #TODO: extend tree to endpoint
+        self.add_sweep(param, values) # Create the requested sweep on this parameter
 
     def add_avg_sweep(self, num_averages):
         param = IntParameter()

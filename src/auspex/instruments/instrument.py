@@ -186,17 +186,13 @@ class Instrument(metaclass=MetaInstrument):
     def disconnect(self):
         pass
 
-    # We now expect the main experiment to deal with shutting down the instruments
-    # def __del__(self):
-    #     self.disconnect()
-
-    def set_all(self, settings_dict):
-        """Accept a settings dictionary and attempt to set all of the instrument
+    def configure_with_dict(self, settings_dict):
+        """Accept a sdettings dictionary and attempt to set all of the instrument
         parameters using the key/value pairs."""
         for name, value in settings_dict.items():
             # Python is insane, and attempts to run a property's getter
             # when queried by hasattr. Avoid this behavior with the
-            # "asl for forgiveness" paradigm.
+            # "ask for forgiveness" paradigm.
             try:
                 setattr(self, name, value)
             except (AttributeError, TypeError) as e:

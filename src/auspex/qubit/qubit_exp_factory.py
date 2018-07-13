@@ -61,7 +61,12 @@ class QubitExpFactory(object):
             # self.db.bind('sqlite', filename=self.database_file, create_db=True)
             # self.db.generate_mapping(create_tables=True)
        
-        self.stream_hierarchy = [bbndb.auspex.Demodulate, bbndb.auspex.Integrate, bbndb.auspex.Average, bbndb.auspex.OutputProxy]
+        self.stream_hierarchy = [
+            bbndb.auspex.Demodulate,
+            bbndb.auspex.Integrate,
+            bbndb.auspex.Average,
+            bbndb.auspex.OutputProxy
+        ]
         self.filter_map = {
             bbndb.auspex.Demodulate: auspex.filters.Channelizer,       
             bbndb.auspex.Average: auspex.filters.Averager,          
@@ -72,11 +77,11 @@ class QubitExpFactory(object):
             'X6-1000M': auspex.filters.X6StreamSelector,
             'AlazarATS9870': auspex.filters.AlazarStreamSelector
         }
-        self.dig_map = {
+        self.instrument_map = {
             'X6-1000M': auspex.instruments.X6,
-            'AlazarATS9870': auspex.instruments.AlazarATS9870
-        }
-        self.source_map = {
+            'AlazarATS9870': auspex.instruments.AlazarATS9870,
+            'APS2': auspex.instruments.APS2,
+            'APS': auspex.instruments.APS,
             'HolzworthHS9000': auspex.instruments.HolzworthHS9000
         }
 
@@ -116,7 +121,7 @@ class QubitExpFactory(object):
         exp.awgs              = self.awgs              = list(set([e.phys_chan.awg for e in self.controlled_qubits + self.measurements]))
         exp.receivers         = self.receivers         = list(set([e.receiver_chan for e in self.measurements]))
         exp.digitizers        = self.digitizers        = list(set([e.receiver_chan.digitizer for e in self.measurements]))
-        exp.sources           = self.sources           = [q.phys_chan.generator.label for q in self.measured_qubits + self.controlled_qubits + self.measurements if q.phys_chan.generator]
+        exp.sources           = self.sources           = [q.phys_chan.generator for q in self.measured_qubits + self.controlled_qubits + self.measurements if q.phys_chan.generator]
 
         # Add the waveform file info to the qubits
         for awg in self.awgs:
@@ -174,10 +179,18 @@ class QubitExpFactory(object):
         proxy_to_filter = {}
         connector_by_qp = {}
 
-        # Create the digitizer instruments from the database objects.
-        # We configure the instrument later after adding channels
-        for dig in self.digitizers:
-            dig.instr = self.dig_map[dig.model]() # For easy lookup
+        # Create microwave sources and digitizer instruments from the database objects.
+        # We configure the digitizers later after adding channels.
+        for instrument in self.sources + self.digitizers + self.awgs:
+            instr = self.instrument_map[instrument.model](instrument.address, instrument.label) # Instantiate
+            # For easy lookup
+            instr.proxy_obj = instrument
+            instrument.instr = instr
+            # Add to the experiment's instrument list
+            exp._instruments[instrument.label] = instr
+            # Add to class dictionary for convenience
+            if not hasattr(exp, instrument.label):
+                setattr(exp, instrument.label, instr)
 
         for mq in self.measured_qubits:
 
