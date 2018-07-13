@@ -77,6 +77,19 @@ class Filter(metaclass=MetaFilter):
     def __repr__(self):
         return "<{}(name={})>".format(self.__class__.__name__, self.name)
 
+    def configure_with_proxy(self, proxy_obj):
+        """For use with bbndb, sets this filter's properties using a FilterProxy object 
+        taken from the filter database."""
+
+        for name, param in self.parameters.items():
+            if hasattr(proxy_obj, name):
+                param.value = getattr(proxy_obj, name)
+            else:
+                raise ValueError(f"{proxy_obj} was expected to have parameter {name}")
+
+    def __repr__(self):
+        return "<{}(name={})>".format(self.__class__.__name__, self.name)
+
     def update_descriptors(self):
         """This method is called whenever the connectivity of the graph changes. This may have implications
         for the internal functioning of the filter, in which case update_descriptors should be overloaded.

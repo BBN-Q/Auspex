@@ -23,19 +23,23 @@ class AlazarStreamSelector(Filter):
     source  = OutputConnector()
     channel = IntParameter(value_range=(1,2), snap=1)
 
-    def __init__(self, name=""):
-        super(AlazarStreamSelector, self).__init__(name=name)
-        self.channel.value = 1 # Either 1 or 2
-        self.quince_parameters = [self.channel]
+    # def __init__(self, name=""):
+    #     super(AlazarStreamSelector, self).__init__(name=name)
+        # self.channel.value = 1 # Either 1 or 2
+        # self.quince_parameters = [self.channel]
 
-    def get_descriptor(self, source_instr_settings, channel_settings):
-        channel = AlazarChannel(channel_settings)
+    def get_channel(self, channel_proxy):
+        """Create and return a channel object corresponding to this stream selector"""
+        return AlazarChannel(channel_proxy)
 
-        # Add the time axis
-        samp_time = 1.0/source_instr_settings['sampling_rate']
+    def get_descriptor(self, channel_proxy):
+        """Get the axis descriptor corresponding to this stream selector. For the Alazar cards this
+        is always just a time axis."""
+        samp_time = 1.0/channel_proxy.dig.sampling_rate
         descrip = DataStreamDescriptor()
-        descrip.add_axis(DataAxis("time", samp_time*np.arange(source_instr_settings['nbr_samples'])))
-        return channel, descrip
+        descrip.add_axis(DataAxis("time", samp_time*np.arange(channel_proxy.digitizer.nbr_samples)))
+        return descrip
+
 
 class X6StreamSelector(Filter):
     """Digital demodulation and filtering to select a particular frequency multiplexed channel"""
@@ -47,27 +51,28 @@ class X6StreamSelector(Filter):
     dsp_channel = IntParameter(value_range=(0,4), snap=1)
     stream_type = Parameter(allowed_values=["Raw", "Demodulated", "Integrated"], default='Demodulated')
 
-    def __init__(self, name=""):
-        super(X6StreamSelector, self).__init__(name=name)
-        self.stream_type.value = "Raw" # One of Raw, Demodulated, Integrated
-        self.quince_parameters = [self.channel, self.dsp_channel, self.stream_type]
+    # def __init__(self, name=""):
+    #     super(X6StreamSelector, self).__init__(name=name)
+        # self.stream_type.value = "Raw" # One of Raw, Demodulated, Integrated
+        # self.quince_parameters = [self.channel, self.dsp_channel, self.stream_type]
 
-    def get_descriptor(self, source_instr_settings, channel_settings):
-        # Create a channel
-        channel = X6Channel(channel_settings)
+    def get_channel(self, channel_proxy):
+        """Create and return a channel object corresponding to this stream selector"""
+        return X6Channel(channel_proxy)
 
+    def get_descriptor(self, channel_proxy):
+        """Get the axis descriptor corresponding to this stream selector. If it's an integrated stream, 
+        then the time axis has already been eliminated. Otherswise, add the time axis."""
         descrip = DataStreamDescriptor()
-        # If it's an integrated stream, then the time axis has already been eliminated.
-        # Otherswise, add the time axis.
-        if channel_settings['stream_type'] == 'Raw':
+        if channel_proxy.stream_type == 'Raw':
             samp_time = 4.0e-9
-            descrip.add_axis(DataAxis("time", samp_time*np.arange(source_instr_settings['record_length']//4)))
+            descrip.add_axis(DataAxis("time", samp_time*np.arange(channel_proxy.digitizer.record_length//4)))
             descrip.dtype = np.float64
-        elif channel_settings['stream_type'] == 'Demodulated':
+        elif channel_proxy.stream_type == 'Demodulated':
             samp_time = 32.0e-9
-            descrip.add_axis(DataAxis("time", samp_time*np.arange(source_instr_settings['record_length']//32)))
+            descrip.add_axis(DataAxis("time", samp_time*np.arange(channel_proxy.digitizer.record_length//32)))
             descrip.dtype = np.complex128
         else: # Integrated
             descrip.dtype = np.complex128
+        return descrip
 
-        return channel, descrip

@@ -30,13 +30,13 @@ else:
         import libx6
         fake_x6 = False
     except:
-        # logger.warning("Could not load x6 library")
+        logger.info("using fake x6")
         fake_x6 = True
 
 class X6Channel(DigitizerChannel):
     """Channel for an X6"""
 
-    def __init__(self, settings_dict=None):
+    def __init__(self, receiver_channel=None):
         self.stream_type       = "Raw"
         self.if_freq           = 0.0
         self.kernel            = None
@@ -51,53 +51,39 @@ class X6Channel(DigitizerChannel):
         self.dtype = np.float64
         self.ideal_data = None
 
-        if settings_dict:
-            self.set_all(settings_dict)
+        if receiver_channel:
+            self.set_by_receiver(receiver_channel)
 
-    def set_all(self, settings_dict):
-        for name, value in settings_dict.items():
-            if name == "kernel" and value:
-                #check if the kernel is given as an existing path or an expression to eval
-                if os.path.exists(os.path.join(config.KernelDir, value+'.txt')):
-                    self.kernel = np.loadtxt(os.path.join(config.KernelDir, value+'.txt'), dtype=complex, converters={0: lambda s: complex(s.decode().replace('+-', '-'))})
-                else:
-                    try:
-                        self.kernel = eval(value)
-                    except:
-                        raise ValueError('Kernel invalid. Provide a file name or an expression to evaluate')
-            elif name == "kernel_bias" and isinstance(value, str) and value:
-                self.kernel_bias = eval(value)
-            #elif hasattr(self, name):
-            #        setattr(self, name, value)
-            elif name == "channel":
-                setattr(self, 'phys_channel', int(value))
-            elif name == 'threshold':
-                setattr(self, 'threshold', value)
-            elif name == 'threshold_invert':
-                setattr(self, 'threshold_invert', bool(value))
-            elif name == 'ideal_data': # for testing purposes
-                self.ideal_data = np.load(os.path.abspath(value+'.npy'))
+    def set_by_receiver(self, receiver):
+        for name in ["stream_type", "kernel_bias", "threshold", "threshold_invert"]:
+            if hasattr(receiver, name) and getattr(receiver, name):
+                setattr(self, name, getattr(receiver, name))
+        if hasattr(receiver, "channel") and receiver.channel:
+            self.phys_channel = receiver.channel
+        if hasattr(receiver, 'ideal_data') and receiver.ideal_data:
+            self.ideal_data = np.load(os.path.abspath(receiver.ideal_data+'.npy'))
+        if hasattr(receiver, "kernel") and receiver.kernel:
+            if os.path.exists(os.path.join(config.KernelDir, receiver.kernel+'.txt')):
+                self.kernel = np.loadtxt(os.path.join(config.KernelDir, receiver.kernel+'.txt'), dtype=complex, converters={0: lambda s: complex(s.decode().replace('+-', '-'))})
             else:
                 try:
-                    setattr(self, name, value)
-                except AttributeError:
-                    logger.debug("Could not set channel attribute: {} on X6 {} channel.".format(name, self.stream_type))
-                    pass
-
+                    self.kernel = eval(receiver.kernel)
+                except:
+                    raise ValueError('Kernel invalid. Provide a file name or an expression to evaluate')
         if self.stream_type == "Integrated":
-            demod_channel = 0
-            result_channel = self.dsp_channel
+            self.demod_channel = 0
+            self.result_channel = self.dsp_channel
             self.dtype = np.complex128
         elif self.stream_type == "Demodulated":
-            demod_channel = self.dsp_channel
-            result_channel = 0
+            self.demod_channel = self.dsp_channel
+            self.result_channel = 0
             self.dtype = np.complex128
         else: #Raw
-            demod_channel  = 0
-            result_channel = 0
+            self.demod_channel  = 0
+            self.result_channel = 0
             self.dtype = np.float64
 
-        self.channel_tuple = (int(self.phys_channel), int(demod_channel), int(result_channel))
+        self.channel_tuple = (int(self.phys_channel), int(self.demod_channel), int(self.result_channel))
 
 class X6(Instrument):
     """BBN QDSP running on the II-X6 digitizer"""
@@ -152,14 +138,17 @@ class X6(Instrument):
         self._chan_to_wsocket.clear()
         self._lib.disconnect()
 
-    def set_all(self, settings_dict):
+    def configure_with_proxy(self, proxy_obj):
         # Call the non-channel commands
-        super(X6, self).set_all(settings_dict)
+        # super(X6, self).set_all(settings_dict)
+        
         # Set data for testing
-        try:
-            self.ideal_data = np.load(os.path.abspath(self.ideal_data+'.npy'))
-        except:
-            self.ideal_data = None
+        if self.ideal_data:
+            try:
+                self.ideal_data = np.load(os.path.abspath(self.ideal_data+'.npy'))
+            except:
+                raise ValueError(f"Could not load ideal X6 data in {self}")
+        
         # perform channel setup
         for chan in self._channels:
             self.channel_setup(chan)
