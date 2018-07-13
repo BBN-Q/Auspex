@@ -9,20 +9,17 @@ class QubitExperiment(Experiment):
     """Experiment with a specialized run method for qubit experiments run via the QubitExpFactory."""
     
     def add_connector(self, qubit):
-        logger.debug(f"Adding {qubit.qubit_name} output connector to experiment.")
+        logger.info(f"Adding {qubit.qubit_name} output connector to experiment.")
         oc = OutputConnector(name=qubit.qubit_name, parent=self)
-        self._output_connectors[qubit.qubit_name] = oc
         self.output_connectors[qubit.qubit_name] = oc
-        # self._output_connectors_by_qubit[qubit] = oc
         setattr(self, qubit.qubit_name, oc)
         return oc
 
     def init_instruments(self):
         for name, instr in self._instruments.items():
-            # instr_par = self.settings['instruments'][name]
-            # logger.debug("Setting instr %s with params %s.", name, instr_par)
-            # instr.set_all(instr_par)
-            instr.configure_with_dict(instr.params)
+            # Configure with dictionary from the instrument proxy
+            instr.configure_with_dict(instr.proxy_obj.to_dict())
+            logger.debug(f"Configuring {instr} with {instr.proxy_obj.to_dict()}")
 
         self.digitizers = [v for _, v in self._instruments.items() if "Digitizer" in v.instrument_type]
         self.awgs       = [v for _, v in self._instruments.items() if "AWG" in v.instrument_type]
@@ -40,9 +37,9 @@ class QubitExperiment(Experiment):
             oc = self.chan_to_oc[chan]
             self.loop.add_reader(socket, dig.receive_data, chan, oc)
 
-        if self.cw_mode:
-            for awg in self.awgs:
-                awg.run()
+        # if self.cw_mode:
+        #     for awg in self.awgs:
+        #         awg.run()
 
     def add_instrument_sweep(self, instrument, attribute, values):
         pass
@@ -50,14 +47,12 @@ class QubitExperiment(Experiment):
     def add_qubit_sweep(self, qubit, measure_or_control, attribute, values):
         """
         Add a *ParameterSweep* to the experiment. Users specify a qubit property that auspex 
-        will try to link back to the relevant instrument.
-        (i.e. *q1 measure frequency* or *q2 control power*). For example::
-            exp = QubitExpFactory.create(PulsedSpec(q))
+        will try to link back to the relevant instrument. For example::
+            exp = QubitExpFactory.create(PulsedSpec(q1))
             exp.add_qubit_sweep(q1, "measure", "frequency", np.linspace(6e9, 6.5e9, 500))
             exp.run_sweeps()
         """
-        # Create the parameter
-        param = FloatParameter()
+        param = FloatParameter() # Create the parameter
 
         if measure_or_control not in ["measure", "control"]:
             raise ValueError(f"Cannot add sweep for something other than measure or control properties of {qubit}")
@@ -107,9 +102,9 @@ class QubitExperiment(Experiment):
 
     def shutdown_instruments(self):
         # remove socket readers
-        if self.cw_mode:
-            for awg in self.awgs:
-                awg.stop()
+        # if self.cw_mode:
+        #     for awg in self.awgs:
+        #         awg.stop()
         for chan, dig in self.chan_to_dig.items():
             socket = dig.get_socket(chan)
             self.loop.remove_reader(socket)
@@ -121,9 +116,9 @@ class QubitExperiment(Experiment):
         for dig in self.digitizers:
             dig.acquire()
         await asyncio.sleep(0.75)
-        if not self.cw_mode:
-            for awg in self.awgs:
-                awg.run()
+        # if not self.cw_mode:
+        for awg in self.awgs:
+            awg.run()
 
         # Wait for all of the acquisitions to complete
         timeout = 10
@@ -136,6 +131,6 @@ class QubitExperiment(Experiment):
 
         for dig in self.digitizers:
             dig.stop()
-        if not self.cw_mode:
-            for awg in self.awgs:
-                awg.stop()
+        # if not self.cw_mode:
+        for awg in self.awgs:
+            awg.stop()

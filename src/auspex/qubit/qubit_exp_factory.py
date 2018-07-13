@@ -26,6 +26,7 @@ import networkx as nx
 import auspex.config as config
 import auspex.instruments
 import auspex.filters
+from auspex.stream import DataAxis
 import bbndb
 from .qubit_exp import QubitExperiment
 from auspex.log import logger
@@ -85,50 +86,49 @@ class QubitExpFactory(object):
             'HolzworthHS9000': auspex.instruments.HolzworthHS9000
         }
 
-    def create(self, meta_file):
-        self.meta_file = meta_file
-        with open(self.meta_file, 'r') as FID:
-            self.meta_info = json.load(FID)
+    def create(self, meta_file, averages=100):
+        with open(meta_file, 'r') as FID:
+            meta_info = json.load(FID)
 
         # Create our experiment instance
         exp = QubitExperiment()
 
         # Make database bbndb.auspex.connection
-        db_provider  = self.meta_info['database_info']['db_provider']
-        db_filename  = self.meta_info['database_info']['db_filename']
-        library_name = self.meta_info['database_info']['library_name']
-        library_id   = self.meta_info['database_info']['library_id']
+        db_provider  = meta_info['database_info']['db_provider']
+        db_filename  = meta_info['database_info']['db_filename']
+        library_name = meta_info['database_info']['library_name']
+        library_id   = meta_info['database_info']['library_id']
 
         # For now we must use the same database
         # if db_filename != self.database_file:
         #     raise Exception("Auspex and QGL must share the same database for now.")
 
         # Load the channel library by ID
-        exp.channelDatabase   = self.channelDatabase  = bbndb.qgl.ChannelDatabase[library_id]
-        exp.all_channels      = self.all_channels     = list(self.channelDatabase.channels)
-        exp.all_sources       = self.all_sources      = list(self.channelDatabase.sources)
-        exp.all_awgs          = self.all_awgs         = list(self.channelDatabase.awgs)
-        exp.all_digitizers    = self.all_digitizers   = list(self.channelDatabase.digitizers)
-        exp.all_qubits        = self.all_qubits       = [c for c in self.all_channels if isinstance(c, bbndb.qgl.Qubit)]
-        exp.all_measurements  = self.all_measurements = [c for c in self.all_channels if isinstance(c, bbndb.qgl.Measurement)]
+        exp.channelDatabase   = channelDatabase  = bbndb.qgl.ChannelDatabase[library_id]
+        exp.all_channels      = all_channels     = list(channelDatabase.channels)
+        exp.all_sources       = all_sources      = list(channelDatabase.sources)
+        exp.all_awgs          = all_awgs         = list(channelDatabase.awgs)
+        exp.all_digitizers    = all_digitizers   = list(channelDatabase.digitizers)
+        exp.all_qubits        = all_qubits       = [c for c in all_channels if isinstance(c, bbndb.qgl.Qubit)]
+        exp.all_measurements  = all_measurements = [c for c in all_channels if isinstance(c, bbndb.qgl.Measurement)]
 
         # Restrict to current qubits, channels, etc. involved in this actual experiment
         # Based on the meta info
-        exp.controlled_qubits = self.controlled_qubits = list(self.channelDatabase.channels.filter(lambda x: x.label in self.meta_info["qubits"]))
-        exp.measurements      = self.measurements      = list(self.channelDatabase.channels.filter(lambda x: x.label in self.meta_info["measurements"]))
-        exp.measured_qubits   = self.measured_qubits   = list(self.channelDatabase.channels.filter(lambda x: "M-"+x.label in self.meta_info["measurements"]))
-        exp.phys_chans        = self.phys_chans        = list(set([e.phys_chan for e in self.controlled_qubits + self.measurements]))
-        exp.awgs              = self.awgs              = list(set([e.phys_chan.awg for e in self.controlled_qubits + self.measurements]))
-        exp.receivers         = self.receivers         = list(set([e.receiver_chan for e in self.measurements]))
-        exp.digitizers        = self.digitizers        = list(set([e.receiver_chan.digitizer for e in self.measurements]))
-        exp.sources           = self.sources           = [q.phys_chan.generator for q in self.measured_qubits + self.controlled_qubits + self.measurements if q.phys_chan.generator]
+        exp.controlled_qubits = controlled_qubits = list(channelDatabase.channels.filter(lambda x: x.label in meta_info["qubits"]))
+        exp.measurements      = measurements      = list(channelDatabase.channels.filter(lambda x: x.label in meta_info["measurements"]))
+        exp.measured_qubits   = measured_qubits   = list(channelDatabase.channels.filter(lambda x: "M-"+x.label in meta_info["measurements"]))
+        exp.phys_chans        = phys_chans        = list(set([e.phys_chan for e in controlled_qubits + measurements]))
+        exp.awgs              = awgs              = list(set([e.phys_chan.awg for e in controlled_qubits + measurements]))
+        exp.receivers         = receivers         = list(set([e.receiver_chan for e in measurements]))
+        exp.digitizers        = digitizers        = list(set([e.receiver_chan.digitizer for e in measurements]))
+        exp.sources           = sources           = [q.phys_chan.generator for q in measured_qubits + controlled_qubits + measurements if q.phys_chan.generator]
 
         # Add the waveform file info to the qubits
-        for awg in self.awgs:
-            awg.sequence_file = self.meta_info['instruments'][awg.label]
+        for awg in awgs:
+            awg.sequence_file = meta_info['instruments'][awg.label]
 
         # Construct the DataAxis from the meta_info
-        desc = self.meta_info["axis_descriptor"]
+        desc = meta_info["axis_descriptor"]
         data_axis = desc[0] # Data will always be the first axis
 
         # ovverride data axis with repeated number of segments
@@ -160,28 +160,31 @@ class QubitExpFactory(object):
         self.meas_graph = nx.DiGraph()
 
         # Build a mapping of qubits to receivers, construct qubit proxies
-        self.receivers_by_qubit = {self.channelDatabase.channels.filter(lambda x: x.label == e.label[2:]).first(): e.receiver_chan for e in self.measurements}
-        self.qubit_proxies = {q: bbndb.auspex.QubitProxy(self, q.label) for q in self.measured_qubits + self.controlled_qubits}
-        self.stream_info_by_qubit = {q.label: r.digitizer.stream_types for q,r in self.receivers_by_qubit.items()}
+        receivers_by_qubit = {channelDatabase.channels.filter(lambda x: x.label == e.label[2:]).first(): e.receiver_chan for e in measurements}
+        qubit_proxies = {q: bbndb.auspex.QubitProxy(self, q.label) for q in measured_qubits + controlled_qubits}
+        stream_info_by_qubit = {q.label: r.digitizer.stream_types for q,r in receivers_by_qubit.items()}
 
-        for q, r in self.receivers_by_qubit.items():
-            qp = self.qubit_proxies[q]
+        for q, r in receivers_by_qubit.items():
+            qp = qubit_proxies[q]
             qp.available_streams = [st.strip() for st in r.digitizer.stream_types.split(",")]
             qp.stream_type = qp.available_streams[-1]
         
         # If no pipeline is defined, assumed we want to generate it automatically
         if self.pipeline is None:
-            for q in self.receivers_by_qubit.keys():
-                self.qubit_proxies[q].auto_create_pipeline()
+            for q in receivers_by_qubit.keys():
+                qubit_proxies[q].auto_create_pipeline()
             commit()
 
         # Now a pipeline exists, so we create Auspex filters from the proxy filters in the db
-        proxy_to_filter = {}
-        connector_by_qp = {}
+        proxy_to_filter  = {}
+        connector_by_qp  = {}
+        exp.chan_to_dig  = {}
+        exp.chan_to_oc   = {}
+        exp.qubit_to_dig = {}
 
         # Create microwave sources and digitizer instruments from the database objects.
         # We configure the digitizers later after adding channels.
-        for instrument in self.sources + self.digitizers + self.awgs:
+        for instrument in sources + digitizers + awgs:
             instr = self.instrument_map[instrument.model](instrument.address, instrument.label) # Instantiate
             # For easy lookup
             instr.proxy_obj = instrument
@@ -192,10 +195,10 @@ class QubitExpFactory(object):
             if not hasattr(exp, instrument.label):
                 setattr(exp, instrument.label, instr)
 
-        for mq in self.measured_qubits:
+        for mq in measured_qubits:
 
             # Create the stream selectors
-            rcv = self.receivers_by_qubit[mq]
+            rcv = receivers_by_qubit[mq]
             dig = rcv.digitizer
             stream_sel = self.stream_sel_map[dig.model](name=rcv.label+'-SS')
             stream_sel.configure_with_proxy(rcv)
@@ -213,17 +216,28 @@ class QubitExpFactory(object):
             if hasattr(exp, "segment_axis"):
                 descriptor.add_axis(exp.segment_axis)
 
+            # Add the output connectors to the experiment and set their base descriptor
+            mqp = qubit_proxies[mq]
+
+            connector_by_qp[mqp] = exp.add_connector(mqp)
+            connector_by_qp[mqp].set_descriptor(descriptor)
+            
             # Add the channel to the instrument
             dig.instr.add_channel(channel)
+            exp.chan_to_dig[channel] = dig.instr
+            exp.chan_to_oc [channel] = connector_by_qp[mqp]
+            exp.qubit_to_dig[mq]     = dig
 
-            # Add the output connectors to the experiment and set their base descriptor
-            mqp = self.qubit_proxies[mq]
-            connector_by_qp[mqp] = exp.add_connector(mqp)
-            connector_by_qp[mqp].set_descriptor(descriptor)          
+        # Find the number of measurements
+        segments_per_dig = {receiver.digitizer: meta_info["receivers"][receiver.label] for receiver in receivers
+                                                         if receiver.label in meta_info["receivers"].keys()}
 
         # Configure digitizer instruments from the database objects
         # this must be done after adding channels.
-        for dig in self.digitizers:
+        for dig in digitizers:
+            dig.instr.number_averges   = averages
+            dig.instr.number_waverorms = 1
+            dig.instr.number_segments  = segments_per_dig[dig]
             dig.instr.configure_with_proxy(dig)
 
         # Configure the individual filter nodes
@@ -252,7 +266,7 @@ class QubitExpFactory(object):
         return exp
 
     def qubit(self, qubit_name):
-        return {q.label: qp for q,qp in self.qubit_proxies.items()}[qubit_name]
+        return {q.label: qp for q,qp in qubit_proxies.items()}[qubit_name]
 
     def save_pipeline(self, name):
         cs = [bbndb.auspex.Connection(pipeline_name=name, node1=n1, node2=n2) for n1, n2 in self.meas_graph.edges()]
@@ -286,7 +300,7 @@ class QubitExpFactory(object):
         plot_graph(graph, labels, colors=colors)
     
     def reset_pipelines(self):
-        for qp in self.qubit_proxies.values():
+        for qp in qubit_proxies.values():
             qp.clear_pipeline()
             qp.auto_create_pipeline()
     

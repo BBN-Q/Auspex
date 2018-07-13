@@ -89,7 +89,7 @@ class X6(Instrument):
     """BBN QDSP running on the II-X6 digitizer"""
     instrument_type = ("Digitizer")
 
-    def __init__(self, resource_name=None, name="Unlabeled X6", gen_fake_data=False):
+    def __init__(self, resource_name=None, name="Unlabeled X6", gen_fake_data=True):
         # X6Channel objects
         self._channels = []
         # socket r/w pairs for each channel
@@ -141,7 +141,6 @@ class X6(Instrument):
     def configure_with_proxy(self, proxy_obj):
         # Call the non-channel commands
         # super(X6, self).set_all(settings_dict)
-        
         # Set data for testing
         if self.ideal_data:
             try:
@@ -312,22 +311,22 @@ class X6(Instrument):
         self._lib.record_length = value
 
     @property
-    def nbr_waveforms(self):
+    def number_waveforms(self):
         return self._lib.nbr_waveforms
-    @nbr_waveforms.setter
-    def nbr_waveforms(self, value):
+    @number_waveforms.setter
+    def number_waveforms(self, value):
         self._lib.nbr_waveforms = value
 
     @property
-    def nbr_segments(self):
+    def number_segments(self):
         return self._lib.nbr_segments
-    @nbr_segments.setter
-    def nbr_segments(self, value):
+    @number_segments.setter
+    def number_segments(self, value):
         self._lib.nbr_segments = value
 
     @property
-    def nbr_round_robins(self):
+    def number_round_robins(self):
         return self._lib.nbr_round_robins
-    @nbr_round_robins.setter
-    def nbr_round_robins(self, value):
+    @number_round_robins.setter
+    def number_round_robins(self, value):
         self._lib.nbr_round_robins = value
