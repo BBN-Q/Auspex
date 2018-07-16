@@ -138,7 +138,7 @@ class X6(Instrument):
         self._chan_to_wsocket.clear()
         self._lib.disconnect()
 
-    def configure_with_proxy(self, proxy_obj):
+    def configure_with_dict(self, settings_dict):
         # Call the non-channel commands
         # super(X6, self).set_all(settings_dict)
         # Set data for testing
@@ -148,6 +148,12 @@ class X6(Instrument):
             except:
                 raise ValueError(f"Could not load ideal X6 data in {self}")
         
+        # Take these directly from the proxy obj
+        self.number_averages  = self.proxy_obj.number_averages
+        self.number_waveforms = self.proxy_obj.number_waveforms
+        self.number_segments  = self.proxy_obj.number_segments
+        self.record_length    = settings_dict['record_length']
+
         # perform channel setup
         for chan in self._channels:
             self.channel_setup(chan)
@@ -325,8 +331,8 @@ class X6(Instrument):
         self._lib.nbr_segments = value
 
     @property
-    def number_round_robins(self):
+    def number_averages(self):
         return self._lib.nbr_round_robins
-    @number_round_robins.setter
-    def number_round_robins(self, value):
+    @number_averages.setter
+    def number_averages(self, value):
         self._lib.nbr_round_robins = value

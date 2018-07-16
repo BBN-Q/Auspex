@@ -161,18 +161,18 @@ class QubitExpFactory(object):
 
         # Build a mapping of qubits to receivers, construct qubit proxies
         receivers_by_qubit = {channelDatabase.channels.filter(lambda x: x.label == e.label[2:]).first(): e.receiver_chan for e in measurements}
-        qubit_proxies = {q: bbndb.auspex.QubitProxy(self, q.label) for q in measured_qubits + controlled_qubits}
+        self.qubit_proxies = {q: bbndb.auspex.QubitProxy(self, q.label) for q in measured_qubits + controlled_qubits}
         stream_info_by_qubit = {q.label: r.digitizer.stream_types for q,r in receivers_by_qubit.items()}
 
         for q, r in receivers_by_qubit.items():
-            qp = qubit_proxies[q]
+            qp = self.qubit_proxies[q]
             qp.available_streams = [st.strip() for st in r.digitizer.stream_types.split(",")]
             qp.stream_type = qp.available_streams[-1]
         
         # If no pipeline is defined, assumed we want to generate it automatically
         if self.pipeline is None:
             for q in receivers_by_qubit.keys():
-                qubit_proxies[q].auto_create_pipeline()
+                self.qubit_proxies[q].auto_create_pipeline()
             commit()
 
         # Now a pipeline exists, so we create Auspex filters from the proxy filters in the db
@@ -217,7 +217,7 @@ class QubitExpFactory(object):
                 descriptor.add_axis(exp.segment_axis)
 
             # Add the output connectors to the experiment and set their base descriptor
-            mqp = qubit_proxies[mq]
+            mqp = self.qubit_proxies[mq]
 
             connector_by_qp[mqp] = exp.add_connector(mqp)
             connector_by_qp[mqp].set_descriptor(descriptor)
@@ -235,10 +235,11 @@ class QubitExpFactory(object):
         # Configure digitizer instruments from the database objects
         # this must be done after adding channels.
         for dig in digitizers:
-            dig.instr.number_averges   = averages
-            dig.instr.number_waverorms = 1
-            dig.instr.number_segments  = segments_per_dig[dig]
-            dig.instr.configure_with_proxy(dig)
+            dig.number_averages  = averages
+            dig.number_waveforms = 1
+            dig.number_segments  = segments_per_dig[dig]
+            dig.instr.proxy_obj  = dig
+            # dig.instr.configure_with_proxy(dig)
 
         # Configure the individual filter nodes
         for node in self.meas_graph.nodes():
@@ -266,7 +267,7 @@ class QubitExpFactory(object):
         return exp
 
     def qubit(self, qubit_name):
-        return {q.label: qp for q,qp in qubit_proxies.items()}[qubit_name]
+        return {q.label: qp for q,qp in self.qubit_proxies.items()}[qubit_name]
 
     def save_pipeline(self, name):
         cs = [bbndb.auspex.Connection(pipeline_name=name, node1=n1, node2=n2) for n1, n2 in self.meas_graph.edges()]
@@ -300,7 +301,7 @@ class QubitExpFactory(object):
         plot_graph(graph, labels, colors=colors)
     
     def reset_pipelines(self):
-        for qp in qubit_proxies.values():
+        for qp in self.qubit_proxies.values():
             qp.clear_pipeline()
             qp.auto_create_pipeline()
     
