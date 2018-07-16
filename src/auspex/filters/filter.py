@@ -81,9 +81,13 @@ class Filter(metaclass=MetaFilter):
         """For use with bbndb, sets this filter's properties using a FilterProxy object 
         taken from the filter database."""
 
+        if proxy_obj.label:
+            self.name = proxy_obj.label
+
         for name, param in self.parameters.items():
             if hasattr(proxy_obj, name):
-                param.value = getattr(proxy_obj, name)
+                if getattr(proxy_obj, name): # Not none
+                    param.value = getattr(proxy_obj, name)
             else:
                 raise ValueError(f"{proxy_obj} was expected to have parameter {name}")
 

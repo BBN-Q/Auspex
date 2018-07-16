@@ -328,7 +328,7 @@ class QubitExpFactory(object):
         else:
             graph = self.meas_graph
             
-        labels = {n: n.label() for n in graph.nodes()}
+        labels = {n: str(n) for n in graph.nodes()}
         colors = ["#3182bd" if isinstance(n, bbndb.auspex.QubitProxy) else "#ff9933" for n in graph.nodes()]
         self.plot_graph(graph, labels, colors=colors)
     
@@ -337,6 +337,10 @@ class QubitExpFactory(object):
             qp.clear_pipeline()
             qp.auto_create_pipeline()
     
+    def clear_pipelines(self):
+        for qp in self.qubit_proxies.values():
+            qp.clear_pipeline()
+
     def show_connectivity(self):
         pass
 
