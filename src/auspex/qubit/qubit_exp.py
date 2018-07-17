@@ -9,7 +9,7 @@ class QubitExperiment(Experiment):
     """Experiment with a specialized run method for qubit experiments run via the QubitExpFactory."""
     
     def add_connector(self, qubit):
-        logger.info(f"Adding {qubit.qubit_name} output connector to experiment.")
+        logger.debug(f"Adding {qubit.qubit_name} output connector to experiment.")
         oc = OutputConnector(name=qubit.qubit_name, parent=self)
         self.output_connectors[qubit.qubit_name] = oc
         setattr(self, qubit.qubit_name, oc)

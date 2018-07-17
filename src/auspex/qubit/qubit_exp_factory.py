@@ -277,7 +277,7 @@ class QubitExpFactory(object):
             if isinstance(node, bbndb.auspex.FilterProxy):
                 if node.qubit_name in measured_qubit_names:
                     new_filt = self.filter_map[type(node)]()
-                    logger.info(f"Created {new_filt} from {node}")
+                    logger.debug(f"Created {new_filt} from {node}")
                     new_filt.configure_with_proxy(node)
                     new_filt.proxy = node
                     proxy_to_filter[node] = new_filt
@@ -330,7 +330,7 @@ class QubitExpFactory(object):
         else:
             graph = self.meas_graph
 
-        labels = {n: str(n) for n in graph.nodes()}
+        labels = {n: n.node_label() for n in graph.nodes()}
         colors = ["#3182bd" if isinstance(n, bbndb.auspex.QubitProxy) else "#ff9933" for n in graph.nodes()]
         self.plot_graph(graph, labels, colors=colors)
 
@@ -348,7 +348,7 @@ class QubitExpFactory(object):
 
     def plot_graph(self, graph, labels, prog="dot", colors='r'):
         import matplotlib.pyplot as plt
-
+        plt.figure(figsize=(12, 4))
         pos = nx.drawing.nx_pydot.graphviz_layout(graph, prog=prog)
 
         # Create position copies for shadows, and shift shadows
@@ -356,14 +356,17 @@ class QubitExpFactory(object):
         pos_labels = copy.copy(pos)
         for idx in pos_shadow.keys():
             pos_shadow[idx] = (pos_shadow[idx][0] + 0.01, pos_shadow[idx][1] - 0.01)
-            pos_labels[idx] = (pos_labels[idx][0] + 0, pos_labels[idx][1] + 20 )
+            pos_labels[idx] = (pos_labels[idx][0] + 0, pos_labels[idx][1] + 15 )
         nx.draw_networkx_nodes(graph, pos_shadow, node_size=100, node_color='k', alpha=0.5)
         nx.draw_networkx_nodes(graph, pos, node_size=100, node_color=colors, linewidths=1, alpha=1.0)
         nx.draw_networkx_edges(graph, pos, width=1)
-        nx.draw_networkx_labels(graph, pos_labels, labels)
-
+        nx.draw_networkx_labels(graph, pos_labels, labels, font_size=10, bbox=dict(facecolor='white', alpha=0.95), horizontalalignment="center")
+        
         ax = plt.gca()
         ax.axis('off')
         ax.set_xlim((ax.get_xlim()[0]-20.0, ax.get_xlim()[1]+20.0))
         ax.set_ylim((ax.get_ylim()[0]-20.0, ax.get_ylim()[1]+20.0))
         plt.show()
+
+    def __getitem__(self, key):
+        return self.qubit(key)

@@ -219,14 +219,12 @@ class Experiment(metaclass=MetaExperiment):
 
         # Things we can't metaclass
         self.output_connectors = {}
-        print("In init 1:", self.output_connectors, self._output_connectors)
         for oc in self._output_connectors.keys():
             a = OutputConnector(name=oc, data_name=oc, unit=self._output_connectors[oc].data_unit, parent=self)
             a.parent = self
 
             self.output_connectors[oc] = a
             setattr(self, oc, a)
-        print("In init 2:", self.output_connectors, self._output_connectors)
 
         # Some instruments don't clean up well after themselves, reconstruct them on a
         # per instance basis. These instruments contain a wide variety of complex behaviors
