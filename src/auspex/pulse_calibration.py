@@ -380,7 +380,6 @@ class RamseyCalibration(PulseCalibration):
         self.set(exp_step = 1)
         data, _ = self.run()
 
-        fit_freqs, fit_errs, all_params, all_errs = fit_ramsey(self.delays, data, two_freqs = self.two_freqs, AIC = self.AIC)
         try:
             fit_freqs, fit_errs, all_params, all_errs = fit_ramsey(self.delays, data, two_freqs = self.two_freqs, AIC = self.AIC)
         except:
