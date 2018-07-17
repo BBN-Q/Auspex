@@ -35,9 +35,9 @@ class AlazarStreamSelector(Filter):
     def get_descriptor(self, channel_proxy):
         """Get the axis descriptor corresponding to this stream selector. For the Alazar cards this
         is always just a time axis."""
-        samp_time = 1.0/channel_proxy.dig.sampling_rate
+        samp_time = 1.0/channel_proxy.digitizer.sampling_rate
         descrip = DataStreamDescriptor()
-        descrip.add_axis(DataAxis("time", samp_time*np.arange(channel_proxy.digitizer.nbr_samples)))
+        descrip.add_axis(DataAxis("time", samp_time*np.arange(channel_proxy.digitizer.record_length)))
         return descrip
 
 
@@ -46,7 +46,7 @@ class X6StreamSelector(Filter):
 
     sink   = InputConnector()
     source = OutputConnector()
-    
+
     channel     = IntParameter(value_range=(1,3), snap=1)
     dsp_channel = IntParameter(value_range=(0,4), snap=1)
     stream_type = Parameter(allowed_values=["Raw", "Demodulated", "Integrated"], default='Demodulated')
@@ -61,7 +61,7 @@ class X6StreamSelector(Filter):
         return X6Channel(channel_proxy)
 
     def get_descriptor(self, channel_proxy):
-        """Get the axis descriptor corresponding to this stream selector. If it's an integrated stream, 
+        """Get the axis descriptor corresponding to this stream selector. If it's an integrated stream,
         then the time axis has already been eliminated. Otherswise, add the time axis."""
         descrip = DataStreamDescriptor()
         if channel_proxy.stream_type == 'Raw':
@@ -75,4 +75,3 @@ class X6StreamSelector(Filter):
         else: # Integrated
             descrip.dtype = np.complex128
         return descrip
-

@@ -63,7 +63,7 @@ class QubitExpFactory(object):
 
             # self.db.bind('sqlite', filename=self.database_file, create_db=True)
             # self.db.generate_mapping(create_tables=True)
-       
+
         self.stream_hierarchy = [
             bbndb.auspex.Demodulate,
             bbndb.auspex.Integrate,
@@ -71,8 +71,8 @@ class QubitExpFactory(object):
             bbndb.auspex.OutputProxy
         ]
         self.filter_map = {
-            bbndb.auspex.Demodulate: auspex.filters.Channelizer,       
-            bbndb.auspex.Average: auspex.filters.Averager,          
+            bbndb.auspex.Demodulate: auspex.filters.Channelizer,
+            bbndb.auspex.Average: auspex.filters.Averager,
             bbndb.auspex.Integrate: auspex.filters.KernelIntegrator,
             bbndb.auspex.Write: auspex.filters.WriteToHDF5,
             bbndb.auspex.Display: auspex.filters.Plotter
@@ -86,7 +86,9 @@ class QubitExpFactory(object):
             'AlazarATS9870': auspex.instruments.AlazarATS9870,
             'APS2': auspex.instruments.APS2,
             'APS': auspex.instruments.APS,
-            'HolzworthHS9000': auspex.instruments.HolzworthHS9000
+            'HolzworthHS9000': auspex.instruments.HolzworthHS9000,
+            'Labbrick': auspex.instruments.Labbrick,
+            'AgilentN5183A': auspex.instruments.AgilentN5183A
         }
 
     def create_default_pipeline(self, qubits=None):
@@ -96,10 +98,10 @@ class QubitExpFactory(object):
             cdb = bbndb.qgl.ChannelDatabase.select(lambda x: x.label == "working").first()
             if not cdb:
                 raise ValueError("Could not find working channel library.")
-            
+
             measurements = [c for c in cdb.channels if isinstance(c, bbndb.qgl.Measurement)]
             meas_labels  = [m.label for m in measurements]
-            qubits       = list(cdb.channels.filter(lambda x: "M-"+x.label in meas_labels))    
+            qubits       = set(cdb.channels.filter(lambda x: "M-"+x.label in meas_labels))
         else:
             qubit_labels = [q.label for q in qubits]
             measurements = [cdb.channels.filter(lambda x: x.label == "M-"+ql).first() for ql in qubit_labels]
@@ -248,7 +250,7 @@ class QubitExpFactory(object):
 
             connector_by_qp[mqp] = exp.add_connector(mqp)
             connector_by_qp[mqp].set_descriptor(descriptor)
-            
+
             # Add the channel to the instrument
             dig.instr.add_channel(channel)
             exp.chan_to_dig[channel] = dig.instr
@@ -279,7 +281,7 @@ class QubitExpFactory(object):
                     new_filt.configure_with_proxy(node)
                     new_filt.proxy = node
                     proxy_to_filter[node] = new_filt
-        
+
         # Connect the filters together
         graph_edges = []
         for node1, node2 in self.meas_graph.edges():
@@ -303,7 +305,7 @@ class QubitExpFactory(object):
 
     def save_pipeline(self, name):
         cs = [bbndb.auspex.Connection(pipeline_name=name, node1=n1, node2=n2) for n1, n2 in self.meas_graph.edges()]
-    
+
     def load_pipeline(self, pipeline_name):
         cs = select(c for c in bbndb.auspex.Connection if c.pipeline_name==pipeline_name)
         if len(cs) == 0:
@@ -313,9 +315,9 @@ class QubitExpFactory(object):
             temp_edges = [(c.node1, c.node2) for c in cs]
             self.meas_graph.clear()
             self.meas_graph.add_edges_from(temp_edges)
-    
+
     def show_pipeline(self, pipeline_name=None):
-        """If a pipeline name is specified query the database, otherwise show the 
+        """If a pipeline name is specified query the database, otherwise show the
         current pipeline."""
         if pipeline_name:
             cs = select(c for c in bbndb.auspex.Connection if c.pipeline_name==pipeline_name)
@@ -327,16 +329,16 @@ class QubitExpFactory(object):
             graph.add_edges_from(temp_edges)
         else:
             graph = self.meas_graph
-            
+
         labels = {n: str(n) for n in graph.nodes()}
         colors = ["#3182bd" if isinstance(n, bbndb.auspex.QubitProxy) else "#ff9933" for n in graph.nodes()]
         self.plot_graph(graph, labels, colors=colors)
-    
+
     def reset_pipelines(self):
         for qp in self.qubit_proxies.values():
             qp.clear_pipeline()
             qp.auto_create_pipeline()
-    
+
     def clear_pipelines(self):
         for qp in self.qubit_proxies.values():
             qp.clear_pipeline()
@@ -348,7 +350,7 @@ class QubitExpFactory(object):
         import matplotlib.pyplot as plt
 
         pos = nx.drawing.nx_pydot.graphviz_layout(graph, prog=prog)
-        
+
         # Create position copies for shadows, and shift shadows
         pos_shadow = copy.copy(pos)
         pos_labels = copy.copy(pos)
@@ -359,11 +361,9 @@ class QubitExpFactory(object):
         nx.draw_networkx_nodes(graph, pos, node_size=100, node_color=colors, linewidths=1, alpha=1.0)
         nx.draw_networkx_edges(graph, pos, width=1)
         nx.draw_networkx_labels(graph, pos_labels, labels)
-        
+
         ax = plt.gca()
         ax.axis('off')
         ax.set_xlim((ax.get_xlim()[0]-20.0, ax.get_xlim()[1]+20.0))
         ax.set_ylim((ax.get_ylim()[0]-20.0, ax.get_ylim()[1]+20.0))
         plt.show()
-
-

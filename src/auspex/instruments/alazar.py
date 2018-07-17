@@ -49,16 +49,21 @@ def rec_camelize(dictionary):
     return new
 
 class AlazarChannel(DigitizerChannel):
-    channel = None
+    phys_channel = None
 
-    def __init__(self, settings_dict=None):
-        if settings_dict:
-            self.set_all(settings_dict)
+    def __init__(self, receiver_channel=None):
+        if receiver_channel:
+            self.set_by_receiver(receiver_channel)
 
     def set_all(self, settings_dict):
         for name, value in settings_dict.items():
             if hasattr(self, name):
                 setattr(self, name, value)
+
+    def set_by_receiver(self, receiver):
+        for name in ["phys_channel"]:
+            if hasattr(receiver, name) and getattr(receiver, name):
+                setattr(self, name, getattr(receiver, name))
 
 class AlazarATS9870(Instrument):
     """Alazar ATS9870 digitizer"""
@@ -116,7 +121,7 @@ class AlazarATS9870(Instrument):
             rsock, wsock = socket.socketpair()
         except:
             raise Exception("Could not create read/write socket pair")
-        self._lib.register_socket(channel.channel - 1, wsock)
+        self._lib.register_socket(channel.phys_channel - 1, wsock)
         self._chan_to_rsocket[channel] = rsock
         self._chan_to_wsocket[channel] = wsock
         return rsock
@@ -128,7 +133,7 @@ class AlazarATS9870(Instrument):
         # We can have either 1 or 2, or both.
         if len(self.channels) < 2 and channel not in self.channels:
             self.channels.append(channel)
-            self._chan_to_buf[channel] = channel.channel
+            self._chan_to_buf[channel] = channel.phys_channel
 
     def receive_data(self, channel, oc):
         # push data from a socket into an OutputConnector (oc)
@@ -142,7 +147,7 @@ class AlazarATS9870(Instrument):
         msg_size = struct.unpack('n', msg)[0]
         buf = sock.recv(msg_size, socket.MSG_WAITALL)
         if len(buf) != msg_size:
-            logger.error("Channel %s socket msg shorter than expected" % channel.channel)
+            logger.error("Channel %s socket msg shorter than expected" % channel.phys_channel)
             logger.error("Expected %s bytes, received %s bytes" % (msg_size, len(buf)))
             # assume that we cannot recover, so stop listening.
             loop = asyncio.get_event_loop()
@@ -164,42 +169,29 @@ class AlazarATS9870(Instrument):
 
         logger.debug("Digitizer %s finished getting data.", self.name)
 
-    def set_all(self, settings_dict):
-        # Flatten the dict and then pass to super
-        settings_dict_flat = {}
+    def configure_with_dict(self, settings_dict):
+        config_dict = {
+            'acquireMode': 'digitizer',
+            'bandwidth': "Full" ,
+            'clockType': "int",
+            'delay': 0.0,
+            'enabled': True,
+            'label': 'Alazar',
+            'recordLength': settings_dict['record_length'],
+            'nbrSegments': self.proxy_obj.number_segments,
+            'nbrWaveforms': self.proxy_obj.number_waveforms,
+            'nbrRoundRobins': self.proxy_obj.number_averages,
+            'samplingRate': 500e6,
+            'triggerCoupling': "DC",
+            'triggerLevel': 1000,
+            'triggerSlope': "rising",
+            'triggerSource': "Ext",
+            'verticalCoupling': "DC",
+            'verticalOffset': 0.0,
+            'verticalScale': 1.0
+        }
 
-        def flatten(dictionary):
-            for k, v in dictionary.items():
-                if isinstance(v, dict):
-                    flatten(v)
-                else:
-                    settings_dict_flat[k] = v
-        flatten(rec_camelize(settings_dict))
-
-        allowed_keywords = [
-            'acquireMode',
-            'bandwidth',
-            'clockType',
-            'delay',
-            'enabled',
-            'label',
-            'recordLength',
-            'nbrSegments',
-            'nbrWaveforms',
-            'nbrRoundRobins',
-            'samplingRate',
-            'triggerCoupling',
-            'triggerLevel',
-            'triggerSlope',
-            'triggerSource',
-            'verticalCoupling',
-            'verticalOffset',
-            'verticalScale',
-        ]
-
-        finicky_dict = {k: v for k, v in settings_dict_flat.items() if k in allowed_keywords}
-
-        self._lib.setAll(finicky_dict)
+        self._lib.setAll(config_dict)
         self.number_acquisitions     = self._lib.numberAcquisitions
         self.samples_per_acquisition = self._lib.samplesPerAcquisition
         self.ch1_buffer              = self._lib.ch1Buffer
