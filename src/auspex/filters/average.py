@@ -54,7 +54,7 @@ class Averager(Filter):
 
     sink            = InputConnector()
     partial_average = OutputConnector()
-    final_average   = OutputConnector()
+    source          = OutputConnector()
     final_variance  = OutputConnector()
     axis            = Parameter()
 
@@ -123,7 +123,7 @@ class Averager(Filter):
         self.sum_so_far                 = np.zeros(self.avg_dims, dtype=descriptor.dtype)
         self.current_avg_frame          = np.zeros(self.points_before_final_average, dtype=descriptor.dtype)
         self.partial_average.descriptor = descriptor
-        self.final_average.descriptor   = descriptor
+        self.source.descriptor   = descriptor
 
         # We can update the visited_tuples upfront if none
         # of the sweeps are adaptive...
@@ -136,7 +136,7 @@ class Averager(Filter):
         else:
             descriptor.visited_tuples = np.empty((0), dtype=desc_out_dtype)
 
-        for stream in self.partial_average.output_streams + self.final_average.output_streams:
+        for stream in self.partial_average.output_streams + self.source.output_streams:
             stream.set_descriptor(descriptor)
             stream.end_connector.update_descriptors()
 
@@ -167,12 +167,12 @@ class Averager(Filter):
         self.idx_global         = 0
         # We only need to accumulate up to the averaging axis
         # BUT we may get something longer at any given time!
-        self.carry = np.zeros(0, dtype=self.final_average.descriptor.dtype)
+        self.carry = np.zeros(0, dtype=self.source.descriptor.dtype)
 
     async def process_data(self, data):
 
         if self.passthrough:
-            for os in self.final_average.output_streams:
+            for os in self.source.output_streams:
                 await os.push(data)
             for os in self.final_variance.output_streams:
                 await os.push(data*0.0)
@@ -189,7 +189,7 @@ class Averager(Filter):
 
         if self.carry.size > 0:
             data = np.concatenate((self.carry, data))
-            self.carry = np.zeros(0, dtype=self.final_average.descriptor.dtype)
+            self.carry = np.zeros(0, dtype=self.source.descriptor.dtype)
 
         idx       = 0
         while idx < data.size:
@@ -212,10 +212,10 @@ class Averager(Filter):
 
                 # Add to Visited tuples
                 if self.sink.descriptor.is_adaptive():
-                    for os in self.final_average.output_streams + self.final_variance.output_streams + self.partial_average.output_streams:
+                    for os in self.source.output_streams + self.final_variance.output_streams + self.partial_average.output_streams:
                         os.descriptor.visited_tuples = np.append(os.descriptor.visited_tuples, reduced_tuples)
 
-                for os in self.final_average.output_streams:
+                for os in self.source.output_streams:
                     await os.push(averaged)
 
                 for os in self.final_variance.output_streams:
@@ -249,7 +249,7 @@ class Averager(Filter):
                 # If we now have enoough for the final average, push to both partial and final...
                 if self.completed_averages == self.num_averages:
                     reshaped = self.current_avg_frame.reshape(partial_reshape_dims)
-                    for os in self.final_average.output_streams + self.partial_average.output_streams:
+                    for os in self.source.output_streams + self.partial_average.output_streams:
                         await os.push(reshaped.mean(axis=self.mean_axis))
                     for os in self.final_variance.output_streams:
                         await os.push(np.real(reshaped).var(axis=self.mean_axis, ddof=1)+1j*np.imag(reshaped).var(axis=self.mean_axis, ddof=1)) # N-1 in the denominator

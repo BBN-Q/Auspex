@@ -17,14 +17,14 @@ from auspex.log import logger
 
 class KernelIntegrator(Filter):
 
-    sink   = InputConnector()
-    source = OutputConnector()
-    kernel = Parameter()
-    bias   = FloatParameter(default=0.0)
-    simple_kernel = BoolParameter(default=True)
-    box_car_start = FloatParameter(default=0.0)
-    box_car_stop = FloatParameter(default=100e-9)
-    frequency = FloatParameter(default=0.0)
+    sink            = InputConnector()
+    source          = OutputConnector()
+    kernel          = Parameter()
+    bias            = FloatParameter(default=0.0)
+    simple_kernel   = BoolParameter(default=True)
+    box_car_start   = FloatParameter(default=0.0)
+    box_car_stop    = FloatParameter(default=100e-9)
+    demod_frequency = FloatParameter(default=0.0)
 
     """Integrate with a given kernel. Kernel will be padded/truncated to match record length"""
     def __init__(self, **kwargs):
@@ -38,7 +38,7 @@ class KernelIntegrator(Filter):
             self.pre_int_op = kwargs["pre_integration_operation"]
         if "post_integration_operation" in kwargs:
             self.post_int_op = kwargs["post_integration_operation"]
-        self.quince_parameters = [self.simple_kernel, self.frequency, self.box_car_start, self.box_car_stop]
+        # self.quince_parameters = [self.simple_kernel, self.demod_frequency, self.box_car_start, self.box_car_stop]
 
     def update_descriptors(self):
         if not self.simple_kernel and self.kernel.value is None:
@@ -55,7 +55,7 @@ class KernelIntegrator(Filter):
             sample_stop = int(self.box_car_stop.value / time_step) + 1
             kernel[sample_start:sample_stop] = 1.0
             # add modulation
-            kernel *= np.exp(2j * np.pi * self.frequency.value * time_step * time_pts)
+            kernel *= np.exp(2j * np.pi * self.demod_frequency.value * time_step * time_pts)
         else:
             kernel = eval(self.kernel.value.encode('unicode_escape'))
         # pad or truncate the kernel to match the record length

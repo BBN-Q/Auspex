@@ -41,8 +41,8 @@ except:
 
 
 class Channelizer(Filter):
-    """Digital demodulation and filtering to select a particular frequency multiplexed channel. If 
-    an axis name is supplied to `follow_axis` then the filter will demodulate at the freqency 
+    """Digital demodulation and filtering to select a particular frequency multiplexed channel. If
+    an axis name is supplied to `follow_axis` then the filter will demodulate at the freqency
     `axis_frequency_value - follow_freq_offset` otherwise it will demodulate at `frequency`. Note that
     the filter coefficients are still calculated with respect to the `frequency` paramter, so it should
     be chosen accordingly when `follow_axis` is defined."""
@@ -50,7 +50,7 @@ class Channelizer(Filter):
     sink               = InputConnector()
     source             = OutputConnector()
     follow_axis        = Parameter(default="") # Name of the axis to follow
-    follow_freq_offset = FloatParameter(default=0.0) # Offset 
+    follow_freq_offset = FloatParameter(default=0.0) # Offset
     decimation_factor  = IntParameter(value_range=(1,100), default=4, snap=1)
     frequency          = FloatParameter(value_range=(-10e9,10e9), increment=1.0e6, default=10e6)
     bandwidth          = FloatParameter(value_range=(0.00, 100e6), increment=0.1e6, default=5e6)
