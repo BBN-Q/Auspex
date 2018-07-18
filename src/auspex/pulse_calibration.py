@@ -352,16 +352,19 @@ class RamseyCalibration(PulseCalibration):
         #find qubit control source (from config)
         qubit_source = self.settings['qubits'][self.qubit.label]['control']['generator']
         orig_freq = self.settings['instruments'][qubit_source]['frequency']
-        set_freq = round(orig_freq + self.added_detuning, 10)
         #plot settings
         finer_delays = np.linspace(np.min(self.delays), np.max(self.delays), 4*len(self.delays))
         if self.set_source:
-            self.settings['instruments'][qubit_source]['frequency'] = set_freq
+            self.settings['instruments'][qubit_source]['frequency'] = round(orig_freq + self.added_detuning, 10)
         else:
             self.settings['qubits'][self.qubit.label]['control']['frequency'] += float(self.added_detuning)
+            config.dump_meas_file(self.settings, config.meas_file) # kludge to update qubit frequency
         self.set()
         data, _ = self.run()
-        fit_freqs, fit_errs, all_params, all_errs = fit_ramsey(self.delays, data, two_freqs = self.two_freqs, AIC = self.AIC)
+        try:
+            fit_freqs, fit_errs, all_params, all_errs = fit_ramsey(self.delays, data, two_freqs = self.two_freqs, AIC = self.AIC)
+        except:
+            self.update_settings()
         # Plot the results
         self.plot["Data"] = (self.delays, data)
         ramsey_f = ramsey_2f if len(fit_freqs) == 2 else ramsey_1f #1-freq fit if the 2-freq has failed
@@ -370,15 +373,17 @@ class RamseyCalibration(PulseCalibration):
         #TODO: set conditions for success
         fit_freq_A = np.mean(fit_freqs) #the fit result can be one or two frequencies
         if self.set_source:
-            set_freq = round(orig_freq + self.added_detuning + fit_freq_A/2, 10)
+            self.settings['instruments'][qubit_source]['frequency'] = round(orig_freq + self.added_detuning + fit_freq_A/2, 10)
         else:
             self.settings['qubits'][self.qubit.label]['control']['frequency'] += float(fit_freq_A/2)
+            config.dump_meas_file(self.settings, config.meas_file)
         self.set(exp_step = 1)
-        self.settings['instruments'][qubit_source]['frequency'] = set_freq
         data, _ = self.run()
 
-        fit_freqs, fit_errs, all_params, all_errs = fit_ramsey(self.delays, data, two_freqs = self.two_freqs, AIC = self.AIC)
-
+        try:
+            fit_freqs, fit_errs, all_params, all_errs = fit_ramsey(self.delays, data, two_freqs = self.two_freqs, AIC = self.AIC)
+        except:
+            self.update_settings() # restore settings
         # Plot the results
         self.init_plot()
         self.plot["Data"] = (self.delays, data)
@@ -393,13 +398,13 @@ class RamseyCalibration(PulseCalibration):
         if self.set_source:
             self.saved_settings['instruments'][qubit_source]['frequency'] = float(round(self.fit_freq))
         else:
-            self.saved_settings['qubits'][self.qubit_names[0]]['control']['frequency'] += float(round(self.fit_freq - orig_freq))
+            self.saved_settings['qubits'][self.qubit.label]['control']['frequency'] += float(round(self.fit_freq - orig_freq))
             # update edges where this is the target qubit
             for predecessor in ChannelLibraries.channelLib.connectivityG.predecessors(self.qubit):
                 edge = ChannelLibraries.channelLib.connectivityG[predecessor][self.qubit]['channel']
                 edge_source = self.saved_settings['edges'][edge.label]['generator']
                 self.saved_settings['edges'][edge.label]['frequency'] = self.saved_settings['qubits'][self.qubit_names[0]]['control']['frequency'] + (self.saved_settings['instruments'][qubit_source]['frequency'] - self.saved_settings['instruments'][edge_source]['frequency'])
-        qubit_set_freq = self.saved_settings['instruments'][qubit_source]['frequency'] + self.saved_settings['qubits'][self.qubit_names[0]]['control']['frequency']
+        qubit_set_freq = self.saved_settings['instruments'][qubit_source]['frequency'] + self.saved_settings['qubits'][self.qubit.label]['control']['frequency']
         logger.info("Qubit set frequency = {} GHz".format(round(float(qubit_set_freq/1e9),5)))
         return ('frequency', qubit_set_freq)
 
