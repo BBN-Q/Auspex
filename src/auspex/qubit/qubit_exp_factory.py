@@ -249,6 +249,10 @@ class QubitExpFactory(object):
             if hasattr(exp, "segment_axis"):
                 descriptor.add_axis(exp.segment_axis)
 
+            # Add averaging if necessary
+            if averages > 1:
+                descriptor.add_axis(DataAxis("averages", range(averages)))
+
             # Add the output connectors to the experiment and set their base descriptor
             mqp = self.qubit_proxies[mq]
 
