@@ -91,6 +91,10 @@ class QubitExpFactory(object):
             'AgilentN5183A': auspex.instruments.AgilentN5183A
         }
 
+        # Dirty trick: push the correct entity defs to the calling context
+        for var in ["Demodulate","Average","Integrate","Display","Write"]:
+            inspect.stack()[1][0].f_globals[var] = getattr(bbndb.auspex, var)
+
     def create_default_pipeline(self, qubits=None):
         """Look at the QGL channel library and create our pipeline from the current
         qubits."""
