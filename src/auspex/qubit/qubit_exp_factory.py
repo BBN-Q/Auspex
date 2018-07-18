@@ -323,6 +323,8 @@ class QubitExpFactory(object):
             temp_edges = [(c.node1, c.node2) for c in cs]
             self.meas_graph.clear()
             self.meas_graph.add_edges_from(temp_edges)
+            for c in cs:
+                c.node1.exp = c.node2.exp = self
 
     def show_pipeline(self, pipeline_name=None):
         """If a pipeline name is specified query the database, otherwise show the
@@ -369,7 +371,7 @@ class QubitExpFactory(object):
         nx.draw_networkx_nodes(graph, pos, node_size=100, node_color=colors, linewidths=1, alpha=1.0)
         nx.draw_networkx_edges(graph, pos, width=1)
         nx.draw_networkx_labels(graph, pos_labels, labels, font_size=10, bbox=dict(facecolor='white', alpha=0.95), horizontalalignment="center")
-        
+
         ax = plt.gca()
         ax.axis('off')
         ax.set_xlim((ax.get_xlim()[0]-20.0, ax.get_xlim()[1]+20.0))

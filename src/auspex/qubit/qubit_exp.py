@@ -2,12 +2,13 @@ from auspex.log import logger
 from auspex.experiment import Experiment, FloatParameter
 from auspex.stream import DataStream, DataAxis, SweepAxis, DataStreamDescriptor, InputConnector, OutputConnector
 import bbndb
-
+import sys
 import asyncio
+import time
 
 class QubitExperiment(Experiment):
     """Experiment with a specialized run method for qubit experiments run via the QubitExpFactory."""
-    
+
     def add_connector(self, qubit):
         logger.debug(f"Adding {qubit.qubit_name} output connector to experiment.")
         oc = OutputConnector(name=qubit.qubit_name, parent=self)
@@ -18,15 +19,17 @@ class QubitExperiment(Experiment):
     def init_instruments(self):
         for name, instr in self._instruments.items():
             # Configure with dictionary from the instrument proxy
-            instr.configure_with_dict(instr.proxy_obj.to_dict())
-            logger.debug(f"Configuring {instr} with {instr.proxy_obj.to_dict()}")
+            if hasattr(instr, "configure_with_proxy"):
+                instr.configure_with_proxy(instr.proxy_obj)
+            else:
+                instr.configure_with_dict(instr.proxy_obj.to_dict())
 
         self.digitizers = [v for _, v in self._instruments.items() if "Digitizer" in v.instrument_type]
         self.awgs       = [v for _, v in self._instruments.items() if "AWG" in v.instrument_type]
 
         # Swap the master AWG so it is last in the list
         try:
-            master_awg_idx = next(ct for ct,awg in enumerate(self.awgs) if 'master' in self.settings['instruments'][awg.name] and self.settings['instruments'][awg.name]['master'])
+            master_awg_idx = next(ct for ct,awg in enumerate(self.awgs) if awg.master)
             self.awgs[-1], self.awgs[master_awg_idx] = self.awgs[master_awg_idx], self.awgs[-1]
         except:
             logger.warning("No AWG is specified as the master.")
@@ -43,10 +46,10 @@ class QubitExperiment(Experiment):
 
     def add_instrument_sweep(self, instrument, attribute, values):
         pass
-   
+
     def add_qubit_sweep(self, qubit, measure_or_control, attribute, values):
         """
-        Add a *ParameterSweep* to the experiment. Users specify a qubit property that auspex 
+        Add a *ParameterSweep* to the experiment. Users specify a qubit property that auspex
         will try to link back to the relevant instrument. For example::
             exp = QubitExpFactory.create(PulsedSpec(q1))
             exp.add_qubit_sweep(q1, "measure", "frequency", np.linspace(6e9, 6.5e9, 500))
