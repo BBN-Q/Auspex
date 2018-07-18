@@ -175,7 +175,7 @@ class APS(Instrument, metaclass=MakeSettersGetters):
       address:                 # APS serial number
       trigger_interval: 0.0    # (s)
       trigger_source: External # Internal or External
-      seq_file: test.h5        # optional sequence file
+      sequence_file: test.h5        # optional sequence file
       tx_channels:             # All transmit channels
         '12':                  # Quadrature channel name (string)
           phase_skew: 0.0      # (deg) - Used by QGL
@@ -292,7 +292,7 @@ class APS(Instrument, metaclass=MakeSettersGetters):
         super(APS, self).set_all(settings)
 
         # Mandatory arguments
-        for key in ['address', 'seq_file', 'trigger_interval', 'trigger_source', 'master']:
+        for key in ['address', 'sequence_file', 'trigger_interval', 'trigger_source', 'master']:
             if key not in settings.keys():
                 raise ValueError("Instrument {} configuration lacks mandatory key {}".format(self, key))
 
@@ -380,10 +380,10 @@ class APS(Instrument, metaclass=MakeSettersGetters):
         self.wrapper.trigger_interval = value
 
     @property
-    def seq_file(self):
+    def sequence_file(self):
         return self._sequence_filename
-    @seq_file.setter
-    def seq_file(self, filename):
+    @sequence_file.setter
+    def sequence_file(self, filename):
         self.wrapper.load_config(filename)
         self._sequence_filename = filename
 
@@ -398,40 +398,6 @@ class APS(Instrument, metaclass=MakeSettersGetters):
 class APS2(Instrument, metaclass=MakeSettersGetters):
     """BBN APS2"""
     instrument_type = "AWG"
-
-    yaml_template = """
-        APS2-Name:
-          type: APS2               # Used by QGL and Auspex. QGL assumes XXXPattern for the pattern generator
-          enabled: true            # true or false, optional
-          master: true             # true or false
-          slave_trig:              # name of marker below, optional, i.e. 12m4. Used by QGL.
-          address:                 # IP address or hostname should be fine
-          trigger_interval: 0.0    # (s)
-          trigger_source: External # Internal, External, Software, or System
-          seq_file: test.h5        # optional sequence file
-          tx_channels:             # All transmit channels
-            '12':                  # Quadrature channel name (string)
-              phase_skew: 0.0      # (deg) - Used by QGL
-              amp_factor: 1.0      # Used by QGL
-              delay: 0.0           # (s) - Used by QGL
-              '1':
-                enabled: true
-                offset: 0.0
-                amplitude: 1.0
-              '2':
-                enabled: true
-                offset: 0.0
-                amplitude: 1.0
-          markers:
-            12m1:
-              delay: 0.0         # (s)
-            12m2:
-              delay: 0.0
-            12m3:
-              delay: 0.0
-            12m4:
-              delay: 0.0
-    """
 
     def __init__(self, resource_name=None, name="Unlabeled APS2"):
         self.name = name
@@ -495,33 +461,41 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
             self.wrapper.set_channel_offset(int(chs[0])-1, value)
             self.wrapper.set_channel_offset(int(chs[1])-1, value)
 
-    def set_all(self, settings_dict, prefix=""):
-        # Pop the channel settings
-        settings = deepcopy(settings_dict)
-        quad_channels = settings.pop('tx_channels')
-        # Call the non-channel commands
-        super(APS2, self).set_all(settings)
-
-        # Mandatory arguments
-        for key in ['address', 'seq_file', 'trigger_interval', 'trigger_source', 'master']:
-            if key not in settings.keys():
-                raise ValueError("Instrument {} configuration lacks mandatory key {}".format(self, key))
-
-        # We expect a dictionary of channel names and their properties
-        main_quad_dict = quad_channels.pop('12', None)
-        if not main_quad_dict:
-            raise ValueError("APS2 {} expected to receive quad channel '12'".format(self))
-
-        # Set the properties of individual hardware channels (offset, amplitude)
-        for chan_num, chan_name in enumerate(['1', '2']):
-            chan_dict = main_quad_dict.pop(chan_name, None)
-            if not chan_dict:
-                raise ValueError("Could not find channel {} in quadrature channel 12 in settings for {}".format(chan_name, self))
-            for chan_attr, value in chan_dict.items():
-                try:
-                    getattr(self, 'set_' + chan_attr)(chan_num, value)
-                except AttributeError:
-                    pass
+    def configure_with_proxy(self, proxy_obj):
+        super(APS2, self).configure_with_dict(proxy_obj.to_dict())
+        self.set_offset(0, proxy_obj["12"].I_channel_offset)
+        self.set_offset(1, proxy_obj["12"].Q_channel_offset)
+        self.set_amplitude(0, proxy_obj["12"].I_channel_amp_factor)
+        self.set_amplitude(1, proxy_obj["12"].Q_channel_amp_factor)
+    #
+    # def configure_with_dict(self, settings_dict):
+    #     print(settings_dict)
+    #     # Pop the channel settings
+    #     settings = deepcopy(settings_dict)
+    #     quad_channels = settings.pop('tx_channels')
+    #     # Call the non-channel commands
+    #     super(APS2, self).set_all(settings)
+    #
+    #     # Mandatory arguments
+    #     for key in ['address', 'seq_file', 'trigger_interval', 'trigger_source', 'master']:
+    #         if key not in settings.keys():
+    #             raise ValueError("Instrument {} configuration lacks mandatory key {}".format(self, key))
+    #
+    #     # We expect a dictionary of channel names and their properties
+    #     main_quad_dict = quad_channels.pop('12', None)
+    #     if not main_quad_dict:
+    #         raise ValueError("APS2 {} expected to receive quad channel '12'".format(self))
+    #
+    #     # Set the properties of individual hardware channels (offset, amplitude)
+    #     for chan_num, chan_name in enumerate(['1', '2']):
+    #         chan_dict = main_quad_dict.pop(chan_name, None)
+    #         if not chan_dict:
+    #             raise ValueError("Could not find channel {} in quadrature channel 12 in settings for {}".format(chan_name, self))
+    #         for chan_attr, value in chan_dict.items():
+    #             try:
+    #                 getattr(self, 'set_' + chan_attr)(chan_num, value)
+    #             except AttributeError:
+    #                 pass
 
     def load_waveform(self, channel, data):
         if channel not in (1, 2):
@@ -571,10 +545,10 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
             self._mode = mode
 
     @property
-    def seq_file(self):
+    def sequence_file(self):
         return self._sequence_filename
-    @seq_file.setter
-    def seq_file(self, filename):
+    @sequence_file.setter
+    def sequence_file(self, filename):
         self.wrapper.load_sequence_file(filename)
         self._sequence_filename = filename
 
@@ -617,7 +591,7 @@ class TDM(APS2):
           address:                 # IP address or hostname should be fine
           trigger_interval: 0.0    # (s)
           trigger_source: Internal # Internal, Software, or System
-          seq_file: test.h5        # optional sequence file"""
+          sequence_file: test.h5        # optional sequence file"""
 
     def set_all(self, settings_dict):
         super(APS2, self).set_all(settings_dict)

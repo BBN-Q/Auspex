@@ -196,7 +196,7 @@ class Instrument(metaclass=MetaInstrument):
             try:
                 setattr(self, name, value)
             except (AttributeError, TypeError) as e:
-                logger.debug("Instrument {} property: {} could not be set to {}.".format(self.name,name,value))
+                logger.info("Instrument {} property: {} could not be set to {}.".format(self.name,name,value))
                 pass
 
 class CLibInstrument(Instrument): pass

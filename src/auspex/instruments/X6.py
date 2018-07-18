@@ -147,7 +147,7 @@ class X6(Instrument):
                 self.ideal_data = np.load(os.path.abspath(self.ideal_data+'.npy'))
             except:
                 raise ValueError(f"Could not load ideal X6 data in {self}")
-        
+
         # Take these directly from the proxy obj
         self.number_averages  = self.proxy_obj.number_averages
         self.number_waveforms = self.proxy_obj.number_waveforms

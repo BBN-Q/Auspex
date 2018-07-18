@@ -33,21 +33,6 @@ else:
         # logger.warning("Could not load alazar library")
         fake_alazar = True
 
-# Convert from pep8 back to camelCase labels
-# http://stackoverflow.com/questions/1175208/elegant-python-function-to-convert-camelcase-to-snake-case
-def camelize(word):
-    word = ''.join(x.capitalize() or '_' for x in word.split('_'))
-    return word[0].lower() + word[1:]
-
-# Recursively re-label dictionary
-def rec_camelize(dictionary):
-    new = {}
-    for k, v in dictionary.items():
-        if isinstance(v, dict):
-            v = rec_camelize(v)
-        new[camelize(k)] = v
-    return new
-
 class AlazarChannel(DigitizerChannel):
     phys_channel = None
 
@@ -61,9 +46,7 @@ class AlazarChannel(DigitizerChannel):
                 setattr(self, name, value)
 
     def set_by_receiver(self, receiver):
-        for name in ["phys_channel"]:
-            if hasattr(receiver, name) and getattr(receiver, name):
-                setattr(self, name, getattr(receiver, name))
+        self.phys_channel = receiver.channel
 
 class AlazarATS9870(Instrument):
     """Alazar ATS9870 digitizer"""
@@ -183,7 +166,7 @@ class AlazarATS9870(Instrument):
             'nbrRoundRobins': self.proxy_obj.number_averages,
             'samplingRate': 500e6,
             'triggerCoupling': "DC",
-            'triggerLevel': 1000,
+            'triggerLevel': 100,
             'triggerSlope': "rising",
             'triggerSource': "Ext",
             'verticalCoupling': "DC",
