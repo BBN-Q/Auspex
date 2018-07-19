@@ -7,7 +7,7 @@
 #    http://www.apache.org/licenses/LICENSE-2.0
 
 import unittest
-import asyncio
+
 import os
 import numpy as np
 import h5py

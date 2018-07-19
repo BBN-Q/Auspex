@@ -13,11 +13,19 @@ import importlib
 import pkgutil
 import inspect
 import re
-import asyncio
+
 import base64
 import datetime
 import subprocess
 import copy
+
+if sys.platform == 'win32' or 'NOFORKING' in os.environ:
+    from threading import Thread as Process
+    from threading import Event
+else:
+    from multiprocessing import Process
+    from multiprocessing import Event
+
 from pony.orm import *
 
 import numpy as np

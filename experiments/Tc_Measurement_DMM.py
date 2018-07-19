@@ -16,7 +16,7 @@ from auspex.filters.plot import XYPlotter, Plotter
 from auspex.filters.average import Averager
 from auspex.analysis.io import load_from_HDF5
 
-import asyncio
+
 import numpy as np
 import matplotlib.pyplot as plt
 import time
@@ -116,17 +116,17 @@ class Cooldown(Experiment):
 		self.index.assign_method(int)
 
 
-	async def run(self):
+	def run(self):
 
 		self.mux.scan()
 
 		# Everything needs len(chan_list) copies since sheet_res is read in len(chan_list) at a time. This preserves the dimensionality of the data
-		await self.temp_A.push([self.lakeshore.Temp("A")]*len(CHAN_LIST))
-		await self.temp_B.push([self.lakeshore.Temp("B")]*len(CHAN_LIST))
-		await self.sys_time.push([time.time()]*len(CHAN_LIST))
+		self.temp_A.push([self.lakeshore.Temp("A")]*len(CHAN_LIST))
+		self.temp_B.push([self.lakeshore.Temp("B")]*len(CHAN_LIST))
+		self.sys_time.push([time.time()]*len(CHAN_LIST))
 
-		await asyncio.sleep(4*len(CHAN_LIST)*PLC/60)
-		await self.sheet_res.push(self.mux.read())
+		time.sleep(4*len(CHAN_LIST)*PLC/60)
+		self.sheet_res.push(self.mux.read())
 
 # Experimental Topology
 # Sweep Temperature with refinement function
@@ -198,20 +198,20 @@ class TcMeas(Experiment):
 		time.sleep(self.T_delta)
 		print("Temperature Stablized at {} K".format(self.lakeshore.Temp("B")))
 
-	async def run(self):
+	def run(self):
 
 		self.mux.scan()
 
 		print("Measuring ...")
 
 		# Everything needs len(chan_list) copies since sheet_res is read in len(chan_list) at a time. This preserves the dimensionality of the data
-		await self.temp_meas.push([self.lakeshore.Temp("B")]*len(CHAN_LIST))
+		self.temp_meas.push([self.lakeshore.Temp("B")]*len(CHAN_LIST))
 
 		# Wait for the expected integration time and read. OPC hangs while measuring we have to do it this way.
 		# For some reason integration seems to take 2x what I expect, could use investigation
-		await asyncio.sleep(4*len(CHAN_LIST)*PLC/60)
+		time.sleep(4*len(CHAN_LIST)*PLC/60)
 
-		await self.sheet_res.push(self.mux.read())
+		self.sheet_res.push(self.mux.read())
 
 	def shutdown_instruments(self):
 

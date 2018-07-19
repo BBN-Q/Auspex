@@ -44,7 +44,7 @@ class KernelIntegrator(Filter):
         if not self.simple_kernel and self.kernel.value is None:
             raise ValueError("Integrator was passed kernel None")
 
-        logger.debug('Updating KernelIntegrator "%s" descriptors based on input descriptor: %s.', self.name, self.sink.descriptor)
+        logger.debug('Updating KernelIntegrator "%s" descriptors based on input descriptor: %s.', self.filter_name, self.sink.descriptor)
 
         record_length = self.sink.descriptor.axes[-1].num_points()
         if self.simple_kernel.value:
@@ -75,7 +75,7 @@ class KernelIntegrator(Filter):
             os.set_descriptor(output_descriptor)
             os.end_connector.update_descriptors()
 
-    async def process_data(self, data):
+    def process_data(self, data):
 
         # TODO: handle variable partial records
         if self.pre_int_op:
@@ -85,4 +85,4 @@ class KernelIntegrator(Filter):
             filtered = self.post_int_op(filtered)
         # push to ouptut connectors
         for os in self.source.output_streams:
-            await os.push(filtered)
+            os.push(filtered)

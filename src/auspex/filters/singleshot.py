@@ -52,7 +52,7 @@ class SingleShotMeasurement(Filter):
 
     def update_descriptors(self):
 
-        logger.debug("Updating Plotter %s descriptors based on input descriptor %s", self.name, self.sink.descriptor)
+        logger.debug("Updating Plotter %s descriptors based on input descriptor %s", self.filter_name, self.sink.descriptor)
         self.stream = self.sink.input_streams[0]
         self.descriptor = self.sink.descriptor
         try:
@@ -76,7 +76,7 @@ class SingleShotMeasurement(Filter):
     def final_init(self):
         self.counter = 1
 
-    async def process_data(self, data):
+    def process_data(self, data):
         """Fill the ground and excited data bins"""
         if self.counter % 2 != 0:
             N = (self.counter + 1) // 2 - 1
@@ -93,7 +93,7 @@ class SingleShotMeasurement(Filter):
             if self.save_kernel.value:
                 self._save_kernel()
             for os in self.fidelity.output_streams:
-                await os.push(self.fidelity_result)
+                os.push(self.fidelity_result)
 
     def compute_filter(self):
         """Compute the single shot kernel and obtain single-shot measurement

@@ -19,7 +19,7 @@ from auspex.filters import WriteToHDF5, ProgressBar
 
 from PyDAQmx import *
 
-import asyncio
+
 import numpy as np
 import time
 import matplotlib.pyplot as plt
@@ -167,16 +167,16 @@ class SwitchSearchExperiment(Experiment):
         descrip.add_axis(DataAxis("attempts", range(self.attempts)))
         self.voltage.set_descriptor(descrip)
 
-    async def run(self):
+    def run(self):
         self.arb.advance()
         self.arb.trigger()
         buf = np.empty(self.buf_points)
         self.analog_input.ReadAnalogF64(self.buf_points, -1, DAQmx_Val_GroupByChannel,
                                         buf, self.buf_points, byref(self.read), None)
         logger.debug("Read a buffer of {} points".format(buf.size))
-        await self.voltage.push(buf)
+        self.voltage.push(buf)
         # Seemingly we need to give the filters some time to catch up here...
-        await asyncio.sleep(0.02)
+        time.sleep(0.02)
         logger.debug("Stream has filled {} of {} points".format(self.voltage.points_taken, self.voltage.num_points()))
 
     def shutdown_instruments(self):

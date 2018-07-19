@@ -14,7 +14,7 @@ from auspex.filters import WriteToHDF5, Plotter
 from auspex.log import logger
 
 import numpy as np
-import asyncio
+
 import time
 import datetime
 
@@ -52,19 +52,19 @@ class IcLockinExperiment(Experiment):
 		time.sleep(self.lock.measure_delay())
 
 
-	async def run(self):
+	def run(self):
 		"""This is run for each step in a sweep."""
 
-		await asyncio.sleep(self.delay)
+		time.sleep(self.delay)
 		R_load = self.lock.mag/(self.sense - self.lock.mag)*self.R_ref
-		await self.resistance.push(R_load)
-		await self.current.push(self.lock.dc/(self.R_ref+R_load))
-		await self.voltage.push(self.lock.dc*R_load/(self.R_ref+R_load))
+		self.resistance.push(R_load)
+		self.current.push(self.lock.dc/(self.R_ref+R_load))
+		self.voltage.push(self.lock.dc*R_load/(self.R_ref+R_load))
 
 		logger.debug("Stream has filled {} of {} points".format(self.resistance.points_taken,
 																self.resistance.num_points() ))
 
-		#await asyncio.sleep(2*self.integration_time) # Give the filters some time to catch up?
+		#time.sleep(2*self.integration_time) # Give the filters some time to catch up?
 
 	def shutdown_instruments(self):
 		self.lock.dc = 0

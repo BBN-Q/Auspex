@@ -30,7 +30,7 @@ from auspex.log import logger
 import auspex.analysis.switching as sw
 from adapt import refine
 
-import asyncio
+
 import itertools
 import numpy as np
 import time
@@ -192,16 +192,16 @@ class SwitchingExperiment(Experiment):
         # Create hooks for relevant delays
         self.pulse_duration.add_post_push_hook(lambda: time.sleep(0.1))
 
-    async def run(self):
+    def run(self):
         """This is run for each step in a sweep."""
         self.arb.advance()
         self.arb.trigger()
         buf = np.empty(self.buf_points)
         self.analog_input.ReadAnalogF64(self.buf_points, -1, DAQmx_Val_GroupByChannel,
                                         buf, self.buf_points, byref(self.read), None)
-        await self.voltage.push(buf)
+        self.voltage.push(buf)
         # Seemingly we need to give the filters some time to catch up here...
-        await asyncio.sleep(0.02)
+        time.sleep(0.02)
         logger.debug("Stream has filled {} of {} points".format(self.voltage.points_taken, self.voltage.num_points() ))
 
     def shutdown_instruments(self):

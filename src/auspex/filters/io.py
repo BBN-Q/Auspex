@@ -6,13 +6,23 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-__all__ = ['WriteToHDF5', 'DataBuffer', 'ProgressBar']
+__all__ = ['WriteToHDF5', 'H5Handler', 'DataBuffer', 'ProgressBar']
 
-import asyncio, concurrent
+import os
+import sys
+
+if sys.platform == 'win32' or 'NOFORKING' in os.environ:
+    import threading as mp
+    from threading import Thread as Process
+    from queue import Queue
+else:
+    import multiprocessing as mp
+    from multiprocessing import Process
+    from multiprocessing import Queue
+
 import itertools
 import h5py
-import pickle
-import zlib
+import queue
 import numpy as np
 import os.path
 import time
@@ -27,6 +37,43 @@ from auspex.log import logger
 import auspex.config as config
 
 from tqdm import tqdm, tqdm_notebook
+
+class H5Handler(Process):
+    def __init__(self, filename, queue, return_queue):
+        super(H5Handler, self).__init__()
+        self.queue = queue
+        self.return_queue = return_queue
+        self.exit = mp.Event()
+        self.filename = filename
+
+    def shutdown(self):
+        self.exit.set()
+
+    def process_queue_item(self, args, file):
+        if args[0] == "write":
+            file[args[1]][args[2]:args[3]] = args[4]
+        elif args[0] == "resize":
+            file[args[1]].resize(args[2])
+        elif args[0] == "resize_to":
+            if args[2] > len(file[args[1]]):
+                file[args[1]].resize((args[2],))
+        elif args[0] == "set_attr":
+            file[args[1]].attrs[args[2]] = args[3]
+        elif args[0] == "get_data":
+            self.return_queue.put((args[1], file[args[1]][:]))
+        elif args[0] == "flush":
+            file.flush()
+        elif args[0] == "create_group":
+            file.create_group(args[1])
+
+    def run(self):
+        with h5py.File(self.filename, "r+", libver="latest") as file:
+            while not self.exit.is_set():
+                try:
+                    call = self.queue.get(True, 0.01)
+                except queue.Empty as e:
+                    continue
+                self.process_queue_item(call, file)
 
 class WriteToHDF5(Filter):
     """Writes data to file."""
@@ -47,8 +94,13 @@ class WriteToHDF5(Filter):
         self.points_taken = 0
         self.file = None
         self.group = None
+        self.queue = None # For putting values in files
+        self.ret_queue = None # For returning values to files
+
+        self.data_write_paths  = {}
+        self.tuple_write_paths = {}
+
         self.store_tuples = store_tuples
-        self.create_group = True
         self.up_to_date = False
         self.sink.max_input_streams = 100
         self.add_date.value = add_date
@@ -57,13 +109,150 @@ class WriteToHDF5(Filter):
         self.quince_parameters = [self.filename, self.groupname, self.add_date, self.save_settings]
 
     def final_init(self):
-        if not self.filename.value:
-            raise Exception("Filename never supplied to writer.")
+        if not self.filename.value and not self.file:
+            raise Exception("File object or filename never supplied to writer.")
         # If self.file is still None, then we need to create
         # the file object. Otherwise, we presume someone has
         # already set it up for us.
         if not self.file:
             self.file = self.new_file()
+
+        streams = self.sink.input_streams
+        stream  = streams[0]
+
+        for s in streams[1:]:
+            if not np.all(s.descriptor.expected_tuples() == streams[0].descriptor.expected_tuples()):
+                raise ValueError("Multiple streams connected to writer must have matching descriptors.")
+
+        desc       = stream.descriptor
+        axes       = desc.axes
+        params     = desc.params
+        self.axis_names = desc.axis_names(with_metadata=True)
+
+        self.file.attrs['exp_src'] = desc._exp_src
+        num_axes = len(axes)
+
+        if desc.is_adaptive() and not self.store_tuples:
+            raise Exception("Cannot omit writing tuples with an adaptive sweep... please enabled store_tuples.")
+
+        if self.store_tuples:
+            # All of the combinations for the present values of the sweep parameters only
+            tuples = desc.expected_tuples(with_metadata=True, as_structured_array=True)
+        expected_length = desc.expected_num_points()
+
+        compression = 'gzip' if self.compress else None
+
+        # If desired, create the group in which the dataset and axes will reside
+        
+        self.group = self.file.create_group(self.groupname.value)
+        self.data_group = self.group.create_group("data")
+
+        # If desired, push experimental metadata into the h5 file
+        if self.save_settings.value and 'header' not in self.file.keys(): # only save header once for multiple writers
+            self.save_yaml_h5()
+
+        # Create datasets for each stream
+        for stream in streams:
+            dset = self.data_group.create_dataset(stream.descriptor.data_name, (expected_length,),
+                                        dtype=stream.descriptor.dtype,
+                                        chunks=True, maxshape=(None,),
+                                        compression=compression)
+            dset.attrs['is_data'] = True
+            dset.attrs['store_tuples'] = self.store_tuples
+            dset.attrs['name'] = stream.descriptor.data_name
+            self.data_write_paths[stream] = "/{}/data/{}".format(self.groupname.value, stream.descriptor.data_name)
+
+        # Write params into attrs
+        for k,v in params.items():
+            if k not in self.axis_names:
+                self.data_group.attrs[k] = v
+
+        # Create a table for the DataStreamDescriptor
+        ref_dtype = h5py.special_dtype(ref=h5py.Reference)
+        self.descriptor = self.group.create_dataset("descriptor", (len(axes),), dtype=ref_dtype)
+        for k,v in desc.metadata.items():
+            self.descriptor.attrs[k] = v
+
+        # Create axis data sets for storing the base axes as well as the
+        # full set of tuples. For the former we add
+        # references to the descriptor.
+        self.tuple_write_paths = {}
+        for i, a in enumerate(axes):
+            if a.unstructured:
+                name = "+".join(a.name)
+            else:
+                name = a.name
+
+            if a.unstructured:
+                # Create another reference table to refer to the constituent axes
+                unstruc_ref_dset = self.group.create_dataset(name, (len(a.name),), dtype=ref_dtype)
+                unstruc_ref_dset.attrs['unstructured'] = True
+
+                for j, (col_name, col_unit) in enumerate(zip(a.name, a.unit)):
+                    # Create table to store the axis value independently for each column
+                    unstruc_dset = self.group.create_dataset(col_name, (a.num_points(),), dtype=a.dtype)
+                    unstruc_ref_dset[j] = unstruc_dset.ref
+                    unstruc_dset[:] = a.points[:,j]
+                    unstruc_dset.attrs['unit'] = col_unit
+                    unstruc_dset.attrs['name'] = col_name
+
+                    # This stores the values taking during the experiment sweeps
+                    if self.store_tuples:
+                        dset = self.data_group.create_dataset(col_name, (expected_length,), dtype=a.dtype,
+                                                             chunks=True, compression=compression, maxshape=(None,) )
+                        dset.attrs['unit'] = col_unit
+                        dset.attrs['is_data'] = False
+                        dset.attrs['name'] = col_name
+                        self.tuple_write_paths[col_name] = "/{}/data/{}".format(self.groupname.value, col_name)
+
+                self.descriptor[i] = self.group[name].ref
+            else:
+                # This stores the axis values
+                self.group.create_dataset(name, (a.num_points(),), dtype=a.dtype, maxshape=(None,) )
+                self.group[name].attrs['unstructured'] = False
+                self.group[name][:] = a.points
+                self.group[name].attrs['unit'] = "None" if a.unit is None else a.unit
+                self.group[name].attrs['name'] = a.name
+                self.descriptor[i] = self.group[name].ref
+
+                # This stores the values taking during the experiment sweeps
+                if self.store_tuples:
+                    dset = self.data_group.create_dataset(name, (expected_length,), dtype=a.dtype,
+                                                          chunks=True, compression=compression, maxshape=(None,) )
+                    dset.attrs['unit'] = "None" if a.unit is None else a.unit
+                    dset.attrs['is_data'] = False
+                    dset.attrs['name'] = name
+                    self.tuple_write_paths[name] = "/{}/data/{}".format(self.groupname.value, name)
+
+            # Give the reader some warning about the usefulness of these axes
+            self.group[name].attrs['was_refined'] = False
+
+            if a.metadata is not None:
+                # Create the axis table for the metadata
+                dset = self.group.create_dataset(name + "_metadata", (a.metadata.size,), dtype=np.uint8, maxshape=(None,) )
+                dset[:] = a.metadata
+                dset = self.group.create_dataset(name + "_metadata_enum", (a.metadata_enum.size,), dtype='S128', maxshape=(None,) )
+                dset[:] = np.asarray(a.metadata_enum, dtype='S128')
+
+                # Associate the metadata with the data axis
+                self.group[name].attrs['metadata'] = self.group[name + "_metadata"].ref
+                self.group[name].attrs['metadata_enum'] = self.group[name + "_metadata_enum"].ref
+                self.group[name].attrs['name'] = name + "_metadata"
+
+                # Create the dataset that stores the individual tuple values
+                if self.store_tuples:
+                    dset = self.data_group.create_dataset(name + "_metadata" , (expected_length,),
+                                                          dtype=np.uint8, maxshape=(None,) )
+                    dset.attrs['name'] = name + "_metadata"
+                    self.tuple_write_paths[name + "_metadata"] = "/{}/data/{}".format(self.groupname.value, name + "_metadata")
+
+
+        # Write all the tuples if this isn't adaptive
+        if self.store_tuples:
+            if not desc.is_adaptive():
+                for i, a in enumerate(self.axis_names):
+                    # import pdb; pdb.set_trace()
+                    self.file[self.tuple_write_paths[a]][:] = tuples[a]
 
     def new_filename(self):
         filename = self.filename.value
@@ -81,10 +270,14 @@ class WriteToHDF5(Filter):
 
         # Set the file number to the maximum in the current folder + 1
         filenums = []
+        # import pdb; pdb.set_trace()
         if os.path.exists(dirname):
             for f in os.listdir(dirname):
-                if ext in f:
-                    filenums += [int(re.findall('-(\d{4})\.', f)[0])] if os.path.isfile(os.path.join(dirname, f)) else []
+                if ext in f and os.path.isfile(os.path.join(dirname, f)):
+                    nums = re.findall('-(\d{4})\.', f)
+                    if len(nums) > 0:
+                        filenums.append(int(nums[0]))
+                    # filenums += [int(re.findall('-(\d{4})\.', f)[0])] if os.path.isfile(os.path.join(dirname, f)) else []
 
         i = max(filenums) + 1 if filenums else 0
         return "{}-{:04d}{}".format(basename,i,ext)
@@ -126,6 +319,7 @@ class WriteToHDF5(Filter):
             lf = lf.append(pd.DataFrame([[self.filename.value, time.strftime("%y%m%d"), time.strftime("%H:%M:%S")]],columns=["Filename", "Date", "Time"]),ignore_index=True)
             lf.to_csv(logfile, sep = "\t", index = False)
 
+    # TODO: update for multiprocessing
     def save_yaml(self):
         """ Save a copy of current experiment settings """
         if config.meas_file:
@@ -135,6 +329,7 @@ class WriteToHDF5(Filter):
                 os.makedirs(fulldir)
                 config.dump_meas_file(config.load_meas_file(config.meas_file), os.path.join(fulldir, os.path.split(config.meas_file)[1]), flatten = True)
 
+    # TODO: update for multiprocessing
     def save_yaml_h5(self):
         """ Save a copy of current experiment settings in the h5 metadata"""
         if config.meas_file:
@@ -142,239 +337,87 @@ class WriteToHDF5(Filter):
             # load them dump to get the 'include' information
             header.attrs['settings'] = config.dump_meas_file(config.load_meas_file(config.meas_file), flatten = True)
 
-    async def run(self):
-        self.finished_processing = False
-        streams    = self.sink.input_streams
-        stream     = streams[0]
+    def main(self):
+        self.finished_processing.clear()
 
-        for s in streams[1:]:
-            if not np.all(s.descriptor.expected_tuples() == streams[0].descriptor.expected_tuples()):
-                raise ValueError("Multiple streams connected to writer must have matching descriptors.")
-
-        desc       = stream.descriptor
-        axes       = desc.axes
-        params     = desc.params
-        axis_names = desc.axis_names(with_metadata=True)
-
-        self.file.attrs['exp_src'] = desc._exp_src
-        num_axes   = len(axes)
-
-        if desc.is_adaptive() and not self.store_tuples:
-            raise Exception("Cannot omit writing tuples with an adaptive sweep... please enabled store_tuples.")
-
-        if self.store_tuples:
-            # All of the combinations for the present values of the sweep parameters only
-            tuples          = desc.expected_tuples(with_metadata=True, as_structured_array=True)
-        expected_length = desc.expected_num_points()
-
-        compression = 'gzip' if self.compress else None
-
-        # If desired, create the group in which the dataset and axes will reside
-        if self.create_group:
-            self.group = self.file.create_group(self.groupname.value)
-        else:
-            self.group = self.file
-
-        self.data_group = self.group.create_group("data")
-
-        # If desired, push experimental metadata into the h5 file
-        if self.save_settings.value and 'header' not in self.file.keys(): # only save header once for multiple writers
-            self.save_yaml_h5()
-
-        # Create datasets for each stream
-        dset_for_streams = {}
-        for stream in streams:
-            dset = self.data_group.create_dataset(stream.descriptor.data_name, (expected_length,),
-                                        dtype=stream.descriptor.dtype,
-                                        chunks=True, maxshape=(None,),
-                                        compression=compression)
-            dset.attrs['is_data'] = True
-            dset.attrs['store_tuples'] = self.store_tuples
-            dset.attrs['name'] = stream.descriptor.data_name
-            dset_for_streams[stream] = dset
-
-        # Write params into attrs
-        for k,v in params.items():
-            if k not in axis_names:
-                self.data_group.attrs[k] = v
-
-        # Create a table for the DataStreamDescriptor
-        ref_dtype = h5py.special_dtype(ref=h5py.Reference)
-        self.descriptor = self.group.create_dataset("descriptor", (len(axes),), dtype=ref_dtype)
-        for k,v in desc.metadata.items():
-            self.descriptor.attrs[k] = v
-
-        # Create axis data sets for storing the base axes as well as the
-        # full set of tuples. For the former we add
-        # references to the descriptor.
-        tuple_dset_for_axis_name = {}
-        for i, a in enumerate(axes):
-            if a.unstructured:
-                name = "+".join(a.name)
-            else:
-                name = a.name
-
-            if a.unstructured:
-                # Create another reference table to refer to the constituent axes
-                unstruc_ref_dset = self.group.create_dataset(name, (len(a.name),), dtype=ref_dtype)
-                unstruc_ref_dset.attrs['unstructured'] = True
-
-                for j, (col_name, col_unit) in enumerate(zip(a.name, a.unit)):
-                    # Create table to store the axis value independently for each column
-                    unstruc_dset = self.group.create_dataset(col_name, (a.num_points(),), dtype=a.dtype)
-                    unstruc_ref_dset[j] = unstruc_dset.ref
-                    unstruc_dset[:] = a.points[:,j]
-                    unstruc_dset.attrs['unit'] = col_unit
-                    unstruc_dset.attrs['name'] = col_name
-
-                    # This stores the values taking during the experiment sweeps
-                    if self.store_tuples:
-                        dset = self.data_group.create_dataset(col_name, (expected_length,), dtype=a.dtype,
-                                                             chunks=True, compression=compression, maxshape=(None,) )
-                        dset.attrs['unit'] = col_unit
-                        dset.attrs['is_data'] = False
-                        dset.attrs['name'] = col_name
-                        tuple_dset_for_axis_name[col_name] = dset
-
-                self.descriptor[i] = self.group[name].ref
-            else:
-                # This stores the axis values
-                self.group.create_dataset(name, (a.num_points(),), dtype=a.dtype, maxshape=(None,) )
-                self.group[name].attrs['unstructured'] = False
-                self.group[name][:] = a.points
-                self.group[name].attrs['unit'] = "None" if a.unit is None else a.unit
-                self.group[name].attrs['name'] = a.name
-                self.descriptor[i] = self.group[name].ref
-
-                # This stores the values taking during the experiment sweeps
-                if self.store_tuples:
-                    dset = self.data_group.create_dataset(name, (expected_length,), dtype=a.dtype,
-                                                          chunks=True, compression=compression, maxshape=(None,) )
-                    dset.attrs['unit'] = "None" if a.unit is None else a.unit
-                    dset.attrs['is_data'] = False
-                    dset.attrs['name'] = name
-                    tuple_dset_for_axis_name[name] = dset
-
-            # Give the reader some warning about the usefulness of these axes
-            self.group[name].attrs['was_refined'] = False
-
-            if a.metadata is not None:
-                # Create the axis table for the metadata
-                dset = self.group.create_dataset(name + "_metadata", (a.metadata.size,), dtype=np.uint8, maxshape=(None,) )
-                dset[:] = a.metadata
-                dset = self.group.create_dataset(name + "_metadata_enum", (a.metadata_enum.size,), dtype='S128', maxshape=(None,) )
-                dset[:] = np.asarray(a.metadata_enum, dtype='S128')
-
-                # Associate the metadata with the data axis
-                self.group[name].attrs['metadata'] = self.group[name + "_metadata"].ref
-                self.group[name].attrs['metadata_enum'] = self.group[name + "_metadata_enum"].ref
-                self.group[name].attrs['name'] = name + "_metadata"
-
-                # Create the dataset that stores the individual tuple values
-                if self.store_tuples:
-                    dset = self.data_group.create_dataset(name + "_metadata" , (expected_length,),
-                                                          dtype=np.uint8, maxshape=(None,) )
-                    dset.attrs['name'] = name + "_metadata"
-                    tuple_dset_for_axis_name[name + "_metadata"] = dset
-
-        # Write all the tuples if this isn't adaptive
-        if self.store_tuples:
-            if not desc.is_adaptive():
-                for i, a in enumerate(axis_names):
-                    tuple_dset_for_axis_name[a][:] = tuples[a]
+        streams = self.sink.input_streams
+        desc = streams[0].descriptor
+        got_done_msg = {s: False for s in streams}
 
         # Write pointer
-        w_idx = 0
+        w_idx = {s: 0 for s in streams}
+        points_taken = {s: 0 for s in streams}
+        i = 0
 
-        while True:
-            # Wait for all of the acquisition to complete
-            # Against at least some peoples rational expectations, asyncio.wait doesn't return Futures
-            # in the order of the iterable it was passed, but perhaps just in order of completion. So,
-            # we construct a dictionary in order that that can be mapped back where we need them:
-            futures = {
-                asyncio.ensure_future(stream.queue.get()): stream
-                for stream in streams
-            }
+        while not self.exit.is_set():# and not self.finished_processing.is_set():
+            i +=1
+            # Try to pull all messages in the queue. queue.empty() is not reliable, so we 
+            # ask for forgiveness rather than permission.
+            msgs_by_stream = {s: [] for s in streams}
 
-            responses, _ = await asyncio.wait(futures)
+            for stream in streams[::-1]:
+                while not self.exit.is_set():
+                    try:
+                        msgs_by_stream[stream].append(stream.queue.get(False))
+                    except queue.Empty as e:
+                        time.sleep(0.002)
+                        break
 
-            # Construct the inverse lookup
-            response_for_stream = {futures[res]: res for res in list(responses)}
-            messages = [response_for_stream[stream].result() for stream in streams]
+            # Process many messages for each stream
+            for stream, messages in msgs_by_stream.items():
+                for message in messages:
 
-            # Ensure we aren't getting different types of messages at the same time.
-            message_types = [m['type'] for m in messages]
-            try:
-                if len(set(message_types)) > 1:
-                    raise ValueError("Writer received concurrent messages with different message types {}".format([m['type'] for m in messages]))
-            except:
-                import ipdb; ipdb.set_trace()
+                    # If we receive a message
+                    if message['type'] == 'event':
+                        # logger.info('%s "%s" received event of type "%s"', self.__class__.__name__, self.name, message['event_type'])
+                        if message['event_type'] == 'done':
+                            got_done_msg[stream] = True
+                        elif message['event_type'] == 'refined':
+                            message_data = message['data']
+                            self.refine(message_data)
+                        elif message['event_type'] == 'new_tuples':
+                            num_new_points = self.process_new_tuples(desc, message['data'])
+                            for stream in streams:
+                                self.queue.put(("resize_to", self.data_write_paths[stream], len(desc.visited_tuples),))
+                            if self.store_tuples:
+                                for an in self.axis_names:
+                                    self.queue.put(("resize_to", self.tuple_write_paths[an], len(desc.visited_tuples),))
 
-            # Infer the type from the first message
-            message_type = messages[0]['type']
+                    elif message['type'] == 'data':
 
-            # If we receive a message
-            if message_type == 'event':
-                logger.debug('%s "%s" received event of type "%s"', self.__class__.__name__, self.name, message_type)
-                if messages[0]['event_type'] == 'done':
-                    break
-                elif messages[0]['event_type'] == 'refined':
-                    refined_axis = messages[0]['data']
+                        message_data = message['data']
 
-                    # Resize the data set
-                    num_new_points = desc.num_new_points_through_axis(refined_axis)
-                    for stream in streams:
-                        dset_for_streams[stream].resize((len(dset_for_streams[streams[0]])+num_new_points,))
+                        if not hasattr(message_data, 'size'):
+                            message_data = np.array([message_data])
+                        message_data = message_data.flatten()
 
-                    if self.store_tuples:
-                        for an in axis_names:
-                            tuple_dset_for_axis_name[an].resize((len(tuple_dset_for_axis_name[an])+num_new_points,))
+                        # Write the data
+                        self.queue.put(("write", self.data_write_paths[stream], w_idx[stream], w_idx[stream]+message_data.size, message_data))
 
-                    # Generally speaking the descriptors are now insufficient to reconstruct
-                    # the full set of tuples. The user should know this, so let's mark the
-                    # descriptor axes accordingly.
-                    self.group[name].attrs['was_refined'] = True
+                        # Write the coordinate tuples
+                        if self.store_tuples:
+                            if desc.is_adaptive():
+                                tuples = desc.tuples()
+                                for axis_name in self.axis_names:
+                                    self.queue.put(("write", self.tuple_write_paths[axis_name], w_idx[stream], w_idx[stream]+message_data.size,
+                                                    tuples[axis_name][w_idx[stream]:w_idx[stream]+message_data.size]))
 
+                        self.queue.put(("flush",))
+                        w_idx[stream] += message_data.size
+                        points_taken[stream] = w_idx[stream]
 
-            elif message_type == 'data':
-                message_data = [message['data'] for message in messages]
-                message_comp = [message['compression'] for message in messages]
-                message_data = [pickle.loads(zlib.decompress(dat)) if comp == 'zlib' else dat for comp, dat in zip(message_comp, message_data)]
-                message_data = [dat if hasattr(dat, 'size') else np.array([dat]) for dat in message_data]  # Convert single values to arrays
-
-                for ii in range(len(message_data)):
-                    if not hasattr(message_data[ii], 'size'):
-                        message_data[ii] = np.array([message_data[ii]])
-                    message_data[ii] = message_data[ii].flatten()
-                    if message_data[ii].size != message_data[0].size:
-                        raise ValueError("Writer received data of unequal length.")
-
-                logger.debug('%s "%s" received %d points', self.__class__.__name__, self.name, message_data[0].size)
-                logger.debug("Now has %d of %d points.", stream.points_taken, stream.num_points())
-
-                self.up_to_date = (w_idx == dset_for_streams[streams[0]].len())
-
-                # Write the data
-                for s, d in zip(streams, message_data):
-                    dset_for_streams[s][w_idx:w_idx+d.size] = d
-
-                # Write the coordinate tuples
-                if self.store_tuples:
-                    if desc.is_adaptive():
-                        tuples = desc.tuples()
-                        for axis_name in axis_names:
-                            tuple_dset_for_axis_name[axis_name][w_idx:w_idx+d.size] = tuples[axis_name][w_idx:w_idx+d.size]
-
-                self.file.flush()
-                w_idx += message_data[0].size
-                self.points_taken = w_idx
-
-                logger.debug("HDF5: Write index at %d", w_idx)
-                logger.debug("HDF5: %s has written %d points", stream.name, w_idx)
+                        logger.debug("HDF5: Write index at %d", w_idx[stream])
+                        logger.debug("HDF5: %s has written %d points", stream.name, w_idx[stream])
 
             # If we have gotten all our data and process_data has returned, then we are done!
-            if np.all([v.done() for v in self.input_connectors.values()]):
-                self.finished_processing = True
+            if desc.is_adaptive():
+                if np.all(list(got_done_msg.values())) and np.all([len(desc.visited_tuples) == points_taken[s] for s in streams]):
+                    self.finished_processing.set()
+                    break
+            else:
+                if np.all(list(got_done_msg.values())) and np.all([v.done() for v in self.input_connectors.values()]):
+                    self.finished_processing.set()
+                    break
 
 class DataBuffer(Filter):
     """Writes data to IO."""
@@ -386,20 +429,24 @@ class DataBuffer(Filter):
         self.quince_parameters = []
         self.sink.max_input_streams = 100
         self.store_tuples = store_tuples
+        self._final_buffers = Queue()
+        self.final_buffers = None
+
+        self.out_queue = Queue() # This seems to work, somewhat surprisingly
 
     def final_init(self):
-        self.buffers = {s: np.empty(s.descriptor.expected_num_points(), dtype=s.descriptor.dtype) for s in self.sink.input_streams}
         self.w_idxs  = {s: 0 for s in self.sink.input_streams}
+        self.descriptor = self.sink.input_streams[0].descriptor
 
-    async def run(self):
-        self.finished_processing = False
+    def main(self):
+        self.finished_processing.clear()
         streams = self.sink.input_streams
+
+        buffers = {s: np.empty(s.descriptor.expected_num_points(), dtype=s.descriptor.dtype) for s in self.sink.input_streams}
 
         for s in streams[1:]:
             if not np.all(s.descriptor.expected_tuples() == streams[0].descriptor.expected_tuples()):
                 raise ValueError("Multiple streams connected to DataBuffer must have matching descriptors.")
-
-        self.descriptor = streams[0].descriptor
 
         # Buffers for stream data
         stream_data = {s: np.zeros(0, dtype=self.sink.descriptor.dtype) for s in streams}
@@ -407,29 +454,16 @@ class DataBuffer(Filter):
         # Store whether streams are done
         stream_done = {s: False for s in streams}
 
-        while True:
+        while not self.exit.is_set():
+            try:
+                stream_results = {stream: stream.queue.get(True, 0.2) for stream in streams}
+            except queue.Empty as e:
+                continue
 
-            futures = {
-                asyncio.ensure_future(stream.queue.get()): stream
-                for stream in streams
-            }
-
-            # Deal with non-equal number of messages using timeout
-            responses, pending = await asyncio.wait(futures, return_when=asyncio.FIRST_COMPLETED, timeout=2.0)
-
-            # Construct the inverse lookup, results in {stream: result}
-            stream_results = {futures[res]: res.result() for res in list(responses)}
-
-            # Cancel the futures
-            for pend in list(pending):
-                pend.cancel()
-
-            # Add any new data to the
+            # Add any new data to the buffers
             for stream, message in stream_results.items():
                 message_type = message['type']
                 message_data = message['data']
-                message_comp = message['compression']
-                message_data = pickle.loads(zlib.decompress(message_data)) if message_comp == 'zlib' else message_data
                 message_data = message_data if hasattr(message_data, 'size') else np.array([message_data])
                 if message_type == 'event':
                     if message['event_type'] == 'done':
@@ -437,10 +471,10 @@ class DataBuffer(Filter):
                     elif message['event_type'] == 'refined':
                         # Single we don't have much structure here we simply
                         # create a new buffer and paste the old buffer into it
-                        old_buffer = self.buffers[stream]
+                        old_buffer = buffers[stream]
                         new_size   = stream.descriptor.num_points()
-                        self.buffers[stream] = np.empty(stream.descriptor.num_points(), dtype=stream.descriptor.dtype)
-                        self.buffers[stream][:old_buffer.size] = old_buffer
+                        buffers[stream] = np.empty(stream.descriptor.num_points(), dtype=stream.descriptor.dtype)
+                        buffers[stream][:old_buffer.size] = old_buffer
 
                 elif message_type == 'data':
                     stream_data[stream] = message_data.flatten()
@@ -451,17 +485,32 @@ class DataBuffer(Filter):
 
             for stream in stream_results.keys():
                 data = stream_data[stream]
-
-                self.buffers[stream][self.w_idxs[stream]:self.w_idxs[stream]+data.size] = data
+                buffers[stream][self.w_idxs[stream]:self.w_idxs[stream]+data.size] = data
                 self.w_idxs[stream] += data.size
 
             # If we have gotten all our data and process_data has returned, then we are done!
             if np.all([v.done() for v in self.input_connectors.values()]):
-                self.finished_processing = True
+                self.finished_processing.set()
+        
+        for s in streams:
+            self._final_buffers.put(buffers[s])
+
+        # If we're using an mp Queue to return the results, put them in here
+        if self.out_queue:
+            self.out_queue.put(self.get_data())
+
+    def get_rdata(self):
+        if self.out_queue:
+            data = self.get_data()
+            self.out_queue.put(data)
 
     def get_data(self):
         streams = self.sink.input_streams
         desc = streams[0].descriptor
+
+        # Get the data from the queue if necessary
+        if not self.final_buffers:
+            self.final_buffers = {s: self._final_buffers.get() for s in streams}
 
         # Set the dtype for the parameter columns
         if self.store_tuples:
@@ -472,14 +521,14 @@ class DataBuffer(Filter):
         # Extend the dtypes for each data column
         for stream in streams:
             dtype.append((stream.descriptor.data_name, stream.descriptor.dtype))
-        data = np.empty(self.buffers[streams[0]].size, dtype=dtype)
+        data = np.empty(self.final_buffers[streams[0]].size, dtype=dtype)
 
         if self.store_tuples:
             tuples = desc.tuples(as_structured_array=True)
             for a in desc.axis_names(with_metadata=True):
                 data[a] = tuples[a]
         for stream in streams:
-            data[stream.descriptor.data_name] = self.buffers[stream]
+            data[stream.descriptor.data_name] = self.final_buffers[stream]
         return data
 
     def get_descriptor(self):
@@ -504,7 +553,13 @@ class ProgressBar(Filter):
         self.bars   = []
         self.w_id   = 0
 
-    async def run(self):
+    def run(self):
+        if config.profile:
+            cProfile.runctx('self.main()', globals(), locals(), 'prof-%s.prof' % self.filter_name)
+        else:
+            self.main()
+
+    def main(self):
         self.stream = self.sink.input_streams[0]
         axes = self.stream.descriptor.axes
         num_axes = len(axes)
@@ -519,11 +574,11 @@ class ProgressBar(Filter):
             else:
                 self.bars.append(tqdm(total=totals[i]/chunk_sizes[i]))
         self.w_id   = 0
-        while True:
+        while not self.exit.is_set():
             if self.stream.done() and self.w_id==self.stream.num_points():
                 break
 
-            new_data = np.array(await self.stream.queue.get()).flatten()
+            new_data = np.array(self.stream.queue.get()).flatten()
             while self.stream.queue.qsize() > 0:
                 new_data = np.append(new_data, np.array(self.stream.queue.get_nowait()).flatten())
             self.w_id += new_data.size

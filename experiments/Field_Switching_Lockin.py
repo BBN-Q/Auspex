@@ -15,7 +15,7 @@ from auspex.filters import WriteToHDF5, Plotter
 from auspex.log import logger
 
 import numpy as np
-import asyncio
+
 import time
 import datetime
 
@@ -44,11 +44,11 @@ class FieldSwitchingLockinExperiment(Experiment):
         self.field.add_post_push_hook(lambda: time.sleep(0.1)) # Field set delay
         time.sleep(self.delay)
 
-    async def run(self):
+    def run(self):
         """This is run for each step in a sweep."""
 
-        await asyncio.sleep(self.delay)
-        await self.resistance.push(self.res_reference/((self.lock.amp/self.lock.mag)-1.0))
+        time.sleep(self.delay)
+        self.resistance.push(self.res_reference/((self.lock.amp/self.lock.mag)-1.0))
 
     def shutdown_instruments(self):
         self.mag.zero()

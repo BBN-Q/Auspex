@@ -6,7 +6,7 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-import asyncio
+
 import os
 import time
 import datetime
@@ -42,11 +42,11 @@ class TestExperiment(Experiment):
     def init_streams(self):
         pass
 
-    async def run(self):
+    def run(self):
         r = np.sqrt(np.power(self.amplitude.value,2) + np.power(self.duration.value,2))
         val = 1.0/(1.0 + np.exp(-10.0*(r-5.0)))
-        await self.voltage.push(val)
-        await asyncio.sleep(0.01)
+        self.voltage.push(val)
+        time.sleep(0.01)
 
 if __name__ == '__main__':
 

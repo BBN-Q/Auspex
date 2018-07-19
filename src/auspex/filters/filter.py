@@ -8,16 +8,29 @@
 
 __all__ = ['Filter']
 
-import asyncio
-import zlib
-import pickle
+import os
+import sys
+
+if sys.platform == 'win32' or 'NOFORKING' in os.environ:
+    from threading import Thread as Process
+    from threading import Event
+    from queue import Queue
+else:
+    from multiprocessing import Process
+    from multiprocessing import Event
+    from multiprocessing import Queue as Queue
+
+import cProfile
+import itertools
+import time
+import queue
 import copy
 import numpy as np
-from concurrent.futures import FIRST_COMPLETED
 
 from auspex.parameter import Parameter
 from auspex.stream import DataStream, InputConnector, OutputConnector
 from auspex.log import logger
+import auspex.config
 
 class MetaFilter(type):
     """Meta class to bake the input/output connectors into a Filter class description
@@ -28,7 +41,7 @@ class MetaFilter(type):
         self._input_connectors  = []
         self._output_connectors = []
         self._parameters        = []
-        self.quince_parameters  = []
+
         for k,v in dct.items():
             if isinstance(v, InputConnector):
                 logger.debug("Found '%s' input connector.", k)
@@ -42,21 +55,22 @@ class MetaFilter(type):
                     v.name = k
                 self._parameters.append(v)
 
-class Filter(metaclass=MetaFilter):
+class Filter(Process, metaclass=MetaFilter):
     """Any node on the graph that takes input streams with optional output streams"""
 
     def __init__(self, name=None, **kwargs):
-        self.name = name
+        super(Filter, self).__init__()
+        self.filter_name = name
         self.input_connectors = {}
         self.output_connectors = {}
         self.parameters = {}
-        self.experiment = None # Keep a reference to the parent experiment
+
+        # Event for killing the filter properly
+        self.exit = Event()
 
         # For objectively measuring doneness
-        self.finished_processing = False
-
-        # For signaling to Quince that something is wrong
-        self.out_of_spec = False
+        self.finished_processing = Event()
+        self.finished_processing.clear()
 
         for ic in self._input_connectors:
             a = InputConnector(name=ic, parent=self)
@@ -75,7 +89,7 @@ class Filter(metaclass=MetaFilter):
             setattr(self, param.name, a)
 
     def __repr__(self):
-        return "<{}(name={})>".format(self.__class__.__name__, self.name)
+        return "<{} Process (name={})>".format(self.__class__.__name__, self.filter_name)
 
     def configure_with_proxy(self, proxy_obj):
         """For use with bbndb, sets this filter's properties using a FilterProxy object 
@@ -113,69 +127,144 @@ class Filter(metaclass=MetaFilter):
         """Return a dict of the output descriptors."""
         return {'source': v for v in input_descriptors.values()}
 
-    async def on_done(self):
+    def on_done(self):
         """To be run when the done signal is received, in case additional steps are
         needed (such as flushing a plot or data)."""
         pass
 
-    async def run(self):
+    def shutdown(self):
+        self.exit.set()
+
+    def run(self):
+        if auspex.config.profile:
+            if not self.filter_name:
+                name = "Unlabeled"
+            else:
+                name = self.filter_name
+            cProfile.runctx('self.main()', globals(), locals(), 'prof-%s-%s.prof' % (self.__class__.__name__, name))
+        else:
+            self.main()
+
+    def main(self):
         """
         Generic run method which waits on a single stream and calls `process_data` on any new_data
         """
-        logger.debug('Running "%s" run loop', self.name)
-        self.finished_processing = False
+        logger.debug('Running "%s" run loop', self.filter_name)
+        self.finished_processing.clear()
         input_stream = getattr(self, self._input_connectors[0]).input_streams[0]
+        desc = input_stream.descriptor
 
-        while True:
+        stream_done = False
+        stream_points = 0
 
-            message = await input_stream.queue.get()
-            message_type = message['type']
-            message_data = message['data']
-            message_comp = message['compression']
+        while not self.exit.is_set() and not self.finished_processing.is_set():
+            # Try to pull all messages in the queue. queue.empty() is not reliable, so we 
+            # ask for forgiveness rather than permission.
+            messages = []
 
-            if message_comp == 'zlib':
-                message_data = pickle.loads(zlib.decompress(message_data))
-            # If we receive a message
-            if message['type'] == 'event':
-                logger.debug('%s "%s" received event "%s"', self.__class__.__name__, self.name, message_data)
-
-                # Propagate along the graph
-                for oc in self.output_connectors.values():
-                    for os in oc.output_streams:
-                        logger.debug('%s "%s" pushed event "%s" to %s, %s', self.__class__.__name__, self.name, message_data, oc, os)
-                        await os.queue.put(message)
-
-                # Check to see if we're done
-                if message['event_type'] == 'done':
-                    if not self.finished_processing:
-                        logger.warning("Filter {} being asked to finish before being done processing.".format(self.name))
-                    await self.on_done()
+            while not self.exit.is_set():
+                try:
+                    messages.append(input_stream.queue.get(False))
+                except queue.Empty as e:
+                    time.sleep(0.002)
                     break
-                elif message['event_type'] == 'refined':
-                    await self.refine(message_data)
 
-            elif message['type'] == 'data':
-                if not hasattr(message_data, 'size'):
-                    message_data = np.array([message_data])
-                logger.debug('%s "%s" received %d points.', self.__class__.__name__, self.name, message_data.size)
-                logger.debug("Now has %d of %d points.", input_stream.points_taken, input_stream.num_points())
-                await self.process_data(message_data.flatten())
+            for message in messages:
+                message_type = message['type']
+                message_data = message['data']
 
-            elif message['type'] == 'data_direct':
-                await self.process_direct(message_data)
+                if message['type'] == 'event':
+                    logger.debug('%s "%s" received event "%s"', self.__class__.__name__, self.filter_name, message_data)
 
+                    # Propagate along the graph
+                    for oc in self.output_connectors.values():
+                        for os in oc.output_streams:
+                            logger.debug('%s "%s" pushed event "%s" to %s, %s', self.__class__.__name__, self.filter_name, message_data, oc, os)
+                            os.queue.put(message)
+
+                    # Check to see if we're done
+                    if message['event_type'] == 'done':
+                        if not self.finished_processing.is_set():
+                            logger.warning("Filter {} being asked to finish before being done processing. ({} of {})".format(self.filter_name,stream_points,input_stream.num_points()))
+                        self.exit.set()
+                        self.finished_processing.set()
+                        break
+                    elif message['event_type'] == 'refined':
+                        self.refine(message_data)
+                        continue
+
+                    elif message['event_type'] == 'new_tuples':
+                        self.process_new_tuples(input_stream.descriptor, message_data)
+                        break
+
+                elif message['type'] == 'data':
+                    if not hasattr(message_data, 'size'):
+                        message_data = np.array([message_data])
+                    logger.debug('%s "%s" received %d points.', self.__class__.__name__, self.filter_name, message_data.size)
+                    logger.debug("Now has %d of %d points.", input_stream.points_taken.value, input_stream.num_points())
+                    stream_points += len(message_data.flatten())
+                    self.process_data(message_data.flatten())
+
+                elif message['type'] == 'data_direct':
+                    self.process_direct(message_data)
+
+                # if stream_points == input_stream.num_points():
+                #     self.finished_processing.set()
+                #     break
             # If we have gotten all our data and process_data has returned, then we are done!
-            if all([v.done() for v in self.input_connectors.values()]):
-                self.finished_processing = True
+            if desc.is_adaptive():
+                if stream_done and np.all([len(desc.visited_tuples) == points_taken[s] for s in streams]):
+                    self.finished_processing.set()
+                    break
+            else:
+                if stream_done and np.all([v.done() for v in self.input_connectors.values()]):
+                    self.finished_processing.set()
+                    break      
 
-    async def process_data(self, data):
+        # When we've finished, either prematurely or as expected
+        self.on_done()
+
+    def process_data(self, data):
         """Process data coming through the filter pipeline"""
         pass
 
-    async def process_direct(self, data):
+    def process_direct(self, data):
         """Process direct data, ignore things like the data descriptors."""
         pass
 
-    async def refine(self, axis):
+    def process_new_tuples(self, descriptor, message_data):
+        axis_names, sweep_values = message_data
+        # All the axis names for this connector
+        ic_axis_names = [ax.name for ax in descriptor.axes]
+        # The sweep values from sweep axes that are present (axes may have been dropped)
+        sweep_values = [sv for an, sv in zip(axis_names, sweep_values) if an in ic_axis_names]
+        vals = [a for a in descriptor.data_axis_values()]
+        if sweep_values:
+            vals  = [[v] for v in sweep_values] + vals
+
+        # Create the outer product of axes
+        nested_list    = list(itertools.product(*vals))
+        flattened_list = [tuple((val for sublist in line for val in sublist)) for line in nested_list]
+        descriptor.visited_tuples = descriptor.visited_tuples + flattened_list
+
+        for oc in self.output_connectors.values():
+            oc.push_event("new_tuples", message_data)
+
+        return len(flattened_list)
+
+    def refine(self, refine_data):
         """Try to deal with a refinement along the given axes."""
-        pass
+        axis_name, reset_axis, points = refine_data
+
+        for ic in self.input_connectors.values():
+            for desc in [ic.descriptor] + [s.descriptor for s in ic.input_streams]:
+                for ax in desc.axes:
+                    if ax.name == axis_name:
+                        if reset_axis:
+                            ax.points = points
+                        else:
+                            ax.points = np.append(ax.points, points)
+
+        for oc in self.output_connectors.values():
+            oc.push_event("refined", refine_data)
+

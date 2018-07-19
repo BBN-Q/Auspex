@@ -3,7 +3,7 @@ from auspex.experiment import Experiment, FloatParameter
 from auspex.stream import DataStream, DataAxis, SweepAxis, DataStreamDescriptor, InputConnector, OutputConnector
 import bbndb
 import sys
-import asyncio
+
 import time
 
 class QubitExperiment(Experiment):
@@ -17,6 +17,8 @@ class QubitExperiment(Experiment):
         return oc
 
     def init_instruments(self):
+        self.cw_mode = False
+
         for name, instr in self._instruments.items():
             # Configure with dictionary from the instrument proxy
             if hasattr(instr, "configure_with_proxy"):
@@ -34,15 +36,20 @@ class QubitExperiment(Experiment):
         except:
             logger.warning("No AWG is specified as the master.")
 
-        # attach digitizer stream sockets to output connectors
+        # Start socket listening processes, store as keys in a dictionary with exit commands as values
+        self.dig_listeners = {}
         for chan, dig in self.chan_to_dig.items():
             socket = dig.get_socket(chan)
             oc = self.chan_to_oc[chan]
-            self.loop.add_reader(socket, dig.receive_data, chan, oc)
+            # self.loop.add_reader(socket, dig.receive_data, chan, oc)
+            exit = Event()
+            self.dig_listeners[Process(target=dig.receive_data, args=(chan, oc, exit))] = exit
+        for listener in self.dig_listeners.keys():
+            listener.start()
 
-        # if self.cw_mode:
-        #     for awg in self.awgs:
-        #         awg.run()
+        if self.cw_mode:
+            for awg in self.awgs:
+                awg.run()
 
     def add_instrument_sweep(self, instrument, attribute, values):
         pass
@@ -104,36 +111,39 @@ class QubitExperiment(Experiment):
         self.add_sweep(param, range(num_averages))
 
     def shutdown_instruments(self):
-        # remove socket readers
-        # if self.cw_mode:
-        #     for awg in self.awgs:
-        #         awg.stop()
+        # remove socket listeners
+        for listener, exit in self.dig_listeners.items():
+            exit.set()
+            listener.join()
+        if self.cw_mode:
+            for awg in self.awgs:
+                awg.stop()
         for chan, dig in self.chan_to_dig.items():
             socket = dig.get_socket(chan)
-            self.loop.remove_reader(socket)
+            # self.loop.remove_reader(socket)
         for name, instr in self._instruments.items():
             instr.disconnect()
 
-    async def run(self):
-        """This is run for each step in a sweep."""
+    def run(self):
+        # Begin acquisition before enabling the AWGs
         for dig in self.digitizers:
             dig.acquire()
-        await asyncio.sleep(0.75)
-        # if not self.cw_mode:
-        for awg in self.awgs:
-            awg.run()
+
+        # Start the AWGs
+        if not self.cw_mode:
+            for awg in self.awgs:
+                awg.run()
 
         # Wait for all of the acquisitions to complete
         timeout = 10
-        try:
-            await asyncio.gather(*[dig.wait_for_acquisition(timeout) for dig in self.digitizers])
-        except Exception as e:
-            logger.error("Received exception %s in run loop. Bailing", repr(e))
-            self.shutdown()
-            sys.exit(0)
+        for dig in self.digitizers:
+            dig.wait_for_acquisition(timeout)
 
+        # Bring everything to a stop
         for dig in self.digitizers:
             dig.stop()
-        # if not self.cw_mode:
-        for awg in self.awgs:
-            awg.stop()
+
+        # Stop the AWGs
+        if not self.cw_mode:
+            for awg in self.awgs:
+                awg.stop()

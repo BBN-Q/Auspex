@@ -2,7 +2,6 @@
 #    http://www.apache.org/licenses/LICENSE-2.0
 
 import unittest
-import asyncio
 import time
 import numpy as np
 
@@ -34,7 +33,7 @@ class CorrelatorExperiment(Experiment):
         self.chan1.add_axis(DataAxis("samples", list(range(self.samples))))
         self.chan2.add_axis(DataAxis("samples", list(range(self.samples))))
 
-    async def run(self):
+    def run(self):
         logger.debug("Data taker running (inner loop)")
 
         while self.idx_1 < self.samples or self.idx_2 < self.samples:
@@ -46,22 +45,22 @@ class CorrelatorExperiment(Experiment):
             if self.chan1.points_taken < self.chan1.num_points():
                 if self.chan1.points_taken + new_1 > self.chan1.num_points():
                     new_1 = self.chan1.num_points() - self.chan1.points_taken
-                await self.chan1.push(self.vals[self.idx_1:self.idx_1+new_1])
+                self.chan1.push(self.vals[self.idx_1:self.idx_1+new_1])
                 self.idx_1 += new_1
             if self.chan2.points_taken < self.chan2.num_points():
                 if self.chan2.points_taken + new_2 > self.chan2.num_points():
                     new_2 = self.chan2.num_points() - self.chan2.points_taken
-                await self.chan2.push(self.vals[self.idx_2:self.idx_2+new_2])
+                self.chan2.push(self.vals[self.idx_2:self.idx_2+new_2])
                 self.idx_2 += new_2
 
-            await asyncio.sleep(0.002)
+            time.sleep(0.002)
             logger.debug("Idx_1: %d, Idx_2: %d", self.idx_1, self.idx_2)
 
 class CorrelatorTestCase(unittest.TestCase):
 
     def test_correlator(self):
         exp   = CorrelatorExperiment()
-        corr  = Correlator()
+        corr  = Correlator(name='corr')
         buff  = DataBuffer()
 
         edges = [(exp.chan1,   corr.sink),
@@ -71,7 +70,7 @@ class CorrelatorTestCase(unittest.TestCase):
         exp.set_graph(edges)
         exp.run_sweeps()
 
-        corr_data     = buff.get_data()['Correlator']
+        corr_data     = buff.out_queue.get()['corr']
         expected_data = exp.vals*exp.vals
         self.assertTrue(np.abs(np.sum(corr_data - expected_data)) <= 1e-4)
 

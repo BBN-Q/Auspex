@@ -14,7 +14,7 @@ from auspex.filters import Print, WriteToHDF5, Plotter, XYPlotter, Averager
 from auspex.instruments import Agilent33220A
 from auspex.log import logger
 
-import asyncio
+
 import numpy as np
 import time
 
@@ -96,7 +96,7 @@ class IVExperiment(Experiment):
         except Exception as e:
             logger.warning("Failed to clear DAQ task!")
 
-    async def run(self):
+    def run(self):
         """This is run for each step in a sweep."""
 
         self.awg.trigger()
@@ -104,6 +104,6 @@ class IVExperiment(Experiment):
         buf = np.empty(2*self.num_samples_total)
         self.analog_input.ReadAnalogF64(self.num_samples_total, -1, DAQmx_Val_GroupByChannel,
                                         buf, 2*self.num_samples_total, byref(self.read), None)
-        await self.current_input.push(buf[self.num_samples_total+self.trim_len:self.num_samples_total+self.trim_len+self.num_samples_trimmed]/self.r_ref)
-        await self.voltage_sample.push(buf[self.trim_len:self.trim_len+self.num_samples_trimmed]/self.preamp_gain)
-        await asyncio.sleep(0.02)
+        self.current_input.push(buf[self.num_samples_total+self.trim_len:self.num_samples_total+self.trim_len+self.num_samples_trimmed]/self.r_ref)
+        self.voltage_sample.push(buf[self.trim_len:self.trim_len+self.num_samples_trimmed]/self.preamp_gain)
+        time.sleep(0.02)

@@ -21,7 +21,7 @@ from PyDAQmx import *
 
 import itertools
 import numpy as np
-import asyncio
+
 import time, sys
 import h5py
 import matplotlib.pyplot as plt
@@ -246,7 +246,7 @@ class nTronSwitchingExperiment(Experiment):
         descrip.add_axis(DataAxis("attempt", range(self.attempts)))
         self.voltage.set_descriptor(descrip)
 
-    async def run(self):
+    def run(self):
         """This is run for each step in a sweep."""
         self.arb.stop()
         self.arb.scenario_start_index = self.start_idxs[self.start_id]
@@ -257,9 +257,9 @@ class nTronSwitchingExperiment(Experiment):
         buf = np.empty(self.buf_points)
         self.analog_input.ReadAnalogF64(self.buf_points, -1, DAQmx_Val_GroupByChannel,
                                         buf, self.buf_points, byref(self.read), None)
-        await self.voltage.push(buf)
+        self.voltage.push(buf)
         # Seemingly we need to give the filters some time to catch up here...
-        await asyncio.sleep(0.02)
+        time.sleep(0.02)
         logger.debug("Stream has filled {} of {} points".format(self.voltage.points_taken, self.voltage.num_points() ))
         self.start_id += 1
         if self.start_id == len(self.start_idxs):

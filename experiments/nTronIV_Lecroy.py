@@ -6,7 +6,7 @@ from auspex.filters import Print, WriteToHDF5, Plotter, XYPlotter, Averager
 from auspex.instruments import Agilent33500B, HDO6104
 from auspex.log import logger
 
-import asyncio
+
 import numpy as np
 import time
 
@@ -75,13 +75,13 @@ class IVExperiment(Experiment):
         self.lecroy.set_channel_enabled(False,channel=1)
         self.lecroy.set_channel_enabled(False,channel=2)
 
-    async def run(self):
+    def run(self):
         """This is run for each step in a sweep."""
         for rep in range(self.repeat):
             self.awg.trigger()
             while not self.lecroy.interface.query("*OPC?") == "1":
                 time.sleep(1)
                 print("waiting")
-            await self.voltage_input.push(self.lecroy.fetch_waveform(1)[1])
-            await self.voltage_sample.push(self.lecroy.fetch_waveform(2)[1])
-            await asyncio.sleep(self.delay)
+            self.voltage_input.push(self.lecroy.fetch_waveform(1)[1])
+            self.voltage_sample.push(self.lecroy.fetch_waveform(2)[1])
+            time.sleep(self.delay)

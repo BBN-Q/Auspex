@@ -7,14 +7,14 @@
 #    http://www.apache.org/licenses/LICENSE-2.0
 
 import unittest
-import asyncio
+import time
 import os
 import numpy as np
 import h5py
 from adapt.refine import refine_1D
 
-import auspex.config as config
-config.auspex_dummy_mode = True
+# import auspex.config as config
+# config.auspex_dummy_mode = True
 
 from auspex.experiment import Experiment
 from auspex.parameter import FloatParameter
@@ -24,7 +24,7 @@ from auspex.filters.io import WriteToHDF5
 from auspex.log import logger
 from auspex.analysis.io import load_from_HDF5
 
-config.load_meas_file(config.find_meas_file())
+# config.load_meas_file(config.find_meas_file())
 
 class SweptTestExperiment(Experiment):
     """Here the run loop merely spews data until it fills up the stream. """
@@ -42,16 +42,14 @@ class SweptTestExperiment(Experiment):
     def __repr__(self):
         return "<SweptTestExperiment>"
 
-    async def run(self):
+    def run(self):
         logger.debug("Data taker running (inner loop)")
-        await asyncio.sleep(0.002)
+        time.sleep(0.002)
 
         def ideal_tc(t, tc=9.0, k=20.0):
             return t*1.0/(1.0 + np.exp(-k*(t-tc)))
 
-        await self.resistance.push(ideal_tc(self.temperature.value))
-        # logger.debug("Stream pushed points {}.".format(data_row))
-        # logger.debug("Stream has filled {} of {} points".format(self.resistance.points_taken, self.resistance.num_points() ))
+        self.resistance.push(ideal_tc(self.temperature.value))
 
 class Adapt1DTestCase(unittest.TestCase):
 
@@ -64,10 +62,10 @@ class Adapt1DTestCase(unittest.TestCase):
         edges = [(exp.resistance, wr.sink)]
         exp.set_graph(edges)
 
-        async def rf(sweep_axis, exp):
-            logger.debug("Running refinement function.")
-            temps = wr.group['data']['temperature'][:]
-            ress  = wr.group['data']['resistance'][:]
+        def rf(sweep_axis, exp):
+            time.sleep(0.1)
+            temps = wr.get_data("/main/data/temperature")
+            ress  = wr.get_data("/main/data/resistance")
             logger.debug("Temps: {}".format(temps))
             logger.debug("Ress: {}".format(ress))
 
@@ -77,9 +75,8 @@ class Adapt1DTestCase(unittest.TestCase):
             if new_temps.size + temps.size > 15:
                 return False
 
-            sweep_axis.add_points(new_temps)
             logger.debug("Axis points are now: {}".format(sweep_axis.points))
-            return True
+            return new_temps
 
         exp.add_sweep(exp.temperature, np.linspace(0,20,5), refine_func=rf)
         exp.run_sweeps()

@@ -11,8 +11,8 @@ __all__ = ['AlazarATS9870', 'AlazarChannel']
 import re
 import socket
 import struct
-import datetime
-import asyncio
+import datetime, time
+import sys
 import numpy as np
 
 from .instrument import Instrument, DigitizerChannel
@@ -20,6 +20,24 @@ from auspex.log import logger
 import auspex.config as config
 
 from unittest.mock import MagicMock
+
+# win32 doesn't support MSG_WAITALL, so on windows we
+# need to do things a slower, less efficient way.
+# (we could optimize this, if performance becomes a problem)
+#
+# TODO: this code is repeated in the X6 driver.
+#
+if sys.platform == 'win32':
+    def sock_recvall(s, data_len):
+        buf = bytearray()
+        while data_len > 0:
+            new = s.recv(data_len)
+            data_len -= len(new)
+            buf.extend(new)
+        return bytes(buf)
+else:
+    def sock_recvall(s, data_len):
+        return s.recv(data_len, socket.MSG_WAITALL)
 
 # Dirty trick to avoid loading libraries when scraping
 # This code using quince.
@@ -118,37 +136,61 @@ class AlazarATS9870(Instrument):
             self.channels.append(channel)
             self._chan_to_buf[channel] = channel.phys_channel
 
-    def receive_data(self, channel, oc):
-        # push data from a socket into an OutputConnector (oc)
-        self.last_timestamp = datetime.datetime.now()
-        self.fetch_count += 1
-        # wire format is just: [size, buffer...]
+    def receive_data(self, channel, oc, exit):
         sock = self._chan_to_rsocket[channel]
-        # TODO receive 4 or 8 bytes depending on sizeof(size_t)
-        msg = sock.recv(8)
-        # reinterpret as int (size_t)
-        msg_size = struct.unpack('n', msg)[0]
-        buf = sock.recv(msg_size, socket.MSG_WAITALL)
-        if len(buf) != msg_size:
-            logger.error("Channel %s socket msg shorter than expected" % channel.phys_channel)
-            logger.error("Expected %s bytes, received %s bytes" % (msg_size, len(buf)))
-            # assume that we cannot recover, so stop listening.
-            loop = asyncio.get_event_loop()
-            loop.remove_reader(sock)
-            return
-        data = np.frombuffer(buf, dtype=np.float32)
-        asyncio.ensure_future(oc.push(data))
+        sock.settimeout(1)
+        last_timestamp = datetime.datetime.now()
+        while not exit.is_set():       
+            # push data from a socket into an OutputConnector (oc)
+            # wire format is just: [size, buffer...]
+            # TODO receive 4 or 8 bytes depending on sizeof(size_t)
+            try:
+                msg = sock.recv(8)
+                last_timestamp = datetime.datetime.now()
+            except:
+                continue
+
+            # reinterpret as int (size_t)
+            msg_size = struct.unpack('n', msg)[0]
+            buf = sock_recvall(sock, msg_size)
+            if len(buf) != msg_size:
+                logger.error("Channel %s socket msg shorter than expected" % channel.channel)
+                logger.error("Expected %s bytes, received %s bytes" % (msg_size, len(buf)))
+                return
+            data = np.frombuffer(buf, dtype=np.float32)
+            oc.push(data)
+    
+    # def receive_data(self, channel, oc):
+    #     # push data from a socket into an OutputConnector (oc)
+    #     self.last_timestamp = datetime.datetime.now()
+    #     self.fetch_count += 1
+    #     # wire format is just: [size, buffer...]
+    #     sock = self._chan_to_rsocket[channel]
+    #     # TODO receive 4 or 8 bytes depending on sizeof(size_t)
+    #     msg = sock.recv(8)
+    #     # reinterpret as int (size_t)
+    #     msg_size = struct.unpack('n', msg)[0]
+    #     buf = sock_recvall(sock, msg_size)
+    #     if len(buf) != msg_size:
+    #         logger.error("Channel %s socket msg shorter than expected" % channel.phys_channel)
+    #         logger.error("Expected %s bytes, received %s bytes" % (msg_size, len(buf)))
+    #         # assume that we cannot recover, so stop listening.
+    #         loop = asyncio.get_event_loop()
+    #         loop.remove_reader(sock)
+    #         return
+    #     data = np.frombuffer(buf, dtype=np.float32)
+    #     asyncio.ensure_future(oc.push(data))
 
     def get_buffer_for_channel(self, channel):
         self.fetch_count += 1
         return getattr(self._lib, 'ch{}Buffer'.format(self._chan_to_buf[channel]))
 
-    async def wait_for_acquisition(self, timeout=5):
+    def wait_for_acquisition(self, timeout=5):
         while not self.done():
             if (datetime.datetime.now() - self.last_timestamp).seconds > timeout:
                 logger.error("Digitizer %s timed out.", self.name)
                 raise Exception("Alazar timed out.")
-            await asyncio.sleep(0.2)
+            time.sleep(0.2)
 
         logger.debug("Digitizer %s finished getting data.", self.name)
 

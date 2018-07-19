@@ -7,7 +7,7 @@
 #    http://www.apache.org/licenses/LICENSE-2.0
 
 import unittest
-import asyncio
+import time
 import os
 import numpy as np
 import h5py
@@ -51,14 +51,14 @@ class SweptTestExperiment(Experiment):
     def __repr__(self):
         return "<SweptTestExperiment>"
 
-    async def run(self):
+    def run(self):
         logger.debug("Data taker running (inner loop)")
         time_step = 0.1
-        await asyncio.sleep(0.002)
+        time.sleep(0.002)
         data_row = np.sin(2*np.pi*self.time_val)*np.ones(5) + 0.1*np.random.random(5)
         self.time_val += time_step
-        await self.voltage.push(data_row)
-        await self.current.push(data_row*2.0)
+        self.voltage.push(data_row)
+        self.current.push(data_row*2.0)
         logger.debug("Stream pushed points {}.".format(data_row))
         logger.debug("Stream has filled {} of {} points".format(self.voltage.points_taken, self.voltage.num_points() ))
 
@@ -90,14 +90,14 @@ class SweptTestExperimentMetadata(Experiment):
     def __repr__(self):
         return "<SweptTestExperimentMetadata>"
 
-    async def run(self):
+    def run(self):
         logger.debug("Data taker running (inner loop)")
         time_step = 0.1
-        await asyncio.sleep(0.002)
+        time.sleep(0.002)
         data_row = np.sin(2*np.pi*self.time_val)*np.ones(5) + 0.1*np.random.random(5)
         self.time_val += time_step
-        await self.voltage.push(data_row)
-        await self.current.push(np.sin(2*np.pi*self.time_val) + 0.1*np.random.random(1))
+        self.voltage.push(data_row)
+        self.current.push(np.sin(2*np.pi*self.time_val) + 0.1*np.random.random(1))
         logger.debug("Stream pushed points {}.".format(data_row))
         logger.debug("Stream has filled {} of {} points".format(self.voltage.points_taken, self.voltage.num_points() ))
 
@@ -115,6 +115,10 @@ class BufferTestCase(unittest.TestCase):
         exp.run_sweeps()
 
         data = db.get_data()
+        data = db.out_queue.get()
+        # print('test_buffer data = %s' % str(data))
+        db.join()
+
         self.assertTrue(len(data) == 4*3*5)
         self.assertTrue(len(data['field']) == 4*3*5)
 
@@ -130,6 +134,10 @@ class BufferTestCase(unittest.TestCase):
         exp.run_sweeps()
 
         data = db.get_data()
+        data = db.out_queue.get()
+        # print('test_buffer data = %s' % str(data))
+        db.join()
+
         self.assertTrue(len(data) == 4*3*5)
         self.assertTrue(len(data['current']) == 4*3*5)
         self.assertTrue(len(data['voltage']) == 4*3*5)
@@ -147,6 +155,11 @@ class BufferTestCase(unittest.TestCase):
         exp.run_sweeps()
 
         data = db.get_data()
+        data = db.out_queue.get()
+        # print('test_buffer data = %s' % str(data))
+        db.join()
+
+
         self.assertTrue(len(data) == 4*3*5)
         self.assertTrue(len(data['samples_metadata']) == 4*3*5)
 

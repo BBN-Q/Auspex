@@ -19,7 +19,7 @@ from auspex.stream import DataAxis, OutputConnector, DataStreamDescriptor
 from auspex.filters import WriteToHDF5, Averager, Plotter
 from auspex.log import logger
 
-import asyncio
+
 import numpy as np
 import time
 import datetime
@@ -156,7 +156,7 @@ class ResetSearchExperiment(Experiment):
         self.arb.scenario_start_index = 0
         self.arb.run()
 
-    async def run(self):
+    def run(self):
         # Establish buffers
         buffers = np.empty(self.buf_points)
         self.arb.advance()
@@ -164,9 +164,9 @@ class ResetSearchExperiment(Experiment):
         self.analog_input.ReadAnalogF64(self.buf_points, -1, DAQmx_Val_GroupByChannel,
                                       buffers, self.buf_points, byref(self.read), None)
         logger.debug("Read a buffer of {} points".format(buffers.size))
-        await self.voltage.push(buffers)
+        self.voltage.push(buffers)
         # Seemingly we need to give the filters some time to catch up here...
-        await asyncio.sleep(0.02)
+        time.sleep(0.02)
         logger.debug("Stream has filled {} of {} points".format(self.voltage.points_taken, self.voltage.num_points() ))
 
     def shutdown_instruments(self):

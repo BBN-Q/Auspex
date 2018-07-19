@@ -102,7 +102,7 @@ class SingleShotFidelityExperiment(QubitExperiment):
                 raise NameError("Please connect a buffer to the single-shot filter output in order to optimize fidelity.")
             #set sweep parameters to the values that maximize fidelity. Then update the saved_settings with the new values
             for buff in fid_buffers:
-                dataset, descriptor = buff.get_data(), buff.get_descriptor()
+                dataset, descriptor = buff.out_queue.get_data(), buff.get_descriptor()
                 opt_ind = np.argmax(dataset['Data'])
                 for k, axis in enumerate(self.sweeper.axes):
                     instr_tree = axis.parameter.instr_tree

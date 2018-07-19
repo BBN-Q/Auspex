@@ -293,7 +293,7 @@ class MatplotClientWindow(QtWidgets.QMainWindow):
                                  QtCore.Qt.CTRL + QtCore.Qt.Key_Q)
         self.file_menu.addAction('&Open', self.open_connection_dialog,
                                  QtCore.Qt.CTRL + QtCore.Qt.Key_O)
-        self.file_menu.addAction('&Open Localhost', lambda: self.open_connection("localhost"),
+        self.file_menu.addAction('&Open Localhost', lambda: self.open_connection("localhost", 7771, 7772),
                                  QtCore.Qt.SHIFT + QtCore.Qt.CTRL + QtCore.Qt.Key_O)
         self.recent = self.file_menu.addMenu("Open Recent")
 
@@ -357,7 +357,7 @@ class MatplotClientWindow(QtWidgets.QMainWindow):
         address, ok = QtWidgets.QInputDialog.getText(self, 'Open Connection',
             'Resource Name:')
         if ok:
-            self.open_connection(address)
+            self.open_connectionopen_connection(address, 7771, 7772)
 
     def construct_plots(self, plot_desc):
         self.toolbars = []
@@ -411,9 +411,10 @@ class MatplotClientWindow(QtWidgets.QMainWindow):
             self.statusBar().showMessage("Exception while plotting {}. Length of data: {}".format(e, len(data)), 1000)
 
     def switch_toolbar(self):
-        for toolbar in self.toolbars:
-            toolbar.setVisible(False)
-        self.toolbars[self.tabs.currentIndex()].setVisible(True)
+        if len(self.toolbars) > 0:
+            for toolbar in self.toolbars:
+                toolbar.setVisible(False)
+            self.toolbars[self.tabs.currentIndex()].setVisible(True)
 
     def fileQuit(self):
         self.close()

@@ -36,7 +36,7 @@ class Plotter(Filter):
         self.quince_parameters = [self.plot_dims, self.plot_mode]
 
         # This will hold the matplot server
-        self.plot_server = None
+        self.plot_queue = None
 
     def desc(self):
         d =    {'plot_type': 'standard',
@@ -58,7 +58,7 @@ class Plotter(Filter):
 
 
     def update_descriptors(self):
-        logger.debug("Updating Plotter %s descriptors based on input descriptor %s", self.name, self.sink.descriptor)
+        logger.debug("Updating Plotter %s descriptors based on input descriptor %s", self.filter_name, self.sink.descriptor)
         self.stream = self.sink.input_streams[0]
         self.descriptor = self.sink.descriptor
 
@@ -93,11 +93,11 @@ class Plotter(Filter):
 
     def update(self):
         if self.plot_dims.value == 1:
-            self.plot_server.send(self.name, self.x_values, self.plot_buffer.copy())
+            self.plot_queue.put({'name': self.filter_name, 'msg':'data', 'data': [self.x_values, self.plot_buffer.copy()]})
         elif self.plot_dims.value == 2:
-            self.plot_server.send(self.name, self.x_values, self.y_values, self.plot_buffer.copy())
+            self.plot_queue.put({'name': self.filter_name, 'msg':'data', 'data': [self.x_values, self.y_values, self.plot_buffer.copy()]})
 
-    async def process_data(self, data):
+    def process_data(self, data):
         # If we get more than enough data, pause to update the plot if necessary
         if (self.idx + data.size) > self.points_before_clear:
             spill_over = (self.idx + data.size) % self.points_before_clear
@@ -119,11 +119,11 @@ class Plotter(Filter):
                 self.update()
                 self.last_update = time.time()
 
-    async def on_done(self):
+    def on_done(self):
         if self.plot_dims.value == 1:
-            self.plot_server.send(self.name, self.x_values, self.plot_buffer)
+            self.plot_queue.put({'name': self.filter_name, "msg": "data", 'data': [self.x_values, self.plot_buffer.copy()], })
         elif self.plot_dims.value == 2:
-            self.plot_server.send(self.name, self.x_values, self.y_values, self.plot_buffer)
+            self.plot_queue.put({'name': self.filter_name, "msg": "data", 'data': [self.x_values, self.y_values, self.plot_buffer.copy()]})
 
     def axis_label(self, index):
         unit_str = " ({})".format(self.descriptor.axes[index].unit) if self.descriptor.axes[index].unit else ''
@@ -146,7 +146,7 @@ class MeshPlotter(Filter):
         self.quince_parameters = [self.plot_mode]
 
         # This will hold the matplot server
-        self.plot_server = None
+        self.plot_queue = None
 
     def desc(self):
         d =    {'plot_type': 'mesh',
@@ -157,24 +157,23 @@ class MeshPlotter(Filter):
         return d
 
     def update_descriptors(self):
-        logger.info("Updating MeshPlotter %s descriptors based on input descriptor %s", self.name, self.sink.descriptor)
+        logger.info("Updating MeshPlotter %s descriptors based on input descriptor %s", self.filter_name, self.sink.descriptor)
 
     def final_init(self):
         pass
 
-    async def process_direct(self, data):
-        self.plot_server.send(self.name, data)
+    def process_direct(self, data):
+        self.plot_queue.put({'name': self.filter_name, "msg":"data", 'data': [self.plot_buffer.copy()]})
 
-    async def on_done(self):
-        self.plot_server.send(self.name, np.array([]), msg="done")
-        time.sleep(0.1)
+    def on_done(self):
+        self.plot_queue.put({'name': self.filter_name, 'data': [np.array([])], "msg": "done"})
 
 class XYPlotter(Filter):
     sink_x = InputConnector()
     sink_y = InputConnector()
 
     def __init__(self, *args, name="", x_series=False, y_series=False, series="inner", notebook=False, webgl=False, **plot_args):
-        """Theyintent is to let someone plot this vs. that from different streams."""
+        """The intent is to let someone plot this vs. that from different streams."""
         super(XYPlotter, self).__init__(*args, name=name)
 
         self.plot_args       = plot_args
@@ -190,7 +189,7 @@ class XYPlotter(Filter):
         self.quince_parameters = []
 
     def update_descriptors(self):
-        logger.debug("Updating XYPlotter %s descriptors.", self.name)
+        logger.debug("Updating XYPlotter %s descriptors.", self.filter_name)
         self.stream_x = self.sink_x.input_streams[0]
         self.stream_y = self.sink_y.input_streams[0]
         self.desc_x   = self.sink_x.descriptor
@@ -246,11 +245,11 @@ class XYPlotter(Filter):
         else:
             self.colors = Viridis256[:self.desc_y.axes[series_axis].num_points()]
 
-        self.plot = self.fig.multi_line(x_data, y_data, name=self.name,
+        self.plot = self.fig.multi_line(x_data, y_data, name=self.filter_name,
                                         line_width=2, color=self.colors,
                                         **self.plot_args)
 
-        renderers = self.plot.select(dict(name=self.name))
+        renderers = self.plot.select(dict(name=self.filter_name))
         self.renderer = [r for r in renderers if isinstance(r, GlyphRenderer)][0]
         self.data_source = self.renderer.data_source
 
@@ -259,11 +258,11 @@ class XYPlotter(Filter):
         self.idx = 0
         self.idy = 0
 
-    async def run(self):
-        while True:
+    def main(self):
+        while not self.exit.is_set():
             # Wait for all of the acquisition to complete, avoid asyncio.wait because of random return order...
-            message_x = await self.stream_x.queue.get()
-            message_y = await self.stream_y.queue.get()
+            message_x = self.stream_x.queue.get()
+            message_y = self.stream_y.queue.get()
             messages = [message_x, message_y]
 
             # Ensure we aren't getting different types of messages at the same time.
@@ -279,7 +278,7 @@ class XYPlotter(Filter):
 
             # If we receive a message
             if message_type == 'event':
-                logger.debug('%s "%s" received event "%s"', self.__class__.__name__, self.name, message_type)
+                logger.debug('%s "%s" received event "%s"', self.__class__.__name__, self.filter_name, message_type)
                 if messages[0]['event_type'] == 'done':
                     break
 
@@ -341,7 +340,7 @@ class XYPlotter(Filter):
 
                     self.last_update = time.time()
 
-    # async def on_done(self):
+    # def on_done(self):
     #     for i,j in zip(self.mapping_functions, self.data_sources):
     #         for mapping_function, data_source in zip(i,j):
     #             data_source.data["y"] = np.copy(mapping_function(self.plot_buffer))
@@ -353,9 +352,12 @@ class ManualPlotter(object):
         self.x_label      = x_label if type(x_label) == list else [x_label]
         self.y_label      = y_label if type(y_label) == list else [y_label]
         self.y_lim        = y_lim
-        self.name         = name
+        self.filter_name  = name
         self.numplots     = numplots
-        self.traces = []
+        self.traces       = []
+
+        # This will hold the matplot server
+        self.plot_queue = None
 
     def add_trace(self, name, matplotlib_kwargs={}, subplot_num = 0):
         self.traces.append({'name': name, 'axis_num' : subplot_num, 'matplotlib_kwargs': matplotlib_kwargs})
@@ -388,4 +390,4 @@ class ManualPlotter(object):
         self.set_data(trace_name, data_tuple[0], data_tuple[1])
 
     def set_data(self, trace_name, xdata, ydata):
-        self.plot_server.send(self.name + ":" + trace_name, xdata, ydata)
+        self.plot_queue.put({"name": self.filter_name + ":" + trace_name, "msg": "data", "data": [xdata, ydata]})

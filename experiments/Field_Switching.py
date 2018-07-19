@@ -16,7 +16,7 @@ from auspex.filters.plot import Plotter
 from auspex.log import logger
 
 import numpy as np
-import asyncio
+
 import time
 import datetime
 
@@ -42,12 +42,12 @@ class FieldSwitchingExperiment(Experiment):
         self.field.assign_method(self.mag.set_field)
         self.field.add_post_push_hook(lambda: time.sleep(0.1)) # Field set delay
 
-    async def run(self):
+    def run(self):
         """This is run for each step in a sweep."""
-        await self.resistance.push(self.keith.resistance)
+        self.resistance.push(self.keith.resistance)
         logger.debug("Stream has filled {} of {} points".format(self.resistance.points_taken,
                                                                 self.resistance.num_points() ))
-        await asyncio.sleep(0.02) # Give the filters some time to catch up?
+        time.sleep(0.02) # Give the filters some time to catch up?
 
     def shutdown_instruments(self):
         self.keith.current = 0.0e-5

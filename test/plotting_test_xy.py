@@ -6,7 +6,7 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-import asyncio
+
 import os
 import numpy as np
 import sys
@@ -47,13 +47,13 @@ class TestExperiment(Experiment):
     def __repr__(self):
         return "<SweptTestExperiment>"
 
-    async def run(self):
+    def run(self):
         logger.debug("Data taker running (inner loop)")
         time_step = 0.02
-        await asyncio.sleep(0.02)
+        time.sleep(0.02)
         self.time_val += time_step
-        await self.voltage.push(self.amp.value*np.cos(2*np.pi*self.time_val) + 0.01*np.random.random())
-        await self.current.push(self.amp.value*np.sin(2*np.pi*self.time_val) + 0.01*np.random.random())
+        self.voltage.push(self.amp.value*np.cos(2*np.pi*self.time_val) + 0.01*np.random.random())
+        self.current.push(self.amp.value*np.sin(2*np.pi*self.time_val) + 0.01*np.random.random())
         logger.debug("Stream has filled {} of {} points".format(self.voltage.points_taken, self.voltage.num_points() ))
 
 

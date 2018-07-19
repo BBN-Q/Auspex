@@ -22,7 +22,7 @@ from auspex.filters import Print, WriteToHDF5, Averager, Plotter, Channelizer, K
 from auspex.log import logger
 
 import numpy as np
-import asyncio
+
 import time, sys, datetime
 
 # Experimental Topology
@@ -249,12 +249,12 @@ class ShortProcessSwitchingExperiment(Experiment):
         descrip.data_name='resistance'
         self.resistance_MTJ.set_descriptor(descrip)
 
-    async def run(self):
+    def run(self):
         self.digital_output.StartTask()
         self.digital_output.WaitUntilTaskDone(2*self.attempts*self.run_time)
         self.digital_output.StopTask()
-        await self.resistance_MTJ.push(self.keith.resistance)
-        await asyncio.sleep(0.05)
+        self.resistance_MTJ.push(self.keith.resistance)
+        time.sleep(0.05)
         # print("\t now ", self.nidaq.points_read)
         # logger.debug("Stream has filled {} of {} points".format(self.voltage.points_taken, self.voltage.num_points() ))
 
@@ -461,11 +461,11 @@ class ShortProcessSwitchingExperimentReset(Experiment):
         descrip.add_axis(DataAxis("attempt", range(self.attempts)))
         self.voltage.set_descriptor(descrip)
 
-    async def run(self):
+    def run(self):
         self.digital_output.StartTask()
         self.digital_output.WaitUntilTaskDone(2*self.attempts*self.trig_interval)
         self.digital_output.StopTask()
-        await asyncio.sleep(0.05)
+        time.sleep(0.05)
 
     def shutdown_instruments(self):
         self.keith.current = 0.0e-5

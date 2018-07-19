@@ -171,5 +171,5 @@ class MixerCalibrationExperiment(Experiment):
     def init_streams(self):
         pass
 
-    async def run(self):
-        await self.amplitude.push(self._instruments[self.sa].peak_amplitude())
+    def run(self):
+        self.amplitude.push(self._instruments[self.sa].peak_amplitude())

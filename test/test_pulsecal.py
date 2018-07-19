@@ -8,7 +8,7 @@
 
 import unittest
 import os
-import asyncio
+
 import time
 import numpy as np
 from QGL import *

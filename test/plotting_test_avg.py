@@ -6,7 +6,7 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-import asyncio
+
 import os
 import numpy as np
 import sys
@@ -52,14 +52,14 @@ class TestExperiment(Experiment):
     def __repr__(self):
         return "<SweptTestExperiment>"
 
-    async def run(self):
+    def run(self):
        
         for _ in range(500):
-            await asyncio.sleep(0.01)
+            time.sleep(0.01)
             data = np.zeros((100,100))
             data[25:75, 25:75] = 1.0 
             data = data + 25*np.random.random((100,100))
-            await self.voltage.push(data.flatten())
+            self.voltage.push(data.flatten())
 
 if __name__ == '__main__':
 

@@ -22,7 +22,7 @@ from PyDAQmx import *
 
 import itertools
 import numpy as np
-import asyncio
+
 import time, sys
 import h5py
 import matplotlib.pyplot as plt
@@ -233,16 +233,16 @@ class nTronBERExperiment(Experiment):
         descrip.add_axis(DataAxis("attempts", range(self.attempts.value)))
         self.daq_buffer.set_descriptor(descrip)
 
-    async def run(self):
+    def run(self):
         """This is run for each step in a sweep."""
         self.arb.advance()
         self.arb.trigger()
         buf = np.empty(self.buf_points)
         self.analog_input.ReadAnalogF64(self.buf_points, -1, DAQmx_Val_GroupByChannel,
                                         buf, self.buf_points, byref(self.read), None)
-        await self.daq_buffer.push(buf)
+        self.daq_buffer.push(buf)
         # Seemingly we need to give the filters some time to catch up here...
-        await asyncio.sleep(0.02)
+        time.sleep(0.02)
         logger.debug("Stream has filled {} of {} points".format(self.daq_buffer.points_taken, self.daq_buffer.num_points() ))
 
     def shutdown_instruments(self):
