@@ -103,6 +103,7 @@ class QubitExpFactory(object):
         for var in ["Demodulate","Average","Integrate","Display","Write"]:
             inspect.stack()[1][0].f_globals[var] = getattr(bbndb.auspex, var)
 
+    @db_session
     def create_default_pipeline(self, qubits=None):
         """Look at the QGL channel library and create our pipeline from the current
         qubits."""
@@ -118,7 +119,8 @@ class QubitExpFactory(object):
             qubit_labels = [q.label for q in qubits]
             measurements = [cdb.channels.filter(lambda x: x.label == "M-"+ql).first() for ql in qubit_labels]
 
-        self.qubit_proxies = {q: bbndb.auspex.QubitProxy(self, q.label) for q in qubits}
+        # We map by the unique database ID since that is much safer
+        self.qubit_proxies = {q.id: bbndb.auspex.QubitProxy(self, q.label) for q in qubits}
 
         # Build a mapping of qubits to receivers, construct qubit proxies
         receivers_by_qubit = {cdb.channels.filter(lambda x: x.label == e.label[2:]).first(): e.receiver_chan for e in measurements}
@@ -126,7 +128,7 @@ class QubitExpFactory(object):
 
         # Set the proper stream types
         for q, r in receivers_by_qubit.items():
-            qp = self.qubit_proxies[q]
+            qp = self.qubit_proxies[q.id]
             qp.available_streams = [st.strip() for st in r.digitizer.stream_types.split(",")]
             qp.stream_type = qp.available_streams[-1]
 
@@ -136,6 +138,7 @@ class QubitExpFactory(object):
             qp.auto_create_pipeline()
         commit()
 
+    @db_session
     def create(self, meta_file, averages=100):
         with open(meta_file, 'r') as FID:
             meta_info = json.load(FID)
@@ -214,7 +217,8 @@ class QubitExpFactory(object):
                 exp.segment_axis = DataAxis(data_axis['name'], data_axis['points'], unit=data_axis['unit'])
 
         # Build a mapping of qubits to receivers, construct qubit proxies
-        receivers_by_qubit = {channelDatabase.channels.filter(lambda x: x.label == e.label[2:]).first(): e.receiver_chan for e in measurements}
+        # We map by the unique database ID since that is much safer
+        receivers_by_qubit = {channelDatabase.channels.filter(lambda x: x.label == e.label[2:]).first().id: e.receiver_chan for e in measurements}
 
         # Now a pipeline exists, so we create Auspex filters from the proxy filters in the db
         proxy_to_filter  = {}
@@ -239,7 +243,7 @@ class QubitExpFactory(object):
         for mq in measured_qubits:
 
             # Create the stream selectors
-            rcv = receivers_by_qubit[mq]
+            rcv = receivers_by_qubit[mq.id]
             dig = rcv.digitizer
             stream_sel = self.stream_sel_map[dig.model](name=rcv.label+'-SS')
             stream_sel.configure_with_proxy(rcv)
@@ -262,16 +266,16 @@ class QubitExpFactory(object):
                 descriptor.add_axis(DataAxis("averages", range(averages)))
 
             # Add the output connectors to the experiment and set their base descriptor
-            mqp = self.qubit_proxies[mq]
+            mqp = self.qubit_proxies[mq.id]
 
-            connector_by_qp[mqp] = exp.add_connector(mqp)
-            connector_by_qp[mqp].set_descriptor(descriptor)
+            connector_by_qp[mqp.id] = exp.add_connector(mqp)
+            connector_by_qp[mqp.id].set_descriptor(descriptor)
 
             # Add the channel to the instrument
             dig.instr.add_channel(channel)
             exp.chan_to_dig[channel] = dig.instr
-            exp.chan_to_oc [channel] = connector_by_qp[mqp]
-            exp.qubit_to_dig[mq]     = dig
+            exp.chan_to_oc [channel] = connector_by_qp[mqp.id]
+            exp.qubit_to_dig[mq.id]  = dig
 
         # Find the number of measurements
         segments_per_dig = {receiver.digitizer: meta_info["receivers"][receiver.label] for receiver in receivers
@@ -287,41 +291,46 @@ class QubitExpFactory(object):
 
         # Restrict the graph to the relevant qubits
         measured_qubit_names = [q.label for q in measured_qubits]
-
+        print("1 -->", self.meas_graph.nodes())
         # Configure the individual filter nodes
         for node in self.meas_graph.nodes():
             if isinstance(node, bbndb.auspex.FilterProxy):
                 if node.qubit_name in measured_qubit_names:
                     new_filt = self.filter_map[type(node)]()
-                    logger.debug(f"Created {new_filt} from {node}")
+                    logger.info(f"Created {new_filt} from {node}")
                     new_filt.configure_with_proxy(node)
                     new_filt.proxy = node
-                    proxy_to_filter[node] = new_filt
+                    proxy_to_filter[node.id] = new_filt
 
         # Connect the filters together
         graph_edges = []
         for node1, node2 in self.meas_graph.edges():
+            print("**", node1, "**", node.qubit_name, "**", node2, "**", node2.qubit_name)
             if node1.qubit_name in measured_qubit_names and node2.qubit_name in measured_qubit_names:
                 if isinstance(node1, bbndb.auspex.FilterProxy):
-                    filt1 = proxy_to_filter[node1]
+                    filt1 = proxy_to_filter[node1.id]
                     oc   = filt1.output_connectors["source"]
                 elif isinstance(node1, bbndb.auspex.QubitProxy):
-                    oc   = connector_by_qp[node1]
-                filt2 = proxy_to_filter[node2]
+                    oc   = connector_by_qp[node1.id]
+                filt2 = proxy_to_filter[node2.id]
                 ic   = filt2.input_connectors["sink"]
                 graph_edges.append([oc, ic])
 
+        print("1 -->", graph_edges)
         # Define the experiment graph
         exp.set_graph(graph_edges)
 
         return exp
 
+    @db_session
     def qubit(self, qubit_name):
-        return {q.label: qp for q,qp in self.qubit_proxies.items()}[qubit_name]
+        return {bbndb.qgl.Qubit[qid].label: qp for qid,qp in self.qubit_proxies.items()}[qubit_name]
 
+    @db_session
     def save_pipeline(self, name):
         cs = [bbndb.auspex.Connection(pipeline_name=name, node1=n1, node2=n2) for n1, n2 in self.meas_graph.edges()]
 
+    @db_session
     def load_pipeline(self, pipeline_name):
         cs = select(c for c in bbndb.auspex.Connection if c.pipeline_name==pipeline_name)
         if len(cs) == 0:
@@ -334,6 +343,7 @@ class QubitExpFactory(object):
             for c in cs:
                 c.node1.exp = c.node2.exp = self
 
+    @db_session
     def show_pipeline(self, pipeline_name=None):
         """If a pipeline name is specified query the database, otherwise show the
         current pipeline."""

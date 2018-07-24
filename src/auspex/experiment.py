@@ -109,7 +109,7 @@ class ExpProgressBar(object):
             num_data = num_data % self.chunk_sizes[i]
 
 class ExperimentGraph(object):
-    def __init__(self, edges)
+    def __init__(self, edges):
         self.dag = None
         self.edges = []
         self.create_graph(edges)
@@ -267,6 +267,7 @@ class Experiment(metaclass=MetaExperiment):
             if ee.parent not in unique_nodes:
                 unique_nodes.append(ee.parent)
         self.nodes = unique_nodes
+        print("set_graph", self.nodes)
         self.graph = ExperimentGraph(edges)
 
     def init_streams(self):
@@ -443,7 +444,8 @@ class Experiment(metaclass=MetaExperiment):
                 w.filename.value = wrs[0].filename.value
 
         # Remove the nodes with 0 dimension
-        self.nodes = [n for n in self.nodes if not(hasattr(n, 'input_connectors') and        n.input_connectors['sink'].descriptor.num_dims()==0)]
+
+        self.nodes = [n for n in self.nodes if not(hasattr(n, 'input_connectors') and  n.input_connectors['sink'].descriptor.num_dims()==0)]
 
         # Go and find any plotters
         self.standard_plotters = [n for n in self.nodes if isinstance(n, (Plotter, MeshPlotter, XYPlotter))]

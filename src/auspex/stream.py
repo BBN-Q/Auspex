@@ -503,7 +503,7 @@ class DataStream(object):
 
     def reset(self):
         self.descriptor.reset()
-        self.points_taken = 0
+        self.points_taken.value = 0
         while not self.queue.empty():
             self.queue.get_nowait()
         if self.start_connector is not None:

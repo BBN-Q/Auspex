@@ -96,7 +96,7 @@ class Filter(Process, metaclass=MetaFilter):
         taken from the filter database."""
 
         if proxy_obj.label:
-            self.name = proxy_obj.label
+            self.filter_name = proxy_obj.label
 
         for name, param in self.parameters.items():
             if hasattr(proxy_obj, name):
@@ -174,7 +174,7 @@ class Filter(Process, metaclass=MetaFilter):
                 message_data = message['data']
 
                 if message['type'] == 'event':
-                    logger.debug('%s "%s" received event "%s"', self.__class__.__name__, self.filter_name, message_data)
+                    logger.info('%s "%s" received event "%s"', self.__class__.__name__, self.filter_name, message_data)
 
                     # Propagate along the graph
                     for oc in self.output_connectors.values():
@@ -200,8 +200,8 @@ class Filter(Process, metaclass=MetaFilter):
                 elif message['type'] == 'data':
                     if not hasattr(message_data, 'size'):
                         message_data = np.array([message_data])
-                    logger.debug('%s "%s" received %d points.', self.__class__.__name__, self.filter_name, message_data.size)
-                    logger.debug("Now has %d of %d points.", input_stream.points_taken.value, input_stream.num_points())
+                    logger.info('%s "%s" received %d points.', self.__class__.__name__, self.filter_name, message_data.size)
+                    logger.info("Now has %d of %d points.", input_stream.points_taken.value, input_stream.num_points())
                     stream_points += len(message_data.flatten())
                     self.process_data(message_data.flatten())
 

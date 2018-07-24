@@ -291,6 +291,7 @@ class X6(Instrument):
                 logger.error("Expected %s bytes, received %s bytes" % (msg_size, len(buf)))
                 return
             data = np.frombuffer(buf, dtype=channel.dtype)
+            logger.info("X6 receiver data of length", len(data))
             oc.push(data)
 
     def get_buffer_for_channel(self, channel):
@@ -298,6 +299,7 @@ class X6(Instrument):
 
     def wait_for_acquisition(self, timeout=5):
         if self.gen_fake_data:
+            logger.info(f"X6 {self._lib.nbr_round_robins} avgs {self._lib.nbr_segments} segs {self._lib.record_length} points")
             for j in range(self._lib.nbr_round_robins):
                 for i in range(self._lib.nbr_segments):
                     if self.ideal_data is not None:

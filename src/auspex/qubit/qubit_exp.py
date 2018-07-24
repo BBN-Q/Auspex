@@ -2,7 +2,15 @@ from auspex.log import logger
 from auspex.experiment import Experiment, FloatParameter
 from auspex.stream import DataStream, DataAxis, SweepAxis, DataStreamDescriptor, InputConnector, OutputConnector
 import bbndb
+
 import sys
+import os
+if sys.platform == 'win32' or 'NOFORKING' in os.environ:
+    from threading import Thread as Process
+    from threading import Event
+else:
+    from multiprocessing import Process
+    from multiprocessing import Event
 
 import time
 
@@ -125,6 +133,7 @@ class QubitExperiment(Experiment):
             instr.disconnect()
 
     def run(self):
+        print("In Run")
         # Begin acquisition before enabling the AWGs
         for dig in self.digitizers:
             dig.acquire()
