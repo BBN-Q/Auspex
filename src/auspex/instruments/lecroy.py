@@ -9,6 +9,12 @@ class HDO6104(SCPIInstrument):
     channel_enabled = Command(scpi_string="C{channel}:TRA",
             additional_args=["channel"],value_map={True:"ON",False:"OFF"})
     sample_points = IntCommand(scpi_string="MEMORY_SIZE")
+    trig_mode = StringCommand(scpi_string="TRIG_MODE")
+    time_div = FloatCommand(scpi_string="TIME_DIV")
+    trig_delay = FloatCommand(scpi_string="TRIG_DELAY")
+    vol_div = Command(scpi_string="C{channel}:VOLT_DIV",additional_args=["channel"])
+    vol_offset = Command(scpi_string="C{channel}:OFFSET",additional_args=["channel"])
+
 
     def connect(self, resource_name=None, interface_type=None):
         super(HDO6104,self).connect(resource_name=resource_name,interface_type=interface_type)
