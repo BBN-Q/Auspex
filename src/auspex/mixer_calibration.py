@@ -52,10 +52,10 @@ class MixerCalibrationExperiment(Experiment):
 
     sideband_modulation = False
 
-    def __init__(self, qubit, mixer="control"):
+    def __init__(self, channel, mixer="control"):
         """Initialize MixerCalibrationExperiment Experiment.
             Args:
-                qubit: Qubit identifier string.
+                channel: channel identifier string (qubit or edge).
                 mixer: One of 'control', 'measure' to select which mixer to cal.
         """
         if mixer not in ("measure", "control"):
@@ -75,16 +75,19 @@ class MixerCalibrationExperiment(Experiment):
             self.LO = self.settings['instruments'][self.sa]['LO']
         except KeyError:
             raise ValueError("LO {} for spectrum analyzer {} not found in instrument configuration file!".format(self.LO, self.sa))
-        try:
-            self.qubit = qubit
-            self.qubit_settings = self.settings['qubits'][qubit]
-        except KeyError as ex:
-            raise ValueError("Could not find qubit {} in the qubit configuration file.".format(qubit)) from ex
-        self.AWG = self.settings['qubits'][qubit][mixer]['AWG'].split(" ")[0]
-        self.chan = self.settings['qubits'][qubit][mixer]['AWG'].split(" ")[1]
+        self.channel = channel
+        if channel in self.settings['qubits']:
+            self.channel_settings = self.settings['qubits'][channel]
+            chan_settings = self.settings['qubits'][channel][mixer]
+        elif channel in self.settings['edges']:
+            self.channel_settings = self.settings['edges'][channel]
+            chan_settings = self.settings['edges'][channel]
+        else:
+            raise ValueError("Could not find channel {} in the configuration file.".format(channel))
+        self.AWG, self.chan = chan_settings['AWG'].split(" ")
         if self.settings['instruments'][self.AWG]['type'] != 'APS2':
             raise ValueError("Mixer calibration only supported for APS2.")
-        self.source = self.settings['qubits'][qubit][mixer]['generator']
+        self.source = chan_settings['generator']
 
         self.instruments_to_enable = [self.sa, self.LO, self.AWG, self.source]
         self.instrs_connected = False
@@ -101,7 +104,7 @@ class MixerCalibrationExperiment(Experiment):
         logger.info("Mixer calibration for {}-{} written to experiment file.".format(self.AWG, self.chan))
 
     def _set_mixer_phase(self, phase):
-        self._instruments[self.AWG].set_mixer_phase_skew(phase) 
+        self._instruments[self.AWG].set_mixer_phase_skew(phase)
 
     def connect_instruments(self):
         """Extend connect_instruments to reset I,Q offsets and amplitude and phase

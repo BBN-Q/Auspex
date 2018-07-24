@@ -29,7 +29,6 @@ import time
 import re
 import pandas as pd
 from shutil import copyfile
-from ruamel.yaml import YAML
 
 from .filter import Filter
 from auspex.parameter import Parameter, FilenameParameter, BoolParameter
@@ -142,7 +141,7 @@ class WriteToHDF5(Filter):
         compression = 'gzip' if self.compress else None
 
         # If desired, create the group in which the dataset and axes will reside
-        
+
         self.group = self.file.create_group(self.groupname.value)
         self.data_group = self.group.create_group("data")
 
@@ -363,7 +362,7 @@ class WriteToHDF5(Filter):
 
         while not self.exit.is_set():# and not self.finished_processing.is_set():
             i +=1
-            # Try to pull all messages in the queue. queue.empty() is not reliable, so we 
+            # Try to pull all messages in the queue. queue.empty() is not reliable, so we
             # ask for forgiveness rather than permission.
             msgs_by_stream = {s: [] for s in streams}
 
@@ -429,7 +428,7 @@ class WriteToHDF5(Filter):
             else:
                 if np.all(list(got_done_msg.values())) and np.all([v.done() for v in self.input_connectors.values()]):
                     self.finished_processing.set()
-                    break      
+                    break
 
 class DataBuffer(Filter):
     """Writes data to IO."""

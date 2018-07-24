@@ -277,12 +277,12 @@ class APS(Instrument, metaclass=MakeSettersGetters):
 
     def set_offset(self, chs, value):
         if isinstance(chs, int) or len(chs)==1:
-            self.wrapper.set_amplitude(int(chs), value)
+            self.wrapper.set_offset(int(chs), value)
         else:
-            self.wrapper.set_amplitude(int(chs[0]), value)
-            self.wrapper.set_amplitude(int(chs[1]), value)
-            self.wrapper.set_amplitude(int(chs[2]), value)
-            self.wrapper.set_amplitude(int(chs[3]), value)
+            self.wrapper.set.offset(int(chs[0]), value)
+            self.wrapper.set.offset(int(chs[1]), value)
+            self.wrapper.set.offset(int(chs[2]), value)
+            self.wrapper.set.offset(int(chs[3]), value)
 
     def set_all(self, settings_dict, prefix=""):
         # Pop the channel settings
@@ -605,3 +605,20 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
     @property
     def fpga_temperature(self):
         return self.wrapper.get_fpga_temperature()
+
+class TDM(APS2):
+    """BBN TDM"""
+    instrument_type = "AWG"
+
+    yaml_template = """
+        APS2-Name:
+          type: TDM                # Used by Auspex. TDMPattern for QGL not yet available
+          enabled: true            # true or false, optional
+          address:                 # IP address or hostname should be fine
+          trigger_interval: 0.0    # (s)
+          trigger_source: Internal # Internal, Software, or System
+          seq_file: test.h5        # optional sequence file"""
+
+    def set_all(self, settings_dict):
+        super(APS2, self).set_all(settings_dict)
+        self.master = False # only for APS2. To make the TDM the master, set trigger_source: Internal for TDM and System for all the APS2

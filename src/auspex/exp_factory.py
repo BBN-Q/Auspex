@@ -195,7 +195,6 @@ class QubitExpFactory(object):
         experiment.save_data       = save_data
         experiment.name            = expname
         experiment.cw_mode         = cw_mode
-        experiment.calibration     = calibration
         experiment.repeats         = repeats
 
         if meta_file:
@@ -312,19 +311,26 @@ class QubitExpFactory(object):
             return
         plt2[cals[first_cal]] = (cal_pts[first_cal], amps1)
         plt2["Fit "+cals[first_cal]] = (xpts, ypts)
-        logger.info("Found {} offset of {}.".format(first_cal, offset1))
+        logger.info("Found {} of {}.".format(str.replace(cals[first_cal], '_', ' '), offset1))
         getattr(mce, cals[first_cal]).value = offset1
 
         sweep_offset(cals[second_cal], cal_pts[second_cal])
-        amps2 = np.array([x[1] for x in buff.out_queue.get()])
-        offset2, xpts, ypts = find_null_offset(cal_pts[second_cal][1:], amps2[1:], default=cal_defaults[second_cal])
+        amps2 = np.array([x[1] for x in buff.get_data()])
+        try:
+            offset2, xpts, ypts = find_null_offset(cal_pts[second_cal][1:], amps2[1:], default=cal_defaults[second_cal])
+        except:
+            mce.extra_plot_server.stop()
+            return
         plt2[cals[second_cal]] = (cal_pts[second_cal], amps2)
         plt2["Fit "+cals[second_cal]] = (xpts, ypts)
-        logger.info("Found {} offset of {}.".format(second_cal, offset2))
+        logger.info("Found {} of {}.".format(str.replace(cals[first_cal], '_', ' '), offset2))
         getattr(mce, cals[second_cal]).value = offset2
 
         mce.disconnect_instruments()
-        mce.extra_plot_server.stop()
+        try:
+            mce.extra_plot_server.stop()
+        except:
+            logger.info('Mixer plot server was not successfully stopped.')
 
         if write_to_file:
             mce.write_to_file()
@@ -388,7 +394,8 @@ class QubitExpFactory(object):
             if len(receivers) > 1:
                 raise NotImplementedError("Single shot fidelity for more than one qubit is not yet implemented.")
             stream_sel_name_orig = receivers[0][0].replace('RecvChan-', '')
-            X6_stream_selectors = [k for k,v in filters.items() if v["type"] == 'X6StreamSelector' and v["source"] == filters[stream_sel_name_orig]['source'] and v['channel'] == filters[stream_sel_name_orig]['channel']]
+            X6_stream_selectors = [k for k,v in filters.items() if v["type"] == 'X6StreamSelector' and v["source"] == filters[stream_sel_name_orig]['source']\
+             and v['channel'] == filters[stream_sel_name_orig]['channel'] and v["dsp_channel"] == filters[stream_sel_name_orig]["dsp_channel"]]
             for s in X6_stream_selectors:
                 if filters[s]['stream_type'] == experiment.ss_stream_type:
                     filters[s]['enabled'] = True
@@ -490,8 +497,8 @@ class QubitExpFactory(object):
             singleshot_ancestors = []
             buffer_ancestors = []
             # Trace back our ancestors, using plotters if no writers are available
-            if len(writers) == 1:
-                writer_ancestors = nx.ancestors(dag, writers[0])
+            if writers:
+                writer_ancestors = set().union(*[nx.ancestors(dag, wr) for wr in writers])
                 # We will have gotten the digitizer, which should be removed since we're already taking care of it
                 writer_ancestors.remove(dig_name)
             if plotters:
@@ -555,16 +562,19 @@ class QubitExpFactory(object):
             #ovverride data axis with repeated number of segments
             data_axis['points'] = np.tile(data_axis['points'], experiment.repeats)
 
-        # See if there are multiple partitions, and therefore metadata
-        if len(desc) > 1:
-            meta_axis = desc[1] # Metadata will always be the second axis
+        # Search for calibration axis, i.e., metadata
+        axis_names = [d['name'] for d in desc]
+        if 'calibration' in axis_names:
+            meta_axis = desc[axis_names.index('calibration')]
             # There should be metadata for each cal describing what it is
-            metadata = ['data']*len(data_axis['points']) + meta_axis['points']
-
-            # Pad the data axis with dummy equidistant x-points for the extra calibration points
-            avg_step = (data_axis['points'][-1] - data_axis['points'][0])/(len(data_axis['points'])-1)
-            points = np.append(data_axis['points'], data_axis['points'][-1] + (np.arange(len(meta_axis['points']))+1)*avg_step)
-
+            if len(desc)>1:
+                metadata = ['data']*len(data_axis['points']) + meta_axis['points']
+                # Pad the data axis with dummy equidistant x-points for the extra calibration points
+                avg_step = (data_axis['points'][-1] - data_axis['points'][0])/(len(data_axis['points'])-1)
+                points = np.append(data_axis['points'], data_axis['points'][-1] + (np.arange(len(meta_axis['points']))+1)*avg_step)
+            else:
+                metadata = meta_axis['points'] # data may consist of calibration points only
+                points = np.arange(len(metadata)) # dummy axis for plotting purposes
             # If there's only one segment we can ignore this axis
             if len(points) > 1:
                 experiment.segment_axis = DataAxis(data_axis['name'], points, unit=data_axis['unit'], metadata=metadata)
@@ -658,7 +668,9 @@ class QubitExpFactory(object):
         else:
             sweeps = experiment.settings['sweeps']
             order = experiment.settings['sweepOrder']
-        qubits = experiment.settings['qubits']
+        channels = experiment.settings['qubits']
+        if 'edges' in experiment.settings:
+            channels.update(experiment.settings['edges'])
 
         for name in order:
             par = sweeps[name]
@@ -681,23 +693,28 @@ class QubitExpFactory(object):
 
                 # Figure our what we are sweeping
                 target_info = par["target"].split()
-                if target_info[0] in experiment.qubits:
+                if target_info[0] in channels:
                     # We are sweeping a qubit, so we must lookup the instrument
                     target = par["target"].split()
-                    name, meas_or_control, prop = target[:3]
-                    if len(target) > 3:
-                        ch_ind = target[3]
-                    qubit = qubits[name]
+                    if target_info[0] in experiment.qubits:
+                        name, meas_or_control, prop = target[:3]
+                        isqubit = True
+                    else:
+                        name, prop = target[:2]
+                        isqubit = False
+                    if len(target) > 2 + isqubit:
+                        ch_ind = target[2 + isqubit]
+                    channel_params = channels[name][meas_or_control] if isqubit else channels[name]
                     method_name = "set_{}".format(prop.lower())
 
                     # If sweeping frequency, we should allow for either mixed up signals or direct synthesis.
                     # Sweeping amplitude is always through the AWG channels.
-                    if 'generator' in qubit[meas_or_control] and prop.lower() == "frequency":
-                        name = qubit[meas_or_control]['generator']
+                    if 'generator' in channel_params and prop.lower() == "frequency":
+                        name = channel_params['generator']
                         instr = experiment._instruments[name]
                     else:
                         # Construct a function that sets a per-channel property
-                        name, chan = qubit[meas_or_control]['AWG'].split()
+                        name, chan = channel_params['AWG'].split()
                         if len(target) > 3:
                             chan = chan[int(ch_ind)-1]
                         instr = experiment._instruments[name]

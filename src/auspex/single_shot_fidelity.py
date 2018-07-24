@@ -29,7 +29,7 @@ import auspex.config
 class SingleShotFidelityExperiment(QubitExperiment):
     """Experiment to measure single-shot measurement fidelity of a qubit."""
 
-    def __init__(self, qubit_names, num_shots=10000, expname=None, meta_file=None, save_data=False, optimize=False, stream_type = 'Raw'):
+    def __init__(self, qubit_names, num_shots=10000, expname=None, meta_file=None, save_data=False, optimize=False, set_threshold = True, stream_type = 'Raw', **kwargs):
         """Create a single shot fidelity measurement experiment. Assumes that there is a single shot measurement
         filter in the filter pipeline.
         Arguments:
@@ -49,6 +49,7 @@ class SingleShotFidelityExperiment(QubitExperiment):
         self.save_data = save_data
         self.calibration = True
         self.optimize = optimize
+        self.set_threshold = True
         self.name = expname
         self.cw_mode = False
         self.repeats = num_shots
@@ -67,7 +68,6 @@ class SingleShotFidelityExperiment(QubitExperiment):
             QubitExpFactory.load_parameter_sweeps(experiment)
         self.ssf = self.find_single_shot_filter()
         self.leave_plot_server_open = True
-        auspex.config.single_plotter_mode = True
 
     def run_sweeps(self):
         #For now, only update histograms if we don't have a parameter sweep.
@@ -89,6 +89,9 @@ class SingleShotFidelityExperiment(QubitExperiment):
                 self.extra_plot_server.stop()
             except:
                 pass
+
+        if self.set_threshold:
+            self.update_threshold()
 
         if self.sweeper.axes and self.optimize:
             #select the buffers/writers whose sources are singleshot filters
@@ -113,7 +116,9 @@ class SingleShotFidelityExperiment(QubitExperiment):
                     else:
                         param_key[instr_tree[-1]] = opt_value
                     logger.info("Set{} to {}.".format(" ".join(str(x) for x in instr_tree),opt_value ))
-                config.dump_meas_file(self.saved_settings, config.meas_file)
+
+        if self.set_threshold or (self.sweeper.axes and self.optimize): # update settings if something was calibrated
+            config.dump_meas_file(self.saved_settings, config.meas_file)
 
     def _update_histogram_plots(self):
         pdf_data = self.get_results()
@@ -125,6 +130,10 @@ class SingleShotFidelityExperiment(QubitExperiment):
         self.im_plot.set_data("Ground Gaussian Fit", pdf_data["Q Bins"], pdf_data["Ground Q Gaussian PDF"])
         self.im_plot.set_data("Excited", pdf_data["Q Bins"], pdf_data["Excited Q PDF"])
         self.im_plot.set_data("Excited Gaussian Fit", pdf_data["Q Bins"], pdf_data["Excited Q Gaussian PDF"])
+
+    def update_threshold(self):
+        if 'I Threshold' in self.ssf[0].pdf_data:
+            self.saved_settings['filters'][self.qubit_to_stream_sel[self.qubit.label]]['threshold'] = round(float(self.ssf[0].pdf_data['I Threshold']), 6)
 
     def init_plots(self):
         self.re_plot = ManualPlotter("Fidelity - Real", x_label='Bins', y_label='Real Quadrature')
@@ -158,7 +167,7 @@ class SingleShotFidelityExperiment(QubitExperiment):
         """Get the PDF and fidelity numbers from the filters. Returns a dictionary of PDF data with the
         filter names as keys."""
         ssf = self.find_single_shot_filter()
-        if len(ssf) > 1:
+        if len(ssf) > 1: # not implemented
             try:
                 return {x.name: x.pdf_data for x in ssf}
             except AttributeError:

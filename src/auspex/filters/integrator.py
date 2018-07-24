@@ -9,11 +9,13 @@
 __all__ = ['KernelIntegrator']
 
 import numpy as np
+import os
 
 from .filter import Filter
 from auspex.parameter import Parameter, FloatParameter, IntParameter, BoolParameter
 from auspex.stream import DataStreamDescriptor, InputConnector, OutputConnector
 from auspex.log import logger
+import auspex.config as config
 
 class KernelIntegrator(Filter):
 
@@ -56,8 +58,13 @@ class KernelIntegrator(Filter):
             kernel[sample_start:sample_stop] = 1.0
             # add modulation
             kernel *= np.exp(2j * np.pi * self.frequency.value * time_step * time_pts)
+        elif os.path.exists(os.path.join(config.KernelDir, self.kernel.value+'.txt')):
+            kernel = np.loadtxt(os.path.join(config.KernelDir, self.kernel.value+'.txt'), dtype=complex, converters={0: lambda s: complex(s.decode().replace('+-', '-'))})
         else:
-            kernel = eval(self.kernel.value.encode('unicode_escape'))
+            try:
+                kernel = eval(self.kernel.value.encode('unicode_escape'))
+            except:
+                raise ValueError('Kernel invalid. Provide a file name or an expression to evaluate')
         # pad or truncate the kernel to match the record length
         if kernel.size < record_length:
             self.aligned_kernel = np.append(kernel, np.zeros(record_length-kernel.size, dtype=np.complex128))
@@ -71,9 +78,9 @@ class KernelIntegrator(Filter):
         output_descriptor.axes = self.sink.descriptor.axes[:-1]
         output_descriptor._exp_src = self.sink.descriptor._exp_src
         output_descriptor.dtype = np.complex128
-        for os in self.source.output_streams:
-            os.set_descriptor(output_descriptor)
-            os.end_connector.update_descriptors()
+        for ost in self.source.output_streams:
+            ost.set_descriptor(output_descriptor)
+            ost.end_connector.update_descriptors()
 
     def process_data(self, data):
 
