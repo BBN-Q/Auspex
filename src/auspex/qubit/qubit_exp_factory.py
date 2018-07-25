@@ -291,7 +291,7 @@ class QubitExpFactory(object):
 
         # Restrict the graph to the relevant qubits
         measured_qubit_names = [q.label for q in measured_qubits]
-        print("1 -->", self.meas_graph.nodes())
+        commit()
         # Configure the individual filter nodes
         for node in self.meas_graph.nodes():
             if isinstance(node, bbndb.auspex.FilterProxy):
@@ -304,8 +304,8 @@ class QubitExpFactory(object):
 
         # Connect the filters together
         graph_edges = []
+        commit()
         for node1, node2 in self.meas_graph.edges():
-            print("**", node1, "**", node.qubit_name, "**", node2, "**", node2.qubit_name)
             if node1.qubit_name in measured_qubit_names and node2.qubit_name in measured_qubit_names:
                 if isinstance(node1, bbndb.auspex.FilterProxy):
                     filt1 = proxy_to_filter[node1.id]
@@ -316,7 +316,6 @@ class QubitExpFactory(object):
                 ic   = filt2.input_connectors["sink"]
                 graph_edges.append([oc, ic])
 
-        print("1 -->", graph_edges)
         # Define the experiment graph
         exp.set_graph(graph_edges)
 

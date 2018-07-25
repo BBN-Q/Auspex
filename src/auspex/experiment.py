@@ -370,7 +370,6 @@ class Experiment(metaclass=MetaExperiment):
                     oc.push_event("new_tuples", (axis_names, sweep_values,))
 
             # Run the procedure
-            # logger.debug("Starting a new run.")
             self.run()
 
             # See if the axes want to extend themselves. They will push updates
@@ -385,6 +384,7 @@ class Experiment(metaclass=MetaExperiment):
             # Finish up, checking to see whether we've received all of our data
             if self.sweeper.done():
                 self.declare_done()
+                break
 
     def filters_finished(self):
         return all([n.finished_processing.is_set() for n in self.other_nodes if isinstance(n, Filter)])
