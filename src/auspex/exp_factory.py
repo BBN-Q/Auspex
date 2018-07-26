@@ -35,6 +35,7 @@ from auspex.stream import OutputConnector, DataStreamDescriptor, DataAxis
 from auspex.experiment import FloatParameter, IntParameter
 from auspex.instruments.X6 import X6Channel
 from auspex.instruments.alazar import AlazarChannel
+from auspex.instruments.dummydig import DummydigChannel
 from auspex.mixer_calibration import MixerCalibrationExperiment, find_null_offset
 
 def correct_resource_name(resource_name):
