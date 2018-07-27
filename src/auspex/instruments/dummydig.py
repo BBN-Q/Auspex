@@ -25,51 +25,22 @@ class DummydigChannel(DigitizerChannel):
     """Channel for an Dummy digitizer"""
 
     def __init__(self, settings_dict=None):
-        self.stream_type       = "Raw"
-        self.if_freq           = 0.0
-        self.kernel            = None
-        self.kernel_bias       = 0.0
-        self.threshold         = 0.0
-        self.threshold_invert  = False
-
-        self.phys_channel   = 1
-        self.dsp_channel    = 0
 
         self.dtype = np.complex128
         self.ideal_data = None
 
         if settings_dict:
+            print('hello')
             self.set_all(settings_dict)
 
     def set_all(self, settings_dict):
         for name, value in settings_dict.items():
-            if name == "kernel" and value:
-                #check if the kernel is given as an existing path or an expression to eval
-                if os.path.exists(os.path.join(config.KernelDir, value+'.txt')):
-                    self.kernel = np.loadtxt(os.path.join(config.KernelDir, value+'.txt'), dtype=complex, converters={0: lambda s: complex(s.decode().replace('+-', '-'))})
-                else:
-                    try:
-                        self.kernel = eval(value)
-                    except:
-                        raise ValueError('Kernel invalid. Provide a file name or an expression to evaluate')
-            elif name == "kernel_bias" and isinstance(value, str) and value:
-                self.kernel_bias = eval(value)
-            #elif hasattr(self, name):
-            #        setattr(self, name, value)
-            elif name == "channel":
-                setattr(self, 'phys_channel', int(value))
-            elif name == 'threshold':
-                setattr(self, 'threshold', value)
-            elif name == 'threshold_invert':
-                setattr(self, 'threshold_invert', bool(value))
-            elif name == 'ideal_data': # for testing purposes
-                self.ideal_data = np.load(os.path.abspath(value+'.npy'))
-            else:
-                try:
-                    setattr(self, name, value)
-                except AttributeError:
-                    logger.debug("Could not set channel attribute: {} on X6 {} channel.".format(name, self.stream_type))
-                    pass
+            print(name,value)
+            try:
+                setattr(self, name, value)
+            except AttributeError:
+                logger.debug("Could not set channel attribute: {} on dummydig {} channel.".format(name, self.stream_type))
+                pass
 
 class Dummydig(Instrument):
     """BBN Dummy digitizer for examples and unit testing"""
@@ -77,7 +48,7 @@ class Dummydig(Instrument):
 
     def __init__(self, resource_name=None, name="Unlabeled Dummydig", gen_fake_data=False):
         
-        # X6Channel objects
+        # Channel objects
         self._channels = []
         # socket r/w pairs for each channel
         self._chan_to_rsocket = {}
@@ -142,9 +113,6 @@ class Dummydig(Instrument):
         if not isinstance(channel, DummydigChannel):
             raise TypeError("Dummydig passed {} rather than an DummydigChannel object.".format(str(channel)))
 
-        if channel.stream_type not in ['Raw', 'Demodulated', 'Integrated']:
-            raise ValueError("Stream type of {} not recognized by Dummydig".format(str(channel.stream_type)))
-
         # todo: other checking here
         self._channels.append(channel)
 
@@ -158,7 +126,7 @@ class Dummydig(Instrument):
                 signal = np.exp(1j*np.linspace(0,10.0*np.pi,int(length/2)))
                 data = np.zeros(length, dtype=chan.dtype)
                 data[int(length/4):int(length/4)+len(signal)] = signal
-                #data += 0.1*np.random.random(length)
+                data += 0.1*np.random.random(length)
                 wsock.send(struct.pack('n', length*data.dtype.itemsize) + data.tostring())
 
     def acquire(self):
@@ -191,7 +159,7 @@ class Dummydig(Instrument):
         for j in range(self.nbr_round_robins):
             for i in range(self.nbr_segments):
                 self.spew_fake_data()
-                await asyncio.sleep(0.1)
+                await asyncio.sleep(0.001)
 
     # pass thru properties
     '''
