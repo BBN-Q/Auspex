@@ -123,7 +123,7 @@ class QubitExperiment(Experiment):
         # remove socket listeners
         for listener, exit in self.dig_listeners.items():
             exit.set()
-            listener.join()
+            listener.join(0.2)
         if self.cw_mode:
             for awg in self.awgs:
                 awg.stop()

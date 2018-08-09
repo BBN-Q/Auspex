@@ -10,6 +10,7 @@ __all__ = ['Filter']
 
 import os
 import sys
+import psutil
 
 if sys.platform == 'win32' or 'NOFORKING' in os.environ:
     from threading import Thread as Process
@@ -22,7 +23,7 @@ else:
 
 import cProfile
 import itertools
-import time
+import time, datetime
 import queue
 import copy
 import numpy as np
@@ -69,8 +70,8 @@ class Filter(Process, metaclass=MetaFilter):
         self.exit = Event()
 
         # For objectively measuring doneness
-        self.finished_processing = Event()
-        self.finished_processing.clear()
+        # self.finished_processing = Event()
+        # self.finished_processing.clear()
 
         # For signaling to Quince that something is wrong
         self.out_of_spec = False
@@ -90,6 +91,9 @@ class Filter(Process, metaclass=MetaFilter):
             a.parent = self
             self.parameters[param.name] = a
             setattr(self, param.name, a)
+
+        # For sending performance information
+        self.last_performance_update = datetime.datetime.now()
 
     def __repr__(self):
         return "<{} Process (name={})>".format(self.__class__.__name__, self.filter_name)
@@ -122,6 +126,7 @@ class Filter(Process, metaclass=MetaFilter):
         self.exit.set()
 
     def run(self):
+        self.p = psutil.Process(os.getpid())
         if auspex.config.profile:
             if not self.filter_name:
                 name = "Unlabeled"
@@ -131,19 +136,34 @@ class Filter(Process, metaclass=MetaFilter):
         else:
             self.main()
 
+    def push_to_all(self, message):
+        for oc in self.output_connectors.values():
+            for os in oc.output_streams:
+                os.queue.put(message)
+
+    def push_resource_usage(self):
+        if (datetime.datetime.now() - self.last_performance_update).seconds > 0.1:
+            self.perf_queue.put((self.filter_name, datetime.datetime.now(), self.p.cpu_percent(), self.p.memory_info()[0]/2.**20))
+            # self.doc.add_next_tick_callback(partial(self.update_perf, time=time.time(), cpu=self.p.cpu_percent(), mem=self.p.memory_info()[0]/2.**20))
+            # # self.cpu_data.data["x"] = np.arange(10) #self.cpu_data.data["x"].append(time.time())
+            # # self.cpu_data.data["y"] = np.random.random(10) #self.cpu_data.data["y"].append(self.p.cpu_percent())
+            self.last_performance_update = datetime.datetime.now()
+        # logger.info("WTF")
+        # print(f"{self}: ({os.getpid()}) {self.p.cpu_percent()} -- {self.p.memory_info()[0]/2.**20:.3f} MB")
+
     def main(self):
         """
         Generic run method which waits on a single stream and calls `process_data` on any new_data
         """
         logger.debug('Running "%s" run loop', self.filter_name)
-        self.finished_processing.clear()
+        # self.finished_processing.clear()
         input_stream = getattr(self, self._input_connectors[0]).input_streams[0]
         desc = input_stream.descriptor
 
         stream_done = False
         stream_points = 0
 
-        while not self.exit.is_set() and not self.finished_processing.is_set():
+        while not self.exit.is_set():# and not self.finished_processing.is_set():
             # Try to pull all messages in the queue. queue.empty() is not reliable, so we 
             # ask for forgiveness rather than permission.
             messages = []
@@ -154,6 +174,8 @@ class Filter(Process, metaclass=MetaFilter):
                 except queue.Empty as e:
                     time.sleep(0.002)
                     break
+                    
+            self.push_resource_usage()
 
             for message in messages:
                 message_type = message['type']
@@ -163,17 +185,19 @@ class Filter(Process, metaclass=MetaFilter):
                     logger.debug('%s "%s" received event "%s"', self.__class__.__name__, self.filter_name, message_data)
 
                     # Propagate along the graph
-                    for oc in self.output_connectors.values():
-                        for os in oc.output_streams:
-                            logger.debug('%s "%s" pushed event "%s" to %s, %s', self.__class__.__name__, self.filter_name, message_data, oc, os)
-                            os.queue.put(message)
+                    self.push_to_all(message)
+                    # for oc in self.output_connectors.values():
+                    #     for os in oc.output_streams:
+                    #         logger.debug('%s "%s" pushed event "%s" to %s, %s', self.__class__.__name__, self.filter_name, message_data, oc, os)
+                    #         os.queue.put(message)
 
                     # Check to see if we're done
                     if message['event_type'] == 'done':
-                        if not self.finished_processing.is_set():
-                            logger.warning("Filter {} being asked to finish before being done processing. ({} of {})".format(self.filter_name,stream_points,input_stream.num_points()))
+                        logger.info(f"{self} received done message!")
+                        # if not self.finished_processing.is_set():
+                        #     logger.warning("Filter {} being asked to finish before being done processing. ({} of {})".format(self.filter_name,stream_points,input_stream.num_points()))
                         self.exit.set()
-                        self.finished_processing.set()
+                        # self.finished_processing.set()
                         break
                     elif message['event_type'] == 'refined':
                         self.refine(message_data)
@@ -198,14 +222,14 @@ class Filter(Process, metaclass=MetaFilter):
                 #     self.finished_processing.set()
                 #     break
             # If we have gotten all our data and process_data has returned, then we are done!
-            if desc.is_adaptive():
-                if stream_done and np.all([len(desc.visited_tuples) == points_taken[s] for s in streams]):
-                    self.finished_processing.set()
-                    break
-            else:
-                if stream_done and np.all([v.done() for v in self.input_connectors.values()]):
-                    self.finished_processing.set()
-                    break      
+            # if desc.is_adaptive():
+            #     if stream_done and np.all([len(desc.visited_tuples) == points_taken[s] for s in streams]):
+            #         # self.finished_processing.set()
+            #         break
+            # else:
+            #     if stream_done and np.all([v.done() for v in self.input_connectors.values()]):
+            #         self.finished_processing.set()
+            #         break      
 
         # When we've finished, either prematurely or as expected
         self.on_done()

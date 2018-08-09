@@ -11,8 +11,14 @@ import sys
 
 if sys.platform == 'win32' or 'NOFORKING' in os.environ:
     from queue import Queue as Queue
+    from threading import Event
+    from threading import Thread as Process
+    from threading import Thread as Thread
 else:
     from multiprocessing import Queue as Queue
+    from multiprocessing import Event
+    from multiprocessing import Process
+    from threading import Thread as Thread
 
 import inspect
 import time
@@ -22,6 +28,8 @@ import logging
 import signal
 import numbers
 import subprocess
+import queue
+from functools import partial
 
 import numpy as np
 import scipy as sp
@@ -382,8 +390,8 @@ class Experiment(metaclass=MetaExperiment):
                 self.declare_done()
                 break
 
-    def filters_finished(self):
-        return all([n.finished_processing.is_set() for n in self.other_nodes if isinstance(n, Filter)])
+    # def filters_finished(self):
+    #     return all([n.finished_processing.is_set() for n in self.other_nodes if isinstance(n, Filter)])
 
     def connect_instruments(self):
         # Connect the instruments to their resources
@@ -473,6 +481,7 @@ class Experiment(metaclass=MetaExperiment):
 
         def catch_ctrl_c(signum, frame):
             logger.info("Caught SIGINT. Shutting down.")
+            self.declare_done()
             self.shutdown()
             raise NameError("Shutting down.")
             sys.exit(0)
@@ -487,6 +496,67 @@ class Experiment(metaclass=MetaExperiment):
         self.other_nodes.extend(self.h5_handlers)
         self.other_nodes.remove(self)
         
+        from .plotting import BokehServerProcess
+        from bokeh.plotting import Figure
+        from bokeh.client import push_session
+        from bokeh.layouts import row, gridplot, column
+        from bokeh.io import curdoc
+        # from bokeh.models.widgets import Panel, Tabs
+        from tornado import gen
+        from bokeh.models import LinearAxis, Range1d, ColumnDataSource
+
+        bokeh_process = BokehServerProcess(notebook=False)
+        bokeh_process.run()
+        perf_queue = Queue()
+        perf_figs = []
+        for n in self.other_nodes:
+            perf_figs.append(Figure(plot_width=500, plot_height=150, x_axis_type="datetime", title=n.filter_name))
+            perf_figs.append(Figure(plot_width=500, plot_height=150, x_axis_type="datetime", title=n.filter_name))
+        for i, pf in enumerate(perf_figs):
+            pf.xaxis[0].axis_label = 'Time (s)'
+            pf.yaxis[0].axis_label = 'CPU Usage (%)' if i%2 == 0 else 'Memory Usage (MB)'
+        data_sources = {n.filter_name: ColumnDataSource(data=dict(time=[], cpu=[], mem=[])) for n in self.other_nodes}
+        cpu_plots    = {n.filter_name: pf.line(x='time', y='cpu', line_color="#3366FF", line_width=4, source=data_sources[n.filter_name]) for n, pf in zip(self.other_nodes, perf_figs[0::2])}
+        mem_plots    = {n.filter_name: pf.line(x='time', y='mem', line_color="#FF6633", line_width=4, source=data_sources[n.filter_name]) for n, pf in zip(self.other_nodes, perf_figs[1::2])}
+
+        container = gridplot(perf_figs, ncols=2)
+        doc = curdoc()
+        exit_perf = Event()
+
+        @gen.coroutine
+        def update_perf(name, time_val, cpu, mem):
+            # print("Updating", data_sources[name], time_val, cpu, mem)
+            data_sources[name].stream(dict(time=[time_val], cpu=[cpu], mem=[mem]))
+
+        def blocking_task(q, exit):
+            print("Running blocking_task")
+            while not exit.is_set():
+                messages = []
+
+                while not exit.is_set():
+                    try:
+                        messages.append(q.get(False))
+                    except queue.Empty as e:
+                        time.sleep(0.05)
+                        break
+
+                for message in messages:
+                    filter_name, time_val, cpu, mem = message
+                    # doc.add_next_tick_callback(partial(update_perf, name=filter_name, time=time_val, cpu=cpu, mem=mem))
+                    update_perf(filter_name, time_val, cpu, mem)
+
+        p = Thread(target=blocking_task, args=(perf_queue, exit_perf))
+        p.start()
+
+        for f in self.other_nodes:
+            f.perf_queue = perf_queue
+
+        doc.clear()
+        doc.add_root(container)
+        session = push_session(doc)
+        session.show(container)
+
+
         # Start the filter processes
         for n in self.other_nodes:
             n.start()
@@ -497,29 +567,55 @@ class Experiment(metaclass=MetaExperiment):
             if callback:
                 callback(plot)
 
-        time.sleep(1)
-        while not self.filters_finished():
-            logger.info("Waiting for filters to finish...")
+        for n in self.h5_handlers:
+            n.exit.set()
+
+        exit_perf.set()
+
+        time.sleep(0.1)
+        times = {n: 0 for n in self.other_nodes}
+        dones = {n: False for n in self.other_nodes}
+        while False in dones.values():
             for n in self.other_nodes:
-                if isinstance(n, Filter):
-                    print(n, n.finished_processing.is_set() )
-            time.sleep(1)
+                n.join(timeout=0.05)
+                if n.is_alive():
+                    print(f"Checking {n}: alive")
+                    times[n] += 0.05
+                    print(f"{n} is not finished! {times[n]}")
+                    if times[n] > 2:
+                        print(f"Killing {n}")
+                        n.shutdown()
+                        n.join()
+                else:
+                    print(f"Checking {n}: dead")
+                    dones[n] = True
+
+        print("DONE WAITING")
+        # while not self.filters_finished():
+        #     logger.info("Waiting for filters to finish...")
+        #     for n in self.other_nodes:
+        #         if isinstance(n, Filter):
+        #             print(n, n.finished_processing.is_set() )
+        #     time.sleep(1)
 
         self.shutdown()
 
     def shutdown(self):
         logger.debug("Shutting Down!")
-        for n in self.other_nodes:
-            n.shutdown()
-            n.join()
 
+        for n in self.other_nodes:
+            # n.shutdown()
+            print("Joining just in case", n)
+            n.join(0.1)
+
+        print("NEXT 1")
         for f in self.files:
             try:
-                logger.debug("Closing %s", f)
+                logger.info("Closing %s", f)
                 f.close()
                 del f
             except:
-                logger.debug("File probably already closed...")
+                logger.info("File probably already closed...")
 
         if hasattr(self, 'plot_server'):
             try:
@@ -533,6 +629,7 @@ class Experiment(metaclass=MetaExperiment):
                 self.extra_plot_desc_server.shutdown()
             except:
                 logger.warning("Could not stop extra plot server gracefully...")
+        print("NEXT 2")
 
         self.shutdown_instruments()
 

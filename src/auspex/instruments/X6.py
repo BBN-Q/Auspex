@@ -120,7 +120,7 @@ class X6(Instrument):
     """BBN QDSP running on the II-X6 digitizer"""
     instrument_type = ("Digitizer")
 
-    def __init__(self, resource_name=None, name="Unlabeled X6", gen_fake_data=False):
+    def __init__(self, resource_name=None, name="Unlabeled X6", gen_fake_data=True):
         # X6Channel objects
         self._channels = []
         # socket r/w pairs for each channel
@@ -176,9 +176,11 @@ class X6(Instrument):
         super(X6, self).set_all(settings_dict)
         # Set data for testing
         try:
-            self.ideal_data = np.load(os.path.abspath(self.ideal_data+'.npy'))
+            self.ideal_data = np.load(os.path.abspath(settings_dict["ideal_data"]+'.npy'))
         except:
+            print("Could not find ideal data")
             self.ideal_data = None
+            import ipdb; ipdb.set_trace()
         # perform channel setup
         for chan in self._channels:
             self.channel_setup(chan)
@@ -264,13 +266,13 @@ class X6(Instrument):
             elif chan.stream_type == "Demodulated":
                 length = int(self._lib.record_length/32)
                 data = np.zeros(length, dtype=chan.dtype)
-                data[int(length/4):int(3*length/4)] = 1.0
+                data[int(length/4):int(3*length/4)] = 1.0 if ideal_datapoint == 0 else ideal_datapoint
                 data += 0.1*(np.random.random(length) + 1j*np.random.random(length))
             else: #Raw
                 length = int(self._lib.record_length/4)
                 signal = np.sin(np.linspace(0,10.0*np.pi,int(length/2)))
                 data = np.zeros(length, dtype=chan.dtype)
-                data[int(length/4):int(length/4)+len(signal)] = signal
+                data[int(length/4):int(length/4)+len(signal)] = signal * (1.0 if ideal_datapoint == 0 else ideal_datapoint)
                 data += 0.1*np.random.random(length)
             wsock.send(struct.pack('n', length*data.dtype.itemsize) + data.tostring())
 
@@ -303,6 +305,7 @@ class X6(Instrument):
 
     def wait_for_acquisition(self, timeout=5):
         if self.gen_fake_data:
+            print(f"X6 getting {self._lib.nbr_round_robins} {self._lib.nbr_segments} {self._lib.record_length}")
             for j in range(self._lib.nbr_round_robins):
                 for i in range(self._lib.nbr_segments):
                     if self.ideal_data is not None:

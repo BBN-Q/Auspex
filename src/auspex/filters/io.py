@@ -25,8 +25,10 @@ import h5py
 import queue
 import numpy as np
 import os.path
+import os, psutil
 import time
 import re
+import datetime
 import pandas as pd
 from shutil import copyfile
 
@@ -45,8 +47,11 @@ class H5Handler(Process):
         self.return_queue = return_queue
         self.exit = mp.Event()
         self.filename = filename
+        self.filter_name = f"H5 Handler: {self.filename}"
+        self.p = psutil.Process(os.getpid())
 
     def shutdown(self):
+        logger.info("H5 handler shutting down")
         self.exit.set()
 
     def process_queue_item(self, args, file):
@@ -66,12 +71,19 @@ class H5Handler(Process):
 
     def run(self):
         with h5py.File(self.filename, "r+", libver="latest") as file:
+            self.last_performance_update = datetime.datetime.now()
             while not self.exit.is_set():
+                self.push_resource_usage()
                 try:
                     call = self.queue.get(True, 0.01)
                 except queue.Empty as e:
                     continue
                 self.process_queue_item(call, file)
+
+    def push_resource_usage(self):
+        if (datetime.datetime.now() - self.last_performance_update).seconds > 0.5:
+            self.perf_queue.put((self.filter_name, datetime.datetime.now(), self.p.cpu_percent(), self.p.memory_info()[0]/2.**20))
+            self.last_performance_update = datetime.datetime.now()
 
 class WriteToHDF5(Filter):
     """Writes data to file."""
@@ -349,7 +361,7 @@ class WriteToHDF5(Filter):
                 logger.warning("Could not retrieve dataset within 5 seconds")
 
     def main(self):
-        self.finished_processing.clear()
+        # self.finished_processing.clear()
 
         streams = self.sink.input_streams
         desc = streams[0].descriptor
@@ -373,6 +385,8 @@ class WriteToHDF5(Filter):
                     except queue.Empty as e:
                         time.sleep(0.002)
                         break
+
+            self.push_resource_usage()
 
             # Process many messages for each stream
             for stream, messages in msgs_by_stream.items():
@@ -420,15 +434,17 @@ class WriteToHDF5(Filter):
                         logger.debug("HDF5: Write index at %d", w_idx[stream])
                         logger.debug("HDF5: %s has written %d points", stream.name, w_idx[stream])
 
-            # If we have gotten all our data and process_data has returned, then we are done!
-            if desc.is_adaptive():
-                if np.all(list(got_done_msg.values())) and np.all([len(desc.visited_tuples) == points_taken[s] for s in streams]):
-                    self.finished_processing.set()
-                    break
-            else:
-                if np.all(list(got_done_msg.values())) and np.all([v.done() for v in self.input_connectors.values()]):
-                    self.finished_processing.set()
-                    break
+            if np.all(list(got_done_msg.values())):
+                break
+            # # If we have gotten all our data and process_data has returned, then we are done!
+            # if desc.is_adaptive():
+            #     if np.all(list(got_done_msg.values())) and np.all([len(desc.visited_tuples) == points_taken[s] for s in streams]):
+            #         self.finished_processing.set()
+            #         break
+            # else:
+            #     if np.all(list(got_done_msg.values())) and np.all([v.done() for v in self.input_connectors.values()]):
+            #         self.finished_processing.set()
+            #         break
 
 class DataBuffer(Filter):
     """Writes data to IO."""
