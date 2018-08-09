@@ -41,7 +41,7 @@ from auspex.instruments.instrument import Instrument
 from auspex.parameter import ParameterGroup, FloatParameter, IntParameter, Parameter
 from auspex.sweep import Sweeper
 from auspex.stream import DataStream, DataAxis, SweepAxis, DataStreamDescriptor, InputConnector, OutputConnector
-from auspex.filters import Plotter, XYPlotter, MeshPlotter, ManualPlotter, WriteToHDF5, H5Handler, DataBuffer, Filter
+from auspex.filters import Plotter, XYPlotter, MeshPlotter, ManualPlotter, WriteToHDF5, H5Handler, DumbFileHandler, DataBuffer, Filter
 from auspex.log import logger
 import auspex.config
 
@@ -195,6 +195,9 @@ class Experiment(metaclass=MetaExperiment):
 
         # This holds the experiment graph
         self.graph = None
+
+        # Should we show the dashboard?
+        self.dashboard = False
 
         # This holds a reference to a matplotlib server instance
         # for plotting, if there is one.
@@ -496,66 +499,96 @@ class Experiment(metaclass=MetaExperiment):
         self.other_nodes.extend(self.h5_handlers)
         self.other_nodes.remove(self)
         
-        from .plotting import BokehServerProcess
-        from bokeh.plotting import Figure
-        from bokeh.client import push_session
-        from bokeh.layouts import row, gridplot, column
-        from bokeh.io import curdoc
-        # from bokeh.models.widgets import Panel, Tabs
-        from tornado import gen
-        from bokeh.models import LinearAxis, Range1d, ColumnDataSource
+        # If we are launching the process dashboard,
+        # setup the bokeh server and establish a queue for
+        # filters to push data back to our thread below for
+        # communication to the bokeh server instance.
 
-        bokeh_process = BokehServerProcess(notebook=False)
-        bokeh_process.run()
-        perf_queue = Queue()
-        perf_figs = []
-        for n in self.other_nodes:
-            perf_figs.append(Figure(plot_width=500, plot_height=150, x_axis_type="datetime", title=n.filter_name))
-            perf_figs.append(Figure(plot_width=500, plot_height=150, x_axis_type="datetime", title=n.filter_name))
-        for i, pf in enumerate(perf_figs):
-            pf.xaxis[0].axis_label = 'Time (s)'
-            pf.yaxis[0].axis_label = 'CPU Usage (%)' if i%2 == 0 else 'Memory Usage (MB)'
-        data_sources = {n.filter_name: ColumnDataSource(data=dict(time=[], cpu=[], mem=[])) for n in self.other_nodes}
-        cpu_plots    = {n.filter_name: pf.line(x='time', y='cpu', line_color="#3366FF", line_width=4, source=data_sources[n.filter_name]) for n, pf in zip(self.other_nodes, perf_figs[0::2])}
-        mem_plots    = {n.filter_name: pf.line(x='time', y='mem', line_color="#FF6633", line_width=4, source=data_sources[n.filter_name]) for n, pf in zip(self.other_nodes, perf_figs[1::2])}
+        if self.dashboard:
+            from .plotting import BokehServerProcess
+            from bokeh.plotting import Figure
+            from bokeh.client import push_session
+            from bokeh.layouts import row, gridplot, column
+            from bokeh.io import curdoc
+            # from bokeh.models.widgets import Panel, Tabs
+            from tornado import gen
+            from bokeh.models import ColumnDataSource, Legend
+            from bokeh.palettes import viridis, Category20 #here viridis is a function that takes\
+            #parameter n and provides a palette with n equally(almost) spaced colors.
 
-        container = gridplot(perf_figs, ncols=2)
-        doc = curdoc()
-        exit_perf = Event()
+            bokeh_process = BokehServerProcess(notebook=False)
+            bokeh_process.run()
+            perf_queue = Queue()
 
-        @gen.coroutine
-        def update_perf(name, time_val, cpu, mem):
-            # print("Updating", data_sources[name], time_val, cpu, mem)
-            data_sources[name].stream(dict(time=[time_val], cpu=[cpu], mem=[mem]))
+            cpu_fig  = Figure(plot_width=800, plot_height=300, x_axis_type="datetime", title="CPU Usage")
+            mem_fig  = Figure(plot_width=800, plot_height=300, x_axis_type="datetime", title="Memory Usage")
+            vmem_fig = Figure(plot_width=800, plot_height=300, x_axis_type="datetime", title="Virtual Memory Usage")
 
-        def blocking_task(q, exit):
-            print("Running blocking_task")
-            while not exit.is_set():
-                messages = []
+            cpu_fig.xaxis[0].axis_label  = 'Time (s)'
+            mem_fig.xaxis[0].axis_label  = 'Time (s)'
+            vmem_fig.xaxis[0].axis_label = 'Time (s)'
+            cpu_fig.yaxis[0].axis_label  = 'CPU (%)'
+            mem_fig.yaxis[0].axis_label  = 'Memory (MB)'
+            vmem_fig.yaxis[0].axis_label = 'Memory (MB)'
+            # perf_figs = []
+            # for n in self.other_nodes:
+            #     perf_figs.append(Figure(plot_width=500, plot_height=150, x_axis_type="datetime", title=n.filter_name))
+            #     perf_figs.append(Figure(plot_width=500, plot_height=150, x_axis_type="datetime", title=n.filter_name))
+            # for i, pf in enumerate(perf_figs):
+            #     pf.xaxis[0].axis_label = 'Time (s)'
+            #     pf.yaxis[0].axis_label = 'CPU Usage (%)' if i%2 == 0 else 'Memory Usage (MB)'
+            colors       = Category20[20] if len(self.other_nodes) <= 20 else viridis(len(self.other_nodes))
+            data_sources = {n.filter_name: ColumnDataSource(data=dict(time=[], cpu=[], mem=[], vmem=[])) for n in self.other_nodes}
+            cpu_plots    = {n.filter_name: cpu_fig.line(x='time', y='cpu', color=colors[i], line_width=4, source=data_sources[n.filter_name]) for i, n in enumerate(self.other_nodes)}
+            mem_plots    = {n.filter_name: mem_fig.line(x='time', y='mem', color=colors[i], line_width=4, source=data_sources[n.filter_name]) for i, n in enumerate(self.other_nodes)}
+            vmem_plots   = {n.filter_name: vmem_fig.line(x='time', y='vmem', color=colors[i], line_width=4, source=data_sources[n.filter_name]) for i, n in enumerate(self.other_nodes)}
 
+            # cpu_plots    = {n.filter_name: pf.line(x='time', y='cpu', line_color="#3366FF", line_width=4, source=data_sources[n.filter_name]) for n, pf in zip(self.other_nodes, perf_figs[0::2])}
+            # mem_plots    = {n.filter_name: pf.line(x='time', y='mem', line_color="#FF6633", line_width=4, source=data_sources[n.filter_name]) for n, pf in zip(self.other_nodes, perf_figs[1::2])}
+
+            legend_1 = Legend(items=[(n , [l]) for n, l in mem_plots.items()], location=(0, 0))
+            legend_2 = Legend(items=[(n , [l]) for n, l in vmem_plots.items()], location=(0, 0))
+            legend_3 = Legend(items=[(n , [l]) for n, l in cpu_plots.items()], location=(0, 0))
+            mem_fig.add_layout(legend_1, 'right')
+            vmem_fig.add_layout(legend_2, 'right')
+            cpu_fig.add_layout(legend_3, 'right')
+            container = column([cpu_fig, mem_fig, vmem_fig])
+            # container = gridplot([cpu_fig, mem_fig, vmem_fig, None], ncols=2)
+            doc = curdoc()
+
+            exit_perf = Event()
+
+            @gen.coroutine
+            def update_perf(name, time_val, cpu, mem, vmem):
+                data_sources[name].stream(dict(time=[time_val], cpu=[cpu], mem=[mem], vmem=[vmem]))
+
+            def wait_for_perf_updates(q, exit):
                 while not exit.is_set():
-                    try:
-                        messages.append(q.get(False))
-                    except queue.Empty as e:
-                        time.sleep(0.05)
-                        break
+                    messages = []
 
-                for message in messages:
-                    filter_name, time_val, cpu, mem = message
-                    # doc.add_next_tick_callback(partial(update_perf, name=filter_name, time=time_val, cpu=cpu, mem=mem))
-                    update_perf(filter_name, time_val, cpu, mem)
+                    while not exit.is_set():
+                        try:
+                            messages.append(q.get(False))
+                        except queue.Empty as e:
+                            time.sleep(0.05)
+                            break
 
-        p = Thread(target=blocking_task, args=(perf_queue, exit_perf))
-        p.start()
+                    for message in messages:
+                        filter_name, time_val, cpu, mem_info = message
+                        mem = mem_info[0]/2.**20
+                        vmem = mem_info[1]/2.**20
+                        update_perf(filter_name, time_val, cpu, mem, vmem)
 
-        for f in self.other_nodes:
-            f.perf_queue = perf_queue
+            perf_thread = Thread(target=wait_for_perf_updates, args=(perf_queue, exit_perf))
+            perf_thread.start()
 
-        doc.clear()
-        doc.add_root(container)
-        session = push_session(doc)
-        session.show(container)
+            for f in self.other_nodes:
+                f.perf_queue = perf_queue
 
+            doc.clear()
+            doc.add_root(container)
+            session = push_session(doc)
+            session.show(container)
 
         # Start the filter processes
         for n in self.other_nodes:
@@ -567,36 +600,29 @@ class Experiment(metaclass=MetaExperiment):
             if callback:
                 callback(plot)
 
-        for n in self.h5_handlers:
-            n.exit.set()
 
-        exit_perf.set()
-
-        time.sleep(0.1)
+        time.sleep(0.0)
         times = {n: 0 for n in self.other_nodes}
         dones = {n: False for n in self.other_nodes}
         while False in dones.values():
             for n in self.other_nodes:
-                n.join(timeout=0.05)
+                n.join(timeout=0.2)
                 if n.is_alive():
-                    print(f"Checking {n}: alive")
-                    times[n] += 0.05
+                    times[n] += 1
                     print(f"{n} is not finished! {times[n]}")
-                    if times[n] > 2:
-                        print(f"Killing {n}")
-                        n.shutdown()
-                        n.join()
+                    # if times[n] > 2:
+                    #     print(f"Killing {n}")
+                    #     n.shutdown()
+                    #     n.join()
                 else:
-                    print(f"Checking {n}: dead")
                     dones[n] = True
 
-        print("DONE WAITING")
-        # while not self.filters_finished():
-        #     logger.info("Waiting for filters to finish...")
-        #     for n in self.other_nodes:
-        #         if isinstance(n, Filter):
-        #             print(n, n.finished_processing.is_set() )
-        #     time.sleep(1)
+        # for n in self.h5_handlers:
+        #     n.exit.set()
+
+        if self.dashboard:
+            exit_perf.set()
+            perf_thread.join()
 
         self.shutdown()
 
@@ -605,31 +631,28 @@ class Experiment(metaclass=MetaExperiment):
 
         for n in self.other_nodes:
             # n.shutdown()
-            print("Joining just in case", n)
             n.join(0.1)
 
-        print("NEXT 1")
         for f in self.files:
             try:
-                logger.info("Closing %s", f)
+                logger.debug("Closing %s", f)
                 f.close()
                 del f
             except:
-                logger.info("File probably already closed...")
+                logger.debug("File probably already closed...")
 
         if hasattr(self, 'plot_server'):
             try:
                 self.plot_server.shutdown()
                 self.plot_desc_server.shutdown()
             except:
-                logger.warning("Could not stop plot server gracefully...")
+                logger.info("Could not stop plot server gracefully...")
         if hasattr(self, 'extra_plot_server'):
             try:
                 self.extra_plot_server.shutdown()
                 self.extra_plot_desc_server.shutdown()
             except:
-                logger.warning("Could not stop extra plot server gracefully...")
-        print("NEXT 2")
+                logger.info("Could not stop extra plot server gracefully...")
 
         self.shutdown_instruments()
 

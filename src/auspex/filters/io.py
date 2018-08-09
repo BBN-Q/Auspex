@@ -6,7 +6,7 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-__all__ = ['WriteToHDF5', 'H5Handler', 'DataBuffer', 'ProgressBar']
+__all__ = ['WriteToHDF5', 'H5Handler', 'DumbFileHandler', 'DataBuffer', 'ProgressBar']
 
 import os
 import sys
@@ -22,6 +22,8 @@ else:
 
 import itertools
 import h5py
+import h5py_cache as h5c
+import contextlib
 import queue
 import numpy as np
 import os.path
@@ -31,6 +33,7 @@ import re
 import datetime
 import pandas as pd
 from shutil import copyfile
+import cProfile
 
 from .filter import Filter
 from auspex.parameter import Parameter, FilenameParameter, BoolParameter
@@ -40,6 +43,56 @@ import auspex.config as config
 
 from tqdm import tqdm, tqdm_notebook
 
+class DumbFileHandler(Process):
+    def __init__(self, filename, queue, return_queue):
+        super(DumbFileHandler, self).__init__()
+        self.queue = queue
+        self.return_queue = return_queue
+        self.exit = mp.Event()
+        self.filename = filename
+        self.filter_name = f"{self.filename}"
+        self.p = psutil.Process(os.getpid())
+        self.perf_queue = None
+        self.beginning = datetime.datetime.now()
+
+    def shutdown(self):
+        logger.info("H5 handler shutting down")
+        self.exit.set()
+
+    def process_queue_item(self, args, file):
+        if args[0] == "write":
+            file.write(args[4].tobytes())
+            # args[4] = array.tostring()
+            # file[args[1]][args[2]:args[3]] = args[4]
+
+    def run(self):
+        with open(self.filename+".bin", 'wb') as file:
+
+            self.last_performance_update = datetime.datetime.now()
+
+            def thing():
+                while not self.exit.is_set():
+                    self.push_resource_usage()
+                    msgs = []
+                    while not self.exit.is_set():
+                        try:
+                            msgs.append(self.queue.get(False))
+                        except queue.Empty as e:
+                            time.sleep(0.002)
+                            break
+                    for msg in msgs:
+                        pass
+                        self.process_queue_item(msg, file)
+                        
+            if config.profile:
+                cProfile.runctx('thing()', globals(), locals(), 'prof-%s-%s.prof' % (self.__class__.__name__, self.filter_name))
+
+    def push_resource_usage(self):
+        if self.perf_queue:
+            if (datetime.datetime.now() - self.last_performance_update).seconds > 0.5:
+                self.perf_queue.put((self.filter_name, datetime.datetime.now()-self.beginning, self.p.cpu_percent(), self.p.memory_info()))
+                self.last_performance_update = datetime.datetime.now()
+
 class H5Handler(Process):
     def __init__(self, filename, queue, return_queue):
         super(H5Handler, self).__init__()
@@ -47,8 +100,10 @@ class H5Handler(Process):
         self.return_queue = return_queue
         self.exit = mp.Event()
         self.filename = filename
-        self.filter_name = f"H5 Handler: {self.filename}"
+        self.filter_name = f"{self.filename}"
         self.p = psutil.Process(os.getpid())
+        self.perf_queue = None
+        self.beginning = datetime.datetime.now()
 
     def shutdown(self):
         logger.info("H5 handler shutting down")
@@ -68,22 +123,39 @@ class H5Handler(Process):
             self.return_queue.put((args[1], file[args[1]][:]))
         elif args[0] == "flush":
             file.flush()
+        elif args[0] == "done":
+            logger.info(f"{self.filename} is done!!!")
+            self.exit.set()
+        self.push_resource_usage()
 
     def run(self):
         with h5py.File(self.filename, "r+", libver="latest") as file:
             self.last_performance_update = datetime.datetime.now()
-            while not self.exit.is_set():
-                self.push_resource_usage()
-                try:
-                    call = self.queue.get(True, 0.01)
-                except queue.Empty as e:
-                    continue
-                self.process_queue_item(call, file)
+
+            def thing():
+                while not self.exit.is_set():
+                    
+
+                    msgs = []
+                    while not self.exit.is_set():
+                        try:
+                            msgs.append(self.queue.get(False))
+                        except queue.Empty as e:
+                            time.sleep(0.002)
+                            break
+                    for msg in msgs:
+                        self.process_queue_item(msg, file)
+
+            if config.profile:
+                cProfile.runctx('thing()', globals(), locals(), 'prof-%s-%s.prof' % (self.__class__.__name__, self.filter_name))
+            else:
+                thing()
 
     def push_resource_usage(self):
-        if (datetime.datetime.now() - self.last_performance_update).seconds > 0.5:
-            self.perf_queue.put((self.filter_name, datetime.datetime.now(), self.p.cpu_percent(), self.p.memory_info()[0]/2.**20))
-            self.last_performance_update = datetime.datetime.now()
+        if self.perf_queue:
+            if (datetime.datetime.now() - self.last_performance_update).seconds > 0.5:
+                self.perf_queue.put((self.filter_name, datetime.datetime.now()-self.beginning, self.p.cpu_percent(), self.p.memory_info()))
+                self.last_performance_update = datetime.datetime.now()
 
 class WriteToHDF5(Filter):
     """Writes data to file."""
@@ -94,7 +166,7 @@ class WriteToHDF5(Filter):
     add_date = BoolParameter(default = False)
     save_settings = BoolParameter(default = True)
 
-    def __init__(self, filename=None, groupname=None, add_date=False, save_settings=True, compress=True, store_tuples=True, exp_log=True, **kwargs):
+    def __init__(self, filename=None, groupname=None, add_date=False, save_settings=True, compress=False, store_tuples=True, exp_log=True, **kwargs):
         super(WriteToHDF5, self).__init__(**kwargs)
         self.compress = compress
         if filename:
@@ -117,6 +189,8 @@ class WriteToHDF5(Filter):
         self.save_settings.value = save_settings
         self.exp_log = exp_log
         self.quince_parameters = [self.filename, self.groupname, self.add_date, self.save_settings]
+
+        self.last_flush = datetime.datetime.now()
 
     def final_init(self):
         if not self.filename.value and not self.file:
@@ -167,6 +241,7 @@ class WriteToHDF5(Filter):
                                         dtype=stream.descriptor.dtype,
                                         chunks=True, maxshape=(None,),
                                         compression=compression)
+            # print("***", dset.chunks)
             dset.attrs['is_data'] = True
             dset.attrs['store_tuples'] = self.store_tuples
             dset.attrs['name'] = stream.descriptor.data_name
@@ -397,6 +472,7 @@ class WriteToHDF5(Filter):
                         # logger.info('%s "%s" received event of type "%s"', self.__class__.__name__, self.name, message['event_type'])
                         if message['event_type'] == 'done':
                             got_done_msg[stream] = True
+                            self.queue.put(("done",))
                         elif message['event_type'] == 'refined':
                             message_data = message['data']
                             self.refine(message_data)
@@ -414,10 +490,12 @@ class WriteToHDF5(Filter):
 
                         if not hasattr(message_data, 'size'):
                             message_data = np.array([message_data])
-                        message_data = message_data.flatten()
 
                         # Write the data
-                        self.queue.put(("write", self.data_write_paths[stream], w_idx[stream], w_idx[stream]+message_data.size, message_data))
+                        try:
+                            self.queue.put(("write", self.data_write_paths[stream], w_idx[stream], w_idx[stream]+message_data.size, message_data))
+                        except queue.Full as e:
+                            logger.warning("QUEUE FULLL!!!!!!!!!!!")
 
                         # Write the coordinate tuples
                         if self.store_tuples:
@@ -427,7 +505,9 @@ class WriteToHDF5(Filter):
                                     self.queue.put(("write", self.tuple_write_paths[axis_name], w_idx[stream], w_idx[stream]+message_data.size,
                                                     tuples[axis_name][w_idx[stream]:w_idx[stream]+message_data.size]))
 
-                        self.queue.put(("flush",))
+                        if (datetime.datetime.now() - self.last_flush).seconds > 3:
+                            self.queue.put(("flush",))
+                            self.last_flush = datetime.datetime.now()
                         w_idx[stream] += message_data.size
                         points_taken[stream] = w_idx[stream]
 
@@ -436,15 +516,6 @@ class WriteToHDF5(Filter):
 
             if np.all(list(got_done_msg.values())):
                 break
-            # # If we have gotten all our data and process_data has returned, then we are done!
-            # if desc.is_adaptive():
-            #     if np.all(list(got_done_msg.values())) and np.all([len(desc.visited_tuples) == points_taken[s] for s in streams]):
-            #         self.finished_processing.set()
-            #         break
-            # else:
-            #     if np.all(list(got_done_msg.values())) and np.all([v.done() for v in self.input_connectors.values()]):
-            #         self.finished_processing.set()
-            #         break
 
 class DataBuffer(Filter):
     """Writes data to IO."""

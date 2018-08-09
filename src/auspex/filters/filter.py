@@ -94,6 +94,8 @@ class Filter(Process, metaclass=MetaFilter):
 
         # For sending performance information
         self.last_performance_update = datetime.datetime.now()
+        self.beginning = datetime.datetime.now()
+        self.perf_queue = None
 
     def __repr__(self):
         return "<{} Process (name={})>".format(self.__class__.__name__, self.filter_name)
@@ -142,14 +144,10 @@ class Filter(Process, metaclass=MetaFilter):
                 os.queue.put(message)
 
     def push_resource_usage(self):
-        if (datetime.datetime.now() - self.last_performance_update).seconds > 0.1:
-            self.perf_queue.put((self.filter_name, datetime.datetime.now(), self.p.cpu_percent(), self.p.memory_info()[0]/2.**20))
-            # self.doc.add_next_tick_callback(partial(self.update_perf, time=time.time(), cpu=self.p.cpu_percent(), mem=self.p.memory_info()[0]/2.**20))
-            # # self.cpu_data.data["x"] = np.arange(10) #self.cpu_data.data["x"].append(time.time())
-            # # self.cpu_data.data["y"] = np.random.random(10) #self.cpu_data.data["y"].append(self.p.cpu_percent())
-            self.last_performance_update = datetime.datetime.now()
-        # logger.info("WTF")
-        # print(f"{self}: ({os.getpid()}) {self.p.cpu_percent()} -- {self.p.memory_info()[0]/2.**20:.3f} MB")
+        if self.perf_queue:
+            if (datetime.datetime.now() - self.last_performance_update).seconds > 0.1:
+                self.perf_queue.put((self.filter_name, datetime.datetime.now()-self.beginning, self.p.cpu_percent(), self.p.memory_info()))
+                self.last_performance_update = datetime.datetime.now()
 
     def main(self):
         """
@@ -174,7 +172,7 @@ class Filter(Process, metaclass=MetaFilter):
                 except queue.Empty as e:
                     time.sleep(0.002)
                     break
-                    
+
             self.push_resource_usage()
 
             for message in messages:
@@ -193,7 +191,7 @@ class Filter(Process, metaclass=MetaFilter):
 
                     # Check to see if we're done
                     if message['event_type'] == 'done':
-                        logger.info(f"{self} received done message!")
+                        logger.debug(f"{self} received done message!")
                         # if not self.finished_processing.is_set():
                         #     logger.warning("Filter {} being asked to finish before being done processing. ({} of {})".format(self.filter_name,stream_points,input_stream.num_points()))
                         self.exit.set()
