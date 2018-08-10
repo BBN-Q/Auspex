@@ -316,7 +316,7 @@ class X6(Instrument):
                             self.spew_fake_data(self.ideal_data[i])
                     else:
                         self.spew_fake_data()
-                    time.sleep(0.0005)
+                    time.sleep(0.0001)
         else:
             while not self.done():
                 if (datetime.datetime.now() - self.last_timestamp).seconds > timeout:

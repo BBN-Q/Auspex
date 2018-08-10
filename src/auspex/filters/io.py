@@ -148,7 +148,10 @@ class H5Handler(Process):
             if begs[1:] == ends[:-1]:
                 for m in msgs:
                     # print(f"{self.filename}, self.write_buf[{m[2]-begs[0]}:{m[3]-begs[0]}] = {m[4][0]}...")
-                    self.write_buf[m[2]-begs[0]:m[3]-begs[0]] = m[4]
+                    try:
+                        self.write_buf[m[2]-begs[0]:m[3]-begs[0]] = m[4]
+                    except:
+                        logger.error(f"Write buffer overrun in {self.filename} handler")
                 # print(f"Catting {len(msgs)} msgs")
                 return [('write', msgs[0][1], begs[0], ends[-1], self.write_buf[:ends[-1]-begs[0]])]
         return msgs
