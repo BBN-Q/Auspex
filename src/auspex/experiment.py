@@ -484,7 +484,8 @@ class Experiment(metaclass=MetaExperiment):
 
         def catch_ctrl_c(signum, frame):
             logger.info("Caught SIGINT. Shutting down.")
-            self.declare_done()
+            self.declare_done() # Ask nicely
+
             self.shutdown()
             raise NameError("Shutting down.")
             sys.exit(0)
@@ -508,9 +509,8 @@ class Experiment(metaclass=MetaExperiment):
             from .plotting import BokehServerProcess
             from bokeh.plotting import Figure
             from bokeh.client import push_session
-            from bokeh.layouts import row, gridplot, column
+            from bokeh.layouts import row, column
             from bokeh.io import curdoc
-            # from bokeh.models.widgets import Panel, Tabs
             from tornado import gen
             from bokeh.models import ColumnDataSource, Legend
             from bokeh.palettes import viridis, Category20 #here viridis is a function that takes\
@@ -520,9 +520,9 @@ class Experiment(metaclass=MetaExperiment):
             bokeh_process.run()
             perf_queue = Queue()
 
-            cpu_fig  = Figure(plot_width=800, plot_height=300, x_axis_type="datetime", title="CPU Usage")
-            mem_fig  = Figure(plot_width=800, plot_height=300, x_axis_type="datetime", title="Memory Usage")
-            vmem_fig = Figure(plot_width=800, plot_height=300, x_axis_type="datetime", title="Virtual Memory Usage")
+            cpu_fig  = Figure(plot_width=1000, plot_height=300, x_axis_type="datetime", title="CPU Usage")
+            mem_fig  = Figure(plot_width=1000, plot_height=300, x_axis_type="datetime", title="Memory Usage")
+            vmem_fig = Figure(plot_width=1000, plot_height=300, x_axis_type="datetime", title="Virtual Memory Usage")
 
             cpu_fig.xaxis[0].axis_label  = 'Time (s)'
             mem_fig.xaxis[0].axis_label  = 'Time (s)'
@@ -530,21 +530,12 @@ class Experiment(metaclass=MetaExperiment):
             cpu_fig.yaxis[0].axis_label  = 'CPU (%)'
             mem_fig.yaxis[0].axis_label  = 'Memory (MB)'
             vmem_fig.yaxis[0].axis_label = 'Memory (MB)'
-            # perf_figs = []
-            # for n in self.other_nodes:
-            #     perf_figs.append(Figure(plot_width=500, plot_height=150, x_axis_type="datetime", title=n.filter_name))
-            #     perf_figs.append(Figure(plot_width=500, plot_height=150, x_axis_type="datetime", title=n.filter_name))
-            # for i, pf in enumerate(perf_figs):
-            #     pf.xaxis[0].axis_label = 'Time (s)'
-            #     pf.yaxis[0].axis_label = 'CPU Usage (%)' if i%2 == 0 else 'Memory Usage (MB)'
+
             colors       = Category20[20] if len(self.other_nodes) <= 20 else viridis(len(self.other_nodes))
             data_sources = {n.filter_name: ColumnDataSource(data=dict(time=[], cpu=[], mem=[], vmem=[])) for n in self.other_nodes}
             cpu_plots    = {n.filter_name: cpu_fig.line(x='time', y='cpu', color=colors[i], line_width=4, source=data_sources[n.filter_name]) for i, n in enumerate(self.other_nodes)}
             mem_plots    = {n.filter_name: mem_fig.line(x='time', y='mem', color=colors[i], line_width=4, source=data_sources[n.filter_name]) for i, n in enumerate(self.other_nodes)}
             vmem_plots   = {n.filter_name: vmem_fig.line(x='time', y='vmem', color=colors[i], line_width=4, source=data_sources[n.filter_name]) for i, n in enumerate(self.other_nodes)}
-
-            # cpu_plots    = {n.filter_name: pf.line(x='time', y='cpu', line_color="#3366FF", line_width=4, source=data_sources[n.filter_name]) for n, pf in zip(self.other_nodes, perf_figs[0::2])}
-            # mem_plots    = {n.filter_name: pf.line(x='time', y='mem', line_color="#FF6633", line_width=4, source=data_sources[n.filter_name]) for n, pf in zip(self.other_nodes, perf_figs[1::2])}
 
             legend_1 = Legend(items=[(n , [l]) for n, l in mem_plots.items()], location=(0, 0))
             legend_2 = Legend(items=[(n , [l]) for n, l in vmem_plots.items()], location=(0, 0))
@@ -553,7 +544,6 @@ class Experiment(metaclass=MetaExperiment):
             vmem_fig.add_layout(legend_2, 'right')
             cpu_fig.add_layout(legend_3, 'right')
             container = column([cpu_fig, mem_fig, vmem_fig])
-            # container = gridplot([cpu_fig, mem_fig, vmem_fig, None], ncols=2)
             doc = curdoc()
 
             exit_perf = Event()
@@ -594,31 +584,26 @@ class Experiment(metaclass=MetaExperiment):
         for n in self.other_nodes:
             n.start()
 
+        # Run the main experiment loop
         self.sweep()
 
+        # Make sure any last minute plotting needs are met
         for plot, callback in zip(self.manual_plotters, self.manual_plotter_callbacks):
             if callback:
                 callback(plot)
 
-
-        time.sleep(0.0)
+        # Wait for the 
+        time.sleep(0.1)
         times = {n: 0 for n in self.other_nodes}
         dones = {n: False for n in self.other_nodes}
         while False in dones.values():
             for n in self.other_nodes:
-                n.join(timeout=0.2)
+                n.join(timeout=0.4)
                 if n.is_alive():
                     times[n] += 1
-                    print(f"{n} is not finished! {times[n]}")
-                    # if times[n] > 2:
-                    #     print(f"Killing {n}")
-                    #     n.shutdown()
-                    #     n.join()
+                    logger.info(f"{n} not done. Waited {times[n]} times. Is the pipeline backed up at IO stage?")
                 else:
                     dones[n] = True
-
-        # for n in self.h5_handlers:
-        #     n.exit.set()
 
         if self.dashboard:
             exit_perf.set()
@@ -630,8 +615,11 @@ class Experiment(metaclass=MetaExperiment):
         logger.debug("Shutting Down!")
 
         for n in self.other_nodes:
-            # n.shutdown()
+            n.exit.set()
             n.join(0.1)
+            if n.is_alive():
+                logger.info(f"Terminating {n.filter_name} aggressively")
+                n.terminate()
 
         for f in self.files:
             try:
