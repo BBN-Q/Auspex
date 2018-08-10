@@ -62,8 +62,9 @@ class DumbFileHandler(Process):
     def process_queue_item(self, args, file):
         if args[0] == "write":
             file.write(args[4].tobytes())
-            # args[4] = array.tostring()
-            # file[args[1]][args[2]:args[3]] = args[4]
+        elif args[0] == "done":
+            self.exit.set()
+        self.push_resource_usage()
 
     def run(self):
         with open(self.filename+".bin", 'wb') as file:
@@ -72,7 +73,6 @@ class DumbFileHandler(Process):
 
             def thing():
                 while not self.exit.is_set():
-                    self.push_resource_usage()
                     msgs = []
                     while not self.exit.is_set():
                         try:
@@ -93,6 +93,10 @@ class DumbFileHandler(Process):
                 self.perf_queue.put((self.filter_name, datetime.datetime.now()-self.beginning, self.p.cpu_percent(), self.p.memory_info()))
                 self.last_performance_update = datetime.datetime.now()
 
+    def __repr__(self):
+        return "<{} Process (filename={})>".format(self.__class__.__name__, self.filename)
+
+
 class H5Handler(Process):
     def __init__(self, filename, queue, return_queue):
         super(H5Handler, self).__init__()
@@ -104,6 +108,8 @@ class H5Handler(Process):
         self.p = psutil.Process(os.getpid())
         self.perf_queue = None
         self.beginning = datetime.datetime.now()
+        self.dtype = None
+        self.write_buf = None
 
     def shutdown(self):
         logger.info("H5 handler shutting down")
@@ -111,6 +117,11 @@ class H5Handler(Process):
 
     def process_queue_item(self, args, file):
         if args[0] == "write":
+            if self.dtype is None:
+                # Set up datatype and write buffer if we haven't already
+                self.dtype = args[4].dtype
+                self.write_buf = np.zeros(len(args[4])*1000, dtype=self.dtype)
+                # print(self.filename, "New buffer size", len(args[4]))
             file[args[1]][args[2]:args[3]] = args[4]
         elif args[0] == "resize":
             file[args[1]].resize(args[2])
@@ -124,9 +135,23 @@ class H5Handler(Process):
         elif args[0] == "flush":
             file.flush()
         elif args[0] == "done":
-            logger.info(f"{self.filename} is done!!!")
             self.exit.set()
         self.push_resource_usage()
+
+    def concat_msgs(self, msgs):
+        # If receiving a bunch of consecutive writes, coalesce them into one
+        # print(self.dtype, False not in [m[0]=='write' for m in msgs])
+        if (len(msgs) > 2) and self.dtype is not None and (False not in [m[0]=='write' for m in msgs]):
+            begs = [m[2] for m in msgs]
+            ends = [m[3] for m in msgs]
+            # print("*", begs[1:], ends[:-1])
+            if begs[1:] == ends[:-1]:
+                for m in msgs:
+                    # print(f"{self.filename}, self.write_buf[{m[2]-begs[0]}:{m[3]-begs[0]}] = {m[4][0]}...")
+                    self.write_buf[m[2]-begs[0]:m[3]-begs[0]] = m[4]
+                # print(f"Catting {len(msgs)} msgs")
+                return [('write', msgs[0][1], begs[0], ends[-1], self.write_buf[:ends[-1]-begs[0]])]
+        return msgs
 
     def run(self):
         with h5py.File(self.filename, "r+", libver="latest") as file:
@@ -134,8 +159,6 @@ class H5Handler(Process):
 
             def thing():
                 while not self.exit.is_set():
-                    
-
                     msgs = []
                     while not self.exit.is_set():
                         try:
@@ -143,6 +166,7 @@ class H5Handler(Process):
                         except queue.Empty as e:
                             time.sleep(0.002)
                             break
+                    msgs = self.concat_msgs(msgs)
                     for msg in msgs:
                         self.process_queue_item(msg, file)
 
@@ -156,6 +180,9 @@ class H5Handler(Process):
             if (datetime.datetime.now() - self.last_performance_update).seconds > 0.5:
                 self.perf_queue.put((self.filter_name, datetime.datetime.now()-self.beginning, self.p.cpu_percent(), self.p.memory_info()))
                 self.last_performance_update = datetime.datetime.now()
+
+    def __repr__(self):
+        return "<{} Process (filename={})>".format(self.__class__.__name__, self.filename)
 
 class WriteToHDF5(Filter):
     """Writes data to file."""
