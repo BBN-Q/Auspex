@@ -54,6 +54,7 @@ class DumbFileHandler(Process):
         self.p = psutil.Process(os.getpid())
         self.perf_queue = None
         self.beginning = datetime.datetime.now()
+        self.processed = 0 
 
     def shutdown(self):
         logger.info("H5 handler shutting down")
@@ -86,6 +87,8 @@ class DumbFileHandler(Process):
                         
             if config.profile:
                 cProfile.runctx('thing()', globals(), locals(), 'prof-%s-%s.prof' % (self.__class__.__name__, self.filter_name))
+        print(self.filter_name, "leaving main loop")
+
 
     def push_resource_usage(self):
         if self.perf_queue:
@@ -103,6 +106,7 @@ class H5Handler(Process):
         self.queue = queue
         self.return_queue = return_queue
         self.exit = mp.Event()
+        self.done = mp.Event()
         self.filename = filename
         self.filter_name = f"{self.filename}"
         self.p = psutil.Process(os.getpid())
@@ -110,6 +114,7 @@ class H5Handler(Process):
         self.beginning = datetime.datetime.now()
         self.dtype = None
         self.write_buf = None
+        self.processed = 0
 
     def shutdown(self):
         logger.info("H5 handler shutting down")
@@ -123,6 +128,8 @@ class H5Handler(Process):
                 self.write_buf = np.zeros(len(args[4])*1000, dtype=self.dtype)
                 # print(self.filename, "New buffer size", len(args[4]))
             file[args[1]][args[2]:args[3]] = args[4]
+            self.processed += args[4].nbytes
+
         elif args[0] == "resize":
             file[args[1]].resize(args[2])
         elif args[0] == "resize_to":
@@ -169,6 +176,7 @@ class H5Handler(Process):
                         except queue.Empty as e:
                             time.sleep(0.002)
                             break
+                        
                     msgs = self.concat_msgs(msgs)
                     for msg in msgs:
                         self.process_queue_item(msg, file)
@@ -177,11 +185,12 @@ class H5Handler(Process):
                 cProfile.runctx('thing()', globals(), locals(), 'prof-%s-%s.prof' % (self.__class__.__name__, self.filter_name))
             else:
                 thing()
+            self.done.set()
 
     def push_resource_usage(self):
         if self.perf_queue:
             if (datetime.datetime.now() - self.last_performance_update).seconds > 0.5:
-                self.perf_queue.put((self.filter_name, datetime.datetime.now()-self.beginning, self.p.cpu_percent(), self.p.memory_info()))
+                self.perf_queue.put((self.filter_name, datetime.datetime.now()-self.beginning, self.p.cpu_percent(), self.p.memory_info(), self.processed))
                 self.last_performance_update = datetime.datetime.now()
 
     def __repr__(self):
@@ -466,8 +475,6 @@ class WriteToHDF5(Filter):
                 logger.warning("Could not retrieve dataset within 5 seconds")
 
     def main(self):
-        # self.finished_processing.clear()
-
         streams = self.sink.input_streams
         desc = streams[0].descriptor
         got_done_msg = {s: False for s in streams}
@@ -476,8 +483,9 @@ class WriteToHDF5(Filter):
         w_idx = {s: 0 for s in streams}
         points_taken = {s: 0 for s in streams}
         i = 0
+        stream_done = False
 
-        while not self.exit.is_set():# and not self.finished_processing.is_set():
+        while not self.exit.is_set():
             i +=1
             # Try to pull all messages in the queue. queue.empty() is not reliable, so we
             # ask for forgiveness rather than permission.
@@ -517,6 +525,7 @@ class WriteToHDF5(Filter):
                     elif message['type'] == 'data':
 
                         message_data = message['data']
+                        self.processed += message_data.nbytes
 
                         if not hasattr(message_data, 'size'):
                             message_data = np.array([message_data])
@@ -545,7 +554,12 @@ class WriteToHDF5(Filter):
                         logger.debug("HDF5: %s has written %d points", stream.name, w_idx[stream])
 
             if np.all(list(got_done_msg.values())):
+                stream_done = True
+                self.done.set()
                 break
+
+        print(self.filter_name, "leaving main loop")
+
 
 class DataBuffer(Filter):
     """Writes data to IO."""

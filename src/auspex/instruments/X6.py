@@ -14,6 +14,7 @@ import struct
 import datetime
 import numpy as np
 import os
+import queue
 import sys
 
 from auspex.log import logger
@@ -254,7 +255,7 @@ class X6(Instrument):
         # todo: other checking here
         self._channels.append(channel)
 
-    def spew_fake_data(self, ideal_datapoint=0):
+    def spew_fake_data(self, counter, ideal_datapoint=0):
         """
         Generate fake data on the stream. For unittest usage.
         ideal_datapoint: mean of the expected signal for stream_type =  "Integrated".
@@ -275,6 +276,7 @@ class X6(Instrument):
                 data[int(length/4):int(length/4)+len(signal)] = signal * (1.0 if ideal_datapoint == 0 else ideal_datapoint)
                 data += 0.1*np.random.random(length)
             wsock.send(struct.pack('n', length*data.dtype.itemsize) + data.tostring())
+            counter[chan] += length
 
     def receive_data(self, channel, oc, exit):
         sock = self._chan_to_rsocket[channel]
@@ -300,23 +302,37 @@ class X6(Instrument):
             data = np.frombuffer(buf, dtype=channel.dtype)
             oc.push(data)
 
+        for stream in oc.output_streams:
+            abc = 0
+            while True:
+                try:
+                    dat = stream.queue.get(False)
+                    abc += 1
+                    time.sleep(0.005)
+                except queue.Empty as e:
+                    logger.info(f"All my data {oc} has been consumed {abc}")
+                    break
+        logger.info("X6 receive data exiting")
+
     def get_buffer_for_channel(self, channel):
         return self._lib.transfer_stream(*channel.channel)
 
     def wait_for_acquisition(self, timeout=5):
         if self.gen_fake_data:
-            print(f"X6 getting {self._lib.nbr_round_robins} {self._lib.nbr_segments} {self._lib.record_length}")
+            counter = {chan: 0 for chan in self._chan_to_wsocket.keys()}
+            logger.info(f"X6 getting {self._lib.nbr_round_robins} {self._lib.nbr_segments} {self._lib.record_length}")
             for j in range(self._lib.nbr_round_robins):
                 for i in range(self._lib.nbr_segments):
                     if self.ideal_data is not None:
                         #add ideal data for testing
                         if hasattr(self, 'exp_step'):
-                            self.spew_fake_data(self.ideal_data[self.exp_step][i])
+                            self.spew_fake_data(counter, self.ideal_data[self.exp_step][i])
                         else:
-                            self.spew_fake_data(self.ideal_data[i])
+                            self.spew_fake_data(counter, self.ideal_data[i])
                     else:
-                        self.spew_fake_data()
+                        self.spew_fake_data(counter)
                     time.sleep(0.0001)
+            logger.info("Counter:", counter)
         else:
             while not self.done():
                 if (datetime.datetime.now() - self.last_timestamp).seconds > timeout:

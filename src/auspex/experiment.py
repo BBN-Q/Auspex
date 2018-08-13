@@ -522,20 +522,20 @@ class Experiment(metaclass=MetaExperiment):
 
             cpu_fig  = Figure(plot_width=1000, plot_height=300, x_axis_type="datetime", title="CPU Usage")
             mem_fig  = Figure(plot_width=1000, plot_height=300, x_axis_type="datetime", title="Memory Usage")
-            vmem_fig = Figure(plot_width=1000, plot_height=300, x_axis_type="datetime", title="Virtual Memory Usage")
+            vmem_fig = Figure(plot_width=1000, plot_height=300, x_axis_type="datetime", title="Data Processed")
 
             cpu_fig.xaxis[0].axis_label  = 'Time (s)'
             mem_fig.xaxis[0].axis_label  = 'Time (s)'
             vmem_fig.xaxis[0].axis_label = 'Time (s)'
             cpu_fig.yaxis[0].axis_label  = 'CPU (%)'
             mem_fig.yaxis[0].axis_label  = 'Memory (MB)'
-            vmem_fig.yaxis[0].axis_label = 'Memory (MB)'
+            vmem_fig.yaxis[0].axis_label = 'Throughput (MB)'
 
             colors       = Category20[20] if len(self.other_nodes) <= 20 else viridis(len(self.other_nodes))
-            data_sources = {n.filter_name: ColumnDataSource(data=dict(time=[], cpu=[], mem=[], vmem=[])) for n in self.other_nodes}
+            data_sources = {n.filter_name: ColumnDataSource(data=dict(time=[], cpu=[], mem=[], vmem=[], proc=[])) for n in self.other_nodes}
             cpu_plots    = {n.filter_name: cpu_fig.line(x='time', y='cpu', color=colors[i], line_width=4, source=data_sources[n.filter_name]) for i, n in enumerate(self.other_nodes)}
             mem_plots    = {n.filter_name: mem_fig.line(x='time', y='mem', color=colors[i], line_width=4, source=data_sources[n.filter_name]) for i, n in enumerate(self.other_nodes)}
-            vmem_plots   = {n.filter_name: vmem_fig.line(x='time', y='vmem', color=colors[i], line_width=4, source=data_sources[n.filter_name]) for i, n in enumerate(self.other_nodes)}
+            vmem_plots   = {n.filter_name: vmem_fig.line(x='time', y='proc', color=colors[i], line_width=4, source=data_sources[n.filter_name]) for i, n in enumerate(self.other_nodes)}
 
             legend_1 = Legend(items=[(n , [l]) for n, l in mem_plots.items()], location=(0, 0))
             legend_2 = Legend(items=[(n , [l]) for n, l in vmem_plots.items()], location=(0, 0))
@@ -549,8 +549,8 @@ class Experiment(metaclass=MetaExperiment):
             exit_perf = Event()
 
             @gen.coroutine
-            def update_perf(name, time_val, cpu, mem, vmem):
-                data_sources[name].stream(dict(time=[time_val], cpu=[cpu], mem=[mem], vmem=[vmem]))
+            def update_perf(name, time_val, cpu, mem, vmem, proc):
+                data_sources[name].stream(dict(time=[time_val], cpu=[cpu], mem=[mem], vmem=[vmem], proc=[proc]))
 
             def wait_for_perf_updates(q, exit):
                 while not exit.is_set():
@@ -564,10 +564,11 @@ class Experiment(metaclass=MetaExperiment):
                             break
 
                     for message in messages:
-                        filter_name, time_val, cpu, mem_info = message
+                        filter_name, time_val, cpu, mem_info, processed = message
                         mem = mem_info[0]/2.**20
                         vmem = mem_info[1]/2.**20
-                        update_perf(filter_name, time_val, cpu, mem, vmem)
+                        proc = processed/2.**20
+                        update_perf(filter_name, time_val, cpu, mem, vmem, proc)
 
             perf_thread = Thread(target=wait_for_perf_updates, args=(perf_queue, exit_perf))
             perf_thread.start()
@@ -597,13 +598,29 @@ class Experiment(metaclass=MetaExperiment):
         times = {n: 0 for n in self.other_nodes}
         dones = {n: False for n in self.other_nodes}
         while False in dones.values():
+            time.sleep(1)
             for n in self.other_nodes:
-                n.join(timeout=0.4)
-                if n.is_alive():
+                if not n.done.is_set():
                     times[n] += 1
                     logger.info(f"{n} not done. Waited {times[n]} times. Is the pipeline backed up at IO stage?")
                 else:
                     dones[n] = True
+
+                    # logger.info(f"{n} draining queue.")
+                    # for ic in n.input_connectors.values():
+                    #     for ist in ic.input_streams:
+                    #         abc = 0
+                    #         while True:
+                    #             try:
+                    #                 ist.queue.get(0.01)
+                    #                 abc += 1
+                    #                 logger.info(f"{n}: drained {abc} messages...")
+                    #             except queue.Empty as e:
+                                    
+                    #                 time.sleep(0.002)
+                    #                 break
+                    n.join(timeout=0.1)
+        logger.info("Done waiting...")
 
         if self.dashboard:
             exit_perf.set()
@@ -621,13 +638,13 @@ class Experiment(metaclass=MetaExperiment):
                 logger.info(f"Terminating {n.filter_name} aggressively")
                 n.terminate()
 
-        for f in self.files:
-            try:
-                logger.debug("Closing %s", f)
-                f.close()
-                del f
-            except:
-                logger.debug("File probably already closed...")
+        # for f in self.files:
+        #     try:
+        #         logger.debug("Closing %s", f)
+        #         f.close()
+        #         del f
+        #     except:
+        #         logger.debug("File probably already closed...")
 
         if hasattr(self, 'plot_server'):
             try:
@@ -642,9 +659,11 @@ class Experiment(metaclass=MetaExperiment):
             except:
                 logger.info("Could not stop extra plot server gracefully...")
 
+        logger.info("Shutting down instruments")
         self.shutdown_instruments()
 
         if not self.keep_instruments_connected:
+            logger.info("Disconnecting instruments")
             self.disconnect_instruments()
 
     def add_axis(self, axis, position=0):
