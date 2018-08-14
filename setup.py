@@ -35,5 +35,4 @@ setup(
     scripts=[],
     description='Automated system for python-based experiments.',
     long_description=open('README.md').read(),
-    install_requires=install_requires
 )
