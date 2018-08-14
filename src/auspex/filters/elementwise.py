@@ -62,7 +62,7 @@ class ElementwiseFilter(Filter):
         self.source.update_descriptors()
 
     def main(self):
-        self.finished_processing.clear()
+        self.done.clear()
         streams = self.sink.input_streams
 
         for s in streams[1:]:
@@ -124,5 +124,6 @@ class ElementwiseFilter(Filter):
 
             # If the amount of data processed is equal to the num points in the stream, we are done
             if all([pts == s.num_points() for s, pts in points_per_stream.items()]):
-                self.finished_processing.set()
+                self.done.set()
+                break
 

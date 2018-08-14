@@ -164,6 +164,7 @@ class PulseCalibration(object):
                             amp, phase, real or imag'.format(self.quad))
                 else:
                     var[qubit_name] = None
+            buff.join()
 
         # Return data and variance of the mean
         if len(data) == 1:

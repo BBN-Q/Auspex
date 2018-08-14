@@ -123,6 +123,11 @@ class H5Handler(Process):
     def process_queue_item(self, args, file):
         if args[0] == "write":
             if self.dtype is None:
+                # Sometimes we get a scalar, deal with it by converting to numpy array
+                try:
+                    len(args[4])
+                except:
+                    args = (args[0], args[1], args[2], args[3], np.array([args[4]]))
                 # Set up datatype and write buffer if we haven't already
                 self.dtype = args[4].dtype
                 self.write_buf = np.zeros(len(args[4])*1000, dtype=self.dtype)
@@ -461,7 +466,7 @@ class WriteToHDF5(Filter):
 
     def get_data(self, data_path):
         """Request data back from the file handler. Data_path is given with respect to root: e.g. /data/voltage"""
-        if self.finished_processing.is_set():
+        if self.done.is_set():
             logger.info("Not yet implemented. Please load the file directly")
         else:
             self.queue.put(("get_data", data_path))
@@ -581,7 +586,7 @@ class DataBuffer(Filter):
         self.descriptor = self.sink.input_streams[0].descriptor
 
     def main(self):
-        self.finished_processing.clear()
+        self.done.clear()
         streams = self.sink.input_streams
 
         buffers = {s: np.empty(s.descriptor.expected_num_points(), dtype=s.descriptor.dtype) for s in self.sink.input_streams}
@@ -621,9 +626,9 @@ class DataBuffer(Filter):
                 elif message_type == 'data':
                     stream_data[stream] = message_data.flatten()
 
-            if False not in stream_done.values():
-                logger.debug('%s "%s" is done', self.__class__.__name__, self.name)
-                break
+            # if False not in stream_done.values():
+            #     logger.debug('%s "%s" is done', self.__class__.__name__, self.name)
+            #     break
 
             for stream in stream_results.keys():
                 data = stream_data[stream]
@@ -632,7 +637,8 @@ class DataBuffer(Filter):
 
             # If we have gotten all our data and process_data has returned, then we are done!
             if np.all([v.done() for v in self.input_connectors.values()]):
-                self.finished_processing.set()
+                self.done.set()
+                break
 
         for s in streams:
             self._final_buffers.put(buffers[s])
