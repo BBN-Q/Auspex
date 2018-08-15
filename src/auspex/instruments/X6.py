@@ -144,8 +144,6 @@ class X6(Instrument):
         else:
             self._lib = libx6.X6()
 
-        self._total_received = Value('i', 0)
-
     def __str__(self):
         return "<X6({}/{})>".format(self.name, self.resource_name)
 
@@ -320,7 +318,6 @@ class X6(Instrument):
             oc.push(data)
 
         logger.info('RECEIVED %d %d', total, oc.points_taken.value)
-        self._total_received.value = total
 
         for stream in oc.output_streams:
             abc = 0
@@ -340,9 +337,7 @@ class X6(Instrument):
     def wait_for_acquisition(self, timeout=5, ocs=None):
 
         if self.gen_fake_data:
-            self._total_received.value = 0
             total_spewed = 0
-            total_received = 0
 
             counter = {chan: 0 for chan in self._chan_to_wsocket.keys()}
             logger.info(f"X6 getting {self._lib.nbr_round_robins} {self._lib.nbr_segments} {self._lib.record_length}")
@@ -365,15 +360,15 @@ class X6(Instrument):
             logger.info('TOTAL fake data generated %d', total_spewed)
             if ocs:
                 while True:
-                    taken = 0
+                    total_taken = 0
                     for oc in ocs:
-                        taken += oc.points_taken.value
+                        total_taken += oc.points_taken.value
                         logger.info('TOTAL fake data received %d', oc.points_taken.value)
-                    if taken == total_spewed:
+                    if total_taken == total_spewed:
                         break
 
-                    logger.info('ITERATING: waiting for acquisition %d < %d', taken, total_spewed)
-                    time.sleep(0.25)
+                    logger.info('WAITING for acquisition to finish %d < %d', total_taken, total_spewed)
+                    time.sleep(0.025)
 
         else:
             while not self.done():
