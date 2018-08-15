@@ -17,12 +17,16 @@ install_requires = [
     "matplotlib >= 2.0.0",
     "ruamel_yaml >= 0.11.14",
     "psutil >= 5.0.0",
+    "cffi >= 1.11.5",
+    "scikit-learn >= 0.19.1",
     "pyzmq >= 16.0.0"
 ]
 
 #Use PyVISA-Py if running on Linux or MacOS
 if os.name == "posix":
     install_requires.append("PyVISA-Py >= 0.2")
+    install_requires.append("pyusb >= 1.0.2")
+    install_requires.append("pyserial >= 3.4")
 
 setup(
     name='auspex',
