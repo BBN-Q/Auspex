@@ -22,6 +22,8 @@ import auspex.config as config
 from .instrument import Instrument, DigitizerChannel
 from unittest.mock import MagicMock
 
+from multiprocessing import Value
+
 # win32 doesn't support MSG_WAITALL, so on windows we
 # need to do things a slower, less efficient way.
 # (we could optimize this, if performance becomes a problem)
@@ -142,6 +144,8 @@ class X6(Instrument):
         else:
             self._lib = libx6.X6()
 
+        self._total_received = Value('i', 0)
+
     def __str__(self):
         return "<X6({}/{})>".format(self.name, self.resource_name)
 
@@ -181,7 +185,7 @@ class X6(Instrument):
         except:
             print("Could not find ideal data")
             self.ideal_data = None
-            import ipdb; ipdb.set_trace()
+            # import ipdb; ipdb.set_trace()
         # perform channel setup
         for chan in self._channels:
             self.channel_setup(chan)
@@ -259,7 +263,13 @@ class X6(Instrument):
         """
         Generate fake data on the stream. For unittest usage.
         ideal_datapoint: mean of the expected signal for stream_type =  "Integrated".
+
+        Returns the total number of fake data points, so that we can
+        keep track of how many we expect to receive, when we're doing
+        the test with fake data
         """
+        total = 0
+
         for chan, wsock in self._chan_to_wsocket.items():
             if chan.stream_type == "Integrated":
                 length = 1
@@ -275,13 +285,19 @@ class X6(Instrument):
                 data = np.zeros(length, dtype=chan.dtype)
                 data[int(length/4):int(length/4)+len(signal)] = signal * (1.0 if ideal_datapoint == 0 else ideal_datapoint)
                 data += 0.1*np.random.random(length)
+            total += length
             wsock.send(struct.pack('n', length*data.dtype.itemsize) + data.tostring())
             counter[chan] += length
+
+        return total
 
     def receive_data(self, channel, oc, exit):
         sock = self._chan_to_rsocket[channel]
         sock.settimeout(1)
         last_timestamp = datetime.datetime.now()
+
+        total = 0
+
         while not exit.is_set():       
             # push data from a socket into an OutputConnector (oc)
             # wire format is just: [size, buffer...]
@@ -300,7 +316,11 @@ class X6(Instrument):
                 logger.error("Expected %s bytes, received %s bytes" % (msg_size, len(buf)))
                 return
             data = np.frombuffer(buf, dtype=channel.dtype)
+            total += len(data)
             oc.push(data)
+
+        logger.info('RECEIVED %d %d', total, oc.points_taken.value)
+        self._total_received.value = total
 
         for stream in oc.output_streams:
             abc = 0
@@ -317,8 +337,13 @@ class X6(Instrument):
     def get_buffer_for_channel(self, channel):
         return self._lib.transfer_stream(*channel.channel)
 
-    def wait_for_acquisition(self, timeout=5):
+    def wait_for_acquisition(self, timeout=5, ocs=None):
+
         if self.gen_fake_data:
+            self._total_received.value = 0
+            total_spewed = 0
+            total_received = 0
+
             counter = {chan: 0 for chan in self._chan_to_wsocket.keys()}
             logger.info(f"X6 getting {self._lib.nbr_round_robins} {self._lib.nbr_segments} {self._lib.record_length}")
             for j in range(self._lib.nbr_round_robins):
@@ -326,13 +351,30 @@ class X6(Instrument):
                     if self.ideal_data is not None:
                         #add ideal data for testing
                         if hasattr(self, 'exp_step'):
-                            self.spew_fake_data(counter, self.ideal_data[self.exp_step][i])
+                            total_spewed += self.spew_fake_data(
+                                    counter, self.ideal_data[self.exp_step][i])
                         else:
-                            self.spew_fake_data(counter, self.ideal_data[i])
+                            total_spewed += self.spew_fake_data(
+                                    counter, self.ideal_data[i])
                     else:
-                        self.spew_fake_data(counter)
+                        total_spewed += self.spew_fake_data(counter)
+
                     time.sleep(0.0001)
-            logger.info("Counter:", counter)
+
+            # logger.info("Counter: %s", str(counter))
+            logger.info('TOTAL fake data generated %d', total_spewed)
+            if ocs:
+                while True:
+                    taken = 0
+                    for oc in ocs:
+                        taken += oc.points_taken.value
+                        logger.info('TOTAL fake data received %d', oc.points_taken.value)
+                    if taken == total_spewed:
+                        break
+
+                    logger.info('ITERATING: waiting for acquisition %d < %d', taken, total_spewed)
+                    time.sleep(0.25)
+
         else:
             while not self.done():
                 if (datetime.datetime.now() - self.last_timestamp).seconds > timeout:

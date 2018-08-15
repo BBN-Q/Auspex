@@ -22,7 +22,7 @@ else:
 
 import itertools
 import h5py
-import h5py_cache as h5c
+# import h5py_cache as h5c
 import contextlib
 import queue
 import numpy as np
@@ -730,7 +730,7 @@ class ProgressBar(Filter):
             while self.stream.queue.qsize() > 0:
                 new_data = np.append(new_data, np.array(self.stream.queue.get_nowait()).flatten())
             self.w_id += new_data.size
-            num_data = self.stream.points_taken
+            num_data = self.stream.points_taken.value
             for i in range(self.num):
                 if num_data == 0:
                     if self.notebook:

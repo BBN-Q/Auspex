@@ -24,7 +24,7 @@ qubits:
     control:
       AWG: BBNAPS2 12
       generator: Holz2
-      frequency: -50000000.0
+      frequency: -49954995.330853336
       pulse_params:
         cutoff: 2.0
         length: 7.0e-08

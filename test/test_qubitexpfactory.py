@@ -65,7 +65,7 @@ class QubitExpFactoryTestCase(unittest.TestCase):
         exp = QubitExpFactory.run(RabiAmp(qq, np.linspace(-1,1,21)), save_data = False)
         buf = exp.buffers[0]
         ax = buf.descriptor.axes[0]
-        self.assertTrue(buf.finished_processing.is_set())
+        self.assertTrue(buf.done.is_set())
         self.assertTrue(len(buf.out_queue.get()) == 21)
         self.assertTrue((ax.points == np.linspace(-1,1,21)).all())
         self.assertTrue(ax.name == 'amplitude')
