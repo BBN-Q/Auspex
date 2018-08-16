@@ -85,7 +85,7 @@ class HolzworthPythonDriver(object):
                              idProduct = self.HOLZWORTH_PRODUCT_ID,
                              find_all=True):
             holz = HolzworthDevice(dev)
-            logger.info("Found Holzworth {} with channels {}".format(holz.serial, holz.channels))
+            logger.debug("Found Holzworth {} with channels {}".format(holz.serial, holz.channels))
             self.devices[holz.serial] = holz
 
         if not self.devices:
