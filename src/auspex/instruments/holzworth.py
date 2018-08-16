@@ -17,13 +17,15 @@ import ctypes
 
 class HolzworthDevice(object):
 
-    TIMEOUT = 100
+    TIMEOUT = 1000
 
     def __init__(self, device):
         super(HolzworthDevice, self).__init__()
 
         if not isinstance(device, usb.core.Device):
             raise TypeError("Holzworth device must receive a USB device!")
+
+        self.serial = device.__repr__()
 
         self._device = device
         self._device.reset()
@@ -46,7 +48,6 @@ class HolzworthDevice(object):
     def __del__(self):
         if self._device is not None:
             usb.util.dispose_resources(self._device)
-        super(HolzworthDevice, self).__del__()
 
     def write(self, command):
         try:
@@ -56,10 +57,11 @@ class HolzworthDevice(object):
             logger.error("Command {} to Holzworth {} timed out!".format(command, self.serial))
 
     def read(self, nbytes=64):
+        data = None
         try:
-            data = elf._e_in.read(nbytes, timeout=self.TIMEOUT)
+            data = self._e_in.read(nbytes, timeout=self.TIMEOUT)
         except usb.core.USBError:
-            logger.error("Read from Holzworth {} timed out!".format(command, self.serial))
+            logger.error("Read from Holzworth {} timed out!".format(self.serial))
         #Strip NULLs from reply and decode
         return bytes(data).partition(b'\0')[0].decode()
 
@@ -78,33 +80,25 @@ class HolzworthPythonDriver(object):
     def __init__(self):
         super(HolzworthPythonDriver, self).__init__()
 
-        devices = {}
+        self.devices = {}
         for dev in usb.core.find(idVendor = self.HOLZWORTH_VENDOR_ID,
                              idProduct = self.HOLZWORTH_PRODUCT_ID,
                              find_all=True):
             holz = HolzworthDevice(dev)
-            devices[holz.serial] = holz
+            logger.info("Found Holzworth {} with channels {}".format(holz.serial, holz.channels))
+            self.devices[holz.serial] = holz
 
-        if not devices:
+        if not self.devices:
             raise IOError("No Holzworth devices found.")
 
     def enumerate(self):
         return self.devices.keys()
 
-    def ch_check(serial, channel):
+    def ch_check(self, serial, channel):
         if serial not in self.devices.keys():
             ValueError("Holzworth {} not connected!".format(serial))
-        if channel not in self.devices[serial]:
+        if channel not in self.devices[serial].channels:
             ValueError("Holzworth {} does not have channel {}".format(serial, channel))
-
-    def read(self, serial):
-        return self.devices[serial].read()
-
-    def write(self, serial, command):
-        self.devices[serial].write(command)
-
-    def query(self, serial, command):
-        self.devices[serial].query(command)
 
 if config.auspex_dummy_mode:
     fake_holzworth = True
@@ -147,6 +141,10 @@ class HolzworthHS9000(Instrument, metaclass=MakeSettersGetters):
         # parse resource_name: expecting something like "HS9004A-009-1"
         model, serial, self.chan = self.resource_name.split("-")
         self.serial = model + '-' + serial
+
+        if int(self.chan) not in (1,2,3,4):
+            raise ValueError("Holzworth {} has unknown channel {}.".format(self.serial, self.chan))
+
         holzworth_driver.ch_check(self.serial, self.chan)
 
         # read frequency and power ranges
@@ -157,12 +155,12 @@ class HolzworthHS9000(Instrument, metaclass=MakeSettersGetters):
 
     def ref_query(self, scpi_string):
         serial = self.serial
-        return holzworth_driver.query(self.serial, ":REF{}".format(scpi_string))
+        return holzworth_driver.devices[self.serial].query(":REF{}".format(scpi_string))
 
     def ch_query(self, scpi_string):
         chan_string = ":CH{}".format(self.chan)
         scpi_string = chan_string + scpi_string
-        return holzworth_driver.query(self.serial, scpi_string)
+        return holzworth_driver.devices[self.serial].query(scpi_string)
 
     @property
     def frequency(self):
