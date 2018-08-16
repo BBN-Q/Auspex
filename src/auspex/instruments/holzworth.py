@@ -286,7 +286,7 @@ class HolzworthHS9000DLL(HolzworthInstrument, metaclass=MakeSettersGetters):
         return self._lib.usbCommWrite(self.resource_name.encode('ascii'), scpi_string.encode('ascii')).decode('ascii')
 
 #create class based on OS...
-class HolzworthHS9000(object):
+class HolzworthHS9000(Instrument):
     def __new__(cls, *args, **kwargs):
         if os.name == "posix":
             obj = object.__new__(HolzworthHS9000Py, *args, **kwargs)
