@@ -19,13 +19,13 @@ install_requires = [
     "psutil >= 5.0.0",
     "cffi >= 1.11.5",
     "scikit-learn >= 0.19.1",
-    "pyzmq >= 16.0.0"
+    "pyzmq >= 16.0.0",
+    "pyusb >= 1.0.2"
 ]
 
 #Use PyVISA-Py if running on Linux or MacOS
 if os.name == "posix":
     install_requires.append("PyVISA-Py >= 0.2")
-    install_requires.append("pyusb >= 1.0.2")
     install_requires.append("pyserial >= 3.4")
 
 setup(
