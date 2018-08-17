@@ -154,7 +154,7 @@ class SingleShotFidelityExperiment(QubitExperiment):
             logger.info("Set digitizer {} round robins to 1 for single shot experiment.".format(d))
             self.settings['instruments'][d]['nbr_round_robins'] = 1
         # disable averagers
-        for f in self.settings['filters'].values():
+        for _, f in self.settings['filters'].items():
             if f['type'] == 'Averager':
                 f['enabled'] = False
 
