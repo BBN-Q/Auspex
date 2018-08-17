@@ -138,10 +138,16 @@ class HolzworthInstrument(Instrument, metaclass=MakeSettersGetters):
 
     def get_info(self):
         # read frequency and power ranges
-        self.fmin = float((self.ch_query(":FREQ:MIN?")).split()[0]) * 1e6 #Hz
-        self.fmax = float((self.ch_query(":FREQ:MAX?")).split()[0]) * 1e6 #Hz
-        self.pmin = float((self.ch_query(":PWR:MIN?")).split()[0]) #dBm
-        self.pmax = float((self.ch_query(":PWR:MAX?")).split()[0]) #dBm
+        if fake_holzworth:
+            self.fmin = 10e3
+            self.fmax = 20e9
+            self.pmin = -80.
+            self.pmax = 16.
+        else:
+            self.fmin = float((self.ch_query(":FREQ:MIN?")).split()[0]) * 1e6 #Hz
+            self.fmax = float((self.ch_query(":FREQ:MAX?")).split()[0]) * 1e6 #Hz
+            self.pmin = float((self.ch_query(":PWR:MIN?")).split()[0]) #dBm
+            self.pmax = float((self.ch_query(":PWR:MAX?")).split()[0]) #dBm
 
     @property
     def frequency(self):
