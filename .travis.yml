@@ -25,7 +25,7 @@ install:
   - export GIT_LFS_SKIP_SMUDGE=1
   - pip install git+https://github.com/BBN-Q/Adapt.git
   - pip install git+https://github.com/BBN-Q/QGL.git
-  - pip install tqdm pyvisa coveralls ruamel.yaml watchdog scikit-learn
+  - pip install tqdm pyvisa coveralls ruamel.yaml watchdog scikit-learn pyusb
   - export GIT_LFS_SKIP_SMUDGE=0
   - conda install -c ecpy atom;
   - export PYTHONPATH=$PYTHONPATH:$PWD/src
