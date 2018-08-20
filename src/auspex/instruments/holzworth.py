@@ -138,7 +138,7 @@ class HolzworthInstrument(Instrument, metaclass=MakeSettersGetters):
 
     def get_info(self):
         # read frequency and power ranges
-        if fake_holzworth:
+        if self.fake_holz:
             self.fmin = 10e3
             self.fmax = 20e9
             self.pmin = -80.
