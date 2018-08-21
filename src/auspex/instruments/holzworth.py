@@ -101,23 +101,23 @@ class HolzworthPythonDriver(object):
         if channel not in self.devices[serial].channels:
             ValueError("Holzworth {} does not have channel {}".format(serial, channel))
 
-if os.name == "posix":
-    if config.auspex_dummy_mode:
-        fake_holzworth = True
-        holzworth_driver = MagicMock()
-    else:
+if config.auspex_dummy_mode:
+    fake_holz = True
+    holzworth_driver = MagicMock()
+else:
+    fake_holz = False
+    if os.name == "posix":
         try:
             holzworth_driver = HolzworthPythonDriver()
-            fake_holzworth = False
             logger.debug("Using Holzworth pure-python driver.")
         except Exception as e:
             logger.warning("Could not connect to Holzworths: {}".format(e))
             if str(e) == "No backend available":
                 logger.warning("You may not have the libusb backend: please install it!")
             holzworth_driver = MagicMock()
-            fake_holzworth = True
-else:
-    logger.debug("Using Holzworth DLL driver.")
+            fake_holz = True
+    else:
+        logger.debug("Using Holzworth DLL driver.")
 
 class MakeSettersGetters(MetaInstrument):
     def __init__(self, name, bases, dct):
@@ -138,7 +138,7 @@ class HolzworthInstrument(Instrument, metaclass=MakeSettersGetters):
 
     def get_info(self):
         # read frequency and power ranges
-        if fake_holzworth:
+        if fake_holz:
             self.fmin = 10e3
             self.fmax = 20e9
             self.pmin = -80.
