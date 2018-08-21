@@ -103,19 +103,19 @@ class HolzworthPythonDriver(object):
 
 if os.name == "posix":
     if config.auspex_dummy_mode:
-        fake_holzworth = True
+        self.fake_holz = True
         holzworth_driver = MagicMock()
     else:
         try:
             holzworth_driver = HolzworthPythonDriver()
-            fake_holzworth = False
+            self.fake_holz = False
             logger.debug("Using Holzworth pure-python driver.")
         except Exception as e:
             logger.warning("Could not connect to Holzworths: {}".format(e))
             if str(e) == "No backend available":
                 logger.warning("You may not have the libusb backend: please install it!")
             holzworth_driver = MagicMock()
-            fake_holzworth = True
+            self.fake_holz = True
 else:
     logger.debug("Using Holzworth DLL driver.")
 
