@@ -237,6 +237,15 @@ class Filter(Process, metaclass=MetaFilter):
                 #     break
             
             if stream_done:
+                # outputs = self.output_connectors.values()
+
+                # if outputs:
+                #     output_status = [v.done() for v in outputs]
+                #     print('x dones: %s' % str(output_status))
+
+                #     if not np.all(output_status):
+                #         print('------------------->>>>>>>>> NOT ALL DONE YET')
+
                 self.done.set()
                 break
 

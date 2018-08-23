@@ -558,6 +558,14 @@ class WriteToHDF5(Filter):
                         logger.debug("HDF5: Write index at %d", w_idx[stream])
                         logger.debug("HDF5: %s has written %d points", stream.name, w_idx[stream])
 
+            # outputs = self.output_connectors.values()
+            # if outputs:
+            #     output_status = [v.done() for v in outputs]
+            #     print('x2 dones: %s' % str(output_status))
+
+            #     if not np.all(output_status):
+            #         print('------------------->>>>>>>>> NOT ALL DONE YET')
+
             if np.all(list(got_done_msg.values())):
                 stream_done = True
                 self.done.set()
@@ -634,6 +642,9 @@ class DataBuffer(Filter):
                 data = stream_data[stream]
                 buffers[stream][self.w_idxs[stream]:self.w_idxs[stream]+data.size] = data
                 self.w_idxs[stream] += data.size
+
+            # if not np.all([v.done() for v in self.output_connectors.values()]):
+            #     print('--------- IO NOT ALL DONE')
 
             # If we have gotten all our data and process_data has returned, then we are done!
             if np.all([v.done() for v in self.input_connectors.values()]):
