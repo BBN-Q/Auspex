@@ -29,6 +29,7 @@ import signal
 import numbers
 import subprocess
 import queue
+import cProfile
 from functools import partial
 
 import numpy as np
@@ -409,6 +410,12 @@ class Experiment(metaclass=MetaExperiment):
             instrument.disconnect()
         self.instrs_connected = False
 
+    # def run_sweeps(self):
+    #     if auspex.config.profile:
+    #         cProfile.runctx('self._run_sweeps()', globals(), locals(), 'prof-run_sweeps.prof')
+    #     else:
+    #         self._run_sweeps()
+
     def run_sweeps(self):
         # Propagate the descriptors through the network
         self.update_descriptors()
@@ -440,7 +447,7 @@ class Experiment(metaclass=MetaExperiment):
             wrs[0].file = wrs[0].new_file()
             wrs[0].queue = Queue()
             wrs[0].ret_queue = Queue()
-            self.h5_handlers.append(H5Handler(wrs[0].filename.value, wrs[0].queue, wrs[0].ret_queue))
+            self.h5_handlers.append(H5Handler(wrs[0].filename.value, len(wrs), wrs[0].queue, wrs[0].ret_queue))
             self.files.append(wrs[0].file)
 
             # Make the rest of the writers use this same file object
@@ -476,7 +483,7 @@ class Experiment(metaclass=MetaExperiment):
         # Launch plot servers.
         if len(self.plotters) > 0:
             self.init_plot_servers()
-        time.sleep(1)
+        time.sleep(0.1)
         #connect all instruments
         self.connect_instruments()
         #initialize instruments
@@ -620,7 +627,7 @@ class Experiment(metaclass=MetaExperiment):
                     #                 time.sleep(0.002)
                     #                 break
                     n.join(timeout=0.1)
-        logger.info("Done waiting...")
+        # logger.info("Done waiting...")
 
         if self.dashboard:
             exit_perf.set()
@@ -659,11 +666,11 @@ class Experiment(metaclass=MetaExperiment):
             except:
                 logger.info("Could not stop extra plot server gracefully...")
 
-        logger.info("Shutting down instruments")
+        logger.debug("Shutting down instruments")
         self.shutdown_instruments()
 
         if not self.keep_instruments_connected:
-            logger.info("Disconnecting instruments")
+            logger.debug("Disconnecting instruments")
             self.disconnect_instruments()
 
     def add_axis(self, axis, position=0):

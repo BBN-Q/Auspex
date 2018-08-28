@@ -260,7 +260,7 @@ class Filter(Process, metaclass=MetaFilter):
             #         break      
 
         # When we've finished, either prematurely or as expected
-        print(self.filter_name, "leaving main loop")
+        # print(self.filter_name, "leaving main loop")
         self.on_done()
 
     def process_data(self, data):

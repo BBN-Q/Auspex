@@ -101,11 +101,13 @@ class DumbFileHandler(Process):
 
 
 class H5Handler(Process):
-    def __init__(self, filename, queue, return_queue):
+    def __init__(self, filename, num_writers, queue, return_queue):
         super(H5Handler, self).__init__()
         self.queue = queue
+        self.num_writers = num_writers # How many writers are using me?
         self.return_queue = return_queue
         self.exit = mp.Event()
+        self.num_dones = 0
         self.done = mp.Event()
         self.filename = filename
         self.filter_name = f"{self.filename}"
@@ -130,8 +132,11 @@ class H5Handler(Process):
                     args = (args[0], args[1], args[2], args[3], np.array([args[4]]))
                 # Set up datatype and write buffer if we haven't already
                 self.dtype = args[4].dtype
-                self.write_buf = np.zeros(len(args[4])*1000, dtype=self.dtype)
-                # print(self.filename, "New buffer size", len(args[4]))
+                try:
+                    l = len(args[4])
+                except:
+                    l = 1
+                self.write_buf = np.zeros(l*1000, dtype=self.dtype)
             file[args[1]][args[2]:args[3]] = args[4]
             self.processed += args[4].nbytes
 
@@ -147,7 +152,9 @@ class H5Handler(Process):
         elif args[0] == "flush":
             file.flush()
         elif args[0] == "done":
-            self.exit.set()
+            self.num_dones += 1
+            if self.num_dones == self.num_writers:
+                self.exit.set()
         self.push_resource_usage()
 
     def concat_msgs(self, msgs):
@@ -571,7 +578,7 @@ class WriteToHDF5(Filter):
                 self.done.set()
                 break
 
-        print(self.filter_name, "leaving main loop")
+        # print(self.filter_name, "leaving main loop")
 
 
 class DataBuffer(Filter):
