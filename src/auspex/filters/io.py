@@ -50,11 +50,11 @@ class DumbFileHandler(Process):
         self.return_queue = return_queue
         self.exit = mp.Event()
         self.filename = filename
-        self.filter_name = f"{self.filename}"
+        self.filter_name = os.path.basename(filename)
         self.p = psutil.Process(os.getpid())
         self.perf_queue = None
         self.beginning = datetime.datetime.now()
-        self.processed = 0 
+        self.processed = 0
 
     def shutdown(self):
         logger.info("H5 handler shutting down")
@@ -84,7 +84,7 @@ class DumbFileHandler(Process):
                     for msg in msgs:
                         pass
                         self.process_queue_item(msg, file)
-                        
+
             if config.profile:
                 cProfile.runctx('thing()', globals(), locals(), 'prof-%s-%s.prof' % (self.__class__.__name__, self.filter_name))
         print(self.filter_name, "leaving main loop")
@@ -110,7 +110,7 @@ class H5Handler(Process):
         self.num_dones = 0
         self.done = mp.Event()
         self.filename = filename
-        self.filter_name = f"{self.filename}"
+        self.filter_name = os.path.basename(filename)
         self.p = psutil.Process(os.getpid())
         self.perf_queue = None
         self.beginning = datetime.datetime.now()
@@ -188,7 +188,7 @@ class H5Handler(Process):
                         except queue.Empty as e:
                             time.sleep(0.002)
                             break
-                        
+
                     msgs = self.concat_msgs(msgs)
                     for msg in msgs:
                         self.process_queue_item(msg, file)
