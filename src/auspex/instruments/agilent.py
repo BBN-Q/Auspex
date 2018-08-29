@@ -179,7 +179,7 @@ class Agilent33500B(SCPIInstrument):
                                 additional_args=['channel'])
     pulse_period = FloatCommand(scpi_string="SOURce{channel:d}:FUNCtion:PULSe:PERiod",
                                 additional_args=['channel'])
-    pulse_edge = FloatCommand(scpi_string="SOURce{channel:d}:FUNCtion:PULSe:TRANsition",
+    pulse_edge = FloatCommand(scpi_string="SOUR{channel:d}:FUNC:PULS:TRAN:BOTH",
                                 additional_args=['channel'])
     pulse_dcyc = IntCommand(scpi_string="SOURce{channel:d}:FUNCtion:PULSe:DCYCle",
                                 additional_args=['channel'])
@@ -214,7 +214,10 @@ class Agilent33500B(SCPIInstrument):
     # Output subsystem
     output = Command(scpi_string="OUTP{channel:d}", value_map={True: "1", False: "0"},
                             additional_args=['channel'])
-    load = FloatCommand(scpi_string="OUTP{channel:d}:LOAD", value_range=[1,1e4],
+#    load = FloatCommand(scpi_string="OUTP{channel:d}:LOAD", value_range=[1,1e4],
+#                            additional_args=['channel'],
+#                            doc="Expected load resistance, 1-10k")
+    load = Command(scpi_string="OUTP{channel:d}:LOAD", value_map={"INF": "INF", "HI": "INF", 50: "50", "50": "50"},
                             additional_args=['channel'],
                             doc="Expected load resistance, 1-10k")
     output_gated = Command(scpi_string="OUTP{channel:d}:MODE", value_map={True:"GATed", False:"NORMal"},
@@ -247,8 +250,13 @@ class Agilent33500B(SCPIInstrument):
     burst_mode = StringCommand(scpi_string="SOURce{channel:d}:BURSt:MODE",
                                 value_map = {"Triggered": "TRIG", "Gated": "GAT"},
                             additional_args=['channel'])
-    trigger_source = StringCommand(scpi_string="TRIGger:SOURce",
-                        value_map = {"Internal": "IMM", "External": "EXT", "Bus": "BUS"})
+    #trigger_source = StringCommand(scpi_string="TRIGger:SOURce",
+   #                        value_map = {"Internal": "IMM", "External": "EXT", "Bus": "BUS"})
+    trigger_source = StringCommand(scpi_string="TRIG{channel:d}:SOUR",
+                        value_map = {"Internal": "IMM", "External": "EXT", "Bus": "BUS"},
+                        additional_args=['channel'])
+    trigger_delay = FloatCommand(scpi_string="TRIG{channel:d}:DEL",
+                        additional_args=['channel'])
     trigger_slope = StringCommand(scpi_string="TRIGger:SLOPe",
                                 value_map = {"Positive": "POS", "Negative": "NEG"})
     # Data subsystem
@@ -373,6 +381,9 @@ class Agilent33500B(SCPIInstrument):
 
     def trigger(self,channel=1):
         self.interface.write("TRIGger%d" %channel)
+
+    def bus_trigger(self):
+        self.interface.write("*TRG")
 
     def abort(self):
         self.interface.write("ABORt")

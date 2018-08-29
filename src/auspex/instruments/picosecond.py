@@ -9,7 +9,7 @@
 __all__ = ['Picosecond10070A']
 
 from auspex.log import logger
-from .instrument import SCPIInstrument, StringCommand, FloatCommand
+from .instrument import SCPIInstrument, StringCommand, FloatCommand, Command
 
 class Picosecond10070A(SCPIInstrument):
     """Picosecond 10070A Pulser"""
@@ -21,6 +21,7 @@ class Picosecond10070A(SCPIInstrument):
     frequency      = FloatCommand(scpi_string="frequency")
     offset         = FloatCommand(scpi_string="offset")
     trigger_source = StringCommand(scpi_string="trigger", allowed_values=["INT", "EXT", "GPIB"])
+    trigger_slope = StringCommand(scpi_string="slope", allowed_values=["POS", "NEG"])
 
     def __init__(self, resource_name, *args, **kwargs):
         super(Picosecond10070A, self).__init__(resource_name, *args, **kwargs)
