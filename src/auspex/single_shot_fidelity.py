@@ -153,6 +153,10 @@ class SingleShotFidelityExperiment(QubitExperiment):
         for d in digitizers:
             logger.info("Set digitizer {} round robins to 1 for single shot experiment.".format(d))
             self.settings['instruments'][d]['nbr_round_robins'] = 1
+        # disable averagers
+        for _, f in self.settings['filters'].items():
+            if f['type'] == 'Averager':
+                f['enabled'] = False
 
     def find_single_shot_filter(self):
         """Make sure there is one single shot measurement filter in the pipeline."""
