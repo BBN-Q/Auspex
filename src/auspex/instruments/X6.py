@@ -157,7 +157,7 @@ class X6(Instrument):
         # pass thru functions
         self.acquire    = self._lib.acquire
         self.stop       = self._lib.stop
-        self.disconnect = self._lib.disconnect
+        # self.disconnect = self._lib.disconnect
 
         if self.gen_fake_data or fake_x6:
             self._lib = MagicMock()
@@ -179,9 +179,12 @@ class X6(Instrument):
         super(X6, self).set_all(settings_dict)
         # Set data for testing
         try:
-            self.ideal_data = np.load(os.path.abspath(settings_dict["ideal_data"]+'.npy'))
+            if "ideal_data" in settings_dict.keys():
+                self.ideal_data = np.load(os.path.abspath(settings_dict["ideal_data"]+'.npy'))
+            else:
+                self.ideal_data = None
         except:
-            print("Could not find ideal data")
+            logger.warning(f"Could not find ideal data...")
             self.ideal_data = None
             # import ipdb; ipdb.set_trace()
         # perform channel setup
@@ -317,7 +320,7 @@ class X6(Instrument):
             total += len(data)
             oc.push(data)
 
-        logger.info('RECEIVED %d %d', total, oc.points_taken.value)
+        # logger.info('RECEIVED %d %d', total, oc.points_taken.value)
 
         for stream in oc.output_streams:
             abc = 0
@@ -327,9 +330,9 @@ class X6(Instrument):
                     abc += 1
                     time.sleep(0.005)
                 except queue.Empty as e:
-                    logger.info(f"All my data {oc} has been consumed {abc}")
+                    # logger.info(f"All my data {oc} has been consumed {abc}")
                     break
-        logger.info("X6 receive data exiting")
+        # logger.info("X6 receive data exiting")
 
     def get_buffer_for_channel(self, channel):
         return self._lib.transfer_stream(*channel.channel)
@@ -340,7 +343,7 @@ class X6(Instrument):
             total_spewed = 0
 
             counter = {chan: 0 for chan in self._chan_to_wsocket.keys()}
-            logger.info(f"X6 getting {self._lib.nbr_round_robins} {self._lib.nbr_segments} {self._lib.record_length}")
+            # logger.info(f"X6 getting {self._lib.nbr_round_robins} {self._lib.nbr_segments} {self._lib.record_length}")
             for j in range(self._lib.nbr_round_robins):
                 for i in range(self._lib.nbr_segments):
                     if self.ideal_data is not None:
@@ -357,17 +360,17 @@ class X6(Instrument):
                     time.sleep(0.0001)
 
             # logger.info("Counter: %s", str(counter))
-            logger.info('TOTAL fake data generated %d', total_spewed)
+            # logger.info('TOTAL fake data generated %d', total_spewed)
             if ocs:
                 while True:
                     total_taken = 0
                     for oc in ocs:
                         total_taken += oc.points_taken.value
-                        logger.info('TOTAL fake data received %d', oc.points_taken.value)
+                        # logger.info('TOTAL fake data received %d', oc.points_taken.value)
                     if total_taken == total_spewed:
                         break
 
-                    logger.info('WAITING for acquisition to finish %d < %d', total_taken, total_spewed)
+                    # logger.info('WAITING for acquisition to finish %d < %d', total_taken, total_spewed)
                     time.sleep(0.025)
 
         else:
