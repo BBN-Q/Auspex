@@ -411,8 +411,8 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
           seq_file: test.h5        # optional sequence file
           tx_channels:             # All transmit channels
             '12':                  # Quadrature channel name (string)
-              phase_skew: 0.0      # (deg) - Used by QGL
-              amp_factor: 1.0      # Used by QGL
+              phase_skew: 0.0      # (deg) - directly set in the instrument
+              amp_factor: 1.0      # directly set in the instrument
               delay: 0.0           # (s) - Used by QGL
               '1':
                 enabled: true
@@ -511,6 +511,14 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
         main_quad_dict = quad_channels.pop('12', None)
         if not main_quad_dict:
             raise ValueError("APS2 {} expected to receive quad channel '12'".format(self))
+        # Set properties of the channel pair
+        if 'delay' in main_quad_dict:  # this is set in QGL
+            main_quad_dict.pop('delay')
+        for attr, value in main_quad_dict.items():
+            try:
+                getattr(self, 'set_' + attr)(value)
+            except AttributeError:
+                pass
 
         # Set the properties of individual hardware channels (offset, amplitude)
         for chan_num, chan_name in enumerate(['1', '2']):
@@ -605,6 +613,20 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
     @property
     def fpga_temperature(self):
         return self.wrapper.get_fpga_temperature()
+
+    @property
+    def amp_factor(self):
+        return self.wrapper.get_mixer_amplitude_imbalance()
+    @amp_factor.setter
+    def amp_factor(self, amp):
+        self.wrapper.set_mixer_amplitude_imbalance(amp)
+
+    @property
+    def phase_skew(self):
+        return self.wrapper.get_mixer_phase_skew()
+    @phase_skew.setter
+    def phase_skew(self, skew):
+        self.wrapper.set_mixer_phase_skew(skew)
 
 class TDM(APS2):
     """BBN TDM"""
