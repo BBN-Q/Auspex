@@ -912,6 +912,9 @@ def phase_to_amplitude(phase, sigma, amp, target, ct, iteration_limit=5):
         else:
             logger.info('Hit max iteration count');
         done_flag = 1
+
+    if amp > 1.0:
+        raise ValueError(f"Phase estimation would have returned amplitude greater than 1.0 ({amp})")
     return amp, done_flag
 
 def quick_norm_data(data): #TODO: generalize as in Qlab.jl

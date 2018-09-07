@@ -61,33 +61,34 @@ def simulate_ramsey(num_steps = 50, maxt = 50e-6, detuning = 100e3, T2 = 40e-6):
     ypoints = np.cos(2*np.pi*detuning*xpoints)*np.exp(-xpoints/T2)
     return ypoints
 
-def simulate_phase_estimation(amp, target, numPulses):
+def simulate_phase_estimation(amp, target, numPulses, ideal_amp=0.34, add_noise=False):
     """
     Simulate the output of a PhaseEstimation experiment with NumPulses.
     amp: initial pulse amplitude
-    target: target pulse amplitude
+    target: target angle (pi/2, etc.)
 
     returns: ideal data and variance
     """
-    idealAmp = 0.34
-    noiseScale = 0.05
+    ideal_amp    = ideal_amp
+    noiseScale   = 0.05
     polarization = 0.99 # residual polarization after each pulse
 
     # data representing over/under rotation of pi/2 pulse
-    # theta = pi/2 * (amp/idealAmp);
-    theta = target * (amp/idealAmp)
-    ks = [ 2**k for k in range(0,numPulses+1)]
+    # theta = pi/2 * (amp/ideal_amp);
+    theta   = target * (amp/ideal_amp)
+    ks      = [ 2**k for k in range(0,numPulses+1)]
 
-    xdata = [ polarization**x * np.sin(x*theta) for x in ks];
+    xdata = [ polarization**x * np.sin(x*theta) for x in ks]
     xdata = np.insert(xdata,0,-1.0)
-    zdata = [ polarization**x * np.cos(x*theta) for x in ks];
+    zdata = [ polarization**x * np.cos(x*theta) for x in ks]
     zdata = np.insert(zdata,0,1.0)
-    data = np.array([zdata,xdata]).flatten('F')
-    data = np.tile(data,(2,1)).flatten('F')
+    data  = np.array([zdata,xdata]).flatten('F')
+    data  = np.tile(data,(2,1)).flatten('F')
 
-    # add noise
-    #data += noiseScale * np.random.randn(len(data));
-    vardata = noiseScale**2 * np.ones((len(data,)));
+    if add_noise:
+        data += noiseScale * np.random.randn(len(data));
+
+    vardata = noiseScale**2 * np.ones((len(data)))
 
     return data, vardata
 
@@ -156,6 +157,7 @@ class SingleQubitCalTestCase(unittest.TestCase):
         self.assertAlmostEqual(ramsey_cal.fit_freq/1e9, new_settings['instruments']['Holz2']['frequency']/1e9, places=4)
         #restore original settings
         auspex.config.dump_meas_file(self.test_settings, cfg_file)
+    
     def test_ramsey_set_qubit(self):
         """
         Test RamseyCalibration with qubit frequency setting.
@@ -166,6 +168,7 @@ class SingleQubitCalTestCase(unittest.TestCase):
         self.assertAlmostEqual((self.test_settings['qubits'][self.q.label]['control']['frequency']+90e3)/1e6, new_settings['qubits'][self.q.label]['control']['frequency']/1e6, places=2)
         #restore original settings
         auspex.config.dump_meas_file(self.test_settings, cfg_file)
+    
     def test_phase_estimation(self):
         """
         Test generating data for phase estimation
@@ -198,13 +201,13 @@ class SingleQubitCalTestCase(unittest.TestCase):
         # is passed into the optimize_amplitude routine to be able to update
         # the amplitude as part of the optimization loop.
         def update_data(amp, ct):
-                data, vardata =  simulate_phase_estimation(amp, target, numPulses)
-                phase, sigma = cal.phase_estimation(data, vardata, verbose=False)
-                amp, done_flag = cal.phase_to_amplitude(phase, sigma, amp, target, ct)
-                return amp, data, done_flag
+            data, vardata =  simulate_phase_estimation(amp, target, numPulses)
+            phase, sigma = cal.phase_estimation(data, vardata, verbose=False)
+            amp, done_flag = cal.phase_to_amplitude(phase, sigma, amp, target, ct)
+            return amp, data, done_flag
 
         done_flag = 0
-        for ct in range(9): #max iterations
+        for ct in range(15): #max iterations
             amp, data, done_flag = update_data(amp, ct)
             ideal_data = data if not ct else np.vstack((ideal_data, data))
             if done_flag:
@@ -220,7 +223,7 @@ class SingleQubitCalTestCase(unittest.TestCase):
         self.assertAlmostEqual(pi_cal.amplitude, amp, places=3)
         #restore original settings
         auspex.config.dump_meas_file(self.test_settings, cfg_file)
-        # os.remove(self.filename)
+        os.remove(self.filename)
 
     def test_drag(self):
         """

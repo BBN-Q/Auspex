@@ -28,8 +28,8 @@ qubits:
       pulse_params:
         cutoff: 2.0
         length: 7.0e-08
-        pi2Amp: 76.60694
-        piAmp: 153.21388
+        pi2Amp: 0.3
+        piAmp: 0.6
         shape_fun: drag
         drag_scaling: -0.195
         sigma: 5.0e-09
