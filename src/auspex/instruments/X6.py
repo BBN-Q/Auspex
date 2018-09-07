@@ -133,7 +133,7 @@ class X6(Instrument):
         self.resource_name = resource_name
         self.name          = name
 
-        self.last_timestamp = datetime.datetime.now()
+        self.last_timestamp = Value('d', datetime.datetime.now().timestamp())
         self.gen_fake_data = gen_fake_data
         self.ideal_data = None
 
@@ -295,7 +295,7 @@ class X6(Instrument):
     def receive_data(self, channel, oc, exit):
         sock = self._chan_to_rsocket[channel]
         sock.settimeout(1)
-        last_timestamp = datetime.datetime.now()
+        self.last_timestamp.value = datetime.datetime.now().timestamp()
 
         total = 0
 
@@ -305,7 +305,7 @@ class X6(Instrument):
             # TODO receive 4 or 8 bytes depending on sizeof(size_t)
             try:
                 msg = sock.recv(8)
-                last_timestamp = datetime.datetime.now()
+                self.last_timestamp.value = datetime.datetime.now().timestamp()
             except:
                 continue
 
@@ -375,7 +375,7 @@ class X6(Instrument):
 
         else:
             while not self.done():
-                if (datetime.datetime.now() - self.last_timestamp).seconds > timeout:
+                if (datetime.datetime.now().timestamp() - self.last_timestamp.value) > timeout:
                     logger.error("Digitizer %s timed out.", self.name)
                     break
                 time.sleep(0.1)

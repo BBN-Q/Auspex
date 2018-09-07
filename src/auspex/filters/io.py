@@ -124,7 +124,7 @@ class H5Handler(Process):
 
     def process_queue_item(self, args, file):
         if args[0] == "write":
-            logger.info(f"Writing {args} to {self.filename}")
+            # logger.info(f"Writing {args} to {self.filename}")
             if self.dtype is None:
                 # Sometimes we get a scalar, deal with it by converting to numpy array
                 try:
