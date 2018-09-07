@@ -19,7 +19,14 @@ from copy import copy, deepcopy
 import os
 import pandas as pd
 
-from time import *
+import time
+import sys
+if sys.platform == 'win32' or 'NOFORKING' in os.environ:
+    from queue import Queue as Queue
+else:
+    from multiprocessing import Queue as Queue
+import subprocess
+from .plotting import PlotDataServerProcess, PlotDescServerProcess
 
 from auspex.exp_factory import QubitExpFactory
 from auspex.parameter import FloatParameter
@@ -30,10 +37,11 @@ from matplotlib import cm
 import numpy as np
 from itertools import product
 
-def calibrate(calibrations, update_settings=True, cal_log=True):
+def calibrate(calibrations, update_settings=True, cal_log=True, leave_plots_open=True):
     """Takes in a qubit (as a string) and list of calibrations (as instantiated classes).
     e.g. calibrate_pulses([RabiAmp("q1"), PhaseEstimation("q1")])"""
     for calibration in calibrations:
+        calibration.leave_plots_open = leave_plots_open
         if not isinstance(calibration, PulseCalibration):
             raise TypeError("calibrate_pulses was passed a calibration that is not actually a calibration.")
         try:
@@ -50,27 +58,30 @@ def calibrate(calibrations, update_settings=True, cal_log=True):
                 pass #Experiment not yet created, so ignore
             raise Exception("Calibration failure") from ex
         finally:
-            sleep(0.1) #occasionally ZMQ barfs here
-            # if hasattr(calibration.exp, 'extra_plot_server'):
-            #     try:
-            #         calibration.exp.extra_plot_server.shutdown()
-            #         calibration.exp.extra_plot_desc_server.shutdown()
-            #     except Exception as e:
-            #         print("Exception while shutting down fitting plots:", e)
+            time.sleep(0.1) #occasionally ZMQ barfs here
+            if hasattr(calibration, 'plot_server'):
+                try:
+                    if calibration.plot:
+                        calibration.shutdown_plot_client()
+                        time.sleep(0.2)
+                        calibration.shutdown_plot_servers()
+                except Exception as e:
+                    print("Exception while shutting down fitting plots:", e)
 
 class PulseCalibration(object):
     """Base class for calibration of qubit control pulses."""
     def __init__(self, qubit_names, quad="real"):
         super(PulseCalibration, self).__init__()
-        self.qubit_names = qubit_names if isinstance(qubit_names, list) else [qubit_names]
-        self.qubit     = [QubitFactory(qubit_name) for qubit_name in qubit_names] if isinstance(qubit_names, list) else QubitFactory(qubit_names)
-        self.filename   = 'None'
-        self.exp        = None
-        self.axis_descriptor = None
-        self.cw_mode    = False
-        self.saved_settings = config.load_meas_file(config.meas_file)
-        self.settings = deepcopy(self.saved_settings) #make a copy for used during calibration
-        self.quad = quad
+        self.qubit_names      = qubit_names if isinstance(qubit_names, list) else [qubit_names]
+        self.qubit            = [QubitFactory(qubit_name) for qubit_name in qubit_names] if isinstance(qubit_names, list) else QubitFactory(qubit_names)
+        self.filename         = 'None'
+        self.exp              = None
+        self.axis_descriptor  = None
+        self.leave_plots_open = True
+        self.cw_mode          = False
+        self.saved_settings   = config.load_meas_file(config.meas_file)
+        self.settings         = deepcopy(self.saved_settings) #make a copy for used during calibration
+        self.quad             = quad
         if quad == "real":
             self.quad_fun = np.real
         elif quad == "imag":
@@ -83,21 +94,42 @@ class PulseCalibration(object):
             raise ValueError('Quadrature to calibrate must be one of ("real", "imag", "amp", "phase").')
         self.plot       = self.init_plot()
 
+        if self.plot:
+            self.launch_plot_servers()
+            self.launch_plot_client()
+
+    def launch_plot_servers(self):
+        self.plot_queue  = Queue()
+        self.plot_desc_server = PlotDescServerProcess({self.plot.filter_name: self.plot.desc()}, port=7773)
+        self.plot_desc_server.start()
+        self.plot_server = PlotDataServerProcess(self.plot_queue, port=7774)
+        self.plot_server.start()
+        self.plot.plot_queue = self.plot_queue
+
+    def launch_plot_client(self):
+        preexec_fn = os.setsid if hasattr(os, 'setsid') else None
+        client_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),"matplotlib-client.py")
+        config.last_extra_plotter_process = subprocess.Popen(['python', client_path, 'localhost',
+                                                            str(7773), str(7774)], env=os.environ.copy(), preexec_fn=preexec_fn)
+
+    def shutdown_plot_servers(self):
+        self.plot_server.shutdown()
+        self.plot_desc_server.shutdown()
+
+    def shutdown_plot_client(self):
+        if self.leave_plots_open:
+            self.plot.set_done()
+        else:
+            self.plot.set_quit()
 
     def sequence(self):
         """Returns the sequence for the given calibration, must be overridden"""
         return [[Id(self.qubit), MEAS(self.qubit)]]
 
     def set(self, instrs_to_set = [], exp_step = 0, **params):
-        try:
-            extra_plot_server = self.exp.extra_plot_server
-        except Exception as e:
-            pass #no experiment yet created, or plot server not yet started
+
         meta_file = compile_to_hardware(self.sequence(**params), fileName=self.filename, axis_descriptor=self.axis_descriptor)
-        if hasattr(self.exp, 'extra_plot_server'):
-            extra_plot_server = self.exp.extra_plot_server
         self.exp = QubitExpFactory.create(meta_file=meta_file, calibration=True, save_data=False, cw_mode=self.cw_mode)
-        self.exp.leave_plot_server_open = True
         self.exp.first_exp = not bool(exp_step)
 
         #Update all instruments that need to keep track of experiment numnber. Adapted from https://stackoverflow.com/questions/9807634/find-all-occurrences-of-a-key-in-nested-python-dictionaries-and-lists
@@ -114,13 +146,6 @@ class PulseCalibration(object):
         for k in find_all_items(self.exp.settings, 'exp_step'):
             k['exp_step'] = exp_step
 
-        try:
-            self.exp.extra_plot_server = extra_plot_server
-        except:
-            pass
-        if self.plot:
-            [self.exp.add_manual_plotter(p) for p in self.plot] if isinstance(self.plot, list) else self.exp.add_manual_plotter(self.plot)
-        #sweep instruments for calibration
         for instr_to_set in instrs_to_set:
             par = FloatParameter()
             par.assign_method(getattr(self.exp._instruments[instr_to_set['instr']], instr_to_set['method']))
@@ -215,7 +240,7 @@ class PulseCalibration(object):
             cal_pars['frequency'] = ctrl_freq + ctrl_settings['frequency'] # actual qubit frequency
         # Update with latest calibration
         cal_pars[cal_result[0]] = cal_result[1]
-        new_cal_entry = [[cal_pars[p] for p in log_columns[:-2]] + [strftime("%y%m%d"), strftime("%H%M%S")]]
+        new_cal_entry = [[cal_pars[p] for p in log_columns[:-2]] + [time.strftime("%y%m%d"), time.strftime("%H%M%S")]]
         lf = lf.append(pd.DataFrame(new_cal_entry, columns = log_columns), ignore_index = True)
         lf.to_csv(logfile, sep="\t", index= False)
 
@@ -307,7 +332,7 @@ class RabiAmpCalibration(PulseCalibration):
         self.plot["Q Data"] = (self.amps, data[N//2:])
         self.plot["I Fit"] = (finer_amps, rabi_amp_model(finer_amps, *poptI))
         self.plot["Q Fit"] = (finer_amps, rabi_amp_model(finer_amps, *poptQ))
-
+        time.sleep(3)
         return ('piAmp', self.pi_amp)
 
     def init_plot(self):

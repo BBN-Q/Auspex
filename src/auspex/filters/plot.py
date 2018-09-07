@@ -352,7 +352,7 @@ class ManualPlotter(object):
         self.x_label      = x_label if type(x_label) == list else [x_label]
         self.y_label      = y_label if type(y_label) == list else [y_label]
         self.y_lim        = y_lim
-        self.filter_name         = name
+        self.filter_name  = name
         self.numplots     = numplots
         self.traces = []
 
@@ -388,6 +388,12 @@ class ManualPlotter(object):
         if len(data_tuple) != 2:
             raise ValueError("__setitem__ for ManualPlotter accepts a tuple of length 2 for (xdata, ydata)")
         self.set_data(trace_name, data_tuple[0], data_tuple[1])
+
+    def set_done(self):
+        self.plot_queue.put({'name': self.filter_name, 'data': [np.array([])], "msg": "done"})
+
+    def set_quit(self):
+        self.plot_queue.put({'name': self.filter_name, 'data': [np.array([])], "msg": "quit"})
 
     def set_data(self, trace_name, xdata, ydata):
         self.plot_queue.put({"name": self.filter_name + ":" + trace_name, "msg": "data", "data": [xdata, ydata]})

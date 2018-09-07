@@ -37,8 +37,9 @@ import zmq
 
 class DataListener(QtCore.QObject):
 
-    message = QtCore.pyqtSignal(tuple)
+    message  = QtCore.pyqtSignal(tuple)
     finished = QtCore.pyqtSignal(bool)
+    bail     = QtCore.pyqtSignal(bool)
 
     def __init__(self, host, port=7772):
         QtCore.QObject.__init__(self)
@@ -48,6 +49,7 @@ class DataListener(QtCore.QObject):
         self.socket.connect("tcp://{}:{}".format(host, port))
         self.socket.setsockopt_string(zmq.SUBSCRIBE, "data")
         self.socket.setsockopt_string(zmq.SUBSCRIBE, "done")
+        self.socket.setsockopt_string(zmq.SUBSCRIBE, "quit")
         self.poller = zmq.Poller()
         self.poller.register(self.socket, zmq.POLLIN)
         self.running = True
@@ -59,7 +61,9 @@ class DataListener(QtCore.QObject):
                 msg = self.socket.recv_multipart()
                 msg_type = msg[0].decode()
                 name     = msg[1].decode()
-                if msg_type == "done":
+                if msg_type == "quit":
+                    self.bail.emit(True)
+                elif msg_type == "done":
                     self.finished.emit(True)
                 elif msg_type == "data":
                     result = [name]
@@ -350,6 +354,7 @@ class MatplotClientWindow(QtWidgets.QMainWindow):
         self.listener_thread.started.connect(self.Datalistener.loop)
         self.Datalistener.message.connect(self.data_signal_received)
         self.Datalistener.finished.connect(self.stop_listening)
+        self.Datalistener.bail.connect(self.bail)
 
         QtCore.QTimer.singleShot(0, self.listener_thread.start)
 
@@ -417,6 +422,11 @@ class MatplotClientWindow(QtWidgets.QMainWindow):
             self.toolbars[self.tabs.currentIndex()].setVisible(True)
 
     def fileQuit(self):
+        self.close()
+
+    def bail(self, _):
+        self.statusBar().showMessage("Quitting", 10000)
+        self.stop_listening(_)
         self.close()
 
     def stop_listening(self, _):

@@ -122,7 +122,7 @@ class SingleQubitCalTestCase(unittest.TestCase):
         ideal_data = [np.tile(simulate_rabiAmp(), self.nbr_round_robins)]
         np.save(self.filename, ideal_data)
         rabi_cal = cal.RabiAmpCalibration(self.q.label, num_steps = len(ideal_data[0])/(2*self.nbr_round_robins))
-        cal.calibrate([rabi_cal])
+        cal.calibrate([rabi_cal], leave_plots_open = False)
         os.remove(self.filename)
         self.assertAlmostEqual(rabi_cal.pi_amp,1,places=2)
         self.assertAlmostEqual(rabi_cal.pi2_amp,0.5,places=2)
@@ -141,7 +141,7 @@ class SingleQubitCalTestCase(unittest.TestCase):
         ideal_data = [np.tile(simulate_ramsey(detuning = 90e3), self.nbr_round_robins), np.tile(simulate_ramsey(detuning = 45e3), self.nbr_round_robins)]
         np.save(self.filename, ideal_data)
         ramsey_cal = cal.RamseyCalibration(self.q.label, num_steps = len(ideal_data[0])/(self.nbr_round_robins), added_detuning = 0e3, delays=np.linspace(0.0, 50.0, 50)*1e-6, set_source = set_source)
-        cal.calibrate([ramsey_cal])
+        cal.calibrate([ramsey_cal], leave_plots_open = False)
         os.remove(self.filename)
         return ramsey_cal
 
@@ -204,7 +204,7 @@ class SingleQubitCalTestCase(unittest.TestCase):
                 return amp, data, done_flag
 
         done_flag = 0
-        for ct in range(5): #max iterations
+        for ct in range(9): #max iterations
             amp, data, done_flag = update_data(amp, ct)
             ideal_data = data if not ct else np.vstack((ideal_data, data))
             if done_flag:
@@ -215,12 +215,12 @@ class SingleQubitCalTestCase(unittest.TestCase):
         quad = np.random.choice(['real', 'imag', 'amp', 'phase'])
         # Verify output matches what was previously seen by matlab
         pi_cal = cal.PiCalibration(self.q.label, numPulses, quad=quad)
-        cal.calibrate([pi_cal])
+        cal.calibrate([pi_cal], leave_plots_open = False)
         # NOTE: expected result is from the same input fed to the routine
         self.assertAlmostEqual(pi_cal.amplitude, amp, places=3)
         #restore original settings
         auspex.config.dump_meas_file(self.test_settings, cfg_file)
-        os.remove(self.filename)
+        # os.remove(self.filename)
 
     def test_drag(self):
         """
@@ -237,7 +237,7 @@ class SingleQubitCalTestCase(unittest.TestCase):
         ideal_data = [np.tile(simulate_drag(deltas_0, pulses_0, ideal_drag), self.nbr_round_robins), np.tile(simulate_drag(deltas_1, pulses_1, ideal_drag), self.nbr_round_robins)]
         np.save(self.filename, ideal_data)
         drag_cal = cal.DRAGCalibration(self.q.label, deltas = deltas_0, num_pulses = pulses_0)
-        cal.calibrate([drag_cal])
+        cal.calibrate([drag_cal], leave_plots_open = False)
 
         os.remove(self.filename)
         self.assertAlmostEqual(drag_cal.drag, ideal_drag, places=2)
