@@ -180,7 +180,7 @@ class Filter(Process, metaclass=MetaFilter):
         stream_points = 0
 
         while not self.exit.is_set():# and not self.finished_processing.is_set():
-            # Try to pull all messages in the queue. queue.empty() is not reliable, so we 
+            # Try to pull all messages in the queue. queue.empty() is not reliable, so we
             # ask for forgiveness rather than permission.
             messages = []
 
@@ -227,6 +227,7 @@ class Filter(Process, metaclass=MetaFilter):
                     logger.debug("Now has %d of %d points.", input_stream.points_taken.value, input_stream.num_points())
                     stream_points += len(message_data.flatten())
                     self.process_data(message_data.flatten())
+                    self.processed += message_data.nbytes
 
                 elif message['type'] == 'data_direct':
                     self.processed += message_data.nbytes
@@ -235,7 +236,7 @@ class Filter(Process, metaclass=MetaFilter):
                 # if stream_points == input_stream.num_points():
                 #     self.finished_processing.set()
                 #     break
-            
+
             if stream_done:
                 # outputs = self.output_connectors.values()
 
@@ -257,7 +258,7 @@ class Filter(Process, metaclass=MetaFilter):
             # else:
             #     if stream_done and np.all([v.done() for v in self.input_connectors.values()]):
             #         self.finished_processing.set()
-            #         break      
+            #         break
 
         # When we've finished, either prematurely or as expected
         # print(self.filter_name, "leaving main loop")

@@ -142,7 +142,7 @@ class QubitExperiment(Experiment):
 
         # Wait for all of the acquisitions to complete
         # DJE timeout = 10
-        timeout = 1
+        timeout = 20
         for dig in self.digitizers:
             dig.wait_for_acquisition(timeout, self.chan_to_oc.values())
 

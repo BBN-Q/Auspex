@@ -123,7 +123,7 @@ class X6(Instrument):
     """BBN QDSP running on the II-X6 digitizer"""
     instrument_type = ("Digitizer")
 
-    def __init__(self, resource_name=None, name="Unlabeled X6", gen_fake_data=True):
+    def __init__(self, resource_name=None, name="Unlabeled X6", gen_fake_data=False):
         # X6Channel objects
         self._channels = []
         # socket r/w pairs for each channel
@@ -299,7 +299,7 @@ class X6(Instrument):
 
         total = 0
 
-        while not exit.is_set():       
+        while not exit.is_set():
             # push data from a socket into an OutputConnector (oc)
             # wire format is just: [size, buffer...]
             # TODO receive 4 or 8 bytes depending on sizeof(size_t)
@@ -337,7 +337,7 @@ class X6(Instrument):
     def get_buffer_for_channel(self, channel):
         return self._lib.transfer_stream(*channel.channel)
 
-    def wait_for_acquisition(self, timeout=5, ocs=None):
+    def wait_for_acquisition(self, timeout=15, ocs=None):
 
         if self.gen_fake_data:
             total_spewed = 0

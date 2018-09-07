@@ -50,11 +50,11 @@ class DumbFileHandler(Process):
         self.return_queue = return_queue
         self.exit = mp.Event()
         self.filename = filename
-        self.filter_name = f"{self.filename}"
+        self.filter_name = os.path.basename(filename)
         self.p = psutil.Process(os.getpid())
         self.perf_queue = None
         self.beginning = datetime.datetime.now()
-        self.processed = 0 
+        self.processed = 0
 
     def shutdown(self):
         logger.info("H5 handler shutting down")
@@ -84,7 +84,7 @@ class DumbFileHandler(Process):
                     for msg in msgs:
                         pass
                         self.process_queue_item(msg, file)
-                        
+
             if config.profile:
                 cProfile.runctx('thing()', globals(), locals(), 'prof-%s-%s.prof' % (self.__class__.__name__, self.filter_name))
         print(self.filter_name, "leaving main loop")
@@ -110,7 +110,7 @@ class H5Handler(Process):
         self.num_dones = 0
         self.done = mp.Event()
         self.filename = filename
-        self.filter_name = f"{self.filename}"
+        self.filter_name = os.path.basename(filename)
         self.p = psutil.Process(os.getpid())
         self.perf_queue = None
         self.beginning = datetime.datetime.now()
@@ -188,7 +188,7 @@ class H5Handler(Process):
                         except queue.Empty as e:
                             time.sleep(0.002)
                             break
-                        
+
                     msgs = self.concat_msgs(msgs)
                     for msg in msgs:
                         self.process_queue_item(msg, file)
@@ -611,50 +611,67 @@ class DataBuffer(Filter):
                 raise ValueError("Multiple streams connected to DataBuffer must have matching descriptors.")
 
         # Buffers for stream data
-        stream_data = {s: np.zeros(0, dtype=self.sink.descriptor.dtype) for s in streams}
+        stream_data = {s: [] for s in streams}
 
         # Store whether streams are done
         stream_done = {s: False for s in streams}
 
         while not self.exit.is_set():
-            try:
-                stream_results = {stream: stream.queue.get(True, 0.2) for stream in streams}
-            except queue.Empty as e:
-                continue
+            msgs_by_stream = {s: [] for s in streams}
+
+            for stream in streams[::-1]:
+                while not self.exit.is_set():
+                    try:
+                        msgs_by_stream[stream].append(stream.queue.get(False))
+                    except queue.Empty as e:
+                        time.sleep(0.002)
+                        break
+            # try:
+            #     messages =
+            #     stream_results = {stream: stream.queue.get(True, 0.2) for stream in streams}
+            # except queue.Empty as e:
+            #     continue
 
             # Add any new data to the buffers
-            for stream, message in stream_results.items():
-                message_type = message['type']
-                message_data = message['data']
-                message_data = message_data if hasattr(message_data, 'size') else np.array([message_data])
-                if message_type == 'event':
-                    if message['event_type'] == 'done':
-                        stream_done[stream] = True
-                    elif message['event_type'] == 'refined':
-                        # Single we don't have much structure here we simply
-                        # create a new buffer and paste the old buffer into it
-                        old_buffer = buffers[stream]
-                        new_size   = stream.descriptor.num_points()
-                        buffers[stream] = np.empty(stream.descriptor.num_points(), dtype=stream.descriptor.dtype)
-                        buffers[stream][:old_buffer.size] = old_buffer
+            for stream, messages in msgs_by_stream.items():
+                for message in messages:
+                    message_type = message['type']
+                    message_data = message['data']
+                    message_data = message_data if hasattr(message_data, 'size') else np.array([message_data])
+                    if message_type == 'event':
+                        if message['event_type'] == 'done':
+                            stream_done[stream] = True
+                            # logger.info(f"Buffer {self.filter_name} stream {stream} done...")
+                        elif message['event_type'] == 'refined':
+                            # Single we don't have much structure here we simply
+                            # create a new buffer and paste the old buffer into it
+                            old_buffer = buffers[stream]
+                            new_size   = stream.descriptor.num_points()
+                            buffers[stream] = np.empty(stream.descriptor.num_points(), dtype=stream.descriptor.dtype)
+                            buffers[stream][:old_buffer.size] = old_buffer
 
-                elif message_type == 'data':
-                    stream_data[stream] = message_data.flatten()
+                    elif message_type == 'data':
+                        new_dat = message_data.flatten()
+                        stream_data[stream].append(new_dat)
+                        self.processed += new_dat.nbytes
 
+            self.push_resource_usage()
             # if False not in stream_done.values():
             #     logger.debug('%s "%s" is done', self.__class__.__name__, self.name)
             #     break
 
-            for stream in stream_results.keys():
-                data = stream_data[stream]
-                buffers[stream][self.w_idxs[stream]:self.w_idxs[stream]+data.size] = data
-                self.w_idxs[stream] += data.size
+            for stream in streams:
+                datas = stream_data[stream]
+                for data in datas:
+                    buffers[stream][self.w_idxs[stream]:self.w_idxs[stream]+data.size] = data
+                    self.w_idxs[stream] += data.size
 
             # if not np.all([v.done() for v in self.output_connectors.values()]):
             #     print('--------- IO NOT ALL DONE')
 
             # If we have gotten all our data and process_data has returned, then we are done!
-            if np.all([v.done() for v in self.input_connectors.values()]):
+            if np.all([stream_done[stream] for stream in streams]):
+                # logger.info(f"Buffer {self.filter_name} all done...")
                 self.done.set()
                 break
 
