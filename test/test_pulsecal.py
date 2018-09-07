@@ -146,6 +146,7 @@ class SingleQubitCalTestCase(unittest.TestCase):
         os.remove(self.filename)
         return ramsey_cal
 
+    @unittest.skip("Issues with Linux build.")
     def test_ramsey_set_source(self):
         """
         Test RamseyCalibration with source frequency setting.
@@ -157,7 +158,7 @@ class SingleQubitCalTestCase(unittest.TestCase):
         self.assertAlmostEqual(ramsey_cal.fit_freq/1e9, new_settings['instruments']['Holz2']['frequency']/1e9, places=3)
         #restore original settings
         auspex.config.dump_meas_file(self.test_settings, cfg_file)
-    
+
     def test_ramsey_set_qubit(self):
         """
         Test RamseyCalibration with qubit frequency setting.
