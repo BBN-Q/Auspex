@@ -14,6 +14,13 @@ from scipy.stats import gaussian_kde, norm
 from scipy.special import betaincinv
 from sklearn.linear_model import LogisticRegressionCV
 from time import sleep
+import os
+import sys
+
+if sys.platform == 'win32' or 'NOFORKING' in os.environ:
+    from queue import Queue
+else:
+    from multiprocessing import Queue
 
 from .filter import Filter
 from auspex.parameter import Parameter, FloatParameter, IntParameter, BoolParameter
@@ -21,7 +28,6 @@ from auspex.stream import DataStreamDescriptor, InputConnector, OutputConnector,
 from auspex.log import logger
 import auspex.config as config
 import time
-import os
 
 class SingleShotMeasurement(Filter):
 
@@ -49,6 +55,8 @@ class SingleShotMeasurement(Filter):
 
         self.quince_parameters = [self.save_kernel, self.optimal_integration_time,
             self.zero_mean, self.set_threshold, self.logistic_regression]
+
+        self.pdf_data_queue = Queue() #Output queue !?
 
     def update_descriptors(self):
 
@@ -94,6 +102,7 @@ class SingleShotMeasurement(Filter):
                 self._save_kernel()
             for os in self.fidelity.output_streams:
                 os.push(self.fidelity_result)
+            self.pdf_data_queue.put(self.pdf_data)
 
     def compute_filter(self):
         """Compute the single shot kernel and obtain single-shot measurement

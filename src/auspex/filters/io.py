@@ -124,6 +124,7 @@ class H5Handler(Process):
 
     def process_queue_item(self, args, file):
         if args[0] == "write":
+            logger.info(f"Writing {args} to {self.filename}")
             if self.dtype is None:
                 # Sometimes we get a scalar, deal with it by converting to numpy array
                 try:
@@ -197,6 +198,7 @@ class H5Handler(Process):
                 cProfile.runctx('thing()', globals(), locals(), 'prof-%s-%s.prof' % (self.__class__.__name__, self.filter_name))
             else:
                 thing()
+            logger.info("Handler exiting!")
             self.done.set()
 
     def push_resource_usage(self):
@@ -387,7 +389,6 @@ class WriteToHDF5(Filter):
         if self.store_tuples:
             if not desc.is_adaptive():
                 for i, a in enumerate(self.axis_names):
-                    # import pdb; pdb.set_trace()
                     self.file[self.tuple_write_paths[a]][:] = tuples[a]
 
     def new_filename(self):
@@ -406,7 +407,6 @@ class WriteToHDF5(Filter):
 
         # Set the file number to the maximum in the current folder + 1
         filenums = []
-        # import pdb; pdb.set_trace()
         if os.path.exists(dirname):
             for f in os.listdir(dirname):
                 if ext in f and os.path.isfile(os.path.join(dirname, f)):
@@ -610,14 +610,15 @@ class DataBuffer(Filter):
             if not np.all(s.descriptor.expected_tuples() == streams[0].descriptor.expected_tuples()):
                 raise ValueError("Multiple streams connected to DataBuffer must have matching descriptors.")
 
-        # Buffers for stream data
-        stream_data = {s: [] for s in streams}
-
         # Store whether streams are done
         stream_done = {s: False for s in streams}
 
         while not self.exit.is_set():
+            # Raw messages for stream data
             msgs_by_stream = {s: [] for s in streams}
+
+            # Buffers for stream data
+            stream_data = {s: [] for s in streams}
 
             for stream in streams[::-1]:
                 while not self.exit.is_set():
@@ -662,7 +663,9 @@ class DataBuffer(Filter):
 
             for stream in streams:
                 datas = stream_data[stream]
+                # logger.info(f"stream {stream.name} has {len(datas)} chunks to process")
                 for data in datas:
+                    # logger.info(f"stream {stream.name} processing data of len {data.size}. idx {self.w_idxs[stream]} out of {len(buffers[stream])}")
                     buffers[stream][self.w_idxs[stream]:self.w_idxs[stream]+data.size] = data
                     self.w_idxs[stream] += data.size
 

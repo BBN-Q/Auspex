@@ -371,8 +371,8 @@ class Experiment(metaclass=MetaExperiment):
                     # tuples that the experiment has probed.
                     nested_list    = list(itertools.product(*vals))
                     flattened_list = [tuple((val for sublist in line for val in sublist)) for line in nested_list]
-                    oc.descriptor.visited_tuples = oc.descriptor.visited_tuples + flattened_list                    
-                    
+                    oc.descriptor.visited_tuples = oc.descriptor.visited_tuples + flattened_list
+
                     # Since the filters are in separate processes, pass them the same
                     # information so that they may perform the same operations.
                     oc.push_event("new_tuples", (axis_names, sweep_values,))
@@ -506,7 +506,7 @@ class Experiment(metaclass=MetaExperiment):
         self.other_nodes.extend(self.extra_plotters)
         self.other_nodes.extend(self.h5_handlers)
         self.other_nodes.remove(self)
-        
+
         # If we are launching the process dashboard,
         # setup the bokeh server and establish a queue for
         # filters to push data back to our thread below for
@@ -600,7 +600,7 @@ class Experiment(metaclass=MetaExperiment):
             if callback:
                 callback(plot)
 
-        # Wait for the 
+        # Wait for the
         time.sleep(0.1)
         times = {n: 0 for n in self.other_nodes}
         dones = {n: False for n in self.other_nodes}
@@ -623,7 +623,7 @@ class Experiment(metaclass=MetaExperiment):
                     #                 abc += 1
                     #                 logger.info(f"{n}: drained {abc} messages...")
                     #             except queue.Empty as e:
-                                    
+
                     #                 time.sleep(0.002)
                     #                 break
                     n.join(timeout=0.1)
@@ -659,7 +659,7 @@ class Experiment(metaclass=MetaExperiment):
                 self.plot_desc_server.shutdown()
             except:
                 logger.info("Could not stop plot server gracefully...")
-        if hasattr(self, 'extra_plot_server'):
+        if hasattr(self, 'extra_plot_server') and not self.leave_plot_server_open:
             try:
                 self.extra_plot_server.shutdown()
                 self.extra_plot_desc_server.shutdown()
@@ -748,7 +748,7 @@ class Experiment(metaclass=MetaExperiment):
             self.extra_plot_server.start()
             for plotter in self.extra_plotters + self.manual_plotters:
                 plotter.plot_queue = self.extra_plot_queue
-            
+
         time.sleep(0.5)
         # Kill a previous plotter if desired.
         if auspex.config.single_plotter_mode and auspex.config.last_plotter_process:
@@ -770,7 +770,7 @@ class Experiment(metaclass=MetaExperiment):
 
         client_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),"matplotlib-client.py")
         #if not auspex.config.last_plotter_process:
-        
+
         preexec_fn = os.setsid if hasattr(os, 'setsid') else None
         if not auspex.config.last_plotter_process:
             if hasattr(self, 'plot_server'):
@@ -781,4 +781,3 @@ class Experiment(metaclass=MetaExperiment):
             if hasattr(self, 'extra_plot_server') and (not auspex.config.last_extra_plotter_process or not self.leave_plot_server_open or self.first_exp):
                 auspex.config.last_extra_plotter_process = subprocess.Popen(['python', client_path, 'localhost',
                                                                     str(7773), str(7774)], env=os.environ.copy(), preexec_fn=preexec_fn)
-      

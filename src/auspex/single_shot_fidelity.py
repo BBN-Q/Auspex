@@ -16,6 +16,7 @@ import auspex.config as config
 from copy import deepcopy
 import os
 import json
+import time
 
 from auspex.log import logger
 from auspex.exp_factory import QubitExpFactory, QubitExperiment
@@ -69,6 +70,8 @@ class SingleShotFidelityExperiment(QubitExperiment):
         self.ssf = self.find_single_shot_filter()
         self.leave_plot_server_open = True
 
+        self.pdf_data = None
+
     def run_sweeps(self):
         #For now, only update histograms if we don't have a parameter sweep.
         if not self.sweeper.axes:
@@ -121,19 +124,29 @@ class SingleShotFidelityExperiment(QubitExperiment):
             config.dump_meas_file(self.saved_settings, config.meas_file)
 
     def _update_histogram_plots(self):
-        pdf_data = self.get_results()
-        self.re_plot.set_data("Ground", pdf_data["I Bins"], pdf_data["Ground I PDF"])
-        self.re_plot.set_data("Ground Gaussian Fit", pdf_data["I Bins"], pdf_data["Ground I Gaussian PDF"])
-        self.re_plot.set_data("Excited", pdf_data["I Bins"], pdf_data["Excited I PDF"])
-        self.re_plot.set_data("Excited Gaussian Fit", pdf_data["I Bins"], pdf_data["Excited I Gaussian PDF"])
-        self.im_plot.set_data("Ground", pdf_data["Q Bins"], pdf_data["Ground Q PDF"])
-        self.im_plot.set_data("Ground Gaussian Fit", pdf_data["Q Bins"], pdf_data["Ground Q Gaussian PDF"])
-        self.im_plot.set_data("Excited", pdf_data["Q Bins"], pdf_data["Excited Q PDF"])
-        self.im_plot.set_data("Excited Gaussian Fit", pdf_data["Q Bins"], pdf_data["Excited Q Gaussian PDF"])
+        self.get_results()
+        self.re_plot.set_data("Ground", self.pdf_data["I Bins"], self.pdf_data["Ground I PDF"])
+        self.re_plot.set_data("Ground Gaussian Fit", self.pdf_data["I Bins"], self.pdf_data["Ground I Gaussian PDF"])
+        self.re_plot.set_data("Excited", self.pdf_data["I Bins"], self.pdf_data["Excited I PDF"])
+        self.re_plot.set_data("Excited Gaussian Fit", self.pdf_data["I Bins"], self.pdf_data["Excited I Gaussian PDF"])
+        self.im_plot.set_data("Ground", self.pdf_data["Q Bins"], self.pdf_data["Ground Q PDF"])
+        self.im_plot.set_data("Ground Gaussian Fit", self.pdf_data["Q Bins"], self.pdf_data["Ground Q Gaussian PDF"])
+        self.im_plot.set_data("Excited", self.pdf_data["Q Bins"], self.pdf_data["Excited Q PDF"])
+        self.im_plot.set_data("Excited Gaussian Fit", self.pdf_data["Q Bins"], self.pdf_data["Excited Q Gaussian PDF"])
+
+        time.sleep(0.2)
+        try:
+            self.extra_plot_server.shutdown()
+            self.extra_plot_desc_server.shutdown()
+        except:
+            logger.info("Could not stop extra plot server gracefully...")
 
     def update_threshold(self):
-        if 'I Threshold' in self.ssf[0].pdf_data:
-            self.saved_settings['filters'][self.qubit_to_stream_sel[self.qubit.label]]['threshold'] = round(float(self.ssf[0].pdf_data['I Threshold']), 6)
+        self.get_results()
+        if 'I Threshold' in self.pdf_data:
+            self.saved_settings['filters'][self.qubit_to_stream_sel[self.qubit.label]]['threshold'] = round(float(self.pdf_data['I Threshold']), 6)
+        else:
+            logger.warning(f"Tried to save filter {self.name} threshold but was not calculated!")
 
     def init_plots(self):
         self.re_plot = ManualPlotter("Fidelity - Real", x_label='Bins', y_label='Real Quadrature')
@@ -154,7 +167,7 @@ class SingleShotFidelityExperiment(QubitExperiment):
             logger.info("Set digitizer {} round robins to 1 for single shot experiment.".format(d))
             self.settings['instruments'][d]['nbr_round_robins'] = 1
         # disable averagers
-        for f in self.settings['filters'].values():
+        for _, f in self.settings['filters'].items():
             if f['type'] == 'Averager':
                 f['enabled'] = False
 
@@ -170,14 +183,15 @@ class SingleShotFidelityExperiment(QubitExperiment):
     def get_results(self):
         """Get the PDF and fidelity numbers from the filters. Returns a dictionary of PDF data with the
         filter names as keys."""
-        ssf = self.find_single_shot_filter()
-        if len(ssf) > 1: # not implemented
-            try:
-                return {x.name: x.pdf_data for x in ssf}
-            except AttributeError:
-                raise AttributeError("Could not find single shot PDF data in results. Did you run the sweeps?")
-        else:
-            try:
-                return ssf[0].pdf_data
-            except AttributeError:
-                raise AttributeError("Could not find single shot PDF data in results. Did you run the sweeps?")
+        if self.pdf_data is None:
+            ssf = self.find_single_shot_filter()
+            if len(ssf) > 1: # not implemented
+                try:
+                    self.pdf_data =  {x.name: x.pdf_data_queue.get(False) for x in ssf}
+                except AttributeError:
+                    raise AttributeError("Could not find single shot PDF data in results. Did you run the sweeps?")
+            else:
+                try:
+                    self.pdf_data = ssf[0].pdf_data_queue.get(False)
+                except AttributeError:
+                    raise AttributeError("Could not find single shot PDF data in results. Did you run the sweeps?")
