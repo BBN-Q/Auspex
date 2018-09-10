@@ -9,12 +9,17 @@
 __all__ = ['HolzworthHS9000']
 
 from .instrument import Instrument, MetaInstrument
-import usb
 import os
 from auspex.log import logger
 from auspex import config
 from unittest.mock import MagicMock
 import ctypes
+
+if not config.auspex_dummy_mode:
+    try:
+        import usb
+    except:
+        logger.warning("Skipping import of pyusb")
 
 class HolzworthDevice(object):
 
