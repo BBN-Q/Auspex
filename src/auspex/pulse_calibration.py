@@ -54,7 +54,7 @@ def calibrate(calibrations, update_settings=True, cal_log=True, leave_plots_open
             if hasattr(calibration.exp, 'extra_plot_server'):
                 try:
                     if calibration.plot:
-                        if self.leave_plots_open:
+                        if calibration.leave_plots_open:
                             if isinstance(calibration.plot, list):
                                 for p in calibration.plot:
                                     p.set_quit()
@@ -128,7 +128,7 @@ class PulseCalibration(object):
             pass
         if self.plot:
             [self.exp.add_manual_plotter(p) for p in self.plot] if isinstance(self.plot, list) else self.exp.add_manual_plotter(self.plot)
-        
+
         #sweep instruments for calibration
         for instr_to_set in instrs_to_set:
             par = FloatParameter()
