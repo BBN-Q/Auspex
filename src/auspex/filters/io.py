@@ -198,7 +198,6 @@ class H5Handler(Process):
                 cProfile.runctx('thing()', globals(), locals(), 'prof-%s-%s.prof' % (self.__class__.__name__, self.filter_name))
             else:
                 thing()
-            logger.info("Handler exiting!")
             self.done.set()
 
     def push_resource_usage(self):
