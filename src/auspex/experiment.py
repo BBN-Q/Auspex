@@ -772,12 +772,12 @@ class Experiment(metaclass=MetaExperiment):
         #if not auspex.config.last_plotter_process:
 
         preexec_fn = os.setsid if hasattr(os, 'setsid') else None
-        if not auspex.config.last_plotter_process:
-            if hasattr(self, 'plot_server'):
-                auspex.config.last_plotter_process = subprocess.Popen(['python', client_path, 'localhost'],
-                                                                        env=os.environ.copy(), preexec_fn=preexec_fn)
+        # if not auspex.config.last_plotter_process:
+        if hasattr(self, 'plot_server'):
+            auspex.config.last_plotter_process = subprocess.Popen(['python', client_path, 'localhost'],
+                                                                    env=os.environ.copy(), preexec_fn=preexec_fn)
 
-        if not auspex.config.last_extra_plotter_process:
-            if hasattr(self, 'extra_plot_server') and (not auspex.config.last_extra_plotter_process or not self.leave_plot_server_open or self.first_exp):
-                auspex.config.last_extra_plotter_process = subprocess.Popen(['python', client_path, 'localhost',
-                                                                    str(7773), str(7774)], env=os.environ.copy(), preexec_fn=preexec_fn)
+        # if not auspex.config.last_extra_plotter_process:
+        if hasattr(self, 'extra_plot_server') and (not auspex.config.last_extra_plotter_process or not self.leave_plot_server_open or self.first_exp):
+            auspex.config.last_extra_plotter_process = subprocess.Popen(['python', client_path, 'localhost',
+                                                                str(7773), str(7774)], env=os.environ.copy(), preexec_fn=preexec_fn)
