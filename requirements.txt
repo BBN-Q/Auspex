@@ -11,3 +11,4 @@ scikit-learn >= 0.18.1
 ruamel.yaml >= 0.15.18
 psutil >= 5.0.0
 pyzmq >= 16.0.0
+pyusb >= 1.0.2
