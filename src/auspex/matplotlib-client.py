@@ -41,41 +41,42 @@ class DataListener(QtCore.QObject):
     finished = QtCore.pyqtSignal(bool)
     bail     = QtCore.pyqtSignal(bool)
 
-    def __init__(self, host, port=7772):
+    def __init__(self, host, uuid, port=7772):
         QtCore.QObject.__init__(self)
 
+        self.uuid = uuid
         self.context = zmq.Context()
         self.socket = self.context.socket(zmq.SUB)
         self.socket.connect("tcp://{}:{}".format(host, port))
-        self.socket.setsockopt_string(zmq.SUBSCRIBE, "data")
-        self.socket.setsockopt_string(zmq.SUBSCRIBE, "done")
-        self.socket.setsockopt_string(zmq.SUBSCRIBE, "quit")
+        self.socket.setsockopt_string(zmq.SUBSCRIBE, uuid)
         self.poller = zmq.Poller()
         self.poller.register(self.socket, zmq.POLLIN)
         self.running = True
 
     def loop(self):
         while self.running:
-            evts = dict(self.poller.poll(50))
-            if self.socket in evts and evts[self.socket] == zmq.POLLIN:
+            socks = dict(self.poller.poll(1000))
+            if socks.get(self.socket) == zmq.POLLIN:
                 msg = self.socket.recv_multipart()
-                msg_type = msg[0].decode()
-                name     = msg[1].decode()
+                msg_type = msg[1].decode()
+                uuid     = msg[0].decode()
+                name     = msg[2].decode()
                 if msg_type == "quit":
                     self.bail.emit(True)
                 elif msg_type == "done":
                     self.finished.emit(True)
                 elif msg_type == "data":
-                    result = [name]
+                    result = [name, uuid]
                     # How many pairs of metadata and data are there?
-                    num_arrays = int((len(msg) - 2)/2)
+                    num_arrays = int((len(msg) - 3)/2)
                     for i in range(num_arrays):
-                        md, data = msg[2+2*i:4+2*i]
+                        md, data = msg[3+2*i:5+2*i]
                         md = json.loads(md.decode())
                         A = np.frombuffer(data, dtype=md['dtype'])
                         result.append(A)
                     self.message.emit(tuple(result))
         self.socket.close()
+        self.context.term()
 
 class MplCanvas(FigureCanvas):
     """Ultimately, this is a QWidget (as well as a FigureCanvasAgg, etc.)."""
@@ -287,7 +288,7 @@ class CanvasMesh(MplCanvas):
         return mesh
 
 class MatplotClientWindow(QtWidgets.QMainWindow):
-    def __init__(self, hostname=None, status_port=7771, data_port=7772):
+    def __init__(self, hostname=None, uuid="", status_port=7771, data_port=7772):
         QtWidgets.QMainWindow.__init__(self)
         self.setAttribute(QtCore.Qt.WA_DeleteOnClose)
         self.setWindowTitle("Auspex Plotting")
@@ -309,6 +310,7 @@ class MatplotClientWindow(QtWidgets.QMainWindow):
         self.main_widget.setFocus()
         self.setCentralWidget(self.main_widget)
 
+        self.uuid = uuid
         self.context = zmq.Context()
 
         self.listener_thread = None
@@ -321,7 +323,7 @@ class MatplotClientWindow(QtWidgets.QMainWindow):
         socket = self.context.socket(zmq.DEALER)
         socket.identity = "Matplotlib_Qt_Client".encode()
         socket.connect("tcp://{}:{}".format(address, status_port))
-        socket.send(b"WHATSUP")
+        socket.send_multipart([self.uuid.encode(), b"WHATSUP"])
 
         poller = zmq.Poller()
         poller.register(socket, zmq.POLLOUT)
@@ -349,7 +351,7 @@ class MatplotClientWindow(QtWidgets.QMainWindow):
             self.listener_thread.wait()
 
         self.listener_thread = QtCore.QThread()
-        self.Datalistener = DataListener(address, data_port)
+        self.Datalistener = DataListener(address, self.uuid, data_port)
         self.Datalistener.moveToThread(self.listener_thread)
         self.listener_thread.started.connect(self.Datalistener.loop)
         self.Datalistener.message.connect(self.data_signal_received)
@@ -401,19 +403,21 @@ class MatplotClientWindow(QtWidgets.QMainWindow):
 
     def data_signal_received(self, message):
         plot_name = message[0]
-        data      = message[1:]
-        try:
-            # If we see a colon, then we must look for a named trace
-            if ":" in plot_name:
-                plot_name, trace_name = plot_name.split(":")
-                self.canvas_by_name[plot_name].update_trace(trace_name, *data)
-            else:
-                if isinstance(self.canvas_by_name[plot_name], CanvasMesh):
-                    self.canvas_by_name[plot_name].update_figure(data[0])
+        uuid      = message[1]
+        data      = message[2:]
+        if uuid == self.uuid:
+            try:
+                # If we see a colon, then we must look for a named trace
+                if ":" in plot_name:
+                    plot_name, trace_name = plot_name.split(":")
+                    self.canvas_by_name[plot_name].update_trace(trace_name, *data)
                 else:
-                    self.canvas_by_name[plot_name].update_figure(data)
-        except Exception as e:
-            self.statusBar().showMessage("Exception while plotting {}. Length of data: {}".format(e, len(data)), 1000)
+                    if isinstance(self.canvas_by_name[plot_name], CanvasMesh):
+                        self.canvas_by_name[plot_name].update_figure(data[0])
+                    else:
+                        self.canvas_by_name[plot_name].update_figure(data)
+            except Exception as e:
+                self.statusBar().showMessage("Exception while plotting {}. Length of data: {}".format(e, len(data)), 1000)
 
     def switch_toolbar(self):
         if len(self.toolbars) > 0:
@@ -453,9 +457,9 @@ if __name__ == '__main__':
         myappid = u'BBN.auspex.matplotlib-client.0001' # arbitrary string
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
 
+    if len(sys.argv) > 3:
+        sys.argv = sys.argv[:3] + [int(arg) for arg in sys.argv[3:]]
     if len(sys.argv) > 2:
-        sys.argv = sys.argv[:2] + [int(arg) for arg in sys.argv[2:]]
-    if len(sys.argv) > 1:
         aw = MatplotClientWindow(*sys.argv[1:])
     else:
         aw = MatplotClientWindow()

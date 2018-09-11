@@ -8,6 +8,8 @@
 
 import os
 import sys
+import uuid
+import json
 
 if sys.platform == 'win32' or 'NOFORKING' in os.environ:
     from queue import Queue as Queue
@@ -32,6 +34,7 @@ import queue
 import cProfile
 from functools import partial
 
+import zmq
 import numpy as np
 import scipy as sp
 import networkx as nx
@@ -42,7 +45,7 @@ from auspex.instruments.instrument import Instrument
 from auspex.parameter import ParameterGroup, FloatParameter, IntParameter, Parameter
 from auspex.sweep import Sweeper
 from auspex.stream import DataStream, DataAxis, SweepAxis, DataStreamDescriptor, InputConnector, OutputConnector
-from auspex.filters import Plotter, XYPlotter, MeshPlotter, ManualPlotter, WriteToHDF5, H5Handler, DumbFileHandler, DataBuffer, Filter
+from auspex.filters import Plotter, MeshPlotter, ManualPlotter, WriteToHDF5, H5Handler, DumbFileHandler, DataBuffer, Filter
 from auspex.log import logger
 import auspex.config
 
@@ -200,13 +203,10 @@ class Experiment(metaclass=MetaExperiment):
         # Should we show the dashboard?
         self.dashboard = False
 
-        # This holds a reference to a matplotlib server instance
-        # for plotting, if there is one.
-        self.matplot_server_thread = None
-        # If this is True, don't close the plot server thread so that
-        # we might push additional plots after run_sweeps is complete.
-        self.leave_plot_server_open = False
+        # Unique ID for this experiment
+        self.uuid = str(uuid.uuid4())
 
+        # Disconnect at the end of experiment?
         self.keep_instruments_connected = False
 
         # Also keep references to all of the plot filters
@@ -461,7 +461,7 @@ class Experiment(metaclass=MetaExperiment):
         self.nodes = [n for n in self.nodes if not(hasattr(n, 'input_connectors') and        n.input_connectors['sink'].descriptor.num_dims()==0)]
 
         # Go and find any plotters
-        self.standard_plotters = [n for n in self.nodes if isinstance(n, (Plotter, MeshPlotter, XYPlotter))]
+        self.standard_plotters = [n for n in self.nodes if isinstance(n, (Plotter, MeshPlotter))]
         self.plotters = copy.copy(self.standard_plotters)
 
         # We might have some additional plotters that are separate from
@@ -482,7 +482,7 @@ class Experiment(metaclass=MetaExperiment):
 
         # Launch plot servers.
         if len(self.plotters) > 0:
-            self.init_plot_servers()
+            self.init_plot_server()
         time.sleep(0.1)
         #connect all instruments
         self.connect_instruments()
@@ -513,7 +513,7 @@ class Experiment(metaclass=MetaExperiment):
         # communication to the bokeh server instance.
 
         if self.dashboard:
-            from .plotting import BokehServerProcess
+            from .dashboard_server import BokehServerProcess
             from bokeh.plotting import Figure
             from bokeh.client import push_session
             from bokeh.layouts import row, column
@@ -724,60 +724,28 @@ class Experiment(metaclass=MetaExperiment):
         stream = self._extra_plots_to_streams[plotter]
         stream.push_direct(data)
 
-    def init_plot_servers(self):
+    def init_plot_server(self):
         logger.debug("Found %d plotters", len(self.plotters))
 
-        from .plotting import PlotDataServerProcess, PlotDescServerProcess
-        plot_desc = {p.filter_name: p.desc() for p in self.standard_plotters}
+        # Create the descriptor and set uuids for each plot process
+        plot_desc = {p.filter_name: p.desc() for p in self.plotters}
+        for p in self.plotters:
+            p.uuid = self.uuid
 
-        if len(self.standard_plotters) > 0:
-            self.plot_queue  = Queue()
-            self.plot_desc_server = PlotDescServerProcess(plot_desc)
-            self.plot_desc_server.start()
-            self.plot_server = PlotDataServerProcess(self.plot_queue)
-            self.plot_server.start()
-            for plotter in self.standard_plotters:
-                plotter.plot_queue = self.plot_queue
+        try:
+            self.context = zmq.Context()
+            self.socket = self.context.socket(zmq.DEALER)
+            self.socket.identity = "Auspex_Experiment".encode()
+            self.socket.connect("tcp://localhost:7761")
+            self.socket.send_multipart([self.uuid.encode(), json.dumps(plot_desc).encode('utf8')])
+        except:
+            logger.warning("Exception occured while contacting the plot server. Is it running?")
+        finally:
+            self.socket.close()
+            self.context.term()
 
-        if (len(self.extra_plotters) + len(self.manual_plotters)) > 0:
-            extra_plot_desc = {p.filter_name: p.desc() for p in self.extra_plotters + self.manual_plotters}
-            self.extra_plot_queue  = Queue()
-            self.extra_plot_desc_server = PlotDescServerProcess(extra_plot_desc, port=7773)
-            self.extra_plot_desc_server.start()
-            self.extra_plot_server = PlotDataServerProcess(self.extra_plot_queue, port=7774)
-            self.extra_plot_server.start()
-            for plotter in self.extra_plotters + self.manual_plotters:
-                plotter.plot_queue = self.extra_plot_queue
-
-        time.sleep(0.5)
-        # Kill a previous plotter if desired.
-        if auspex.config.single_plotter_mode and auspex.config.last_plotter_process:
-            pros = [auspex.config.last_plotter_process]
-            if (not self.leave_plot_server_open or self.first_exp) and auspex.config.last_extra_plotter_process:
-                pros += [auspex.config.last_extra_plotter_process]
-            for pro in pros:
-                if hasattr(os, 'setsid'): # Doesn't exist on windows
-                    try:
-                        os.kill(pro.pid, 0) # Raises an error if the PID doesn't exist
-                        os.killpg(os.getpgid(pro.pid), signal.SIGTERM) # Proceed to kill process group
-                    except OSError:
-                        logger.debug("No plotter to kill.")
-                else:
-                    try:
-                        pro.kill()
-                    except:
-                        logger.debug("No plotter to kill.")
-
-        client_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),"matplotlib-client.py")
-        #if not auspex.config.last_plotter_process:
-
-        preexec_fn = os.setsid if hasattr(os, 'setsid') else None
-        # if not auspex.config.last_plotter_process:
-        if hasattr(self, 'plot_server'):
-            auspex.config.last_plotter_process = subprocess.Popen(['python', client_path, 'localhost'],
-                                                                    env=os.environ.copy(), preexec_fn=preexec_fn)
-
-        # if not auspex.config.last_extra_plotter_process:
-        if hasattr(self, 'extra_plot_server') and (not auspex.config.last_extra_plotter_process or not self.leave_plot_server_open or self.first_exp):
-            auspex.config.last_extra_plotter_process = subprocess.Popen(['python', client_path, 'localhost',
-                                                                str(7773), str(7774)], env=os.environ.copy(), preexec_fn=preexec_fn)
+        if len(self.plotters) > 0:
+            client_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),"matplotlib-client.py")
+            preexec_fn  = os.setsid if hasattr(os, 'setsid') else None
+            subprocess.Popen(['python', client_path, 'localhost', self.uuid], env=os.environ.copy(), preexec_fn=preexec_fn)
+            time.sleep(1)
