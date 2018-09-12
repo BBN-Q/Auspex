@@ -11,6 +11,7 @@ __all__ = ['AMI430']
 from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand
 
 import time
+from auspex.log import logger
 
 class AMI430(SCPIInstrument):
     """AMI430 Power Supply Programmer"""
@@ -134,5 +135,16 @@ class AMI430(SCPIInstrument):
         """
         self.field_target = val
         self.ramp()
-        while self.ramping_state != "HOLDING at the target field/current":
-            time.sleep(0.1)
+        cnt = 0
+        while True:
+            try:
+                status = self.ramping_state
+                if status == "HOLDING at the target field/current":
+                    break
+            except:
+                cnt += 1
+                logger.warning("AMI electromagnet does not respond. Wait: %d" %cnt)
+                if cnt > 10:
+                    logger.error("AMI electromagnet does not respond. Abort.")
+                    break
+            time.sleep(0.5)
