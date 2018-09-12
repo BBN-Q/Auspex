@@ -56,9 +56,10 @@ def calibrate(calibrations, update_settings=True, cal_log=True, leave_plots_open
                 for p in pps:
                     if not leave_plots_open:
                         p.set_quit()                            
-                    time.sleep(0.1)
-                    p.socket.close()
-                    p.context.term()
+                    time.sleep(0.15)
+                    if p.do_plotting:
+                        p.socket.close()
+                        p.context.term()
 
 class PulseCalibration(object):
     """Base class for calibration of qubit control pulses."""
@@ -374,6 +375,8 @@ class RamseyCalibration(PulseCalibration):
             self.settings['qubits'][self.qubit.label]['control']['frequency'] += float(fit_freq_A/2)
             config.dump_meas_file(self.settings, config.meas_file)
         self.set(exp_step = 1)
+        if not self.leave_plots_open:
+            self.plot.set_quit()
         data, _ = self.run()
 
         try:
@@ -550,6 +553,9 @@ class DRAGCalibration(PulseCalibration):
                 self.deltas = np.linspace(opt_drag[-1] - new_drag_step, opt_drag[-1] + new_drag_step, len(self.deltas))
                 new_pulse_step = int(np.floor(2*(max(self.num_pulses)-min(self.num_pulses))/len(self.num_pulses)))
                 self.num_pulses = np.arange(max(self.num_pulses) - new_pulse_step, max(self.num_pulses) + new_pulse_step*(len(self.num_pulses)-1), new_pulse_step)
+
+            if not self.leave_plots_open:
+                self.plot.set_quit()
 
         self.saved_settings['qubits'][self.qubit.label]['control']['pulse_params']['drag_scaling'] = round(float(opt_drag[-1]), 5)
         self.drag = opt_drag[-1]

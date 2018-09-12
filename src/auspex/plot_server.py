@@ -30,7 +30,7 @@ plot_descriptors = {}
 try:
     while True: 
         try:
-            socks = dict(poller.poll(100))
+            socks = dict(poller.poll(50))
 
             if socks.get(client_desc_sock) == zmq.POLLIN:
                 ident, uid, msg = client_desc_sock.recv_multipart()

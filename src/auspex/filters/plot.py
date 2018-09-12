@@ -11,6 +11,7 @@ __all__ = ['Plotter', 'ManualPlotter', 'MeshPlotter']
 import time
 import zmq
 import json
+import uuid
 import numpy as np
 
 from .filter import Filter
@@ -281,8 +282,10 @@ class ManualPlotter(object):
             try:
                 self.context = zmq.Context()
                 self.socket = self.context.socket(zmq.DEALER)
-                self.socket.identity = "Auspex_Experiment".encode()
+                self.socket.setsockopt(zmq.LINGER, 0)
+                self.socket.identity = f"Auspex_Experiment {str(uuid.uuid4())}".encode()
                 self.socket.connect("tcp://localhost:7762")
+                self.socket.send_multipart([b"wtf", b"wtf2"])
             except:
                 logger.warning("Exception occured while contacting the plot server. Is it running?")
 
