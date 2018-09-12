@@ -285,7 +285,6 @@ class ManualPlotter(object):
                 self.socket.setsockopt(zmq.LINGER, 0)
                 self.socket.identity = f"Auspex_Experiment {str(uuid.uuid4())}".encode()
                 self.socket.connect("tcp://localhost:7762")
-                self.socket.send_multipart([b"wtf", b"wtf2"])
             except:
                 logger.warning("Exception occured while contacting the plot server. Is it running?")
 
