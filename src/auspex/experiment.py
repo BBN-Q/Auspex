@@ -713,18 +713,31 @@ class Experiment(metaclass=MetaExperiment):
             # self.socket.setsockopt(zmq.LINGER, 0)
             self.socket.identity = "Auspex_Experiment".encode()
             self.socket.connect("tcp://localhost:7761")
-            
-            self.socket.RCVTIMEO = 1000
-
             self.socket.send_multipart([self.uuid.encode(), json.dumps(plot_desc).encode('utf8')])
-            if self.socket.recv_multipart()[0] == b'ACK':
-                self.do_plotting = True
-                for p in self.plotters:
-                    p.connect()
+
+            poller = zmq.Poller()
+            poller.register(self.socket, zmq.POLLIN)
+            time.sleep(0.1)
+            evts = dict(poller.poll(100))
+            if self.socket in evts:
+                try:
+                    if self.socket.recv_multipart()[0] == b'ACK':
+                        logger.info("Connection established to plot server.")
+                        self.do_plotting = True
+                        for p in self.plotters:
+                            p.connect()
+                    else:
+                        raise Exception("Server returned invalid message, expected ACK.")
+                except:
+                    logger.info("Could not connect to server.")
+                    for p in self.plotters:
+                        p.do_plotting = False
             else:
-                logger.warning("Plot server not available!")
+                logger.info("Server did not respond.")
                 for p in self.plotters:
                     p.do_plotting = False
+
+            self.socket.close()
 
         except:
             logger.warning("Exception occured while contacting the plot server. Is it running?")
@@ -734,6 +747,5 @@ class Experiment(metaclass=MetaExperiment):
         if len(self.plotters) > 0 and self.do_plotting:
             client_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),"matplotlib-client.py")
             preexec_fn  = os.setsid if hasattr(os, 'setsid') else None
-            print(['python', client_path, 'localhost', self.uuid])
             subprocess.Popen(['python', client_path, 'localhost', self.uuid], env=os.environ.copy(), preexec_fn=preexec_fn)
             time.sleep(1)
