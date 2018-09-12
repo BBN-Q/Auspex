@@ -40,22 +40,26 @@ class Plotter(Filter):
         # Unique id for plot server
         self.uuid = None
 
+        # Should we actually produce plots?
+        self.do_plotting = True
+
     def send(self, message):
-        data = message['data']
-        msg  = message['msg']
-        name = message['name']
+        if self.do_plotting:
+            data = message['data']
+            msg  = message['msg']
+            name = message['name']
 
-        msg_contents = [self.uuid.encode(), msg.encode(), name.encode()]
+            msg_contents = [self.uuid.encode(), msg.encode(), name.encode()]
 
-        # We might be sending multiple axes, series, etc.
-        # Just add them succesively to a multipart message.
-        for dat in data:
-            md = dict(
-                dtype = str(dat.dtype),
-                shape = dat.shape,
-            )
-            msg_contents.extend([json.dumps(md).encode(), np.ascontiguousarray(dat)])
-        self.socket.send_multipart(msg_contents)
+            # We might be sending multiple axes, series, etc.
+            # Just add them succesively to a multipart message.
+            for dat in data:
+                md = dict(
+                    dtype = str(dat.dtype),
+                    shape = dat.shape,
+                )
+                msg_contents.extend([json.dumps(md).encode(), np.ascontiguousarray(dat)])
+            self.socket.send_multipart(msg_contents)
 
     def desc(self):
         d =    {'plot_type': 'standard',
@@ -87,16 +91,6 @@ class Plotter(Filter):
         self.descriptor = self.sink.descriptor
 
     def final_init(self):
-
-        # Connect to the plot server
-        try:
-            self.context = zmq.Context()
-            self.socket = self.context.socket(zmq.DEALER)
-            self.socket.identity = "Auspex_Experiment".encode()
-            self.socket.connect("tcp://localhost:7762")
-        except:
-            logger.warning("Exception occured while contacting the plot server. Is it running?")
-
         # Determine the plot dimensions
         if not self.plot_dims.value:
             if len(self.descriptor.axes) > 1:
@@ -123,6 +117,17 @@ class Plotter(Filter):
 
         self.plot_buffer = (np.nan*np.ones(self.points_before_clear)).astype(self.descriptor.dtype)
         self.idx = 0
+
+    def connect(self):
+        # Connect to the plot server
+        if self.do_plotting:
+            try:
+                self.context = zmq.Context()
+                self.socket = self.context.socket(zmq.DEALER)
+                self.socket.identity = "Auspex_Experiment".encode()
+                self.socket.connect("tcp://localhost:7762")
+            except:
+                logger.warning("Exception occured while contacting the plot server. Is it running?")
 
     def update(self):
         if self.plot_dims.value == 1:
@@ -157,8 +162,9 @@ class Plotter(Filter):
             self.send({'name': self.filter_name, "msg": "data", 'data': [self.x_values, self.plot_buffer.copy()], })
         elif self.plot_dims.value == 2:
             self.send({'name': self.filter_name, "msg": "data", 'data': [self.x_values, self.y_values, self.plot_buffer.copy()]})
-        self.socket.close()
-        self.context.term()
+        if self.do_plotting:
+            self.socket.close()
+            self.context.term()
 
     def axis_label(self, index):
         unit_str = " ({})".format(self.descriptor.axes[index].unit) if self.descriptor.axes[index].unit else ''
@@ -183,6 +189,9 @@ class MeshPlotter(Filter):
         # Unique id for plot server
         self.uuid = None
 
+        # Should we actually produce plots?
+        self.do_plotting = True
+
     def desc(self):
         d =    {'plot_type': 'mesh',
                 'plot_mode': self.plot_mode.value,
@@ -192,42 +201,46 @@ class MeshPlotter(Filter):
         return d
 
     def send(self, message):
-        data = message['data']
-        msg  = message['msg']
-        name = message['name']
+        if self.do_plotting:
+            data = message['data']
+            msg  = message['msg']
+            name = message['name']
 
-        msg_contents = [self.uuid.encode(), msg.encode(), name.encode()]
+            msg_contents = [self.uuid.encode(), msg.encode(), name.encode()]
 
-        # We might be sending multiple axes, series, etc.
-        # Just add them succesively to a multipart message.
-        for dat in data:
-            md = dict(
-                dtype = str(dat.dtype),
-                shape = dat.shape,
-            )
-            msg_contents.extend([json.dumps(md).encode(), np.ascontiguousarray(dat)])
-        self.socket.send_multipart(msg_contents)
+            # We might be sending multiple axes, series, etc.
+            # Just add them succesively to a multipart message.
+            for dat in data:
+                md = dict(
+                    dtype = str(dat.dtype),
+                    shape = dat.shape,
+                )
+                msg_contents.extend([json.dumps(md).encode(), np.ascontiguousarray(dat)])
+            self.socket.send_multipart(msg_contents)
 
 
     def update_descriptors(self):
         logger.info("Updating MeshPlotter %s descriptors based on input descriptor %s", self.filter_name, self.sink.descriptor)
 
-    def final_init(self):
+    def connect(self):
         # Connect to the plot server
-        try:
-            self.context = zmq.Context()
-            self.socket = self.context.socket(zmq.DEALER)
-            self.socket.identity = "Auspex_Experiment".encode()
-            self.socket.connect("tcp://localhost:7762")
-        except:
-            logger.warning("Exception occured while contacting the plot server. Is it running?")
-
+        if self.do_plotting:
+            try:
+                self.context = zmq.Context()
+                self.socket = self.context.socket(zmq.DEALER)
+                self.socket.identity = "Auspex_Experiment".encode()
+                self.socket.connect("tcp://localhost:7762")
+            except:
+                logger.warning("Exception occured while contacting the plot server. Is it running?")
 
     def process_direct(self, data):
         self.send({'name': self.filter_name, "msg":"data", 'data': [self.plot_buffer.copy()]})
 
     def on_done(self):
         self.send({'name': self.filter_name, 'data': [np.array([])], "msg": "done"})
+        if self.do_plotting:
+            self.socket.close()
+            self.context.term()
 
 class ManualPlotter(object):
     """Establish a figure, then give the user complete control over plot creation and data."""
@@ -242,30 +255,36 @@ class ManualPlotter(object):
         # Unique id for plot server
         self.uuid = None
 
-        # Connect to the plot server
-        try:
-            self.context = zmq.Context()
-            self.socket = self.context.socket(zmq.DEALER)
-            self.socket.identity = "Auspex_Experiment".encode()
-            self.socket.connect("tcp://localhost:7762")
-        except:
-            logger.warning("Exception occured while contacting the plot server. Is it running?")
+        # Should we actually produce plots?
+        self.do_plotting = True
 
     def send(self, message):
-        data = message['data']
-        msg  = message['msg']
-        name = message['name']
-        msg_contents = [self.uuid.encode(), msg.encode(), name.encode()]
+        if self.do_plotting:
+            data = message['data']
+            msg  = message['msg']
+            name = message['name']
+            msg_contents = [self.uuid.encode(), msg.encode(), name.encode()]
 
-        # We might be sending multiple axes, series, etc.
-        # Just add them succesively to a multipart message.
-        for dat in data:
-            md = dict(
-                dtype = str(dat.dtype),
-                shape = dat.shape,
-            )
-            msg_contents.extend([json.dumps(md).encode(), np.ascontiguousarray(dat)])
-        self.socket.send_multipart(msg_contents)
+            # We might be sending multiple axes, series, etc.
+            # Just add them succesively to a multipart message.
+            for dat in data:
+                md = dict(
+                    dtype = str(dat.dtype),
+                    shape = dat.shape,
+                )
+                msg_contents.extend([json.dumps(md).encode(), np.ascontiguousarray(dat)])
+            self.socket.send_multipart(msg_contents)
+
+    def connect(self):
+        # Connect to the plot server
+        if self.do_plotting:
+            try:
+                self.context = zmq.Context()
+                self.socket = self.context.socket(zmq.DEALER)
+                self.socket.identity = "Auspex_Experiment".encode()
+                self.socket.connect("tcp://localhost:7762")
+            except:
+                logger.warning("Exception occured while contacting the plot server. Is it running?")
 
     def add_trace(self, name, matplotlib_kwargs={}, subplot_num = 0):
         self.traces.append({'name': name, 'axis_num' : subplot_num, 'matplotlib_kwargs': matplotlib_kwargs})

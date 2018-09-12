@@ -29,24 +29,28 @@ plot_descriptors = {}
 # Loop and accept messages
 try:
     while True: 
+        try:
+            socks = dict(poller.poll(100))
 
-        socks = dict(poller.poll(100))
+            if socks.get(client_desc_sock) == zmq.POLLIN:
+                ident, uid, msg = client_desc_sock.recv_multipart()
+                if msg == b"WHATSUP":
+                    client_desc_sock.send_multipart([ident, b"HI!", json.dumps(plot_descriptors[uid]).encode('utf8')])
 
-        if socks.get(client_desc_sock) == zmq.POLLIN:
-            ident, uid, msg = client_desc_sock.recv_multipart()
-            if msg == b"WHATSUP":
-                client_desc_sock.send_multipart([ident, b"HI!", json.dumps(plot_descriptors[uid]).encode('utf8')])
+            if socks.get(auspex_desc_sock) == zmq.POLLIN:
+                msg = auspex_desc_sock.recv_multipart()
+                ident, uid, plot_desc = msg
+                plot_descriptors[uid] = json.loads(plot_desc)
 
-        if socks.get(auspex_desc_sock) == zmq.POLLIN:
-            msg = auspex_desc_sock.recv_multipart()
-            ident, uid, plot_desc = msg
-            plot_descriptors[uid] = json.loads(plot_desc)
+                auspex_desc_sock.send_multipart([ident, b"ACK"])
 
-        if socks.get(auspex_data_sock) == zmq.POLLIN:
-            # The expected data order is [msg, name, json.dumps(metadata), np.ascontiguousarray(dat)]
-            # We assume that this is true and merely pass along the message
-            msg = auspex_data_sock.recv_multipart()
-            client_data_sock.send_multipart(msg[1:])
+            if socks.get(auspex_data_sock) == zmq.POLLIN:
+                # The expected data order is [msg, name, json.dumps(metadata), np.ascontiguousarray(dat)]
+                # We assume that this is true and merely pass along the message
+                msg = auspex_data_sock.recv_multipart()
+                client_data_sock.send_multipart(msg[1:])
+        except Exception as e:
+            print("Plot server generated exception", e)
 
 except KeyboardInterrupt:
     print("Server manually terminated.")

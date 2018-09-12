@@ -120,6 +120,10 @@ class ExpProgressBar(object):
                 self.bars[i].update(pos - self.bars[i].n)
             num_data = num_data % self.chunk_sizes[i]
 
+def auspex_plot_server():
+    client_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),"plot_server.py")
+    subprocess.Popen(['python', 'plot_server.py'], env=os.environ.copy())
+
 class ExperimentGraph(object):
     def __init__(self, edges):
         self.dag = None
@@ -202,6 +206,9 @@ class Experiment(metaclass=MetaExperiment):
 
         # Should we show the dashboard?
         self.dashboard = False
+
+        # Create and use plots?
+        self.do_plotting = False
 
         # Unique ID for this experiment
         self.uuid = str(uuid.uuid4())
@@ -483,6 +490,7 @@ class Experiment(metaclass=MetaExperiment):
         # Launch plot servers.
         if len(self.plotters) > 0:
             self.init_plot_server()
+
         time.sleep(0.1)
         #connect all instruments
         self.connect_instruments()
@@ -612,23 +620,11 @@ class Experiment(metaclass=MetaExperiment):
                     logger.info(f"{n} not done. Waited {times[n]} times. Is the pipeline backed up at IO stage?")
                 else:
                     dones[n] = True
-
-                    # logger.info(f"{n} draining queue.")
-                    # for ic in n.input_connectors.values():
-                    #     for ist in ic.input_streams:
-                    #         abc = 0
-                    #         while True:
-                    #             try:
-                    #                 ist.queue.get(0.01)
-                    #                 abc += 1
-                    #                 logger.info(f"{n}: drained {abc} messages...")
-                    #             except queue.Empty as e:
-
-                    #                 time.sleep(0.002)
-                    #                 break
                     n.join(timeout=0.1)
-        # logger.info("Done waiting...")
-
+            # We've had enough...
+            if any([t > 10 for t in times.values()]):
+                break
+                
         if self.dashboard:
             exit_perf.set()
             perf_thread.join()
@@ -644,14 +640,6 @@ class Experiment(metaclass=MetaExperiment):
             if n.is_alive():
                 logger.info(f"Terminating {n.filter_name} aggressively")
                 n.terminate()
-
-        # for f in self.files:
-        #     try:
-        #         logger.debug("Closing %s", f)
-        #         f.close()
-        #         del f
-        #     except:
-        #         logger.debug("File probably already closed...")
 
         if hasattr(self, 'plot_server'):
             try:
@@ -735,17 +723,31 @@ class Experiment(metaclass=MetaExperiment):
         try:
             self.context = zmq.Context()
             self.socket = self.context.socket(zmq.DEALER)
+            # self.socket.setsockopt(zmq.LINGER, 0)
             self.socket.identity = "Auspex_Experiment".encode()
             self.socket.connect("tcp://localhost:7761")
+            
+            self.socket.RCVTIMEO = 1000
+
             self.socket.send_multipart([self.uuid.encode(), json.dumps(plot_desc).encode('utf8')])
+            if self.socket.recv_multipart()[0] == b'ACK':
+                self.do_plotting = True
+                for p in self.plotters:
+                    p.connect()
+            else:
+                logger.warning("Plot server not available!")
+                for p in self.plotters:
+                    p.do_plotting = False
+
         except:
             logger.warning("Exception occured while contacting the plot server. Is it running?")
         finally:
             self.socket.close()
             self.context.term()
 
-        if len(self.plotters) > 0:
+        if len(self.plotters) > 0 and self.do_plotting:
             client_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),"matplotlib-client.py")
             preexec_fn  = os.setsid if hasattr(os, 'setsid') else None
+            print(['python', client_path, 'localhost', self.uuid])
             subprocess.Popen(['python', client_path, 'localhost', self.uuid], env=os.environ.copy(), preexec_fn=preexec_fn)
             time.sleep(1)
