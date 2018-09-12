@@ -52,12 +52,13 @@ def calibrate(calibrations, update_settings=True, cal_log=True, leave_plots_open
         finally:
             time.sleep(0.1) #occasionally ZMQ barfs here
             if calibration.plot:
-                if not leave_plots_open:
-                    if isinstance(calibration.plot, list):
-                        for p in calibration.plot:
-                            p.set_quit()
-                    else:
-                        calibration.plot.set_quit()
+                pps = calibration.plot if isinstance(calibration.plot, list) else [calibration.plot]
+                for p in pps:
+                    if not leave_plots_open:
+                        p.set_quit()                            
+                    time.sleep(0.1)
+                    p.socket.close()
+                    p.context.term()
 
 class PulseCalibration(object):
     """Base class for calibration of qubit control pulses."""
