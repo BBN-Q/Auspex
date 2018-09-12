@@ -122,7 +122,7 @@ class ExpProgressBar(object):
 
 def auspex_plot_server():
     client_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),"plot_server.py")
-    subprocess.Popen(['python', 'plot_server.py'], env=os.environ.copy())
+    subprocess.Popen(['python', client_path], env=os.environ.copy())
 
 class ExperimentGraph(object):
     def __init__(self, edges):
@@ -641,19 +641,6 @@ class Experiment(metaclass=MetaExperiment):
                 logger.info(f"Terminating {n.filter_name} aggressively")
                 n.terminate()
 
-        if hasattr(self, 'plot_server'):
-            try:
-                self.plot_server.shutdown()
-                self.plot_desc_server.shutdown()
-            except:
-                logger.info("Could not stop plot server gracefully...")
-        if hasattr(self, 'extra_plot_server') and not self.leave_plot_server_open:
-            try:
-                self.extra_plot_server.shutdown()
-                self.extra_plot_desc_server.shutdown()
-            except:
-                logger.info("Could not stop extra plot server gracefully...")
-
         logger.debug("Shutting down instruments")
         self.shutdown_instruments()
 
@@ -741,9 +728,8 @@ class Experiment(metaclass=MetaExperiment):
 
         except:
             logger.warning("Exception occured while contacting the plot server. Is it running?")
-        finally:
-            self.socket.close()
-            self.context.term()
+            for p in self.plotters:
+                p.do_plotting = False
 
         if len(self.plotters) > 0 and self.do_plotting:
             client_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),"matplotlib-client.py")

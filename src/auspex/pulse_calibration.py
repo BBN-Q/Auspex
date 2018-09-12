@@ -51,19 +51,13 @@ def calibrate(calibrations, update_settings=True, cal_log=True, leave_plots_open
             raise Exception("Calibration failure") from ex
         finally:
             time.sleep(0.1) #occasionally ZMQ barfs here
-            if hasattr(calibration.exp, 'extra_plot_server'):
-                try:
-                    if calibration.plot:
-                        if calibration.leave_plots_open:
-                            if isinstance(calibration.plot, list):
-                                for p in calibration.plot:
-                                    p.set_quit()
-                            else:
-                                calibration.plot.set_quit()
-                        calibration.exp.extra_plot_server.shutdown()
-                        calibration.exp.extra_plot_desc_server.shutdown()
-                except Exception as e:
-                    print("Exception while shutting down fitting plots:", e)
+            if calibration.plot:
+                if not leave_plots_open:
+                    if isinstance(calibration.plot, list):
+                        for p in calibration.plot:
+                            p.set_quit()
+                    else:
+                        calibration.plot.set_quit()
 
 class PulseCalibration(object):
     """Base class for calibration of qubit control pulses."""
@@ -96,16 +90,8 @@ class PulseCalibration(object):
         return [[Id(self.qubit), MEAS(self.qubit)]]
 
     def set(self, instrs_to_set = [], exp_step = 0, **params):
-        try:
-            extra_plot_server = self.exp.extra_plot_server
-        except Exception as e:
-            pass #no experiment yet created, or plot server not yet started
-        if hasattr(self.exp, 'extra_plot_server'):
-            extra_plot_server = self.exp.extra_plot_server
-
         meta_file = compile_to_hardware(self.sequence(**params), fileName=self.filename, axis_descriptor=self.axis_descriptor)
         self.exp = QubitExpFactory.create(meta_file=meta_file, calibration=True, save_data=False, cw_mode=self.cw_mode)
-        self.exp.leave_plot_server_open = True
         self.exp.first_exp = not bool(exp_step)
 
         #Update all instruments that need to keep track of experiment numnber. Adapted from https://stackoverflow.com/questions/9807634/find-all-occurrences-of-a-key-in-nested-python-dictionaries-and-lists
@@ -122,10 +108,6 @@ class PulseCalibration(object):
         for k in find_all_items(self.exp.settings, 'exp_step'):
             k['exp_step'] = exp_step
 
-        try:
-            self.exp.extra_plot_server = extra_plot_server
-        except:
-            pass
         if self.plot:
             [self.exp.add_manual_plotter(p) for p in self.plot] if isinstance(self.plot, list) else self.exp.add_manual_plotter(self.plot)
 
