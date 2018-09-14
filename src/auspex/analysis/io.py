@@ -21,7 +21,7 @@ def load_from_HDF5(filename_or_fileobject, reshape=True, return_structured_array
         f = h5py.File(filename_or_fileobject, 'r')
     for groupname in f:
         if groupname == "header":
-            break # for now, ignore the header
+            continue # for now, ignore the header
         # Reconstruct the descriptor
         descriptor = DataStreamDescriptor()
         g = f[groupname]
