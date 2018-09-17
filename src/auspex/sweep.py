@@ -77,7 +77,6 @@ class Sweeper(object):
         if len(refined_axes) > 1:
             raise Exception("More than one axis trying to refine simultaneously. This cannot be tolerated.")
 
-
     def done(self):
         return np.all([a.done for a in self.axes])
 

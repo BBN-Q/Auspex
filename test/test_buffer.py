@@ -105,6 +105,7 @@ class BufferTestCase(unittest.TestCase):
 
     def test_buffer(self):
         exp = SweptTestExperiment()
+
         db  = DataBuffer()
 
         edges = [(exp.voltage, db.sink)]
@@ -114,7 +115,7 @@ class BufferTestCase(unittest.TestCase):
         exp.add_sweep(exp.freq, np.linspace(0,10.0,3))
         exp.run_sweeps()
 
-        data = db.get_data()
+        # data = db.get_data()
         data = db.out_queue.get()
         # print('test_buffer data = %s' % str(data))
         db.join()
@@ -124,6 +125,7 @@ class BufferTestCase(unittest.TestCase):
 
     def test_buffer_multi(self):
         exp = SweptTestExperiment()
+
         db  = DataBuffer()
 
         edges = [(exp.voltage, db.sink), (exp.current, db.sink)]
@@ -133,9 +135,9 @@ class BufferTestCase(unittest.TestCase):
         exp.add_sweep(exp.freq, np.linspace(0,10.0,3))
         exp.run_sweeps()
 
-        data = db.get_data()
+        # data = db.get_data()
         data = db.out_queue.get()
-        # print('test_buffer data = %s' % str(data))
+        # print('test_buffer_multi data = %s' % str(data))
         db.join()
 
         self.assertTrue(len(data) == 4*3*5)
@@ -154,11 +156,10 @@ class BufferTestCase(unittest.TestCase):
         exp.add_sweep(exp.freq, np.linspace(0,10.0,3))
         exp.run_sweeps()
 
-        data = db.get_data()
+        # data = db.get_data()
         data = db.out_queue.get()
-        # print('test_buffer data = %s' % str(data))
+        # print('test_buffer_metadata data = %s' % str(data))
         db.join()
-
 
         self.assertTrue(len(data) == 4*3*5)
         self.assertTrue(len(data['samples_metadata']) == 4*3*5)

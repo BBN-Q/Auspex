@@ -6,7 +6,7 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-__all__ = ['WriteToHDF5', 'H5Handler', 'DataBuffer', 'ProgressBar']
+__all__ = ['WriteToHDF5', 'H5Handler', 'DumbFileHandler', 'DataBuffer', 'ProgressBar']
 
 import os
 import sys
@@ -22,13 +22,18 @@ else:
 
 import itertools
 import h5py
+# import h5py_cache as h5c
+import contextlib
 import queue
 import numpy as np
 import os.path
+import os, psutil
 import time
 import re
+import datetime
 import pandas as pd
 from shutil import copyfile
+import cProfile
 
 from .filter import Filter
 from auspex.parameter import Parameter, FilenameParameter, BoolParameter
@@ -38,20 +43,104 @@ import auspex.config as config
 
 from tqdm import tqdm, tqdm_notebook
 
-class H5Handler(Process):
+class DumbFileHandler(Process):
     def __init__(self, filename, queue, return_queue):
-        super(H5Handler, self).__init__()
+        super(DumbFileHandler, self).__init__()
         self.queue = queue
         self.return_queue = return_queue
         self.exit = mp.Event()
         self.filename = filename
+        self.filter_name = os.path.basename(filename)
+        self.p = psutil.Process(os.getpid())
+        self.perf_queue = None
+        self.beginning = datetime.datetime.now()
+        self.processed = 0
 
     def shutdown(self):
+        logger.info("H5 handler shutting down")
         self.exit.set()
 
     def process_queue_item(self, args, file):
         if args[0] == "write":
+            file.write(args[4].tobytes())
+        elif args[0] == "done":
+            self.exit.set()
+        self.push_resource_usage()
+
+    def run(self):
+        with open(self.filename+".bin", 'wb') as file:
+
+            self.last_performance_update = datetime.datetime.now()
+
+            def thing():
+                while not self.exit.is_set():
+                    msgs = []
+                    while not self.exit.is_set():
+                        try:
+                            msgs.append(self.queue.get(False))
+                        except queue.Empty as e:
+                            time.sleep(0.002)
+                            break
+                    for msg in msgs:
+                        pass
+                        self.process_queue_item(msg, file)
+
+            if config.profile:
+                cProfile.runctx('thing()', globals(), locals(), 'prof-%s-%s.prof' % (self.__class__.__name__, self.filter_name))
+        print(self.filter_name, "leaving main loop")
+
+
+    def push_resource_usage(self):
+        if self.perf_queue:
+            if (datetime.datetime.now() - self.last_performance_update).seconds > 0.5:
+                self.perf_queue.put((self.filter_name, datetime.datetime.now()-self.beginning, self.p.cpu_percent(), self.p.memory_info()))
+                self.last_performance_update = datetime.datetime.now()
+
+    def __repr__(self):
+        return "<{} Process (filename={})>".format(self.__class__.__name__, self.filename)
+
+
+class H5Handler(Process):
+    def __init__(self, filename, num_writers, queue, return_queue):
+        super(H5Handler, self).__init__()
+        self.queue = queue
+        self.num_writers = num_writers # How many writers are using me?
+        self.return_queue = return_queue
+        self.exit = mp.Event()
+        self.num_dones = 0
+        self.done = mp.Event()
+        self.filename = filename
+        self.filter_name = os.path.basename(filename)
+        self.p = psutil.Process(os.getpid())
+        self.perf_queue = None
+        self.beginning = datetime.datetime.now()
+        self.dtype = None
+        self.write_buf = None
+        self.processed = 0
+
+    def shutdown(self):
+        logger.info("H5 handler shutting down")
+        self.exit.set()
+
+    def process_queue_item(self, args, file):
+        if args[0] == "write":
+            # logger.info(f"Writing {args} to {self.filename}")
+            if self.dtype is None:
+                # Sometimes we get a scalar, deal with it by converting to numpy array
+                try:
+                    len(args[4])
+                except:
+                    args = (args[0], args[1], args[2], args[3], np.array([args[4]]))
+                # Set up datatype and write buffer if we haven't already
+                self.dtype = args[4].dtype
+                try:
+                    l = len(args[4])
+                except:
+                    l = 1
+                self.write_buf = np.zeros(l*1000, dtype=self.dtype)
             file[args[1]][args[2]:args[3]] = args[4]
+            self.processed += args[4].nbytes
+
         elif args[0] == "resize":
             file[args[1]].resize(args[2])
         elif args[0] == "resize_to":
@@ -63,17 +152,62 @@ class H5Handler(Process):
             self.return_queue.put((args[1], file[args[1]][:]))
         elif args[0] == "flush":
             file.flush()
-        elif args[0] == "create_group":
-            file.create_group(args[1])
+        elif args[0] == "done":
+            self.num_dones += 1
+            if self.num_dones == self.num_writers:
+                self.exit.set()
+        self.push_resource_usage()
+
+    def concat_msgs(self, msgs):
+        # If receiving a bunch of consecutive writes, coalesce them into one
+        # print(self.dtype, False not in [m[0]=='write' for m in msgs])
+        if (len(msgs) > 2) and self.dtype is not None and (False not in [m[0]=='write' for m in msgs]):
+            begs = [m[2] for m in msgs]
+            ends = [m[3] for m in msgs]
+            # print("*", begs[1:], ends[:-1])
+            if begs[1:] == ends[:-1]:
+                for m in msgs:
+                    # print(f"{self.filename}, self.write_buf[{m[2]-begs[0]}:{m[3]-begs[0]}] = {m[4][0]}...")
+                    try:
+                        self.write_buf[m[2]-begs[0]:m[3]-begs[0]] = m[4]
+                    except:
+                        logger.error(f"Write buffer overrun in {self.filename} handler")
+                # print(f"Catting {len(msgs)} msgs")
+                return [('write', msgs[0][1], begs[0], ends[-1], self.write_buf[:ends[-1]-begs[0]])]
+        return msgs
 
     def run(self):
         with h5py.File(self.filename, "r+", libver="latest") as file:
-            while not self.exit.is_set():
-                try:
-                    call = self.queue.get(True, 0.01)
-                except queue.Empty as e:
-                    continue
-                self.process_queue_item(call, file)
+            self.last_performance_update = datetime.datetime.now()
+
+            def thing():
+                while not self.exit.is_set():
+                    msgs = []
+                    while not self.exit.is_set():
+                        try:
+                            msgs.append(self.queue.get(False))
+                        except queue.Empty as e:
+                            time.sleep(0.002)
+                            break
+
+                    msgs = self.concat_msgs(msgs)
+                    for msg in msgs:
+                        self.process_queue_item(msg, file)
+
+            if config.profile:
+                cProfile.runctx('thing()', globals(), locals(), 'prof-%s-%s.prof' % (self.__class__.__name__, self.filter_name))
+            else:
+                thing()
+            self.done.set()
+
+    def push_resource_usage(self):
+        if self.perf_queue:
+            if (datetime.datetime.now() - self.last_performance_update).seconds > 0.5:
+                self.perf_queue.put((self.filter_name, datetime.datetime.now()-self.beginning, self.p.cpu_percent(), self.p.memory_info(), self.processed))
+                self.last_performance_update = datetime.datetime.now()
+
+    def __repr__(self):
+        return "<{} Process (filename={})>".format(self.__class__.__name__, self.filename)
 
 class WriteToHDF5(Filter):
     """Writes data to file."""
@@ -84,14 +218,14 @@ class WriteToHDF5(Filter):
     add_date = BoolParameter(default = False)
     save_settings = BoolParameter(default = True)
 
-    def __init__(self, filename=None, groupname=None, add_date=False, save_settings=True, compress=True, store_tuples=True, exp_log=True, **kwargs):
+    def __init__(self, filename=None, groupname=None, add_date=False, save_settings=True, compress=False, store_tuples=True, exp_log=True, **kwargs):
         super(WriteToHDF5, self).__init__(**kwargs)
         self.compress = compress
         if filename:
             self.filename.value = filename
         if groupname:
             self.groupname.value = groupname
-        self.points_taken = 0
+
         self.file = None
         self.group = None
         self.queue = None # For putting values in files
@@ -107,6 +241,8 @@ class WriteToHDF5(Filter):
         self.save_settings.value = save_settings
         self.exp_log = exp_log
         self.quince_parameters = [self.filename, self.groupname, self.add_date, self.save_settings]
+
+        self.last_flush = datetime.datetime.now()
 
     def final_init(self):
         if not self.filename.value and not self.file:
@@ -143,7 +279,7 @@ class WriteToHDF5(Filter):
         compression = 'gzip' if self.compress else None
 
         # If desired, create the group in which the dataset and axes will reside
-        
+
         self.group = self.file.create_group(self.groupname.value)
         self.data_group = self.group.create_group("data")
 
@@ -157,6 +293,7 @@ class WriteToHDF5(Filter):
                                         dtype=stream.descriptor.dtype,
                                         chunks=True, maxshape=(None,),
                                         compression=compression)
+            # print("***", dset.chunks)
             dset.attrs['is_data'] = True
             dset.attrs['store_tuples'] = self.store_tuples
             dset.attrs['name'] = stream.descriptor.data_name
@@ -251,7 +388,6 @@ class WriteToHDF5(Filter):
         if self.store_tuples:
             if not desc.is_adaptive():
                 for i, a in enumerate(self.axis_names):
-                    # import pdb; pdb.set_trace()
                     self.file[self.tuple_write_paths[a]][:] = tuples[a]
 
     def new_filename(self):
@@ -270,7 +406,6 @@ class WriteToHDF5(Filter):
 
         # Set the file number to the maximum in the current folder + 1
         filenums = []
-        # import pdb; pdb.set_trace()
         if os.path.exists(dirname):
             for f in os.listdir(dirname):
                 if ext in f and os.path.isfile(os.path.join(dirname, f)):
@@ -319,7 +454,6 @@ class WriteToHDF5(Filter):
             lf = lf.append(pd.DataFrame([[self.filename.value, time.strftime("%y%m%d"), time.strftime("%H:%M:%S")]],columns=["Filename", "Date", "Time"]),ignore_index=True)
             lf.to_csv(logfile, sep = "\t", index = False)
 
-    # TODO: update for multiprocessing
     def save_yaml(self):
         """ Save a copy of current experiment settings """
         if config.meas_file:
@@ -329,7 +463,6 @@ class WriteToHDF5(Filter):
                 os.makedirs(fulldir)
                 config.dump_meas_file(config.load_meas_file(config.meas_file), os.path.join(fulldir, os.path.split(config.meas_file)[1]), flatten = True)
 
-    # TODO: update for multiprocessing
     def save_yaml_h5(self):
         """ Save a copy of current experiment settings in the h5 metadata"""
         if config.meas_file:
@@ -337,9 +470,22 @@ class WriteToHDF5(Filter):
             # load them dump to get the 'include' information
             header.attrs['settings'] = config.dump_meas_file(config.load_meas_file(config.meas_file), flatten = True)
 
-    def main(self):
-        self.finished_processing.clear()
+    def get_data(self, data_path):
+        """Request data back from the file handler. Data_path is given with respect to root: e.g. /data/voltage"""
+        if self.done.is_set():
+            logger.info("Not yet implemented. Please load the file directly")
+        else:
+            self.queue.put(("get_data", data_path))
+            time.sleep(0.1)
+            try:
+                path, data = self.ret_queue.get(True, 5.0)
+                if path != data_path:
+                    logger.warning("Retrieved data path {} doesn't match requested path {}".format(path, data_path))
+                return data
+            except queue.Empty:
+                logger.warning("Could not retrieve dataset within 5 seconds")
 
+    def main(self):
         streams = self.sink.input_streams
         desc = streams[0].descriptor
         got_done_msg = {s: False for s in streams}
@@ -348,10 +494,11 @@ class WriteToHDF5(Filter):
         w_idx = {s: 0 for s in streams}
         points_taken = {s: 0 for s in streams}
         i = 0
+        stream_done = False
 
-        while not self.exit.is_set():# and not self.finished_processing.is_set():
+        while not self.exit.is_set():
             i +=1
-            # Try to pull all messages in the queue. queue.empty() is not reliable, so we 
+            # Try to pull all messages in the queue. queue.empty() is not reliable, so we
             # ask for forgiveness rather than permission.
             msgs_by_stream = {s: [] for s in streams}
 
@@ -363,6 +510,8 @@ class WriteToHDF5(Filter):
                         time.sleep(0.002)
                         break
 
+            self.push_resource_usage()
+
             # Process many messages for each stream
             for stream, messages in msgs_by_stream.items():
                 for message in messages:
@@ -372,6 +521,7 @@ class WriteToHDF5(Filter):
                         # logger.info('%s "%s" received event of type "%s"', self.__class__.__name__, self.name, message['event_type'])
                         if message['event_type'] == 'done':
                             got_done_msg[stream] = True
+                            self.queue.put(("done",))
                         elif message['event_type'] == 'refined':
                             message_data = message['data']
                             self.refine(message_data)
@@ -386,13 +536,16 @@ class WriteToHDF5(Filter):
                     elif message['type'] == 'data':
 
                         message_data = message['data']
+                        self.processed += message_data.nbytes
 
                         if not hasattr(message_data, 'size'):
                             message_data = np.array([message_data])
-                        message_data = message_data.flatten()
 
                         # Write the data
-                        self.queue.put(("write", self.data_write_paths[stream], w_idx[stream], w_idx[stream]+message_data.size, message_data))
+                        try:
+                            self.queue.put(("write", self.data_write_paths[stream], w_idx[stream], w_idx[stream]+message_data.size, message_data))
+                        except queue.Full as e:
+                            logger.warning("QUEUE FULLL!!!!!!!!!!!")
 
                         # Write the coordinate tuples
                         if self.store_tuples:
@@ -402,22 +555,30 @@ class WriteToHDF5(Filter):
                                     self.queue.put(("write", self.tuple_write_paths[axis_name], w_idx[stream], w_idx[stream]+message_data.size,
                                                     tuples[axis_name][w_idx[stream]:w_idx[stream]+message_data.size]))
 
-                        self.queue.put(("flush",))
+                        if (datetime.datetime.now() - self.last_flush).seconds > 3:
+                            self.queue.put(("flush",))
+                            self.last_flush = datetime.datetime.now()
                         w_idx[stream] += message_data.size
                         points_taken[stream] = w_idx[stream]
 
                         logger.debug("HDF5: Write index at %d", w_idx[stream])
                         logger.debug("HDF5: %s has written %d points", stream.name, w_idx[stream])
 
-            # If we have gotten all our data and process_data has returned, then we are done!
-            if desc.is_adaptive():
-                if np.all(list(got_done_msg.values())) and np.all([len(desc.visited_tuples) == points_taken[s] for s in streams]):
-                    self.finished_processing.set()
-                    break
-            else:
-                if np.all(list(got_done_msg.values())) and np.all([v.done() for v in self.input_connectors.values()]):
-                    self.finished_processing.set()
-                    break
+            # outputs = self.output_connectors.values()
+            # if outputs:
+            #     output_status = [v.done() for v in outputs]
+            #     print('x2 dones: %s' % str(output_status))
+
+            #     if not np.all(output_status):
+            #         print('------------------->>>>>>>>> NOT ALL DONE YET')
+
+            if np.all(list(got_done_msg.values())):
+                stream_done = True
+                self.done.set()
+                break
+
+        # print(self.filter_name, "leaving main loop")
+
 
 class DataBuffer(Filter):
     """Writes data to IO."""
@@ -439,7 +600,7 @@ class DataBuffer(Filter):
         self.descriptor = self.sink.input_streams[0].descriptor
 
     def main(self):
-        self.finished_processing.clear()
+        self.done.clear()
         streams = self.sink.input_streams
 
         buffers = {s: np.empty(s.descriptor.expected_num_points(), dtype=s.descriptor.dtype) for s in self.sink.input_streams}
@@ -448,50 +609,74 @@ class DataBuffer(Filter):
             if not np.all(s.descriptor.expected_tuples() == streams[0].descriptor.expected_tuples()):
                 raise ValueError("Multiple streams connected to DataBuffer must have matching descriptors.")
 
-        # Buffers for stream data
-        stream_data = {s: np.zeros(0, dtype=self.sink.descriptor.dtype) for s in streams}
-
         # Store whether streams are done
         stream_done = {s: False for s in streams}
 
         while not self.exit.is_set():
-            try:
-                stream_results = {stream: stream.queue.get(True, 0.2) for stream in streams}
-            except queue.Empty as e:
-                continue
+            # Raw messages for stream data
+            msgs_by_stream = {s: [] for s in streams}
+
+            # Buffers for stream data
+            stream_data = {s: [] for s in streams}
+
+            for stream in streams[::-1]:
+                while not self.exit.is_set():
+                    try:
+                        msgs_by_stream[stream].append(stream.queue.get(False))
+                    except queue.Empty as e:
+                        time.sleep(0.002)
+                        break
+            # try:
+            #     messages =
+            #     stream_results = {stream: stream.queue.get(True, 0.2) for stream in streams}
+            # except queue.Empty as e:
+            #     continue
 
             # Add any new data to the buffers
-            for stream, message in stream_results.items():
-                message_type = message['type']
-                message_data = message['data']
-                message_data = message_data if hasattr(message_data, 'size') else np.array([message_data])
-                if message_type == 'event':
-                    if message['event_type'] == 'done':
-                        stream_done[stream] = True
-                    elif message['event_type'] == 'refined':
-                        # Single we don't have much structure here we simply
-                        # create a new buffer and paste the old buffer into it
-                        old_buffer = buffers[stream]
-                        new_size   = stream.descriptor.num_points()
-                        buffers[stream] = np.empty(stream.descriptor.num_points(), dtype=stream.descriptor.dtype)
-                        buffers[stream][:old_buffer.size] = old_buffer
+            for stream, messages in msgs_by_stream.items():
+                for message in messages:
+                    message_type = message['type']
+                    message_data = message['data']
+                    message_data = message_data if hasattr(message_data, 'size') else np.array([message_data])
+                    if message_type == 'event':
+                        if message['event_type'] == 'done':
+                            stream_done[stream] = True
+                            # logger.info(f"Buffer {self.filter_name} stream {stream} done...")
+                        elif message['event_type'] == 'refined':
+                            # Single we don't have much structure here we simply
+                            # create a new buffer and paste the old buffer into it
+                            old_buffer = buffers[stream]
+                            new_size   = stream.descriptor.num_points()
+                            buffers[stream] = np.empty(stream.descriptor.num_points(), dtype=stream.descriptor.dtype)
+                            buffers[stream][:old_buffer.size] = old_buffer
 
-                elif message_type == 'data':
-                    stream_data[stream] = message_data.flatten()
+                    elif message_type == 'data':
+                        new_dat = message_data.flatten()
+                        stream_data[stream].append(new_dat)
+                        self.processed += new_dat.nbytes
 
-            if False not in stream_done.values():
-                logger.debug('%s "%s" is done', self.__class__.__name__, self.name)
-                break
+            self.push_resource_usage()
+            # if False not in stream_done.values():
+            #     logger.debug('%s "%s" is done', self.__class__.__name__, self.name)
+            #     break
 
-            for stream in stream_results.keys():
-                data = stream_data[stream]
-                buffers[stream][self.w_idxs[stream]:self.w_idxs[stream]+data.size] = data
-                self.w_idxs[stream] += data.size
+            for stream in streams:
+                datas = stream_data[stream]
+                # logger.info(f"stream {stream.name} has {len(datas)} chunks to process")
+                for data in datas:
+                    # logger.info(f"stream {stream.name} processing data of len {data.size}. idx {self.w_idxs[stream]} out of {len(buffers[stream])}")
+                    buffers[stream][self.w_idxs[stream]:self.w_idxs[stream]+data.size] = data
+                    self.w_idxs[stream] += data.size
+
+            # if not np.all([v.done() for v in self.output_connectors.values()]):
+            #     print('--------- IO NOT ALL DONE')
 
             # If we have gotten all our data and process_data has returned, then we are done!
-            if np.all([v.done() for v in self.input_connectors.values()]):
-                self.finished_processing.set()
-        
+            if np.all([stream_done[stream] for stream in streams]):
+                # logger.info(f"Buffer {self.filter_name} all done...")
+                self.done.set()
+                break
+
         for s in streams:
             self._final_buffers.put(buffers[s])
 
@@ -582,7 +767,7 @@ class ProgressBar(Filter):
             while self.stream.queue.qsize() > 0:
                 new_data = np.append(new_data, np.array(self.stream.queue.get_nowait()).flatten())
             self.w_id += new_data.size
-            num_data = self.stream.points_taken
+            num_data = self.stream.points_taken.value
             for i in range(self.num):
                 if num_data == 0:
                     if self.notebook:

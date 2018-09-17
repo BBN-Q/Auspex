@@ -7,6 +7,7 @@
 #    http://www.apache.org/licenses/LICENSE-2.0
 
 import unittest
+import time
 import os
 import numpy as np
 import h5py
@@ -79,10 +80,10 @@ class SweepTestCase(unittest.TestCase):
         exp.add_sweep(exp.freq, np.linspace(0,10.0,3))
         exp.run_sweeps()
 
-        logger.debug("Run test: logger.debuger ended up with %d points.", pri.sink.input_streams[0].points_taken.value)
-        logger.debug("Run test: voltage ended up with %d points.", exp.voltage.num_points())
+        logger.debug("Run test: logger.debuger ended up with %d points." % pri.sink.input_streams[0].points_taken.value)
+        logger.debug("Run test: voltage ended up with %d points." % exp.voltage.num_points())
 
-        self.assertTrue(pri.sink.input_streams[0].points_take.value == exp.voltage.num_points())
+        self.assertTrue(pri.sink.input_streams[0].points_taken.value == exp.voltage.num_points())
 
     def test_run_sweep(self):
         exp = SweptTestExperiment()
@@ -112,7 +113,7 @@ class SweepTestCase(unittest.TestCase):
         exp.add_sweep(exp.field, np.linspace(0,100.0,11))
         exp.add_sweep(exp.freq, [1.0, 2.0], refine_func=rf)
         exp.run_sweeps()
-        # self.assertTrue(pri.sink.input_streams[0].points_taken == 5*11*5)
+        # self.assertTrue(pri.sink.output_streams[0].points_taken.value == 5*11*5)
 
     def test_unstructured_sweep(self):
         exp = SweptTestExperiment()

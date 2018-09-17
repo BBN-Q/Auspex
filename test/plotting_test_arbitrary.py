@@ -53,6 +53,7 @@ if __name__ == '__main__':
     plt  = ManualPlotter("Manual Plotting Test", x_label='X Thing', y_label='Y Thing')
     plt.add_data_trace("Example Data")
     plt.add_fit_trace("Example Fit")
+
     buff = DataBuffer()
 
     edges = [(exp.voltage, buff.sink)]
@@ -60,7 +61,7 @@ if __name__ == '__main__':
 
     # Create a plotter callback
     def plot_me(plot):
-        ys = buff.out_queue.get_data()['voltage']
+        ys = buff.out_queue.get()['voltage']
         xs = buff.descriptor.axes[0].points
         plot["Example Data"] = (xs, ys)
         plot["Example Fit"]  = (xs, ys+0.1)
@@ -70,7 +71,9 @@ if __name__ == '__main__':
     exp.add_sweep(exp.amplitude, np.linspace(-5.0, 5.0, 100))
     exp.run_sweeps()
 
-    ys = buff.out_queue.get_data()['voltage']
+    # ys = buff.get_data()['voltage']
+    ys = buff.out_queue.get()['voltage']
+
     xs = buff.descriptor.axes[0].points
     plt["Example Data"] = (xs, ys)
     plt["Example Fit"]  = (xs, ys+0.1)

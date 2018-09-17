@@ -198,7 +198,7 @@ class SweepAxis(DataAxis):
             self.done = False
 
     def check_for_refinement(self, output_connectors_dict):
-        """Check to see if we need to perform any refinements. If there is a refine_func 
+        """Check to see if we need to perform any refinements. If there is a refine_func
         and it returns a list of points, then we need to extend the axes. Otherwise, if the
         refine_func returns None or false, then we reset the axis to its original set of points. If
         there is no refine_func then we don't do anything at all."""
@@ -503,11 +503,12 @@ class DataStream(object):
 
     def reset(self):
         self.descriptor.reset()
-        self.points_taken.value = 0
+        with self.points_taken_lock:
+            self.points_taken.value = 0
         while not self.queue.empty():
             self.queue.get_nowait()
         if self.start_connector is not None:
-            self.start_connector.points_taken = 0
+            self.start_connector.points_taken.value = 0
 
     def __repr__(self):
         return "<DataStream(name={}, completion={}%, descriptor={})>".format(
@@ -539,7 +540,6 @@ class DataStream(object):
     #     self.queue.put(message)
 
 # These connectors are where we attached the DataStreams
-
 class InputConnector(object):
     def __init__(self, name="", parent=None, datatype=None, max_input_streams=1):
         self.name = name
@@ -580,9 +580,10 @@ class OutputConnector(object):
     def __init__(self, name="", data_name=None, unit=None, parent=None, datatype=None):
         self.name = name
         self.output_streams = []
-        self.points_taken = 0
         self.parent = parent
         self.unit = unit
+        self.points_taken_lock = mp.Lock()
+        self.points_taken = Value('i', 0) # Using shared memory since these are used in filter processes
 
         # if data_name is not none, then it is the origin of the whole chain
         self.data_name = data_name
@@ -600,7 +601,8 @@ class OutputConnector(object):
         self.has_adaptive_sweeps = False
 
     def __len__(self):
-        return self.points_taken
+        with self.points_taken_lock:
+            return self.points_taken.value
 
     # We allow the connectors itself to posess
     # a descriptor, that it may pass
@@ -628,12 +630,13 @@ class OutputConnector(object):
         return all([stream.done() for stream in self.output_streams])
 
     def push(self, data):
-        if hasattr(data, 'size'):
-            self.points_taken += data.size
-        elif isinstance(data, numbers.Number):
-            self.points_taken += 1
-        else:
-            self.points_taken += len(data)
+        with self.points_taken_lock:
+            if hasattr(data, 'size'):
+                self.points_taken.value += data.size
+            elif isinstance(data, numbers.Number):
+                self.points_taken.value += 1
+            else:
+                self.points_taken.value += len(data)
         for stream in self.output_streams:
             stream.push(data)
 

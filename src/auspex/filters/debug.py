@@ -8,7 +8,6 @@
 
 __all__ = ['Print', 'Passthrough']
 
-
 import numpy as np
 
 from .filter import Filter
@@ -24,7 +23,6 @@ class Print(Filter):
         super(Print, self).__init__(*args, **kwargs)
 
     def process_data(self, data):
-
         logger.debug('%s "%s" received points: %s', self.__class__.__name__, self.name, data)
 
 class Passthrough(Filter):

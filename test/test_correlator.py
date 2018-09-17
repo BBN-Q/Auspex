@@ -42,14 +42,14 @@ class CorrelatorExperiment(Experiment):
             new_1 = np.random.randint(1,5)
             new_2 = np.random.randint(1,5)
 
-            if self.chan1.points_taken < self.chan1.num_points():
-                if self.chan1.points_taken + new_1 > self.chan1.num_points():
-                    new_1 = self.chan1.num_points() - self.chan1.points_taken
+            if self.chan1.points_taken.value < self.chan1.num_points():
+                if self.chan1.points_taken.value + new_1 > self.chan1.num_points():
+                    new_1 = self.chan1.num_points() - self.chan1.points_taken.value
                 self.chan1.push(self.vals[self.idx_1:self.idx_1+new_1])
                 self.idx_1 += new_1
-            if self.chan2.points_taken < self.chan2.num_points():
-                if self.chan2.points_taken + new_2 > self.chan2.num_points():
-                    new_2 = self.chan2.num_points() - self.chan2.points_taken
+            if self.chan2.points_taken.value < self.chan2.num_points():
+                if self.chan2.points_taken.value + new_2 > self.chan2.num_points():
+                    new_2 = self.chan2.num_points() - self.chan2.points_taken.value
                 self.chan2.push(self.vals[self.idx_2:self.idx_2+new_2])
                 self.idx_2 += new_2
 

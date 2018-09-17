@@ -17,6 +17,7 @@ import time
 
 from auspex.stream import InputConnector, OutputConnector
 from auspex.log import logger
+import auspex.config as config
 from .filter import Filter
 
 
@@ -60,7 +61,7 @@ class ElementwiseFilter(Filter):
         self.source.update_descriptors()
 
     def main(self):
-        self.finished_processing.clear()
+        self.done.clear()
         streams = self.sink.input_streams
 
         for s in streams[1:]:
@@ -75,8 +76,8 @@ class ElementwiseFilter(Filter):
         points_per_stream = {s: 0 for s in streams}
 
         while not self.exit.is_set():
-            
-            # Try to pull all messages in the queue. queue.empty() is not reliable, so we 
+
+            # Try to pull all messages in the queue. queue.empty() is not reliable, so we
             # ask for forgiveness rather than permission.
             msgs_by_stream = {s: [] for s in streams}
 
@@ -99,6 +100,7 @@ class ElementwiseFilter(Filter):
                             streams_done[stream] = True
                         elif message['event_type'] == 'refine':
                             logger.warning("ElementwiseFilter doesn't handle refinement yet!")
+                        self.push_to_all(message)
                     elif message_type == 'data':
                         # Add any old data...
                         points_per_stream[stream] += len(message_data.flatten())
@@ -121,5 +123,6 @@ class ElementwiseFilter(Filter):
                     stream_data[stream] = np.zeros(0, dtype=self.sink.descriptor.dtype)
 
             # If the amount of data processed is equal to the num points in the stream, we are done
-            if all([pts == s.num_points() for s, pts in points_per_stream.items()]):
-                self.finished_processing.set()
+            if np.all([streams_done[stream] for stream in streams]):
+                self.done.set()
+                break

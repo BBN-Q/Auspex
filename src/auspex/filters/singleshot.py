@@ -14,6 +14,13 @@ from scipy.stats import gaussian_kde, norm
 from scipy.special import betaincinv
 from sklearn.linear_model import LogisticRegressionCV
 from time import sleep
+import os
+import sys
+
+if sys.platform == 'win32' or 'NOFORKING' in os.environ:
+    from queue import Queue
+else:
+    from multiprocessing import Queue
 
 from .filter import Filter
 from auspex.parameter import Parameter, FloatParameter, IntParameter, BoolParameter
@@ -21,7 +28,6 @@ from auspex.stream import DataStreamDescriptor, InputConnector, OutputConnector,
 from auspex.log import logger
 import auspex.config as config
 import time
-import os
 
 class SingleShotMeasurement(Filter):
 
@@ -49,6 +55,8 @@ class SingleShotMeasurement(Filter):
 
         self.quince_parameters = [self.save_kernel, self.optimal_integration_time,
             self.zero_mean, self.set_threshold, self.logistic_regression]
+
+        self.pdf_data_queue = Queue() #Output queue !?
 
     def update_descriptors(self):
 
@@ -94,6 +102,7 @@ class SingleShotMeasurement(Filter):
                 self._save_kernel()
             for os in self.fidelity.output_streams:
                 os.push(self.fidelity_result)
+            self.pdf_data_queue.put(self.pdf_data)
 
     def compute_filter(self):
         """Compute the single shot kernel and obtain single-shot measurement
@@ -159,8 +168,8 @@ class SingleShotMeasurement(Filter):
             logger.info("Found best integration time at {} out of {} decimated points.".format(best_idx, num_times))
             #redo calculation with KDEs to get a more accurate estimate
             bins = np.linspace(I_mins[best_idx], I_maxes[best_idx], 100)
-            g_KDE = gaussian_kde(ground_I[best_idx, :])
-            e_KDE = gaussian_kde(excited_I[best_idx, :])
+            g_KDE = gaussian_kde(int_ground_I[best_idx, :])
+            e_KDE = gaussian_kde(int_excited_I[best_idx, :])
             g_PDF = g_KDE(bins)
             e_PDF = e_KDE(bins)
         else:
@@ -265,6 +274,3 @@ class SingleShotMeasurement(Filter):
             np.savetxt(os.path.join(config.KernelDir, filename), self.kernel, header=header, comments="#")
         except (AttributeError, IOError) as ex:
             raise AttributeError("Could not save single shot fidelity kernel!") from ex
-
-    async def on_done(self):
-        pass

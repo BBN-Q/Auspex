@@ -277,12 +277,12 @@ class APS(Instrument, metaclass=MakeSettersGetters):
 
     def set_offset(self, chs, value):
         if isinstance(chs, int) or len(chs)==1:
-            self.wrapper.set_amplitude(int(chs), value)
+            self.wrapper.set_offset(int(chs), value)
         else:
-            self.wrapper.set_amplitude(int(chs[0]), value)
-            self.wrapper.set_amplitude(int(chs[1]), value)
-            self.wrapper.set_amplitude(int(chs[2]), value)
-            self.wrapper.set_amplitude(int(chs[3]), value)
+            self.wrapper.set.offset(int(chs[0]), value)
+            self.wrapper.set.offset(int(chs[1]), value)
+            self.wrapper.set.offset(int(chs[2]), value)
+            self.wrapper.set.offset(int(chs[3]), value)
 
     def set_all(self, settings_dict, prefix=""):
         # Pop the channel settings
@@ -399,6 +399,40 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
     """BBN APS2"""
     instrument_type = "AWG"
 
+    yaml_template = """
+        APS2-Name:
+          type: APS2               # Used by QGL and Auspex. QGL assumes XXXPattern for the pattern generator
+          enabled: true            # true or false, optional
+          master: true             # true or false
+          slave_trig:              # name of marker below, optional, i.e. 12m4. Used by QGL.
+          address:                 # IP address or hostname should be fine
+          trigger_interval: 0.0    # (s)
+          trigger_source: External # Internal, External, Software, or System
+          seq_file: test.h5        # optional sequence file
+          tx_channels:             # All transmit channels
+            '12':                  # Quadrature channel name (string)
+              phase_skew: 0.0      # (deg) - directly set in the instrument
+              amp_factor: 1.0      # directly set in the instrument
+              delay: 0.0           # (s) - Used by QGL
+              '1':
+                enabled: true
+                offset: 0.0
+                amplitude: 1.0
+              '2':
+                enabled: true
+                offset: 0.0
+                amplitude: 1.0
+          markers:
+            12m1:
+              delay: 0.0         # (s)
+            12m2:
+              delay: 0.0
+            12m3:
+              delay: 0.0
+            12m4:
+              delay: 0.0
+    """
+
     def __init__(self, resource_name=None, name="Unlabeled APS2"):
         self.name = name
         self.resource_name = resource_name
@@ -467,35 +501,6 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
         self.set_offset(1, proxy_obj["12"].Q_channel_offset)
         self.set_amplitude(0, proxy_obj["12"].I_channel_amp_factor)
         self.set_amplitude(1, proxy_obj["12"].Q_channel_amp_factor)
-    #
-    # def configure_with_dict(self, settings_dict):
-    #     print(settings_dict)
-    #     # Pop the channel settings
-    #     settings = deepcopy(settings_dict)
-    #     quad_channels = settings.pop('tx_channels')
-    #     # Call the non-channel commands
-    #     super(APS2, self).set_all(settings)
-    #
-    #     # Mandatory arguments
-    #     for key in ['address', 'seq_file', 'trigger_interval', 'trigger_source', 'master']:
-    #         if key not in settings.keys():
-    #             raise ValueError("Instrument {} configuration lacks mandatory key {}".format(self, key))
-    #
-    #     # We expect a dictionary of channel names and their properties
-    #     main_quad_dict = quad_channels.pop('12', None)
-    #     if not main_quad_dict:
-    #         raise ValueError("APS2 {} expected to receive quad channel '12'".format(self))
-    #
-    #     # Set the properties of individual hardware channels (offset, amplitude)
-    #     for chan_num, chan_name in enumerate(['1', '2']):
-    #         chan_dict = main_quad_dict.pop(chan_name, None)
-    #         if not chan_dict:
-    #             raise ValueError("Could not find channel {} in quadrature channel 12 in settings for {}".format(chan_name, self))
-    #         for chan_attr, value in chan_dict.items():
-    #             try:
-    #                 getattr(self, 'set_' + chan_attr)(chan_num, value)
-    #             except AttributeError:
-    #                 pass
 
     def load_waveform(self, channel, data):
         if channel not in (1, 2):
@@ -579,6 +584,20 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
     @property
     def fpga_temperature(self):
         return self.wrapper.get_fpga_temperature()
+
+    @property
+    def amp_factor(self):
+        return self.wrapper.get_mixer_amplitude_imbalance()
+    @amp_factor.setter
+    def amp_factor(self, amp):
+        self.wrapper.set_mixer_amplitude_imbalance(amp)
+
+    @property
+    def phase_skew(self):
+        return self.wrapper.get_mixer_phase_skew()
+    @phase_skew.setter
+    def phase_skew(self, skew):
+        self.wrapper.set_mixer_phase_skew(skew)
 
 class TDM(APS2):
     """BBN TDM"""

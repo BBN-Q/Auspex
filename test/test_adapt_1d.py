@@ -7,9 +7,9 @@
 #    http://www.apache.org/licenses/LICENSE-2.0
 
 import unittest
-import time
 import os
 import numpy as np
+import time
 import h5py
 from adapt.refine import refine_1D
 
@@ -53,6 +53,7 @@ class SweptTestExperiment(Experiment):
 
 class Adapt1DTestCase(unittest.TestCase):
 
+    # @unittest.skip("Adaptive sweeps not yet working in multiprocessing.")
     def test_writehdf5_1D_adaptive_sweep(self):
         exp = SweptTestExperiment()
         if os.path.exists("test_writehdf5_1D_adaptive-0000.h5"):
@@ -80,9 +81,9 @@ class Adapt1DTestCase(unittest.TestCase):
 
         exp.add_sweep(exp.temperature, np.linspace(0,20,5), refine_func=rf)
         exp.run_sweeps()
-        
+
         self.assertTrue(os.path.exists("test_writehdf5_1D_adaptive-0000.h5"))
-        
+
         expected_data = np.array([ 0., 5.,10.,15.,20., 7.5, 8.75, 9.375, 9.0625, 8.90625, 8.984375,12.5,17.5, 9.0234375, 8.945312])
         data, desc = load_from_HDF5(wr.filename.value, reshape=False)
         actual_data = data['main']['temperature']

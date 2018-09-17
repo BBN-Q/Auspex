@@ -1,5 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import auspex.config as config
+config.auspex_dummy_mode = True
 from auspex.filters import SingleShotMeasurement as SSM
 
 def generate_fake_data(alpha, phi, sigma, N = 5000, plot=False):

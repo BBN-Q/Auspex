@@ -67,7 +67,7 @@ class VarianceExperiment(Experiment):
     trials  = 5
     repeats = 10
     idx     = 0
-    
+
     # For variance comparison
     vals = np.random.random((samples*trials*repeats))
 
@@ -113,10 +113,11 @@ class AverageTestCase(unittest.TestCase):
         exp.set_graph(edges)
         exp.run_sweeps()
 
+        # var_data  = var_buff.get_data()['Variance'].reshape(var_buff.descriptor.data_dims())
+        # mean_data = mean_buff.get_data()['chan1'].reshape(mean_buff.descriptor.data_dims())
         var_data  = var_buff.out_queue.get()['Variance'].reshape(var_buff.descriptor.data_dims())
         mean_data = mean_buff.out_queue.get()['chan1'].reshape(mean_buff.descriptor.data_dims())
         orig_data = exp.vals.reshape(exp.chan1.descriptor.data_dims())
-
         self.assertTrue(np.abs(np.sum(mean_data - np.mean(orig_data, axis=0))) <= 1e-3)
         self.assertTrue(np.abs(np.sum(var_data - np.var(orig_data, axis=0, ddof=1))) <= 1e-3)
 

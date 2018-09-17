@@ -8,11 +8,19 @@
 
 import os
 import sys
+import uuid
+import json
 
 if sys.platform == 'win32' or 'NOFORKING' in os.environ:
     from queue import Queue as Queue
+    from threading import Event
+    from threading import Thread as Process
+    from threading import Thread as Thread
 else:
     from multiprocessing import Queue as Queue
+    from multiprocessing import Event
+    from multiprocessing import Process
+    from threading import Thread as Thread
 
 import inspect
 import time
@@ -22,7 +30,11 @@ import logging
 import signal
 import numbers
 import subprocess
+import queue
+import cProfile
+from functools import partial
 
+import zmq
 import numpy as np
 import scipy as sp
 import networkx as nx
@@ -33,7 +45,7 @@ from auspex.instruments.instrument import Instrument
 from auspex.parameter import ParameterGroup, FloatParameter, IntParameter, Parameter
 from auspex.sweep import Sweeper
 from auspex.stream import DataStream, DataAxis, SweepAxis, DataStreamDescriptor, InputConnector, OutputConnector
-from auspex.filters import Plotter, XYPlotter, MeshPlotter, ManualPlotter, WriteToHDF5, H5Handler, DataBuffer, Filter
+from auspex.filters import Plotter, MeshPlotter, ManualPlotter, WriteToHDF5, H5Handler, DumbFileHandler, DataBuffer, Filter
 from auspex.log import logger
 import auspex.config
 
@@ -107,6 +119,10 @@ class ExpProgressBar(object):
             if pos > self.bars[i].n:
                 self.bars[i].update(pos - self.bars[i].n)
             num_data = num_data % self.chunk_sizes[i]
+
+def auspex_plot_server():
+    client_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),"plot_server.py")
+    subprocess.Popen(['python', client_path], env=os.environ.copy())
 
 class ExperimentGraph(object):
     def __init__(self, edges):
@@ -188,13 +204,16 @@ class Experiment(metaclass=MetaExperiment):
         # This holds the experiment graph
         self.graph = None
 
-        # This holds a reference to a matplotlib server instance
-        # for plotting, if there is one.
-        self.matplot_server_thread = None
-        # If this is True, don't close the plot server thread so that
-        # we might push additional plots after run_sweeps is complete.
-        self.leave_plot_server_open = False
+        # Should we show the dashboard?
+        self.dashboard = False
 
+        # Create and use plots?
+        self.do_plotting = False
+
+        # Unique ID for this experiment
+        self.uuid = str(uuid.uuid4())
+
+        # Disconnect at the end of experiment?
         self.keep_instruments_connected = False
 
         # Also keep references to all of the plot filters
@@ -267,7 +286,6 @@ class Experiment(metaclass=MetaExperiment):
             if ee.parent not in unique_nodes:
                 unique_nodes.append(ee.parent)
         self.nodes = unique_nodes
-        print("set_graph", self.nodes)
         self.graph = ExperimentGraph(edges)
 
     def init_streams(self):
@@ -319,9 +337,6 @@ class Experiment(metaclass=MetaExperiment):
                 if hasattr(self,k):
                     v = getattr(self,k)
                     oc.descriptor.add_param(k, v)
-            # if not self.sweeper.is_adaptive():
-            #     oc.descriptor.visited_tuples = oc.descriptor.expected_tuples(with_metadata=True, as_structured_array=False)
-            # else:
             oc.descriptor.visited_tuples = []
             oc.update_descriptors()
 
@@ -358,7 +373,6 @@ class Experiment(metaclass=MetaExperiment):
                     vals = [a for a in oc.descriptor.data_axis_values()]
                     if sweep_values:
                         vals  = [[v] for v in sweep_values] + vals
-
                     # Find all coordinate tuples and update the list of
                     # tuples that the experiment has probed.
                     nested_list    = list(itertools.product(*vals))
@@ -386,8 +400,8 @@ class Experiment(metaclass=MetaExperiment):
                 self.declare_done()
                 break
 
-    def filters_finished(self):
-        return all([n.finished_processing.is_set() for n in self.other_nodes if isinstance(n, Filter)])
+    # def filters_finished(self):
+    #     return all([n.finished_processing.is_set() for n in self.other_nodes if isinstance(n, Filter)])
 
     def connect_instruments(self):
         # Connect the instruments to their resources
@@ -401,6 +415,12 @@ class Experiment(metaclass=MetaExperiment):
         for instrument in self._instruments.values():
             instrument.disconnect()
         self.instrs_connected = False
+
+    # def run_sweeps(self):
+    #     if auspex.config.profile:
+    #         cProfile.runctx('self._run_sweeps()', globals(), locals(), 'prof-run_sweeps.prof')
+    #     else:
+    #         self._run_sweeps()
 
     def run_sweeps(self):
         # Propagate the descriptors through the network
@@ -433,7 +453,7 @@ class Experiment(metaclass=MetaExperiment):
             wrs[0].file = wrs[0].new_file()
             wrs[0].queue = Queue()
             wrs[0].ret_queue = Queue()
-            self.h5_handlers.append(H5Handler(wrs[0].filename.value, wrs[0].queue, wrs[0].ret_queue))
+            self.h5_handlers.append(H5Handler(wrs[0].filename.value, len(wrs), wrs[0].queue, wrs[0].ret_queue))
             self.files.append(wrs[0].file)
 
             # Make the rest of the writers use this same file object
@@ -448,7 +468,7 @@ class Experiment(metaclass=MetaExperiment):
         self.nodes = [n for n in self.nodes if not(hasattr(n, 'input_connectors') and  n.input_connectors['sink'].descriptor.num_dims()==0)]
 
         # Go and find any plotters
-        self.standard_plotters = [n for n in self.nodes if isinstance(n, (Plotter, MeshPlotter, XYPlotter))]
+        self.standard_plotters = [n for n in self.nodes if isinstance(n, (Plotter, MeshPlotter))]
         self.plotters = copy.copy(self.standard_plotters)
 
         # We might have some additional plotters that are separate from
@@ -469,8 +489,9 @@ class Experiment(metaclass=MetaExperiment):
 
         # Launch plot servers.
         if len(self.plotters) > 0:
-            self.init_plot_servers()
-        time.sleep(1)
+            self.init_plot_server()
+
+        time.sleep(0.1)
         #connect all instruments
         self.connect_instruments()
         #initialize instruments
@@ -478,6 +499,8 @@ class Experiment(metaclass=MetaExperiment):
 
         def catch_ctrl_c(signum, frame):
             logger.info("Caught SIGINT. Shutting down.")
+            self.declare_done() # Ask nicely
+
             self.shutdown()
             raise NameError("Shutting down.")
             sys.exit(0)
@@ -491,58 +514,138 @@ class Experiment(metaclass=MetaExperiment):
         self.other_nodes.extend(self.extra_plotters)
         self.other_nodes.extend(self.h5_handlers)
         self.other_nodes.remove(self)
-        
+
+        # If we are launching the process dashboard,
+        # setup the bokeh server and establish a queue for
+        # filters to push data back to our thread below for
+        # communication to the bokeh server instance.
+
+        if self.dashboard:
+            from .dashboard_server import BokehServerProcess
+            from bokeh.plotting import Figure
+            from bokeh.client import push_session
+            from bokeh.layouts import row, column
+            from bokeh.io import curdoc
+            from tornado import gen
+            from bokeh.models import ColumnDataSource, Legend
+            from bokeh.palettes import viridis, Category20 #here viridis is a function that takes\
+            #parameter n and provides a palette with n equally(almost) spaced colors.
+
+            bokeh_process = BokehServerProcess(notebook=False)
+            bokeh_process.run()
+            perf_queue = Queue()
+
+            cpu_fig  = Figure(plot_width=1000, plot_height=300, x_axis_type="datetime", title="CPU Usage")
+            mem_fig  = Figure(plot_width=1000, plot_height=300, x_axis_type="datetime", title="Memory Usage")
+            vmem_fig = Figure(plot_width=1000, plot_height=300, x_axis_type="datetime", title="Data Processed")
+
+            cpu_fig.xaxis[0].axis_label  = 'Time (s)'
+            mem_fig.xaxis[0].axis_label  = 'Time (s)'
+            vmem_fig.xaxis[0].axis_label = 'Time (s)'
+            cpu_fig.yaxis[0].axis_label  = 'CPU (%)'
+            mem_fig.yaxis[0].axis_label  = 'Memory (MB)'
+            vmem_fig.yaxis[0].axis_label = 'Throughput (MB)'
+
+            colors       = Category20[20] if len(self.other_nodes) <= 20 else viridis(len(self.other_nodes))
+            data_sources = {n.filter_name: ColumnDataSource(data=dict(time=[], cpu=[], mem=[], vmem=[], proc=[])) for n in self.other_nodes}
+            cpu_plots    = {n.filter_name: cpu_fig.line(x='time', y='cpu', color=colors[i], line_width=4, source=data_sources[n.filter_name]) for i, n in enumerate(self.other_nodes)}
+            mem_plots    = {n.filter_name: mem_fig.line(x='time', y='mem', color=colors[i], line_width=4, source=data_sources[n.filter_name]) for i, n in enumerate(self.other_nodes)}
+            vmem_plots   = {n.filter_name: vmem_fig.line(x='time', y='proc', color=colors[i], line_width=4, source=data_sources[n.filter_name]) for i, n in enumerate(self.other_nodes)}
+
+            legend_1 = Legend(items=[(n , [l]) for n, l in mem_plots.items()], location=(0, 0))
+            legend_2 = Legend(items=[(n , [l]) for n, l in vmem_plots.items()], location=(0, 0))
+            legend_3 = Legend(items=[(n , [l]) for n, l in cpu_plots.items()], location=(0, 0))
+            mem_fig.add_layout(legend_1, 'right')
+            vmem_fig.add_layout(legend_2, 'right')
+            cpu_fig.add_layout(legend_3, 'right')
+            container = column([cpu_fig, mem_fig, vmem_fig])
+            doc = curdoc()
+
+            exit_perf = Event()
+
+            @gen.coroutine
+            def update_perf(name, time_val, cpu, mem, vmem, proc):
+                data_sources[name].stream(dict(time=[time_val], cpu=[cpu], mem=[mem], vmem=[vmem], proc=[proc]))
+
+            def wait_for_perf_updates(q, exit):
+                while not exit.is_set():
+                    messages = []
+
+                    while not exit.is_set():
+                        try:
+                            messages.append(q.get(False))
+                        except queue.Empty as e:
+                            time.sleep(0.05)
+                            break
+
+                    for message in messages:
+                        filter_name, time_val, cpu, mem_info, processed = message
+                        mem = mem_info[0]/2.**20
+                        vmem = mem_info[1]/2.**20
+                        proc = processed/2.**20
+                        update_perf(filter_name, time_val, cpu, mem, vmem, proc)
+
+            perf_thread = Thread(target=wait_for_perf_updates, args=(perf_queue, exit_perf))
+            perf_thread.start()
+
+            for f in self.other_nodes:
+                f.perf_queue = perf_queue
+
+            doc.clear()
+            doc.add_root(container)
+            session = push_session(doc)
+            session.show(container)
+
         # Start the filter processes
         for n in self.other_nodes:
             n.start()
 
+        # Run the main experiment loop
         self.sweep()
 
+        # Make sure any last minute plotting needs are met
         for plot, callback in zip(self.manual_plotters, self.manual_plotter_callbacks):
             if callback:
                 callback(plot)
 
-        time.sleep(1)
-        while not self.filters_finished():
-            logger.info("Waiting for filters to finish...")
-            for n in self.other_nodes:
-                if isinstance(n, Filter):
-                    print(n, n.finished_processing.is_set() )
+        # Wait for the
+        time.sleep(0.1)
+        times = {n: 0 for n in self.other_nodes}
+        dones = {n: False for n in self.other_nodes}
+        while False in dones.values():
             time.sleep(1)
+            for n in self.other_nodes:
+                if not n.done.is_set():
+                    times[n] += 1
+                    logger.info(f"{n} not done. Waited {times[n]} times. Is the pipeline backed up at IO stage?")
+                else:
+                    dones[n] = True
+                    n.join(timeout=0.1)
+            # We've had enough...
+            if any([t > 10 for t in times.values()]):
+                break
 
+        if self.dashboard:
+            exit_perf.set()
+            perf_thread.join()
 
         self.shutdown()
 
     def shutdown(self):
         logger.debug("Shutting Down!")
+
         for n in self.other_nodes:
-            n.shutdown()
-            n.join()
+            n.exit.set()
+            n.join(0.1)
+            if n.is_alive():
+                logger.info(f"Terminating {n.filter_name} aggressively")
+                n.terminate()
 
-        for f in self.files:
-            try:
-                logger.debug("Closing %s", f)
-                f.close()
-                del f
-            except:
-                logger.debug("File probably already closed...")
-
-        if hasattr(self, 'plot_server'):
-            try:
-                self.plot_server.shutdown()
-                self.plot_desc_server.shutdown()
-            except:
-                logger.warning("Could not stop plot server gracefully...")
-        if hasattr(self, 'extra_plot_server'):
-            try:
-                self.extra_plot_server.shutdown()
-                self.extra_plot_desc_server.shutdown()
-            except:
-                logger.warning("Could not stop extra plot server gracefully...")
-
+        logger.debug("Shutting down instruments")
         self.shutdown_instruments()
 
         if not self.keep_instruments_connected:
+            logger.debug("Disconnecting instruments")
             self.disconnect_instruments()
 
     def add_axis(self, axis, position=0):
@@ -596,60 +699,51 @@ class Experiment(metaclass=MetaExperiment):
         stream = self._extra_plots_to_streams[plotter]
         stream.push_direct(data)
 
-    def init_plot_servers(self):
+    def init_plot_server(self):
         logger.debug("Found %d plotters", len(self.plotters))
 
-        from .plotting import PlotDataServerProcess, PlotDescServerProcess
-        plot_desc = {p.filter_name: p.desc() for p in self.standard_plotters}
+        # Create the descriptor and set uuids for each plot process
+        plot_desc = {p.filter_name: p.desc() for p in self.plotters}
+        for p in self.plotters:
+            p.uuid = self.uuid
 
-        if len(self.standard_plotters) > 0:
-            self.plot_queue  = Queue()
-            self.plot_desc_server = PlotDescServerProcess(plot_desc)
-            self.plot_desc_server.start()
-            self.plot_server = PlotDataServerProcess(self.plot_queue)
-            self.plot_server.start()
-            for plotter in self.standard_plotters:
-                plotter.plot_queue = self.plot_queue
+        try:
+            context = zmq.Context()
+            socket = context.socket(zmq.DEALER)
+            socket.setsockopt(zmq.LINGER, 0)
+            socket.identity = "Auspex_Experiment".encode()
+            socket.connect("tcp://localhost:7761")
+            socket.send_multipart([self.uuid.encode(), json.dumps(plot_desc).encode('utf8')])
 
-        if (len(self.extra_plotters) + len(self.manual_plotters)) > 0:
-            extra_plot_desc = {p.filter_name: p.desc() for p in self.extra_plotters + self.manual_plotters}
-            self.extra_plot_queue  = Queue()
-            self.extra_plot_desc_server = PlotDescServerProcess(extra_plot_desc, port=7773)
-            self.extra_plot_desc_server.start()
-            self.extra_plot_server = PlotDataServerProcess(self.extra_plot_queue, port=7774)
-            self.extra_plot_server.start()
-            for plotter in self.extra_plotters + self.manual_plotters:
-                plotter.plot_queue = self.extra_plot_queue
+            poller = zmq.Poller()
+            poller.register(socket, zmq.POLLIN)
 
-        time.sleep(0.5)
-        # Kill a previous plotter if desired.
-        if auspex.config.single_plotter_mode and auspex.config.last_plotter_process:
-            pros = [auspex.config.last_plotter_process]
-            if (not self.leave_plot_server_open or self.first_exp) and auspex.config.last_extra_plotter_process:
-                pros += [auspex.config.last_extra_plotter_process]
-            for pro in pros:
-                if hasattr(os, 'setsid'): # Doesn't exist on windows
-                    try:
-                        os.kill(pro.pid, 0) # Raises an error if the PID doesn't exist
-                        os.killpg(os.getpgid(pro.pid), signal.SIGTERM) # Proceed to kill process group
-                    except OSError:
-                        logger.debug("No plotter to kill.")
-                else:
-                    try:
-                        pro.kill()
-                    except:
-                        logger.debug("No plotter to kill.")
+            evts = dict(poller.poll(1000))
+            if socket in evts:
+                try:
+                    if socket.recv_multipart()[0] == b'ACK':
+                        logger.info("Connection established to plot server.")
+                        self.do_plotting = True
+                        for p in self.plotters:
+                            p.connect()
+                    else:
+                        raise Exception("Server returned invalid message, expected ACK.")
+                except:
+                    logger.info("Could not connect to server.")
+                    for p in self.plotters:
+                        p.do_plotting = False
+            else:
+                logger.info("Server did not respond.")
+                for p in self.plotters:
+                    p.do_plotting = False
 
-        client_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),"matplotlib-client.py")
-        #if not auspex.config.last_plotter_process:
-        preexec_fn = os.setsid if hasattr(os, 'setsid') else None
-        if not auspex.config.last_plotter_process:
-            if hasattr(self, 'plot_server'):
-                auspex.config.last_plotter_process = subprocess.Popen(['python', client_path, 'localhost'],
-                                                                        env=os.environ.copy(), preexec_fn=preexec_fn)
+        except:
+            logger.warning("Exception occured while contacting the plot server. Is it running?")
+            for p in self.plotters:
+                p.do_plotting = False
 
-        if not auspex.config.last_extra_plotter_process:
-            if hasattr(self, 'extra_plot_server') and (not auspex.config.last_extra_plotter_process or not self.leave_plot_server_open or self.first_exp):
-                auspex.config.last_extra_plotter_process = subprocess.Popen(['python', client_path, 'localhost',
-                                                                    str(7773), str(7774)], env=os.environ.copy(), preexec_fn=preexec_fn)
-      
+        if len(self.plotters) > 0 and self.do_plotting:
+            client_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),"matplotlib-client.py")
+            preexec_fn  = os.setsid if hasattr(os, 'setsid') else None
+            subprocess.Popen(['python', client_path, 'localhost', self.uuid], env=os.environ.copy(), preexec_fn=preexec_fn)
+            time.sleep(1)

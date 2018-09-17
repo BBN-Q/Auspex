@@ -95,7 +95,7 @@ class ExperimentTestCase(unittest.TestCase):
         """Check that instruments have been appropriately gathered"""
         self.assertTrue(hasattr(TestExperiment, "_instruments")) # should have parsed these instruments from class dir
         self.assertTrue(len(TestExperiment._instruments) == 3 ) # should have parsed these instruments from class dir
-        
+
         te = TestExperiment()
         self.assertTrue(te._instruments['fake_instr_1'] == te.fake_instr_1) # should contain this instrument
         self.assertTrue(te._instruments['fake_instr_2'] == te.fake_instr_2) # should contain this instrument
