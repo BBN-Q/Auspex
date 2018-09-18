@@ -133,6 +133,7 @@ class H5Handler(Process):
                     args = (args[0], args[1], args[2], args[3], np.array([args[4]]))
                 # Set up datatype and write buffer if we haven't already
                 self.dtype = args[4].dtype
+                logger.info(f"Dtype for writer is {self.dtype}")
                 try:
                     l = len(args[4])
                 except:
@@ -216,9 +217,8 @@ class WriteToHDF5(Filter):
     filename = FilenameParameter()
     groupname = Parameter(default='main')
     add_date = BoolParameter(default = False)
-    save_settings = BoolParameter(default = True)
 
-    def __init__(self, filename=None, groupname=None, add_date=False, save_settings=True, compress=False, store_tuples=True, exp_log=True, **kwargs):
+    def __init__(self, filename=None, groupname=None, add_date=False, compress=False, store_tuples=True, exp_log=True, **kwargs):
         super(WriteToHDF5, self).__init__(**kwargs)
         self.compress = compress
         if filename:
@@ -238,9 +238,7 @@ class WriteToHDF5(Filter):
         self.up_to_date = False
         self.sink.max_input_streams = 100
         self.add_date.value = add_date
-        self.save_settings.value = save_settings
         self.exp_log = exp_log
-        self.quince_parameters = [self.filename, self.groupname, self.add_date, self.save_settings]
 
         self.last_flush = datetime.datetime.now()
 
@@ -282,10 +280,6 @@ class WriteToHDF5(Filter):
 
         self.group = self.file.create_group(self.groupname.value)
         self.data_group = self.group.create_group("data")
-
-        # If desired, push experimental metadata into the h5 file
-        if self.save_settings.value and 'header' not in self.file.keys(): # only save header once for multiple writers
-            self.save_yaml_h5()
 
         # Create datasets for each stream
         for stream in streams:
@@ -435,9 +429,6 @@ class WriteToHDF5(Filter):
         os.makedirs(head, exist_ok=True)
         logger.debug("Create new data file: %s." % self.filename.value)
         # Copy current settings to a folder with the file name
-        if self.save_settings.value:
-            # just move copies to a new directory
-            self.save_yaml()
         if self.exp_log:
             self.write_to_log()
         return h5py.File(self.filename.value, 'w', libver='latest')
@@ -453,22 +444,6 @@ class WriteToHDF5(Filter):
                 lf = pd.DataFrame(columns = ["Filename", "Date", "Time"])
             lf = lf.append(pd.DataFrame([[self.filename.value, time.strftime("%y%m%d"), time.strftime("%H:%M:%S")]],columns=["Filename", "Date", "Time"]),ignore_index=True)
             lf.to_csv(logfile, sep = "\t", index = False)
-
-    def save_yaml(self):
-        """ Save a copy of current experiment settings """
-        if config.meas_file:
-            head = os.path.dirname(self.filename.value)
-            fulldir = os.path.splitext(self.filename.value)[0]
-            if not os.path.exists(fulldir):
-                os.makedirs(fulldir)
-                config.dump_meas_file(config.load_meas_file(config.meas_file), os.path.join(fulldir, os.path.split(config.meas_file)[1]), flatten = True)
-
-    def save_yaml_h5(self):
-        """ Save a copy of current experiment settings in the h5 metadata"""
-        if config.meas_file:
-            header = self.file.create_group("header")
-            # load them dump to get the 'include' information
-            header.attrs['settings'] = config.dump_meas_file(config.load_meas_file(config.meas_file), flatten = True)
 
     def get_data(self, data_path):
         """Request data back from the file handler. Data_path is given with respect to root: e.g. /data/voltage"""

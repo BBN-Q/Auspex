@@ -27,8 +27,6 @@ from auspex.filters.io import WriteToHDF5
 from auspex.analysis.io import load_from_HDF5
 from auspex.log import logger
 
-config.load_meas_file(config.find_meas_file())
-
 class SweptTestExperiment(Experiment):
     """Here the run loop merely spews data until it fills up the stream. """
 
@@ -155,7 +153,7 @@ class WriteTestCase(unittest.TestCase):
     def test_writehdf5(self):
         with tempfile.TemporaryDirectory() as tmpdirname:
             exp = SweptTestExperiment()
-            wr = WriteToHDF5(tmpdirname+"/test_writehdf5.h5", save_settings = True)
+            wr = WriteToHDF5(tmpdirname+"/test_writehdf5.h5")
 
             edges = [(exp.voltage, wr.sink)]
             exp.set_graph(edges)
@@ -172,12 +170,12 @@ class WriteTestCase(unittest.TestCase):
                 self.assertTrue("Here the run loop merely spews" in f.attrs['exp_src'])
                 self.assertTrue(f['main/data'].attrs['time_val'] == 0)
                 self.assertTrue(f['main/data'].attrs['unit_freq'] == "Hz")
-                self.assertTrue(f['header'].attrs['settings'] == config.dump_meas_file(config.load_meas_file(config.meas_file), flatten = True))
+                # self.assertTrue(f['header'].attrs['settings'] == config.dump_meas_file(config.load_meas_file(config.meas_file), flatten = True))
 
     def test_writehdf5_with_settings(self):
         with tempfile.TemporaryDirectory() as tmpdirname:
             exp = SweptTestExperiment()
-            wr = WriteToHDF5(tmpdirname+"/test_writehdf5.h5", save_settings = True)
+            wr = WriteToHDF5(tmpdirname+"/test_writehdf5.h5")
 
             edges = [(exp.voltage, wr.sink)]
             exp.set_graph(edges)
@@ -194,7 +192,7 @@ class WriteTestCase(unittest.TestCase):
                 self.assertTrue("Here the run loop merely spews" in f.attrs['exp_src'])
                 self.assertTrue(f['main/data'].attrs['time_val'] == 0)
                 self.assertTrue(f['main/data'].attrs['unit_freq'] == "Hz")
-                self.assertTrue(f['header'].attrs['settings'] == config.dump_meas_file(config.load_meas_file(config.meas_file), flatten = True))
+                # self.assertTrue(f['header'].attrs['settings'] == config.dump_meas_file(config.load_meas_file(config.meas_file), flatten = True))
 
     def test_filename_increment(self):
         with tempfile.TemporaryDirectory() as tmpdirname:
