@@ -93,7 +93,7 @@ class AverageTestCase(unittest.TestCase):
         avgr            = Averager('trials', name="TestAverager")
 
         edges = [(exp.chan1, avgr.sink),
-                 (avgr.final_average, printer_final.sink)]
+                 (avgr.source, printer_final.sink)]
 
         exp.set_graph(edges)
         exp.run_sweeps()
@@ -108,7 +108,7 @@ class AverageTestCase(unittest.TestCase):
         edges = [(exp.chan1,           avgr.sink),
                  (avgr.final_variance, printer_final.sink),
                  (avgr.final_variance, var_buff.sink),
-                 (avgr.final_average,  mean_buff.sink)]
+                 (avgr.source,  mean_buff.sink)]
 
         exp.set_graph(edges)
         exp.run_sweeps()
@@ -141,7 +141,7 @@ class AverageTestCase(unittest.TestCase):
 
         edges = [(exp.chan1, avgr.sink),
                  (avgr.partial_average, printer_partial.sink),
-                 (avgr.final_average, printer_final.sink)]
+                 (avgr.source, printer_final.sink)]
         exp.set_graph(edges)
 
         exp.add_sweep(exp.freq_1, np.linspace(0,9,10))

@@ -172,7 +172,7 @@ class Averager(Filter):
     def process_data(self, data):
 
         if self.passthrough:
-            for os in self.final_average.output_streams:
+            for os in self.source.output_streams:
                 os.push(data)
             for os in self.final_variance.output_streams:
                 os.push(data*0.0)
@@ -215,7 +215,7 @@ class Averager(Filter):
                     for os in self.source.output_streams + self.final_variance.output_streams + self.partial_average.output_streams:
                         os.descriptor.visited_tuples = np.append(os.descriptor.visited_tuples, reduced_tuples)
 
-                for os in self.final_average.output_streams:
+                for os in self.source.output_streams:
                     os.push(averaged)
 
                 for os in self.final_variance.output_streams:
@@ -249,7 +249,7 @@ class Averager(Filter):
                 # If we now have enoough for the final average, push to both partial and final...
                 if self.completed_averages == self.num_averages:
                     reshaped = self.current_avg_frame.reshape(partial_reshape_dims)
-                    for os in self.final_average.output_streams + self.partial_average.output_streams:
+                    for os in self.source.output_streams + self.partial_average.output_streams:
                         os.push(reshaped.mean(axis=self.mean_axis))
                     for os in self.final_variance.output_streams:
                         os.push(np.real(reshaped).var(axis=self.mean_axis, ddof=1)+1j*np.imag(reshaped).var(axis=self.mean_axis, ddof=1)) # N-1 in the denominator
