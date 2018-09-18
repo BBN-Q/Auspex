@@ -11,6 +11,7 @@ import os
 import numpy as np
 import time
 import h5py
+import tempfile
 from adapt.refine import refine_1D
 
 # import auspex.config as config
@@ -55,40 +56,40 @@ class Adapt1DTestCase(unittest.TestCase):
 
     # @unittest.skip("Adaptive sweeps not yet working in multiprocessing.")
     def test_writehdf5_1D_adaptive_sweep(self):
-        exp = SweptTestExperiment()
-        if os.path.exists("test_writehdf5_1D_adaptive-0000.h5"):
-            os.remove("test_writehdf5_1D_adaptive-0000.h5")
-        wr = WriteToHDF5("test_writehdf5_1D_adaptive.h5")
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            exp = SweptTestExperiment()
+            if os.path.exists(tmpdirname+"/test_writehdf5_1D_adaptive-0000.h5"):
+                os.remove(tmpdirname+"/test_writehdf5_1D_adaptive-0000.h5")
+            wr = WriteToHDF5(tmpdirname+"/test_writehdf5_1D_adaptive.h5")
 
-        edges = [(exp.resistance, wr.sink)]
-        exp.set_graph(edges)
+            edges = [(exp.resistance, wr.sink)]
+            exp.set_graph(edges)
 
-        def rf(sweep_axis, exp):
-            time.sleep(0.1)
-            temps = wr.get_data("/main/data/temperature")
-            ress  = wr.get_data("/main/data/resistance")
-            logger.debug("Temps: {}".format(temps))
-            logger.debug("Ress: {}".format(ress))
+            def rf(sweep_axis, exp):
+                time.sleep(0.1)
+                temps = wr.get_data("/main/data/temperature")
+                ress  = wr.get_data("/main/data/resistance")
+                logger.debug("Temps: {}".format(temps))
+                logger.debug("Ress: {}".format(ress))
 
-            new_temps = refine_1D(temps, ress, all_points=False, criterion="difference", threshold = "one_sigma")
+                new_temps = refine_1D(temps, ress, all_points=False, criterion="difference", threshold = "one_sigma")
 
-            logger.debug("New temperature values: {}".format(new_temps))
-            if new_temps.size + temps.size > 15:
-                return False
+                logger.debug("New temperature values: {}".format(new_temps))
+                if new_temps.size + temps.size > 15:
+                    return False
 
-            logger.debug("Axis points are now: {}".format(sweep_axis.points))
-            return new_temps
+                logger.debug("Axis points are now: {}".format(sweep_axis.points))
+                return new_temps
 
-        exp.add_sweep(exp.temperature, np.linspace(0,20,5), refine_func=rf)
-        exp.run_sweeps()
+            exp.add_sweep(exp.temperature, np.linspace(0,20,5), refine_func=rf)
+            exp.run_sweeps()
 
-        self.assertTrue(os.path.exists("test_writehdf5_1D_adaptive-0000.h5"))
+            self.assertTrue(os.path.exists(tmpdirname+"/test_writehdf5_1D_adaptive-0000.h5"))
 
-        expected_data = np.array([ 0., 5.,10.,15.,20., 7.5, 8.75, 9.375, 9.0625, 8.90625, 8.984375,12.5,17.5, 9.0234375, 8.945312])
-        data, desc = load_from_HDF5(wr.filename.value, reshape=False)
-        actual_data = data['main']['temperature']
-        self.assertTrue(actual_data.size == expected_data.size)
-        os.remove("test_writehdf5_1D_adaptive-0000.h5")
+            expected_data = np.array([ 0., 5.,10.,15.,20., 7.5, 8.75, 9.375, 9.0625, 8.90625, 8.984375,12.5,17.5, 9.0234375, 8.945312])
+            data, desc = load_from_HDF5(wr.filename.value, reshape=False)
+            actual_data = data['main']['temperature']
+            self.assertTrue(actual_data.size == expected_data.size)
 
 if __name__ == '__main__':
     unittest.main()
