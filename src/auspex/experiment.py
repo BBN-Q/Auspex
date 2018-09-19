@@ -617,13 +617,16 @@ class Experiment(metaclass=MetaExperiment):
             for n in self.other_nodes:
                 if not n.done.is_set():
                     times[n] += 1
-                    logger.info(f"{n} not done. Waited {times[n]} times. Is the pipeline backed up at IO stage?")
+                    logger.info(f"{n.filter_name} not done. Waited {times[n]} times. Is the pipeline backed up at IO stage?")
                 else:
                     dones[n] = True
                     n.join(timeout=0.1)
             # We've had enough...
             if any([t > 10 for t in times.values()]):
                 break
+
+        for buff in self.buffers:
+            buff.output_data = buff.get_data()
 
         if self.dashboard:
             exit_perf.set()
