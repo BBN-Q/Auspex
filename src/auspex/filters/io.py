@@ -593,7 +593,7 @@ class DataBuffer(Filter):
         self._final_buffers = Queue()
         self.final_buffers = None
 
-        self.out_queue = Queue() # This seems to work, somewhat surprisingly
+        # self.out_queue = Queue() # This seems to work, somewhat surprisingly
 
     def final_init(self):
         self.w_idxs  = {s: 0 for s in self.sink.input_streams}
@@ -641,7 +641,6 @@ class DataBuffer(Filter):
                     if message_type == 'event':
                         if message['event_type'] == 'done':
                             stream_done[stream] = True
-                            # logger.info(f"Buffer {self.filter_name} stream {stream} done...")
                         elif message['event_type'] == 'refined':
                             # Single we don't have much structure here we simply
                             # create a new buffer and paste the old buffer into it
@@ -656,33 +655,22 @@ class DataBuffer(Filter):
                         self.processed += new_dat.nbytes
 
             self.push_resource_usage()
-            # if False not in stream_done.values():
-            #     logger.debug('%s "%s" is done', self.__class__.__name__, self.name)
-            #     break
 
             for stream in streams:
                 datas = stream_data[stream]
-                # logger.info(f"stream {stream.name} has {len(datas)} chunks to process")
                 for data in datas:
-                    # logger.info(f"stream {stream.name} processing data of len {data.size}. idx {self.w_idxs[stream]} out of {len(buffers[stream])}")
+                    
                     buffers[stream][self.w_idxs[stream]:self.w_idxs[stream]+data.size] = data
                     self.w_idxs[stream] += data.size
 
-            # if not np.all([v.done() for v in self.output_connectors.values()]):
-            #     print('--------- IO NOT ALL DONE')
-
             # If we have gotten all our data and process_data has returned, then we are done!
             if np.all([stream_done[stream] for stream in streams]):
-                # logger.info(f"Buffer {self.filter_name} all done...")
-                self.done.set()
                 break
 
         for s in streams:
             self._final_buffers.put(buffers[s])
 
-        # If we're using an mp Queue to return the results, put them in here
-        if self.out_queue:
-            self.out_queue.put(self.get_data())
+        self.done.set()
 
     def get_rdata(self):
         if self.out_queue:
