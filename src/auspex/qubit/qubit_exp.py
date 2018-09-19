@@ -129,7 +129,7 @@ class QubitExperiment(Experiment):
         for chan, dig in self.chan_to_dig.items():
             socket = dig.get_socket(chan)
             # self.loop.remove_reader(socket)
-        for name, instr in self._instruments.items():
+        for instr in self.instruments:
             instr.disconnect()
 
     def run(self):

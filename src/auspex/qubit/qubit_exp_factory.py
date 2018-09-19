@@ -83,6 +83,7 @@ class QubitExpFactory(object):
             bbndb.auspex.Average: auspex.filters.Averager,
             bbndb.auspex.Integrate: auspex.filters.KernelIntegrator,
             bbndb.auspex.Write: auspex.filters.WriteToHDF5,
+            bbndb.auspex.Buffer: auspex.filters.DataBuffer,
             bbndb.auspex.Display: auspex.filters.Plotter
         }
         self.stream_sel_map = {
@@ -100,10 +101,9 @@ class QubitExpFactory(object):
         }
 
         # Dirty trick: push the correct entity defs to the calling context
-        for var in ["Demodulate","Average","Integrate","Display","Write"]:
+        for var in ["Demodulate","Average","Integrate","Display","Write","Buffer"]:
             inspect.stack()[1][0].f_globals[var] = getattr(bbndb.auspex, var)
 
-    @db_session
     def create_default_pipeline(self, qubits=None):
         """Look at the QGL channel library and create our pipeline from the current
         qubits."""
@@ -138,7 +138,6 @@ class QubitExpFactory(object):
             qp.auto_create_pipeline()
         commit()
 
-    @db_session
     def create(self, meta_file, averages=100):
         with open(meta_file, 'r') as FID:
             meta_info = json.load(FID)
@@ -160,13 +159,13 @@ class QubitExpFactory(object):
         #     raise Exception("Auspex and QGL must share the same database for now.")
 
         # Load the channel library by ID
-        exp.channelDatabase   = channelDatabase  = bbndb.qgl.ChannelDatabase[library_id]
-        exp.all_channels      = all_channels     = list(channelDatabase.channels)
-        exp.all_sources       = all_sources      = list(channelDatabase.sources)
-        exp.all_awgs          = all_awgs         = list(channelDatabase.awgs)
-        exp.all_digitizers    = all_digitizers   = list(channelDatabase.digitizers)
-        exp.all_qubits        = all_qubits       = [c for c in all_channels if isinstance(c, bbndb.qgl.Qubit)]
-        exp.all_measurements  = all_measurements = [c for c in all_channels if isinstance(c, bbndb.qgl.Measurement)]
+        exp.channelDatabase = channelDatabase  = bbndb.qgl.ChannelDatabase[library_id]
+        all_channels        = list(channelDatabase.channels)
+        all_sources         = list(channelDatabase.sources)
+        all_awgs            = list(channelDatabase.awgs)
+        all_digitizers      = list(channelDatabase.digitizers)
+        all_qubits          = [c for c in all_channels if isinstance(c, bbndb.qgl.Qubit)]
+        all_measurements    = [c for c in all_channels if isinstance(c, bbndb.qgl.Measurement)]
 
         # Restrict to current qubits, channels, etc. involved in this actual experiment
         # Based on the meta info
@@ -177,7 +176,7 @@ class QubitExpFactory(object):
         exp.awgs              = awgs              = list(set([e.phys_chan.awg for e in controlled_qubits + measurements]))
         exp.receivers         = receivers         = list(set([e.receiver_chan for e in measurements]))
         exp.digitizers        = digitizers        = list(set([e.receiver_chan.digitizer for e in measurements]))
-        exp.sources           = sources           = [q.phys_chan.generator for q in measured_qubits + controlled_qubits + measurements if q.phys_chan.generator]
+        exp.sources           = sources           = list(set([q.phys_chan.generator for q in measured_qubits + controlled_qubits + measurements if q.phys_chan.generator]))
 
         # If no pipeline is defined, assumed we want to generate it automatically
         if not self.meas_graph:
@@ -229,7 +228,8 @@ class QubitExpFactory(object):
 
         # Create microwave sources and digitizer instruments from the database objects.
         # We configure the digitizers later after adding channels.
-        for instrument in sources + digitizers + awgs:
+        exp.instruments = sources + digitizers + awgs
+        for instrument in exp.instruments:
             instr = self.instrument_map[instrument.model](instrument.address, instrument.label) # Instantiate
             # For easy lookup
             instr.proxy_obj = instrument
@@ -321,15 +321,15 @@ class QubitExpFactory(object):
 
         return exp
 
-    @db_session
+    def run(*args, **kwargs):
+        pass
+
     def qubit(self, qubit_name):
         return {bbndb.qgl.Qubit[qid].label: qp for qid,qp in self.qubit_proxies.items()}[qubit_name]
 
-    @db_session
     def save_pipeline(self, name):
         cs = [bbndb.auspex.Connection(pipeline_name=name, node1=n1, node2=n2) for n1, n2 in self.meas_graph.edges()]
 
-    @db_session
     def load_pipeline(self, pipeline_name):
         cs = select(c for c in bbndb.auspex.Connection if c.pipeline_name==pipeline_name)
         if len(cs) == 0:
@@ -342,7 +342,6 @@ class QubitExpFactory(object):
             for c in cs:
                 c.node1.exp = c.node2.exp = self
 
-    @db_session
     def show_pipeline(self, pipeline_name=None):
         """If a pipeline name is specified query the database, otherwise show the
         current pipeline."""
