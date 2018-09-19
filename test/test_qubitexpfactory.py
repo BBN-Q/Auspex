@@ -3,32 +3,23 @@ import os
 import glob
 import shutil
 import time
+import tempfile
 import numpy as np
 from QGL import *
 import QGL.config
-
-# Trick QGL and Auspex into using our local config
-# from QGL import config_location
-curr_dir = os.path.dirname(os.path.abspath(__file__))
-curr_dir = curr_dir.replace('\\', '/')  # use unix-like convention
-awg_dir  = os.path.abspath(os.path.join(curr_dir, "AWG" ))
-cfg_file = os.path.abspath(os.path.join(curr_dir, "test_measure.yml"))
-
-ChannelLibrary(library_file=cfg_file)
 import auspex.config
+
+cl = ChannelLibrary()
+
 # Dummy mode
-import auspex.config as config
-config.auspex_dummy_mode = True
+auspex.config.auspex_dummy_mode = True
 
-auspex.config.meas_file  = cfg_file
-auspex.config.AWGDir     = awg_dir
-QGL.config.AWGDir        = awg_dir
+# Set temporary output directories
+awg_dir = tempfile.TemporaryDirectory()
+auspex.config.AWGDir = QGL.config.AWGDir = awg_dir.name
 
-# Create the AWG directory if it doesn't exist
-if not os.path.exists(awg_dir):
-    os.makedirs(awg_dir)
-
-from auspex.exp_factory import QubitExpFactory
+from auspex.qubit import QubitExpFactory, db_session
+import bbndb
 
 def clear_test_data():
     for file in glob.glob("test_*.h5"):
@@ -43,35 +34,99 @@ class QubitExpFactoryTestCase(unittest.TestCase):
     filts  = ['avg-q1-int', 'q1-WriteToHDF5'] #'partial-avg-buff'
     nbr_round_robins = 50
 
+    @db_session
     def test_create(self):
-        qq = QubitFactory("q1")
-        exp = QubitExpFactory.create(PulsedSpec(qq), save_data = False)
-        self.assertTrue(set(self.instrs).issubset(exp._instruments.keys())) # All instruments were loaded
-        self.assertTrue(set(self.filts).issubset(exp.filters.keys())) # All filters were loaded
-        self.assertTrue(set(self.qubits).issubset(exp.qubits))
-        self.assertTrue(len(exp._output_connectors["q1-IntegratedSS"].descriptor.axes) == 1)
-        self.assertTrue(len(exp._output_connectors["q1-IntegratedSS"].descriptor.axes[0].points) == self.nbr_round_robins)
+        cl.clear()
+        q1    = new_qubit("q1")
+        q2    = new_qubit("q2")
+        aps1  = new_APS2("BBNAPS1", address="192.168.5.102")
+        aps2  = new_APS2("BBNAPS2", address="192.168.5.103")
+        aps3  = new_APS2("BBNAPS3", address="192.168.5.104")
+        aps4  = new_APS2("BBNAPS4", address="192.168.5.105")
+        x6_1  = new_X6("X6_1", address="1", record_length=512)
+        x6_2  = new_X6("X6_1", address="1", record_length=512)
+        holz1 = new_source("Holz_1", "HolzworthHS9000", "HS9004A-009-1", power=-30)
+        holz2 = new_source("Holz_2", "HolzworthHS9000", "HS9004A-009-2", power=-30)
+        holz3 = new_source("Holz_3", "HolzworthHS9000", "HS9004A-009-3", power=-30)
+        holz4 = new_source("Holz_4", "HolzworthHS9000", "HS9004A-009-4", power=-30)
 
+        set_control(q1, aps1, generator=holz1)
+        set_measure(q1, aps2, x6_1.ch("1"), generator=holz2)
+        set_control(q2, aps3, generator=holz3)
+        set_measure(q2, aps4, x6_2.ch("1"), generator=holz4)
+        set_master(aps1, aps1.ch("m2"))
+
+        q1 = QubitFactory("q1")
+        ef = QubitExpFactory()
+        
+        ef.create_default_pipeline()
+        ef.qubit("q1").clear_pipeline()
+        ef.qubit("q1").set_stream_type("raw")
+        ef.create_default_pipeline()
+
+        exp = ef.create(PulsedSpec(q1), averages=50)
+
+        # These should only be related to q1
+        self.assertTrue([q1] == exp.measured_qubits)
+        self.assertTrue([q1] == exp.controlled_qubits)
+        self.assertTrue(set(exp.awgs) == set([aps1, aps2]))
+        self.assertTrue(set(exp.instrument_proxies) == set([aps1, aps2, x6_1, holz1, holz2]))
+        self.assertTrue(set(exp.sources) == set([holz1, holz2]))
+        self.assertTrue(set(exp.digitizers) == set([x6_1]))
+        self.assertTrue(len(exp.output_connectors["q1"].descriptor.axes) == 2)
+        self.assertTrue(len(exp.output_connectors["q1"].descriptor.axes[0].points) == 50)
+
+    @db_session
     def test_add_qubit_sweep(self):
-        qq = QubitFactory("q1")
-        exp = QubitExpFactory.create(PulsedSpec(qq), save_data = False)
-        exp.add_qubit_sweep("q1 measure frequency", np.linspace(6e9, 6.5e9, 500))
-        self.assertTrue(len(exp._output_connectors["q1-IntegratedSS"].descriptor.axes[0].points) == 500)
-        self.assertTrue(exp._output_connectors["q1-IntegratedSS"].descriptor.axes[0].points[-1] == 6.5e9)
+        cl.clear()
+        q1    = new_qubit("q1")
+        aps1  = new_APS2("BBNAPS1", address="192.168.5.102")
+        aps2  = new_APS2("BBNAPS2", address="192.168.5.103")
+        x6_1  = new_X6("X6_1", address="1", record_length=512)
+        holz1 = new_source("Holz_1", "HolzworthHS9000", "HS9004A-009-1", power=-30)
+        holz2 = new_source("Holz_2", "HolzworthHS9000", "HS9004A-009-2", power=-30)
+        set_control(q1, aps1, generator=holz1)
+        set_measure(q1, aps2, x6_1.ch("1"), generator=holz2)
+        set_master(aps1, aps1.ch("m2"))
+        q1 = QubitFactory("q1")
+        ef = QubitExpFactory()
+        ef.create_default_pipeline()
 
+        exp = ef.create(PulsedSpec(q1), averages=50)
+        exp.add_qubit_sweep(q1, "measure", "frequency", np.linspace(6e9, 6.5e9, 500))
+        self.assertTrue(len(exp.output_connectors["q1"].descriptor.axes[0].points) == 500)
+        self.assertTrue(exp.output_connectors["q1"].descriptor.axes[0].points[-1] == 6.5e9)
+
+    @db_session
     def test_run_direct(self):
-        clear_test_data()
-        qq = QubitFactory("q1")
-        exp = QubitExpFactory.run(RabiAmp(qq, np.linspace(-1,1,21)), save_data = False)
+        cl.clear()
+        q1    = new_qubit("q1")
+        aps1  = new_APS2("BBNAPS1", address="192.168.5.102")
+        aps2  = new_APS2("BBNAPS2", address="192.168.5.103")
+        x6_1  = new_X6("X6_1", address="1", record_length=512)
+        holz1 = new_source("Holz_1", "HolzworthHS9000", "HS9004A-009-1", power=-30)
+        holz2 = new_source("Holz_2", "HolzworthHS9000", "HS9004A-009-2", power=-30)
+        set_control(q1, aps1, generator=holz1)
+        set_measure(q1, aps2, x6_1.ch("1"), generator=holz2)
+        set_master(aps1, aps1.ch("m2"))
+        q1 = QubitFactory("q1")
+        ef = QubitExpFactory()
+        ef.create_default_pipeline()
+        ef.qubit("q1").clear_pipeline()
+        ef.qubit("q1").add(bbndb.auspex.Buffer(label="q1_buff"))
+
+        exp = ef.run(RabiAmp(q1, np.linspace(-1,1,21)), averages=50)
         buf = exp.buffers[0]
-        ax = buf.descriptor.axes[0]
+        ax  = buf.descriptor.axes[1]
+
         self.assertTrue(buf.done.is_set())
-        self.assertTrue(len(buf.out_queue.get()) == 21)
-        self.assertTrue((ax.points == np.linspace(-1,1,21)).all())
+        self.assertTrue(len(buf.output_data) == int(512/4*21*50)) # Record length * segments * averages (record decimated by 4x)
+        self.assertTrue(np.all(np.array(ax.points) == np.linspace(-1,1,21)))
         self.assertTrue(ax.name == 'amplitude')
 
     # Figure out how to buffer a partial average for testing...
     @unittest.skip("Partial average for buffers to be fixed")
+    @db_session
     def test_final_vs_partial_avg(self):
         clear_test_data()
         qq = QubitFactory("q1")
