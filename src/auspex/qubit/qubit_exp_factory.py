@@ -228,14 +228,16 @@ class QubitExpFactory(object):
 
         # Create microwave sources and digitizer instruments from the database objects.
         # We configure the digitizers later after adding channels.
-        exp.instruments = sources + digitizers + awgs
-        for instrument in exp.instruments:
+        exp.instrument_proxies = sources + digitizers + awgs
+        exp.instruments = []
+        for instrument in exp.instrument_proxies:
             instr = self.instrument_map[instrument.model](instrument.address, instrument.label) # Instantiate
             # For easy lookup
             instr.proxy_obj = instrument
             instrument.instr = instr
             # Add to the experiment's instrument list
             exp._instruments[instrument.label] = instr
+            exp.instruments.append(instr)
             # Add to class dictionary for convenience
             if not hasattr(exp, instrument.label):
                 setattr(exp, instrument.label, instr)
@@ -321,8 +323,10 @@ class QubitExpFactory(object):
 
         return exp
 
-    def run(*args, **kwargs):
-        pass
+    def run(self, *args, **kwargs):
+        exp = self.create(*args, **kwargs)
+        exp.run_sweeps()
+        return exp
 
     def qubit(self, qubit_name):
         return {bbndb.qgl.Qubit[qid].label: qp for qid,qp in self.qubit_proxies.items()}[qubit_name]
