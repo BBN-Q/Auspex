@@ -116,7 +116,7 @@ class BufferTestCase(unittest.TestCase):
         exp.run_sweeps()
 
         # data = db.get_data()
-        data = db.out_queue.get()
+        data = db.output_data
         # print('test_buffer data = %s' % str(data))
         db.join()
 
@@ -136,7 +136,7 @@ class BufferTestCase(unittest.TestCase):
         exp.run_sweeps()
 
         # data = db.get_data()
-        data = db.out_queue.get()
+        data = db.output_data
         # print('test_buffer_multi data = %s' % str(data))
         db.join()
 
@@ -157,7 +157,7 @@ class BufferTestCase(unittest.TestCase):
         exp.run_sweeps()
 
         # data = db.get_data()
-        data = db.out_queue.get()
+        data = db.output_data
         # print('test_buffer_metadata data = %s' % str(data))
         db.join()
 
