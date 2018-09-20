@@ -17,6 +17,10 @@ import time
 class QubitExperiment(Experiment):
     """Experiment with a specialized run method for qubit experiments run via the QubitExpFactory."""
 
+    def __init__(self, *args, **kwargs):
+        super(QubitExperiment, self).__init__(*args, **kwargs)
+        self.cw_mode = False
+
     def add_connector(self, qubit):
         logger.debug(f"Adding {qubit.qubit_name} output connector to experiment.")
         oc = OutputConnector(name=qubit.qubit_name, parent=self)
@@ -25,8 +29,6 @@ class QubitExperiment(Experiment):
         return oc
 
     def init_instruments(self):
-        self.cw_mode = False
-
         for name, instr in self._instruments.items():
             # Configure with dictionary from the instrument proxy
             if hasattr(instr, "configure_with_proxy"):
@@ -133,7 +135,6 @@ class QubitExperiment(Experiment):
             instr.disconnect()
 
     def run(self):
-        print("In Run")
         # Begin acquisition before enabling the AWGs
         for dig in self.digitizers:
             dig.acquire()
