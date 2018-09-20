@@ -104,7 +104,7 @@ class QubitExpFactory(object):
         for var in ["Demodulate","Average","Integrate","Display","Write","Buffer"]:
             inspect.stack()[1][0].f_globals[var] = getattr(bbndb.auspex, var)
 
-    def create_default_pipeline(self, qubits=None):
+    def create_default_pipeline(self, qubits=None, buffers=False):
         """Look at the QGL channel library and create our pipeline from the current
         qubits."""
         if not qubits:
@@ -135,7 +135,7 @@ class QubitExpFactory(object):
         # generate the pipeline automatically
         self.meas_graph = nx.DiGraph()
         for qp in self.qubit_proxies.values():
-            qp.auto_create_pipeline()
+            qp.auto_create_pipeline(buffers=buffers)
         commit()
 
     def create(self, meta_file, averages=100):
@@ -178,6 +178,9 @@ class QubitExpFactory(object):
         exp.digitizers        = digitizers        = list(set([e.receiver_chan.digitizer for e in measurements]))
         exp.sources           = sources           = list(set([q.phys_chan.generator for q in measured_qubits + controlled_qubits + measurements if q.phys_chan.generator]))
 
+        # In case we need to access more detailed foundational information
+        exp.factory = self
+
         # If no pipeline is defined, assumed we want to generate it automatically
         if not self.meas_graph:
             self.create_default_pipeline(measured_qubits)
@@ -218,13 +221,18 @@ class QubitExpFactory(object):
         # Build a mapping of qubits to receivers, construct qubit proxies
         # We map by the unique database ID since that is much safer
         receivers_by_qubit = {channelDatabase.channels.filter(lambda x: x.label == e.label[2:]).first().id: e.receiver_chan for e in measurements}
+        
+        # Impose the qubit proxy's stream type on the receiver
+        for qubit, receiver  in receivers_by_qubit.items():
+            receiver.stream_type = self.qubit_proxies[qubit].stream_type
 
         # Now a pipeline exists, so we create Auspex filters from the proxy filters in the db
-        proxy_to_filter  = {}
-        connector_by_qp  = {}
-        exp.chan_to_dig  = {}
-        exp.chan_to_oc   = {}
-        exp.qubit_to_dig = {}
+        proxy_to_filter      = {}
+        connector_by_qp      = {}
+        exp.chan_to_dig      = {}
+        exp.chan_to_oc       = {}
+        exp.qubit_to_dig     = {}
+        exp.qubits_by_output = {}
 
         # Create microwave sources and digitizer instruments from the database objects.
         # We configure the digitizers later after adding channels.
@@ -299,10 +307,12 @@ class QubitExpFactory(object):
             if isinstance(node, bbndb.auspex.FilterProxy):
                 if node.qubit_name in measured_qubit_names:
                     new_filt = self.filter_map[type(node)]()
-                    logger.info(f"Created {new_filt} from {node}")
+                    # logger.info(f"Created {new_filt} from {node}")
                     new_filt.configure_with_proxy(node)
                     new_filt.proxy = node
                     proxy_to_filter[node.id] = new_filt
+                    if isinstance(node, bbndb.auspex.OutputProxy):
+                        exp.qubits_by_output[new_filt] = node.qubit_name
 
         # Connect the filters together
         graph_edges = []
@@ -317,6 +327,10 @@ class QubitExpFactory(object):
                 filt2 = proxy_to_filter[node2.id]
                 ic   = filt2.input_connectors["sink"]
                 graph_edges.append([oc, ic])
+
+        # # For lookup
+        # exp.proxy_to_filter = proxy_to_filter
+        # exp.filter_to_proxy = {v: k for k,v in proxy_to_filter.items()}
 
         # Define the experiment graph
         exp.set_graph(graph_edges)

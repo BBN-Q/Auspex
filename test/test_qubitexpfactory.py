@@ -16,7 +16,9 @@ auspex.config.auspex_dummy_mode = True
 
 # Set temporary output directories
 awg_dir = tempfile.TemporaryDirectory()
+kern_dir = tempfile.TemporaryDirectory()
 auspex.config.AWGDir = QGL.config.AWGDir = awg_dir.name
+auspex.config.KernelDir = kern_dir.name
 
 from auspex.qubit import QubitExpFactory, db_session
 import bbndb
@@ -62,9 +64,9 @@ class QubitExpFactoryTestCase(unittest.TestCase):
         ef.create_default_pipeline()
         ef.qubit("q1").clear_pipeline()
         ef.qubit("q1").set_stream_type("raw")
-        ef.create_default_pipeline()
+        ef.reset_pipelines()
 
-        exp = ef.create(PulsedSpec(q1), averages=50)
+        exp = ef.create(PulsedSpec(q1), averages=5)
 
         # These should only be related to q1
         self.assertTrue([q1] == exp.measured_qubits)
@@ -74,7 +76,7 @@ class QubitExpFactoryTestCase(unittest.TestCase):
         self.assertTrue(set(exp.sources) == set([holz1, holz2]))
         self.assertTrue(set(exp.digitizers) == set([x6_1]))
         self.assertTrue(len(exp.output_connectors["q1"].descriptor.axes) == 2)
-        self.assertTrue(len(exp.output_connectors["q1"].descriptor.axes[0].points) == 50)
+        self.assertTrue(len(exp.output_connectors["q1"].descriptor.axes[0].points) == 5)
 
     @db_session
     def test_add_qubit_sweep(self):
@@ -92,7 +94,7 @@ class QubitExpFactoryTestCase(unittest.TestCase):
         ef = QubitExpFactory()
         ef.create_default_pipeline()
 
-        exp = ef.create(PulsedSpec(q1), averages=50)
+        exp = ef.create(PulsedSpec(q1), averages=5)
         exp.add_qubit_sweep(q1, "measure", "frequency", np.linspace(6e9, 6.5e9, 500))
         self.assertTrue(len(exp.output_connectors["q1"].descriptor.axes[0].points) == 500)
         self.assertTrue(exp.output_connectors["q1"].descriptor.axes[0].points[-1] == 6.5e9)
@@ -111,16 +113,14 @@ class QubitExpFactoryTestCase(unittest.TestCase):
         set_master(aps1, aps1.ch("m2"))
         q1 = QubitFactory("q1")
         ef = QubitExpFactory()
-        ef.create_default_pipeline()
-        ef.qubit("q1").clear_pipeline()
-        ef.qubit("q1").add(bbndb.auspex.Buffer(label="q1_buff"))
+        ef.create_default_pipeline(buffers=True)
 
-        exp = ef.run(RabiAmp(q1, np.linspace(-1,1,21)), averages=50)
+        exp = ef.run(RabiAmp(q1, np.linspace(-1,1,21)), averages=5)
         buf = exp.buffers[0]
-        ax  = buf.descriptor.axes[1]
+        ax  = buf.descriptor.axes[0]
 
         self.assertTrue(buf.done.is_set())
-        self.assertTrue(len(buf.output_data) == int(512/4*21*50)) # Record length * segments * averages (record decimated by 4x)
+        self.assertTrue(len(buf.output_data) == 21) # Record length * segments * averages (record decimated by 4x)
         self.assertTrue(np.all(np.array(ax.points) == np.linspace(-1,1,21)))
         self.assertTrue(ax.name == 'amplitude')
 

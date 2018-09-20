@@ -634,7 +634,7 @@ class DataBuffer(Filter):
             for stream in streams:
                 datas = stream_data[stream]
                 for data in datas:
-                    
+                    # logger.info(f"stream {s} gets data {data.size}. Buffer size {len(buffers[stream])} Range {self.w_idxs[stream]} to {self.w_idxs[stream]+data.size} ")
                     buffers[stream][self.w_idxs[stream]:self.w_idxs[stream]+data.size] = data
                     self.w_idxs[stream] += data.size
 
