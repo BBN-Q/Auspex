@@ -89,11 +89,11 @@ class X6Channel(DigitizerChannel):
                     self.kernel = eval(receiver.kernel)
                 except:
                     raise ValueError('Kernel invalid. Provide a file name or an expression to evaluate')
-        if self.stream_type == "Integrated":
+        if self.stream_type == "integrated":
             self.demod_channel = 0
             self.result_channel = self.dsp_channel
             self.dtype = np.complex128
-        elif self.stream_type == "Demodulated":
+        elif self.stream_type == "demodulated":
             self.demod_channel = self.dsp_channel
             self.result_channel = 0
             self.dtype = np.complex128
@@ -184,7 +184,7 @@ class X6(Instrument):
             self.channel_setup(chan)
         # pad all kernels to the maximum set length, to ensure that the valid signal is emitted only when all results are ready
         # first find longest kernel
-        integrated_channels = [chan for chan in self._channels if chan.stream_type == 'Integrated']
+        integrated_channels = [chan for chan in self._channels if chan.stream_type == 'integrated']
         if integrated_channels:
             max_kernel_length = max([len(chan.kernel) for chan in integrated_channels])
             # pad kernes to the maximum length
@@ -202,17 +202,17 @@ class X6(Instrument):
         a, b, c = channel.channel_tuple
         self._lib.enable_stream(a, b, c)
 
-        if channel.stream_type == "Raw":
+        if channel.stream_type == "raw":
             return
-        elif channel.stream_type == "Demodulated":
+        elif channel.stream_type == "demodulated":
             self._lib.set_nco_frequency(a, b, channel.if_freq)
-        elif channel.stream_type == "Integrated":
+        elif channel.stream_type == "integrated":
             if channel.kernel is None:
                 logger.error("Integrated streams must specify a kernel")
                 return
             # convert to complex128
             channel.kernel = channel.kernel.astype(complex)
-            self._lib.write_kernel(a, b, c, channel.kernel)
+            # self._lib.write_kernel(a, b, c, channel.kernel)
             self._lib.set_kernel_bias(a, b, c, channel.kernel_bias)
             self._lib.set_threshold(a, c, channel.threshold)
             self._lib.set_threshold_invert(a, c, channel.threshold_invert)
@@ -246,7 +246,7 @@ class X6(Instrument):
         if not isinstance(channel, X6Channel):
             raise TypeError("X6 passed {} rather than an X6Channel object.".format(str(channel)))
 
-        if channel.stream_type not in ['Raw', 'Demodulated', 'Integrated']:
+        if channel.stream_type not in ['raw', 'demodulated', 'integrated']:
             raise ValueError("Stream type of {} not recognized by X6".format(str(channel.stream_type)))
 
         # todo: other checking here
@@ -264,10 +264,10 @@ class X6(Instrument):
         total = 0
 
         for chan, wsock in self._chan_to_wsocket.items():
-            if chan.stream_type == "Integrated":
+            if chan.stream_type == "integrated":
                 length = 1
                 data = 0.5 + 0.1*(np.random.random(length).astype(chan.dtype) + 1j*np.random.random(length).astype(chan.dtype)) + ideal_datapoint
-            elif chan.stream_type == "Demodulated":
+            elif chan.stream_type == "demodulated":
                 length = int(self._lib.record_length/32)
                 data = np.zeros(length, dtype=chan.dtype)
                 data[int(length/4):int(3*length/4)] = 1.0 if ideal_datapoint == 0 else ideal_datapoint

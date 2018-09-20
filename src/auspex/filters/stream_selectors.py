@@ -49,7 +49,7 @@ class X6StreamSelector(Filter):
 
     channel     = IntParameter(value_range=(1,3), snap=1)
     dsp_channel = IntParameter(value_range=(0,4), snap=1)
-    stream_type = Parameter(allowed_values=["Raw", "Demodulated", "Integrated"], default='Demodulated')
+    stream_type = Parameter(allowed_values=["raw", "demodulated", "integrated"], default='demodulated')
 
     # def __init__(self, name=""):
     #     super(X6StreamSelector, self).__init__(name=name)
@@ -64,11 +64,11 @@ class X6StreamSelector(Filter):
         """Get the axis descriptor corresponding to this stream selector. If it's an integrated stream,
         then the time axis has already been eliminated. Otherswise, add the time axis."""
         descrip = DataStreamDescriptor()
-        if channel_proxy.stream_type == 'Raw':
+        if channel_proxy.stream_type == 'raw':
             samp_time = 4.0e-9
             descrip.add_axis(DataAxis("time", samp_time*np.arange(channel_proxy.digitizer.record_length//4)))
             descrip.dtype = np.float64
-        elif channel_proxy.stream_type == 'Demodulated':
+        elif channel_proxy.stream_type == 'demodulated':
             samp_time = 32.0e-9
             descrip.add_axis(DataAxis("time", samp_time*np.arange(channel_proxy.digitizer.record_length//32)))
             descrip.dtype = np.complex128
