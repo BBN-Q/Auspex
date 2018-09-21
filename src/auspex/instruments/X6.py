@@ -163,14 +163,14 @@ class X6(Instrument):
         # Call the non-channel commands
         # super(X6, self).set_all(settings_dict)
         # Set data for testing
-        try:
-            if "ideal_data" in settings_dict.keys():
-                self.ideal_data = np.load(os.path.abspath(settings_dict["ideal_data"]+'.npy'))
-            else:
-                self.ideal_data = None
-        except:
-            logger.warning(f"Could not find ideal data...")
-            self.ideal_data = None
+        # try:
+        #     if "ideal_data" in settings_dict.keys():
+        #         self.ideal_data = np.load(os.path.abspath(settings_dict["ideal_data"]+'.npy'))
+        #     else:
+        #         self.ideal_data = None
+        # except:
+        #     logger.warning(f"Could not find ideal data...")
+        #     self.ideal_data = None
 
 
         # Take these directly from the proxy obj

@@ -104,6 +104,14 @@ class QubitExpFactory(object):
         for var in ["Demodulate","Average","Integrate","Display","Write","Buffer"]:
             inspect.stack()[1][0].f_globals[var] = getattr(bbndb.auspex, var)
 
+        self.ideal_data = {}
+
+    def set_fake_data(self, digitizer, ideal_data):
+        self.ideal_data[digitizer] = ideal_data
+
+    def clear_fake_data(self):
+        self.ideal_data = {}
+
     def create_default_pipeline(self, qubits=None, buffers=False):
         """Look at the QGL channel library and create our pipeline from the current
         qubits."""
@@ -178,6 +186,8 @@ class QubitExpFactory(object):
         exp.digitizers        = digitizers        = list(set([e.receiver_chan.digitizer for e in measurements]))
         exp.sources           = sources           = list(set([q.phys_chan.generator for q in measured_qubits + controlled_qubits + measurements if q.phys_chan.generator]))
 
+        exp.qubits_by_name    = self.qubits_by_name  = {q.label: q for q in measured_qubits + controlled_qubits}
+
         # In case we need to access more detailed foundational information
         exp.factory = self
 
@@ -249,6 +259,10 @@ class QubitExpFactory(object):
             # Add to class dictionary for convenience
             if not hasattr(exp, instrument.label):
                 setattr(exp, instrument.label, instr)
+
+            # Add fake data if necessary
+            if instrument in self.ideal_data.keys():
+                instr.ideal_data = self.ideal_data[instrument]
 
         for mq in measured_qubits:
 
