@@ -257,7 +257,7 @@ class QubitExpFactory(object):
         mce.set_graph(edges)
 
         sweep_offset("I_offset", offset_pts)
-        I1_amps = np.array([x[1] for x in buff.out_queue.get()])
+        I1_amps = np.array([x[1] for x in buff.output_data])
         try:
             I1_offset, xpts, ypts = find_null_offset(offset_pts[1:], I1_amps[1:])
         except:
@@ -270,7 +270,7 @@ class QubitExpFactory(object):
 
         mce.first_exp = False # slight misnomer to indicate that no new plot is needed
         sweep_offset("Q_offset", offset_pts)
-        Q1_amps = np.array([x[1] for x in buff.out_queue.get()])
+        Q1_amps = np.array([x[1] for x in buff.output_data])
         try:
             Q1_offset, xpts, ypts = find_null_offset(offset_pts[1:], Q1_amps[1:])
         except:
@@ -282,7 +282,7 @@ class QubitExpFactory(object):
         mce.Q_offset.value = Q1_offset
 
         sweep_offset("I_offset", offset_pts)
-        I2_amps = np.array([x[1] for x in buff.out_queue.get()])
+        I2_amps = np.array([x[1] for x in buff.output_data])
         try:
             I2_offset, xpts, ypts = find_null_offset(offset_pts[1:], I2_amps[1:])
         except:
@@ -304,7 +304,7 @@ class QubitExpFactory(object):
         mce.sideband_modulation = True
 
         sweep_offset(cals[first_cal], cal_pts[first_cal])
-        amps1 = np.array([x[1] for x in buff.out_queue.get()])
+        amps1 = np.array([x[1] for x in buff.output_data])
         try:
             offset1, xpts, ypts = find_null_offset(cal_pts[first_cal][1:], amps1[1:], default=cal_defaults[first_cal])
         except:

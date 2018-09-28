@@ -62,7 +62,7 @@ if __name__ == '__main__':
 
     # Create a plotter callback
     def plot_me(plot):
-        ys = buff.out_queue.get()['voltage']
+        ys = buff.output_data['voltage']
         xs = buff.descriptor.axes[0].points
         plot["Example Data"] = (xs, ys)
         plot["Example Fit"]  = (xs, ys+0.1)
@@ -73,7 +73,7 @@ if __name__ == '__main__':
     exp.run_sweeps()
 
     # ys = buff.get_data()['voltage']
-    ys = buff.out_queue.get()['voltage']
+    ys = buff.output_data['voltage']
 
     xs = buff.descriptor.axes[0].points
     plt["Example Data"] = (xs, ys)
