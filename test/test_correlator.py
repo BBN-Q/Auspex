@@ -72,7 +72,7 @@ class CorrelatorTestCase(unittest.TestCase):
         exp.run_sweeps()
 
         # corr_data     = buff.get_data()['Correlator']
-        corr_data     = buff.out_queue.get()['corr']
+        corr_data     = buff.output_data['corr']
         expected_data = exp.vals*exp.vals
         self.assertTrue(np.abs(np.sum(corr_data - expected_data)) <= 1e-4)
 
