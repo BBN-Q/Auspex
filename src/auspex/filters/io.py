@@ -124,7 +124,7 @@ class H5Handler(Process):
 
     def process_queue_item(self, args, file):
         if args[0] == "write":
-            # logger.info(f"Writing {args} to {self.filename}")
+            # logger.info(f"Writing len {len(args[4])} to chunk {args[3]-args[3]} in {self.filename}")
             if self.dtype is None:
                 # Sometimes we get a scalar, deal with it by converting to numpy array
                 try:
@@ -171,7 +171,10 @@ class H5Handler(Process):
                     try:
                         self.write_buf[m[2]-begs[0]:m[3]-begs[0]] = m[4]
                     except:
-                        logger.error(f"Write buffer overrun in {self.filename} handler")
+                        logger.warning(f"Write buffer overrun in {self.filename} handler. Trying to reallocate.")
+                        old_buff = self.write_buf
+                        self.write_buf = np.append(self.write_buf, np.zeros(len(m[4])*10000, dtype=self.dtype))
+                        self.write_buf[m[2]-begs[0]:m[3]-begs[0]] = m[4]
                 # print(f"Catting {len(msgs)} msgs")
                 return [('write', msgs[0][1], begs[0], ends[-1], self.write_buf[:ends[-1]-begs[0]])]
         return msgs
