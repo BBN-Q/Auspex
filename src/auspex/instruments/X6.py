@@ -83,13 +83,7 @@ class X6Channel(ReceiverChannel):
         if hasattr(receiver, 'ideal_data') and receiver.ideal_data:
             self.ideal_data = np.load(os.path.abspath(receiver.ideal_data+'.npy'))
         if hasattr(receiver, "kernel") and receiver.kernel:
-            if os.path.exists(os.path.join(config.KernelDir, receiver.kernel+'.txt')):
-                self.kernel = np.loadtxt(os.path.join(config.KernelDir, receiver.kernel+'.txt'), dtype=complex, converters={0: lambda s: complex(s.decode().replace('+-', '-'))})
-            else:
-                try:
-                    self.kernel = eval(receiver.kernel)
-                except:
-                    raise ValueError('Kernel invalid. Provide a file name or an expression to evaluate')
+            self.kernel = receiver.kernel
         if self.stream_type == "integrated":
             self.demod_channel = 0
             self.result_channel = self.dsp_channel
@@ -208,12 +202,11 @@ class X6(Instrument):
         elif channel.stream_type == "demodulated":
             self._lib.set_nco_frequency(a, b, channel.if_freq)
         elif channel.stream_type == "integrated":
+            # import ipdb; ipdb.set_trace()
             if channel.kernel is None:
                 logger.error("Integrated streams must specify a kernel")
                 return
-            # convert to complex128
-            channel.kernel = channel.kernel.astype(complex)
-            # self._lib.write_kernel(a, b, c, channel.kernel)
+            self._lib.write_kernel(a, b, c, channel.kernel)
             self._lib.set_kernel_bias(a, b, c, channel.kernel_bias)
             self._lib.set_threshold(a, c, channel.threshold)
             self._lib.set_threshold_invert(a, c, channel.threshold_invert)
