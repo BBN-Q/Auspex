@@ -115,8 +115,8 @@ class AverageTestCase(unittest.TestCase):
 
         # var_data  = var_buff.get_data()['Variance'].reshape(var_buff.descriptor.data_dims())
         # mean_data = mean_buff.get_data()['chan1'].reshape(mean_buff.descriptor.data_dims())
-        var_data  = var_buff.out_queue.get()['Variance'].reshape(var_buff.descriptor.data_dims())
-        mean_data = mean_buff.out_queue.get()['chan1'].reshape(mean_buff.descriptor.data_dims())
+        var_data  = var_buff.output_data['Variance'].reshape(var_buff.descriptor.data_dims())
+        mean_data = mean_buff.output_data['chan1'].reshape(mean_buff.descriptor.data_dims())
         orig_data = exp.vals.reshape(exp.chan1.descriptor.data_dims())
         self.assertTrue(np.abs(np.sum(mean_data - np.mean(orig_data, axis=0))) <= 1e-3)
         self.assertTrue(np.abs(np.sum(var_data - np.var(orig_data, axis=0, ddof=1))) <= 1e-3)
