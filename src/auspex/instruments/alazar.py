@@ -15,7 +15,7 @@ import datetime, time
 import sys
 import numpy as np
 
-from .instrument import Instrument, DigitizerChannel
+from .instrument import Instrument, ReceiverChannel
 from auspex.log import logger
 import auspex.config as config
 
@@ -51,7 +51,7 @@ else:
         # logger.warning("Could not load alazar library")
         fake_alazar = True
 
-class AlazarChannel(DigitizerChannel):
+class AlazarChannel(ReceiverChannel):
     phys_channel = None
 
     def __init__(self, receiver_channel=None):

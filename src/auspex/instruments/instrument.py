@@ -1,7 +1,4 @@
-# __all__ = ['Command', 'FloatCommand', 'StringCommand', 'IntCommand', 'RampCommand',
-#             'SCPICommand',
-#             'DigitizerChannel',
-__all__ = ['Instrument'] # 'SCPIInstrument', 'CLibInstrument', 'MetaInstrument']
+__all__ = ['Instrument'] 
 
 import numpy as np
 import os
@@ -149,7 +146,7 @@ class SCPIFloatCommand(SCPICommand, FloatCommand): pass
 class SCPIIntCommand(SCPICommand, IntCommand): pass
 class SCPIRampCommand(SCPICommand, RampCommand): pass
 
-class DigitizerChannel(object): pass
+class ReceiverChannel(object): pass
 
 class MetaInstrument(type):
     def __init__(self, name, bases, dct):

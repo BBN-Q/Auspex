@@ -5,7 +5,7 @@ import inspect
 from . import bbn
 import auspex.config
 from auspex.log import logger
-from auspex.instruments.instrument import Instrument, SCPIInstrument, CLibInstrument, DigitizerChannel
+from auspex.instruments.instrument import Instrument, SCPIInstrument, CLibInstrument, ReceiverChannel
 
 __all__  = ['InstrumentFactory']
 

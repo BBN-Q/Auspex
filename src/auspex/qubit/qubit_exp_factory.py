@@ -106,8 +106,8 @@ class QubitExpFactory(object):
 
         self.ideal_data = {}
 
-    def set_fake_data(self, digitizer, ideal_data):
-        self.ideal_data[digitizer] = ideal_data
+    def set_fake_data(self, receiver, ideal_data):
+        self.ideal_data[receiver] = ideal_data
 
     def clear_fake_data(self):
         self.ideal_data = {}
@@ -132,12 +132,12 @@ class QubitExpFactory(object):
 
         # Build a mapping of qubits to receivers, construct qubit proxies
         receivers_by_qubit = {cdb.channels.filter(lambda x: x.label == e.label[2:]).first(): e.receiver_chan for e in measurements}
-        stream_info_by_qubit = {q.label: r.digitizer.stream_types for q,r in receivers_by_qubit.items()}
+        stream_info_by_qubit = {q.label: r.receiver.stream_types for q,r in receivers_by_qubit.items()}
 
         # Set the proper stream types
         for q, r in receivers_by_qubit.items():
             qp = self.qubit_proxies[q.id]
-            qp.available_streams = [st.strip() for st in r.digitizer.stream_types.split(",")]
+            qp.available_streams = [st.strip() for st in r.receiver.stream_types.split(",")]
             qp.stream_type = qp.available_streams[-1]
 
         # generate the pipeline automatically
@@ -170,8 +170,9 @@ class QubitExpFactory(object):
         exp.channelDatabase = channelDatabase  = bbndb.qgl.ChannelDatabase[library_id]
         all_channels        = list(channelDatabase.channels)
         all_sources         = list(channelDatabase.sources)
-        all_awgs            = list(channelDatabase.awgs)
-        all_digitizers      = list(channelDatabase.digitizers)
+        all_transmitters    = list(channelDatabase.transmitters)
+        all_receivers       = list(channelDatabase.receivers)
+        all_transceivers    = list(channelDatabase.transceivers)
         all_qubits          = [c for c in all_channels if isinstance(c, bbndb.qgl.Qubit)]
         all_measurements    = [c for c in all_channels if isinstance(c, bbndb.qgl.Measurement)]
 
@@ -181,9 +182,9 @@ class QubitExpFactory(object):
         exp.measurements      = measurements      = list(channelDatabase.channels.filter(lambda x: x.label in meta_info["measurements"]))
         exp.measured_qubits   = measured_qubits   = list(channelDatabase.channels.filter(lambda x: "M-"+x.label in meta_info["measurements"]))
         exp.phys_chans        = phys_chans        = list(set([e.phys_chan for e in controlled_qubits + measurements]))
-        exp.awgs              = awgs              = list(set([e.phys_chan.awg for e in controlled_qubits + measurements]))
-        exp.receivers         = receivers         = list(set([e.receiver_chan for e in measurements]))
-        exp.digitizers        = digitizers        = list(set([e.receiver_chan.digitizer for e in measurements]))
+        exp.transmitters      = transmitters      = list(set([e.phys_chan.transmitter for e in controlled_qubits + measurements]))
+        exp.receiver_chans    = receiver_chans    = list(set([e.receiver_chan for e in measurements]))
+        exp.receivers         = receivers         = list(set([e.receiver_chan.receiver for e in measurements]))
         exp.sources           = sources           = list(set([q.phys_chan.generator for q in measured_qubits + controlled_qubits + measurements if q.phys_chan.generator]))
 
         exp.qubits_by_name    = self.qubits_by_name  = {q.label: q for q in measured_qubits + controlled_qubits}
@@ -196,7 +197,7 @@ class QubitExpFactory(object):
             self.create_default_pipeline(measured_qubits)
 
         # Add the waveform file info to the qubits
-        for awg in awgs:
+        for awg in transmitters:
             awg.sequence_file = meta_info['instruments'][awg.label]
 
         # Construct the DataAxis from the meta_info
@@ -244,9 +245,9 @@ class QubitExpFactory(object):
         exp.qubit_to_dig     = {}
         exp.qubits_by_output = {}
 
-        # Create microwave sources and digitizer instruments from the database objects.
-        # We configure the digitizers later after adding channels.
-        exp.instrument_proxies = sources + digitizers + awgs
+        # Create microwave sources and receiver instruments from the database objects.
+        # We configure the receivers later after adding channels.
+        exp.instrument_proxies = sources + receivers + transmitters
         exp.instruments = []
         for instrument in exp.instrument_proxies:
             instr = self.instrument_map[instrument.model](instrument.address, instrument.label) # Instantiate
@@ -268,7 +269,7 @@ class QubitExpFactory(object):
 
             # Create the stream selectors
             rcv = receivers_by_qubit[mq.id]
-            dig = rcv.digitizer
+            dig = rcv.receiver
             stream_sel = self.stream_sel_map[dig.model](name=rcv.label+'-SS')
             stream_sel.configure_with_proxy(rcv)
             stream_sel.receiver = stream_sel.proxy = rcv
@@ -302,12 +303,12 @@ class QubitExpFactory(object):
             exp.qubit_to_dig[mq.id]  = dig
 
         # Find the number of measurements
-        segments_per_dig = {receiver.digitizer: meta_info["receivers"][receiver.label] for receiver in receivers
+        segments_per_dig = {receiver_chan.receiver: meta_info["receivers"][receiver.label] for receiver_chan in receiver_chans
                                                          if receiver.label in meta_info["receivers"].keys()}
 
-        # Configure digitizer instruments from the database objects
+        # Configure receiver instruments from the database objects
         # this must be done after adding channels.
-        for dig in digitizers:
+        for dig in receivers:
             dig.number_averages  = averages
             dig.number_waveforms = 1
             dig.number_segments  = segments_per_dig[dig]

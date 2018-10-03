@@ -19,7 +19,7 @@ import sys
 
 from auspex.log import logger
 import auspex.config as config
-from .instrument import Instrument, DigitizerChannel
+from .instrument import Instrument, ReceiverChannel
 from unittest.mock import MagicMock
 
 from multiprocessing import Value
@@ -52,7 +52,7 @@ else:
         logger.info("using fake x6")
         fake_x6 = True
 
-class X6Channel(DigitizerChannel):
+class X6Channel(ReceiverChannel):
     """Channel for an X6"""
 
     def __init__(self, receiver_channel=None):
@@ -72,6 +72,7 @@ class X6Channel(DigitizerChannel):
 
         if receiver_channel:
             self.set_by_receiver(receiver_channel)
+            self.receiver_channel = receiver_channel
 
     def set_by_receiver(self, receiver):
         for name in ["stream_type", "kernel_bias", "threshold", "threshold_invert"]:
