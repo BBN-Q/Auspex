@@ -80,7 +80,7 @@ class VisaInterface(Interface):
         return self._resource.query("*TST?") # Self-Test Query
     def WAI(self):
         self._resource.write("*WAI") # Wait-to-Continue Command
-        
+
 class PrologixInterface(VisaInterface):
     """Prologix-Ethernet interface for communicating with remote GPIB instruments."""
     def __init__(self, resource_name):
