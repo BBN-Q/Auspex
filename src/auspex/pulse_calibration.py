@@ -507,11 +507,11 @@ class CRAmpCalibration_PhEst(PhaseEstimation):
         self.edge_name = self.CRchan.label
 
 class DRAGCalibration(PulseCalibration):
-    def __init__(self, qubit_name, deltas = np.linspace(-1,1,21), num_pulses = np.arange(8, 48, 4)):
+    def __init__(self, qubit_name, deltas = np.linspace(-1,1,21), num_pulses = np.arange(8, 48, 4), **kwargs):
         self.filename = 'DRAG/DRAG'
         self.deltas = deltas
         self.num_pulses = num_pulses
-        super(DRAGCalibration, self).__init__(qubit_name)
+        super(DRAGCalibration, self).__init__(qubit_name, **kwargs)
 
     def sequence(self):
         seqs = []
