@@ -39,6 +39,16 @@ ConfigurationFile = None
 KernelDir         = None
 LogDir            = None
 
+# ----- No Holzworth warning Start...
+# Added the followiing 25 Oct 2018 to test Instrument metaclass load introspection
+# minimization (during import) which, with holzworth.py module deltas in-turn,
+# bars holzworth warnings
+#
+# Just set the initial defaults
+# (rather than fancy try/(catch) except detection logic):
+tgtInstrumentClass      = None
+bEchoInstrumentMetaInit = False
+# ----- No Holzworth warning Stop.
 
 def find_meas_file():
     global meas_file

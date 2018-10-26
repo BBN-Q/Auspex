@@ -101,26 +101,68 @@ class HolzworthPythonDriver(object):
         if channel not in self.devices[serial].channels:
             ValueError("Holzworth {} does not have channel {}".format(serial, channel))
 
+#----- ST-15 note:  Defined/indented here as a stand-alone block, this segment
+# fires ONCE upon module load (even for simple import reference); as such
+# this is what has been spawning the "No Holzworths" warning -- this would
+# occur (originally) as the module loaded for MetaClass introspection/validation.
+#
 if config.auspex_dummy_mode:
     fake_holz = True
     holzworth_driver = MagicMock()
 else:
     fake_holz = False
+
+    # ----- ST-15 delta start...
+    # Added optional logic to exclude/skip HolzworthPythonDriver load when
+    # config.tgtInstrumentClass defined and indicates one of the Holzworth
+    # instrument class definitions.
+    #
+    # logger.debug( "Pre MSG -- os.name: {%s}", os.name)
+    #
+    bSkipHWDriverLoad = False
+    if not (None == config.tgtInstrumentClass):
+        #
+        szTgtSubKey = "holzworth"
+        if -1 == config.tgtInstrumentClass.lower().find( szTgtSubKey):
+            # No match
+            logger.debug( "Aborting HWDriver load << szTgtSubKey {%s} ! in {%s} tgtInstrumentClass\n\r",
+                szTgtSubKey, config.tgtInstrumentClass)
+            bSkipHWDriverLoad = True
+        else:
+            # Matched
+            logger.info( "Continuing HWDriver load << szTgtSubKey {%s} in {%s} tgtInstrumentClass...",
+                szTgtSubKey, config.tgtInstrumentClass)
+            # Skip driver load remains false
+    # ----- ST-15 delta stop.
+
     if os.name == "posix":
-        try:
-            holzworth_driver = HolzworthPythonDriver()
-            logger.debug("Using Holzworth pure-python driver.")
-        except Exception as e:
-            logger.warning("Could not connect to Holzworths: {}".format(e))
-            if str(e) == "No backend available":
-                logger.warning("You may not have the libusb backend: please install it!")
-            holzworth_driver = MagicMock()
-            fake_holz = True
+        #
+        # ----- ST-15 delta start...
+        if bSkipHWDriverLoad:
+            logger.debug( "HolzworthPythonDriver load skipped << ST-15 Delta.")
+        else:
+            # ----- ST-15 delta stop.
+            # Original block indented to suit bSkipHWDriverLoad use-case:
+            try:
+                holzworth_driver = HolzworthPythonDriver()
+                logger.debug("Using Holzworth pure-python driver.")
+            except Exception as e:
+                logger.warning("Could not connect to Holzworths: {}".format(e))
+                if str(e) == "No backend available":
+                    logger.warning("You may not have the libusb backend: please install it!")
+                holzworth_driver = MagicMock()
+                fake_holz = True
     else:
         logger.debug("Using Holzworth DLL driver.")
 
 class MakeSettersGetters(MetaInstrument):
     def __init__(self, name, bases, dct):
+
+        # ---- ST-15 additional config.tgtInstrumentClass originally explored
+        # here; initally proved irrelevant and excluded
+        # (due to static block delta, above)
+        # ----- TJR, 26 Oct 2018
+
         super(MakeSettersGetters, self).__init__(name, bases, dct)
 
         for k,v in dct.items():
@@ -135,6 +177,11 @@ class HolzworthInstrument(Instrument, metaclass=MakeSettersGetters):
     def __init__(self, resource_name=None, name="Unlabeled Generic Holzworth Instrument"):
         self.name = name
         self.resource_name = resource_name
+
+        # ---- ST-15 additional config.tgtInstrumentClass originally explored
+        # here; initally proved irrelevant and excluded
+        # (due to static block delta, above)
+        # ----- TJR, 26 Oct 2018
 
     def get_info(self):
         # read frequency and power ranges

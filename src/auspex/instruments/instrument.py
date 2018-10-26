@@ -12,6 +12,13 @@ from unittest.mock import MagicMock
 from auspex.log import logger
 from .interface import Interface, VisaInterface, PrologixInterface
 
+# ----- 25 Oct 2018 -- Added config import for ST-15 delta support
+# config mods include optional parameters to help constrain import prompted
+# MetaClass introspection.  This, in-turn, can help reduce irrelvant
+# boot-up warnings (such as the "No Holzworths" warning).
+#
+from auspex import config
+
 #Helper function to check for IPv4 address
 #See http://stackoverflow.com/a/11264379
 def is_valid_ipv4(ipv4_address):
@@ -153,6 +160,36 @@ class DigitizerChannel(object): pass
 
 class MetaInstrument(type):
     def __init__(self, name, bases, dct):
+
+        # ----- 25 Oct 2018 -- ST-15 delta start...
+        # defined as the Instrument metaclass, this logic
+        # fires upon module load (prompted by mearly an unused import statement)
+        # regardless of use; moreover, it iterates thru ALL Instrument sub-class
+        # definitions.  Thus prompts the holzworth module warnings even where
+        # such a specific reference is NOT in use -- TJR
+        # (deeper still the HW warning occurs due to in essence a static block
+        # load where the class gets validated thru this process).
+        #
+        if not (None == config.tgtInstrumentClass):
+            # tgtInstrumentClass defined
+            if not (name == config.tgtInstrumentClass):
+                # No match
+                logger.debug( "Skipping MI.__init__ << name {%s} != {%s} tgtInstrumentClass\n\r", name, config.tgtInstrumentClass)
+                return None
+            else:
+                # Matched
+                logger.info( "Continuing MI.__init__ << {%s} == name == tgtInstrumentClass 8-)", name)
+
+        # else it's NOT set, let the original logic engage
+        # (No behavior changes)
+
+        if config.bEchoInstrumentMetaInit:
+            # Optionally paint the Instrument metaclass _init_ Parameters
+            logger.info( "$$$ MI.__init__ (name, bases, dct):"
+               "\n\r   -- name:{%s}\n\r   -- bases:{%s}\n\r   -- dct:{%s}\n\r", name, bases, dct)
+
+        # ----- 25 Oct 2018 -- ST-15 delta stop.
+
         type.__init__(self, name, bases, dct)
 
         # What sort of instrument are we?
