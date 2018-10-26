@@ -17,6 +17,23 @@ import numpy as np
 import h5py
 import matplotlib.pyplot as plt
 
+# ----- No Holzworth warning Start...
+# Added the followiing 26 Oct 2018 to test Instrument metaclass load introspection
+# minimization (during import) which, with holzworth.py module deltas in-turn,
+# bars holzworth warnings
+#
+from auspex import config
+
+# Optionally force an extra arg into config on-the-fly -- cite the target
+# instrument class (the name string, case matters):
+config.tgtInstrumentClass       = "TestInstrument"
+
+# Show the Instrument MetaClass __init__ arguments
+#
+config.bEchoInstrumentMetaInit  = True
+#
+# ----- No Holzworth warning Stop.
+
 from auspex.experiment import Experiment, FloatParameter
 from auspex.stream import OutputConnector, DataStreamDescriptor
 from auspex.filters.plot import Plotter, ManualPlotter
