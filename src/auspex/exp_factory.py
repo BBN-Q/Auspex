@@ -831,9 +831,21 @@ class QubitExpFactory(object):
                     descrip.add_axis(DataAxis("segments", range(source_instr_settings['nbr_segments'])))
 
             # Digitizer mode preserves round_robins, averager mode collapsing along them:
-            if 'acquire_mode' not in source_instr_settings.keys() or source_instr_settings['acquire_mode'] == 'digitizer':
+            acq_mode_instr = 'digitizer'
+            acq_mode_chan = 'digitizer'
+            if 'acquire_mode' in source_instr_settings.keys():
+                acq_mode_instr = source_instr_settings['acquire_mode']
+            if settings['channel'] in source_instr_settings['rx_channels'].keys():
+                chan_settings = source_instr_settings['rx_channels'][settings['channel']]
+                if 'acquire_mode' in chan_settings.keys():
+                    acq_mode_chan = chan_settings['acquire_mode']
+
+            if acq_mode_instr == 'digitizer' and acq_mode_chan == 'digitizer':
                 if source_instr_settings['nbr_round_robins'] > 1:
                     descrip.add_axis(DataAxis("round_robins", range(source_instr_settings['nbr_round_robins'])))
+            elif acq_mode_instr == 'averager' or acq_mode_chan == 'averager':
+                descrip.add_axis(DataAxis("round_robins", range(1)))
+                logger.warning("'%s' HW averaging enabled, added singleton axis", name)
 
             oc.set_descriptor(descrip)
 
