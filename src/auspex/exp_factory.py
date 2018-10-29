@@ -834,7 +834,7 @@ class QubitExpFactory(object):
                     descrip.add_axis(DataAxis("round_robins", range(source_instr_settings['nbr_round_robins'])))
             elif acq_mode_instr == 'averager' or acq_mode_chan == 'averager':
                 descrip.add_axis(DataAxis("round_robins", range(1)))
-                logger.warning("'%s' HW averaging enabled, added singleton axis", channel)
+                logger.warning("'%s' HW averaging enabled, added singleton axis", name)
 
             oc.set_descriptor(descrip)
 
