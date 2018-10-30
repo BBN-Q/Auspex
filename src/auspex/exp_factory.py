@@ -492,18 +492,15 @@ class QubitExpFactory(object):
             # Trace back our ancestors, using plotters if no writers are available
             if writers:
                 writer_ancestors = set().union(*[nx.ancestors(dag, wr) for wr in writers])
-                # We will have gotten the digitizer, which should be removed since we're already taking care of it
-                writer_ancestors.remove(dig_name)
             if plotters:
                 plotter_ancestors = set().union(*[nx.ancestors(dag, pl) for pl in plotters])
-                plotter_ancestors.remove(dig_name)
             if singleshot:
                 singleshot_ancestors = set().union(*[nx.ancestors(dag, ss) for ss in singleshot])
-                singleshot_ancestors.remove(dig_name)
             if buffers:
                 buffer_ancestors = set().union(*[nx.ancestors(dag, bf) for bf in buffers])
-                buffer_ancestors.remove(dig_name)
             filt_to_enable.update(set().union(writer_ancestors, plotter_ancestors, singleshot_ancestors, buffer_ancestors))
+            # remove all the digitizers, which are already taken care of
+            filt_to_enable.difference_update([f for f in filt_to_enable if dag.in_degree()[f] == 0])
 
         if calibration:
             # One to one writers to qubits
@@ -533,12 +530,15 @@ class QubitExpFactory(object):
             if filters[meas_name]["type"] == "WriteToHDF5":
                 filters[meas_name]['groupname'] = ''.join(writer_to_qubit[meas_name]) \
                     + "-" + filters[meas_name]['groupname']
-
+        extra_meta = 'extra_meta' in meta_info
         for instr_name, chan_data in meta_info['instruments'].items():
             instruments[instr_name]['enabled']  = True
             if isinstance(chan_data, str):
                 instruments[instr_name]['seq_file'] = chan_data # Per-instrument seq file
+                if extra_meta and instr_name in meta_info['extra_meta']:
+                    instruments[instr_name]['extra_meta'] = meta_info['extra_meta']
             elif isinstance(chan_data, dict):
+                chanMeta = {}
                 for chan_name, seq_file in chan_data.items():
                     if "tx_channels" in instruments[instr_name] and chan_name in instruments[instr_name]["tx_channels"].keys():
                         instruments[instr_name]["tx_channels"][chan_name]['seq_file'] = seq_file
@@ -546,6 +546,10 @@ class QubitExpFactory(object):
                         instruments[instr_name]["rx_channels"][chan_name]['seq_file'] = seq_file
                     else:
                         raise ValueError("Could not find channel {} in of instrument {}.".format(chan_name, instr_name))
+                    fullChanName = instr_name + "-" + chan_name
+                    if extra_meta and fullChanName in meta_info['extra_meta']:
+                        chanMeta[chan_name] = meta_info['extra_meta'][fullChanName]
+                instruments[instr_name]['extra_meta'] = chanMeta
 
         # Now we will construct the DataAxis from the meta_info
         desc = meta_info["axis_descriptor"]
@@ -689,9 +693,13 @@ class QubitExpFactory(object):
                 if target_info[0] in channels:
                     # We are sweeping a qubit, so we must lookup the instrument
                     target = par["target"].split()
+                    qubit = ""
                     if target_info[0] in experiment.qubits:
                         name, meas_or_control, prop = target[:3]
                         isqubit = True
+                        qubit = name
+                        if meas_or_control == "measure":
+                            qubit = "M-"+qubit
                     else:
                         name, prop = target[:2]
                         isqubit = False
@@ -712,9 +720,9 @@ class QubitExpFactory(object):
                             chan = chan[int(ch_ind)-1]
                         instr = experiment._instruments[name]
 
-                        def method(value, channel=chan, instr=instr, prop=prop.lower()):
+                        def method(value, channel=chan, instr=instr,qubit=qubit, prop=prop.lower()):
                             # e.g. keysight.set_amplitude("ch1", 0.5)
-                            getattr(instr, "set_"+prop)(chan, value)
+                            getattr(instr, "set_"+prop)(chan, value, qubit)
 
                 elif target_info[0] in experiment._instruments:
                     # We are sweeping an instrument directly
@@ -823,9 +831,21 @@ class QubitExpFactory(object):
                     descrip.add_axis(DataAxis("segments", range(source_instr_settings['nbr_segments'])))
 
             # Digitizer mode preserves round_robins, averager mode collapsing along them:
-            if 'acquire_mode' not in source_instr_settings.keys() or source_instr_settings['acquire_mode'] == 'digitizer':
+            acq_mode_instr = 'digitizer'
+            acq_mode_chan = 'digitizer'
+            if 'acquire_mode' in source_instr_settings.keys():
+                acq_mode_instr = source_instr_settings['acquire_mode']
+            if settings['channel'] in source_instr_settings['rx_channels'].keys():
+                chan_settings = source_instr_settings['rx_channels'][settings['channel']]
+                if 'acquire_mode' in chan_settings.keys():
+                    acq_mode_chan = chan_settings['acquire_mode']
+
+            if acq_mode_instr == 'digitizer' and acq_mode_chan == 'digitizer':
                 if source_instr_settings['nbr_round_robins'] > 1:
                     descrip.add_axis(DataAxis("round_robins", range(source_instr_settings['nbr_round_robins'])))
+            elif acq_mode_instr == 'averager' or acq_mode_chan == 'averager':
+                descrip.add_axis(DataAxis("round_robins", range(1)))
+                logger.warning("'%s' HW averaging enabled, added singleton axis", name)
 
             oc.set_descriptor(descrip)
 
