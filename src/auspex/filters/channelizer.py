@@ -25,6 +25,17 @@ from auspex.log import logger
 tgtLibName          = "libchannelizer"
 libchannelizer_path = None
 
+# Common no-load warning text, cited in two places.
+#
+szNoLoadWarningBase = "Could not load (Intel dependent) IPP channelizer library!"               \
+    "\n\r   << Process will continue with fall-back Python IPP channelizer methods...\n\r"      \
+    "\n\r   Note:  Accelerated IPP function processing depends on Intel IPP channelizer logic"  \
+    "\n\r      IPP library load exception details include:"                                     \
+    "\n\r         %s: \"%s\""                                                                   \
+    "\n\r            << load_library( \"%s\", libchannelizer_path) call failed!"                \
+    "\n\r            -- libchannelizer_path:"                                                   \
+    "\n\r               %s\n\r"
+
 try:
     # load libchannelizer to access Intel IPP filtering functions
     import numpy.ctypeslib as npct
@@ -58,14 +69,16 @@ try:
     #
 except OSError as e :
     # Pulled in actual error text for greater transparancy
-    logger.warning( "Could not load channelizer library!"
-        "\n\r   (falling back to python channelizer methods)"
-        "\n\r   -- Error details include:"
-        "\n\r      << load_library( \"%s\", libchannelizer_path) call failed!"
-        "\n\r         << EEE: \"%s\""
-        "\n\r      << Target libchannelizer_path:"
-        "\n\r%s\n\r",
-        tgtLibName, e, libchannelizer_path)
+    logger.info( szNoLoadWarningBase, "OSError",
+        e, tgtLibName, libchannelizer_path)
+
+    load_fallback = True
+
+except Error as e:
+    # Pulled in actual error text for greater transparancy
+    # For NON OSError citations (should that occur)
+    logger.info( szNoLoadWarningBase, "(generic) Error",
+        e, tgtLibName, libchannelizer_path)
 
     load_fallback = True
 
