@@ -126,7 +126,7 @@ else:
     # the function returns true and thus the new logic avoids loading the
     # driver...
     #
-    bSkipHWDriverLoad =
+    bSkipHWDriverLoad = \
         config.disjointNameRefz( "Holzworth",
                                  acceptClassRefz=config.tgtInstrumentClass,
                                  bEchoDetails=config.bEchoInstrumentMetaInit,

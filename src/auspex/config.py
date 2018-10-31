@@ -282,7 +282,7 @@ def disjointNameRefz (tgtBaseClName, acceptClassRefz=None, bEchoDetails=False, s
             # One answer to deal with; yes or no.
             if -1 == acceptClassRefz.lower().find( szTgtSubKey):
                 # No match
-                logger.info( (szSE_MsgMask + "\n\r"), "Skipping",
+                logger.debug( (szSE_MsgMask + "\n\r"), "Skipping",
                     szLogLabel, szTgtSubKey, "NOT", acceptClassRefz)
                 bDisjointForRefz = True
             else:
@@ -301,7 +301,7 @@ def disjointNameRefz (tgtBaseClName, acceptClassRefz=None, bEchoDetails=False, s
                 for currAcceptClName in acceptClassRefz:
                     if -1 == currAcceptClName.lower().find( szTgtSubKey):
                         # No match
-                        logger.info( szME_MsgMask,
+                        logger.debug( szME_MsgMask,
                             nIndex, nCount, "NoMatch", szTgtSubKey, "NOT", currAcceptClName, acceptedRefzType)
                     else:
                         # Matched
@@ -315,7 +315,7 @@ def disjointNameRefz (tgtBaseClName, acceptClassRefz=None, bEchoDetails=False, s
                 bDisjointForRefz = not bMatched
 
                 if bDisjointForRefz:
-                    logger.info( "Skipping %s;  %s << bDisjointForRefz\n\r",
+                    logger.debug( "Skipping %s;  %s << bDisjointForRefz\n\r",
                         szLogLabel, bDisjointForRefz)
                 else:
                     logger.info( "Continuing %s;  %s << bDisjointForRefz",
