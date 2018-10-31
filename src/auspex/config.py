@@ -165,3 +165,168 @@ def dump_meas_file(data, filename = "", flatten=False):
         ret_string = out.getvalue()
         out.close()
         return ret_string
+
+# Generalized MetaClass constraint processing, 30 Oct 2018 -- work-in-progress
+#
+from auspex.log import logger
+
+
+__szSMI_LogTextPrefix="%s <currClName> '%s' %s.__init__(...)\n\r   << "
+
+# TODO - should I rename this filterMetaInit >> true : skip it, false : keep it
+#
+def skipMetaInit (currClName, currClBases, currClDict, acceptClassRefz=None, bEchoDetails=False, szLogLabel="Meta?"):
+    """
+    Where acceptClassRefz is defined,
+    determines equivalence/membership of currClName value with respect to
+    the acceptClassRefz {string, list, set} object.
+    Logic generalized here to support numerous MetaClass initialization
+    constraint analysis/usage.
+    """
+    if None == currClName:
+        raise Exception( "Bogus currClName [%s] cited!", currClName)
+
+    if None == currClBases:
+        raise Exception( "Bogus currClBases [%s] cited!", currClBases)
+
+    if None == currClDict:
+        raise Exception( "Bogus currClDict [%s] cited!", currClDict)
+
+    bSkipMInit = False
+
+    if not (None == acceptClassRefz):
+        # acceptClassRefz defined
+        #
+        acceptedRefzType = type( acceptClassRefz)
+
+        if str == acceptedRefzType:
+            # Process acceptedRefzType as a single string value
+            if not (currClName == acceptClassRefz):
+                # No Match
+                logger.debug( __szSMI_LogTextPrefix +
+                    "!= '%s' <acceptClassRefz> %s\n\r",
+                    "Skipping", currClName, szLogLabel, acceptClassRefz, acceptedRefzType)
+                bSkipMInit = True
+            else:
+                # Matched
+                logger.info( __szSMI_LogTextPrefix +
+                    "== <acceptClassRefz> %s 8-)\n\r",
+                    "Continuing", currClName, szLogLabel, acceptedRefzType)
+        else:
+            if list == acceptedRefzType or set == acceptedRefzType:
+                # Process as a multi-entry list ['A', 'B'] or set {'A', 'B'}
+                if not (currClName in acceptClassRefz):
+                    # No match
+                    logger.debug( __szSMI_LogTextPrefix +
+                        "currClName is NOT an acceptClassRefz element:"  \
+                        "\n\r      %s::%s\n\r",
+                        "Skipping", currClName, szLogLabel, acceptedRefzType, acceptClassRefz)
+                    bSkipMInit = True
+                else:
+                    # Matched
+                    logger.info( __szSMI_LogTextPrefix +
+                        "currClName is an element of acceptClassRefz:" \
+                        "\n\r      %s::%s 8-)\n\r",
+                        "Continuing", currClName, szLogLabel, acceptedRefzType, acceptClassRefz)
+            #
+            else:
+                raise Exception( "Unhandled acceptedRefzType: {} cited!".format( acceptedRefzType))
+
+    # else acceptClassRefz NOT defined; default behavior (no skip) applies
+
+    if bEchoDetails and not bSkipMInit:
+        # Optionally paint the Instrument metaclass _init_ Parameters
+        logger.info( "%s %s.__init__( currClName, currClBases, currClDict):" \
+           "\n\r   --  currClName: %s" \
+           "\n\r   -- currClBases: %s" \
+           "\n\r   --  currClDict: %s\n\r",
+           "++", szLogLabel, currClName, currClBases, currClDict)
+
+    return bSkipMInit
+
+#----- end skipMetaInit function definition.
+
+
+#--- generalize logic that looks for a lower case sub-set reference against
+# a given str, list, set acceptClassRefz
+
+def disjointNameRefz (tgtBaseClName, acceptClassRefz=None, bEchoDetails=False, szLogLabel="DisJ?"):
+    """
+    Where acceptClassRefz is defined,
+    determines whether the tgtBaseClName is disjoint from the one or more
+    acceptClassRefz {string, list, set} object value[s].  More precisely,
+    determines if (lower-case) tgtBaseClName is a substring of the
+    (lowercase) acceptClassRefz elements.
+    Logic generalized here to support numerous MetaClass initialization
+    constraint analysis/usage.
+    """
+    if None == tgtBaseClName:
+        raise Exception( "Bogus tgtBaseClName [%s] cited!", tgtBaseClName)
+
+    bDisjointForRefz = False
+
+    szTgtSubKey = tgtBaseClName.lower()
+
+    if not (None == acceptClassRefz):
+        # acceptClassRefz defined
+        #
+        acceptedRefzType = type( acceptClassRefz)
+
+        szSE_MsgMask = "%s %s." \
+            "\n\r   << <szTgtSubKey> '%s' %s '%s' <acceptClassRefz> [lc] substring."
+
+        szME_MsgMask = "%u/%u: %s << <szTgtSubKey> '%s' %s '%s' <currAcceptClName> %s element substring.\n\r"
+
+        if str == acceptedRefzType:
+            # Process acceptedRefzType as a single string value
+            # One answer to deal with; yes or no.
+            if -1 == acceptClassRefz.lower().find( szTgtSubKey):
+                # No match
+                logger.info( (szSE_MsgMask + "\n\r"), "Skipping",
+                    szLogLabel, szTgtSubKey, "NOT", acceptClassRefz)
+                bDisjointForRefz = True
+            else:
+                # Matched
+                logger.info( szSE_MsgMask, "Continuing",
+                    szLogLabel, szTgtSubKey, "noted as", acceptClassRefz)
+                # bDisjointForRefz remains false
+
+        else:
+            if list == acceptedRefzType or set == acceptedRefzType:
+                # Process as a multi-entry list ['A', 'B'] or set {'A', 'B'}
+                # Multiple possibilities; return false on first match
+                nIndex = 1;
+                nCount = len( acceptClassRefz)
+                bMatched = False
+                for currAcceptClName in acceptClassRefz:
+                    if -1 == currAcceptClName.lower().find( szTgtSubKey):
+                        # No match
+                        logger.info( szME_MsgMask,
+                            nIndex, nCount, "NoMatch", szTgtSubKey, "NOT", currAcceptClName, acceptedRefzType)
+                    else:
+                        # Matched
+                        logger.info( szME_MsgMask,
+                            nIndex, nCount, "Matched", szTgtSubKey, "noted as", currAcceptClName, acceptedRefzType)
+                        bMarched = True
+                        break
+                    nIndex += 1
+                # end for all acceptClassRefz elements
+
+                bDisjointForRefz = not bMatched
+
+                if bDisjointForRefz:
+                    logger.info( "Skipping %s;  %s << bDisjointForRefz\n\r",
+                        szLogLabel, bDisjointForRefz)
+                else:
+                    logger.info( "Continuing %s;  %s << bDisjointForRefz",
+                        szLogLabel, bDisjointForRefz)
+                #
+            else:
+                raise Exception( "Unhandled acceptedRefzType: {} cited!".format( acceptedRefzType))
+
+    # else acceptClassRefz NOT defined; default behavior; disjointness not
+    # determinte -- no skip applies
+
+    return bDisjointForRefz
+
+#----- end disjointNameRefz function definition.

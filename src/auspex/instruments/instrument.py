@@ -170,23 +170,21 @@ class MetaInstrument(type):
         # (deeper still the HW warning occurs due to in essence a static block
         # load where the class gets validated thru this process).
         #
-        if not (None == config.tgtInstrumentClass):
-            # tgtInstrumentClass defined
-            if not (name == config.tgtInstrumentClass):
-                # No match
-                logger.debug( "Skipping MI.__init__ << name {%s} != {%s} tgtInstrumentClass\n\r", name, config.tgtInstrumentClass)
-                return None
-            else:
-                # Matched
-                logger.info( "Continuing MI.__init__ << {%s} == name == tgtInstrumentClass 8-)", name)
-
-        # else it's NOT set, let the original logic engage
+        # 30 Oct -- generalized such logic as config.skipMetaInit function.
+        #
+        # 31 Oct -- Embelished such that where tgtInstrumentClass defined,
+        # this function limits the meta class stub instantiation to only those
+        # cited;  where tgtInstrumentClass NOT defined -- all logic fires as
+        # before (with no boot-up behavior changes produced)
+        #
+        if config.skipMetaInit( name, bases, dct,
+                                acceptClassRefz = config.tgtInstrumentClass,
+                                bEchoDetails    = config.bEchoInstrumentMetaInit,
+                                szLogLabel      = "MetaI"):
+            #
+            return None
+        # else continue __init__ logic as normal
         # (No behavior changes)
-
-        if config.bEchoInstrumentMetaInit:
-            # Optionally paint the Instrument metaclass _init_ Parameters
-            logger.info( "$$$ MI.__init__ (name, bases, dct):"
-               "\n\r   -- name:{%s}\n\r   -- bases:{%s}\n\r   -- dct:{%s}\n\r", name, bases, dct)
 
         # ----- 25 Oct 2018 -- ST-15 delta stop.
 

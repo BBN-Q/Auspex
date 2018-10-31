@@ -117,22 +117,23 @@ else:
     # config.tgtInstrumentClass defined and indicates one of the Holzworth
     # instrument class definitions.
     #
+    # 31 Oct Generalized & enhanced previous logic as disjointNameRefz function
+    #
+    # Where config.tgtInstrumentClass defined, this function looks to see if
+    # any of the class name references (compared as lower case) contain
+    # the target key string (in this case, Holzworth).  If key is not Found
+    # in the class set (or config.tgtInstrumentClass defined is NOT defined),
+    # the function returns true and thus the new logic avoids loading the
+    # driver...
+    #
+    bSkipHWDriverLoad =
+        config.disjointNameRefz( "Holzworth",
+                                 acceptClassRefz=config.tgtInstrumentClass,
+                                 bEchoDetails=config.bEchoInstrumentMetaInit,
+                                 szLogLabel="HW driver load")
+
     # logger.debug( "Pre MSG -- os.name: {%s}", os.name)
     #
-    bSkipHWDriverLoad = False
-    if not (None == config.tgtInstrumentClass):
-        #
-        szTgtSubKey = "holzworth"
-        if -1 == config.tgtInstrumentClass.lower().find( szTgtSubKey):
-            # No match
-            logger.debug( "Aborting HWDriver load << szTgtSubKey {%s} ! in {%s} tgtInstrumentClass\n\r",
-                szTgtSubKey, config.tgtInstrumentClass)
-            bSkipHWDriverLoad = True
-        else:
-            # Matched
-            logger.info( "Continuing HWDriver load << szTgtSubKey {%s} in {%s} tgtInstrumentClass...",
-                szTgtSubKey, config.tgtInstrumentClass)
-            # Skip driver load remains false
     # ----- ST-15 delta stop.
 
     if os.name == "posix":
