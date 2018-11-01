@@ -266,6 +266,9 @@ class APS(Instrument, metaclass=MakeSettersGetters):
             self.wrapper.disconnect()
             self.connected = False
 
+    def set_enabled(self, ch, value):
+        self.wrapper.set_enabled(ch, value)
+
     def set_amplitude(self, chs, value):
         if isinstance(chs, int) or len(chs)==1:
             self.wrapper.set_amplitude(int(chs), value)
