@@ -301,13 +301,13 @@ class APS(Instrument, metaclass=MakeSettersGetters):
             quad_dict = quad_channels.pop(chan_group, None)
             if not quad_dict:
                 raise ValueError("APS {} expected to receive quad channel '{}'".format(self, chan_group))
-            for chan_num, chan_name in enumerate(list(chan_group)):
+            for chan_name in list(chan_group):
                 chan_dict = quad_dict.pop(chan_name, None)
                 if not chan_dict:
                     raise ValueError("Could not find channel {} in quadrature channel '{}' in settings for {}".format(chan_name, chan_group, self))
                 for chan_attr, value in chan_dict.items():
                     try:
-                        getattr(self, 'set_' + chan_attr)(chan_num, value)
+                        getattr(self, 'set_' + chan_attr)(int(chan_name), value)
                     except AttributeError:
                         pass
 
