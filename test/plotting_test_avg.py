@@ -11,31 +11,38 @@ import os
 import numpy as np
 import sys
 
-# ----- No Holzworth warning Start...
-# Added the followiing 26 Oct 2018 to test Instrument metaclass load introspection
-# minimization (during import) which, with holzworth.py module deltas in-turn,
-# bars holzworth warnings
+# ----- fix/unitTests_1 (ST-15) delta Start...
+# Added the followiing 26 Oct 2018 to test Instrument and filter metaclass load
+# introspection minimization (during import)
 #
 from auspex import config
 
-# Optionally force an extra arg into config on-the-fly -- cite the target
-# instrument class (the name string, case matters):
+# Filter out Holzworth warning noise noise by citing the specific instrument[s]
+# used for this test.
 config.tgtInstrumentClass       = "TestInstrument"
 
-# Show the Instrument MetaClass __init__ arguments
+# Filter out Channerlizer noise by citing the specific filters used for this
+# test.
+# ...Actually Print, Channelizer, and KernelIntegrator are NOT used in this test;
+# hence commented them out, below, as well.
+config.tgtFilterClass           = {"Plotter", "Averager"}
+
+# Uncomment to the following to show the Instrument MetaClass __init__ arguments
+# config.bEchoInstrumentMetaInit  = True
 #
-config.bEchoInstrumentMetaInit  = True
-#
-# ----- No Holzworth warning Stop.
+# ----- fix/unitTests_1 (ST-15) delta Stop.
 
 from auspex.instruments.instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand
 from auspex.experiment import Experiment, FloatParameter
 from auspex.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector
 from auspex.filters.plot import Plotter
 from auspex.filters.average import Averager
-from auspex.filters.debug import Print
-from auspex.filters.channelizer import Channelizer
-from auspex.filters.integrator import KernelIntegrator
+
+# The following are not actually cited in the test logic, below
+#
+#from auspex.filters.debug import Print
+#from auspex.filters.channelizer import Channelizer
+#from auspex.filters.integrator import KernelIntegrator
 
 from auspex.log import logger, logging
 logger.setLevel(logging.INFO)

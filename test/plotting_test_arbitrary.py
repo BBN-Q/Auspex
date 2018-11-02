@@ -17,22 +17,24 @@ import numpy as np
 import h5py
 import matplotlib.pyplot as plt
 
-# ----- No Holzworth warning Start...
-# Added the followiing 26 Oct 2018 to test Instrument metaclass load introspection
-# minimization (during import) which, with holzworth.py module deltas in-turn,
-# bars holzworth warnings
+# ----- fix/unitTests_1 (ST-15) delta Start...
+# Added the followiing 26 Oct 2018 to test Instrument and filter metaclass load
+# introspection minimization (during import)
 #
 from auspex import config
 
-# Optionally force an extra arg into config on-the-fly -- cite the target
-# instrument class (the name string, case matters):
+# Filter out Holzworth warning noise noise by citing the specific instrument[s]
+# used for this test.
 config.tgtInstrumentClass       = "TestInstrument"
 
-# Show the Instrument MetaClass __init__ arguments
+# Filter out Channerlizer noise by citing the specific filters used for this
+# test.
+config.tgtFilterClass           = {"Plotter", "ManualPlotter", "WriteToHDF5", "DataBuffer"}
+
+# Uncomment to the following to show the Instrument MetaClass __init__ arguments
+# config.bEchoInstrumentMetaInit  = True
 #
-config.bEchoInstrumentMetaInit  = True
-#
-# ----- No Holzworth warning Stop.
+# ----- fix/unitTests_1 (ST-15) delta Stop.
 
 from auspex.experiment import Experiment, FloatParameter
 from auspex.stream import OutputConnector, DataStreamDescriptor
