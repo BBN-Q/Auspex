@@ -15,6 +15,13 @@ from copy import deepcopy
 import numpy as np
 import scipy.signal
 
+# ----- 31 Oct 2018 -- Added config import for ST-15 delta support
+# config mods include optional parameters to help constrain import prompted
+# MetaClass introspection.  This, in-turn, can help reduce irrelvant
+# boot-up warnings (such as the "Channelizer" warnings) where desired.
+#
+from auspex import config
+
 from .filter import Filter
 from auspex.parameter import Parameter, IntParameter, FloatParameter
 from auspex.stream import  DataStreamDescriptor, InputConnector, OutputConnector
@@ -37,33 +44,59 @@ szNoLoadWarningBase = "Could not load (Intel dependent) IPP channelizer library!
     "\n\r               %s\n\r"
 
 try:
-    # load libchannelizer to access Intel IPP filtering functions
-    import numpy.ctypeslib as npct
-    from ctypes import c_int, c_size_t
-    np_float  = npct.ndpointer(dtype=np.float32, flags='C_CONTIGUOUS')
-
-    libchannelizer_path = os.path.abspath(os.path.join( os.path.dirname(__file__), "libchannelizer"))
-
-    # /fix/unitTests_1 observation:
-    # Interesting, under the Mac build, libchannelizer_path does NOT exist.
-    # /Users/trogers/bbnqconda/lib/python3.6/site-packages/auspex-0.1-py3.6.egg/auspex/filters/libchannelizer
-    # but the filters path does:
-    # /Users/trogers/bbnqconda/lib/python3.6/site-packages/auspex-0.1-py3.6.egg/auspex/filters
+    # ----- /fix/unitTests_1 (ST-15) delta start...
+    # Added optional logic to exclude/skip the Intel IPP Channerlizer load when
+    # config.tgtFilterClass defined and content includes or omits a Channerlizer
+    # filterclass definition.
     #
-    # Additionally, souce logic and pre-compiled libraries currently exist
-    # (for Windows and Linux) under the .../Auspex/src/auspex/filters/libchannelizer
-    # directory.
-    #
-    if "Windows" in platform.platform():
-        os.environ["PATH"] += ";" + libchannelizer_path
-    #libipp = npct.load_library("libchannelizer",  libchannelizer_path)
-    # npct.load_library raises OSError on failure; modified error trap, below...
-    libipp = npct.load_library( tgtLibName,  libchannelizer_path)
-    libipp.filter_records_fir.argtypes = [np_float, c_size_t, c_int, np_float, c_size_t, c_size_t, np_float]
-    libipp.filter_records_iir.argtypes = [np_float, c_size_t, np_float, c_size_t, c_size_t, np_float]
-    libipp.init()
+    bSkipChDriverLoad = \
+        config.disjointNameRefz( "Channelizer",
+                                 acceptClassRefz = config.tgtFilterClass,
+                                 bEchoDetails    = config.bEchoInstrumentMetaInit,
+                                 szLogLabel      = "Channelizer driver load")
 
-    load_fallback = False
+    if bSkipChDriverLoad:
+        # config.tgtFilterClass is defined and does NOT contain any Channerlizer
+        # filter class reference[s].
+        #
+        load_fallback = False # and in this case, do nothing
+
+        logger.debug( "Skipping Intel IPP filtering Channerlizer library load" \
+            "\n\r   (Channerlizer is NOT in the defined tgtFilterClass reference[s])\n\r")
+
+    else:
+        # either config.tgtFilterClass is NOT defined; or it is defined
+        # and includes one or more Channerlizer filter class reference[s].
+        #
+        # Fire original logic as before (original logic now indented)
+        # ----- /fix/unitTests_1 (ST-15) delta stop.
+
+        # load libchannelizer to access Intel IPP filtering functions
+        import numpy.ctypeslib as npct
+        from ctypes import c_int, c_size_t
+        np_float  = npct.ndpointer(dtype=np.float32, flags='C_CONTIGUOUS')
+
+        libchannelizer_path = os.path.abspath(os.path.join( os.path.dirname(__file__), "libchannelizer"))
+
+        # /fix/unitTests_1 observation:
+        # Note:  .../Auspex/src/auspex/filters/libchannelizer subdirectory not
+        #        installed with python setup build/install steps.  Rather,
+        #        "pip install -e ." usage pushes relevant development path
+        #        references (including the compiled binary path) into the
+        #        anaconda environment.
+
+        if "Windows" in platform.platform():
+            os.environ["PATH"] += ";" + libchannelizer_path
+        #libipp = npct.load_library("libchannelizer",  libchannelizer_path)
+        # npct.load_library raises OSError on failure; modified error trap, below...
+        libipp = npct.load_library( tgtLibName,  libchannelizer_path)
+        libipp.filter_records_fir.argtypes = [np_float, c_size_t, c_int, np_float, c_size_t, c_size_t, np_float]
+        libipp.filter_records_iir.argtypes = [np_float, c_size_t, np_float, c_size_t, c_size_t, np_float]
+        libipp.init()
+
+        load_fallback = False
+        # ----- Original logic, now indented, stop
+
 #except:
     #logger.warning("Could not load channelizer library; falling back to python methods.")
     #

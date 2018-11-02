@@ -47,6 +47,7 @@ LogDir            = None
 # Just set the initial defaults
 # (rather than fancy try/(catch) except detection logic):
 tgtInstrumentClass      = None
+tgtFilterClass          = None
 bEchoInstrumentMetaInit = False
 # ----- No Holzworth warning Stop.
 
@@ -209,9 +210,10 @@ def skipMetaInit (currClName, currClBases, currClDict, acceptClassRefz=None, bEc
                 bSkipMInit = True
             else:
                 # Matched
-                logger.info( __szSMI_LogTextPrefix +
-                    "== <acceptClassRefz> %s 8-)\n\r",
-                    "Continuing", currClName, szLogLabel, acceptedRefzType)
+                if bEchoDetails:
+                    logger.info( __szSMI_LogTextPrefix +
+                        "== <acceptClassRefz> %s 8-)\n\r",
+                        "Continuing", currClName, szLogLabel, acceptedRefzType)
         else:
             if list == acceptedRefzType or set == acceptedRefzType:
                 # Process as a multi-entry list ['A', 'B'] or set {'A', 'B'}
@@ -224,10 +226,11 @@ def skipMetaInit (currClName, currClBases, currClDict, acceptClassRefz=None, bEc
                     bSkipMInit = True
                 else:
                     # Matched
-                    logger.info( __szSMI_LogTextPrefix +
-                        "currClName is an element of acceptClassRefz:" \
-                        "\n\r      %s::%s 8-)\n\r",
-                        "Continuing", currClName, szLogLabel, acceptedRefzType, acceptClassRefz)
+                    if bEchoDetails:
+                        logger.info( __szSMI_LogTextPrefix +
+                            "currClName is an element of acceptClassRefz:" \
+                            "\n\r      %s::%s 8-)\n\r",
+                            "Continuing", currClName, szLogLabel, acceptedRefzType, acceptClassRefz)
             #
             else:
                 raise Exception( "Unhandled acceptedRefzType: {} cited!".format( acceptedRefzType))
@@ -287,8 +290,9 @@ def disjointNameRefz (tgtBaseClName, acceptClassRefz=None, bEchoDetails=False, s
                 bDisjointForRefz = True
             else:
                 # Matched
-                logger.info( szSE_MsgMask, "Continuing",
-                    szLogLabel, szTgtSubKey, "noted as", acceptClassRefz)
+                if bEchoDetails:
+                    logger.info( szSE_MsgMask, "Continuing",
+                        szLogLabel, szTgtSubKey, "noted as", acceptClassRefz)
                 # bDisjointForRefz remains false
 
         else:
@@ -304,12 +308,14 @@ def disjointNameRefz (tgtBaseClName, acceptClassRefz=None, bEchoDetails=False, s
                         logger.debug( szME_MsgMask,
                             nIndex, nCount, "NoMatch", szTgtSubKey, "NOT", currAcceptClName, acceptedRefzType)
                     else:
-                        # Matched
-                        logger.info( szME_MsgMask,
-                            nIndex, nCount, "Matched", szTgtSubKey, "noted as", currAcceptClName, acceptedRefzType)
-                        bMarched = True
+                        bMatched = True
+                        if bEchoDetails:
+                            logger.info( szME_MsgMask,
+                                nIndex, nCount, "Matched", szTgtSubKey, "noted as", currAcceptClName, acceptedRefzType)
                         break
+
                     nIndex += 1
+
                 # end for all acceptClassRefz elements
 
                 bDisjointForRefz = not bMatched
@@ -318,8 +324,9 @@ def disjointNameRefz (tgtBaseClName, acceptClassRefz=None, bEchoDetails=False, s
                     logger.debug( "Skipping %s;  %s << bDisjointForRefz\n\r",
                         szLogLabel, bDisjointForRefz)
                 else:
-                    logger.info( "Continuing %s;  %s << bDisjointForRefz",
-                        szLogLabel, bDisjointForRefz)
+                    if bEchoDetails:
+                        logger.info( "Continuing %s;  %s << bDisjointForRefz",
+                            szLogLabel, bDisjointForRefz)
                 #
             else:
                 raise Exception( "Unhandled acceptedRefzType: {} cited!".format( acceptedRefzType))
