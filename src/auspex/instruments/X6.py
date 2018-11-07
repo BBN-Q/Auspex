@@ -21,17 +21,35 @@ import auspex.config as config
 from .instrument import Instrument, DigitizerChannel
 from unittest.mock import MagicMock
 
+fake_x6 = True  # for discovery unit test support IMI
+
 # Dirty trick to avoid loading libraries when scraping
 # This code using quince.
 if config.auspex_dummy_mode:
     fake_x6 = True
 else:
-    try:
-        import libx6
-        fake_x6 = False
-    except:
-        # logger.warning("Could not load x6 library")
-        fake_x6 = True
+    #
+    # ----- fix/unitTests_1 / ST-15 delta start...
+    bSkipX6DriverLoad = \
+        config.disjointNameRefz( "X6",
+                                 acceptClassRefz=config.tgtInstrumentClass,
+                                 bEchoDetails=config.bEchoInstrumentMetaInit,
+                                 szLogLabel="X6 driver load")
+    if bSkipX6DriverLoad:
+        logger.debug( "X6 module load skipped << ST-15 Delta.")
+    else:
+        # ----- fix/unitTests_1 / ST-15 delta stop.
+        # Original block indented to suit bSkipX6DriverLoad use-case:
+        try:
+            import libx6
+            fake_x6 = False
+        #except:
+            # logger.warning("Could not load x6 library")
+        except Exception as e:
+            logger.warning( "libx6 import failed!"
+                "\n\r   << EEE Exception: %s", e)
+            fake_x6 = True
+            print( "      -- Set to continue processing nonetheless << fake_x6 << {}\n\r".format( fake_x6))
 
 class X6Channel(DigitizerChannel):
     """Channel for an X6"""
@@ -139,8 +157,20 @@ class X6(Instrument):
 
         if self.gen_fake_data or fake_x6:
             self._lib = MagicMock()
-            logger.warning("Could not load x6 library")
-            logger.warning("X6 GENERATING FAKE DATA")
+            #logger.warning("Could not load x6 library")
+            #
+            szMockLabel = ""
+            if self.gen_fake_data:
+                szMockLabel += "gen_fake_data:{}".format( self.gen_fake_data)
+            if len( szMockLabel) > 0:
+                szMockLabel += " && "
+            if fake_x6:
+                szMockLabel += "fake_x6:{}".format( fake_x6)
+
+            logger.warning("MagicMock X6 library assigned" \
+                " << %s...", szMockLabel)
+            #
+            logger.warning("X6 GENERATING FAKE DATA\n\r")
         self._lib.connect(int(self.resource_name))
 
     def disconnect(self):

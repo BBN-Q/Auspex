@@ -18,35 +18,81 @@ from visa import VisaIOError
 import numpy as np
 from copy import deepcopy
 
+# If we run this static will we have an issue across multiple APS dependent
+# unit test cases if __name__ == '__main__':
+#
+bSkipApsDriverLoad = \
+    config.disjointNameRefz( "APS",
+                             acceptClassRefz=config.tgtInstrumentClass,
+                             bEchoDetails=config.bEchoInstrumentMetaInit,
+                             szLogLabel="APS driver load")
+
+if config.bUseMockOnLoadError:
+    _szLoadExLabel = "-- Continuing process nonetheless with selected MagicMock library..."
+else:
+    _szLoadExLabel = "XX MagicMock simulation NOT selected."
+
 # Dirty trick to avoid loading libraries when scraping
 # This code using quince.
 aps2_missing = False
+
+fake_aps2 = True  # for discovery unit test support IMI
+
 if config.auspex_dummy_mode:
     fake_aps2 = True
     aps2 = MagicMock()
 else:
-    try:
-        import aps2
-        fake_aps2 = False
-    except:
-        fake_aps2 = True
-        aps2_missing = True
-        aps2 = MagicMock()
+    # ----- fix/unitTests_1 / ST-15 delta start...
+    if bSkipApsDriverLoad:
+        logger.debug( "aps2 module load skipped << ST-15 Delta.")
+    else:
+        # ----- fix/unitTests_1 / ST-15 delta stop.
+        # Original block indented to suit bSkipHWDriverLoad use-case:
+        try:
+            import aps2
+            fake_aps2 = False
+        # except:
+        except Exception as e:
+            fake_aps2 = True
+            aps2_missing = True
+            aps2 = MagicMock()
+            #
+            if config.bUseMockOnLoadError:
+                aps2_missing = False # Override it
+            logger.warning( "aps2 Import failed" \
+                "\n\r   << EEE exception: %s" \
+                "\n\r      %s\n\r", e, _szLoadExLabel)
 
 aps1_missing = False
+
+fake_aps2 = True  # for discovery unit test support IMI
+
 if config.auspex_dummy_mode:
     fake_aps1 = True
     aps1 = MagicMock()
 else:
-    try:
-        import aps as libaps
-        if libaps.APS_PY_WRAPPER_VERSION < 1.4:
-            raise ImportError("Old version of libaps found. Please update.")
-        fake_aps1 = False
-    except:
-        fake_aps1 = True
-        aps1_missing = True
-        libaps = MagicMock()
+    # ----- fix/unitTests_1 / ST-15 delta start...
+    if bSkipApsDriverLoad:
+        logger.debug( "aps[1] module load skipped << ST-15 Delta.")
+    else:
+        # ----- fix/unitTests_1 / ST-15 delta stop.
+        # Original block indented to suit bSkipHWDriverLoad use-case:
+        try:
+            import aps as libaps
+            if libaps.APS_PY_WRAPPER_VERSION < 1.4:
+                raise ImportError("Old version of libaps found. Please update.")
+            fake_aps1 = False
+        # except:
+        except Exception as e:
+            fake_aps1 = True
+            aps1_missing = True
+            libaps = MagicMock()
+            #
+            if config.bUseMockOnLoadError:
+                aps1_missing = False # Override it
+            logger.warning( "aps Import failed" \
+                "\n\r   << EEE exception: %s" \
+                "\n\r      %s\n\r", e, _szLoadExLabel)
 
 class DigitalAttenuator(SCPIInstrument):
     """BBN 3 Channel Instrument"""

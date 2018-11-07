@@ -49,6 +49,13 @@ LogDir            = None
 tgtInstrumentClass      = None
 tgtFilterClass          = None
 bEchoInstrumentMetaInit = False
+# unlike dummy_mode usage altered code attempts to invoke module loads and
+# exercise error processing; set this true, however, to enable stepping beyond
+# and/or simulating the unavailable library use cases.  Leaving it false
+# (the default case) paints the errors and warns the user as ecpected.
+#
+# wants to be true to support discovery unit tests with original default behavior
+bUseMockOnLoadError     = True
 # ----- No Holzworth warning Stop.
 
 def find_meas_file():

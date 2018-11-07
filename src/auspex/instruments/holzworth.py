@@ -148,11 +148,17 @@ else:
                 holzworth_driver = HolzworthPythonDriver()
                 logger.debug("Using Holzworth pure-python driver.")
             except Exception as e:
-                logger.warning("Could not connect to Holzworths: {}".format(e))
+                #logger.warning("Could not connect to Holzworths: {}".format(e))
+                logger.warning("HolzworthPythonDriver load failed!" \
+                    "\n\r   << EEE Exception: %s", e)
                 if str(e) == "No backend available":
                     logger.warning("You may not have the libusb backend: please install it!")
                 holzworth_driver = MagicMock()
                 fake_holz = True
+                # Note:  we could react to config.bUseMockOnLoadError Here
+                # too allow true failure or optional MagicMock continuation
+                # (the original default behavior)
+                print( "      -- Continuing process nonetheless with MagicMock holzworth_driver...\n\r")
     else:
         logger.debug("Using Holzworth DLL driver.")
 
