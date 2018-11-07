@@ -33,8 +33,8 @@ class TestFitMethods(unittest.TestCase):
     # cites zero tests run;  renaming the methods as "test<xyz>" render them
     # runable and revealed call syntax issues...
     #
-    #def TestT1Fit(self):
-    def testT1Fit(self):  # Added try/except trap with alternate syntax -- TJR
+    def TestT1Fit(self):
+    #def testT1Fit(self):  # Added try/except trap with alternate syntax -- TJR
         """Test the fit_t1 experiment """
 
         # Set parameters and generate synthetic data in natural units
@@ -87,8 +87,8 @@ class TestFitMethods(unittest.TestCase):
         self.assertAlmostEqual(T2, result[0], delta=result_err[1])
 
 
-    #def TestRBFit(self):
-    def testRBFit(self): # Runs ok with no changes -- TJR
+    def TestRBFit(self):
+    #def testRBFit(self): # Runs ok with no changes -- TJR
         """Test the fit_single_qubit_rb experiment """
 
         # Set parameters and generate synthetic data
