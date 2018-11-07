@@ -110,13 +110,19 @@ class QubitExperiment(Experiment):
         self.add_sweep(param, range(num_averages))
 
     def shutdown_instruments(self):
-        # remove socket readers
+        # remove socket readers, stop AWGS and turn off microwave sources
+        
+        # turn off microwave sources
+        super(QubitExperiment,self).shutdown_instruments()
+
         if self.cw_mode:
             for awg in self.awgs:
                 awg.stop()
+
         for chan, dig in self.chan_to_dig.items():
             socket = dig.get_socket(chan)
             self.loop.remove_reader(socket)
+
         for name, instr in self._instruments.items():
             instr.disconnect()
 
