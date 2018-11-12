@@ -578,7 +578,7 @@ class CLEARCalibration(MeasCalibration):
     nsteps: calibration steps/sweep
     cal_steps: choose ranges for calibration steps. 1: +-100%; 0: skip step
     '''
-    def __init__(self, qubit_name, kappa = 2e6, chi = 1e6, t_empty = 400e-9, ramsey_delays=np.linspace(0.0, 50.0, 51)*1e-6, ramsey_freq = 100e3, meas_delay = 0, alpha = 1, T1factor = 1, T2 = 30e-6, nsteps = 11, eps1 = None, eps2 = None, cal_steps = (1,1,1)):
+    def __init__(self, qubit_name, kappa = 2*np.pi*2e6, chi = -2*np.pi*1e6, t_empty = 400e-9, ramsey_delays=np.linspace(0.0, 50.0, 51)*1e-6, ramsey_freq = 100e3, meas_delay = 0, alpha = 1, T1factor = 1, T2 = 30e-6, nsteps = 11, eps1 = None, eps2 = None, cal_steps = (1,1,1)):
         super(CLEARCalibration, self).__init__(qubit_name)
         self.filename = 'CLEAR/CLEAR'
         self.kappa = kappa
@@ -586,7 +586,7 @@ class CLEARCalibration(MeasCalibration):
         self.ramsey_delays = ramsey_delays
         self.ramsey_freq = ramsey_freq
         self.meas_delay = meas_delay
-        self.tau = t_empty/2 #tau
+        self.tau = t_empty/2
         self.alpha = alpha
         self.T1factor = T1factor
         self.T2 = T2
@@ -599,7 +599,7 @@ class CLEARCalibration(MeasCalibration):
 
     def sequence(self, **params):
         prep = X(self.qubit) if params['state'] else Id(self.qubit)
-        seqs = [[prep, MEAS(self.qubit, amp1 = params['eps1'], amp2 =  params['eps2'], step_length = self.tau, dig_trig=None), X90(self.qubit), Id(self.qubit,d), U90(self.qubit,phase = 2*pi*self.ramsey_freq*d),
+        seqs = [[prep, MEAS(self.qubit, amp1 = self.alpha*params['eps1'], amp2 =  self.alpha*params['eps2'], step_length = self.tau, dig_trig=None), X90(self.qubit), Id(self.qubit,d), U90(self.qubit,phase = 2*pi*self.ramsey_freq*d),
         Id(self.qubit, self.meas_delay), MEAS(self.qubit)] for d in self.ramsey_delays]
         seqs += create_cal_seqs((self.qubit,), 2, delay = self.meas_delay)
         return seqs
