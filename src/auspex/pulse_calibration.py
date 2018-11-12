@@ -599,7 +599,7 @@ class CLEARCalibration(MeasCalibration):
 
     def sequence(self, **params):
         prep = X(self.qubit) if params['state'] else Id(self.qubit)
-        seqs = [[prep, MEAS(self.qubit, amp1 = params['eps1'], amp2 =  params['eps2'], step_length = self.tau, dig_trig=None), X90(self.qubit), Id(self.qubit,d), U90(self.qubit,phase = self.ramsey_freq*d),
+        seqs = [[prep, MEAS(self.qubit, amp1 = params['eps1'], amp2 =  params['eps2'], step_length = self.tau, dig_trig=None), X90(self.qubit), Id(self.qubit,d), U90(self.qubit,phase = 2*pi*self.ramsey_freq*d),
         Id(self.qubit, self.meas_delay), MEAS(self.qubit)] for d in self.ramsey_delays]
         seqs += create_cal_seqs((self.qubit,), 2, delay = self.meas_delay)
         return seqs
