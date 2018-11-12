@@ -78,13 +78,19 @@ class SingleShotMeasurement(Filter):
 
     async def process_data(self, data):
         """Fill the ground and excited data bins"""
-        if self.counter % 2 != 0:
-            N = (self.counter + 1) // 2 - 1
-            self.ground_data[:,N] = data
-        else:
-            N = self.counter // 2 - 1
-            self.excited_data[:,N] = data
-        self.counter += 1
+        if data.shape[0] == self.ground_data.size*2:
+            dsplit = np.split(data,self.num_segments)
+            self.ground_data = np.array(dsplit[::2])
+            self.excited_data = np.array(dsplit[1::2])
+            self.counter = self.num_segments+1
+        else: 
+            if self.counter % 2 != 0:
+                N = (self.counter + 1) // 2 - 1
+                self.ground_data[:,N] = data
+            else:
+                N = self.counter // 2 - 1
+                self.excited_data[:,N] = data
+            self.counter += 1
         if self.counter > self.num_segments:
             self.counter = 1
             self.compute_filter()
@@ -96,8 +102,7 @@ class SingleShotMeasurement(Filter):
                 await os.push(self.fidelity_result)
 
     def compute_filter(self):
-        """Compute the single shot kernel and obtain single-shot measurement
-        fidelity.
+        """Compute the single shot kernel and obtain single-shot measurement fidelity.
 
         Expects that the data will be in self.ground_data and self.excited_data,
         which are (T, N)-shaped numpy arrays, with T the time axis and N the
