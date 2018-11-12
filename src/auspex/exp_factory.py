@@ -110,13 +110,19 @@ class QubitExperiment(Experiment):
         self.add_sweep(param, range(num_averages))
 
     def shutdown_instruments(self):
-        # remove socket readers
+        # remove socket readers, stop AWGS and turn off microwave sources
+        
+        # turn off microwave sources
+        super(QubitExperiment,self).shutdown_instruments()
+
         if self.cw_mode:
             for awg in self.awgs:
                 awg.stop()
+
         for chan, dig in self.chan_to_dig.items():
             socket = dig.get_socket(chan)
             self.loop.remove_reader(socket)
+
         for name, instr in self._instruments.items():
             instr.disconnect()
 
@@ -497,18 +503,15 @@ class QubitExpFactory(object):
             # Trace back our ancestors, using plotters if no writers are available
             if writers:
                 writer_ancestors = set().union(*[nx.ancestors(dag, wr) for wr in writers])
-                # We will have gotten the digitizer, which should be removed since we're already taking care of it
-                writer_ancestors.remove(dig_name)
             if plotters:
                 plotter_ancestors = set().union(*[nx.ancestors(dag, pl) for pl in plotters])
-                plotter_ancestors.remove(dig_name)
             if singleshot:
                 singleshot_ancestors = set().union(*[nx.ancestors(dag, ss) for ss in singleshot])
-                singleshot_ancestors.remove(dig_name)
             if buffers:
                 buffer_ancestors = set().union(*[nx.ancestors(dag, bf) for bf in buffers])
-                buffer_ancestors.remove(dig_name)
             filt_to_enable.update(set().union(writer_ancestors, plotter_ancestors, singleshot_ancestors, buffer_ancestors))
+            # remove all the digitizers, which are already taken care of
+            filt_to_enable.difference_update([f for f in filt_to_enable if dag.in_degree()[f] == 0])
 
         if calibration:
             # One to one writers to qubits
@@ -828,9 +831,21 @@ class QubitExpFactory(object):
                     descrip.add_axis(DataAxis("segments", range(source_instr_settings['nbr_segments'])))
 
             # Digitizer mode preserves round_robins, averager mode collapsing along them:
-            if 'acquire_mode' not in source_instr_settings.keys() or source_instr_settings['acquire_mode'] == 'digitizer':
+            acq_mode_instr = 'digitizer'
+            acq_mode_chan = 'digitizer'
+            if 'acquire_mode' in source_instr_settings.keys():
+                acq_mode_instr = source_instr_settings['acquire_mode']
+            if settings['channel'] in source_instr_settings['rx_channels'].keys():
+                chan_settings = source_instr_settings['rx_channels'][settings['channel']]
+                if 'acquire_mode' in chan_settings.keys():
+                    acq_mode_chan = chan_settings['acquire_mode']
+
+            if acq_mode_instr == 'digitizer' and acq_mode_chan == 'digitizer':
                 if source_instr_settings['nbr_round_robins'] > 1:
                     descrip.add_axis(DataAxis("round_robins", range(source_instr_settings['nbr_round_robins'])))
+            elif acq_mode_instr == 'averager' or acq_mode_chan == 'averager':
+                descrip.add_axis(DataAxis("round_robins", range(1)))
+                logger.warning("'%s' HW averaging enabled, added singleton axis", name)
 
             oc.set_descriptor(descrip)
 
