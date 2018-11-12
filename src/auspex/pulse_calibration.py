@@ -657,6 +657,7 @@ class CLEARCalibration(MeasCalibration):
                 self.eps2*=opt_scaling
             self.plot[1]['Fit sweep {}, state 0'.format(ct)] = (finer_xpoints, quadf(finer_xpoints, *popt_0))
             self.plot[1]['Fit sweep {}, state 1'.format(ct)] = (finer_xpoints, quadf(finer_xpoints, *popt_1))
+        return [('eps1', round(float(self.eps1), 5)), ('eps2', round(float(self.eps1), 5))]
 
     def update_settings(self):
         #update library (default amp1, amp2 for MEAS)
