@@ -111,7 +111,7 @@ class QubitExperiment(Experiment):
 
     def shutdown_instruments(self):
         # remove socket readers, stop AWGS and turn off microwave sources
-        
+
         # turn off microwave sources
         super(QubitExperiment,self).shutdown_instruments()
 
