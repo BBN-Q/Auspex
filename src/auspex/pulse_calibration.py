@@ -648,15 +648,15 @@ class CLEARCalibration(MeasCalibration):
             popt_0,_ = fit_quad(xpoints, n0vec)
             popt_1,_ = fit_quad(xpoints, n1vec)
             finer_xpoints = np.linspace(np.min(xpoints), np.max(xpoints), 4*len(xpoints))
-            opt_scaling = np.mean(popt_0[0], popt_1[0])
+            opt_scaling = np.mean([popt_0[1], popt_1[1]])
             logger.info("Optimal scaling factor for step {} = {}".format(ct+1, opt_scaling))
 
             if ct<2:
                 self.eps1*=opt_scaling
             if ct!=1:
                 self.eps2*=opt_scaling
-            self.plot[1]['Fit sweep {}, state 0'.format(ct)] = (finer_xpoints, quadf(finer_xpoints, popt_0))
-            self.plot[1]['Fit sweep {}, state 1'.format(ct)] = (finer_xpoints, quadf(finer_xpoints, popt_1))
+            self.plot[1]['Fit sweep {}, state 0'.format(ct)] = (finer_xpoints, quadf(finer_xpoints, *popt_0))
+            self.plot[1]['Fit sweep {}, state 1'.format(ct)] = (finer_xpoints, quadf(finer_xpoints, *popt_1))
 
         def update_settings(self):
             #update library (default amp1, amp2 for MEAS)
