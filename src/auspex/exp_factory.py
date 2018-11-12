@@ -387,9 +387,10 @@ class QubitExpFactory(object):
             if len(receivers) > 1:
                 raise NotImplementedError("Single shot fidelity for more than one qubit is not yet implemented.")
             stream_sel_name_orig = receivers[0][0].replace('RecvChan-', '')
-            X6_stream_selectors = [k for k,v in filters.items() if v["type"] == 'X6StreamSelector' and v["source"] == filters[stream_sel_name_orig]['source']\
-             and v['channel'] == filters[stream_sel_name_orig]['channel'] and v["dsp_channel"] == filters[stream_sel_name_orig]["dsp_channel"]]
-            for s in X6_stream_selectors:
+            #X6_stream_selectors = [k for k,v in filters.items() if v["type"] == 'X6StreamSelector' and v["source"] == filters[stream_sel_name_orig]['source']\
+            # and v['channel'] == filters[stream_sel_name_orig]['channel'] and v["dsp_channel"] == filters[stream_sel_name_orig]["dsp_channel"]]
+            stream_selectors = [k for k,v in filters.items() if "StreamSelector" in v["type"] and v["source"] == filters[stream_sel_name_orig]['source']]
+            for s in stream_selectors:
                 if filters[s]['stream_type'] == experiment.ss_stream_type:
                     filters[s]['enabled'] = True
                     stream_sel_name = s
@@ -423,10 +424,11 @@ class QubitExpFactory(object):
 
             # Find the enabled X6 stream selectors with the same channel as the receiver. Allow to plot/save raw/demod/int streams belonging to the same receiver
             if calibration:
-                X6_stream_selectors = []
+                #X6_stream_selectors = []
+                stream_selectors = []
             else:
-                X6_stream_selectors = [k for k,v in filters.items() if (v["type"] == 'X6StreamSelector' and v["source"] == filters[stream_sel_name]['source'] and v["enabled"] == True and v["channel"] == filters[stream_sel_name]["channel"] and v["dsp_channel"] == filters[stream_sel_name]["dsp_channel"])]
-
+                #X6_stream_selectors = [k for k,v in filters.items() if (v["type"] == 'X6StreamSelector' and v["source"] == filters[stream_sel_name]['source'] and v["enabled"] == True and v["channel"] == filters[stream_sel_name]["channel"] and v["dsp_channel"] == filters[stream_sel_name]["dsp_channel"])]
+                stream_selectors = [k for k,v in filters.items() if ("StreamSelector" in v["type"]) and (v["source"] == filters[stream_sel_name_orig]['source'])]
             # Enable the tree for single-shot fidelity experiment. Change stream_sel_name to raw (by default)
             writers = []
             plotters = []
@@ -437,7 +439,10 @@ class QubitExpFactory(object):
                 source_type = filters[filters[endpoint_name]['source'].split(' ')[0]]['type']
                 return filters[endpoint_name]['type'] == endpoint_type and (not hasattr(filters[endpoint_name], 'enabled') or filters[endpoint_name]['enabled']) and not (calibration and source_type == 'Correlator') and (not source_type == 'SingleShotMeasurement' or experiment.__class__.__name__ == 'SingleShotFidelityExperiment')
             for filt_name, filt in filters.items():
-                if filt_name in [stream_sel_name] + X6_stream_selectors:
+                #if filt_name in [stream_sel_name] + X6_stream_selectors:
+                if filt['enabled'] == False:
+                    continue
+                if filt_name in [stream_sel_name] + stream_selectors:
                     # Find descendants of the channel selector
                     chan_descendants = nx.descendants(dag, filt_name)
                     # Find endpoints within the descendants
