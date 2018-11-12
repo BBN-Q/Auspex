@@ -658,12 +658,12 @@ class CLEARCalibration(MeasCalibration):
             self.plot[1]['Fit sweep {}, state 0'.format(ct)] = (finer_xpoints, quadf(finer_xpoints, *popt_0))
             self.plot[1]['Fit sweep {}, state 1'.format(ct)] = (finer_xpoints, quadf(finer_xpoints, *popt_1))
 
-        def update_settings(self):
-            #update library (default amp1, amp2 for MEAS)
-            self.saved_settings['qubits'][self.qubit.label]['measure']['pulse_params']['amp1'] = round(float(self.eps1), 5)
-            self.saved_settings['qubits'][self.qubit.label]['measure']['pulse_params']['amp2'] = round(float(self.eps2), 5)
-            self.saved_settings['qubits'][self.qubit.label]['measure']['pulse_params']['step_length'] = round(float(self.tau), 5)
-            super(CLEARCalibration, self).update_settings()
+    def update_settings(self):
+        #update library (default amp1, amp2 for MEAS)
+        self.saved_settings['qubits'][self.qubit.label]['measure']['pulse_params']['amp1'] = round(float(self.eps1), 5)
+        self.saved_settings['qubits'][self.qubit.label]['measure']['pulse_params']['amp2'] = round(float(self.eps2), 5)
+        self.saved_settings['qubits'][self.qubit.label]['measure']['pulse_params']['step_length'] = round(float(self.tau), 5)
+        super(CLEARCalibration, self).update_settings()
 
 '''Two-qubit gate calibrations'''
 class CRCalibration(PulseCalibration):
