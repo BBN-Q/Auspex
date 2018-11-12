@@ -138,6 +138,13 @@ class DataAxis(object):
         return "<DataAxis(name={}, start={}, stop={}, num={}, unit={})>".format(
             self.name, self.points[0], self.points[-1], len(self.points), self.unit)
 
+    def __eq__(self, other):
+        d1 = self.__dict__
+        d2 = other.__dict__
+        d1['done'] = True
+        d2['done'] = True
+        return d1 == d2
+
 class SweepAxis(DataAxis):
     """ Structure for sweep axis, separate from DataAxis.
     Can be an unstructured axis, in which case 'parameter' is actually a list of parameters. """
