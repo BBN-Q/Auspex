@@ -40,7 +40,7 @@ def calibrate(calibrations, update_settings=True, cal_log=True):
             cal_result = calibration.calibrate()
             if update_settings:
                 calibration.update_settings()
-            if cal_log:
+            if cal_log and not isinstance(calibration, MeasCalibration):
                 calibration.write_to_log(cal_result)
         except Exception as ex:
             logger.warning('Calibration {} could not complete: got exception: {}.'.format(type(calibration).__name__, ex))
