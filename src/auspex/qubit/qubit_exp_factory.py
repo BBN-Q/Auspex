@@ -26,8 +26,6 @@ else:
     from multiprocessing import Process
     from multiprocessing import Event
 
-from pony.orm import *
-
 import numpy as np
 import networkx as nx
 
@@ -52,25 +50,10 @@ class QubitExpFactory(object):
         self.qubit_proxies = {}
         self.meas_graph    = None
 
-        if bbndb.database:
-            self.db = bbndb.database
+        if bbndb.session:
+            self.session = bbndb.session
         else:
-            raise Exception("Auspex currently expects db to be loaded already by QGL")
-            # config.load_db()
-            # if database_file:
-            #     self.database_file = database_file
-            # elif config.db_file:
-            #     self.database_file = config.db_file
-            # else:
-            #     self.database_file = ":memory:"
-
-            # # self.db = Database()
-
-            # # Define auspex and QGL database entities
-            # filter_db.define_entities(self.db)
-
-            # self.db.bind('sqlite', filename=self.database_file, create_db=True)
-            # self.db.generate_mapping(create_tables=True)
+            raise Exception("Auspex expects db to be loaded already by QGL")
 
         self.stream_hierarchy = [
             bbndb.auspex.Demodulate,
@@ -115,27 +98,30 @@ class QubitExpFactory(object):
     def create_default_pipeline(self, qubits=None, buffers=False):
         """Look at the QGL channel library and create our pipeline from the current
         qubits."""
+        cdb = self.session.query(bbndb.qgl.ChannelDatabase).filter_by(label="working").first()
+        if not cdb:
+            raise ValueError("Could not find working channel library.")
+        
         if not qubits:
-            cdb = bbndb.qgl.ChannelDatabase.select(lambda x: x.label == "working").first()
-            if not cdb:
-                raise ValueError("Could not find working channel library.")
-
             measurements = [c for c in cdb.channels if isinstance(c, bbndb.qgl.Measurement)]
             meas_labels  = [m.label for m in measurements]
-            qubits       = set(cdb.channels.filter(lambda x: "M-"+x.label in meas_labels))
+            qubits       = [c for c in cdb.channels if "M-"+c.label in meas_labels]
         else:
-            qubit_labels = [q.label for q in qubits]
-            measurements = [cdb.channels.filter(lambda x: x.label == "M-"+ql).first() for ql in qubit_labels]
+            meas_labels = ["M-"+q.label for q in qubits]
+            measurements = [c for c in cdb.channels if c.label in meas_labels]
 
         # We map by the unique database ID since that is much safer
         self.qubit_proxies = {q.id: bbndb.auspex.QubitProxy(self, q.label) for q in qubits}
 
         # Build a mapping of qubits to receivers, construct qubit proxies
-        receivers_by_qubit = {cdb.channels.filter(lambda x: x.label == e.label[2:]).first(): e.receiver_chan for e in measurements}
-        stream_info_by_qubit = {q.label: r.receiver.stream_types for q,r in receivers_by_qubit.items()}
+        receiver_chans_by_qubit = {}
+        available_streams_by_qubit = {}
+        for m in measurements:
+            q = [c for c in cdb.channels if c.label==m.label[2:]][0]
+            receiver_chans_by_qubit[q] = m.receiver_chan
+            available_streams_by_qubit[q] = m.receiver_chan.receiver.stream_types
 
-        # Set the proper stream types
-        for q, r in receivers_by_qubit.items():
+        for q, r in receiver_chans_by_qubit.items():
             qp = self.qubit_proxies[q.id]
             qp.available_streams = [st.strip() for st in r.receiver.stream_types.split(",")]
             qp.stream_type = qp.available_streams[-1]
@@ -144,7 +130,7 @@ class QubitExpFactory(object):
         self.meas_graph = nx.DiGraph()
         for qp in self.qubit_proxies.values():
             qp.auto_create_pipeline(buffers=buffers)
-        commit()
+        self.session.commit()
 
     def create(self, meta_file, averages=100):
         with open(meta_file, 'r') as FID:
@@ -157,14 +143,10 @@ class QubitExpFactory(object):
         exp = QubitExperiment()
 
         # Make database bbndb.auspex.connection
-        db_provider  = meta_info['database_info']['db_provider']
-        db_filename  = meta_info['database_info']['db_filename']
-        library_name = meta_info['database_info']['library_name']
-        library_id   = meta_info['database_info']['library_id']
-
-        # For now we must use the same database
-        # if db_filename != self.database_file:
-        #     raise Exception("Auspex and QGL must share the same database for now.")
+        db_provider      = meta_info['database_info']['db_provider']
+        db_resource_name = meta_info['database_info']['db_resource_name']
+        library_name     = meta_info['database_info']['library_name']
+        library_id       = meta_info['database_info']['library_id']
 
         # Load the channel library by ID
         exp.channelDatabase = channelDatabase  = bbndb.qgl.ChannelDatabase[library_id]
@@ -231,10 +213,10 @@ class QubitExpFactory(object):
 
         # Build a mapping of qubits to receivers, construct qubit proxies
         # We map by the unique database ID since that is much safer
-        receivers_by_qubit = {channelDatabase.channels.filter(lambda x: x.label == e.label[2:]).first().id: e.receiver_chan for e in measurements}
+        receiver_chans_by_qubit = {channelDatabase.channels.filter(lambda x: x.label == e.label[2:]).first().id: e.receiver_chan for e in measurements}
         
         # Impose the qubit proxy's stream type on the receiver
-        for qubit, receiver  in receivers_by_qubit.items():
+        for qubit, receiver  in receiver_chans_by_qubit.items():
             receiver.stream_type = self.qubit_proxies[qubit].stream_type
 
         # Now a pipeline exists, so we create Auspex filters from the proxy filters in the db
@@ -268,7 +250,7 @@ class QubitExpFactory(object):
         for mq in measured_qubits:
 
             # Create the stream selectors
-            rcv = receivers_by_qubit[mq.id]
+            rcv = receiver_chans_by_qubit[mq.id]
             dig = rcv.receiver
             stream_sel = self.stream_sel_map[dig.model](name=rcv.label+'-SS')
             stream_sel.configure_with_proxy(rcv)
@@ -316,7 +298,7 @@ class QubitExpFactory(object):
 
         # Restrict the graph to the relevant qubits
         measured_qubit_names = [q.label for q in measured_qubits]
-        commit()
+        self.session.commit()
         # Configure the individual filter nodes
         for node in self.meas_graph.nodes():
             if isinstance(node, bbndb.auspex.FilterProxy):
@@ -331,7 +313,7 @@ class QubitExpFactory(object):
 
         # Connect the filters together
         graph_edges = []
-        commit()
+        self.session.commit()
         for node1, node2 in self.meas_graph.edges():
             if node1.qubit_name in measured_qubit_names and node2.qubit_name in measured_qubit_names:
                 if isinstance(node1, bbndb.auspex.FilterProxy):
