@@ -110,13 +110,19 @@ class QubitExperiment(Experiment):
         self.add_sweep(param, range(num_averages))
 
     def shutdown_instruments(self):
-        # remove socket readers
+        # remove socket readers, stop AWGS and turn off microwave sources
+
+        # turn off microwave sources
+        super(QubitExperiment,self).shutdown_instruments()
+
         if self.cw_mode:
             for awg in self.awgs:
                 awg.stop()
+
         for chan, dig in self.chan_to_dig.items():
             socket = dig.get_socket(chan)
             self.loop.remove_reader(socket)
+
         for name, instr in self._instruments.items():
             instr.disconnect()
 
@@ -530,15 +536,12 @@ class QubitExpFactory(object):
             if filters[meas_name]["type"] == "WriteToHDF5":
                 filters[meas_name]['groupname'] = ''.join(writer_to_qubit[meas_name]) \
                     + "-" + filters[meas_name]['groupname']
-        extra_meta = 'extra_meta' in meta_info
+
         for instr_name, chan_data in meta_info['instruments'].items():
             instruments[instr_name]['enabled']  = True
             if isinstance(chan_data, str):
                 instruments[instr_name]['seq_file'] = chan_data # Per-instrument seq file
-                if extra_meta and instr_name in meta_info['extra_meta']:
-                    instruments[instr_name]['extra_meta'] = meta_info['extra_meta']
             elif isinstance(chan_data, dict):
-                chanMeta = {}
                 for chan_name, seq_file in chan_data.items():
                     if "tx_channels" in instruments[instr_name] and chan_name in instruments[instr_name]["tx_channels"].keys():
                         instruments[instr_name]["tx_channels"][chan_name]['seq_file'] = seq_file
@@ -546,10 +549,6 @@ class QubitExpFactory(object):
                         instruments[instr_name]["rx_channels"][chan_name]['seq_file'] = seq_file
                     else:
                         raise ValueError("Could not find channel {} in of instrument {}.".format(chan_name, instr_name))
-                    fullChanName = instr_name + "-" + chan_name
-                    if extra_meta and fullChanName in meta_info['extra_meta']:
-                        chanMeta[chan_name] = meta_info['extra_meta'][fullChanName]
-                instruments[instr_name]['extra_meta'] = chanMeta
 
         # Now we will construct the DataAxis from the meta_info
         desc = meta_info["axis_descriptor"]
@@ -693,13 +692,9 @@ class QubitExpFactory(object):
                 if target_info[0] in channels:
                     # We are sweeping a qubit, so we must lookup the instrument
                     target = par["target"].split()
-                    qubit = ""
                     if target_info[0] in experiment.qubits:
                         name, meas_or_control, prop = target[:3]
                         isqubit = True
-                        qubit = name
-                        if meas_or_control == "measure":
-                            qubit = "M-"+qubit
                     else:
                         name, prop = target[:2]
                         isqubit = False
@@ -720,9 +715,9 @@ class QubitExpFactory(object):
                             chan = chan[int(ch_ind)-1]
                         instr = experiment._instruments[name]
 
-                        def method(value, channel=chan, instr=instr,qubit=qubit, prop=prop.lower()):
+                        def method(value, channel=chan, instr=instr, prop=prop.lower()):
                             # e.g. keysight.set_amplitude("ch1", 0.5)
-                            getattr(instr, "set_"+prop)(chan, value, qubit)
+                            getattr(instr, "set_"+prop)(chan, value)
 
                 elif target_info[0] in experiment._instruments:
                     # We are sweeping an instrument directly

@@ -278,7 +278,11 @@ class Experiment(metaclass=MetaExperiment):
 
     def shutdown_instruments(self):
         """Gets run after a sweep ends, or when the program is terminated."""
-        pass
+        for instrument in self._instruments.values():
+            if instrument.instrument_type == "Microwave Source":
+                instrument.output = 0;
+            else:
+                pass
 
     def init_progressbar(self, num=0, notebook=False):
         """ initialize the progress bars."""
