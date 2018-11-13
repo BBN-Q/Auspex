@@ -31,10 +31,10 @@ class QubitExperiment(Experiment):
     def init_instruments(self):
         for name, instr in self._instruments.items():
             # Configure with dictionary from the instrument proxy
-            if hasattr(instr, "configure_with_proxy"):
-                instr.configure_with_proxy(instr.proxy_obj)
-            else:
-                instr.configure_with_dict(instr.proxy_obj.to_dict())
+            # if hasattr(instr, "configure_with_proxy"):
+            instr.configure_with_proxy(instr.proxy_obj)
+            # else:
+            #     instr.configure_with_dict(dict(instr.proxy_obj))
 
         self.digitizers = [v for _, v in self._instruments.items() if "Digitizer" in v.instrument_type]
         self.awgs       = [v for _, v in self._instruments.items() if "AWG" in v.instrument_type]

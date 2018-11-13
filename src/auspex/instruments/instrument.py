@@ -183,6 +183,9 @@ class Instrument(metaclass=MetaInstrument):
     def disconnect(self):
         pass
 
+    def configure_with_proxy(self, proxy):
+        self.configure_with_dict(dict((col, getattr(proxy, col)) for col in proxy.__table__.columns.keys()))
+
     def configure_with_dict(self, settings_dict):
         """Accept a sdettings dictionary and attempt to set all of the instrument
         parameters using the key/value pairs."""

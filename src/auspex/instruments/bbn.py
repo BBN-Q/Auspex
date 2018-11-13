@@ -496,7 +496,7 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
             self.wrapper.set_channel_offset(int(chs[1])-1, value)
 
     def configure_with_proxy(self, proxy_obj):
-        super(APS2, self).configure_with_dict(proxy_obj.to_dict())
+        super(APS2, self).configure_with_proxy(proxy_obj)
         self.set_offset(0, proxy_obj["12"].I_channel_offset)
         self.set_offset(1, proxy_obj["12"].Q_channel_offset)
         self.set_amplitude(0, proxy_obj["12"].I_channel_amp_factor)
@@ -562,7 +562,7 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
         return self.wrapper.get_trigger_source()
     @trigger_source.setter
     def trigger_source(self, source):
-        if source in ["Internal", "External", "Software", "System"]:
+        if source.lower() in ["internal", "external", "software", "system"]:
             self.wrapper.set_trigger_source(getattr(aps2,source.upper()))
         else:
             raise ValueError("Invalid trigger source specification.")

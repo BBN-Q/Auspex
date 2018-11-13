@@ -109,9 +109,8 @@ class QubitExpFactory(object):
         else:
             meas_labels = ["M-"+q.label for q in qubits]
             measurements = [c for c in cdb.channels if c.label in meas_labels]
-
-        # We map by the unique database ID since that is much safer
-        self.qubit_proxies = {q.id: bbndb.auspex.QubitProxy(self, q.label) for q in qubits}
+        self.qubits = qubits
+        self.qubit_proxies = {q.label: bbndb.auspex.QubitProxy(self, q.label) for q in qubits}
 
         # Build a mapping of qubits to receivers, construct qubit proxies
         receiver_chans_by_qubit = {}
@@ -122,7 +121,7 @@ class QubitExpFactory(object):
             available_streams_by_qubit[q] = m.receiver_chan.receiver.stream_types
 
         for q, r in receiver_chans_by_qubit.items():
-            qp = self.qubit_proxies[q.id]
+            qp = self.qubit_proxies[q.label]
             qp.available_streams = [st.strip() for st in r.receiver.stream_types.split(",")]
             qp.stream_type = qp.available_streams[-1]
 
@@ -130,6 +129,9 @@ class QubitExpFactory(object):
         self.meas_graph = nx.DiGraph()
         for qp in self.qubit_proxies.values():
             qp.auto_create_pipeline(buffers=buffers)
+
+        for el in self.meas_graph.nodes():
+            self.session.add(el)
         self.session.commit()
 
     def create(self, meta_file, averages=100):
@@ -149,25 +151,25 @@ class QubitExpFactory(object):
         library_id       = meta_info['database_info']['library_id']
 
         # Load the channel library by ID
-        exp.channelDatabase = channelDatabase  = bbndb.qgl.ChannelDatabase[library_id]
-        all_channels        = list(channelDatabase.channels)
-        all_sources         = list(channelDatabase.sources)
-        all_transmitters    = list(channelDatabase.transmitters)
-        all_receivers       = list(channelDatabase.receivers)
-        all_transceivers    = list(channelDatabase.transceivers)
+        exp.channelDatabase = cdb = self.session.query(bbndb.qgl.ChannelDatabase).filter_by(id=library_id).first()
+        all_channels        = cdb.channels
+        all_generators      = cdb.generators
+        all_transmitters    = cdb.transmitters
+        all_receivers       = cdb.receivers
+        all_transceivers    = cdb.transceivers
         all_qubits          = [c for c in all_channels if isinstance(c, bbndb.qgl.Qubit)]
         all_measurements    = [c for c in all_channels if isinstance(c, bbndb.qgl.Measurement)]
 
         # Restrict to current qubits, channels, etc. involved in this actual experiment
         # Based on the meta info
-        exp.controlled_qubits = controlled_qubits = list(channelDatabase.channels.filter(lambda x: x.label in meta_info["qubits"]))
-        exp.measurements      = measurements      = list(channelDatabase.channels.filter(lambda x: x.label in meta_info["measurements"]))
-        exp.measured_qubits   = measured_qubits   = list(channelDatabase.channels.filter(lambda x: "M-"+x.label in meta_info["measurements"]))
+        exp.controlled_qubits = controlled_qubits = [c for c in cdb.channels if c.label in meta_info["qubits"]]
+        exp.measurements      = measurements      = [c for c in cdb.channels if c.label in meta_info["measurements"]]
+        exp.measured_qubits   = measured_qubits   = [c for c in cdb.channels if "M-"+c.label in meta_info["measurements"]]
         exp.phys_chans        = phys_chans        = list(set([e.phys_chan for e in controlled_qubits + measurements]))
         exp.transmitters      = transmitters      = list(set([e.phys_chan.transmitter for e in controlled_qubits + measurements]))
         exp.receiver_chans    = receiver_chans    = list(set([e.receiver_chan for e in measurements]))
         exp.receivers         = receivers         = list(set([e.receiver_chan.receiver for e in measurements]))
-        exp.sources           = sources           = list(set([q.phys_chan.generator for q in measured_qubits + controlled_qubits + measurements if q.phys_chan.generator]))
+        exp.generators        = sources           = list(set([q.phys_chan.generator for q in measured_qubits + controlled_qubits + measurements if q.phys_chan.generator]))
 
         exp.qubits_by_name    = self.qubits_by_name  = {q.label: q for q in measured_qubits + controlled_qubits}
 
@@ -176,7 +178,8 @@ class QubitExpFactory(object):
 
         # If no pipeline is defined, assumed we want to generate it automatically
         if not self.meas_graph:
-            self.create_default_pipeline(measured_qubits)
+            raise Exception("No pipeline has been create, do so automatically using exp_factory.create_default_pipeline()")
+            #self.create_default_pipeline(measured_qubits)
 
         # Add the waveform file info to the qubits
         for awg in transmitters:
@@ -213,11 +216,14 @@ class QubitExpFactory(object):
 
         # Build a mapping of qubits to receivers, construct qubit proxies
         # We map by the unique database ID since that is much safer
-        receiver_chans_by_qubit = {channelDatabase.channels.filter(lambda x: x.label == e.label[2:]).first().id: e.receiver_chan for e in measurements}
-        
+        receiver_chans_by_qubit_label = {}
+        for m in measurements:
+            q = [c for c in cdb.channels if c.label==m.label[2:]][0]
+            receiver_chans_by_qubit_label[q.label] = m.receiver_chan
+
         # Impose the qubit proxy's stream type on the receiver
-        for qubit, receiver  in receiver_chans_by_qubit.items():
-            receiver.stream_type = self.qubit_proxies[qubit].stream_type
+        for qubit_label, receiver in receiver_chans_by_qubit_label.items():
+            receiver.stream_type = self.qubit_proxies[qubit_label].stream_type
 
         # Now a pipeline exists, so we create Auspex filters from the proxy filters in the db
         proxy_to_filter      = {}
@@ -250,7 +256,7 @@ class QubitExpFactory(object):
         for mq in measured_qubits:
 
             # Create the stream selectors
-            rcv = receiver_chans_by_qubit[mq.id]
+            rcv = receiver_chans_by_qubit_label[mq.label]
             dig = rcv.receiver
             stream_sel = self.stream_sel_map[dig.model](name=rcv.label+'-SS')
             stream_sel.configure_with_proxy(rcv)
@@ -273,7 +279,7 @@ class QubitExpFactory(object):
                 descriptor.add_axis(DataAxis("averages", range(averages)))
 
             # Add the output connectors to the experiment and set their base descriptor
-            mqp = self.qubit_proxies[mq.id]
+            mqp = self.qubit_proxies[mq.label]
 
             connector_by_qp[mqp.id] = exp.add_connector(mqp)
             connector_by_qp[mqp.id].set_descriptor(descriptor)
@@ -340,10 +346,13 @@ class QubitExpFactory(object):
         return exp
 
     def qubit(self, qubit_name):
-        return {bbndb.qgl.Qubit[qid].label: qp for qid,qp in self.qubit_proxies.items()}[qubit_name]
+        return self.qubit_proxies[qubit_name]
+        # return []
 
     def save_pipeline(self, name):
-        cs = [bbndb.auspex.Connection(pipeline_name=name, node1=n1, node2=n2) for n1, n2 in self.meas_graph.edges()]
+        cs = [bbndb.auspex.Connection(pipeline_name=name, node1=n1, node2=n2, time=datetime.datetime.now()) for n1, n2 in self.meas_graph.edges()]
+        for c in cs:
+            self.session.add(cs)
 
     def load_pipeline(self, pipeline_name):
         cs = select(c for c in bbndb.auspex.Connection if c.pipeline_name==pipeline_name)
