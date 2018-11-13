@@ -486,10 +486,9 @@ class Experiment(metaclass=MetaExperiment):
         # Close file objects and create file handler processes for H5 writers
         for file in self.files:
             file.close()
-
         # Launch plot servers.
         if len(self.plotters) > 0:
-            self.init_plot_server()
+            self.connect_to_plot_server()
 
         time.sleep(0.1)
         #connect all instruments
@@ -702,7 +701,7 @@ class Experiment(metaclass=MetaExperiment):
         stream = self._extra_plots_to_streams[plotter]
         stream.push_direct(data)
 
-    def init_plot_server(self):
+    def connect_to_plot_server(self):
         logger.debug("Found %d plotters", len(self.plotters))
 
         # Create the descriptor and set uuids for each plot process
@@ -727,8 +726,6 @@ class Experiment(metaclass=MetaExperiment):
                     if socket.recv_multipart()[0] == b'ACK':
                         logger.info("Connection established to plot server.")
                         self.do_plotting = True
-                        for p in self.plotters:
-                            p.connect()
                     else:
                         raise Exception("Server returned invalid message, expected ACK.")
                 except:

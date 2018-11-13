@@ -36,7 +36,6 @@ try:
                 ident, uid, msg = client_desc_sock.recv_multipart()
                 if msg == b"WHATSUP":
                     client_desc_sock.send_multipart([ident, b"HI!", json.dumps(plot_descriptors[uid]).encode('utf8')])
-
             if socks.get(auspex_desc_sock) == zmq.POLLIN:
                 msg = auspex_desc_sock.recv_multipart()
                 ident, uid, plot_desc = msg

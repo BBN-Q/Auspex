@@ -154,25 +154,13 @@ class Filter(Process, metaclass=MetaFilter):
                 name = self.filter_name
             cProfile.runctx('self.main()', globals(), locals(), 'prof-%s-%s.prof' % (self.__class__.__name__, name))
         else:
+            self.execute_on_run()
             self.main()
 
-        # # # Make sure queues are flushed out completely:
-        # # logger.info("Closing out queues to prevent hang")
-        # # for ic in self.input_connectors.values():
-        # #     for ist in ic.input_streams:
-        # #         ist.queue.close()
-        # for ic in self.input_connectors.values():
-        #     for ist in ic.input_streams:
-        #         abc = 0
-        #         while True:
-        #             try:
-        #                 ist.queue.get(0.01)
-        #                 abc += 1
-        #                 logger.info(f"{self}: drained {abc} messages...")
-        #             except queue.Empty as e:
-        #                 time.sleep(0.002)
-        #                 break
         self.done.set()
+
+    def execute_on_run(self):
+        pass
 
     def push_to_all(self, message):
         for oc in self.output_connectors.values():

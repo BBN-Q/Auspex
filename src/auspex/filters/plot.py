@@ -119,7 +119,7 @@ class Plotter(Filter):
         self.plot_buffer = (np.nan*np.ones(self.points_before_clear)).astype(self.descriptor.dtype)
         self.idx = 0
 
-    def connect(self):
+    def execute_on_run(self):
         # Connect to the plot server
         if self.do_plotting:
             try:
@@ -131,6 +131,7 @@ class Plotter(Filter):
                 logger.warning("Exception occured while contacting the plot server. Is it running?")
 
     def update(self):
+        logger.info(f"Sending {self.filter_name}")
         if self.plot_dims.value == 1:
             self.send({'name': self.filter_name, 'msg':'data', 'data': [self.x_values, self.plot_buffer.copy()]})
         elif self.plot_dims.value == 2:
@@ -223,7 +224,7 @@ class MeshPlotter(Filter):
     def update_descriptors(self):
         logger.info("Updating MeshPlotter %s descriptors based on input descriptor %s", self.filter_name, self.sink.descriptor)
 
-    def connect(self):
+    def execute_on_run(self):
         # Connect to the plot server
         if self.do_plotting:
             try:
@@ -279,7 +280,7 @@ class ManualPlotter(object):
                 msg_contents.extend([json.dumps(md).encode(), np.ascontiguousarray(dat)])
             self.socket.send_multipart(msg_contents)
 
-    def connect(self):
+    def execute_on_run(self):
         # Connect to the plot server
         if self.do_plotting:
             try:
