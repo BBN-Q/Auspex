@@ -14,7 +14,7 @@ import numpy as np
 from .filter import Filter
 from auspex.parameter import Parameter, IntParameter
 from auspex.log import logger
-from auspex.stream import InputConnector, OutputConnector, DataAxis
+from auspex.stream import InputConnector, OutputConnector
 
 class Plotter(Filter):
     sink      = InputConnector()
@@ -61,10 +61,10 @@ class Plotter(Filter):
         logger.debug("Updating Plotter %s descriptors based on input descriptor %s", self.name, self.sink.descriptor)
         self.stream = self.sink.input_streams[0]
         self.descriptor = self.sink.descriptor
-        singleavg = DataAxis("round_robins",range(1))
-        if singleavg in self.descriptor.axes:
-            self.descriptor.pop_axis('round_robins')
-            logger.warning("Popping singleton axis 'round_robins' axis from '%s'", self.name)
+        for axis in self.descriptor.axes:
+            if axis.name == 'round_robins' and len(axis.points) == 1:
+                self.descriptor.pop_axis('round_robins')
+                logger.warning("Popping singleton axis 'round_robins' axis from '%s'", self.name)
 
     def final_init(self):
 
