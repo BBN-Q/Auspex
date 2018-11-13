@@ -595,6 +595,10 @@ class CLEARCalibration(MeasCalibration):
             # theoretical values as default
             self.eps1 = (1 - 2*np.exp(kappa*t_empty/4)*np.cos(chi*t_empty/2))/(1+np.exp(kappa*t_empty/2)-2*np.exp(kappa*t_empty/4)*np.cos(chi*t_empty/2))
             self.eps2 = 1/(1+np.exp(kappa*t_empty/2)-2*np.exp(kappa*t_empty/4)*np.cos(chi*t_empty/2))
+            logger.info('Theoretical step amplitudes: {} (eps1), {} (eps2)'.format(self.eps1, self.eps2))
+        else:
+            self.eps1 = eps1
+            self.eps2 = eps2
         self.cal_steps = cal_steps
 
     def sequence(self, **params):
