@@ -133,6 +133,7 @@ class QubitExpFactory(object):
         for el in self.meas_graph.nodes():
             self.session.add(el)
         self.session.commit()
+        self.save_pipeline("working")
 
     def create(self, meta_file, averages=100):
         with open(meta_file, 'r') as FID:
@@ -281,13 +282,13 @@ class QubitExpFactory(object):
             # Add the output connectors to the experiment and set their base descriptor
             mqp = self.qubit_proxies[mq.label]
 
-            connector_by_qp[mqp.id] = exp.add_connector(mqp)
-            connector_by_qp[mqp.id].set_descriptor(descriptor)
+            connector_by_qp[mqp] = exp.add_connector(mqp)
+            connector_by_qp[mqp].set_descriptor(descriptor)
 
             # Add the channel to the instrument
             dig.instr.add_channel(channel)
             exp.chan_to_dig[channel] = dig.instr
-            exp.chan_to_oc [channel] = connector_by_qp[mqp.id]
+            exp.chan_to_oc [channel] = connector_by_qp[mqp]
             exp.qubit_to_dig[mq.id]  = dig
 
         # Find the number of measurements
@@ -313,7 +314,7 @@ class QubitExpFactory(object):
                     # logger.info(f"Created {new_filt} from {node}")
                     new_filt.configure_with_proxy(node)
                     new_filt.proxy = node
-                    proxy_to_filter[node.id] = new_filt
+                    proxy_to_filter[node] = new_filt
                     if isinstance(node, bbndb.auspex.OutputProxy):
                         exp.qubits_by_output[new_filt] = node.qubit_name
 
@@ -323,11 +324,11 @@ class QubitExpFactory(object):
         for node1, node2 in self.meas_graph.edges():
             if node1.qubit_name in measured_qubit_names and node2.qubit_name in measured_qubit_names:
                 if isinstance(node1, bbndb.auspex.FilterProxy):
-                    filt1 = proxy_to_filter[node1.id]
+                    filt1 = proxy_to_filter[node1]
                     oc   = filt1.output_connectors["source"]
                 elif isinstance(node1, bbndb.auspex.QubitProxy):
-                    oc   = connector_by_qp[node1.id]
-                filt2 = proxy_to_filter[node2.id]
+                    oc   = connector_by_qp[node1]
+                filt2 = proxy_to_filter[node2]
                 ic   = filt2.input_connectors["sink"]
                 graph_edges.append([oc, ic])
 
@@ -349,10 +350,17 @@ class QubitExpFactory(object):
         return self.qubit_proxies[qubit_name]
         # return []
 
+    def ls(self):
+        i = 0
+        for name, time in self.session.query(bbndb.auspex.Connection.pipeline_name, bbndb.auspex.Connection.time).distinct().all():
+            print(f"[{i}] {time} -> {name}")
+            i += 1
+
     def save_pipeline(self, name):
-        cs = [bbndb.auspex.Connection(pipeline_name=name, node1=n1, node2=n2, time=datetime.datetime.now()) for n1, n2 in self.meas_graph.edges()]
+        now = datetime.datetime.now()
+        cs = [bbndb.auspex.Connection(pipeline_name=name, node1=n1, node2=n2, time=now) for n1, n2 in self.meas_graph.edges()]
         for c in cs:
-            self.session.add(cs)
+            self.session.add(c)
 
     def load_pipeline(self, pipeline_name):
         cs = select(c for c in bbndb.auspex.Connection if c.pipeline_name==pipeline_name)
