@@ -50,6 +50,9 @@ class X6Channel(DigitizerChannel):
 
         self.dtype = np.float64
         self.ideal_data = None
+        
+        self.correlation_matrix = None
+        self.correlator_inputs = None
 
         if settings_dict:
             self.set_all(settings_dict)
@@ -91,6 +94,14 @@ class X6Channel(DigitizerChannel):
         elif self.stream_type == "Demodulated":
             demod_channel = self.dsp_channel
             result_channel = 0
+            self.dtype = np.complex128
+        elif self.stream_type == "State":
+            demod_channel = 0
+            result_channel = self.dsp_channel
+            self.dtype = np.uint8
+        elif self.stream_type == "Correlated":
+            demod_channel = 0
+            result_channel = self.dsp_channel
             self.dtype = np.complex128
         else: #Raw
             demod_channel  = 0
@@ -155,6 +166,8 @@ class X6(Instrument):
     def set_all(self, settings_dict):
         # Call the non-channel commands
         super(X6, self).set_all(settings_dict)
+        correlator_setup()
+        
         # Set data for testing
         try:
             self.ideal_data = np.load(os.path.abspath(self.ideal_data+'.npy'))
@@ -179,6 +192,16 @@ class X6(Instrument):
                     if (a, 0, c) not in enabled_int_chan_tuples:
                         self._lib.write_kernel(a, 0, c, 1j*np.zeros(max_kernel_length))
 
+    def correlator_setup(self):
+        inputs = [int(x) for x in self.correlator_inputs.split()]
+        matrix = [float(x) for x in self.correlator_matrix.split()]
+        
+        for a in range(1,3):
+            for input in range(len(inputs)):
+                self._lib.write_correlator_inputs(a, input, inputs[input])
+                
+            self._lib.write_correlator_matrix(a, matrix)
+                        
     def channel_setup(self, channel):
         a, b, c = channel.channel_tuple
         self._lib.enable_stream(a, b, c)
@@ -197,6 +220,10 @@ class X6(Instrument):
             self._lib.set_kernel_bias(a, b, c, channel.kernel_bias)
             self._lib.set_threshold(a, c, channel.threshold)
             self._lib.set_threshold_invert(a, c, channel.threshold_invert)
+        elif channel.stream_type == "State":
+            return
+        elif channel.stream_type == "Correlated":
+            return
         else:
             logger.error("Unrecognized stream type %s" % channel.stream_type)
 
@@ -227,7 +254,7 @@ class X6(Instrument):
         if not isinstance(channel, X6Channel):
             raise TypeError("X6 passed {} rather than an X6Channel object.".format(str(channel)))
 
-        if channel.stream_type not in ['Raw', 'Demodulated', 'Integrated']:
+        if channel.stream_type not in ['Raw', 'Demodulated', 'Integrated', 'State', 'Correlated']:
             raise ValueError("Stream type of {} not recognized by X6".format(str(channel.stream_type)))
 
         # todo: other checking here
