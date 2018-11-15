@@ -12,6 +12,8 @@ import copy
 
 import numpy as np
 import networkx as nx
+from IPython.display import HTML, display
+from sqlalchemy import inspect
 
 import auspex.config as config
 import auspex.instruments
@@ -124,6 +126,24 @@ class PipelineManager(object):
             labels = {n: n.node_label() for n in graph.nodes()}
             colors = ["#3182bd" if isinstance(n, bbndb.auspex.QubitProxy) else "#ff9933" for n in graph.nodes()]
             self.plot_graph(graph, labels, colors=colors)
+
+    def print(self, qubit_name=None):
+        if qubit_name:
+            nodes = nx.algorithms.dag.descendants(self.meas_graph, self.qubit(qubit_name))
+        else:
+            nodes = self.meas_graph.nodes()
+        table_code = ""
+        
+        for node in nodes:
+            label = node.label if node.label else "Unlabeled"
+            table_code += f"<tr><td><b>{node.node_type}</b> ({node.qubit_name})</td><td></td><td><i>{label}</i></td></td><td></tr>"
+            inspr = inspect(node)
+            for c in list(node.__mapper__.columns):
+                if c.name not in ["id", "label", "qubit_name", "node_type"]:
+                    hist = getattr(inspr.attrs, c.name).history
+                    dirty = "Yes" if hist.has_changes() else ""
+                    table_code += f"<tr><td></td><td>{c.name}</td><td>{getattr(node,c.name)}</td><td>{dirty}</td></tr>"
+        display(HTML(f"<table><tr><th>Name</th><th>Attribute</th><th>Value</th><th>Changes</th></tr><tr>{table_code}</tr></table>"))
 
     def reset_pipelines(self):
         for qp in self.qubit_proxies.values():
