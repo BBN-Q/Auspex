@@ -1,6 +1,8 @@
 from auspex.log import logger
 from auspex.experiment import Experiment, FloatParameter
 from auspex.stream import DataStream, DataAxis, SweepAxis, DataStreamDescriptor, InputConnector, OutputConnector
+import auspex.instruments
+import auspex.filters
 import bbndb
 
 import sys
@@ -12,14 +14,253 @@ else:
     from multiprocessing import Process
     from multiprocessing import Event
 
+from . import pipeline
 import time
+import json
+
+stream_hierarchy = [
+    bbndb.auspex.Demodulate,
+    bbndb.auspex.Integrate,
+    bbndb.auspex.Average,
+    bbndb.auspex.OutputProxy
+]
+filter_map = {
+    bbndb.auspex.Demodulate: auspex.filters.Channelizer,
+    bbndb.auspex.Average: auspex.filters.Averager,
+    bbndb.auspex.Integrate: auspex.filters.KernelIntegrator,
+    bbndb.auspex.Write: auspex.filters.WriteToHDF5,
+    bbndb.auspex.Buffer: auspex.filters.DataBuffer,
+    bbndb.auspex.Display: auspex.filters.Plotter
+}
+stream_sel_map = {
+    'X6-1000M': auspex.filters.X6StreamSelector,
+    'AlazarATS9870': auspex.filters.AlazarStreamSelector
+}
+instrument_map = {
+    'X6-1000M': auspex.instruments.X6,
+    'AlazarATS9870': auspex.instruments.AlazarATS9870,
+    'APS2': auspex.instruments.APS2,
+    'APS': auspex.instruments.APS,
+    'HolzworthHS9000': auspex.instruments.HolzworthHS9000,
+    'Labbrick': auspex.instruments.Labbrick,
+    'AgilentN5183A': auspex.instruments.AgilentN5183A
+}
 
 class QubitExperiment(Experiment):
-    """Experiment with a specialized run method for qubit experiments run via the QubitExpFactory."""
+    """Experiment with specialized config and run methods for qubit experiments"""
 
-    def __init__(self, *args, **kwargs):
-        super(QubitExperiment, self).__init__(*args, **kwargs)
+    def __init__(self, meta_file, pipeline_name=None, averages=100, **kwargs):
+        super(QubitExperiment, self).__init__(**kwargs)
+
+        if not pipeline.pipelineMgr:
+            raise Exception("Could not find pipeline manager, have you declared one using PipelineManager()?")
+
+        self.pipeline_name = pipeline_name
         self.cw_mode = False
+
+        self.create_from_meta(meta_file, averages)
+
+    def create_from_meta(self, meta_file, averages):
+        try:
+            with open(meta_file, 'r') as FID:
+                meta_info = json.load(FID)
+        except:
+            raise Exception(f"Could note process meta info from file {meta_file}")
+
+        # Load ChannelLibrary and database information
+        db_provider      = meta_info['database_info']['db_provider']
+        db_resource_name = meta_info['database_info']['db_resource_name']
+        library_name     = meta_info['database_info']['library_name']
+        library_id       = meta_info['database_info']['library_id']
+
+        # Load necessary qubit information and map to qubit proxies
+        self.qubit_proxies = pipeline.pipelineMgr.qubit_proxies
+        if self.qubit_proxies is {}:
+            raise Exception("No filter pipeline has been created. You can try running the create_default_pipeline() method of the Pipeline Manager")
+
+        # Load the channel library by ID
+        self.chan_db     = pipeline.pipelineMgr.session.query(bbndb.qgl.ChannelDatabase).filter_by(id=library_id).first()
+        all_channels     = self.chan_db.channels
+        all_generators   = self.chan_db.generators
+        all_transmitters = self.chan_db.transmitters
+        all_receivers    = self.chan_db.receivers
+        all_transceivers = self.chan_db.transceivers
+        all_qubits       = [c for c in all_channels if isinstance(c, bbndb.qgl.Qubit)]
+        all_measurements = [c for c in all_channels if isinstance(c, bbndb.qgl.Measurement)]
+
+        # Restrict to current qubits, channels, etc. involved in this actual experiment
+        self.controlled_qubits = [c for c in self.chan_db.channels if c.label in meta_info["qubits"]]
+        self.measurements      = [c for c in self.chan_db.channels if c.label in meta_info["measurements"]]
+        self.measured_qubits   = [c for c in self.chan_db.channels if "M-"+c.label in meta_info["measurements"]]
+        self.phys_chans        = list(set([e.phys_chan for e in self.controlled_qubits + self.measurements]))
+        self.transmitters      = list(set([e.phys_chan.transmitter for e in self.controlled_qubits + self.measurements]))
+        self.receiver_chans    = list(set([e.receiver_chan for e in self.measurements]))
+        self.receivers         = list(set([e.receiver_chan.receiver for e in self.measurements]))
+        self.generators        = list(set([q.phys_chan.generator for q in self.measured_qubits + self.controlled_qubits + self.measurements if q.phys_chan.generator]))
+        self.qubits_by_name    = {q.label: q for q in self.measured_qubits + self.controlled_qubits}
+
+        # In case we need to access more detailed foundational information
+        self.factory = self
+
+        # If no pipeline is defined, assumed we want to generate it automatically
+        if not pipeline.pipelineMgr.meas_graph:
+            raise Exception("No pipeline has been created, do so automatically using exp_factory.create_default_pipeline()")
+            #self.create_default_pipeline(self.measured_qubits)
+
+        # Add the waveform file info to the qubits
+        for awg in self.transmitters:
+            awg.sequence_file = meta_info['instruments'][awg.label]
+
+        # Construct the DataAxis from the meta_info
+        desc = meta_info["axis_descriptor"]
+        data_axis = desc[0] # Data will always be the first axis
+
+        # ovverride data axis with repeated number of segments
+        if hasattr(self, "repeats") and self.repeats is not None:
+            data_axis['points'] = np.tile(data_axis['points'], self.repeats)
+
+        # Search for calibration axis, i.e., metadata
+        axis_names = [d['name'] for d in desc]
+        if 'calibration' in axis_names:
+            meta_axis = desc[axis_names.index('calibration')]
+            # There should be metadata for each cal describing what it is
+            if len(desc)>1:
+                metadata = ['data']*len(data_axis['points']) + meta_axis['points']
+                # Pad the data axis with dummy equidistant x-points for the extra calibration points
+                avg_step = (data_axis['points'][-1] - data_axis['points'][0])/(len(data_axis['points'])-1)
+                points = np.append(data_axis['points'], data_axis['points'][-1] + (np.arange(len(meta_axis['points']))+1)*avg_step)
+            else:
+                metadata = meta_axis['points'] # data may consist of calibration points only
+                points = np.arange(len(metadata)) # dummy axis for plotting purposes
+            # If there's only one segment we can ignore this axis
+            if len(points) > 1:
+                self.segment_axis = DataAxis(data_axis['name'], points, unit=data_axis['unit'], metadata=metadata)
+        else:
+            # No calibration data, just add a segment axis as long as there is more than one segment
+            if len(data_axis['points']) > 1:
+                self.segment_axis = DataAxis(data_axis['name'], data_axis['points'], unit=data_axis['unit'])
+
+        # Build a mapping of qubits to self.receivers, construct qubit proxies
+        # We map by the unique database ID since that is much safer
+        receiver_chans_by_qubit_label = {}
+        for m in self.measurements:
+            q = [c for c in self.chan_db.channels if c.label==m.label[2:]][0]
+            receiver_chans_by_qubit_label[q.label] = m.receiver_chan
+
+        # Impose the qubit proxy's stream type on the receiver
+        for qubit_label, receiver in receiver_chans_by_qubit_label.items():
+            receiver.stream_type = self.qubit_proxies[qubit_label].stream_type
+
+        # Now a pipeline exists, so we create Auspex filters from the proxy filters in the db
+        proxy_to_filter      = {}
+        connector_by_qp      = {}
+        self.chan_to_dig      = {}
+        self.chan_to_oc       = {}
+        self.qubit_to_dig     = {}
+        self.qubits_by_output = {}
+
+        # Create microwave sources and receiver instruments from the database objects.
+        # We configure the self.receivers later after adding channels.
+        self.instrument_proxies = self.generators + self.receivers + self.transmitters
+        self.instruments = []
+        for instrument in self.instrument_proxies:
+            instr = instrument_map[instrument.model](instrument.address, instrument.label) # Instantiate
+            # For easy lookup
+            instr.proxy_obj = instrument
+            instrument.instr = instr
+            # Add to the experiment's instrument list
+            self._instruments[instrument.label] = instr
+            self.instruments.append(instr)
+            # Add to class dictionary for convenience
+            if not hasattr(self, instrument.label):
+                setattr(self, instrument.label, instr)
+
+        for mq in self.measured_qubits:
+
+            # Create the stream selectors
+            rcv = receiver_chans_by_qubit_label[mq.label]
+            dig = rcv.receiver
+            stream_sel = stream_sel_map[dig.model](name=rcv.label+'-SS')
+            stream_sel.configure_with_proxy(rcv)
+            stream_sel.receiver = stream_sel.proxy = rcv
+
+            # Construct the channel from the receiver
+            channel = stream_sel.get_channel(rcv)
+
+            # Get the base descriptor from the channel
+            descriptor = stream_sel.get_descriptor(rcv)
+
+            # Update the descriptor based on the number of segments
+            # The segment axis should already be defined if the sequence
+            # is greater than length 1
+            if hasattr(self, "segment_axis"):
+                descriptor.add_axis(self.segment_axis)
+
+            # Add averaging if necessary
+            if averages > 1:
+                descriptor.add_axis(DataAxis("averages", range(averages)))
+
+            # Add the output connectors to the experiment and set their base descriptor
+            mqp = self.qubit_proxies[mq.label]
+
+            connector_by_qp[mqp] = self.add_connector(mqp)
+            connector_by_qp[mqp].set_descriptor(descriptor)
+
+            # Add the channel to the instrument
+            dig.instr.add_channel(channel)
+            self.chan_to_dig[channel] = dig.instr
+            self.chan_to_oc [channel] = connector_by_qp[mqp]
+            self.qubit_to_dig[mq.id]  = dig
+
+        # Find the number of self.measurements
+        segments_per_dig = {receiver_chan.receiver: meta_info["receivers"][receiver.label] for receiver_chan in self.receiver_chans
+                                                         if receiver.label in meta_info["receivers"].keys()}
+
+        # Configure receiver instruments from the database objects
+        # this must be done after adding channels.
+        for dig in self.receivers:
+            dig.number_averages  = averages
+            dig.number_waveforms = 1
+            dig.number_segments  = segments_per_dig[dig]
+            dig.instr.proxy_obj  = dig
+
+        # Restrict the graph to the relevant qubits
+        measured_qubit_names = [q.label for q in self.measured_qubits]
+        pipeline.pipelineMgr.session.commit()
+        # Configure the individual filter nodes
+        for node in pipeline.pipelineMgr.meas_graph.nodes():
+            if isinstance(node, bbndb.auspex.FilterProxy):
+                if node.qubit_name in measured_qubit_names:
+                    new_filt = filter_map[type(node)]()
+                    # logger.info(f"Created {new_filt} from {node}")
+                    new_filt.configure_with_proxy(node)
+                    new_filt.proxy = node
+                    proxy_to_filter[node] = new_filt
+                    if isinstance(node, bbndb.auspex.OutputProxy):
+                        self.qubits_by_output[new_filt] = node.qubit_name
+
+        # Connect the filters together
+        graph_edges = []
+        pipeline.pipelineMgr.session.commit()
+        for node1, node2 in pipeline.pipelineMgr.meas_graph.edges():
+            if node1.qubit_name in measured_qubit_names and node2.qubit_name in measured_qubit_names:
+                if isinstance(node1, bbndb.auspex.FilterProxy):
+                    filt1 = proxy_to_filter[node1]
+                    oc   = filt1.output_connectors["source"]
+                elif isinstance(node1, bbndb.auspex.QubitProxy):
+                    oc   = connector_by_qp[node1]
+                filt2 = proxy_to_filter[node2]
+                ic   = filt2.input_connectors["sink"]
+                graph_edges.append([oc, ic])
+
+        # Define the experiment graph
+        self.set_graph(graph_edges)
+
+    def set_fake_data(self, instrument, ideal_data):
+        instrument.instr.ideal_data = ideal_data
+
+    def clear_fake_data(self, instrument):
+        instrument.instr.ideal_data = None
 
     def add_connector(self, qubit):
         logger.debug(f"Adding {qubit.qubit_name} output connector to experiment.")
@@ -69,8 +310,8 @@ class QubitExperiment(Experiment):
         Add a *ParameterSweep* to the experiment. Users specify a qubit property that auspex
         will try to link back to the relevant instrument. For example::
             exp = QubitExpFactory.create(PulsedSpec(q1))
-            exp.add_qubit_sweep(q1, "measure", "frequency", np.linspace(6e9, 6.5e9, 500))
-            exp.run_sweeps()
+            self.add_qubit_sweep(q1, "measure", "frequency", np.linspace(6e9, 6.5e9, 500))
+            self.run_sweeps()
         """
         param = FloatParameter() # Create the parameter
 
