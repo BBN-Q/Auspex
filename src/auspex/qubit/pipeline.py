@@ -87,9 +87,15 @@ class PipelineManager(object):
 
     def ls(self):
         i = 0
+        table_code = ""        
+
         for name, time in self.session.query(bbndb.auspex.Connection.pipeline_name, bbndb.auspex.Connection.time).distinct().all():
-            print(f"[{i}] {time} -> {name}")
+            y, d, t = map(time.strftime, ["%Y", "%b. %d", "%I:%M:%S %p"])
+            # t = time.strftime("(%Y) %b. %d @ %I:%M:%S %p")
+            table_code += f"<tr><td>{i}</td><td>{y}</td><td>{d}</td><td>{t}</td><td>{name}</td></tr>"
             i += 1
+        display(HTML(f"<table><tr><th>id</th><th>Year</th><th>Date</th><th>Time</th><th>Name</th></tr><tr>{table_code}</tr></table>"))
+
 
     def save_pipeline(self, name):
         now = datetime.datetime.now()
@@ -112,7 +118,7 @@ class PipelineManager(object):
     def show_pipeline(self, pipeline_name=None):
         """If a pipeline name is specified query the database, otherwise show the current pipeline."""
         if pipeline_name:
-            cs = select(c for c in bbndb.auspex.Connection if c.pipeline_name==pipeline_name)
+            cs = self.session.query(bbndb.auspex.Connection).filter(c.pipeline_name==pipeline_name).all()
             if len(cs) == 0:
                 print(f"No results for pipeline {pipeline_name}")
                 return
