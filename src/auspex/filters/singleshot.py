@@ -79,9 +79,11 @@ class SingleShotMeasurement(Filter):
     async def process_data(self, data):
         """Fill the ground and excited data bins"""
         if data.shape[0] == self.ground_data.size*2:
-            dsplit = np.split(data,self.num_segments)
-            self.ground_data = np.array(dsplit[::2])
-            self.excited_data = np.array(dsplit[1::2])
+            dsplit = np.array(np.split(data,self.num_segments))
+            gd = dsplit[::2]
+            ed = dsplit[1::2]
+            self.ground_data = gd.T
+            self.excited_data = ed.T
             self.counter = self.num_segments+1
         else: 
             if self.counter % 2 != 0:
