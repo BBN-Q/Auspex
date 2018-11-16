@@ -51,7 +51,7 @@ class X6Channel(DigitizerChannel):
         self.dtype = np.float64
         self.ideal_data = None
         
-        self.correlation_matrix = None
+        self.correlator_matrix = None
         self.correlator_inputs = None
 
         if settings_dict:
@@ -193,14 +193,15 @@ class X6(Instrument):
                         self._lib.write_kernel(a, 0, c, 1j*np.zeros(max_kernel_length))
 
     def correlator_setup(self):
-        inputs = [int(x) for x in self.correlator_inputs.split()]
-        matrix = [float(x) for x in self.correlator_matrix.split()]
-        
-        for a in range(1,3):
-            for input in range(len(inputs)):
-                self._lib.write_correlator_inputs(a, input, inputs[input])
-                
-            self._lib.write_correlator_matrix(a, matrix)
+        if(self.correlator_inputs is not None and self.correlator_matrix is not None):
+            inputs = [int(x) for x in self.correlator_inputs.split()]
+            matrix = [float(x) for x in self.correlator_matrix.split()]
+            
+            for a in range(1,3):
+                for input in range(len(inputs)):
+                    self._lib.write_correlator_inputs(a, input, inputs[input])
+                    
+                self._lib.write_correlator_matrix(a, matrix)
                         
     def channel_setup(self, channel):
         a, b, c = channel.channel_tuple
