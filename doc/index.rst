@@ -71,5 +71,3 @@ Contents:
    Qubit Experiments <qubits>
    Plotting Client <plotting>
    Full API <api/auspex>
-
-

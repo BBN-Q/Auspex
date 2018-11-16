@@ -131,7 +131,6 @@ class Plotter(Filter):
                 logger.warning("Exception occured while contacting the plot server. Is it running?")
 
     def update(self):
-        logger.info(f"Sending {self.filter_name}")
         if self.plot_dims.value == 1:
             self.send({'name': self.filter_name, 'msg':'data', 'data': [self.x_values, self.plot_buffer.copy()]})
         elif self.plot_dims.value == 2:

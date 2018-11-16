@@ -133,7 +133,7 @@ class H5Handler(Process):
                     args = (args[0], args[1], args[2], args[3], np.array([args[4]]))
                 # Set up datatype and write buffer if we haven't already
                 self.dtype = args[4].dtype
-                logger.info(f"Dtype for writer is {self.dtype}")
+                logger.debug(f"Dtype for writer is {self.dtype}")
                 try:
                     l = len(args[4])
                 except:

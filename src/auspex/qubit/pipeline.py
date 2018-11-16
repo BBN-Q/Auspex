@@ -56,6 +56,8 @@ class PipelineManager(object):
             measurements = [c for c in cdb.channels if c.label in meas_labels]
         self.qubits = qubits
         self.qubit_proxies = {q.label: bbndb.auspex.QubitProxy(self, q.label) for q in qubits}
+        for q in self.qubit_proxies.values():
+            q.pipelineMgr = self
 
         # Build a mapping of qubits to receivers, construct qubit proxies
         receiver_chans_by_qubit = {}
@@ -75,8 +77,8 @@ class PipelineManager(object):
         for qp in self.qubit_proxies.values():
             qp.create_default_pipeline(buffers=buffers)
 
-        for el in self.meas_graph.nodes():
-            self.session.add(el)
+        # for el in self.meas_graph.nodes():
+        #     self.session.add(el)
         self.session.commit()
         self.save_pipeline("working")
 
@@ -143,7 +145,7 @@ class PipelineManager(object):
                     hist = getattr(inspr.attrs, c.name).history
                     dirty = "Yes" if hist.has_changes() else ""
                     table_code += f"<tr><td></td><td>{c.name}</td><td>{getattr(node,c.name)}</td><td>{dirty}</td></tr>"
-        display(HTML(f"<table><tr><th>Name</th><th>Attribute</th><th>Value</th><th>Changes</th></tr><tr>{table_code}</tr></table>"))
+        display(HTML(f"<table><tr><th>Name</th><th>Attribute</th><th>Value</th><th>Uncommitted Changes</th></tr><tr>{table_code}</tr></table>"))
 
     def reset_pipelines(self):
         for qp in self.qubit_proxies.values():
