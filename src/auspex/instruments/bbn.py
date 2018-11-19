@@ -166,51 +166,6 @@ class APS(Instrument, metaclass=MakeSettersGetters):
     """BBN APSI or DACII"""
 
     instrument_type = "AWG"
-    yaml_template = """
-    APS-Name:
-      type: APS               # Used by QGL and Auspex. QGL assumes XXXPattern for the pattern generator
-      enabled: true            # true or false, optional
-      master: true             # true or false
-      slave_trig:              # name of marker below, optional, i.e. 12m4. Used by QGL.
-      address:                 # APS serial number
-      trigger_interval: 0.0    # (s)
-      trigger_source: External # Internal or External
-      sequence_file: test.h5        # optional sequence file
-      tx_channels:             # All transmit channels
-        '12':                  # Quadrature channel name (string)
-          phase_skew: 0.0      # (deg) - Used by QGL
-          amp_factor: 1.0      # Used by QGL
-          delay: 0.0           # (s) - Used by QGL
-          '1':
-            enabled: true
-            offset: 0.0
-            amplitude: 1.0
-          '2':
-            enabled: true
-            offset: 0.0
-            amplitude: 1.0
-         '34':                  # Quadrature channel name (string)
-           phase_skew: 0.0      # (deg) - Used by QGL
-           amp_factor: 1.0      # Used by QGL
-           delay: 0.0           # (s) - Used by QGL
-           '1':
-             enabled: true
-             offset: 0.0
-             amplitude: 1.0
-           '2':
-             enabled: true
-             offset: 0.0
-             amplitude: 1.0
-      markers:
-        1m1:
-          delay: 0.0         # (s)
-        2m1:
-          delay: 0.0
-        3m1:
-          delay: 0.0
-        4m1:
-          delay: 0.0
-                    """
 
     def __init__(self, resource_name=None, name="Unlabled APS"):
         self.name = name
@@ -399,40 +354,6 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
     """BBN APS2"""
     instrument_type = "AWG"
 
-    yaml_template = """
-        APS2-Name:
-          type: APS2               # Used by QGL and Auspex. QGL assumes XXXPattern for the pattern generator
-          enabled: true            # true or false, optional
-          master: true             # true or false
-          slave_trig:              # name of marker below, optional, i.e. 12m4. Used by QGL.
-          address:                 # IP address or hostname should be fine
-          trigger_interval: 0.0    # (s)
-          trigger_source: External # Internal, External, Software, or System
-          seq_file: test.h5        # optional sequence file
-          tx_channels:             # All transmit channels
-            '12':                  # Quadrature channel name (string)
-              phase_skew: 0.0      # (deg) - directly set in the instrument
-              amp_factor: 1.0      # directly set in the instrument
-              delay: 0.0           # (s) - Used by QGL
-              '1':
-                enabled: true
-                offset: 0.0
-                amplitude: 1.0
-              '2':
-                enabled: true
-                offset: 0.0
-                amplitude: 1.0
-          markers:
-            12m1:
-              delay: 0.0         # (s)
-            12m2:
-              delay: 0.0
-            12m3:
-              delay: 0.0
-            12m4:
-              delay: 0.0
-    """
-
     def __init__(self, resource_name=None, name="Unlabeled APS2"):
         self.name = name
         self.resource_name = resource_name
@@ -602,15 +523,6 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
 class TDM(APS2):
     """BBN TDM"""
     instrument_type = "AWG"
-
-    yaml_template = """
-        APS2-Name:
-          type: TDM                # Used by Auspex. TDMPattern for QGL not yet available
-          enabled: true            # true or false, optional
-          address:                 # IP address or hostname should be fine
-          trigger_interval: 0.0    # (s)
-          trigger_source: Internal # Internal, Software, or System
-          sequence_file: test.h5        # optional sequence file"""
 
     def set_all(self, settings_dict):
         super(APS2, self).set_all(settings_dict)

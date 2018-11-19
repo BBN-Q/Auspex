@@ -8,7 +8,6 @@ networkx >= 1.11
 matplotlib >= 2.0.0
 cffi >= 1.9.1
 scikit-learn >= 0.18.1
-ruamel.yaml >= 0.15.18
 psutil >= 5.0.0
 pyzmq >= 16.0.0
 git+https://github.com/bbn-q/bbndb.git@master

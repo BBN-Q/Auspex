@@ -12,10 +12,6 @@ import os, os.path
 import sys
 from shutil import move
 from io import StringIO
-try:
-    import ruamel.yaml as yaml
-except:
-    import ruamel_yaml as yaml
 
 # Profiling
 profile = False
