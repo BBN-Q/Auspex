@@ -133,6 +133,9 @@ todo_include_todos = False
 #
 html_theme = 'sphinx_rtd_theme'
 
+# Try to get css table styles correct for nbsphinx
+# html_css_files = ['https://cdn.jupyter.org/notebook/5.1.0/style/style.min.css']
+
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
 # documentation.

@@ -31,13 +31,6 @@ auspex\.parameter module
     :members:
     :undoc-members:
 
-auspex\.plot_server module
---------------------------
-
-.. automodule:: auspex.plot_server
-    :members:
-    :undoc-members:
-
 auspex\.refine module
 ---------------------
 

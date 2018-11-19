@@ -14,4 +14,4 @@ git+https://github.com/bbn-q/bbndb.git@master
 pyusb >= 1.0.2
 sphinx>=1.4
 ipykernel
-nbsphinx
+git+https://github.com/spatialaudio/nbsphinx.git@master
