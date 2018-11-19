@@ -52,7 +52,7 @@ Which will automatically fetch and install all of the requirements. If you are u
 Qubit Experiments
 *****************
 
-Auspex is agnostic to the type of experiment being performed, but we have included a special :ref:`QubitExpFactory <qubitexpfactory>` that is designed to work seamlessly with `QGL <https://github.com/BBN-Q/QGL>`_ to allow for simple execution of experiments on superconducting qubits. Though Auspex is generally decoupled from other BBN software packages, this mode of operation introduces *QGL* as a dependency. Depending on the experiments being run, one may need to install a number of additional driver libraries.
+Auspex is agnostic to the type of experiment being performed, but we include infrastructure for configuring and executing :ref:`qubit experiments <qubits>` using the gate-level `QGL <https://github.com/BBN-Q/QGL>`_ language. In this case, auspex relies on `bbndb <https://github.com/BBN-Q/bbndb>`_ as a database backend for sharing state and keeping track of configurations. Depending on the experiments being run, one may need to install a number of additional driver libraries.
 
 
 Genealogy and Etymology
@@ -69,5 +69,5 @@ Contents:
    Defining Experiments <experiments>
    Advanced Sweeps <sweeps>
    Qubit Experiments <qubits>
-   Plotting Client <plotting>
+   Plotting Server <plotting>
    Full API <api/auspex>

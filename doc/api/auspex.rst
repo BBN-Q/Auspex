@@ -8,13 +8,7 @@ Subpackages
     auspex.analysis
     auspex.filters
     auspex.instruments
-
-auspex\.exp\_factory module
----------------------------
-.. _qubitexpfactory:
-.. automodule:: auspex.exp_factory
-    :members:
-    :undoc-members:
+    auspex.qubit
 
 auspex\.experiment module
 -------------------------
@@ -37,17 +31,10 @@ auspex\.parameter module
     :members:
     :undoc-members:
 
-auspex\.plotting module
------------------------
+auspex\.plot_server module
+--------------------------
 
-.. automodule:: auspex.plotting
-    :members:
-    :undoc-members:
-
-auspex\.pulse\_calibration module
----------------------------------
-
-.. automodule:: auspex.pulse_calibration
+.. automodule:: auspex.plot_server
     :members:
     :undoc-members:
 
@@ -55,13 +42,6 @@ auspex\.refine module
 ---------------------
 
 .. automodule:: auspex.refine
-    :members:
-    :undoc-members:
-
-auspex\.single\_shot\_fidelity module
----------------------------
-.. _singleshotfidelityexperiment:
-.. automodule:: auspex.single_shot_fidelity
     :members:
     :undoc-members:
 
