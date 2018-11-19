@@ -11,7 +11,7 @@ scikit-learn >= 0.18.1
 ruamel.yaml >= 0.15.18
 psutil >= 5.0.0
 pyzmq >= 16.0.0
-bbndb >= 0.1
+git+https://github.com/bbn-q/bbndb.git@master
 pyusb >= 1.0.2
 sphinx>=1.4
 ipykernel
