@@ -9,6 +9,7 @@ import re
 import base64
 import datetime
 import copy
+from functools import wraps
 
 import numpy as np
 import networkx as nx
@@ -23,6 +24,21 @@ import bbndb
 from auspex.log import logger
 
 pipelineMgr = None
+
+def check_session_dirty(f):
+    """Since we can't mix db objects from separate sessions, re-fetch entities by their unique IDs"""
+    @wraps(f)
+    def wrapper(cls, *args, **kwargs):
+        if (len(cls.session.dirty | cls.session.new)) == 0:
+            if 'force' in kwargs:
+                kwargs.pop('force')
+            return f(cls, *args, **kwargs)
+        elif 'force' in kwargs and kwargs['force']:
+            kwargs.pop('force')
+            return f(cls, *args, **kwargs)
+        else:
+            raise Exception("Uncommitted transactions for working database. Either use force=True or commit/revert your changes.")        
+    return wrapper
 
 class PipelineManager(object):
     """Create and run Qubit Experiments."""
@@ -55,7 +71,7 @@ class PipelineManager(object):
             meas_labels = ["M-"+q.label for q in qubits]
             measurements = [c for c in cdb.channels if c.label in meas_labels]
         self.qubits = qubits
-        self.qubit_proxies = {q.label: bbndb.auspex.QubitProxy(self, q.label) for q in qubits}
+        self.qubit_proxies = {q.label: bbndb.auspex.QubitProxy(pipelineMgr=self, qubit_name=q.label) for q in qubits}
         for q in self.qubit_proxies.values():
             q.pipelineMgr = self
 
@@ -80,7 +96,7 @@ class PipelineManager(object):
         # for el in self.meas_graph.nodes():
         #     self.session.add(el)
         self.session.commit()
-        self.save_pipeline("working")
+        self.save_as("working")
 
     def qubit(self, qubit_name):
         return self.qubit_proxies[qubit_name]
@@ -91,34 +107,48 @@ class PipelineManager(object):
 
         for name, time in self.session.query(bbndb.auspex.Connection.pipeline_name, bbndb.auspex.Connection.time).distinct().all():
             y, d, t = map(time.strftime, ["%Y", "%b. %d", "%I:%M:%S %p"])
-            # t = time.strftime("(%Y) %b. %d @ %I:%M:%S %p")
             table_code += f"<tr><td>{i}</td><td>{y}</td><td>{d}</td><td>{t}</td><td>{name}</td></tr>"
             i += 1
         display(HTML(f"<table><tr><th>id</th><th>Year</th><th>Date</th><th>Time</th><th>Name</th></tr><tr>{table_code}</tr></table>"))
 
-
-    def save_pipeline(self, name):
+    @check_session_dirty
+    def save_as(self, name):
         now = datetime.datetime.now()
-        cs = [bbndb.auspex.Connection(pipeline_name=name, node1=n1, node2=n2, time=now) for n1, n2 in self.meas_graph.edges()]
-        for c in cs:
-            self.session.add(c)
+        for n1, n2 in self.meas_graph.edges():
+            new_node1 = bbndb.copy_sqla_object(n1, self.session)
+            new_node2 = bbndb.copy_sqla_object(n2, self.session)
+            c = bbndb.auspex.Connection(pipeline_name=name, node1=new_node1, node2=new_node2, time=now)
+            self.session.add_all([n1, n2, c])
+        self.session.commit()
 
-    def load_pipeline(self, pipeline_name):
-        cs = select(c for c in bbndb.auspex.Connection if c.pipeline_name==pipeline_name)
+    @check_session_dirty
+    def load(self, pipeline_name):
+        cs = self.session.query(bbndb.auspex.Connection).filter_by(pipeline_name=pipeline_name).all()
         if len(cs) == 0:
-            print(f"No results for pipeline {pipeline_name}")
-            return
+            raise Exception(f"Could not find pipeline named {pipeline_name}")
         else:
-            temp_edges = [(c.node1, c.node2) for c in cs]
-            self.meas_graph.clear()
-            self.meas_graph.add_edges_from(temp_edges)
+            nodes = []
+            new_by_old = {}
+            edges = []
+            # Find all nodes
             for c in cs:
-                c.node1.exp = c.node2.exp = self
+                nodes.extend([c.node1, c.node2])
+            # Copy unique nodes into new objects
+            for n in list(set(nodes)):
+                new_by_old[n] = bbndb.copy_sqla_object(n, self.session)
+                new_by_old[n].pipeline = self
+            # Add edges between new objects
+            for c in cs:
+                edges.append((new_by_old[c.node1], new_by_old[c.node2]))
+            self.session.add_all(new_by_old.values())
+            self.session.commit()
+            self.meas_graph.clear()
+            self.meas_graph.add_edges_from(edges)
 
     def show_pipeline(self, pipeline_name=None):
         """If a pipeline name is specified query the database, otherwise show the current pipeline."""
         if pipeline_name:
-            cs = self.session.query(bbndb.auspex.Connection).filter(c.pipeline_name==pipeline_name).all()
+            cs = self.session.query(bbndb.auspex.Connection).filter_by(pipeline_name=pipeline_name).all()
             if len(cs) == 0:
                 print(f"No results for pipeline {pipeline_name}")
                 return
