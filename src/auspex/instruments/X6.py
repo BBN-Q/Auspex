@@ -50,7 +50,7 @@ class X6Channel(DigitizerChannel):
 
         self.dtype = np.float64
         self.ideal_data = None
-        
+
         self.correlator_matrix = None
         self.correlator_inputs = None
 
@@ -166,8 +166,8 @@ class X6(Instrument):
     def set_all(self, settings_dict):
         # Call the non-channel commands
         super(X6, self).set_all(settings_dict)
-        correlator_setup()
-        
+        self.correlator_setup()
+
         # Set data for testing
         try:
             self.ideal_data = np.load(os.path.abspath(self.ideal_data+'.npy'))
@@ -194,15 +194,15 @@ class X6(Instrument):
 
     def correlator_setup(self):
         if(self.correlator_inputs is not None and self.correlator_matrix is not None):
-            inputs = [int(x) for x in self.correlator_inputs.split()]
-            matrix = [float(x) for x in self.correlator_matrix.split()]
-            
+            inputs = [int(x) for x in self.correlator_inputs.split(',')]
+            matrix = np.array([float(x) for x in self.correlator_matrix.split(',')])
+
             for a in range(1,3):
                 for input in range(len(inputs)):
-                    self._lib.write_correlator_inputs(a, input, inputs[input])
-                    
+                    self._lib.set_correlator_input(a, input, inputs[input])
+
                 self._lib.write_correlator_matrix(a, matrix)
-                        
+
     def channel_setup(self, channel):
         a, b, c = channel.channel_tuple
         self._lib.enable_stream(a, b, c)
