@@ -13,3 +13,6 @@ psutil >= 5.0.0
 pyzmq >= 16.0.0
 bbndb >= 0.1
 pyusb >= 1.0.2
+sphinx>=1.4
+ipykernel
+nbsphinx
