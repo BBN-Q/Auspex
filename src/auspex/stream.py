@@ -138,6 +138,7 @@ class DataAxis(object):
         return "<DataAxis(name={}, start={}, stop={}, num={}, unit={})>".format(
             self.name, self.points[0], self.points[-1], len(self.points), self.unit)
 
+
 class SweepAxis(DataAxis):
     """ Structure for sweep axis, separate from DataAxis.
     Can be an unstructured axis, in which case 'parameter' is actually a list of parameters. """
