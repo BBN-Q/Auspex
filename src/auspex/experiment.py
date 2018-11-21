@@ -596,7 +596,7 @@ class Experiment(metaclass=MetaExperiment):
             session.show(container)
 
         # Start the filter processes
-        for n in self.other_nodes:
+        for n in self.other_nodes + self.manual_plotters:
             n.start()
 
         # Run the main experiment loop
@@ -632,6 +632,10 @@ class Experiment(metaclass=MetaExperiment):
             perf_thread.join()
 
         self.shutdown()
+
+    def stop_manual_plotters(self):
+        for mp in self.manual_plotters:
+            mp.stop()
 
     def shutdown(self):
         logger.debug("Shutting Down!")

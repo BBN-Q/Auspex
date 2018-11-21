@@ -244,7 +244,10 @@ class MeshPlotter(Filter):
             self.context.term()
 
 class ManualPlotter(object):
-    """Establish a figure, then give the user complete control over plot creation and data."""
+    """
+    Establish a figure, then give the user complete control over plot creation and data. There isn't any reason to 
+    run this as a process, but we provide the same interface for convenience.
+    """
     def __init__(self,  name="", x_label=['X'], y_label=["y"], y_lim=None, numplots = 1):
         self.x_label      = x_label if type(x_label) == list else [x_label]
         self.y_label      = y_label if type(y_label) == list else [y_label]
@@ -253,14 +256,25 @@ class ManualPlotter(object):
         self.numplots     = numplots
         self.traces       = []
 
-        # This will hold the matplot server
-        self.plot_queue = None
+        # Calls block so this won't ever hang
+        self.done = True
 
         # Unique id for plot server
         self.uuid = None
 
         # Should we actually produce plots?
         self.do_plotting = True
+
+    def start(self):
+        self.execute_on_run()
+
+    def stop(self):
+        if self.do_plotting:
+            try:
+                self.socket.close()
+                self.context.term()
+            except:
+                logger.warning(f"Exception occured while closing socket and context for {self}")
 
     def send(self, message):
         if self.do_plotting:
@@ -288,7 +302,8 @@ class ManualPlotter(object):
                 self.socket.setsockopt(zmq.LINGER, 0)
                 self.socket.identity = f"Auspex_Experiment {str(uuid.uuid4())}".encode()
                 self.socket.connect("tcp://localhost:7762")
-                self.socket.send_multipart([b"wtf", b"wtf2"])
+                logger.info("Socket connected...")
+                # self.socket.send_multipart([b"wtf", b"wtf2"])
             except:
                 logger.warning("Exception occured while contacting the plot server. Is it running?")
 
