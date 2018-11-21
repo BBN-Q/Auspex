@@ -152,8 +152,8 @@ class QubitExperiment(Experiment):
             receiver.stream_type = self.qubit_proxies[qubit_label].stream_type
 
         # Now a pipeline exists, so we create Auspex filters from the proxy filters in the db
-        proxy_to_filter      = {}
-        connector_by_qp      = {}
+        self.proxy_to_filter  = {}
+        self.connector_by_qp  = {}
         self.chan_to_dig      = {}
         self.chan_to_oc       = {}
         self.qubit_to_dig     = {}
@@ -203,13 +203,13 @@ class QubitExperiment(Experiment):
             # Add the output connectors to the experiment and set their base descriptor
             mqp = self.qubit_proxies[mq.label]
 
-            connector_by_qp[mqp] = self.add_connector(mqp)
-            connector_by_qp[mqp].set_descriptor(descriptor)
+            self.connector_by_qp[mqp] = self.add_connector(mqp)
+            self.connector_by_qp[mqp].set_descriptor(descriptor)
 
             # Add the channel to the instrument
             dig.instr.add_channel(channel)
             self.chan_to_dig[channel] = dig.instr
-            self.chan_to_oc [channel] = connector_by_qp[mqp]
+            self.chan_to_oc [channel] = self.connector_by_qp[mqp]
             self.qubit_to_dig[mq.id]  = dig
 
         # Find the number of self.measurements
@@ -227,34 +227,41 @@ class QubitExperiment(Experiment):
         # Restrict the graph to the relevant qubits
         measured_qubit_names = [q.label for q in self.measured_qubits]
         pipeline.pipelineMgr.session.commit()
+
+        # Any modifications to be done by subclasses, just a passthrough here
+        mod_graph = self.modify_graph(pipeline.pipelineMgr.meas_graph)
+
         # Configure the individual filter nodes
-        for node in pipeline.pipelineMgr.meas_graph.nodes():
+        for node in mod_graph.nodes():
             if isinstance(node, bbndb.auspex.FilterProxy):
                 if node.qubit_name in measured_qubit_names:
                     new_filt = filter_map[type(node)]()
                     # logger.info(f"Created {new_filt} from {node}")
                     new_filt.configure_with_proxy(node)
                     new_filt.proxy = node
-                    proxy_to_filter[node] = new_filt
+                    self.proxy_to_filter[node] = new_filt
                     if isinstance(node, bbndb.auspex.OutputProxy):
                         self.qubits_by_output[new_filt] = node.qubit_name
 
         # Connect the filters together
         graph_edges = []
         pipeline.pipelineMgr.session.commit()
-        for node1, node2 in pipeline.pipelineMgr.meas_graph.edges():
+        for node1, node2 in mod_graph.edges():
             if node1.qubit_name in measured_qubit_names and node2.qubit_name in measured_qubit_names:
                 if isinstance(node1, bbndb.auspex.FilterProxy):
-                    filt1 = proxy_to_filter[node1]
+                    filt1 = self.proxy_to_filter[node1]
                     oc   = filt1.output_connectors["source"]
                 elif isinstance(node1, bbndb.auspex.QubitProxy):
-                    oc   = connector_by_qp[node1]
-                filt2 = proxy_to_filter[node2]
+                    oc   = self.connector_by_qp[node1]
+                filt2 = self.proxy_to_filter[node2]
                 ic   = filt2.input_connectors["sink"]
                 graph_edges.append([oc, ic])
 
         # Define the experiment graph
         self.set_graph(graph_edges)
+
+    def modify_graph(self, graph):
+        return graph
 
     def set_fake_data(self, instrument, ideal_data):
         instrument.instr.ideal_data = ideal_data
