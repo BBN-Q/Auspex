@@ -225,18 +225,21 @@ class QubitExperiment(Experiment):
             dig.instr.proxy_obj  = dig
 
         # Restrict the graph to the relevant qubits
-        measured_qubit_names = [q.label for q in self.measured_qubits]
+        self.measured_qubit_names = [q.label for q in self.measured_qubits]
         pipeline.pipelineMgr.session.commit()
 
         # Any modifications to be done by subclasses, just a passthrough here
-        mod_graph = self.modify_graph(pipeline.pipelineMgr.meas_graph)
+        self.modified_graph = self.modify_graph(pipeline.pipelineMgr.meas_graph)
 
+        # Compartmentalize the instantiation
+        self.instantiate_filters(self.modified_graph)
+
+    def instantiate_filters(self, graph):
         # Configure the individual filter nodes
-        for node in mod_graph.nodes():
+        for node in graph.nodes():
             if isinstance(node, bbndb.auspex.FilterProxy):
-                if node.qubit_name in measured_qubit_names:
+                if node.qubit_name in self.measured_qubit_names:
                     new_filt = filter_map[type(node)]()
-                    # logger.info(f"Created {new_filt} from {node}")
                     new_filt.configure_with_proxy(node)
                     new_filt.proxy = node
                     self.proxy_to_filter[node] = new_filt
@@ -246,8 +249,8 @@ class QubitExperiment(Experiment):
         # Connect the filters together
         graph_edges = []
         pipeline.pipelineMgr.session.commit()
-        for node1, node2 in mod_graph.edges():
-            if node1.qubit_name in measured_qubit_names and node2.qubit_name in measured_qubit_names:
+        for node1, node2 in graph.edges():
+            if node1.qubit_name in self.measured_qubit_names and node2.qubit_name in self.measured_qubit_names:
                 if isinstance(node1, bbndb.auspex.FilterProxy):
                     filt1 = self.proxy_to_filter[node1]
                     oc   = filt1.output_connectors["source"]
@@ -263,8 +266,9 @@ class QubitExperiment(Experiment):
     def modify_graph(self, graph):
         return graph
 
-    def set_fake_data(self, instrument, ideal_data):
+    def set_fake_data(self, instrument, ideal_data, increment=False):
         instrument.instr.ideal_data = ideal_data
+        instrument.instr.increment_ideal_data = increment
 
     def clear_fake_data(self, instrument):
         instrument.instr.ideal_data = None

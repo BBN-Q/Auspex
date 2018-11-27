@@ -114,8 +114,11 @@ class X6(Instrument):
         self.name          = name
 
         self.last_timestamp = Value('d', datetime.datetime.now().timestamp())
-        self.gen_fake_data = gen_fake_data
-        self.ideal_data = None
+        
+        self.gen_fake_data        = gen_fake_data
+        self.increment_ideal_data = False
+        self.ideal_counter        = 0
+        self.ideal_data           = None
 
         self.timeout = 10.0
 
@@ -155,19 +158,6 @@ class X6(Instrument):
         self._lib.disconnect()
 
     def configure_with_dict(self, settings_dict):
-        # Call the non-channel commands
-        # super(X6, self).set_all(settings_dict)
-        # Set data for testing
-        # try:
-        #     if "ideal_data" in settings_dict.keys():
-        #         self.ideal_data = np.load(os.path.abspath(settings_dict["ideal_data"]+'.npy'))
-        #     else:
-        #         self.ideal_data = None
-        # except:
-        #     logger.warning(f"Could not find ideal data...")
-        #     self.ideal_data = None
-
-
         # Take these directly from the proxy obj
         self.number_averages  = self.proxy_obj.number_averages
         self.number_waveforms = self.proxy_obj.number_waveforms
@@ -182,7 +172,7 @@ class X6(Instrument):
         integrated_channels = [chan for chan in self._channels if chan.stream_type == 'integrated']
         if integrated_channels:
             max_kernel_length = max([len(chan.kernel) for chan in integrated_channels])
-            # pad kernes to the maximum length
+            # pad kernels to the maximum length
             for chan in integrated_channels:
                 if len(chan.kernel) < max_kernel_length:
                     np.append(chan.kernel, 1j*np.zeros(max_kernel_length - len(chan.kernel)))
@@ -202,7 +192,6 @@ class X6(Instrument):
         elif channel.stream_type == "demodulated":
             self._lib.set_nco_frequency(a, b, channel.if_freq)
         elif channel.stream_type == "integrated":
-            # import ipdb; ipdb.set_trace()
             if channel.kernel is None:
                 logger.error("Integrated streams must specify a kernel")
                 return
@@ -246,7 +235,7 @@ class X6(Instrument):
         # todo: other checking here
         self._channels.append(channel)
 
-    def spew_fake_data(self, counter, ideal_datapoint=0):
+    def spew_fake_data(self, counter, ideal_datapoint=0, random_mag=0.1, random_seed=12345):
         """
         Generate fake data on the stream. For unittest usage.
         ideal_datapoint: mean of the expected signal for stream_type =  "Integrated".
@@ -256,22 +245,23 @@ class X6(Instrument):
         the test with fake data
         """
         total = 0
+        np.random.seed(random_seed)
 
         for chan, wsock in self._chan_to_wsocket.items():
             if chan.stream_type == "integrated":
                 length = 1
-                data = 0.5 + 0.1*(np.random.random(length).astype(chan.dtype) + 1j*np.random.random(length).astype(chan.dtype)) + ideal_datapoint
+                data = random_mag*(np.random.random(length).astype(chan.dtype) + 1j*np.random.random(length).astype(chan.dtype)) + ideal_datapoint
             elif chan.stream_type == "demodulated":
                 length = int(self._lib.record_length/32)
                 data = np.zeros(length, dtype=chan.dtype)
                 data[int(length/4):int(3*length/4)] = 1.0 if ideal_datapoint == 0 else ideal_datapoint
-                data += 0.1*(np.random.random(length) + 1j*np.random.random(length))
+                data += random_mag*(np.random.random(length) + 1j*np.random.random(length))
             else: #Raw
                 length = int(self._lib.record_length/4)
                 signal = np.sin(np.linspace(0,10.0*np.pi,int(length/2)))
                 data = np.zeros(length, dtype=chan.dtype)
                 data[int(length/4):int(length/4)+len(signal)] = signal * (1.0 if ideal_datapoint == 0 else ideal_datapoint)
-                data += 0.1*np.random.random(length)
+                data += random_mag*np.random.random(length)
             total += length
             wsock.send(struct.pack('n', length*data.dtype.itemsize) + data.tostring())
             counter[chan] += length
@@ -329,14 +319,19 @@ class X6(Instrument):
             total_spewed = 0
 
             counter = {chan: 0 for chan in self._chan_to_wsocket.keys()}
-            # logger.info(f"X6 getting {self._lib.nbr_round_robins} {self._lib.nbr_segments} {self._lib.record_length}")
+            initial_points = {oc: oc.points_taken.value for oc in ocs}
             for j in range(self._lib.nbr_round_robins):
                 for i in range(self._lib.nbr_segments):
                     if self.ideal_data is not None:
                         #add ideal data for testing
-                        if hasattr(self, 'exp_step'):
+                        if hasattr(self, 'exp_step') and self.increment_ideal_data:
+                            raise Exception("Cannot use both exp_step and increment_ideal_data")
+                        elif hasattr(self, 'exp_step'):
                             total_spewed += self.spew_fake_data(
                                     counter, self.ideal_data[self.exp_step][i])
+                        elif self.increment_ideal_data:
+                            total_spewed += self.spew_fake_data(
+                                   counter, self.ideal_data[self.ideal_counter][i])
                         else:
                             total_spewed += self.spew_fake_data(
                                     counter, self.ideal_data[i])
@@ -345,14 +340,15 @@ class X6(Instrument):
 
                     time.sleep(0.0001)
 
+            self.ideal_counter += 1
             # logger.info("Counter: %s", str(counter))
             # logger.info('TOTAL fake data generated %d', total_spewed)
             if ocs:
                 while True:
                     total_taken = 0
                     for oc in ocs:
-                        total_taken += oc.points_taken.value
-                        # logger.info('TOTAL fake data received %d', oc.points_taken.value)
+                        total_taken += oc.points_taken.value - initial_points[oc]
+                        # logger.info('TOTAL fake data received %d', oc.points_taken.value - initial_points[oc])
                     if total_taken == total_spewed:
                         break
 
