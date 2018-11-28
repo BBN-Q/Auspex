@@ -369,376 +369,109 @@ class RabiAmpCalibration(Calibration):
         awg_chan.I_channel_offset += round(amp_factor*self.amp2offset*self.i_offset, 5)
         awg_chan.Q_channel_offset += round(amp_factor*self.amp2offset*self.i_offset, 5)
 
-
-# class PulseCalibrationExperiment(QubitExperiment):
-#     """Actual experiment that gets run for """
-#     def __init__(self, qubits, output_nodes=None, quad="real", auto_rollback=True):
-#         self.qubits           = qubits if isinstance(qubits, list) else [qubits]
-#         self.qubit            = None if isinstance(qubits, list) else qubits
-#         self.output_nodes     = output_nodes if isinstance(output_nodes, list) else [output_nodes]
-#         self.filename         = 'None'
-#         self.axis_descriptor  = None
-#         self.leave_plots_open = True
-#         self.cw_mode          = False
-#         self.quad             = quad
-#         self.succeeded        = False
-#         self.norm_points      = None
-#         self.auto_rollback    = True # Rollback any db changes upon calibration failure
-#         try:
-#             self.quad_fun = {"real": np.real, "imag": np.imag, "amp": np.abs, "phase": np.angle}[quad]
-#         except:
-#             raise ValueError('Quadrature to calibrate must be one of ("real", "imag", "amp", "phase").')
-
-#         # Compile sequence
-#         self.meta_file = self.compile()
-
-#         # Configure, which loads the pipeline and meta_info. During this process the measurement graph is modified
-#         # according to the function modify_graph
-#         super(PulseCalibrationExperiment, self).__init__(self.meta_file)
-
-#         # Setup plots
-#         self.plot = self.init_plots()
-#         if self.plot:
-#             [self.add_manual_plotter(p) for p in self.plot] if isinstance(self.plot, list) else self.add_manual_plotter(self.plot)
-
-#         # Modify instrument configuration etc. 
-#         self.configure_calibration()
-    
-#     def guess_output_nodes(self, graph):
-#         output_nodes = []
-#         for qubit in self.qubits:
-#             ds = nx.descendants(graph, self.qubit_proxies[qubit.label])
-#             outputs = [d for d in ds if isinstance(d, (bbndb.auspex.Write, bbndb.auspex.Buffer))]
-#             if len(outputs) != 1:
-#                 raise Exception(f"More than one output node found for {qubit}, please explicitly define output node using output_nodes argument.")
-#             output_nodes.append(outputs[0])
-#         return output_nodes
-
-#     def compile(self):
-#         return compile_to_hardware(self.sequence(), fileName=self.filename, axis_descriptor=self.descriptor())
-
-#     def descriptor(self):
-#         return None
-
-#     def modify_graph(self, graph):
-#         """Change the graph as needed. By default we changes all writers to buffers"""
-#         if None in self.output_nodes:
-#             self.output_nodes = self.guess_output_nodes(graph)
-
-#         for output_node in self.output_nodes:
-#             if output_node not in graph:
-#                 raise ValueError(f"Could not find specified output node {output_node} in graph.")
-
-#         for qubit in self.qubits:
-#             if self.qubit_proxies[qubit.label] not in graph:
-#                 raise ValueError(f"Could not find specified qubit {qubit} in graph.")
-
-#         mapping = {}
-#         for i in range(len(self.output_nodes)):
-#             output_node = self.output_nodes[i]
-#             if isinstance(output_node, bbndb.auspex.Write):
-#                 # Change the output node to a buffer
-#                 mapping[output_node] = bbndb.auspex.Buffer(label=output_node.label, qubit_name=output_node.qubit_name)
-#                 self.output_nodes[i] = mapping[output_node]
-#             if not isinstance(self.output_nodes[i], bbndb.auspex.Buffer):
-#                 raise ValueError(f"Specified output {self.output_nodes[i]} node is not a buffer or could not be converted to a buffer")
-#         nx.relabel_nodes(graph, mapping, copy=False)
-
-#         # Disable any paths not involving the buffer
-#         new_graph = nx.DiGraph()
-#         for output_node, qubit in zip(self.output_nodes, self.qubits):
-#             path  = nx.shortest_path(graph, self.qubit_proxies[qubit.label], output_node)
-#             new_graph.add_path(path)
-
-#         return new_graph
-
-#     def sequence(self):
-#         """Returns the sequence for the given calibration, must be overridden"""
-#         return [[Id(self.qubit), MEAS(self.qubit)]]
-
-#     def run_sweeps(self):
-#         """The main execution of the calibration"""
-#         super(PulseCalibrationExperiment, self).run_sweeps()
-#         data = {}
-#         var = {}
-
-#         for qubit, output in zip(self.qubits, [self.proxy_to_filter[on] for on in self.output_nodes]):
-#             if not isinstance(output, DataBuffer):
-#                 raise ValueError("Could not find data buffer for calibration.")
-
-#             dataset, descriptor = output.get_data(), output.get_descriptor()
-#             if self.norm_points:
-#                 buff_data = normalize_data(dataset, zero_id=self.norm_points[self.qubit.label][0], 
-#                                            one_id=self.norm_points[self.qubit.label][1])
-#             else:
-#                 buff_data = dataset['Data']
-
-#             data[qubit.label] = self.quad_fun(buff_data)
-#             if 'Variance' in dataset.dtype.names:
-#                 realvar = np.real(dataset['Variance'])
-#                 imagvar = np.imag(dataset['Variance'])
-#                 N = descriptor.metadata["num_averages"]
-#                 if self.quad in ['real', 'imag']:
-#                     var[qubit.label] = self.quad_fun(dataset['Variance'])/N
-#                 elif self.quad == 'amp':
-#                     var[qubit.label] = (realvar + imagvar)/N
-#                 elif self.quad == 'phase':
-#                     # take the approach from Qlab assuming the noise is
-#                     # Gaussian in both quadratures i.e. 'circular' in the IQ plane.
-#                     stddata = np.sqrt(realvar + imagvar)
-#                     stdtheta = 180/np.pi * 2 * np.arctan(stddata/abs(data[qubit.label]))
-#                     var[qubit.label] = (stdtheta**2)/N
-#                 else:
-#                     raise Exception('Variance of {} not available. Choose amp, phase, real or imag'.format(self.quad))
-#             else:
-#                 var[qubit.label] = None
-
-#         # Return data and variance of the mean
-#         if len(data) == 1:
-#             # if single qubit, get rid of dictionary
-#             data = list(data.values())[0]
-#             var = list(var.values())[0]
-#         return data, var
-
-#     def configure_calibration(self):
-#         """Here is where device/channel settings are changed"""
-#         pass
-
-#     def init_plots(self):
-#         """Return a ManualPlotter object so we can plot calibrations. All
-#         plot lines, glyphs, etc. must be declared up front!"""
-#         return None
-
-#     def _calibrate(self):
-#         """Runs the actual calibration routine, must be overridden to provide any useful functionality.
-#         This function is responsible for calling self.update_plot()"""
-#         pass
+class RamseyCalibration(Calibration):
+    def __init__(self, qubit, delays=np.linspace(0.0, 20.0, 41)*1e-6, 
+                two_freqs=False, added_detuning=150e3, set_source=True, AIC=True, **kwargs):
+        self.delays         = delays
+        self.two_freqs      = two_freqs
+        self.added_detuning = added_detuning
+        self.set_source     = set_source
+        self.AIC            = AIC #Akaike information criterion for model choice
         
-#     def calibrate(self):
-#         self.start_manual_plotters()
-#         self._calibrate()
-#         self.stop_manual_plotters()
-#         if self.succeeded:
-#             logger.info(f"Calibration {self} succeeded, updating settings.")
-#             self.update_settings()
-#         elif self.auto_rollback:
-#             pipeline.pipelineMgr.session.rollback()
-#         return self.succeeded
+        super(RamseyCalibration, self).__init__(qubit, **kwargs)
+        self.filename = 'Ramsey/Ramsey'
 
-#     def update_settings(self):
-#         """Update the database with new configuration parameters"""
-#         pass
+    def descriptor(self):
+        return [delay_descriptor(self.delays)]
 
-#     def write_to_log(self, cal_result):
-#         """Log calibration result"""
-#         pass
+    def sequence(self):
+        return [[X90(self.qubit), Id(self.qubit, delay), X90(self.qubit), MEAS(self.qubit)] for delay in self.delays]
 
-#     def add_cal_sweep(self, method, values):
-#         par = FloatParameter()
-#         par.assign_method(method)
-#         self.add_sweep(par, values)
+    def init_plots(self):
+        plot = ManualPlotter("Ramsey Fits", x_label='Time (us)', y_label='Amplitude (Arb. Units)')
+        plot.add_data_trace("Data 1", {'color': 'black'})
+        plot.add_fit_trace("Fit 1", {'color': 'red'})
+        plot.add_data_trace("Data 2", {'color': 'green'})
+        plot.add_fit_trace("Fit 2", {'color': 'blue'})
+        self.plot = plot
+        return [plot]
 
-# class CavityTuneup(PulseCalibrationExperiment):
-#     def __init__(self, qubit, frequencies=np.linspace(4e9, 5e9, 10), **kwargs):
-#         self.frequencies = frequencies
-#         super(CavityTuneup, self).__init__(qubit, **kwargs)
-#         self.cw_mode = True
+    def exp_config(self, exp):
+        if self.first_ramsey:
+            self.source_proxy = self.qubit.phys_chan.generator # DB object
+            self.qubit_source = exp._instruments[self.source_proxy.label] # auspex instrument
+            self.orig_freq    = self.source_proxy.frequency
+            if self.set_source:
+                self.source_proxy.frequency = round(self.orig_freq + self.added_detuning + fit_freq_A/2, 10)
+                self.qubit_source.frequency = self.source_proxy.frequency
+            
 
-#     def sequence(self):
-#         return [[Id(self.qubit), MEAS(self.qubit)]]
+    def calibrate(self):
+        self.first_ramsey = True
 
-#     def configure_calibration(self):
-#         cavity_source = self._instruments[self.qubit.measure_chan.phys_chan.generator.label]
-#         self.add_cal_sweep(cavity_source.set_frequency, self.frequencies)
-
-#     def _calibrate(self):
-#         data, _ = self.run_sweeps()
-#         self.plot["Data"] = (self.frequencies, data)
-
-#         # TODO: fit to standing waves + peak feature
-
-#     def init_plots(self):
-#         plot = ManualPlotter("Qubit Search", x_label='Frequency (GHz)', y_label='Amplitude (Arb. Units)')
-#         plot.add_data_trace("Data", {'color': 'C1'})
-#         plot.add_fit_trace("Fit", {'color': 'C1'})
-#         return plot
-
-# class QubitTuneup(PulseCalibrationExperiment):
-#     def __init__(self, qubit, frequencies=np.linspace(4, 5, 100), **kwargs):
-#         self.frequencies = frequencies
-#         super(QubitTuneup, self).__init__(qubit, **kwargs)
-#         self.cw_mode = True
-
-#     def sequence(self):
-#         return [[X(self.qubit), MEAS(self.qubit)]]
-
-#     def configure_calibration(self):
-#         qubit_source = self._instruments[self.qubit.phys_chan.generator.label]
-#         self.add_cal_sweep(qubit_source.set_frequency, self.frequencies)
-
-#     def _calibrate(self):
-#         data, _ = self.run_sweeps()
-#         self.plot["Data"] = (self.frequencies, data)
-
-#     def init_plots(self):
-#         plot = ManualPlotter("Qubit Search", x_label='Frequency (GHz)', y_label='Amplitude (Arb. Units)')
-#         plot.add_data_trace("Data", {'color': 'C1'})
-#         plot.add_fit_trace("Fit", {'color': 'C1'})
-#         return plot
-
-# class RabiAmpExperiment(PulseCalibrationExperiment):
-
-#     amp2offset = 0.5
-
-#     def __init__(self, qubit, num_steps=40, **kwargs):
-#         if num_steps % 2 != 0:
-#             raise ValueError("Number of steps for RabiAmp calibration must be even!")
-#         #for now, only do one qubit at a time
-#         self.num_steps = num_steps
-#         self.amps = np.hstack((np.arange(-1, 0, 2./num_steps),
-#                                np.arange(2./num_steps, 1+2./num_steps, 2./num_steps)))
-#         super(RabiAmpExperiment, self).__init__(qubit, **kwargs)
-#         self.filename = 'Rabi/Rabi'
-
-#     def sequence(self):
-#         return ([[Xtheta(self.qubit, amp=a), MEAS(self.qubit)] for a in self.amps] +
-#                 [[Ytheta(self.qubit, amp=a), MEAS(self.qubit)] for a in self.amps])
-
-#     def _calibrate(self):
-#         data, _ = self.run_sweeps()
-#         N = len(data)
-#         piI, offI, poptI = fit_rabi_amp(self.amps, data[:N//2])
-#         piQ, offQ, poptQ = fit_rabi_amp(self.amps, data[N//2:])
-#         #Arbitary extra division by two so that it doesn't push the offset too far.
-#         self.pi_amp = piI
-#         self.pi2_amp = piI/2.0
-#         self.i_offset = offI*self.amp2offset
-#         self.q_offset = offQ*self.amp2offset
-#         logger.info("Found X180 amplitude: {}".format(self.pi_amp))
-#         logger.info("Shifting I offset by: {}".format(self.i_offset))
-#         logger.info("Shifting Q offset by: {}".format(self.q_offset))
-#         finer_amps = np.linspace(np.min(self.amps), np.max(self.amps), 4*len(self.amps))
-#         self.plot["I Data"] = (self.amps, data[:N//2])
-#         self.plot["Q Data"] = (self.amps, data[N//2:])
-#         self.plot["I Fit"] = (finer_amps, rabi_amp_model(finer_amps, *poptI))
-#         self.plot["Q Fit"] = (finer_amps, rabi_amp_model(finer_amps, *poptQ))
-
-#         if self.pi_amp <= 1.0 and self.pi2_amp <= 1.0:
-#             self.succeeded = True
-
-#     def init_plots(self):
-#         plot = ManualPlotter("Rabi Amplitude Cal", x_label="I/Q Amplitude", y_label="{} (Arb. Units)".format(self.quad))
-#         plot.add_data_trace("I Data", {'color': 'C1'})
-#         plot.add_data_trace("Q Data", {'color': 'C2'})
-#         plot.add_fit_trace("I Fit", {'color': 'C1'})
-#         plot.add_fit_trace("Q Fit", {'color': 'C2'})
-#         return plot
-
-#     def update_settings(self):
-#         self.qubit.pulse_params['piAmp'] = round(self.pi_amp, 5)
-#         self.qubit.pulse_params['pi2Amp'] = round(self.pi2_amp, 5)
-#         awg_chan   = self.qubit.phys_chan
-#         amp_factor = self.qubit.phys_chan.amp_factor
-#         awg_chan.I_channel_offset += round(amp_factor*self.amp2offset*self.i_offset, 5)
-#         awg_chan.Q_channel_offset += round(amp_factor*self.amp2offset*self.i_offset, 5)
-
-
-# class RamseyCalibration(PulseCalibrationExperiment):
-#     def __init__(self, qubit, delays=np.linspace(0.0, 20.0, 41)*1e-6, two_freqs = False, added_detuning = 150e3, set_source = True, AIC = True, **kwargs):
-#         self.delays = delays
-#         self.two_freqs = two_freqs
-#         self.added_detuning = added_detuning
-#         self.set_source = set_source
-#         self.AIC = AIC #Akaike information criterion for model choice
-#         super(RamseyCalibration, self).__init__(qubit, **kwargs)
-#         self.filename = 'Ramsey/Ramsey'
-
-#     def descriptor(self):
-#         return [delay_descriptor(self.delays)]
-
-#     def sequence(self):
-#         return [[X90(self.qubit), Id(self.qubit, delay), X90(self.qubit), MEAS(self.qubit)] for delay in self.delays]
-
-#     def init_plots(self):
-#         plot = ManualPlotter("Ramsey Fit", x_label='Time (us)', y_label='Amplitude (Arb. Units)')
-#         plot.add_data_trace("Data", {'color': 'black'})
-#         plot.add_fit_trace("Fit", {'color': 'red'})
-#         return plot
-
-#     def _calibrate(self):
-#         source_proxy = self.qubit.phys_chan.generator # DB object
-#         qubit_source = self._instruments[source_proxy.label] # auspex instrument
-#         orig_freq = source_proxy.frequency
+        if not self.set_source:
+            self.qubit.frequency += float(self.added_detuning)
+        data, _ = self.run_sweeps()
+        try:
+            fit_freqs, fit_errs, all_params, all_errs = fit_ramsey(self.delays, data, two_freqs=self.two_freqs, AIC=self.AIC)
+        except Exception as e:
+            raise Exception(f"Exception {e} while fitting in {self}")
         
-#         #plot settings
-#         finer_delays = np.linspace(np.min(self.delays), np.max(self.delays), 4*len(self.delays))
-#         if self.set_source:
-#             source_proxy.frequency = round(orig_freq + self.added_detuning + fit_freq_A/2, 10)
-#             qubit_source.frequency = source_proxy.frequency
-#         else:
-#             self.qubit.frequency += float(self.added_detuning)
-#         data, _ = self.run_sweeps()
-#         try:
-#             fit_freqs, fit_errs, all_params, all_errs = fit_ramsey(self.delays, data, two_freqs = self.two_freqs, AIC = self.AIC)
-#         except Exception as e:
-#             raise Exception(f"Exception {e} while fitting in {self}")
+        # Plot the results
+        self.plot["Data 1"] = (self.delays, data)
+        finer_delays = np.linspace(np.min(self.delays), np.max(self.delays), 4*len(self.delays))
+        ramsey_f = ramsey_2f if len(fit_freqs) == 2 else ramsey_1f #1-freq fit if the 2-freq has failed
+        self.plot["Fit 1"] = (finer_delays, ramsey_f(finer_delays, *all_params))
+
+        #TODO: set conditions for success
+        fit_freq_A = np.mean(fit_freqs) #the fit result can be one or two frequencies
+        if self.set_source:
+            self.source_proxy.frequency = round(self.orig_freq + self.added_detuning + fit_freq_A/2, 10)
+            self.qubit_source.frequency = self.source_proxy.frequency
+        else:
+            self.qubit.frequency += float(fit_freq_A/2)
+
+        self.first_ramsey = False
+
+        # if self.plot:
+        #     [self.add_manual_plotter(p) for p in self.plot] if isinstance(self.plot, list) else self.add_manual_plotter(self.plot)
+        # self.start_manual_plotters()
+        data, _ = self.run_sweeps()
+
+        try:
+            fit_freqs, fit_errs, all_params, all_errs = fit_ramsey(self.delays, data, two_freqs=self.two_freqs, AIC=self.AIC)
+        except Exception as e:
+            raise Exception(f"Exception {e} while fitting in {self}")
         
-#         # Plot the results
-#         self.plot["Data"] = (self.delays, data)
-#         ramsey_f = ramsey_2f if len(fit_freqs) == 2 else ramsey_1f #1-freq fit if the 2-freq has failed
-#         self.plot["Fit"] = (finer_delays, ramsey_f(finer_delays, *all_params))
+        # Plot the results
+        self.plot["Data 2"] = (self.delays, data)
+        ramsey_f = ramsey_2f if len(fit_freqs) == 2 else ramsey_1f
+        self.plot["Fit 2"]  = (finer_delays, ramsey_f(finer_delays, *all_params))
 
-#         #TODO: set conditions for success
-#         fit_freq_A = np.mean(fit_freqs) #the fit result can be one or two frequencies
-#         if self.set_source:
-#             source_proxy.frequency = round(orig_freq + self.added_detuning + fit_freq_A/2, 10)
-#             qubit_source.frequency = source_proxy.frequency
-#         else:
-#             self.qubit.frequency += float(fit_freq_A/2)
-#         self.stop_manual_plotters()
-#         self.instantiate_filters(self.modified_graph)
-
-#         # Setup plots
-#         # TODO: replace this with specific code for manually launching plots, etc.
-#         self.plot = self.init_plots()
-#         if self.plot:
-#             [self.add_manual_plotter(p) for p in self.plot] if isinstance(self.plot, list) else self.add_manual_plotter(self.plot)
-#         self.start_manual_plotters()
-#         data, _ = self.run_sweeps()
-
-#         try:
-#             fit_freqs, fit_errs, all_params, all_errs = fit_ramsey(self.delays, data, two_freqs = self.two_freqs, AIC = self.AIC)
-#         except Exception as e:
-#             raise Exception(f"Exception {e} while fitting in {self}")
+        fit_freq_B = np.mean(fit_freqs)
+        if fit_freq_B < fit_freq_A:
+            self.fit_freq = round(orig_freq + self.added_detuning + 0.5*(fit_freq_A + 0.5*fit_freq_A + fit_freq_B), 10)
+        else:
+            self.fit_freq = round(orig_freq + self.added_detuning - 0.5*(fit_freq_A - 0.5*fit_freq_A + fit_freq_B), 10)
         
-#         # Plot the results
-#         self.plot["Data"] = (self.delays, data)
-#         ramsey_f = ramsey_2f if len(fit_freqs) == 2 else ramsey_1f
-#         self.plot["Fit"]  = (finer_delays, ramsey_f(finer_delays, *all_params))
-
-#         fit_freq_B = np.mean(fit_freqs)
-#         if fit_freq_B < fit_freq_A:
-#             self.fit_freq = round(orig_freq + self.added_detuning + 0.5*(fit_freq_A + 0.5*fit_freq_A + fit_freq_B), 10)
-#         else:
-#             self.fit_freq = round(orig_freq + self.added_detuning - 0.5*(fit_freq_A - 0.5*fit_freq_A + fit_freq_B), 10)
+        if self.set_source:
+            source_proxy.frequency = float(round(self.fit_freq))
+            qubit_source.frequency = source_proxy.frequency
+        else:
+            self.qubit.frequency += float(round(self.fit_freq - orig_freq))
         
-#         if self.set_source:
-#             source_proxy.frequency = float(round(self.fit_freq))
-#             qubit_source.frequency = source_proxy.frequency
-#         else:
-#             self.qubit.frequency += float(round(self.fit_freq - orig_freq))
-#             # update edges where this is the target qubit
+        # update edges where this is the target qubit
 
-#             for edge in q1.edge_target:
-#                 edge_source = edge.phys_chan.generator
-#                 edge.frequency = source_proxy.frequency + qubit_source.frequency - edge_source.frequency
-#                 # TODO: fix this for db backend
+        for edge in q1.edge_target:
+            edge_source = edge.phys_chan.generator
+            edge.frequency = source_proxy.frequency + qubit_source.frequency - edge_source.frequency
+        #         # TODO: fix this for db backend
 
-#         qubit_set_freq = self.saved_settings['instruments'][qubit_source]['frequency'] + self.saved_settings['qubits'][self.qubit.label]['control']['frequency']
-#         logger.info("Qubit set frequency = {} GHz".format(round(float(qubit_set_freq/1e9),5)))
-#         return ('frequency', qubit_set_freq)
+        # qubit_set_freq = self.saved_settings['instruments'][qubit_source]['frequency'] + self.saved_settings['qubits'][self.qubit.label]['control']['frequency']
+        # logger.info("Qubit set frequency = {} GHz".format(round(float(qubit_set_freq/1e9),5)))
+        # return ('frequency', qubit_set_freq)
 
-# class PhaseEstimation(PulseCalibrationExperiment):
+# class PhaseEstimation(Calibration):
 #     """Estimates pulse rotation angle from a sequence of P^k experiments, where
 #     k is of the form 2^n. Uses the modified phase estimation algorithm from
 #     Kimmel et al, quant-ph/1502.02677 (2015). Every experiment i doubled.
@@ -777,7 +510,7 @@ class RabiAmpCalibration(Calibration):
 #         # repeat each
 #         return [copy(s) for s in seqs for _ in range(2)]
 
-#     def _calibrate(self):
+#     def calibrate(self):
 #         """Attempts to optimize the pulse amplitude for a pi/2 or pi pulse about X or Y. """
 
 #         ct = 1
@@ -788,7 +521,7 @@ class RabiAmpCalibration(Calibration):
 #         while not done_flag:
 #             self.set(exp_step = ct-1)
 #             if isinstance(self, CRAmpCalibration_PhEst):
-#                 #trick PulseCalibrationExperiment to ignore the control qubit
+#                 #trick Calibration to ignore the control qubit
 #                 temp_qubit = copy(self.qubit)
 #                 temp_qubit_names = copy(self.qubit_names)
 #                 self.qubit = self.qubit[1]
@@ -834,7 +567,7 @@ class RabiAmpCalibration(Calibration):
 #         self.target    = np.pi/2
 #         self.edge_name = self.CRchan.label
 
-# class DRAGCalibration(PulseCalibrationExperiment):
+# class DRAGCalibration(Calibration):
 #     def __init__(self, qubit, deltas = np.linspace(-1,1,21), num_pulses = np.arange(8, 48, 4)):
 #         self.filename = 'DRAG/DRAG'
 #         self.deltas = deltas
@@ -857,7 +590,7 @@ class RabiAmpCalibration(Calibration):
 #         plot.add_data_trace('Data_opt', subplot_num = 1) #TODO: error bars
 #         return plot
 
-#     def _calibrate(self):
+#     def calibrate(self):
 #         # run twice for different DRAG parameter ranges
 #         steps = 2
 #         for k in range(steps):
@@ -892,7 +625,7 @@ class RabiAmpCalibration(Calibration):
 #         self.drag = opt_drag[-1]
 #         return ('drag_scaling', opt_drag[-1])
 
-# class MeasCalibration(PulseCalibrationExperiment):
+# class MeasCalibration(Calibration):
 #     def __init__(self, qubit_name):
 #         super(MeasCalibration, self).__init__(qubit, **kwargs)
 #         self.meas_name = "M-" + qubit_name
@@ -951,7 +684,7 @@ class RabiAmpCalibration(Calibration):
 #         return [plot_raw, plot_res]
 
 
-#     def _calibrate(self):
+#     def calibrate(self):
 #         cal_step = 0
 #         for ct in range(3):
 #             if not self.cal_steps[ct]:
@@ -1001,7 +734,7 @@ class RabiAmpCalibration(Calibration):
 #             super(CLEARCalibration, self).update_settings()
 
 # '''Two-qubit gate calibrations'''
-# class CRCalibration(PulseCalibrationExperiment):
+# class CRCalibration(Calibration):
 #     def __init__(self, qubit_names, lengths=np.linspace(20, 1020, 21)*1e-9, phase = 0, amp = 0.8, rise_fall = 40e-9):
 #         super(CRCalibration, self).__init__(qubit_names, factory)
 #         self.lengths = lengths
@@ -1019,7 +752,7 @@ class RabiAmpCalibration(Calibration):
 #         plot.add_fit_trace("Fit 1", {'color': 'C2'})
 #         return plot
 
-#     def _calibrate(self):
+#     def calibrate(self):
 #         # generate sequence
 #         self.set()
 #         # run and load normalized data
