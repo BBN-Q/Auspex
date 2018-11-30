@@ -108,6 +108,7 @@ class SingleShotMeasurement(Filter):
                     self.fidelity_result = np.complex128(0)
                     break
 
+            self.TOLERANCE = ORIG_TOL
 
             if self.logistic_regression.value:
                 self.logistic_fidelity()
