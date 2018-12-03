@@ -186,7 +186,7 @@ class PipelineManager(object):
     def reset_pipelines(self):
         for qp in self.qubit_proxies.values():
             qp.clear_pipeline()
-            qp.auto_create_pipeline()
+            qp.create_default_pipeline()
 
     def clear_pipelines(self):
         for qp in self.qubit_proxies.values():

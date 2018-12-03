@@ -642,7 +642,7 @@ class Experiment(metaclass=MetaExperiment):
             mp.stop()
 
     def shutdown(self):
-        logger.info("Shutting Down!")
+        logger.debug("Shutting Down!")
 
         for n in self.other_nodes:
             n.exit.set()
