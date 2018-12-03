@@ -362,7 +362,7 @@ class RabiAmpCalibration(Calibration):
         return [plot]
 
     def update_settings(self):
-        self.qubit.pulse_params['piAmp'] = round(self.pi_amp, 5)
+        s = round(self.pi_amp, 5)
         self.qubit.pulse_params['pi2Amp'] = round(self.pi2_amp, 5)
         awg_chan   = self.qubit.phys_chan
         amp_factor = self.qubit.phys_chan.amp_factor
@@ -397,6 +397,7 @@ class RamseyCalibration(Calibration):
         return [plot]
 
     def exp_config(self, exp):
+        rcvr = self.qubit.measure_chan.receiver_chan.receiver
         if self.first_ramsey:
             self.source_proxy = self.qubit.phys_chan.generator # DB object
             self.qubit_source = exp._instruments[self.source_proxy.label] # auspex instrument
@@ -404,7 +405,9 @@ class RamseyCalibration(Calibration):
             if self.set_source:
                 self.source_proxy.frequency = round(self.orig_freq + self.added_detuning + fit_freq_A/2, 10)
                 self.qubit_source.frequency = self.source_proxy.frequency
-            
+            exp._instruments[rcvr.label].exp_step = 0
+        else:
+            exp._instruments[rcvr.label].exp_step = 1
 
     def calibrate(self):
         self.first_ramsey = True
@@ -450,21 +453,20 @@ class RamseyCalibration(Calibration):
 
         fit_freq_B = np.mean(fit_freqs)
         if fit_freq_B < fit_freq_A:
-            self.fit_freq = round(orig_freq + self.added_detuning + 0.5*(fit_freq_A + 0.5*fit_freq_A + fit_freq_B), 10)
+            self.fit_freq = round(self.orig_freq + self.added_detuning + 0.5*(fit_freq_A + 0.5*fit_freq_A + fit_freq_B), 10)
         else:
-            self.fit_freq = round(orig_freq + self.added_detuning - 0.5*(fit_freq_A - 0.5*fit_freq_A + fit_freq_B), 10)
-        
-        if self.set_source:
-            source_proxy.frequency = float(round(self.fit_freq))
-            qubit_source.frequency = source_proxy.frequency
-        else:
-            self.qubit.frequency += float(round(self.fit_freq - orig_freq))
-        
-        # update edges where this is the target qubit
+            self.fit_freq = round(self.orig_freq + self.added_detuning - 0.5*(fit_freq_A - 0.5*fit_freq_A + fit_freq_B), 10)
 
-        for edge in q1.edge_target:
+    def update_settings(self):
+        if self.set_source:
+            self.source_proxy.frequency = float(round(self.fit_freq))
+            self.qubit_source.frequency = self.source_proxy.frequency
+        else:
+            self.qubit.frequency += float(round(self.fit_freq - self.orig_freq))
+        # update edges where this is the target qubit
+        for edge in self.qubit.edge_target:
             edge_source = edge.phys_chan.generator
-            edge.frequency = source_proxy.frequency + qubit_source.frequency - edge_source.frequency
+            edge.frequency = self.source_proxy.frequency + self.qubit_source.frequency - edge_source.frequency
         #         # TODO: fix this for db backend
 
         # qubit_set_freq = self.saved_settings['instruments'][qubit_source]['frequency'] + self.saved_settings['qubits'][self.qubit.label]['control']['frequency']
