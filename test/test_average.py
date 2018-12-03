@@ -16,6 +16,7 @@ _bNO_METACLASS_INTROSPECTION_CONSTRAINTS = True  # Use original dummy flag logic
 
 if _bNO_METACLASS_INTROSPECTION_CONSTRAINTS:
     #
+    # The original unittest quieting logic
     import auspex.config as config
     config.auspex_dummy_mode = True
     #
