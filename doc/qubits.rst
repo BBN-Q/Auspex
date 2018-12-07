@@ -15,6 +15,7 @@ The best way to gain experience is to follow through with these tutorials:
    Q1 Tutorial: Creating Channel Library <examples/Example-Q1.ipynb>
    Q2 Tutorial: Saving/Loading Library Versions <examples/Example-Q2.ipynb>
    Q3 Tutorial: Using the Pipeline Manager <examples/Example-Q3.ipynb>
+   Q4 Tutorial: Running a Basic Experiment <examples/Example-Q4.ipynb>
 
 The Filter Pipeline
 *******************
