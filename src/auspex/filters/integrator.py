@@ -57,7 +57,7 @@ class KernelIntegrator(Filter):
             sample_stop = int(self.box_car_stop.value / time_step) + 1
             kernel[sample_start:sample_stop] = 1.0
             # add modulation
-            kernel *= np.exp(2j * np.pi * self.frequency.value * time_step * time_pts)
+            kernel *= np.exp(2j * np.pi * self.demod_frequency.value * time_step * time_pts)
         elif os.path.exists(os.path.join(config.KernelDir, self.kernel.value+'.txt')):
             kernel = np.loadtxt(os.path.join(config.KernelDir, self.kernel.value+'.txt'), dtype=complex, converters={0: lambda s: complex(s.decode().replace('+-', '-'))})
         else:
