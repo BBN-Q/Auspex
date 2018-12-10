@@ -389,16 +389,16 @@ class Experiment(metaclass=MetaExperiment):
                 while not self.filters_finished():
                     await asyncio.sleep(1)
                     sleep_time += 1
-                    if sleep_time == 5:
-                        logger.info("Still waiting for filters to finish. Did the experiment produce the expected amount of data?")
-                        for n in self.nodes:
-                            if isinstance(n, Filter):
-                                logger.info("  {} done: {}".format(n, n.finished_processing))
-                        print({n: n.finished_processing for n in self.nodes if isinstance(n, Filter)})
+                    # if sleep_time == 5:
+                    #     logger.info("Still waiting for filters to finish. Did the experiment produce the expected amount of data?")
+                    #     for n in self.nodes:
+                    #         if isinstance(n, Filter):
+                    #             logger.info("  {} done: {}".format(n, n.finished_processing))
+                    #     print({n: n.finished_processing for n in self.nodes if isinstance(n, Filter)})
 
-                    if sleep_time >= 20:
-                        logger.warning("Filters not stopped after 20 seconds, bailing.")
-                        break
+                    # if sleep_time >= 20:
+                    #     logger.warning("Filters not stopped after 20 seconds, bailing.")
+                    #     break
                 await self.declare_done()
                 break
 

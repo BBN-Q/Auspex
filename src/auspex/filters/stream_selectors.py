@@ -42,7 +42,7 @@ class X6StreamSelector(Filter):
 
     sink   = InputConnector()
     source = OutputConnector()
-    
+
     channel     = IntParameter(value_range=(1,3), snap=1)
     dsp_channel = IntParameter(value_range=(0,4), snap=1)
     stream_type = Parameter(allowed_values=["Raw", "Demodulated", "Integrated", "State", "Correlated"], default='Demodulated')
@@ -72,5 +72,5 @@ class X6StreamSelector(Filter):
         elif channel_settings['stream_type'] == 'Correlated': # Same as integrated
             descrip.dtype = np.complex128
         elif channel_settings['stream_type'] == 'State':
-            descrip.dtype = np.uint8
+            descrip.dtype = np.complex128
         return channel, descrip

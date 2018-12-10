@@ -244,7 +244,9 @@ class APS(Instrument, metaclass=MakeSettersGetters):
 
     def _initialize(self):
         if self.connected:
-            self.wrapper.init(force=True)
+            logger.info('Do not initialize')
+            #self.wrapper.init(force=False)  # Loading the bitfile can fail
+            #logger.info('Initialized')
             self.run_mode = self._run_mode
             self.repeat_mode = self._repeat_mode
             self.sampling_rate = self._sampling_rate
@@ -256,15 +258,17 @@ class APS(Instrument, metaclass=MakeSettersGetters):
             raise Exception("Must supply a resource name to 'connect' if the instrument was initialized without one.")
         elif resource_name is not None:
             self.resource_name = resource_name
+        logger.info('Trying to connect')
         self.wrapper.connect(self.resource_name)
+        logger.info('Connected')
         self.connected = True
         self._initialize()
 
     def disconnect(self):
         if self.resource_name and self.connected:
             self.stop()
-            self.wrapper.disconnect()
-            self.connected = False
+            #self.wrapper.disconnect()
+            #self.connected = False
 
     def set_enabled(self, ch, value):
         self.wrapper.set_enabled(ch, value)

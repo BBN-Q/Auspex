@@ -98,7 +98,7 @@ class X6Channel(DigitizerChannel):
         elif self.stream_type == "State":
             demod_channel = 0
             result_channel = self.dsp_channel
-            self.dtype = np.uint8
+            self.dtype = np.complex128
         elif self.stream_type == "Correlated":
             demod_channel = 0
             result_channel = self.dsp_channel
@@ -302,6 +302,7 @@ class X6(Instrument):
             loop = asyncio.get_event_loop()
             loop.remove_reader(sock)
             return
+
         data = np.frombuffer(buf, dtype=channel.dtype)
         asyncio.ensure_future(oc.push(data))
 
