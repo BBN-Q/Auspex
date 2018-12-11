@@ -43,7 +43,8 @@ instrument_map = {
     'APS': auspex.instruments.APS,
     'HolzworthHS9000': auspex.instruments.HolzworthHS9000,
     'Labbrick': auspex.instruments.Labbrick,
-    'AgilentN5183A': auspex.instruments.AgilentN5183A
+    'AgilentN5183A': auspex.instruments.AgilentN5183A,
+    'BNC845': auspex.instruments.BNC845
 }
 
 class QubitExperiment(Experiment):
@@ -306,6 +307,7 @@ class QubitExperiment(Experiment):
             # self.loop.add_reader(socket, dig.receive_data, chan, oc)
             exit = Event()
             self.dig_listeners[Process(target=dig.receive_data, args=(chan, oc, exit))] = exit
+        assert None not in self.dig_listeners.keys()
         for listener in self.dig_listeners.keys():
             listener.start()
 
@@ -374,15 +376,16 @@ class QubitExperiment(Experiment):
 
     def shutdown_instruments(self):
         # remove socket listeners
+        logger.debug("Shutting down instruments")
         for listener, exit in self.dig_listeners.items():
             exit.set()
-            listener.join()
+            listener.join(2)
+            if listener.is_alive():
+                logger.info(f"Terminating listener {listener} aggressively")
+                listener.terminate()
         if self.cw_mode:
             for awg in self.awgs:
                 awg.stop()
-        for chan, dig in self.chan_to_dig.items():
-            socket = dig.get_socket(chan)
-            # self.loop.remove_reader(socket)
         for instr in self.instruments:
             instr.disconnect()
 
@@ -391,6 +394,7 @@ class QubitExperiment(Experiment):
         for dig in self.digitizers:
             dig.acquire()
 
+        time.sleep(2)
         # Start the AWGs
         if not self.cw_mode:
             for awg in self.awgs:
