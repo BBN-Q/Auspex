@@ -190,14 +190,15 @@ class Instrument(metaclass=MetaInstrument):
         """Accept a sdettings dictionary and attempt to set all of the instrument
         parameters using the key/value pairs."""
         for name, value in settings_dict.items():
-            # Python is insane, and attempts to run a property's getter
-            # when queried by hasattr. Avoid this behavior with the
-            # "ask for forgiveness" paradigm.
-            try:
-                setattr(self, name, value)
-            except (AttributeError, TypeError) as e:
-                logger.info("Instrument {} property: {} could not be set to {}.".format(self.name,name,value))
-                pass
+            if name not in ["id", "label", "model", "address", "channel_db_id"]:
+                # Python is insane, and attempts to run a property's getter
+                # when queried by hasattr. Avoid this behavior with the
+                # "ask for forgiveness" paradigm.
+                try:
+                    setattr(self, name, value)
+                except (AttributeError, TypeError) as e:
+                    logger.info("Instrument {} property: {} could not be set to {}.".format(self.name,name,value))
+                    pass
 
 class CLibInstrument(Instrument): pass
 
