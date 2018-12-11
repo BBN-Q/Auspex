@@ -38,7 +38,8 @@ class BNC845(SCPIInstrument):
                           value_map={'INTERNAL': 'INT', 'EXTERNAL': 'EXT'})
     freq_source  = StringCommand(scpi_string=":FREQ:SOUR",
                           value_map={'INTERNAL': 'INT', 'EXTERNAL': 'EXT'})
-
+    instrument_type = "Microwave Source"
+    
     def __init__(self, resource_name=None, *args, **kwargs):
         """Berkely Nucleonics BNC845-M RF Signal Generator
 
