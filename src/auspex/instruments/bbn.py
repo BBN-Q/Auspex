@@ -17,6 +17,7 @@ from time import sleep
 from visa import VisaIOError
 import numpy as np
 from copy import deepcopy
+import os.path
 
 # Dirty trick to avoid loading libraries when scraping
 # This code using quince.
@@ -339,6 +340,7 @@ class APS(Instrument, metaclass=MakeSettersGetters):
         return self._sequence_filename
     @sequence_file.setter
     def sequence_file(self, filename):
+        assert os.path.exists(filename), f"Sequence file {filename} for APS2 {self} does not exist."
         self.wrapper.load_config(filename)
         self._sequence_filename = filename
 
