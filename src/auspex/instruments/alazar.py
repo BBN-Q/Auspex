@@ -15,6 +15,8 @@ import datetime, time
 import sys
 import numpy as np
 
+from multiprocessing import Value
+
 from .instrument import Instrument, ReceiverChannel
 from auspex.log import logger
 import auspex.config as config
@@ -72,7 +74,6 @@ class AlazarATS9870(Instrument):
 
     def __init__(self, resource_name=None, name="Unlabeled Alazar"):
         self.name = name
-        self.fetch_count = 0
 
         # A list of AlazarChannel objects
         self.channels = []
@@ -84,7 +85,8 @@ class AlazarATS9870(Instrument):
         self._chan_to_rsocket = {}
         self._chan_to_wsocket = {}
 
-        self.last_timestamp = datetime.datetime.now()
+        self.last_timestamp = Value('d', datetime.datetime.now().timestamp())
+        self.fetch_count    = Value('d', 0)
 
         if fake_alazar:
             self._lib = MagicMock()
@@ -102,7 +104,7 @@ class AlazarATS9870(Instrument):
             self.get_socket(channel)
 
     def acquire(self):
-        self.fetch_count = 0
+        self.fetch_count.value = 0
         self._lib.acquire()
 
     def stop(self):
@@ -112,7 +114,8 @@ class AlazarATS9870(Instrument):
         return self._lib.data_available()
 
     def done(self):
-        return self.fetch_count >= (len(self.channels) * self.number_acquisitions)
+        # logger.info(f"{self.fetch_count.value} {len(self.channels)} {self.number_acquisitions}")
+        return self.fetch_count.value >= (len(self.channels) * self.number_acquisitions)
 
     def get_socket(self, channel):
         if channel in self._chan_to_rsocket:
@@ -123,6 +126,7 @@ class AlazarATS9870(Instrument):
         except:
             raise Exception("Could not create read/write socket pair")
         self._lib.register_socket(channel.phys_channel - 1, wsock)
+        # logger.info(f"Passing socket {wsock} to libalazar driver")
         self._chan_to_rsocket[channel] = rsock
         self._chan_to_wsocket[channel] = wsock
         return rsock
@@ -138,35 +142,40 @@ class AlazarATS9870(Instrument):
 
     def receive_data(self, channel, oc, exit):
         sock = self._chan_to_rsocket[channel]
-        sock.settimeout(1)
-        last_timestamp = datetime.datetime.now()
+        # logger.info(f"Recovered socket {sock} for data acquisition")
+        sock.settimeout(2)
+        self.last_timestamp.value = datetime.datetime.now().timestamp()
+        # logger.info("Entering receive data")
         while not exit.is_set():
             # push data from a socket into an OutputConnector (oc)
             # wire format is just: [size, buffer...]
             # TODO receive 4 or 8 bytes depending on sizeof(size_t)
             try:
-                msg = sock.recv(8)
-                last_timestamp = datetime.datetime.now()
+                # logger.info("Trying to receive data")
+                msg = sock.recv(1)
+                self.last_timestamp.value = datetime.datetime.now().timestamp()
             except:
+                # logger.info("Failed to receive data")
                 continue
-
+            # logger.info(f"In receive data: {msg}")
             # reinterpret as int (size_t)
             msg_size = struct.unpack('n', msg)[0]
             buf = sock_recvall(sock, msg_size)
             if len(buf) != msg_size:
-                logger.error("Channel %s socket msg shorter than expected" % channel.channel)
-                logger.error("Expected %s bytes, received %s bytes" % (msg_size, len(buf)))
+                logger.error(f"Channel {channel} socket msg shorter than expected")
+                logger.error(f"Expected {msg_size} bytes, received {len(buf)} bytes")
                 return
+            self.fetch_count.value += 1
             data = np.frombuffer(buf, dtype=np.float32)
             oc.push(data)
 
     def get_buffer_for_channel(self, channel):
-        self.fetch_count += 1
+        self.fetch_count.value += 1
         return getattr(self._lib, 'ch{}Buffer'.format(self._chan_to_buf[channel]))
 
-    def wait_for_acquisition(self, timeout=5):
+    def wait_for_acquisition(self, timeout=5, ocs=None):
         while not self.done():
-            if (datetime.datetime.now() - self.last_timestamp).seconds > timeout:
+            if (datetime.datetime.now().timestamp() - self.last_timestamp.value) > timeout:
                 logger.error("Digitizer %s timed out.", self.name)
                 raise Exception("Alazar timed out.")
             time.sleep(0.2)
