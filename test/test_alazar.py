@@ -6,7 +6,7 @@ import unittest
 
 class AlazarTestCase(unittest.TestCase):
 
-    def basic(self, delay):
+    def basic(self, delay=1.0, averages=10, segments=20, record=1024):
         oc   = Queue()
         exit = Event()
         
@@ -24,10 +24,10 @@ class AlazarTestCase(unittest.TestCase):
             'delay': 0.0,
             'enabled': True,
             'label': 'Alazar',
-            'recordLength': 1024,
-            'nbrSegments': 20,
+            'recordLength': record,
+            'nbrSegments': segments,
             'nbrWaveforms': 1,
-            'nbrRoundRobins': 10,
+            'nbrRoundRobins': averages,
             'samplingRate': 500e6,
             'triggerCoupling': "DC",
             'triggerLevel': 100,
@@ -38,12 +38,12 @@ class AlazarTestCase(unittest.TestCase):
             'verticalScale': 1.0
         }
         alz._lib.setAll(config_dict)
-        alz.record_length           = 1024
+        alz.record_length           = record
         alz.number_acquisitions     = alz._lib.numberAcquisitions
         alz.samples_per_acquisition = alz._lib.samplesPerAcquisition
-        alz.number_segments         = 20
+        alz.number_segments         = segments
         alz.number_waveforms        = 1
-        alz.number_averages         = 10
+        alz.number_averages         = averages
         alz.ch1_buffer              = alz._lib.ch1Buffer
         alz.ch2_buffer              = alz._lib.ch2Buffer
         # print("asdasd", alz.number_averages)
@@ -71,12 +71,16 @@ class AlazarTestCase(unittest.TestCase):
             proc.terminate()
         alz.disconnect()
 
+        self.assertTrue(oc.points_taken.value == averages*segments*record)
+
     def test_1sec(self):
-        self.basic(1.0)
+        self.basic(delay=1.0)
     def test_100msec(self):
-        self.basic(0.1)
+        self.basic(delay=0.1)
     def test_10msec(self):
-        self.basic(0.01)
+        self.basic(delay=0.01)
+    def test_1sec_100avg(self):
+        self.basic(delay=1.0, averages=100)
 
 if __name__ == '__main__':
     unittest.main()
