@@ -72,7 +72,7 @@ class AlazarATS9870(Instrument):
     """Alazar ATS9870 digitizer"""
     instrument_type = ("Digitizer")
 
-    def __init__(self, resource_name=None, name="Unlabeled Alazar"):
+    def __init__(self, resource_name=None, name="Unlabeled Alazar", gen_fake_data=True):
         self.name = name
 
         # A list of AlazarChannel objects
@@ -88,12 +88,17 @@ class AlazarATS9870(Instrument):
         self.last_timestamp = Value('d', datetime.datetime.now().timestamp())
         self.fetch_count    = Value('d', 0)
 
-        if fake_alazar:
+        self.gen_fake_data        = gen_fake_data
+        self.increment_ideal_data = False
+        self.ideal_counter        = 0
+        self.ideal_data           = None
+
+    def connect(self, resource_name=None):
+        if fake_alazar or self.gen_fake_data:
             self._lib = MagicMock()
         else:
             self._lib = ATS9870()
 
-    def connect(self, resource_name=None):
         if fake_alazar:
             logger.warning("Could not load Alazar library")
         if resource_name:
@@ -140,6 +145,31 @@ class AlazarATS9870(Instrument):
             self.channels.append(channel)
             self._chan_to_buf[channel] = channel.phys_channel
 
+    def spew_fake_data(self, counter, ideal_datapoint=0, random_mag=0.1, random_seed=12345):
+        """
+        Generate fake data on the stream. For unittest usage.
+        ideal_datapoint: mean of the expected signal 
+
+        Returns the total number of fake data points, so that we can
+        keep track of how many we expect to receive, when we're doing
+        the test with fake data
+        """
+        total = 0
+        np.random.seed(random_seed)
+
+        for chan, wsock in self._chan_to_wsocket.items():
+            length = int(self.record_length)
+            signal = np.sin(np.linspace(0,10.0*np.pi,int(length/2)))
+            data = np.zeros(length, dtype=np.float32)
+            data[int(length/4):int(length/4)+len(signal)] = signal * (1.0 if ideal_datapoint == 0 else ideal_datapoint)
+            data += random_mag*np.random.random(length)
+            total += length
+            # logger.info(f"Sending {struct.pack('n', length*np.float32().itemsize)}")
+            wsock.send(struct.pack('n', length*np.float32().itemsize) + data.tostring())
+            counter[chan] += length
+
+        return total
+
     def receive_data(self, channel, oc, exit):
         sock = self._chan_to_rsocket[channel]
         # logger.info(f"Recovered socket {sock} for data acquisition")
@@ -152,7 +182,7 @@ class AlazarATS9870(Instrument):
             # TODO receive 4 or 8 bytes depending on sizeof(size_t)
             try:
                 # logger.info("Trying to receive data")
-                msg = sock.recv(1)
+                msg = sock.recv(8)
                 self.last_timestamp.value = datetime.datetime.now().timestamp()
             except:
                 # logger.info("Failed to receive data")
@@ -174,11 +204,53 @@ class AlazarATS9870(Instrument):
         return getattr(self._lib, 'ch{}Buffer'.format(self._chan_to_buf[channel]))
 
     def wait_for_acquisition(self, timeout=5, ocs=None):
-        while not self.done():
-            if (datetime.datetime.now().timestamp() - self.last_timestamp.value) > timeout:
-                logger.error("Digitizer %s timed out.", self.name)
-                raise Exception("Alazar timed out.")
-            time.sleep(0.2)
+        if self.gen_fake_data:
+            total_spewed = 0
+
+            counter = {chan: 0 for chan in self._chan_to_wsocket.keys()}
+            initial_points = {oc: oc.points_taken.value for oc in ocs}
+            # print(self.number_averages, self.number_segments)
+            for j in range(self.number_averages):
+                for i in range(self.number_segments):
+                    if self.ideal_data is not None:
+                        #add ideal data for testing
+                        if hasattr(self, 'exp_step') and self.increment_ideal_data:
+                            raise Exception("Cannot use both exp_step and increment_ideal_data")
+                        elif hasattr(self, 'exp_step'):
+                            total_spewed += self.spew_fake_data(
+                                    counter, self.ideal_data[self.exp_step][i])
+                        elif self.increment_ideal_data:
+                            total_spewed += self.spew_fake_data(
+                                   counter, self.ideal_data[self.ideal_counter][i])
+                        else:
+                            total_spewed += self.spew_fake_data(
+                                    counter, self.ideal_data[i])
+                    else:
+                        total_spewed += self.spew_fake_data(counter)
+
+                    time.sleep(0.0001)
+
+            self.ideal_counter += 1
+            # logger.info("Counter: %s", str(counter))
+            # logger.info('TOTAL fake data generated %d', total_spewed)
+            if ocs:
+                while True:
+                    total_taken = 0
+                    for oc in ocs:
+                        total_taken += oc.points_taken.value - initial_points[oc]
+                        # logger.info('TOTAL fake data received %d', oc.points_taken.value - initial_points[oc])
+                    if total_taken == total_spewed:
+                        break
+
+                    # logger.info('WAITING for acquisition to finish %d < %d', total_taken, total_spewed)
+                    time.sleep(0.025)
+
+        else:
+            while not self.done():
+                if (datetime.datetime.now().timestamp() - self.last_timestamp.value) > timeout:
+                    logger.error("Digitizer %s timed out.", self.name)
+                    raise Exception("Alazar timed out.")
+                time.sleep(0.2)
 
         logger.debug("Digitizer %s finished getting data.", self.name)
 
@@ -205,8 +277,12 @@ class AlazarATS9870(Instrument):
         }
 
         self._lib.setAll(config_dict)
+        self.record_length           = settings_dict['record_length']
         self.number_acquisitions     = self._lib.numberAcquisitions
         self.samples_per_acquisition = self._lib.samplesPerAcquisition
+        self.number_segments         = self.proxy_obj.number_segments,
+        self.number_waveforms        = self.proxy_obj.number_waveforms,
+        self.number_averages         = self.proxy_obj.number_averages,
         self.ch1_buffer              = self._lib.ch1Buffer
         self.ch2_buffer              = self._lib.ch2Buffer
 
