@@ -394,7 +394,7 @@ class QubitExperiment(Experiment):
         for dig in self.digitizers:
             dig.acquire()
 
-        time.sleep(2)
+        # time.sleep(2)
         # Start the AWGs
         if not self.cw_mode:
             for awg in self.awgs:

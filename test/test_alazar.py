@@ -3,6 +3,26 @@ from auspex.instruments import AlazarATS9870, AlazarChannel
 
 import time
 import unittest
+import tempfile
+import numpy as np
+from QGL import *
+import QGL.config
+import auspex.config
+
+# Dummy mode
+auspex.config.auspex_dummy_mode = True
+
+# Set temporary output directories
+awg_dir = tempfile.TemporaryDirectory()
+kern_dir = tempfile.TemporaryDirectory()
+auspex.config.AWGDir = QGL.config.AWGDir = awg_dir.name
+auspex.config.KernelDir = kern_dir.name
+
+from auspex.qubit import *
+import bbndb
+
+cl = ChannelLibrary(db_resource_name=":memory:")
+pl = PipelineManager()
 
 class AlazarTestCase(unittest.TestCase):
 
@@ -81,6 +101,25 @@ class AlazarTestCase(unittest.TestCase):
         self.basic(delay=0.01)
     def test_1sec_100avg(self):
         self.basic(delay=1.0, averages=100)
+
+    def test_qubit_experiment(self):
+        cl.clear()
+        q1     = cl.new_qubit("q1")
+        aps2_1 = cl.new_APS2("BBNAPS1", address="192.168.5.101")
+        aps2_2 = cl.new_APS2("BBNAPS2", address="192.168.5.102")
+        dig_1  = cl.new_Alazar("Alz1", address="1")
+        h1     = cl.new_source("Holz1", "HolzworthHS9000", "HS9004A-009-1", power=-30)
+        h2     = cl.new_source("Holz2", "HolzworthHS9000", "HS9004A-009-2", power=-30)
+        cl.set_control(q1, aps2_1, generator=h1)
+        cl.set_measure(q1, aps2_2, dig_1.ch("1"), generator=h2)
+        cl.set_master(aps2_1, aps2_1.ch("m2"))
+        pl.create_default_pipeline(buffers=True)
+        pl["q1"]["Demodulate"].decimation_factor = 16
+        pl["q1"]["Demodulate"]["Integrate"].box_car_stop = 1e-6
+        exp = QubitExperiment(RabiAmp(cl["q1"], np.linspace(-1, 1, 51)), averages=20)
+        exp.set_fake_data(dig_1, np.cos(np.linspace(-np.pi, np.pi, 51)))
+        exp.run_sweeps()
+        self.assertAlmostEqual(np.abs(exp.buffers[0].output_data["Data"]).sum(),459.2,places=1)
 
 if __name__ == '__main__':
     unittest.main()

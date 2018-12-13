@@ -197,6 +197,7 @@ class AlazarATS9870(Instrument):
                 return
             self.fetch_count.value += 1
             data = np.frombuffer(buf, dtype=np.float32)
+            # logger.info(f"Received {len(data)}")
             oc.push(data)
 
     def get_buffer_for_channel(self, channel):
@@ -280,9 +281,9 @@ class AlazarATS9870(Instrument):
         self.record_length           = settings_dict['record_length']
         self.number_acquisitions     = self._lib.numberAcquisitions
         self.samples_per_acquisition = self._lib.samplesPerAcquisition
-        self.number_segments         = self.proxy_obj.number_segments,
-        self.number_waveforms        = self.proxy_obj.number_waveforms,
-        self.number_averages         = self.proxy_obj.number_averages,
+        self.number_segments         = self.proxy_obj.number_segments
+        self.number_waveforms        = self.proxy_obj.number_waveforms
+        self.number_averages         = self.proxy_obj.number_averages
         self.ch1_buffer              = self._lib.ch1Buffer
         self.ch2_buffer              = self._lib.ch2Buffer
 

@@ -760,4 +760,4 @@ class Experiment(metaclass=MetaExperiment):
             client_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),"matplotlib-client.py")
             preexec_fn  = os.setsid if hasattr(os, 'setsid') else None
             subprocess.Popen(['python', client_path, 'localhost', self.uuid], env=os.environ.copy(), preexec_fn=preexec_fn)
-            time.sleep(1)
+            time.sleep(2)
