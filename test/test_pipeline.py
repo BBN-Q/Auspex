@@ -130,7 +130,7 @@ class PipelineTestCase(unittest.TestCase):
         self.assertTrue(len(exp.output_connectors["q1"].descriptor.axes[0].points) == 500)
         self.assertTrue(exp.output_connectors["q1"].descriptor.axes[0].points[-1] == 6.5e9)
 
-    def test_run_direct(self):
+    def test_run(self):
         cl.clear()
         q1    = cl.new_qubit("q1")
         aps1  = cl.new_APS2("BBNAPS1", address="192.168.5.102")
