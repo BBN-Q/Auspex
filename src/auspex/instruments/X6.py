@@ -122,11 +122,6 @@ class X6(Instrument):
 
         self.timeout = 10.0
 
-        if fake_x6:
-            self._lib = MagicMock()
-        else:
-            self._lib = libx6.X6()
-
     def __str__(self):
         return "<X6({}/{})>".format(self.name, self.resource_name)
 
@@ -134,6 +129,11 @@ class X6(Instrument):
         self.disconnect()
 
     def connect(self, resource_name=None):
+        if fake_x6 or self.gen_fake_data():
+            self._lib = MagicMock()
+        else:
+            self._lib = libx6.X6()
+
         if resource_name is not None:
             self.resource_name = resource_name
 
