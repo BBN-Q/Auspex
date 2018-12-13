@@ -125,7 +125,7 @@ class Plotter(Filter):
             try:
                 self.context = zmq.Context()
                 self.socket = self.context.socket(zmq.DEALER)
-                self.socket.identity = "Auspex_Experiment".encode()
+                self.socket.identity = f"Auspex_Experiment_{self.filter_name}_{hex(id(self))}".encode()
                 self.socket.connect("tcp://localhost:7762")
             except:
                 logger.warning("Exception occured while contacting the plot server. Is it running?")
