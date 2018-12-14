@@ -43,6 +43,7 @@ class X6Channel(DigitizerChannel):
         self.kernel_bias       = 0.0
         self.threshold         = 0.0
         self.threshold_invert  = False
+        self.threshold_input_sel = False
 
         self.phys_channel   = 1
         self.dsp_channel    = 0
@@ -78,6 +79,8 @@ class X6Channel(DigitizerChannel):
                 setattr(self, 'threshold', value)
             elif name == 'threshold_invert':
                 setattr(self, 'threshold_invert', bool(value))
+            elif name == 'threshold_input_sel':
+                setattr(self, 'threshold_input_sel', bool(value))
             elif name == 'ideal_data': # for testing purposes
                 self.ideal_data = np.load(os.path.abspath(value+'.npy'))
             else:
@@ -221,6 +224,7 @@ class X6(Instrument):
             self._lib.set_kernel_bias(a, b, c, channel.kernel_bias)
             self._lib.set_threshold(a, c, channel.threshold)
             self._lib.set_threshold_invert(a, c, channel.threshold_invert)
+            self._lib.set_threshold_input_sel(a, c, channel.threshold_input_sel)
         elif channel.stream_type == "State":
             return
         elif channel.stream_type == "Correlated":
