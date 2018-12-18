@@ -79,7 +79,7 @@ class X6Channel(DigitizerChannel):
                 setattr(self, 'threshold', value)
             elif name == 'threshold_invert':
                 setattr(self, 'threshold_invert', bool(value))
-            elif name == 'threshold_input_sel':
+            elif name == 'threshold_input_sel' or name == 'threshold_correlated':
                 setattr(self, 'threshold_input_sel', bool(value))
             elif name == 'ideal_data': # for testing purposes
                 self.ideal_data = np.load(os.path.abspath(value+'.npy'))
@@ -131,6 +131,8 @@ class X6(Instrument):
         self.gen_fake_data = gen_fake_data
         self.ideal_data = None
 
+        self.state_vld_bitmask = '0,0'
+
         if fake_x6:
             self._lib = MagicMock()
         else:
@@ -171,6 +173,9 @@ class X6(Instrument):
         super(X6, self).set_all(settings_dict)
         self.correlator_setup()
 
+        for a in range(1, 3):
+            self._lib.set_state_vld_bitmask(a, int(self.state_vld_bitmask.split(',')[a-1]))
+
         # Set data for testing
         try:
             self.ideal_data = np.load(os.path.abspath(self.ideal_data+'.npy'))
@@ -191,7 +196,7 @@ class X6(Instrument):
             # then zero disabled channels
             enabled_int_chan_tuples = [chan.channel_tuple for chan in integrated_channels]
             for a in range(1,3):
-                for c in range(1,3): # max number of sdp_channels for now
+                for c in range(1,6): # max number of sdp_channels for now
                     if (a, 0, c) not in enabled_int_chan_tuples:
                         self._lib.write_kernel(a, 0, c, 1j*np.zeros(max_kernel_length))
 
