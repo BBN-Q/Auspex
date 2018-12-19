@@ -40,18 +40,6 @@ else:
     def sock_recvall(s, data_len):
         return s.recv(data_len, socket.MSG_WAITALL)
 
-# Dirty trick to avoid loading libraries when scraping
-# This code using quince.
-if config.auspex_dummy_mode:
-    fake_x6 = True
-else:
-    try:
-        import libx6
-        fake_x6 = False
-    except:
-        logger.info("using fake x6")
-        fake_x6 = True
-
 class X6Channel(ReceiverChannel):
     """Channel for an X6"""
 
@@ -122,11 +110,6 @@ class X6(Instrument):
 
         self.timeout = 10.0
 
-        if fake_x6:
-            self._lib = MagicMock()
-        else:
-            self._lib = libx6.X6()
-
     def __str__(self):
         return "<X6({}/{})>".format(self.name, self.resource_name)
 
@@ -134,6 +117,18 @@ class X6(Instrument):
         self.disconnect()
 
     def connect(self, resource_name=None):
+        if config.auspex_dummy_mode or self.gen_fake_data:
+            self.fake_x6 = True
+            self._lib = MagicMock()
+        else:
+            try:
+                import libx6
+                self._lib = libx6.X6()
+                self.fake_x6 = False
+            except:
+                raise Exception("Could not find libx6. You can run in dummy mode by setting config.auspex_dummy_mode \
+                    or setting the gen_fake_data property of this instrument.")
+
         if resource_name is not None:
             self.resource_name = resource_name
 
@@ -142,10 +137,10 @@ class X6(Instrument):
         self.stop       = self._lib.stop
         # self.disconnect = self._lib.disconnect
 
-        if self.gen_fake_data or fake_x6:
-            self._lib = MagicMock()
-            logger.warning("Could not load x6 library")
-            logger.warning("X6 GENERATING FAKE DATA")
+        # if self.gen_fake_data or fake_x6:
+        #     self._lib = MagicMock()
+        #     logger.warning("Could not load x6 library")
+        #     logger.warning("X6 GENERATING FAKE DATA")
         self._lib.connect(int(self.resource_name))
 
     def disconnect(self):
