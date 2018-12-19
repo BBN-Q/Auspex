@@ -21,7 +21,7 @@ from auspex.stream import  DataStreamDescriptor, InputConnector, OutputConnector
 from auspex.log import logger
 
 try:
-    load libchannelizer to access Intel IPP filtering functions
+    # load libchannelizer to access Intel IPP filtering functions
     import numpy.ctypeslib as npct
     from ctypes import c_int, c_size_t
     np_float  = npct.ndpointer(dtype=np.float32, flags='C_CONTIGUOUS')
