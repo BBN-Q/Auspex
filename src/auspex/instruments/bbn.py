@@ -420,10 +420,10 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
 
     def configure_with_proxy(self, proxy_obj):
         super(APS2, self).configure_with_proxy(proxy_obj)
-        self.set_offset(0, proxy_obj["12"].I_channel_offset)
-        self.set_offset(1, proxy_obj["12"].Q_channel_offset)
-        self.set_amplitude(0, proxy_obj["12"].I_channel_amp_factor)
-        self.set_amplitude(1, proxy_obj["12"].Q_channel_amp_factor)
+        self.set_offset(0, proxy_obj[1].I_channel_offset)
+        self.set_offset(1, proxy_obj[1].Q_channel_offset)
+        self.set_amplitude(0, proxy_obj[1].I_channel_amp_factor)
+        self.set_amplitude(1, proxy_obj[1].Q_channel_amp_factor)
 
     def load_waveform(self, channel, data):
         if channel not in (1, 2):
