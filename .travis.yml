@@ -4,15 +4,25 @@
 language: python
 python:
   - "3.6"
+  - "3.7"
+env:
+  - CONDA_TYPE=miniconda CONDA_VERS=https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh
+  - CONDA_TYPE=miniconda CONDA_VERS=https://repo.continuum.io/miniconda/Miniconda3-4.5.11-Linux-x86_64.sh
+
+addons:
+  apt:
+    packages:
+    - libusb-1.0-0-dev
 
 install:
   # Setup anaconda. See http://conda.pydata.org/docs/travis.html
-
-  - wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh
+  - echo "Using $CONDA_TYPE"
+  - wget $CONDA_VERS -O miniconda.sh
+  - bash miniconda.sh -h | sed '4q;d'
   - bash miniconda.sh -b -p $HOME/miniconda
   - export PATH="$HOME/miniconda/bin:$PATH"
-  - export BBN_MEAS_FILE="$PWD/test/test_measure.yml"
-  - echo "Measure file at $BBN_MEAS_FILE"
+  - export BBN_DB="$PWD/bbn.sqlite"
+  - echo "Database file at $BBN_DB"
   - hash -r
   - conda config --set always_yes yes --set changeps1 no
   - conda update -q conda
@@ -20,14 +30,13 @@ install:
   - conda info -a
 
   # Create conda environment with dependencies
-  - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION numpy scipy matplotlib h5py pandas networkx cffi bokeh jupyter future psutil
+  - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION numpy scipy matplotlib h5py pandas networkx cffi bokeh jupyter psutil
   - source activate test-environment
   - export GIT_LFS_SKIP_SMUDGE=1
   - pip install git+https://github.com/BBN-Q/Adapt.git
   - pip install git+https://github.com/BBN-Q/QGL.git
-  - pip install tqdm pyvisa coveralls ruamel.yaml watchdog scikit-learn pyusb
+  - pip install tqdm pyvisa coveralls scikit-learn pyusb
   - export GIT_LFS_SKIP_SMUDGE=0
-  - conda install -c ecpy atom;
   - export PYTHONPATH=$PYTHONPATH:$PWD/src
 
 script:
