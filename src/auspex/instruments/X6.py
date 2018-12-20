@@ -184,21 +184,26 @@ class X6(Instrument):
         # perform channel setup
         for chan in self._channels:
             self.channel_setup(chan)
+        
+        ##########################################################################
+        # The following has been deprecated after implementing state_vld_bitmask #
+        ##########################################################################
+        
         # pad all kernels to the maximum set length, to ensure that the valid signal is emitted only when all results are ready
         # first find longest kernel
-        integrated_channels = [chan for chan in self._channels if chan.stream_type == 'Integrated']
-        if integrated_channels:
-            max_kernel_length = max([len(chan.kernel) for chan in integrated_channels])
-            # pad kernes to the maximum length
-            for chan in integrated_channels:
-                if len(chan.kernel) < max_kernel_length:
-                    np.append(chan.kernel, 1j*np.zeros(max_kernel_length - len(chan.kernel)))
-            # then zero disabled channels
-            enabled_int_chan_tuples = [chan.channel_tuple for chan in integrated_channels]
-            for a in range(1,3):
-                for c in range(1,6): # max number of sdp_channels for now
-                    if (a, 0, c) not in enabled_int_chan_tuples:
-                        self._lib.write_kernel(a, 0, c, 1j*np.zeros(max_kernel_length))
+        #integrated_channels = [chan for chan in self._channels if chan.stream_type == 'Integrated']
+        #if integrated_channels:
+        #    max_kernel_length = max([len(chan.kernel) for chan in integrated_channels])
+        #    # pad kernes to the maximum length
+        #    for chan in integrated_channels:
+        #        if len(chan.kernel) < max_kernel_length:
+        #            np.append(chan.kernel, 1j*np.zeros(max_kernel_length - len(chan.kernel)))
+        #    # then zero disabled channels
+        #    enabled_int_chan_tuples = [chan.channel_tuple for chan in integrated_channels]
+        #    for a in range(1,3):
+        #        for c in range(1,6): # max number of sdp_channels for now
+        #            if (a, 0, c) not in enabled_int_chan_tuples:
+        #                self._lib.write_kernel(a, 0, c, 1j*np.zeros(max_kernel_length))
 
     def correlator_setup(self):
         if(self.correlator_inputs is not None and self.correlator_matrix is not None):
