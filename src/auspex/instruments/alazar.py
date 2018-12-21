@@ -76,6 +76,7 @@ class AlazarATS9870(Instrument):
         self.last_timestamp = Value('d', datetime.datetime.now().timestamp())
         self.fetch_count    = Value('d', 0)
         self.total_received = Value('d', 0)
+        self.gen_fake_data  = gen_fake_data
 
     def connect(self, resource_name=None):
         if config.auspex_dummy_mode or self.gen_fake_data:
