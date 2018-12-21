@@ -52,9 +52,6 @@ class X6Channel(DigitizerChannel):
         self.dtype = np.float64
         self.ideal_data = None
 
-        self.correlator_matrix = None
-        self.correlator_inputs = None
-
         if settings_dict:
             self.set_all(settings_dict)
 
@@ -131,6 +128,8 @@ class X6(Instrument):
         self.gen_fake_data = gen_fake_data
         self.ideal_data = None
 
+        self.correlator_matrix = None
+        self.correlator_inputs = None
         self.state_vld_bitmask = '0,0'
 
         if fake_x6:
@@ -184,11 +183,11 @@ class X6(Instrument):
         # perform channel setup
         for chan in self._channels:
             self.channel_setup(chan)
-        
+
         ##########################################################################
         # The following has been deprecated after implementing state_vld_bitmask #
         ##########################################################################
-        
+
         # pad all kernels to the maximum set length, to ensure that the valid signal is emitted only when all results are ready
         # first find longest kernel
         #integrated_channels = [chan for chan in self._channels if chan.stream_type == 'Integrated']
