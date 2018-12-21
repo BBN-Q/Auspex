@@ -116,7 +116,7 @@ class Plotter(Filter):
         if self.plot_dims.value == 2:
             self.y_values = self.descriptor.axes[-2].points
 
-        self.plot_buffer = (np.nan*np.ones(self.points_before_clear)).astype(self.descriptor.dtype)
+        self.plot_buffer = (np.nan*np.ones(self.points_before_clear) + 1.0j*np.nan*np.ones(self.points_before_clear)).astype(self.descriptor.dtype)
         self.idx = 0
 
     def execute_on_run(self):
@@ -125,7 +125,7 @@ class Plotter(Filter):
             try:
                 self.context = zmq.Context()
                 self.socket = self.context.socket(zmq.DEALER)
-                self.socket.identity = "Auspex_Experiment".encode()
+                self.socket.identity = f"Auspex_Experiment_{self.filter_name}_{hex(id(self))}".encode()
                 self.socket.connect("tcp://localhost:7762")
             except:
                 logger.warning("Exception occured while contacting the plot server. Is it running?")

@@ -343,6 +343,9 @@ class Experiment(metaclass=MetaExperiment):
     def declare_done(self):
         for oc in self.output_connectors.values():
             for os in oc.output_streams:
+                # TODO: why does any queue interaction prevent adding out of order?
+                while not os.queue.empty():
+                    time.sleep(0.05)
                 os.push_event("done")
         for p in self.extra_plotters:
             stream = self._extra_plots_to_streams[p]

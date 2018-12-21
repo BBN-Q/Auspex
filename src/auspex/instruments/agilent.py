@@ -623,7 +623,6 @@ class AgilentN5183A(SCPIInstrument):
         if is_valid_ipv4(self.resource_name):
             if "::5025::SOCKET" not in self.resource_name:
                 self.resource_name += "::5025::SOCKET"
-        print(self.resource_name)
         super(AgilentN5183A, self).connect(resource_name=resource_name, interface_type=interface_type)
         self.interface._resource.read_termination = u"\n"
         self.interface._resource.write_termination = u"\n"

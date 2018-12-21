@@ -268,13 +268,13 @@ class X6(Instrument):
 
         return total
 
-    def receive_data(self, channel, oc, exit):
+    def receive_data(self, channel, oc, exit, ready):
         sock = self._chan_to_rsocket[channel]
         sock.settimeout(1)
         self.last_timestamp.value = datetime.datetime.now().timestamp()
 
         total = 0
-
+        ready += 1
         while not exit.is_set():
             # push data from a socket into an OutputConnector (oc)
             # wire format is just: [size, buffer...]

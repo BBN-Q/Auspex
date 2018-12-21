@@ -87,6 +87,7 @@ class AlazarATS9870(Instrument):
 
         self.last_timestamp = Value('d', datetime.datetime.now().timestamp())
         self.fetch_count    = Value('d', 0)
+        self.total_received = Value('d', 0)
 
         if fake_alazar:
             self._lib = MagicMock()
@@ -105,6 +106,7 @@ class AlazarATS9870(Instrument):
 
     def acquire(self):
         self.fetch_count.value = 0
+        self.total_received.value = 0
         self._lib.acquire()
 
     def stop(self):
@@ -114,8 +116,8 @@ class AlazarATS9870(Instrument):
         return self._lib.data_available()
 
     def done(self):
-        # logger.info(f"{self.fetch_count.value} {len(self.channels)} {self.number_acquisitions}")
-        return self.fetch_count.value >= (len(self.channels) * self.number_acquisitions)
+        #logger.debug(f"Checking alazar doneness: {self.total_received.value} {self.number_segments * self.number_averages * self.record_length}")
+        return self.total_received.value >=  (self.number_segments * self.number_averages * self.record_length)
 
     def get_socket(self, channel):
         if channel in self._chan_to_rsocket:
@@ -140,35 +142,39 @@ class AlazarATS9870(Instrument):
             self.channels.append(channel)
             self._chan_to_buf[channel] = channel.phys_channel
 
-    def receive_data(self, channel, oc, exit):
+    def receive_data(self, channel, oc, exit, ready):
         sock = self._chan_to_rsocket[channel]
-        # logger.info(f"Recovered socket {sock} for data acquisition")
         sock.settimeout(2)
         self.last_timestamp.value = datetime.datetime.now().timestamp()
-        # logger.info("Entering receive data")
+        ready.value += 1
+
         while not exit.is_set():
             # push data from a socket into an OutputConnector (oc)
             # wire format is just: [size, buffer...]
             # TODO receive 4 or 8 bytes depending on sizeof(size_t)
             try:
-                # logger.info("Trying to receive data")
-                msg = sock.recv(1)
+                msg = sock.recv(8)
                 self.last_timestamp.value = datetime.datetime.now().timestamp()
             except:
-                # logger.info("Failed to receive data")
+                logger.debug("Didn't find any data on socket within 2 seconds (this is normal during experiment shutdown).")
                 continue
-            # logger.info(f"In receive data: {msg}")
-            # reinterpret as int (size_t)
             msg_size = struct.unpack('n', msg)[0]
             buf = sock_recvall(sock, msg_size)
             if len(buf) != msg_size:
-                logger.error(f"Channel {channel} socket msg shorter than expected")
-                logger.error(f"Expected {msg_size} bytes, received {len(buf)} bytes")
-                return
-            self.fetch_count.value += 1
+                time.sleep(0.01)
+                try:
+                    buf2 = sock_recvall(sock, msg_size-len(buf))
+                    if(len(buf2)==msg_size-len(buf)):
+                        buf = buf+buf2
+                    else:
+                        logger.error("Buffer mismatch...")
+                except:
+                    pass
             data = np.frombuffer(buf, dtype=np.float32)
+            self.total_received.value += len(data)
             oc.push(data)
-
+            self.fetch_count.value += 1
+            
     def get_buffer_for_channel(self, channel):
         self.fetch_count.value += 1
         return getattr(self._lib, 'ch{}Buffer'.format(self._chan_to_buf[channel]))
@@ -209,6 +215,10 @@ class AlazarATS9870(Instrument):
         self.samples_per_acquisition = self._lib.samplesPerAcquisition
         self.ch1_buffer              = self._lib.ch1Buffer
         self.ch2_buffer              = self._lib.ch2Buffer
+        self.record_length           = settings_dict['record_length']
+        self.number_segments         = self.proxy_obj.number_segments
+        self.number_waveforms        = self.proxy_obj.number_waveforms
+        self.number_averages         = self.proxy_obj.number_averages
 
     def disconnect(self):
         self._lib.disconnect()

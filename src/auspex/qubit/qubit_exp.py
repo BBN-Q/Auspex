@@ -13,6 +13,7 @@ if sys.platform == 'win32' or 'NOFORKING' in os.environ:
 else:
     from multiprocessing import Process
     from multiprocessing import Event
+    from multiprocessing import Value
 
 from . import pipeline
 import time
@@ -301,15 +302,18 @@ class QubitExperiment(Experiment):
 
         # Start socket listening processes, store as keys in a dictionary with exit commands as values
         self.dig_listeners = {}
+        ready = Value('i', 0)
         for chan, dig in self.chan_to_dig.items():
             socket = dig.get_socket(chan)
             oc = self.chan_to_oc[chan]
-            # self.loop.add_reader(socket, dig.receive_data, chan, oc)
             exit = Event()
-            self.dig_listeners[Process(target=dig.receive_data, args=(chan, oc, exit))] = exit
+            self.dig_listeners[Process(target=dig.receive_data, args=(chan, oc, exit, ready))] = exit
         assert None not in self.dig_listeners.keys()
         for listener in self.dig_listeners.keys():
             listener.start()
+
+        while ready.value < len(self.chan_to_dig):
+            time.sleep(0.3)
 
         if self.cw_mode:
             for awg in self.awgs:
@@ -327,6 +331,7 @@ class QubitExperiment(Experiment):
             self.run_sweeps()
         """
         param = FloatParameter() # Create the parameter
+        param.name = f"{qubit.label} {measure_or_control} {attribute}"
 
         if measure_or_control not in ["measure", "control"]:
             raise ValueError(f"Cannot add sweep for something other than measure or control properties of {qubit}")
@@ -339,25 +344,24 @@ class QubitExperiment(Experiment):
             thing = thing[0]
         elif measure_or_control == "control":
             logger.debug(f"Sweeping {qubit} control")
-            thing = qubit
-
-        if attribute == "frequency":
-            if thing.phys_chan.generator:
-                # Mixed up to final frequency
-                name  = thing.phys_chan.generator.label
-                instr = list(filter(lambda x: x.name == name, self._instruments.values()))[0]
-                method = None
-            else:
-                # Direct synthesis
-                name  = thing.phys_chan.awg.label
-                instr = list(filter(lambda x: x.name == name, self._instruments.values()))[0]
-                def method(value, channel=chan, instr=instr, prop=prop.lower()):
-                    # e.g. keysight.set_amplitude("ch1", 0.5)
-                    getattr(instr, "set_"+prop)(chan, value)
+            thing = qubit        
+        if thing.phys_chan.generator and attribute=="frequency":
+            # Mixed up to final frequency
+            name  = thing.phys_chan.generator.label
+            instr = list(filter(lambda x: x.name == name, self._instruments.values()))[0]
+            method = None
+        else:
+            # Direct synthesis
+            name, chan = thing.phys_chan.label.split("-")
+            instr = self._instruments[name] #list(filter(lambda x: x.name == name, self._instruments.values()))[0]
+            def method(value, channel=chan, instr=instr, prop=attribute):
+                # e.g. keysight.set_amplitude("ch1", 0.5)
+                getattr(instr, "set_"+prop)(chan, value)
 
         if method:
             # Custom method
             param.assign_method(method)
+
         else:
             # Get method by name
             if hasattr(instr, "set_"+attribute):
@@ -394,11 +398,11 @@ class QubitExperiment(Experiment):
         for dig in self.digitizers:
             dig.acquire()
 
-        time.sleep(2)
         # Start the AWGs
         if not self.cw_mode:
             for awg in self.awgs:
                 awg.run()
+                #logger.info(f"Started {awg}")
 
         # Wait for all of the acquisitions to complete
         timeout = 20
