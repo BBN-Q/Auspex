@@ -34,7 +34,7 @@ setup(
     author='auspex Developers',
     package_dir={'':'src'},
     packages=[
-        'auspex', 'auspex.instruments', 'auspex.filters', 'auspex.analysis'
+        'auspex', 'auspex.instruments', 'auspex.filters', 'auspex.analysis', 'auspex.qubit'
     ],
     scripts=[],
     description='Automated system for python-based experiments.',

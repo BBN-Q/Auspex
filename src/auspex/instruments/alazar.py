@@ -41,18 +41,6 @@ else:
     def sock_recvall(s, data_len):
         return s.recv(data_len, socket.MSG_WAITALL)
 
-# Dirty trick to avoid loading libraries when scraping
-# This code using quince.
-if config.auspex_dummy_mode:
-    fake_alazar = True
-else:
-    try:
-        from libalazar import ATS9870
-        fake_alazar = False
-    except:
-        # logger.warning("Could not load alazar library")
-        fake_alazar = True
-
 class AlazarChannel(ReceiverChannel):
     phys_channel = None
 
@@ -72,7 +60,7 @@ class AlazarATS9870(Instrument):
     """Alazar ATS9870 digitizer"""
     instrument_type = ("Digitizer")
 
-    def __init__(self, resource_name=None, name="Unlabeled Alazar"):
+    def __init__(self, resource_name=None, name="Unlabeled Alazar", gen_fake_data=False):
         self.name = name
 
         # A list of AlazarChannel objects
@@ -89,14 +77,18 @@ class AlazarATS9870(Instrument):
         self.fetch_count    = Value('d', 0)
         self.total_received = Value('d', 0)
 
-        if fake_alazar:
+    def connect(self, resource_name=None):
+        if config.auspex_dummy_mode or self.gen_fake_data:
+            self.fake_alazar = True
             self._lib = MagicMock()
         else:
-            self._lib = ATS9870()
-
-    def connect(self, resource_name=None):
-        if fake_alazar:
-            logger.warning("Could not load Alazar library")
+            try:
+                from libalazar import ATS9870
+                self._lib = ATS9870()
+                self.fake_alazar = False
+            except:
+                raise Exception("Could not find libalazar. You can run in dummy mode by setting config.auspex_dummy_mode \
+                    or setting the gen_fake_data property of this instrument.")
         if resource_name:
             self.resource_name = resource_name
 
