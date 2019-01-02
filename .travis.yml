@@ -25,8 +25,10 @@ python:
 
 install:
     # Pulling in docker image without || true -- want it to fail if not there.
-    - echo "Pulling in BBNQConda docker image..."
-    - docker pull merlinbeast/bbnq:bbnqconda_centos7_4_bbnq_pylib_v1.0.1_19.12.2018
+    - export BBNQConda_DI="merlinbeast/bbnq:bbnqconda_centos7_4_bbnq_pylib_v1.0.1_19.12.2018"
+    - echo "Pulling in BBNQConda docker image via ~:"
+#    - docker pull merlinbeast/bbnq:bbnqconda_centos7_4_bbnq_pylib_v1.0.1_19.12.2018
+    - docker pull ${BBNQConda_DI}
     
   # Setup anaconda. See http://conda.pydata.org/docs/travis.html
 
@@ -55,7 +57,10 @@ install:
     # Defining pip install commands for use in the docker session
     # Note -- script test was using direct clone, then walking the installation
     # to do pip install, documentation rendereing and such.
+    #
+    # Define dependent/sibling repository modules to PiP load prior to testing.
     - export TGT_PIPLOADS="pip install git+https://github.com/BBN-Q/Adapt.git; pip install git+https://github.com/BBN-Q/QGL.git"   
+    
 script:
 #  - coverage run -m unittest discover -v test
     - echo "Invoking run over Docker image..."
@@ -68,7 +73,9 @@ script:
 # Added TGT_PIPINSTS reference
 #    - docker run -v $PWD:/root/TravisT -e BBN_MEAS_FILE=test/test_measure.yml -e LC_ALL=en_US.utf8 -e LANG=en_US.utf8 merlinbeast/bbnq:bbnqconda_centos7_4_bbnq_pylib_v1.0.1_19.12.2018 /bin/sh -c "source ~/.bashrc; ${TGT_PIPLOADS}; cd ~/TravisT; pwd; which conda; which python; python -m unittest discover -v test"
 # Previous successfully pip loaded QGL and Adapt -- started to run and couldn't find Auspex -- Doht -- add the pip install -e . next
-    - docker run -v $PWD:/root/TravisT -e BBN_MEAS_FILE=test/test_measure.yml -e LC_ALL=en_US.utf8 -e LANG=en_US.utf8 merlinbeast/bbnq:bbnqconda_centos7_4_bbnq_pylib_v1.0.1_19.12.2018 /bin/sh -c "source ~/.bashrc; which conda; which python; ${TGT_PIPLOADS}; cd ~/TravisT; pwd; echo 'Pip Installing Auspex test directory...'; pip install -e .; python -m unittest discover -v test"
+#    - docker run -v $PWD:/root/TravisT -e BBN_MEAS_FILE=test/test_measure.yml -e LC_ALL=en_US.utf8 -e LANG=en_US.utf8 merlinbeast/bbnq:bbnqconda_centos7_4_bbnq_pylib_v1.0.1_19.12.2018 /bin/sh -c "source ~/.bashrc; which conda; which python; ${TGT_PIPLOADS}; cd ~/TravisT; pwd; echo 'Pip Installing Auspex test directory...'; pip install -e .; python -m unittest discover -v test"
+# Previous worked; simplification one follows:
+    - docker run -v $PWD:/root/TravisT -e BBN_MEAS_FILE=test/test_measure.yml -e LC_ALL=en_US.utf8 -e LANG=en_US.utf8 ${BBNQConda_DI} /bin/sh -c "source ~/.bashrc; which conda; which python; ${TGT_PIPLOADS}; cd ~/TravisT; pwd; echo 'Pip Installing Auspex test directory...'; pip install -e .; python -m unittest discover -v test"
 
 after_script:
   - coveralls
