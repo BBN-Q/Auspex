@@ -3,6 +3,22 @@
 # .travis.yml file based on:
 # https://gist.github.com/dan-blanchard/7045057
 
+# Original derivation notes, above, deriving docker image references from
+# the following: 
+# https://giorgos.sealabs.net/build-and-test-against-docker-images-in-travis.html
+#
+sudo: required
+
+services:
+    - docker
+    
+before_install:
+    - docker --version
+    #- echo "ENV GIT_SHA ${TRAVIS_COMMIT}" >> Dockerfile
+    - echo "ENV GIT_SHA contents? ~:"
+    - echo "ENV GIT_SHA ${TRAVIS_COMMIT}"
+    - echo "...and back to original TI config..."
+      
 language: python
 python:
   - "3.6"
