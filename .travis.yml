@@ -56,7 +56,7 @@ script:
 #  - coverage run -m unittest discover -v test
     - echo "Invoking run over Docker image..."
 #    - docker run -v $PWD:/root/Travis -e BBN_MEAS_FILE=test/test_measure.yml -e LC_ALL=en_US.utf8 -e LANG=en_US.utf8 merlinbeast/bbnq:bbnqconda_centos7_4_bbnq_pylib_v1.0.1_19.12.2018 coverage run -m unittest discover -v test
-    - docker run -v $PWD:/root/Travis -e BBN_MEAS_FILE=test/test_measure.yml -e LC_ALL=en_US.utf8 -e LANG=en_US.utf8 merlinbeast/bbnq:bbnqconda_centos7_4_bbnq_pylib_v1.0.1_19.12.2018 python -m unittest discover -v test
+    - docker run -v $PWD:/root/Travis -e BBN_MEAS_FILE=test/test_measure.yml -e LC_ALL=en_US.utf8 -e LANG=en_US.utf8 merlinbeast/bbnq:bbnqconda_centos7_4_bbnq_pylib_v1.0.1_19.12.2018 which conda; which python; python -m unittest discover -v test
 
 after_script:
   - coveralls
