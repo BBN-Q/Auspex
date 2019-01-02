@@ -60,7 +60,7 @@ script:
 #  alternate calls drived from : https://docs.travis-ci.com/user/docker/
 # keep the multi-command semicolons within the quotes.
 #
-    - docker run -v $PWD:/root/TravisT -e BBN_MEAS_FILE=test/test_measure.yml -e LC_ALL=en_US.utf8 -e LANG=en_US.utf8 merlinbeast/bbnq:bbnqconda_centos7_4_bbnq_pylib_v1.0.1_19.12.2018 /bin/sh -c "cd ~/TravisT; pwd; which conda; which python; python -m unittest discover -v test"
+    - docker run -v $PWD:/root/TravisT -e BBN_MEAS_FILE=test/test_measure.yml -e LC_ALL=en_US.utf8 -e LANG=en_US.utf8 merlinbeast/bbnq:bbnqconda_centos7_4_bbnq_pylib_v1.0.1_19.12.2018 /bin/sh -c "source ~/.bashrc; cd ~/TravisT; pwd; which conda; which python; python -m unittest discover -v test"
 
 after_script:
   - coveralls
