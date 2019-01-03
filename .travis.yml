@@ -15,7 +15,6 @@ env:
     #    true >> run over docker image.
     #    false >> apply original logic.
     #
-    # - TEST_OVER_DI=false
     - TEST_OVER_DI=true
     
     # Aside -- boolean sub logic / assignment processing does NOT appear
