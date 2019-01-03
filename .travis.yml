@@ -17,11 +17,22 @@ env:
     #
     - TEST_OVER_DI=false
     
+    - |
+        if [ ! -z ${TEST_OVER_DI} ] && [ ${TEST_OVER_DI} == true ]; then
+            #
+            SUDO_VAL=required
+            #
+        else
+            SUDO_VAL=false
+        fi
+    
+    
+sudo:   ${SUDO_VAL}
 # I wonder -- can sudo and services definitions get managed
 # by the same logic block (rather than logic blocks within) IMI
 #
-# This stub renders  "unrecognized service" -- try it embedded next
 #sudo: required
+# This stub renders  "unrecognized service" -- try it embedded next
 #sudo: |
 #    if [ ! -z ${TEST_OVER_DI} ] && [ ${TEST_OVER_DI} == true ]; then
 #        #
@@ -31,16 +42,16 @@ env:
 #        false
 #    fi
 
-#services:
+services:
 #    - docker
-#    - |
-#        if [ ! -z ${TEST_OVER_DI} ] && [ ${TEST_OVER_DI} == true ]; then
-#            #
-#            docker
-#            #
-#        else
-#            # N/A -- no services reference.
-#        fi
+    - |
+        if [ ! -z ${TEST_OVER_DI} ] && [ ${TEST_OVER_DI} == true ]; then
+            #
+            docker
+            #
+        else
+            # N/A -- no services reference.
+        fi
 
 # Ok that munged up sudo service references, how about together IMI
 # No joy -- pushing this out appears to cause Travis to ignore it
@@ -61,18 +72,19 @@ env:
     
 before_install:
     # added sudo and services here YES IMI
-    - |
-        if [ ! -z ${TEST_OVER_DI} ] && [ ${TEST_OVER_DI} == true ]; then
-
-            sudo: required
-            
-            services:
-                - docker
-
-        else
-            # No sudo, no services.
-            sudo: false
-        fi
+#    # No joy -- citing sudo here as a sub reference flags sudo:: command not found failure DOhttt!
+#    - |
+#        if [ ! -z ${TEST_OVER_DI} ] && [ ${TEST_OVER_DI} == true ]; then
+#
+#            sudo: required
+#            
+#            services:
+#                - docker
+#
+#        else
+#            # No sudo, no services.
+#            sudo: false
+#        fi
     
     
     # Use the YAML pipe to process over multi-line entries
