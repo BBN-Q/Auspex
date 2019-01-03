@@ -15,10 +15,13 @@ services:
 before_install:
     - docker --version
     #- echo "ENV GIT_SHA ${TRAVIS_COMMIT}" >> Dockerfile
-    - echo "ENV GIT_SHA contents? ~:"
+# Useless
+#    - echo "ENV GIT_SHA contents? ~:"
+    # TRAVIS_COMMIT value usefull if script needs to build and push new docker images.
+    # (unused here, currently)
     - echo "ENV GIT_SHA ${TRAVIS_COMMIT}"
-    - echo "...and back to original TI config..."
-      
+#    - echo "...and back to original TI config..."
+
 language: python
 python:
   - "3.6"
@@ -59,7 +62,8 @@ install:
     # to do pip install, documentation rendereing and such.
     #
     # Define dependent/sibling repository modules to PiP load prior to testing.
-    - export TGT_PIPLOADS="pip install git+https://github.com/BBN-Q/Adapt.git; pip install git+https://github.com/BBN-Q/QGL.git"
+    - export TGT_PIPLOADS="pip install git+https://github.com/BBN-Q/Adapt.git; echo ''; echo '# ---'; pip install git+https://github.com/BBN-Q/QGL.git"
+    # the utf8 settings are required for documentation rendering logic.
     - export DI_ENV_VALS="-e BBN_MEAS_FILE=test/test_measure.yml -e LC_ALL=en_US.utf8 -e LANG=en_US.utf8"
     
 script:
@@ -78,7 +82,9 @@ script:
 # Previous worked; simplification one follows:
 #    - docker run -v $PWD:/root/TravisT -e BBN_MEAS_FILE=test/test_measure.yml -e LC_ALL=en_US.utf8 -e LANG=en_US.utf8 ${BBNQConda_DI} /bin/sh -c "source ~/.bashrc; which conda; which python; ${TGT_PIPLOADS}; cd ~/TravisT; pwd; echo 'Pip Installing Auspex test directory...'; pip install -e .; python -m unittest discover -v test"
 # Previous worked; simplification two follows (note condainfo will show environment setting -- how to show BBNQConda v IMI)
-    - docker run -v $PWD:/root/RepoCDir ${DI_ENV_VALS} ${BBNQConda_DI} /bin/sh -c "source ~/.bashrc; conda info; conda list; python --version; echo ''; echo '# --- PIP loading dependency mods...'; ${TGT_PIPLOADS}; cd ~/RepoCDir; pwd; echo ''; echo '# --- Pip Installing repo clone source...'; pip install -e .; echo ''; echo '# --- Unittest begin...'; python -m unittest discover -v test"
+#    - docker run -v $PWD:/root/RepoCDir ${DI_ENV_VALS} ${BBNQConda_DI} /bin/sh -c "source ~/.bashrc; conda info; conda list; python --version; echo ''; echo '# --- PIP loading dependency mods...'; ${TGT_PIPLOADS}; cd ~/RepoCDir; pwd; echo ''; echo '# --- Pip Installing repo clone source...'; pip install -e .; echo ''; echo '# --- Unittest begin...'; python -m unittest discover -v test"
+# Previous worked; adjusting console commentary -- simplif three
+    - docker run -v $PWD:/root/RepoCDir ${DI_ENV_VALS} ${BBNQConda_DI} /bin/sh -c "source ~/.bashrc; echo ''; echo '# --- DI Run-Time info:'; python --version; echo ''; conda info; conda list; echo ''; echo '# --- PIP loading dependency mods...'; ${TGT_PIPLOADS}; cd ~/RepoCDir; pwd; echo ''; echo '# --- Pip Installing repo clone...'; pip install -e .; echo ''; echo '# --- Unittest begin...'; python -m unittest discover -v test"
     
 after_script:
   - coveralls
