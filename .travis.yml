@@ -9,7 +9,7 @@
 #
 env:
     # check logic for switchable -- this appears to get exported
-    - TEST_OVER_DI=true
+    - TEST_OVER_DI=false
     
 sudo: required
 
@@ -17,42 +17,27 @@ services:
     - docker
     
 before_install:
-#    - if: env(TEST_OVER_DI) IS present AND env(TEST_OVER_DI) = true
-#        - echo "TEST_OVER_DI engaged."
-#    # There does NOT appear to be an else reference IMI
-#    - if: !( env(TEST_OVER_DI) IS present)) OR !(env(TEST_OVER_DI) = true)
-#        - echo "NOT TEST_OVER_DI"
     # Use the YAML pipe to process over multi-line entries
     # << https://stackoverflow.com/questions/38789253/running-script-conditionally-does-not-work-in-travis-yml-why
-# No joy << syntax error near unexpected token `('    
-#    - |
-#        if [ env(TEST_OVER_DI) IS present && env(TEST_OVER_DI) = true ]; then
-#            echo "TEST_OVER_DI engaged."
-#        else
-#            echo "TEST_OVER_DI inactive"
-#        fi
-# No joy
-#    - |
-#        if [ ${TEST_OVER_DI} IS present && ${TEST_OVER_DI} == true ]; then
-#            echo "TEST_OVER_DI engaged."
-#        else
-#            echo "TEST_OVER_DI inactive"
-#        fi
-# Read defined (not zero) and eq true, else not
+    # This works -- Read defined (not zero) and eq true, else not
     - |
         if [ ! -z ${TEST_OVER_DI} ] && [ ${TEST_OVER_DI} == true ]; then
+            #
             echo "TEST_OVER_DI engaged."
+            docker --version
+            echo "ENV GIT_SHA ${TRAVIS_COMMIT}"
+            #
         else
             echo "TEST_OVER_DI inactive"
         fi
         
-    - docker --version
+#    - docker --version
     #- echo "ENV GIT_SHA ${TRAVIS_COMMIT}" >> Dockerfile
 # Useless
 #    - echo "ENV GIT_SHA contents? ~:"
     # TRAVIS_COMMIT value usefull if script needs to build and push new docker images.
     # (unused here, currently)
-    - echo "ENV GIT_SHA ${TRAVIS_COMMIT}"
+#    - echo "ENV GIT_SHA ${TRAVIS_COMMIT}"
 #    - echo "...and back to original TI config..."
 
 # TEST -- if we're running from DOCKER do we really need to setup python references here IMI
