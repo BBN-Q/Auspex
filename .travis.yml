@@ -7,12 +7,30 @@
 # the following: 
 # https://giorgos.sealabs.net/build-and-test-against-docker-images-in-travis.html
 #
+env:
+    # check logic for switchable
+    - TEST_OVER_DI=true
+    
 sudo: required
 
 services:
     - docker
     
 before_install:
+#    - if: env(TEST_OVER_DI) IS present AND env(TEST_OVER_DI) = true
+#        - echo "TEST_OVER_DI engaged."
+#    # There does NOT appear to be an else reference IMI
+#    - if: !( env(TEST_OVER_DI) IS present)) OR !(env(TEST_OVER_DI) = true)
+#        - echo "NOT TEST_OVER_DI"
+    # Use the YAML pipe to process over multi-line entries
+    # << https://stackoverflow.com/questions/38789253/running-script-conditionally-does-not-work-in-travis-yml-why
+    - |
+        if [ env(TEST_OVER_DI) IS present && env(TEST_OVER_DI) = true ]; then
+            echo "TEST_OVER_DI engaged."
+        else:
+            echo "TEST_OVER_DI inactive"
+        fi
+        
     - docker --version
     #- echo "ENV GIT_SHA ${TRAVIS_COMMIT}" >> Dockerfile
 # Useless
@@ -24,10 +42,11 @@ before_install:
 
 # TEST -- if we're running from DOCKER do we really need to setup python references here IMI
 # Commenting these and other potentially unused segments ATT
-#
-#language: python
-#python:
-#  - "3.6"
+# Note:  if No language references defined, system defaults to Ruby -- let the python ref remain.
+# (even though unused if execution occurs down in docker level)
+language: python
+python:
+  - "3.6"
 
 install:
     # Pulling in docker image without || true -- want it to fail if not there.
@@ -39,8 +58,9 @@ install:
     # and still need to explode out a base linux environment for Travis IMI
 #    - export TGT_DI=`docker images | grep ${BBNQConda_DI}`
 #    - echo ''; if [ -z "${BBNQConda_DI}" ]; then echo "Docker cache missed -- ${BBNQConda_DI} pull pending..." ; docker pull ${BBNQConda_DI}; else echo "Docker cache hit -- ${BBNQConda_DI} docked and ready..."; fi
-    # test the image display -- anything IMI
-    - docker images
+    # test the image display -- anything IMI -- Nope  docker cache appears empty
+    # upon entry -- hence dynamic load logic pointless; just load it
+    #- docker images
     
 #    - echo "Pulling in BBNQConda docker image via ~:"
 ##    - docker pull merlinbeast/bbnq:bbnqconda_centos7_4_bbnq_pylib_v1.0.1_19.12.2018
