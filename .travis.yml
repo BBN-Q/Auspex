@@ -22,9 +22,12 @@ before_install:
     - echo "ENV GIT_SHA ${TRAVIS_COMMIT}"
 #    - echo "...and back to original TI config..."
 
-language: python
-python:
-  - "3.6"
+# TEST -- if we're running from DOCKER do we really need to setup python references here IMI
+# Commenting these and other potentially unused segments ATT
+#
+#language: python
+#python:
+#  - "3.6"
 
 install:
     # Pulling in docker image without || true -- want it to fail if not there.
@@ -109,7 +112,8 @@ after_script:
 # necessary to run on new container-based infrastructure
 #sudo: false
 
+# Commenting out PIP cache
 cache:
   directories:
     - $HOME/download
-    - $HOME/.cache/pip
+#    - $HOME/.cache/pip
