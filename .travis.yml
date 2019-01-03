@@ -8,13 +8,38 @@
 # https://giorgos.sealabs.net/build-and-test-against-docker-images-in-travis.html
 #
 env:
-    # check logic for switchable -- this appears to get exported
+    # These values appear to get exported; hence can process with standard
+    # shell mechanisms.
+    #
+    # Defines test logic switch
+    #    true >> run over docker image.
+    #    false >> apply original logic.
+    #
     - TEST_OVER_DI=false
     
-sudo: required
+# I wonder -- can sudo and services definitions get managed
+# by the same logic block (rather than logic blocks within) IMI
+#
+#sudo: required
+sudo: |
+    if [ ! -z ${TEST_OVER_DI} ] && [ ${TEST_OVER_DI} == true ]; then
+        #
+        required
+        #
+    else
+        false
+    fi
 
 services:
-    - docker
+#    - docker
+    - |
+        if [ ! -z ${TEST_OVER_DI} ] && [ ${TEST_OVER_DI} == true ]; then
+            #
+            docker
+            #
+        else
+            # N/A -- no services reference.
+        fi
     
 before_install:
     # Use the YAML pipe to process over multi-line entries
