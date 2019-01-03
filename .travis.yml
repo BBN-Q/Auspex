@@ -15,7 +15,8 @@ env:
     #    true >> run over docker image.
     #    false >> apply original logic.
     #
-    - TEST_OVER_DI=false
+    # - TEST_OVER_DI=false
+    - TEST_OVER_DI=true
     
     # Aside -- boolean sub logic / assignment processing does NOT appear
     # to work on items within the env segment.
@@ -34,7 +35,7 @@ sudo:   ${SUDO_VAL}
 
 # Logical management of Sudo and services definitions does NOT appear to work.
 # Moreover, services were NOT defined in the original logic, and it does NOT
-# appear to be a requirement for our DI run use-case, so leave it out.
+# appear to be a requirement for our DI run use-case, so just leaving it out for-now.
 #
 #services:
 #    - docker
