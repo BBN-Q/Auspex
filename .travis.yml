@@ -59,11 +59,12 @@ install:
     # to do pip install, documentation rendereing and such.
     #
     # Define dependent/sibling repository modules to PiP load prior to testing.
-    - export TGT_PIPLOADS="pip install git+https://github.com/BBN-Q/Adapt.git; pip install git+https://github.com/BBN-Q/QGL.git"   
+    - export TGT_PIPLOADS="pip install git+https://github.com/BBN-Q/Adapt.git; pip install git+https://github.com/BBN-Q/QGL.git"
+    - export DI_ENV_VALS="-e BBN_MEAS_FILE=test/test_measure.yml -e LC_ALL=en_US.utf8 -e LANG=en_US.utf8"
     
 script:
 #  - coverage run -m unittest discover -v test
-    - echo "Invoking run over Docker image..."
+    - echo ""; echo "#----- Invoking Docker image run..."
 #    - docker run -v $PWD:/root/Travis -e BBN_MEAS_FILE=test/test_measure.yml -e LC_ALL=en_US.utf8 -e LANG=en_US.utf8 merlinbeast/bbnq:bbnqconda_centos7_4_bbnq_pylib_v1.0.1_19.12.2018 coverage run -m unittest discover -v test
 #    - docker run -v $PWD:/root/Travis -e BBN_MEAS_FILE=test/test_measure.yml -e LC_ALL=en_US.utf8 -e LANG=en_US.utf8 merlinbeast/bbnq:bbnqconda_centos7_4_bbnq_pylib_v1.0.1_19.12.2018 which conda; which python; python -m unittest discover -v test
 #  alternate calls drived from : https://docs.travis-ci.com/user/docker/
@@ -75,8 +76,10 @@ script:
 # Previous successfully pip loaded QGL and Adapt -- started to run and couldn't find Auspex -- Doht -- add the pip install -e . next
 #    - docker run -v $PWD:/root/TravisT -e BBN_MEAS_FILE=test/test_measure.yml -e LC_ALL=en_US.utf8 -e LANG=en_US.utf8 merlinbeast/bbnq:bbnqconda_centos7_4_bbnq_pylib_v1.0.1_19.12.2018 /bin/sh -c "source ~/.bashrc; which conda; which python; ${TGT_PIPLOADS}; cd ~/TravisT; pwd; echo 'Pip Installing Auspex test directory...'; pip install -e .; python -m unittest discover -v test"
 # Previous worked; simplification one follows:
-    - docker run -v $PWD:/root/TravisT -e BBN_MEAS_FILE=test/test_measure.yml -e LC_ALL=en_US.utf8 -e LANG=en_US.utf8 ${BBNQConda_DI} /bin/sh -c "source ~/.bashrc; which conda; which python; ${TGT_PIPLOADS}; cd ~/TravisT; pwd; echo 'Pip Installing Auspex test directory...'; pip install -e .; python -m unittest discover -v test"
-
+#    - docker run -v $PWD:/root/TravisT -e BBN_MEAS_FILE=test/test_measure.yml -e LC_ALL=en_US.utf8 -e LANG=en_US.utf8 ${BBNQConda_DI} /bin/sh -c "source ~/.bashrc; which conda; which python; ${TGT_PIPLOADS}; cd ~/TravisT; pwd; echo 'Pip Installing Auspex test directory...'; pip install -e .; python -m unittest discover -v test"
+# Previous worked; simplification two follows (note condainfo will show environment setting -- how to show BBNQConda v IMI)
+    - docker run -v $PWD:/root/RepoCDir ${DI_ENV_VALS} ${BBNQConda_DI} /bin/sh -c "source ~/.bashrc; conda info; conda list; python --version; echo ''; echo '# --- PIP loading dependency mods...'; ${TGT_PIPLOADS}; cd ~/RepoCDir; pwd; echo ''; echo '# --- Pip Installing repo clone source...'; pip install -e .; echo ''; echo '# --- Unittest begin...'; python -m unittest discover -v test"
+    
 after_script:
   - coveralls
 
