@@ -17,14 +17,17 @@ env:
     #
     - TEST_OVER_DI=false
     
-    - |
-        if [ ! -z ${TEST_OVER_DI} ] && [ ${TEST_OVER_DI} == true ]; then
-            #
-            SUDO_VAL=required
-            #
-        else
-            SUDO_VAL=false
-        fi
+    # Nope -- no logic witin the env segment
+#    - |
+#        if [ ! -z ${TEST_OVER_DI} ] && [ ${TEST_OVER_DI} == true ]; then
+#            #
+#            SUDO_VAL=required
+#            #
+#        else
+#            SUDO_VAL=false
+#        fi
+# OK, just manually set the value
+    - SUDO_VAL=false
     
     
 sudo:   ${SUDO_VAL}
