@@ -8,7 +8,7 @@
 # https://giorgos.sealabs.net/build-and-test-against-docker-images-in-travis.html
 #
 env:
-    # check logic for switchable
+    # check logic for switchable -- this appears to get exported
     - TEST_OVER_DI=true
     
 sudo: required
@@ -31,8 +31,16 @@ before_install:
 #        else
 #            echo "TEST_OVER_DI inactive"
 #        fi
+# No joy
+#    - |
+#        if [ ${TEST_OVER_DI} IS present && ${TEST_OVER_DI} == true ]; then
+#            echo "TEST_OVER_DI engaged."
+#        else
+#            echo "TEST_OVER_DI inactive"
+#        fi
+# Read defined (not zero) and eq true, else not
     - |
-        if [ ${TEST_OVER_DI} IS present && ${TEST_OVER_DI} == true ]; then
+        if [ ! -z ${TEST_OVER_DI} ] && [ ${TEST_OVER_DI} == true ]; then
             echo "TEST_OVER_DI engaged."
         else
             echo "TEST_OVER_DI inactive"
