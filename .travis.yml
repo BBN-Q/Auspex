@@ -31,12 +31,18 @@ install:
     - export BBNQConda_DI="merlinbeast/bbnq:bbnqconda_centos7_4_bbnq_pylib_v1.0.1_19.12.2018"
     
     # Sample logic to see if we can determine pull needs or not
-    - export TGT_DI=`docker images | grep ${BBNQConda_DI}`
-    - echo ''; if [ -z "${BBNQConda_DI}" ]; then echo "Docker cache missed -- ${BBNQConda_DI} pull pending..." ; docker pull ${BBNQConda_DI}; else echo "Docker cache hit -- ${BBNQConda_DI} docked and ready..."; fi
+    # Sadly -- this did NOT work as expected (as it does under normal shells)
+    # Could this be that we don't have a complete linux system here, currently,
+    # and still need to explode out a base linux environment for Travis IMI
+#    - export TGT_DI=`docker images | grep ${BBNQConda_DI}`
+#    - echo ''; if [ -z "${BBNQConda_DI}" ]; then echo "Docker cache missed -- ${BBNQConda_DI} pull pending..." ; docker pull ${BBNQConda_DI}; else echo "Docker cache hit -- ${BBNQConda_DI} docked and ready..."; fi
+    # test the image display -- anything IMI
+    - docker images
     
 #    - echo "Pulling in BBNQConda docker image via ~:"
 ##    - docker pull merlinbeast/bbnq:bbnqconda_centos7_4_bbnq_pylib_v1.0.1_19.12.2018
-#    - docker pull ${BBNQConda_DI}
+    # Popping constant pull back in
+    - docker pull ${BBNQConda_DI}
     
   # Setup anaconda. See http://conda.pydata.org/docs/travis.html
 
