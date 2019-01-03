@@ -43,20 +43,38 @@ env:
 #        fi
 
 # Ok that munged up sudo service references, how about together IMI
-|
-    if [ ! -z ${TEST_OVER_DI} ] && [ ${TEST_OVER_DI} == true ]; then
-
-        sudo: required
-        
-        services:
-            - docker
-
-    else
-        # No sudo, no services.
-        sudo: false
-    fi
+# No joy -- pushing this out appears to cause Travis to ignore it
+#|
+#    if [ ! -z ${TEST_OVER_DI} ] && [ ${TEST_OVER_DI} == true ]; then
+#
+#        sudo: required
+#        
+#        services:
+#            - docker#
+#
+#    else
+#        # No sudo, no services.
+#        sudo: false
+#    fi
+    
+# What if we add that segment to before_install IMI
     
 before_install:
+    # added sudo and services here YES IMI
+    - |
+        if [ ! -z ${TEST_OVER_DI} ] && [ ${TEST_OVER_DI} == true ]; then
+
+            sudo: required
+            
+            services:
+                - docker
+
+        else
+            # No sudo, no services.
+            sudo: false
+        fi
+    
+    
     # Use the YAML pipe to process over multi-line entries
     # << https://stackoverflow.com/questions/38789253/running-script-conditionally-does-not-work-in-travis-yml-why
     # This works -- Read defined (not zero) and eq true, else not
