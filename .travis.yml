@@ -24,10 +24,17 @@ before_install:
 #        - echo "NOT TEST_OVER_DI"
     # Use the YAML pipe to process over multi-line entries
     # << https://stackoverflow.com/questions/38789253/running-script-conditionally-does-not-work-in-travis-yml-why
+# No joy << syntax error near unexpected token `('    
+#    - |
+#        if [ env(TEST_OVER_DI) IS present && env(TEST_OVER_DI) = true ]; then
+#            echo "TEST_OVER_DI engaged."
+#        else
+#            echo "TEST_OVER_DI inactive"
+#        fi
     - |
-        if [ env(TEST_OVER_DI) IS present && env(TEST_OVER_DI) = true ]; then
+        if [ ${TEST_OVER_DI} IS present && ${TEST_OVER_DI} == true ]; then
             echo "TEST_OVER_DI engaged."
-        else:
+        else
             echo "TEST_OVER_DI inactive"
         fi
         
