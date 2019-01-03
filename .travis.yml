@@ -20,26 +20,41 @@ env:
 # I wonder -- can sudo and services definitions get managed
 # by the same logic block (rather than logic blocks within) IMI
 #
+# This stub renders  "unrecognized service" -- try it embedded next
 #sudo: required
-sudo: |
-    if [ ! -z ${TEST_OVER_DI} ] && [ ${TEST_OVER_DI} == true ]; then
-        #
-        required
-        #
-    else
-        false
-    fi
+#sudo: |
+#    if [ ! -z ${TEST_OVER_DI} ] && [ ${TEST_OVER_DI} == true ]; then
+#        #
+#        required
+#        #
+#    else
+#        false
+#    fi
 
-services:
+#services:
 #    - docker
-    - |
-        if [ ! -z ${TEST_OVER_DI} ] && [ ${TEST_OVER_DI} == true ]; then
-            #
-            docker
-            #
-        else
-            # N/A -- no services reference.
-        fi
+#    - |
+#        if [ ! -z ${TEST_OVER_DI} ] && [ ${TEST_OVER_DI} == true ]; then
+#            #
+#            docker
+#            #
+#        else
+#            # N/A -- no services reference.
+#        fi
+
+# Ok that munged up sudo service references, how about together IMI
+|
+    if [ ! -z ${TEST_OVER_DI} ] && [ ${TEST_OVER_DI} == true ]; then
+
+        sudo: required
+        
+        services:
+            - docker
+
+    else
+        # No sudo, no services.
+        sudo: false
+    fi
     
 before_install:
     # Use the YAML pipe to process over multi-line entries
