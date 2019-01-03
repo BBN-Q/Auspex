@@ -15,13 +15,19 @@ env:
     #    true >> run over docker image.
     #    false >> apply original logic.
     #
-    - TEST_OVER_DI=true
+#    - TEST_OVER_DI=true
     
     # Aside -- boolean sub logic / assignment processing does NOT appear
     # to work on items within the env segment.
     
     # ...so, just manually set the sudo value (options false, required, true)
-    - SUDO_VAL=false
+#    - SUDO_VAL=false
+
+    # Actually -- define the ENV values altogether in a set 
+    # (Uncomment the mode you want to run)
+    - TEST_OVER_DI=true SUDO_VAL=false
+#    - TEST_OVER_DI=false SUDO_VAL=false
+
     
     # could space delimiters work here IMI
     # - SERVICES_VAL="docker"
@@ -55,15 +61,6 @@ before_install:
             echo "TEST_OVER_DI inactive"
         fi
         
-#    - docker --version
-    #- echo "ENV GIT_SHA ${TRAVIS_COMMIT}" >> Dockerfile
-# Useless
-#    - echo "ENV GIT_SHA contents? ~:"
-    # TRAVIS_COMMIT value usefull if script needs to build and push new docker images.
-    # (unused here, currently)
-#    - echo "ENV GIT_SHA ${TRAVIS_COMMIT}"
-#    - echo "...and back to original TI config..."
-
 # TEST -- if we're running from DOCKER do we really need to setup python references here IMI
 # Commenting these and other potentially unused segments ATT
 # Note:  if No language references defined, system defaults to Ruby -- let the python ref remain.
@@ -74,52 +71,8 @@ python:
     - "3.6"
 
 install:
-    # Pulling in docker image without || true -- want it to fail if not there.
-#    - export BBNQConda_DI="merlinbeast/bbnq:bbnqconda_centos7_4_bbnq_pylib_v1.0.1_19.12.2018"
-    
-    
-    # Sample logic to determine if we need to pull an image or not does 
-    # NOT appear to work as the docker images call returns empty set after 
-    # initialization.
-    # - docker images
-    
-    # Popping constant pull back in
-#    - docker pull ${BBNQConda_DI}
-
-    # Defining pip install commands for use in the docker session
-    # Note -- script test was using direct clone, then walking the installation
-    # to do pip install, documentation rendereing and such.
-    #
-    # Define dependent/sibling repository modules to PiP load prior to testing.
-#    - export TGT_PIPLOADS="pip install git+https://github.com/BBN-Q/Adapt.git; echo ''; echo '# ---'; pip install git+https://github.com/BBN-Q/QGL.git"
-    # the utf8 settings are required for documentation rendering logic.
-#    - export DI_ENV_VALS="-e BBN_MEAS_FILE=test/test_measure.yml -e LC_ALL=en_US.utf8 -e LANG=en_US.utf8"
-    
-  # Setup anaconda. See http://conda.pydata.org/docs/travis.html
-
-#  - wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh
-#  - bash miniconda.sh -b -p $HOME/miniconda
-#  - export PATH="$HOME/miniconda/bin:$PATH"
-#  - export BBN_MEAS_FILE="$PWD/test/test_measure.yml"
-#  - echo "Measure file at $BBN_MEAS_FILE"
-#  - hash -r
-#  - conda config --set always_yes yes --set changeps1 no
-#  - conda update -q conda
-#  # Useful for debugging any issues with conda
-#  - conda info -a
-#
-#  # Create conda environment with dependencies
-#  - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION numpy scipy matplotlib h5py pandas networkx cffi bokeh jupyter future psutil
-#  - source activate test-environment
-#  - export GIT_LFS_SKIP_SMUDGE=1
-#  - pip install git+https://github.com/BBN-Q/Adapt.git
-#  - pip install git+https://github.com/BBN-Q/QGL.git
-#  - pip install tqdm pyvisa coveralls ruamel.yaml watchdog scikit-learn pyusb
-#  - export GIT_LFS_SKIP_SMUDGE=0
-#  - conda install -c ecpy atom;
-#  - export PYTHONPATH=$PYTHONPATH:$PWD/src
-
-# Pull in the install switch logic:
+    # Pull in the install switch logic (BBNQConda example and original MiniConda)
+    # Use the YAML pipe to process over multi-line entries
     - |
         if [ ! -z ${TEST_OVER_DI} ] && [ ${TEST_OVER_DI} == true ]; then
             
@@ -177,14 +130,8 @@ install:
 
     
 script:
-# Original logic
-#  - coverage run -m unittest discover -v test
-
-# 
-# Commented out working invocation for switch logic, below
-#    - docker run -v $PWD:/root/RepoCDir ${DI_ENV_VALS} ${BBNQConda_DI} /bin/sh -c "source ~/.bashrc; echo ''; echo '# --- DI Run-Time info:'; python --version; conda info; conda list; echo ''; echo '# --- PIP loading dependency mods...'; ${TGT_PIPLOADS}; cd ~/RepoCDir; echo ''; echo '# --- Pip Installing repo clone...'; pwd; pip install -e .; echo ''; echo '# --- Unittest begin...'; python -m unittest discover -v test"
-
-# Pull in the script switch logic:
+    # Pull in the script switch logic (BBNQConda example and original MiniConda)
+    # Use the YAML pipe to process over multi-line entries
     - |
         if [ ! -z ${TEST_OVER_DI} ] && [ ${TEST_OVER_DI} == true ]; then
             
@@ -196,7 +143,7 @@ script:
         
             echo "# --- Script invoking test over MiniConda build..."
             
-            # Original sestup logic here
+            # Original test invocaton command.
             coverage run -m unittest discover -v test
 
         fi
