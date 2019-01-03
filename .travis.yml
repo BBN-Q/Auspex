@@ -29,6 +29,11 @@ python:
 install:
     # Pulling in docker image without || true -- want it to fail if not there.
     - export BBNQConda_DI="merlinbeast/bbnq:bbnqconda_centos7_4_bbnq_pylib_v1.0.1_19.12.2018"
+    
+    # Sample logic to see if we can determine pull needs or not
+    - export TGT_DI=`docker images | grep ${BBNQConda_DI}`
+    - if [ -z "${BBNQConda_DI}" ]; then echo 'Docker pull pending'; else echo 'No pull necessary -- ${BBNQConda_DI} docked and ready...'; fi
+    
     - echo "Pulling in BBNQConda docker image via ~:"
 #    - docker pull merlinbeast/bbnq:bbnqconda_centos7_4_bbnq_pylib_v1.0.1_19.12.2018
     - docker pull ${BBNQConda_DI}
@@ -84,7 +89,9 @@ script:
 # Previous worked; simplification two follows (note condainfo will show environment setting -- how to show BBNQConda v IMI)
 #    - docker run -v $PWD:/root/RepoCDir ${DI_ENV_VALS} ${BBNQConda_DI} /bin/sh -c "source ~/.bashrc; conda info; conda list; python --version; echo ''; echo '# --- PIP loading dependency mods...'; ${TGT_PIPLOADS}; cd ~/RepoCDir; pwd; echo ''; echo '# --- Pip Installing repo clone source...'; pip install -e .; echo ''; echo '# --- Unittest begin...'; python -m unittest discover -v test"
 # Previous worked; adjusting console commentary -- simplif three
-    - docker run -v $PWD:/root/RepoCDir ${DI_ENV_VALS} ${BBNQConda_DI} /bin/sh -c "source ~/.bashrc; echo ''; echo '# --- DI Run-Time info:'; python --version; echo ''; conda info; conda list; echo ''; echo '# --- PIP loading dependency mods...'; ${TGT_PIPLOADS}; cd ~/RepoCDir; pwd; echo ''; echo '# --- Pip Installing repo clone...'; pip install -e .; echo ''; echo '# --- Unittest begin...'; python -m unittest discover -v test"
+#    - docker run -v $PWD:/root/RepoCDir ${DI_ENV_VALS} ${BBNQConda_DI} /bin/sh -c "source ~/.bashrc; echo ''; echo '# --- DI Run-Time info:'; python --version; echo ''; conda info; conda list; echo ''; echo '# --- PIP loading dependency mods...'; ${TGT_PIPLOADS}; cd ~/RepoCDir; pwd; echo ''; echo '# --- Pip Installing repo clone...'; pip install -e .; echo ''; echo '# --- Unittest begin...'; python -m unittest discover -v test"
+    - docker run -v $PWD:/root/RepoCDir ${DI_ENV_VALS} ${BBNQConda_DI} /bin/sh -c "source ~/.bashrc; echo ''; echo '# --- DI Run-Time info:'; python --version; echo ''; conda info; conda list; echo ''; echo '# --- PIP loading dependency mods...'; ${TGT_PIPLOADS}; cd ~/RepoCDir; echo ''; echo '# --- Pip Installing repo clone...'; pwd; pip install -e .; echo ''; echo '# --- Unittest begin...'; python -m unittest discover -v test"
+    
     
 after_script:
   - coveralls
