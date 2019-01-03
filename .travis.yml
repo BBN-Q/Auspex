@@ -123,8 +123,10 @@ install:
     - |
         if [ ! -z ${TEST_OVER_DI} ] && [ ${TEST_OVER_DI} == true ]; then
             
+            echo "# --- Install setting up test over BBNQConda Docker Image..."
+            
             # Pulling in docker image without || true -- want it to fail if not there.
-            - export BBNQConda_DI="merlinbeast/bbnq:bbnqconda_centos7_4_bbnq_pylib_v1.0.1_19.12.2018"
+            export BBNQConda_DI="merlinbeast/bbnq:bbnqconda_centos7_4_bbnq_pylib_v1.0.1_19.12.2018"
             
             
             # Sample logic to determine if we need to pull an image or not does 
@@ -133,19 +135,21 @@ install:
             # - docker images
             
             # Popping constant pull back in
-            - docker pull ${BBNQConda_DI}
+            docker pull ${BBNQConda_DI}
 
             # Defining pip install commands for use in the docker session
             # Note -- script test was using direct clone, then walking the installation
             # to do pip install, documentation rendereing and such.
             #
             # Define dependent/sibling repository modules to PiP load prior to testing.
-            - export TGT_PIPLOADS="pip install git+https://github.com/BBN-Q/Adapt.git; echo ''; echo '# ---'; pip install git+https://github.com/BBN-Q/QGL.git"
+            export TGT_PIPLOADS="pip install git+https://github.com/BBN-Q/Adapt.git; echo ''; echo '# ---'; pip install git+https://github.com/BBN-Q/QGL.git"
             # the utf8 settings are required for documentation rendering logic.
-            - export DI_ENV_VALS="-e BBN_MEAS_FILE=test/test_measure.yml -e LC_ALL=en_US.utf8 -e LANG=en_US.utf8"
+            export DI_ENV_VALS="-e BBN_MEAS_FILE=test/test_measure.yml -e LC_ALL=en_US.utf8 -e LANG=en_US.utf8"
 
         else
         
+            echo "# --- Install setting up test over MiniConda Image..."
+            
             # Original sestup logic here
             wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh
             bash miniconda.sh -b -p $HOME/miniconda
@@ -173,28 +177,9 @@ install:
 
     
 script:
+# Original logic
 #  - coverage run -m unittest discover -v test
 
-# UnNecessary
-#    - echo ""; echo "#----- Invoking Docker image run..."
-#    - docker run -v $PWD:/root/Travis -e BBN_MEAS_FILE=test/test_measure.yml -e LC_ALL=en_US.utf8 -e LANG=en_US.utf8 merlinbeast/bbnq:bbnqconda_centos7_4_bbnq_pylib_v1.0.1_19.12.2018 coverage run -m unittest discover -v test
-#    - docker run -v $PWD:/root/Travis -e BBN_MEAS_FILE=test/test_measure.yml -e LC_ALL=en_US.utf8 -e LANG=en_US.utf8 merlinbeast/bbnq:bbnqconda_centos7_4_bbnq_pylib_v1.0.1_19.12.2018 which conda; which python; python -m unittest discover -v test
-#  alternate calls drived from : https://docs.travis-ci.com/user/docker/
-# keep the multi-command semicolons within the quotes.
-#
-#    - docker run -v $PWD:/root/TravisT -e BBN_MEAS_FILE=test/test_measure.yml -e LC_ALL=en_US.utf8 -e LANG=en_US.utf8 merlinbeast/bbnq:bbnqconda_centos7_4_bbnq_pylib_v1.0.1_19.12.2018 /bin/sh -c "source ~/.bashrc; cd ~/TravisT; pwd; which conda; which python; python -m unittest discover -v test"
-# Added TGT_PIPINSTS reference
-#    - docker run -v $PWD:/root/TravisT -e BBN_MEAS_FILE=test/test_measure.yml -e LC_ALL=en_US.utf8 -e LANG=en_US.utf8 merlinbeast/bbnq:bbnqconda_centos7_4_bbnq_pylib_v1.0.1_19.12.2018 /bin/sh -c "source ~/.bashrc; ${TGT_PIPLOADS}; cd ~/TravisT; pwd; which conda; which python; python -m unittest discover -v test"
-# Previous successfully pip loaded QGL and Adapt -- started to run and couldn't find Auspex -- Doht -- add the pip install -e . next
-#    - docker run -v $PWD:/root/TravisT -e BBN_MEAS_FILE=test/test_measure.yml -e LC_ALL=en_US.utf8 -e LANG=en_US.utf8 merlinbeast/bbnq:bbnqconda_centos7_4_bbnq_pylib_v1.0.1_19.12.2018 /bin/sh -c "source ~/.bashrc; which conda; which python; ${TGT_PIPLOADS}; cd ~/TravisT; pwd; echo 'Pip Installing Auspex test directory...'; pip install -e .; python -m unittest discover -v test"
-# Previous worked; simplification one follows:
-#    - docker run -v $PWD:/root/TravisT -e BBN_MEAS_FILE=test/test_measure.yml -e LC_ALL=en_US.utf8 -e LANG=en_US.utf8 ${BBNQConda_DI} /bin/sh -c "source ~/.bashrc; which conda; which python; ${TGT_PIPLOADS}; cd ~/TravisT; pwd; echo 'Pip Installing Auspex test directory...'; pip install -e .; python -m unittest discover -v test"
-# Previous worked; simplification two follows (note condainfo will show environment setting -- how to show BBNQConda v IMI)
-#    - docker run -v $PWD:/root/RepoCDir ${DI_ENV_VALS} ${BBNQConda_DI} /bin/sh -c "source ~/.bashrc; conda info; conda list; python --version; echo ''; echo '# --- PIP loading dependency mods...'; ${TGT_PIPLOADS}; cd ~/RepoCDir; pwd; echo ''; echo '# --- Pip Installing repo clone source...'; pip install -e .; echo ''; echo '# --- Unittest begin...'; python -m unittest discover -v test"
-# Previous worked; adjusting console commentary -- simplif three
-#    - docker run -v $PWD:/root/RepoCDir ${DI_ENV_VALS} ${BBNQConda_DI} /bin/sh -c "source ~/.bashrc; echo ''; echo '# --- DI Run-Time info:'; python --version; echo ''; conda info; conda list; echo ''; echo '# --- PIP loading dependency mods...'; ${TGT_PIPLOADS}; cd ~/RepoCDir; pwd; echo ''; echo '# --- Pip Installing repo clone...'; pip install -e .; echo ''; echo '# --- Unittest begin...'; python -m unittest discover -v test"
-#    - docker run -v $PWD:/root/RepoCDir ${DI_ENV_VALS} ${BBNQConda_DI} /bin/sh -c "source ~/.bashrc; echo ''; echo '# --- DI Run-Time info:'; python --version; echo ''; conda info; conda list; echo ''; echo '# --- PIP loading dependency mods...'; ${TGT_PIPLOADS}; cd ~/RepoCDir; echo ''; echo '# --- Pip Installing repo clone...'; pwd; pip install -e .; echo ''; echo '# --- Unittest begin...'; python -m unittest discover -v test"
-# log text refinement five   
 # 
 # Commented out working invocation for switch logic, below
 #    - docker run -v $PWD:/root/RepoCDir ${DI_ENV_VALS} ${BBNQConda_DI} /bin/sh -c "source ~/.bashrc; echo ''; echo '# --- DI Run-Time info:'; python --version; conda info; conda list; echo ''; echo '# --- PIP loading dependency mods...'; ${TGT_PIPLOADS}; cd ~/RepoCDir; echo ''; echo '# --- Pip Installing repo clone...'; pwd; pip install -e .; echo ''; echo '# --- Unittest begin...'; python -m unittest discover -v test"
@@ -203,10 +188,14 @@ script:
     - |
         if [ ! -z ${TEST_OVER_DI} ] && [ ${TEST_OVER_DI} == true ]; then
             
+            echo "# --- Script invoking test over BBNQConda Docker Image..."
+            
             docker run -v $PWD:/root/RepoCDir ${DI_ENV_VALS} ${BBNQConda_DI} /bin/sh -c "source ~/.bashrc; echo ''; echo '# --- DI Run-Time info:'; python --version; conda info; conda list; echo ''; echo '# --- PIP loading dependency mods...'; ${TGT_PIPLOADS}; cd ~/RepoCDir; echo ''; echo '# --- Pip Installing repo clone...'; pwd; pip install -e .; echo ''; echo '# --- Unittest begin...'; python -m unittest discover -v test"
 
         else
         
+            echo "# --- Script invoking test over MiniConda build..."
+            
             # Original sestup logic here
             coverage run -m unittest discover -v test
 
