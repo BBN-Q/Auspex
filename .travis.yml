@@ -11,22 +11,19 @@ env:
     # These values appear to get exported; hence can process with standard
     # shell mechanisms.
     #
-    # Defines test logic switch
-    #    true >> run over docker image.
-    #    false >> apply original logic.
+    # Defines test logic switchs
+    #    TEST_OVER_DI true >> run over docker image.
+    #    TEST_OVER_DI false >> apply original Miniconda test logic.
     #
-#    - TEST_OVER_DI=true
-    
     # Aside -- boolean sub logic / assignment processing does NOT appear
-    # to work on items within the env segment.
+    # to work on items within the env segment 8-{
     
-    # ...so, just manually set the sudo value (options false, required, true)
-#    - SUDO_VAL=false
+    # ...so, just manually set the sudo value sets as desired (options false, required, true)
+#   # SUDO_VAL={false | required | true}
 
-    # Actually -- define the ENV values altogether in a set 
     # (Uncomment the mode you want to run)
-    - TEST_OVER_DI=true SUDO_VAL=false
-#    - TEST_OVER_DI=false SUDO_VAL=false
+    # - TEST_OVER_DI=true SUDO_VAL=false
+    - TEST_OVER_DI=false SUDO_VAL=false
 
     
     # could space delimiters work here IMI
