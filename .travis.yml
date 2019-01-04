@@ -21,8 +21,8 @@ env:
     # ...so, just manually set the sudo value sets as desired (options false, required, true)
 #   # SUDO_VAL={false | required | true}
 
-    # (Uncomment the mode you want to run)
-    # - TEST_OVER_DI=true SUDO_VAL=false
+    # (Uncomment the mode you want to run -- more than one set implies multiple builds)
+    - TEST_OVER_DI=true SUDO_VAL=false
     - TEST_OVER_DI=false SUDO_VAL=false
 
     
