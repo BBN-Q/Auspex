@@ -19,10 +19,12 @@ env:
     # to work on items within the env segment 8-{
     
     # ...so, just manually set the sudo value sets as desired (options false, required, true)
-#   # SUDO_VAL={false | required | true}
+    # SUDO_VAL={false | required | true}
 
-    # (Uncomment the mode you want to run -- more than one set implies multiple builds)
-    - TEST_OVER_DI=true SUDO_VAL=false
+    # Uncomment the the environment value set want to run;
+    # note, more than one set active spawns multiple, simultaneous builds.
+    #
+    - TEST_OVER_DI=true  SUDO_VAL=false
     - TEST_OVER_DI=false SUDO_VAL=false
 
     
@@ -58,6 +60,40 @@ before_install:
             echo "TEST_OVER_DI inactive"
         fi
         
+    - echo "Travis PWD [${PWD}]"
+    # Manually write script, to repo clone directory, which introspects
+    # conda-meta file data;  use this to reveal the Conda "installed_by"
+    # shell file name[s]
+    # (aside -- this should be available on both DockerImage and MiniConda modes)
+    - |
+        echo ''
+        export LCI_SH=./listCondaInstaller.sh
+
+        if [ ! -f ${LCI_SH} ]; then
+
+           echo "Rendering ${LCI_SH}..."
+           echo "#\!/bin/bash"                         >  ${LCI_SH}
+           echo "echo ''"                              >> ${LCI_SH}
+           echo "export SH_NAME=\$0"                   >> ${LCI_SH}
+           echo "export TGT_KEY=\${CONDA_PREFIX}"      >> ${LCI_SH}
+           echo "if [ ! -z \${TGT_KEY} ]; then"        >> ${LCI_SH}
+           echo "   echo \"# --- \${SH_NAME} :: Session \${TGT_KEY} elements installed by:\""                                  >> ${LCI_SH}
+           echo "   grep -o '\"installed_by\": *\"[^\"]*\"' \${TGT_KEY}/conda-meta/*.json | grep -o '\"[^\"]*\"$' | sort -u"   >> ${LCI_SH}
+           echo "else"                                 >> ${LCI_SH}
+           echo "   echo \"# --- \${SH_NAME} :: NoOp << CONDA_PREFIX undefined << '\${TGT_KEY}'\""                             >> ${LCI_SH}
+           echo "fi"                                   >> ${LCI_SH}
+           echo "echo ''"                              >> ${LCI_SH}
+
+           chmod u+x ${LCI_SH}
+
+        else
+           echo "Skipped ${LCI_SH} rendering (already exists)"
+        fi
+
+        ls -l ${LCI_SH}
+        echo ''
+
+
 # TEST -- if we're running from DOCKER do we really need to setup python references here IMI
 # Commenting these and other potentially unused segments ATT
 # Note:  if No language references defined, system defaults to Ruby -- let the python ref remain.
@@ -98,9 +134,9 @@ install:
 
         else
         
-            echo "# --- Install setting up test over MiniConda Image..."
+            echo "# --- Install setting up base MiniConda Image..."
             
-            # Original sestup logic here
+            # Original Miniconda logic here
             wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh
             bash miniconda.sh -b -p $HOME/miniconda
             export PATH="$HOME/miniconda/bin:$PATH"
@@ -109,8 +145,14 @@ install:
             hash -r
             conda config --set always_yes yes --set changeps1 no
             conda update -q conda
-            Useful for debugging any issues with conda
+
+            # Reveal conda element install shell[s]
+            ${LCI_SH}
+
+            # Useful for debugging any issues with conda
             conda info -a
+
+            echo "# --- Install enriching MiniConda Image for repo test..."
 
             # Create conda environment with dependencies
             conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION numpy scipy matplotlib h5py pandas networkx cffi bokeh jupyter future psutil
@@ -134,7 +176,7 @@ script:
             
             echo "# --- Script invoking test over BBNQConda Docker Image..."
             
-            docker run -v $PWD:/root/RepoCDir ${DI_ENV_VALS} ${BBNQConda_DI} /bin/sh -c "source ~/.bashrc; echo ''; echo '# --- DI Run-Time info:'; python --version; conda info; conda list; echo ''; echo '# --- PIP loading dependency mods...'; ${TGT_PIPLOADS}; cd ~/RepoCDir; echo ''; echo '# --- Pip Installing repo clone...'; pwd; pip install -e .; echo ''; echo '# --- Unittest begin...'; python -m unittest discover -v test"
+            docker run -v $PWD:/root/RepoCDir ${DI_ENV_VALS} ${BBNQConda_DI} /bin/sh -c "source ~/.bashrc; echo ''; echo '# --- DI Run-Time info:'; python --version; conda info; conda list; echo ''; echo '# --- PIP loading dependency mods...'; ${TGT_PIPLOADS}; cd ~/RepoCDir; echo ''; echo '# --- Pip Installing repo clone...'; pwd; pip install -e .; echo ''; ${LCI_SH}; echo '# --- Unittest begin...'; python -m unittest discover -v test"
 
         else
         
