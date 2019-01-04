@@ -146,13 +146,12 @@ install:
             conda config --set always_yes yes --set changeps1 no
             conda update -q conda
 
-            # Reveal conda element install shell[s]
-            ${LCI_SH}
-
             # Useful for debugging any issues with conda
+            echo ''; echo "# --- Install; conda info lists as follows..."
+
             conda info -a
 
-            echo "# --- Install enriching MiniConda Image for repo test..."
+            echo ''; echo "# --- Install enriching MiniConda Image for repo test..."
 
             # Create conda environment with dependencies
             conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION numpy scipy matplotlib h5py pandas networkx cffi bokeh jupyter future psutil
@@ -180,6 +179,10 @@ script:
 
         else
         
+            # Reveal conda element install shell[s]
+            # aside -- moved this down here; when called during the install, above CONDA_PREFIX was undefined.
+            ${LCI_SH}
+
             echo "# --- Script invoking test over MiniConda build..."
             
             # Original test invocaton command.
