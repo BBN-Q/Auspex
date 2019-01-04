@@ -24,7 +24,7 @@ env:
     # Uncomment the the environment value set want to run;
     # note, more than one set active spawns multiple, simultaneous builds.
     #
-    - TEST_OVER_DI=true  SUDO_VAL=false
+#    - TEST_OVER_DI=true  SUDO_VAL=false
     - TEST_OVER_DI=false SUDO_VAL=false
 
     
@@ -151,11 +151,22 @@ install:
 
             conda info -a
 
+            echo ''; echo "# T1 --- CONDA_PREFIX ?? [${CONDA_PREFIX}]"
+            ${LCI_SH}
+
             echo ''; echo "# --- Install enriching MiniConda Image for repo test..."
 
             # Create conda environment with dependencies
             conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION numpy scipy matplotlib h5py pandas networkx cffi bokeh jupyter future psutil
+
+            echo ''; echo "# T2 --- CONDA_PREFIX ?? [${CONDA_PREFIX}]"
+            ${LCI_SH}
+
             source activate test-environment
+
+            echo ''; echo "# T3 --- CONDA_PREFIX ?? [${CONDA_PREFIX}]"
+            ${LCI_SH}
+
             export GIT_LFS_SKIP_SMUDGE=1
             pip install git+https://github.com/BBN-Q/Adapt.git
             pip install git+https://github.com/BBN-Q/QGL.git
@@ -164,6 +175,9 @@ install:
             conda install -c ecpy atom;
             export PYTHONPATH=$PYTHONPATH:$PWD/src
             
+            echo ''; echo "# T4 --- CONDA_PREFIX ?? [${CONDA_PREFIX}]"
+            ${LCI_SH}
+
         fi
 
     
