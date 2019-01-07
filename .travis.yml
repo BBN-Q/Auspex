@@ -66,8 +66,6 @@ before_install:
     # shell file name[s]
     # (aside -- this should be available on both DockerImage and MiniConda modes)
     - |
-
-        # echo ''
         export LCI_SH=./listCondaInstaller.sh
 
         if [ ! -f ${LCI_SH} ]; then
@@ -77,6 +75,13 @@ before_install:
            echo "echo ''"                              >> ${LCI_SH}
            echo "export SH_NAME=\$0"                   >> ${LCI_SH}
            echo "export TGT_KEY=\${CONDA_PREFIX}"      >> ${LCI_SH}
+
+           echo "export TGT_KEY2=\${HOME}/miniconda"   >> ${LCI_SH}
+           echo "if [ -z \${TGT_KEY} ] && [ ! -z \${TGT_KEY2} ]; then"                                                         >> ${LCI_SH}
+           echo "   export TGT_KEY=\${TGT_KEY2}"       >> ${LCI_SH}
+           echo "   echo \"EEE << Overrode NULL CONDA_PREFIX reference with \$\{HOME\}/miniconda [\${TGT_KEY}].\""             >> ${LCI_SH}
+           echo "fi"                                   >> ${LCI_SH}
+
            echo "if [ ! -z \${TGT_KEY} ]; then"        >> ${LCI_SH}
            echo "   echo \"# --- \${SH_NAME} :: Session \${TGT_KEY} elements installed by:\""                                  >> ${LCI_SH}
            echo "   grep -o '\"installed_by\": *\"[^\"]*\"' \${TGT_KEY}/conda-meta/*.json | grep -o '\"[^\"]*\"$' | sort -u"   >> ${LCI_SH}
@@ -91,8 +96,6 @@ before_install:
            echo "Skipped ${LCI_SH} rendering (already exists)"
         fi
 
-        # ls -l ${LCI_SH}
-        # echo ''
         ls -l ${LCI_SH}; echo ''
 
 
@@ -155,7 +158,7 @@ install:
 
             echo ''; echo "# T1 --- CONDA_PREFIX ?? [${CONDA_PREFIX}]"
             # Hack -- looking for MiniConda environment references
-            set | grep CONDA; set | grep PREFIX ; echo ''; echo "ls -l \${HOME}/miniconda ~:"; ls -l ${HOME}/miniconda
+            # set | grep CONDA; set | grep PREFIX ; echo ''; echo "ls -l \${HOME}/miniconda ~:"; ls -l ${HOME}/miniconda
             ${LCI_SH}
 
             echo ''; echo "# --- Install enriching MiniConda Image for repo test..."
@@ -165,14 +168,14 @@ install:
 
             echo ''; echo "# T2 --- CONDA_PREFIX ?? [${CONDA_PREFIX}]"
             # Hack -- looking for MiniConda environment references
-            set | grep CONDA; set | grep PREFIX ; echo ''; echo "ls -l \${HOME}/miniconda ~:"; ls -l ${HOME}/miniconda
+            #set | grep CONDA; set | grep PREFIX ; echo ''; echo "ls -l \${HOME}/miniconda ~:"; ls -l ${HOME}/miniconda
             ${LCI_SH}
 
             source activate test-environment
 
             echo ''; echo "# T3 --- CONDA_PREFIX ?? [${CONDA_PREFIX}]"
             # Hack -- looking for MiniConda environment references
-            set | grep CONDA; set | grep PREFIX
+            #set | grep CONDA; set | grep PREFIX
             ${LCI_SH}
 
             export GIT_LFS_SKIP_SMUDGE=1
@@ -185,7 +188,7 @@ install:
             
             echo ''; echo "# T4 --- CONDA_PREFIX ?? [${CONDA_PREFIX}]"
             # Hack -- looking for MiniConda environment references
-            set | grep CONDA; set | grep PREFIX
+            #set | grep CONDA; set | grep PREFIX
             ${LCI_SH}
 
         fi
