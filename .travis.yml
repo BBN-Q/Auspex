@@ -24,7 +24,7 @@ env:
     # Uncomment the the environment value set want to run;
     # note, more than one set active spawns multiple, simultaneous builds.
     #
-#    - TEST_OVER_DI=true  SUDO_VAL=false
+    - TEST_OVER_DI=true  SUDO_VAL=false
     - TEST_OVER_DI=false SUDO_VAL=false
 
     
@@ -79,7 +79,7 @@ before_install:
            echo "export TGT_KEY2=\${HOME}/miniconda"   >> ${LCI_SH}
            echo "if [ -z \${TGT_KEY} ] && [ ! -z \${TGT_KEY2} ]; then"                                                         >> ${LCI_SH}
            echo "   export TGT_KEY=\${TGT_KEY2}"       >> ${LCI_SH}
-           echo "   echo \"EEE << Overrode NULL CONDA_PREFIX reference with \$\{HOME\}/miniconda [\${TGT_KEY}].\""             >> ${LCI_SH}
+           echo "   echo \"# --- \${SH_NAME} -- Foop! NULL CONDA_PREFIX ref noted; used \$\{HOME\}/miniconda [\${TGT_KEY}].\"" >> ${LCI_SH}
            echo "fi"                                   >> ${LCI_SH}
 
            echo "if [ ! -z \${TGT_KEY} ]; then"        >> ${LCI_SH}
@@ -115,10 +115,9 @@ install:
         if [ ! -z ${TEST_OVER_DI} ] && [ ${TEST_OVER_DI} == true ]; then
             
             echo "# --- Install setting up test over BBNQConda Docker Image..."
-            
-            # Pulling in docker image without || true -- want it to fail if not there.
+
+            #---------- New BBNQconda docker image setup logic here
             export BBNQConda_DI="merlinbeast/bbnq:bbnqconda_centos7_4_bbnq_pylib_v1.0.1_19.12.2018"
-            
             
             # Sample logic to determine if we need to pull an image or not does 
             # NOT appear to work as the docker images call returns empty set after 
@@ -141,12 +140,12 @@ install:
         
             echo "# --- Install setting up base MiniConda Image..."
             
-            # Original Miniconda logic here
+            #---------- ~Original Miniconda build-out logic here
             wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh
             bash miniconda.sh -b -p $HOME/miniconda
             export PATH="$HOME/miniconda/bin:$PATH"
             export BBN_MEAS_FILE="$PWD/test/test_measure.yml"
-            echo "Measure file at $BBN_MEAS_FILE"
+            echo ''; echo "Measure file at $BBN_MEAS_FILE"
             hash -r
             conda config --set always_yes yes --set changeps1 no
             conda update -q conda
@@ -156,9 +155,8 @@ install:
 
             conda info -a
 
-            echo ''; echo "# T1 --- CONDA_PREFIX ?? [${CONDA_PREFIX}]"
-            # Hack -- looking for MiniConda environment references
-            # set | grep CONDA; set | grep PREFIX ; echo ''; echo "ls -l \${HOME}/miniconda ~:"; ls -l ${HOME}/miniconda
+            # echo ''; echo "# T1 --- CONDA_PREFIX ?? [${CONDA_PREFIX}]"
+            # Reveal conda element install shell[s] to the console log.
             ${LCI_SH}
 
             echo ''; echo "# --- Install enriching MiniConda Image for repo test..."
@@ -166,17 +164,15 @@ install:
             # Create conda environment with dependencies
             conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION numpy scipy matplotlib h5py pandas networkx cffi bokeh jupyter future psutil
 
-            echo ''; echo "# T2 --- CONDA_PREFIX ?? [${CONDA_PREFIX}]"
-            # Hack -- looking for MiniConda environment references
-            #set | grep CONDA; set | grep PREFIX ; echo ''; echo "ls -l \${HOME}/miniconda ~:"; ls -l ${HOME}/miniconda
-            ${LCI_SH}
+            # deprecated
+            #echo ''; echo "# T2 --- CONDA_PREFIX ?? [${CONDA_PREFIX}]"
+            #${LCI_SH}
 
             source activate test-environment
 
-            echo ''; echo "# T3 --- CONDA_PREFIX ?? [${CONDA_PREFIX}]"
-            # Hack -- looking for MiniConda environment references
-            #set | grep CONDA; set | grep PREFIX
-            ${LCI_SH}
+            # deprecated
+            # echo ''; echo "# T3 --- CONDA_PREFIX ?? [${CONDA_PREFIX}]"
+            #${LCI_SH}
 
             export GIT_LFS_SKIP_SMUDGE=1
             pip install git+https://github.com/BBN-Q/Adapt.git
@@ -186,10 +182,9 @@ install:
             conda install -c ecpy atom;
             export PYTHONPATH=$PYTHONPATH:$PWD/src
             
-            echo ''; echo "# T4 --- CONDA_PREFIX ?? [${CONDA_PREFIX}]"
-            # Hack -- looking for MiniConda environment references
-            #set | grep CONDA; set | grep PREFIX
-            ${LCI_SH}
+            # deprecated
+            #echo ''; echo "# T4 --- CONDA_PREFIX ?? [${CONDA_PREFIX}]"
+            #${LCI_SH}
 
         fi
 
@@ -206,9 +201,8 @@ script:
 
         else
         
-            # Reveal conda element install shell[s]
-            # aside -- moved this down here; when called during the install, above CONDA_PREFIX was undefined.
-            ${LCI_SH}
+            # deprecated
+            #${LCI_SH}
 
             echo "# --- Script invoking test over MiniConda build..."
             
