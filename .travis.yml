@@ -60,13 +60,13 @@ before_install:
             echo "TEST_OVER_DI inactive"
         fi
         
-    - echo "Travis PWD [${PWD}]"
+    - echo "Travis PWD [${PWD}]"; echo ''
     # Manually write script, to repo clone directory, which introspects
     # conda-meta file data;  use this to reveal the Conda "installed_by"
     # shell file name[s]
     # (aside -- this should be available on both DockerImage and MiniConda modes)
     - |
-        echo ''
+#        echo ''
         export LCI_SH=./listCondaInstaller.sh
 
         if [ ! -f ${LCI_SH} ]; then
@@ -90,8 +90,9 @@ before_install:
            echo "Skipped ${LCI_SH} rendering (already exists)"
         fi
 
-        ls -l ${LCI_SH}
-        echo ''
+#        ls -l ${LCI_SH}
+#        echo ''
+        ls -l ${LCI_SH}; echo ''
 
 
 # TEST -- if we're running from DOCKER do we really need to setup python references here IMI
@@ -152,6 +153,8 @@ install:
             conda info -a
 
             echo ''; echo "# T1 --- CONDA_PREFIX ?? [${CONDA_PREFIX}]"
+            # Hack -- looking for MiniConda environment references
+            set | grep CONDA; set | grep PREFIX ; echo ''; echo "ls -l \${HOME}/miniconda ~:"; ls -l ${HOME}/miniconda
             ${LCI_SH}
 
             echo ''; echo "# --- Install enriching MiniConda Image for repo test..."
@@ -160,11 +163,15 @@ install:
             conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION numpy scipy matplotlib h5py pandas networkx cffi bokeh jupyter future psutil
 
             echo ''; echo "# T2 --- CONDA_PREFIX ?? [${CONDA_PREFIX}]"
+            # Hack -- looking for MiniConda environment references
+            set | grep CONDA; set | grep PREFIX ; echo ''; echo "ls -l \${HOME}/miniconda ~:"; ls -l ${HOME}/miniconda
             ${LCI_SH}
 
             source activate test-environment
 
             echo ''; echo "# T3 --- CONDA_PREFIX ?? [${CONDA_PREFIX}]"
+            # Hack -- looking for MiniConda environment references
+            set | grep CONDA; set | grep PREFIX
             ${LCI_SH}
 
             export GIT_LFS_SKIP_SMUDGE=1
@@ -176,6 +183,8 @@ install:
             export PYTHONPATH=$PYTHONPATH:$PWD/src
             
             echo ''; echo "# T4 --- CONDA_PREFIX ?? [${CONDA_PREFIX}]"
+            # Hack -- looking for MiniConda environment references
+            set | grep CONDA; set | grep PREFIX
             ${LCI_SH}
 
         fi
