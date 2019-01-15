@@ -41,18 +41,6 @@ else:
     def sock_recvall(s, data_len):
         return s.recv(data_len, socket.MSG_WAITALL)
 
-# Dirty trick to avoid loading libraries when scraping
-# This code using quince.
-if config.auspex_dummy_mode:
-    fake_alazar = True
-else:
-    try:
-        from libalazar import ATS9870
-        fake_alazar = False
-    except:
-        # logger.warning("Could not load alazar library")
-        fake_alazar = True
-
 class AlazarChannel(ReceiverChannel):
     phys_channel = None
 
@@ -72,7 +60,7 @@ class AlazarATS9870(Instrument):
     """Alazar ATS9870 digitizer"""
     instrument_type = ("Digitizer")
 
-    def __init__(self, resource_name=None, name="Unlabeled Alazar", gen_fake_data=True):
+    def __init__(self, resource_name=None, name="Unlabeled Alazar", gen_fake_data=False):
         self.name = name
 
         # A list of AlazarChannel objects
@@ -87,6 +75,7 @@ class AlazarATS9870(Instrument):
 
         self.last_timestamp = Value('d', datetime.datetime.now().timestamp())
         self.fetch_count    = Value('d', 0)
+        self.total_received = Value('d', 0)
 
         self.gen_fake_data        = gen_fake_data
         self.increment_ideal_data = False
@@ -94,13 +83,17 @@ class AlazarATS9870(Instrument):
         self.ideal_data           = None
 
     def connect(self, resource_name=None):
-        if fake_alazar or self.gen_fake_data:
+        if config.auspex_dummy_mode or self.gen_fake_data:
+            self.fake_alazar = True
             self._lib = MagicMock()
         else:
-            self._lib = ATS9870()
-
-        if fake_alazar:
-            logger.warning("Could not load Alazar library")
+            try:
+                from libalazar import ATS9870
+                self._lib = ATS9870()
+                self.fake_alazar = False
+            except:
+                raise Exception("Could not find libalazar. You can run in dummy mode by setting config.auspex_dummy_mode \
+                    or setting the gen_fake_data property of this instrument.")
         if resource_name:
             self.resource_name = resource_name
 
@@ -110,6 +103,7 @@ class AlazarATS9870(Instrument):
 
     def acquire(self):
         self.fetch_count.value = 0
+        self.total_received.value = 0
         self._lib.acquire()
 
     def stop(self):
@@ -119,8 +113,8 @@ class AlazarATS9870(Instrument):
         return self._lib.data_available()
 
     def done(self):
-        # logger.info(f"{self.fetch_count.value} {len(self.channels)} {self.number_acquisitions}")
-        return self.fetch_count.value >= (len(self.channels) * self.number_acquisitions)
+        #logger.debug(f"Checking alazar doneness: {self.total_received.value} {self.number_segments * self.number_averages * self.record_length}")
+        return self.total_received.value >=  (self.number_segments * self.number_averages * self.record_length)
 
     def get_socket(self, channel):
         if channel in self._chan_to_rsocket:
@@ -148,7 +142,7 @@ class AlazarATS9870(Instrument):
     def spew_fake_data(self, counter, ideal_datapoint=0, random_mag=0.1, random_seed=12345):
         """
         Generate fake data on the stream. For unittest usage.
-        ideal_datapoint: mean of the expected signal 
+        ideal_datapoint: mean of the expected signal
 
         Returns the total number of fake data points, so that we can
         keep track of how many we expect to receive, when we're doing
@@ -170,35 +164,38 @@ class AlazarATS9870(Instrument):
 
         return total
 
-    def receive_data(self, channel, oc, exit):
+    def receive_data(self, channel, oc, exit, ready):
         sock = self._chan_to_rsocket[channel]
-        # logger.info(f"Recovered socket {sock} for data acquisition")
         sock.settimeout(2)
         self.last_timestamp.value = datetime.datetime.now().timestamp()
-        # logger.info("Entering receive data")
+        ready.value += 1
+
         while not exit.is_set():
             # push data from a socket into an OutputConnector (oc)
             # wire format is just: [size, buffer...]
             # TODO receive 4 or 8 bytes depending on sizeof(size_t)
             try:
-                # logger.info("Trying to receive data")
                 msg = sock.recv(8)
                 self.last_timestamp.value = datetime.datetime.now().timestamp()
             except:
-                # logger.info("Failed to receive data")
+                logger.debug("Didn't find any data on socket within 2 seconds (this is normal during experiment shutdown).")
                 continue
-            # logger.info(f"In receive data: {msg}")
-            # reinterpret as int (size_t)
             msg_size = struct.unpack('n', msg)[0]
             buf = sock_recvall(sock, msg_size)
             if len(buf) != msg_size:
-                logger.error(f"Channel {channel} socket msg shorter than expected")
-                logger.error(f"Expected {msg_size} bytes, received {len(buf)} bytes")
-                return
-            self.fetch_count.value += 1
+                time.sleep(0.01)
+                try:
+                    buf2 = sock_recvall(sock, msg_size-len(buf))
+                    if(len(buf2)==msg_size-len(buf)):
+                        buf = buf+buf2
+                    else:
+                        logger.error("Buffer mismatch...")
+                except:
+                    pass
             data = np.frombuffer(buf, dtype=np.float32)
-            # logger.info(f"Received {len(data)}")
+            self.total_received.value += len(data)
             oc.push(data)
+            self.fetch_count.value += 1
 
     def get_buffer_for_channel(self, channel):
         self.fetch_count.value += 1
@@ -286,6 +283,10 @@ class AlazarATS9870(Instrument):
         self.number_averages         = self.proxy_obj.number_averages
         self.ch1_buffer              = self._lib.ch1Buffer
         self.ch2_buffer              = self._lib.ch2Buffer
+        self.record_length           = settings_dict['record_length']
+        self.number_segments         = self.proxy_obj.number_segments
+        self.number_waveforms        = self.proxy_obj.number_waveforms
+        self.number_averages         = self.proxy_obj.number_averages
 
     def disconnect(self):
         self._lib.disconnect()

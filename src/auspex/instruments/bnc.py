@@ -30,7 +30,7 @@ class BNC845(SCPIInstrument):
 
     frequency = FloatCommand(scpi_string="SOURCE:FREQUENCY:FIXED")
     power     = FloatCommand(scpi_string="SOURCE:POWER:LEVEL:IMMEDIATE:AMPLITUDE")
-    output    = StringCommand(scpi_string="SOURCE:ROSC:OUTPUT:STATE",value_map={True: '0', False: '1'})
+    output    = StringCommand(scpi_string="OUTPUT:STATE",value_map={True: '1', False: '0'})
     pulse     = StringCommand(scpi_string="PULSE", value_map={True: '0', False: '1'})
     mod       = StringCommand(scpi_string="MOD", value_map={True: '0', False: '1'})
     alc       = StringCommand(scpi_string="SOURCE:POWER:ALC ", value_map={True: '0', False: '1'})
@@ -53,7 +53,7 @@ class BNC845(SCPIInstrument):
                 logger.error("Invalid IP address for BNC845: {}.".format(resource_name))
         super(BNC845, self).__init__(resource_name, *args, **kwargs)
 
-    def connect(self, resource_name=None, interface_type=None):
+    def connect(self, resource_name=None, interface_type="VISA"):
         """Connect to the RF source via a specified physical interface. Defaults
         to the IP address given at instatiation and the VISA interface if these
         arguments are not given.

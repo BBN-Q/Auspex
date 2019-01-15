@@ -40,18 +40,6 @@ else:
     def sock_recvall(s, data_len):
         return s.recv(data_len, socket.MSG_WAITALL)
 
-# Dirty trick to avoid loading libraries when scraping
-# This code using quince.
-if config.auspex_dummy_mode:
-    fake_x6 = True
-else:
-    try:
-        import libx6
-        fake_x6 = False
-    except:
-        logger.info("using fake x6")
-        fake_x6 = True
-
 class X6Channel(ReceiverChannel):
     """Channel for an X6"""
 
@@ -103,7 +91,7 @@ class X6(Instrument):
     """BBN QDSP running on the II-X6 digitizer"""
     instrument_type = ("Digitizer")
 
-    def __init__(self, resource_name=None, name="Unlabeled X6", gen_fake_data=True):
+    def __init__(self, resource_name=None, name="Unlabeled X6", gen_fake_data=False):
         # X6Channel objects
         self._channels = []
         # socket r/w pairs for each channel
@@ -114,7 +102,7 @@ class X6(Instrument):
         self.name          = name
 
         self.last_timestamp = Value('d', datetime.datetime.now().timestamp())
-        
+
         self.gen_fake_data        = gen_fake_data
         self.increment_ideal_data = False
         self.ideal_counter        = 0
@@ -129,10 +117,17 @@ class X6(Instrument):
         self.disconnect()
 
     def connect(self, resource_name=None):
-        if fake_x6 or self.gen_fake_data():
+        if config.auspex_dummy_mode or self.gen_fake_data:
+            self.fake_x6 = True
             self._lib = MagicMock()
         else:
-            self._lib = libx6.X6()
+            try:
+                import libx6
+                self._lib = libx6.X6()
+                self.fake_x6 = False
+            except:
+                raise Exception("Could not find libx6. You can run in dummy mode by setting config.auspex_dummy_mode \
+                    or setting the gen_fake_data property of this instrument.")
 
         if resource_name is not None:
             self.resource_name = resource_name
@@ -142,10 +137,10 @@ class X6(Instrument):
         self.stop       = self._lib.stop
         # self.disconnect = self._lib.disconnect
 
-        if self.gen_fake_data or fake_x6:
-            self._lib = MagicMock()
-            logger.warning("Could not load x6 library")
-            logger.warning("X6 GENERATING FAKE DATA")
+        # if self.gen_fake_data or fake_x6:
+        #     self._lib = MagicMock()
+        #     logger.warning("Could not load x6 library")
+        #     logger.warning("X6 GENERATING FAKE DATA")
         self._lib.connect(int(self.resource_name))
 
     def disconnect(self):
@@ -268,13 +263,13 @@ class X6(Instrument):
 
         return total
 
-    def receive_data(self, channel, oc, exit):
+    def receive_data(self, channel, oc, exit, ready):
         sock = self._chan_to_rsocket[channel]
         sock.settimeout(1)
         self.last_timestamp.value = datetime.datetime.now().timestamp()
 
         total = 0
-
+        ready += 1
         while not exit.is_set():
             # push data from a socket into an OutputConnector (oc)
             # wire format is just: [size, buffer...]
