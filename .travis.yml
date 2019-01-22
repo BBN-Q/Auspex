@@ -29,7 +29,7 @@ install:
   #
   # Prep for git-lfs
   - cd ~; mkdir GitWork; cd GitWork; pwd
-  - curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh |  bash
+  - sudo curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh |  bash
   - sudo apt install git-lfs
   - which git-lfs; git-lfs --version
   #
