@@ -8,10 +8,10 @@ env:
   - CONDA_TYPE=miniconda CONDA_VERS=https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh
   - CONDA_TYPE=miniconda CONDA_VERS=https://repo.continuum.io/miniconda/Miniconda3-4.5.11-Linux-x86_64.sh
 
-addons:
-  apt:
-    packages:
-    - libusb-1.0-0-dev
+#addons:
+#  apt:
+#    packages:
+#    - libusb-1.0-0-dev
 
 install:
   # Setup anaconda. See http://conda.pydata.org/docs/travis.html
@@ -22,6 +22,17 @@ install:
   - export PATH="$HOME/miniconda/bin:$PATH"
   - export BBN_DB="$PWD/bbn.sqlite"
   - echo "Database file at $BBN_DB"
+  #
+  # Update the package descriptions and install libusb
+  - sudo apt update
+  - sudo apt install libusb-1.0-0
+  #
+  # Prep for git-lfs
+  - cd ~; mkdir GitWork; cd GitWork; pwd
+  - curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh |  bash
+  - sudo apt install git-lfs
+  - which git-lfs; git-lfs --version
+  #
   - hash -r
   - conda config --set always_yes yes --set changeps1 no
   - conda update -q conda
