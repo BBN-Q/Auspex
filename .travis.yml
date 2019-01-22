@@ -16,8 +16,8 @@ install:
   #
   # Looking to resolve the Seg Fault occuring upon unit-test invocation.
   # Update the package descriptions and install libusb
-  - apt update
-  - apt install libusb-1.0-0
+  - sudo apt update
+  - sudo apt install libusb-1.0-0
   #
   - hash -r
   - conda config --set always_yes yes --set changeps1 no
