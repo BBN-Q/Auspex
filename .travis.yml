@@ -61,12 +61,13 @@ script:
   # Why does this appear to be running an entirely different test set IMI
   - coverage run -m unittest discover -v test
   #
+  # Aside -- the pushd . cited above revealed the source location.
   - echo ''; echo "Trying direct invocation..."
-  - ls -l $HOME/BBN-Q/Auspex
-  - ls -l $HOME/BBN-Q/Auspex/test
+  - ls -l ~/build/BBN-Q/Auspex
+  - ls -l ~/build/BBN-Q/Auspex/test
   #- python -m unittest test/test_*.py -v
-  - python -m unittest $HOME/BBN-Q/Auspex/test/test_adapt_1d.py -v
-  - python -m unittest $HOME/BBN-Q/Auspex/test/test_average.py -v
+  - python -m unittest ~/build/BBN-Q/Auspex/test/test_adapt_1d.py -v
+  - python -m unittest ~/build/BBN-Q/Auspex/test/test_average.py -v
 
 after_script:
   - coveralls
