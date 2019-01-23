@@ -75,7 +75,7 @@ script:
   - python -m unittest ~/build/BBN-Q/Auspex/test/test_fits.py -v
   - python -m unittest ~/build/BBN-Q/Auspex/test/test_instrument.py -v
   - python -m unittest ~/build/BBN-Q/Auspex/test/test_pipeline.py -v
-  - python -m unittest ~/build/BBN-Q/Auspex/test/test_pulsecal -v
+  - python -m unittest ~/build/BBN-Q/Auspex/test/test_pulsecal.py -v
   - python -m unittest ~/build/BBN-Q/Auspex/test/test_singleshot_filter.py -v
   - python -m unittest ~/build/BBN-Q/Auspex/test/test_sweeps.py -v
   - python -m unittest ~/build/BBN-Q/Auspex/test/test_write.py -v
