@@ -24,7 +24,7 @@ install:
   - echo "Database file at $BBN_DB"
   #
   # Check version here -- git-lfs installation, below, seems to have pushed version to 3.7.1
-  - python --version
+  - which python; python --version
   # Update the package descriptions and install libusb
   - sudo apt update
   - sudo apt install libusb-1.0-0
@@ -56,7 +56,10 @@ install:
   - export PYTHONPATH=$PYTHONPATH:$PWD/src
 
 script:
+  # Why does this appear to be running an entirely different test set IMI
   - coverage run -m unittest discover -v test
+  - echo ''; echo "Trying direct invocation..."
+  - python -m unittest test/test_*.py -v
 
 after_script:
   - coveralls
