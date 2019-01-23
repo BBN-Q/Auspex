@@ -60,7 +60,8 @@ script:
   - coverage run -m unittest discover -v test
   - echo ''; echo "Trying direct invocation..."
   #- python -m unittest test/test_*.py -v
-  - python -m unittest $HOME/Auspex/test/test_*.py -v
+  - python -m unittest $HOME/Auspex/test/test_adapt_1d.py -v
+  - python -m unittest $HOME/Auspex/test/test_average.py -v
 
 after_script:
   - coveralls
