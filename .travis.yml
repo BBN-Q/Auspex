@@ -36,7 +36,7 @@ install:
   - curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh |  sudo bash
   - sudo apt install git-lfs
   - which git-lfs; git-lfs --version
-  - popd .
+  - popd
   #
   - python --version
   #
