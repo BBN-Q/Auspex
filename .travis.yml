@@ -31,10 +31,12 @@ install:
   #
   - python --version
   # Prep for git-lfs
-  - cd ~; mkdir GitWork; cd GitWork; pwd
+  # Ouch -- I changed directory and didn't switch it back
+  - pushd .; cd ~; mkdir GitWork; cd GitWork; pwd
   - curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh |  sudo bash
   - sudo apt install git-lfs
   - which git-lfs; git-lfs --version
+  - popd .
   #
   - python --version
   #
