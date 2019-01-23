@@ -23,16 +23,20 @@ install:
   - export BBN_DB="$PWD/bbn.sqlite"
   - echo "Database file at $BBN_DB"
   #
+  # Check version here -- git-lfs installation, below, seems to have pushed version to 3.7.1
+  - python --version
   # Update the package descriptions and install libusb
   - sudo apt update
   - sudo apt install libusb-1.0-0
   #
+  - python --version
   # Prep for git-lfs
   - cd ~; mkdir GitWork; cd GitWork; pwd
-  # - sudo curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh |  bash
   - curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh |  sudo bash
   - sudo apt install git-lfs
   - which git-lfs; git-lfs --version
+  #
+  - python --version
   #
   - hash -r
   - conda config --set always_yes yes --set changeps1 no
