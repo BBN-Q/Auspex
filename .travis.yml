@@ -48,7 +48,7 @@ install:
 
   # Create conda environment with dependencies
   #- conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION numpy scipy matplotlib h5py pandas networkx cffi bokeh jupyter psutil sqlalchemy
-  - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION numpy scipy matplotlib h5py pandas networkx cffi bokeh jupyter psutil sqlalchemy future
+  - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION numpy scipy matplotlib h5py pandas networkx cffi bokeh jupyter psutil sqlalchemy future pydot
   - source activate test-environment
   - export GIT_LFS_SKIP_SMUDGE=1
   - pip install git+https://github.com/BBN-Q/bbndb.git
@@ -69,7 +69,7 @@ script:
   #- python -m unittest test/test_*.py -v
   #
   # Seg faults
-  #- python -m unittest ~/build/BBN-Q/Auspex/test/test_adapt_1d.py -v
+  - python -m unittest ~/build/BBN-Q/Auspex/test/test_adapt_1d.py -v
   #
   - python -m unittest ~/build/BBN-Q/Auspex/test/test_average.py -v
   - python -m unittest ~/build/BBN-Q/Auspex/test/test_bitfields.py -v
@@ -81,8 +81,8 @@ script:
   #
   # Stalls for unsupported Synchronized and int
   #- python -m unittest ~/build/BBN-Q/Auspex/test/test_pipeline.py -v
+  #- python -m unittest ~/build/BBN-Q/Auspex/test/test_pulsecal.py -v
   #
-  - python -m unittest ~/build/BBN-Q/Auspex/test/test_pulsecal.py -v
   - python -m unittest ~/build/BBN-Q/Auspex/test/test_singleshot_filter.py -v
   - python -m unittest ~/build/BBN-Q/Auspex/test/test_sweeps.py -v
   - python -m unittest ~/build/BBN-Q/Auspex/test/test_write.py -v
