@@ -37,6 +37,8 @@ install:
   - sudo apt install git-lfs
   - which git-lfs; git-lfs --version
   - popd
+  # Other builds render the awg file -- this make any diffeence IMI
+  - mkdir /tmp/awg
   #
   - python --version
   #
