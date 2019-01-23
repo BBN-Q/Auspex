@@ -62,12 +62,23 @@ script:
   - coverage run -m unittest discover -v test
   #
   # Aside -- the pushd . cited above revealed the source location.
-  - echo ''; echo "Trying direct invocation..."
+  - echo ''; echo "Trying direct, singular, invocations:"
   - ls -l ~/build/BBN-Q/Auspex
   - ls -l ~/build/BBN-Q/Auspex/test
   #- python -m unittest test/test_*.py -v
   - python -m unittest ~/build/BBN-Q/Auspex/test/test_adapt_1d.py -v
   - python -m unittest ~/build/BBN-Q/Auspex/test/test_average.py -v
+  - python -m unittest ~/build/BBN-Q/Auspex/test/test_bitfields.py -v
+  - python -m unittest ~/build/BBN-Q/Auspex/test/test_buffer.py -v
+  - python -m unittest ~/build/BBN-Q/Auspex/test/test_correlator.py -v
+  - python -m unittest ~/build/BBN-Q/Auspex/test/test_experiment.py -v
+  - python -m unittest ~/build/BBN-Q/Auspex/test/test_fits.py -v
+  - python -m unittest ~/build/BBN-Q/Auspex/test/test_instrument.py -v
+  - python -m unittest ~/build/BBN-Q/Auspex/test/test_pipeline.py -v
+  - python -m unittest ~/build/BBN-Q/Auspex/test/test_pulsecal -v
+  - python -m unittest ~/build/BBN-Q/Auspex/test/test_singleshot_filter.py -v
+  - python -m unittest ~/build/BBN-Q/Auspex/test/test_sweeps.py -v
+  - python -m unittest ~/build/BBN-Q/Auspex/test/test_write.py -v
 
 after_script:
   - coveralls
