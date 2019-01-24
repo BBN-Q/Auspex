@@ -76,6 +76,11 @@ class DigitalAttenuator(SCPIInstrument):
         self.interface.query = MethodType(query, self.interface)
         sleep(2) #!!! Why is the digital attenuator so slow?
 
+    def configure_with_proxy(self, proxy):
+        for i, c in enumerate(proxy.channels):
+            self.set_attenuation(i+1, c.attenuation)
+        super(DigitalAttenuator, self).configure_with_proxy(proxy)
+
     @classmethod
     def channel_check(cls, chan):
         """ Assert the channel requested is feasbile """
