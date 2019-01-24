@@ -305,6 +305,9 @@ class QubitExperiment(Experiment):
         except:
             logger.warning("No AWG is specified as the master.")
 
+        for gen_proxy in self.generators:
+            gen_proxy.instr.output = True
+
         # Start socket listening processes, store as keys in a dictionary with exit commands as values
         self.dig_listeners = {}
         ready = Value('i', 0)
@@ -395,6 +398,8 @@ class QubitExperiment(Experiment):
         if self.cw_mode:
             for awg in self.awgs:
                 awg.stop()
+        for gen_proxy in self.generators:
+            gen_proxy.instr.output = False
         for instr in self.instruments:
             instr.disconnect()
 
