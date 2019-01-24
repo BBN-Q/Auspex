@@ -327,8 +327,17 @@ class QubitExperiment(Experiment):
             for awg in self.awgs:
                 awg.run()
 
-    def add_instrument_sweep(self, instrument, attribute, values):
-        pass
+    def add_instrument_sweep(self, instrument_name, attribute, values, channel=None):
+        param = FloatParameter() # Create the parameter
+        param.name = f"{instrument_name} {attribute} {channel}"
+        instr = self._instruments[instrument_name]
+        def method(value, channel=channel, instr=instr, prop=attribute):
+            if channel:
+                getattr(instr, "set_"+prop)(channel, value)
+            else:
+                getattr(instr, "set_"+prop)(value)
+        param.assign_method(method)
+        self.add_sweep(param, values) # Create the requested sweep on this parameter
 
     def add_qubit_sweep(self, qubit, measure_or_control, attribute, values):
         """
