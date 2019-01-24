@@ -1,4 +1,4 @@
-__all__ = ['Instrument'] 
+__all__ = ['Instrument']
 
 import numpy as np
 import os
@@ -190,7 +190,7 @@ class Instrument(metaclass=MetaInstrument):
         """Accept a sdettings dictionary and attempt to set all of the instrument
         parameters using the key/value pairs."""
         for name, value in settings_dict.items():
-            if name not in ["id", "label", "model", "address", "channel_db_id"]:
+            if name not in ["id", "label", "model", "address", "channel_db_id", "standalone"]:
                 # Python is insane, and attempts to run a property's getter
                 # when queried by hasattr. Avoid this behavior with the
                 # "ask for forgiveness" paradigm.

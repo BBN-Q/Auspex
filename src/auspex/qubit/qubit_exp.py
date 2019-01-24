@@ -38,6 +38,7 @@ stream_sel_map = {
     'AlazarATS9870': auspex.filters.AlazarStreamSelector
 }
 instrument_map = {
+    'DigitalAttenuator': auspex.instruments.DigitalAttenuator,
     'X6-1000M': auspex.instruments.X6,
     'AlazarATS9870': auspex.instruments.AlazarATS9870,
     'APS2': auspex.instruments.APS2,
@@ -81,7 +82,8 @@ class QubitExperiment(Experiment):
             raise Exception("No filter pipeline has been created. You can try running the create_default_pipeline() method of the Pipeline Manager")
 
         # Load the channel library by ID
-        self.chan_db     = pipeline.pipelineMgr.session.query(bbndb.qgl.ChannelDatabase).filter_by(id=library_id).first()
+        sess = pipeline.pipelineMgr.session
+        self.chan_db     = sess.query(bbndb.qgl.ChannelDatabase).filter_by(id=library_id).first()
         all_channels     = self.chan_db.channels
         all_generators   = self.chan_db.generators
         all_transmitters = self.chan_db.transmitters
@@ -100,6 +102,9 @@ class QubitExperiment(Experiment):
         self.receivers         = list(set([e.receiver_chan.receiver for e in self.measurements]))
         self.generators        = list(set([q.phys_chan.generator for q in self.measured_qubits + self.controlled_qubits + self.measurements if q.phys_chan.generator]))
         self.qubits_by_name    = {q.label: q for q in self.measured_qubits + self.controlled_qubits}
+
+        # The exception being any instruments that are declared as standalone
+        self.all_standalone   = [i for i in self.chan_db.all_instruments() if i.standalone and i not in self.transmitters + self.receivers + self.generators]
 
         # In case we need to access more detailed foundational information
         self.factory = self
@@ -163,7 +168,7 @@ class QubitExperiment(Experiment):
 
         # Create microwave sources and receiver instruments from the database objects.
         # We configure the self.receivers later after adding channels.
-        self.instrument_proxies = self.generators + self.receivers + self.transmitters
+        self.instrument_proxies = self.generators + self.receivers + self.transmitters + self.all_standalone
         self.instruments = []
         for instrument in self.instrument_proxies:
             instr = instrument_map[instrument.model](instrument.address, instrument.label) # Instantiate
