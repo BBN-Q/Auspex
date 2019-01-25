@@ -28,9 +28,15 @@ install:
   # Update the package descriptions and install libusb
   - sudo apt update
   #
+  - sudo apt-get update
+  - sudo apt-get upgrade
   # On the off chance that we're missing the underlying dev tools (after having updated it)
   # Debian's flavor (where yum groupinstall "Development Tools" on Centos)
-  - sudo apt install build-essential
+  - which gcc
+  - gcc --version
+  - sudo apt-get install build-essential
+  - which gcc
+  - gcc --version
   #
   # Prep for git-lfs
   # Ouch -- I changed directory and didn't switch it back
@@ -47,8 +53,10 @@ install:
   - apt search libusb
   - apt list libusb-1.0-0
   #
+  # Sadly this Linux varient does not appear to have any sort of libopenusb library
+  # (which may be relate to introspecting all the instrument dependencies IMI)
   # - sudo apt install libopenusb-dev
-  - apt search openusb
+  # - apt search openusb
   #
   - hash -r
   - conda config --set always_yes yes --set changeps1 no
