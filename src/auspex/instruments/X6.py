@@ -43,6 +43,7 @@ class X6Channel(DigitizerChannel):
         self.kernel_bias       = 0.0
         self.threshold         = 0.0
         self.threshold_invert  = False
+        self.threshold_input_sel = False
 
         self.phys_channel   = 1
         self.dsp_channel    = 0
@@ -75,6 +76,8 @@ class X6Channel(DigitizerChannel):
                 setattr(self, 'threshold', value)
             elif name == 'threshold_invert':
                 setattr(self, 'threshold_invert', bool(value))
+            elif name == 'threshold_input_sel' or name == 'threshold_correlated':
+                setattr(self, 'threshold_input_sel', bool(value))
             elif name == 'ideal_data': # for testing purposes
                 self.ideal_data = np.load(os.path.abspath(value+'.npy'))
             else:
@@ -91,6 +94,14 @@ class X6Channel(DigitizerChannel):
         elif self.stream_type == "Demodulated":
             demod_channel = self.dsp_channel
             result_channel = 0
+            self.dtype = np.complex128
+        elif self.stream_type == "State":
+            demod_channel = 0
+            result_channel = self.dsp_channel
+            self.dtype = np.complex128
+        elif self.stream_type == "Correlated":
+            demod_channel = 0
+            result_channel = self.dsp_channel
             self.dtype = np.complex128
         else: #Raw
             demod_channel  = 0
@@ -116,6 +127,10 @@ class X6(Instrument):
         self.last_timestamp = datetime.datetime.now()
         self.gen_fake_data = gen_fake_data
         self.ideal_data = None
+
+        self.correlator_matrix = None
+        self.correlator_inputs = None
+        self.state_vld_bitmask = '0,0'
 
         if fake_x6:
             self._lib = MagicMock()
@@ -155,6 +170,11 @@ class X6(Instrument):
     def set_all(self, settings_dict):
         # Call the non-channel commands
         super(X6, self).set_all(settings_dict)
+        self.correlator_setup()
+
+        for a in range(1, 3):
+            self._lib.set_state_vld_bitmask(a, int(self.state_vld_bitmask.split(',')[a-1]))
+
         # Set data for testing
         try:
             self.ideal_data = np.load(os.path.abspath(self.ideal_data+'.npy'))
@@ -163,21 +183,37 @@ class X6(Instrument):
         # perform channel setup
         for chan in self._channels:
             self.channel_setup(chan)
+
+        ##########################################################################
+        # The following has been deprecated after implementing state_vld_bitmask #
+        ##########################################################################
+
         # pad all kernels to the maximum set length, to ensure that the valid signal is emitted only when all results are ready
         # first find longest kernel
-        integrated_channels = [chan for chan in self._channels if chan.stream_type == 'Integrated']
-        if integrated_channels:
-            max_kernel_length = max([len(chan.kernel) for chan in integrated_channels])
-            # pad kernes to the maximum length
-            for chan in integrated_channels:
-                if len(chan.kernel) < max_kernel_length:
-                    np.append(chan.kernel, 1j*np.zeros(max_kernel_length - len(chan.kernel)))
-            # then zero disabled channels
-            enabled_int_chan_tuples = [chan.channel_tuple for chan in integrated_channels]
+        #integrated_channels = [chan for chan in self._channels if chan.stream_type == 'Integrated']
+        #if integrated_channels:
+        #    max_kernel_length = max([len(chan.kernel) for chan in integrated_channels])
+        #    # pad kernes to the maximum length
+        #    for chan in integrated_channels:
+        #        if len(chan.kernel) < max_kernel_length:
+        #            np.append(chan.kernel, 1j*np.zeros(max_kernel_length - len(chan.kernel)))
+        #    # then zero disabled channels
+        #    enabled_int_chan_tuples = [chan.channel_tuple for chan in integrated_channels]
+        #    for a in range(1,3):
+        #        for c in range(1,6): # max number of sdp_channels for now
+        #            if (a, 0, c) not in enabled_int_chan_tuples:
+        #                self._lib.write_kernel(a, 0, c, 1j*np.zeros(max_kernel_length))
+
+    def correlator_setup(self):
+        if(self.correlator_inputs is not None and self.correlator_matrix is not None):
+            inputs = [int(x) for x in self.correlator_inputs.split(',')]
+            matrix = np.array([float(x) for x in self.correlator_matrix.split(',')])
+
             for a in range(1,3):
-                for c in range(1,3): # max number of sdp_channels for now
-                    if (a, 0, c) not in enabled_int_chan_tuples:
-                        self._lib.write_kernel(a, 0, c, 1j*np.zeros(max_kernel_length))
+                for input in range(len(inputs)):
+                    self._lib.set_correlator_input(a, input, inputs[input])
+
+                self._lib.write_correlator_matrix(a, matrix)
 
     def channel_setup(self, channel):
         a, b, c = channel.channel_tuple
@@ -197,6 +233,11 @@ class X6(Instrument):
             self._lib.set_kernel_bias(a, b, c, channel.kernel_bias)
             self._lib.set_threshold(a, c, channel.threshold)
             self._lib.set_threshold_invert(a, c, channel.threshold_invert)
+            self._lib.set_threshold_input_sel(a, c, channel.threshold_input_sel)
+        elif channel.stream_type == "State":
+            return
+        elif channel.stream_type == "Correlated":
+            return
         else:
             logger.error("Unrecognized stream type %s" % channel.stream_type)
 
@@ -227,7 +268,7 @@ class X6(Instrument):
         if not isinstance(channel, X6Channel):
             raise TypeError("X6 passed {} rather than an X6Channel object.".format(str(channel)))
 
-        if channel.stream_type not in ['Raw', 'Demodulated', 'Integrated']:
+        if channel.stream_type not in ['Raw', 'Demodulated', 'Integrated', 'State', 'Correlated']:
             raise ValueError("Stream type of {} not recognized by X6".format(str(channel.stream_type)))
 
         # todo: other checking here
@@ -274,6 +315,7 @@ class X6(Instrument):
             loop = asyncio.get_event_loop()
             loop.remove_reader(sock)
             return
+
         data = np.frombuffer(buf, dtype=channel.dtype)
         asyncio.ensure_future(oc.push(data))
 
