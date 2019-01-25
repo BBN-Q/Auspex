@@ -47,6 +47,9 @@ install:
   - apt search libusb
   - apt list libusb-1.0-0
   #
+  - sudo apt install libopenusb-dev
+  - apt search libopenusb
+  #
   - hash -r
   - conda config --set always_yes yes --set changeps1 no
   - conda update -q conda
