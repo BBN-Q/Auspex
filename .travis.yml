@@ -52,8 +52,11 @@ install:
   # - mkdir /tmp/awg
   #- sudo apt install libusb-1.0-0
   - sudo apt install libusb-1.0-0-dev
+  # Does the following give us libusb0 imi
+  - sudo apt install libhidapi-libusb0
   - apt search libusb
   - apt list libusb-1.0-0
+  - apt list libhidapi-libusb0
   #
   # Sadly this Linux varient does not appear to have any sort of libopenusb library
   # (which may be relate to introspecting all the instrument dependencies IMI)
