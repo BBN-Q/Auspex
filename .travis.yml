@@ -63,13 +63,14 @@ script:
   #
   # Aside -- the pushd . cited above revealed the source location.
   - echo ''; echo "Trying direct, singular, invocations:"
-  - ls -l ~/build/BBN-Q/Auspex
+  # - ls -l ~/build/BBN-Q/Auspex
   - ls -l ~/build/BBN-Q/Auspex/test
   #- python -m unittest test/test_*.py -v
   #
   # Seg faults
   #- python -m unittest ~/build/BBN-Q/Auspex/test/test_adapt_1d.py -v
   # make it very noisy
+  - export PYUSB_DEBUG_LEVEL=debug
   - python -v -m unittest ~/build/BBN-Q/Auspex/test/test_adapt_1d.py -v
   #
   - python -m unittest ~/build/BBN-Q/Auspex/test/test_average.py -v
