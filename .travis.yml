@@ -26,7 +26,7 @@ install:
   # Note -- Miniconda3 installs python version 3.7.1 (not git-lfs install logic)
   - which python; python --version
   # Update the package descriptions and install libusb
-  - sudo apt update
+  # - sudo apt update
   #
   - sudo apt-get update
   - sudo apt-get upgrade
