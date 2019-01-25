@@ -34,11 +34,12 @@ install:
   #
   # Prep for git-lfs
   # Ouch -- I changed directory and didn't switch it back
-  - pushd .; cd ~; mkdir GitWork; cd GitWork; pwd
-  - curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh |  sudo bash
-  - sudo apt install git-lfs
-  - which git-lfs; git-lfs --version
-  - popd
+  # Commenting out git-lfs segment for now -- usb should NOT depend on it
+  #- pushd .; cd ~; mkdir GitWork; cd GitWork; pwd
+  #- curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh |  sudo bash
+  #- sudo apt install git-lfs
+  #- which git-lfs; git-lfs --version
+  #- popd
   # Other builds render the awg file -- this make any diffeence IMI -- NO
   # - mkdir /tmp/awg
   - sudo apt install libusb-1.0-0
