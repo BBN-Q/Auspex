@@ -86,6 +86,9 @@ install:
   - pip install tqdm pyvisa coveralls scikit-learn pyusb
   - export GIT_LFS_SKIP_SMUDGE=0
   - export PYTHONPATH=$PYTHONPATH:$PWD/src
+  #
+  # what if we pip install the AUspex source?
+  - pip install -e ~/build/BBN-Q/Auspex; echo ''
 
 script:
   # Skipping global discovery case, for now (to see if it changes direct call results).
@@ -94,9 +97,6 @@ script:
   # Aside -- the pushd . cited above revealed the source location.
   - echo ''; echo "Trying direct, singular, invocations:"
   # - ls -l ~/build/BBN-Q/Auspex
-  #
-  # what if we pip install the AUspex source?
-  - pip install -e ~/build/BBN-Q/Auspex
   #
   - ls -l ~/build/BBN-Q/Auspex/test
   #- python -m unittest test/test_*.py -v
