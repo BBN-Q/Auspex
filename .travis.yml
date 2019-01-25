@@ -14,7 +14,7 @@ addons:
     packages:
     #- libusb-1.0-0-dev
     #
-    - update
+    # - update It auto-updates don't need to cite that.
     - build-essential
     - libusb-1.0-0-dev
     - libhidapi-libusb0
