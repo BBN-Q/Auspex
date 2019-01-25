@@ -6,7 +6,7 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-__all__ = ['APS', 'APS2', 'DigitalAttenuator', 'SpectrumAnalyzer']
+__all__ = ['APS', 'APS2', 'TDM', 'DigitalAttenuator', 'SpectrumAnalyzer']
 
 from .instrument import Instrument, SCPIInstrument, VisaInterface, MetaInstrument
 from auspex.log import logger
@@ -531,6 +531,9 @@ class TDM(APS2):
     """BBN TDM"""
     instrument_type = "AWG"
 
-    def set_all(self, settings_dict):
-        super(APS2, self).set_all(settings_dict)
-        self.master = False # only for APS2. To make the TDM the master, set trigger_source: Internal for TDM and System for all the APS2
+    def configure_with_proxy(self, proxy_obj):
+        super(APS2, self).configure_with_proxy(proxy_obj)
+    #
+    # def set_all(self, settings_dict):
+    #     super(APS2, self).set_all(settings_dict)
+    #     self.master = False # only for APS2. To make the TDM the master, set trigger_source: Internal for TDM and System for all the APS2

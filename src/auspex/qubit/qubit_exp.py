@@ -42,6 +42,7 @@ instrument_map = {
     'X6-1000M': auspex.instruments.X6,
     'AlazarATS9870': auspex.instruments.AlazarATS9870,
     'APS2': auspex.instruments.APS2,
+    'TDM': auspex.instruments.TDM,
     'APS': auspex.instruments.APS,
     'HolzworthHS9000': auspex.instruments.HolzworthHS9000,
     'Labbrick': auspex.instruments.Labbrick,
@@ -103,8 +104,15 @@ class QubitExperiment(Experiment):
         self.generators        = list(set([q.phys_chan.generator for q in self.measured_qubits + self.controlled_qubits + self.measurements if q.phys_chan.generator]))
         self.qubits_by_name    = {q.label: q for q in self.measured_qubits + self.controlled_qubits}
 
+        # Locate transmitters relying on processors
+        self.transceivers = list(set([t.transceiver for t in self.transmitters + self.receivers if t.transceiver]))
+        self.processors = list(set([p for t in self.transceivers for p in t.processors]))
+
+        # Determine if the digitizer trigger lives on another transmitter that isn't included already
+        self.transmitters = list(set([mq.measure_chan.trig_chan.phys_chan.transmitter for mq in self.measured_qubits] + self.transmitters))
+
         # The exception being any instruments that are declared as standalone
-        self.all_standalone   = [i for i in self.chan_db.all_instruments() if i.standalone and i not in self.transmitters + self.receivers + self.generators]
+        self.all_standalone = [i for i in self.chan_db.all_instruments() if i.standalone and i not in self.transmitters + self.receivers + self.generators]
 
         # In case we need to access more detailed foundational information
         self.factory = self
@@ -168,7 +176,7 @@ class QubitExperiment(Experiment):
 
         # Create microwave sources and receiver instruments from the database objects.
         # We configure the self.receivers later after adding channels.
-        self.instrument_proxies = self.generators + self.receivers + self.transmitters + self.all_standalone
+        self.instrument_proxies = self.generators + self.receivers + self.transmitters + self.all_standalone + self.processors
         self.instruments = []
         for instrument in self.instrument_proxies:
             instr = instrument_map[instrument.model](instrument.address, instrument.label) # Instantiate
@@ -297,7 +305,6 @@ class QubitExperiment(Experiment):
 
         self.digitizers = [v for _, v in self._instruments.items() if "Digitizer" in v.instrument_type]
         self.awgs       = [v for _, v in self._instruments.items() if "AWG" in v.instrument_type]
-
         # Swap the master AWG so it is last in the list
         try:
             master_awg_idx = next(ct for ct,awg in enumerate(self.awgs) if awg.master)
@@ -361,7 +368,7 @@ class QubitExperiment(Experiment):
             thing = thing[0]
         elif measure_or_control == "control":
             logger.debug(f"Sweeping {qubit} control")
-            thing = qubit        
+            thing = qubit
         if thing.phys_chan.generator and attribute=="frequency":
             # Mixed up to final frequency
             name  = thing.phys_chan.generator.label
