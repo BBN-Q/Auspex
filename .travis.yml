@@ -30,7 +30,7 @@ install:
   #
   # On the off chance that we're missing the underlying dev tools (after having updated it)
   # Debian's flavor (where yum groupinstall "Development Tools" on Centos)
-  - sudo apt build-essential
+  - sudo apt install build-essential
   #
   - sudo apt install libusb-1.0-0
   #
