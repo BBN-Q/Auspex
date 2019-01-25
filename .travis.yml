@@ -42,7 +42,9 @@ install:
   #- popd
   # Other builds render the awg file -- this make any diffeence IMI -- NO
   # - mkdir /tmp/awg
-  - sudo apt install libusb-1.0-0
+  #- sudo apt install libusb-1.0-0
+  - sudo apt install libusb-1.0-0-dev
+  - apt search libusb
   - apt list libusb-1.0-0
   #
   - hash -r
