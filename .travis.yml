@@ -23,13 +23,12 @@ install:
   - export BBN_DB="$PWD/bbn.sqlite"
   - echo "Database file at $BBN_DB"
   #
-  # Check version here -- git-lfs installation, below, seems to have pushed version to 3.7.1
+  # Note -- Miniconda3 installs python version 3.7.1 (not git-lfs install logic)
   - which python; python --version
   # Update the package descriptions and install libusb
   - sudo apt update
   - sudo apt install libusb-1.0-0
   #
-  - python --version
   # Prep for git-lfs
   # Ouch -- I changed directory and didn't switch it back
   - pushd .; cd ~; mkdir GitWork; cd GitWork; pwd
@@ -37,10 +36,8 @@ install:
   - sudo apt install git-lfs
   - which git-lfs; git-lfs --version
   - popd
-  # Other builds render the awg file -- this make any diffeence IMI
-  - mkdir /tmp/awg
-  #
-  - python --version
+  # Other builds render the awg file -- this make any diffeence IMI -- NO
+  # - mkdir /tmp/awg
   #
   - hash -r
   - conda config --set always_yes yes --set changeps1 no
@@ -61,8 +58,8 @@ install:
   - export PYTHONPATH=$PYTHONPATH:$PWD/src
 
 script:
-  # Why does this appear to be running an entirely different test set IMI
-  - coverage run -m unittest discover -v test
+  # Skipping global discovery case, for now (to see if it changes direct call results).
+  # - coverage run -m unittest discover -v test
   #
   # Aside -- the pushd . cited above revealed the source location.
   - echo ''; echo "Trying direct, singular, invocations:"
