@@ -25,7 +25,7 @@ auspex_dummy_mode = False
 
 # If this is True, then close the last
 # plotter before starting a new one.
-single_plotter_mode = True
+single_plotter_mode = False
 
 # This holds a reference to the most
 # recent plotters.

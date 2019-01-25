@@ -9,7 +9,6 @@ doc/make.bat
 config/config.json
 *.egg-info*
 *.dll
-*.json
 *.log
 *.prof
 *.bak
