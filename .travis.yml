@@ -32,8 +32,6 @@ install:
   # Debian's flavor (where yum groupinstall "Development Tools" on Centos)
   - sudo apt install build-essential
   #
-  - sudo apt install libusb-1.0-0
-  #
   # Prep for git-lfs
   # Ouch -- I changed directory and didn't switch it back
   - pushd .; cd ~; mkdir GitWork; cd GitWork; pwd
@@ -43,6 +41,8 @@ install:
   - popd
   # Other builds render the awg file -- this make any diffeence IMI -- NO
   # - mkdir /tmp/awg
+  - sudo apt install libusb-1.0-0
+  - apt list libusb-1.0-0
   #
   - hash -r
   - conda config --set always_yes yes --set changeps1 no
