@@ -59,10 +59,10 @@ class X6Channel(ReceiverChannel):
         self.ideal_data = None
 
         if receiver_channel:
-            self.set_by_receiver(receiver_channel)
+            self.set_by_receiver_channel(receiver_channel)
             self.receiver_channel = receiver_channel
 
-    def set_by_receiver(self, receiver):
+    def set_by_receiver_channel(self, receiver):
         for name in ["stream_type", "kernel_bias", "threshold", "threshold_invert"]:
             if hasattr(receiver, name) and getattr(receiver, name):
                 setattr(self, name, getattr(receiver, name))
@@ -79,6 +79,7 @@ class X6Channel(ReceiverChannel):
         elif self.stream_type == "demodulated":
             self.demod_channel = receiver.dsp_channel
             self.result_channel = 0
+            self.if_freq = receiver.if_freq
             self.dtype = np.complex128
         else: #Raw
             self.demod_channel  = 0

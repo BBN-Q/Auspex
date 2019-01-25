@@ -199,7 +199,7 @@ class QubitExperiment(Experiment):
             stream_sel.configure_with_proxy(rcv)
             stream_sel.receiver = stream_sel.proxy = rcv
 
-            # Construct the channel from the receiver
+            # Construct the channel from the receiver channel
             channel = stream_sel.get_channel(rcv)
 
             # Get the base descriptor from the channel
