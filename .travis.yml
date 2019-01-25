@@ -18,6 +18,8 @@ addons:
     - build-essential
     - libusb-1.0-0-dev
     - libhidapi-libusb0
+    # Does the following help? (linux tools to query connected USB device types)
+    - usbutils
 
 install:
   # Setup anaconda. See http://conda.pydata.org/docs/travis.html
