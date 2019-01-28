@@ -12,7 +12,7 @@ env:
   #- CONDA_TYPE=miniconda CONDA_VERS=https://repo.continuum.io/miniconda/Miniconda3-4.5.11-Linux-x86_64.sh
   #
   # Merging in alternate BBNQconda logic 
-  #- CONDA_TYPE=miniconda CONDA_VERS=https://repo.continuum.io/miniconda/Miniconda3-4.5.11-Linux-x86_64.sh SUDO_VAL=false
+  - CONDA_TYPE=miniconda CONDA_VERS=https://repo.continuum.io/miniconda/Miniconda3-4.5.11-Linux-x86_64.sh SUDO_VAL=false
   #- CONDA_TYPE=dockerImg BBNQConda_DI="merlinbeast/bbnq:bbnqconda_centos7_4_bbnq_pylib_v1.0.1_19.12.2018" SUDO_VAL=false
   - CONDA_TYPE=dockerImg BBNQConda_DI="merlinbeast/bbnq:bbnqconda_centos7_4_bbnq_pylib_v1.0.2_18.01.2019" SUDO_VAL=false
   
@@ -115,11 +115,11 @@ install:
             # to do pip install, documentation rendereing and such.
             #
             # Define dependent/sibling repository modules to PiP load prior to testing.
-            export TGT_PIPLOADS="export GIT_LFS_SKIP_SMUDGE=1"
+            export TGT_PIPLOADS="export GIT_LFS_SKIP_SMUDGE=1; set | grep GIT_LFS | grep -v _="
             export TGT_PIPLOADS+="; echo ''; pip install git+https://github.com/BBN-Q/bbndb.git"
             export TGT_PIPLOADS+="; echo ''; echo '# ---'; pip install git+https://github.com/BBN-Q/Adapt.git"
             export TGT_PIPLOADS+="; echo ''; echo '# ---'; pip install git+https://github.com/BBN-Q/QGL.git@sqlalchemy"
-            export TGT_PIPLOADS+="; echo ''; export GIT_LFS_SKIP_SMUDGE=0; echo ''"
+            export TGT_PIPLOADS+="; echo ''; export GIT_LFS_SKIP_SMUDGE=0; set | grep GIT_LFS | grep -v _=; echo ''"
             # the utf8 settings are required for documentation rendering logic.
             #export DI_ENV_VALS="-e BBN_MEAS_FILE=test/test_measure.yml -e LC_ALL=en_US.utf8 -e LANG=en_US.utf8"
             # -p 8888:8888 sets it up for Jupyter notebook export
@@ -151,92 +151,26 @@ install:
             # Useful for debugging any issues with conda
             conda info -a
 
+            # Reveal conda element install shell[s] to the console log.
+            ${LCI_SH}
+
             conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION numpy scipy matplotlib h5py pandas networkx cffi bokeh jupyter psutil sqlalchemy future pydot
+
             source activate test-environment
-            export GIT_LFS_SKIP_SMUDGE=1
-            pip install git+https://github.com/BBN-Q/bbndb.git
-            pip install git+https://github.com/BBN-Q/Adapt.git
-            pip install git+https://github.com/BBN-Q/QGL.git@sqlalchemy
+            export GIT_LFS_SKIP_SMUDGE=1; set | grep GIT_LFS | grep -v _=
+            pip install git+https://github.com/BBN-Q/bbndb.git; echo ''; echo '# ---'
+            pip install git+https://github.com/BBN-Q/Adapt.git; echo ''; echo '# ---'
+            pip install git+https://github.com/BBN-Q/QGL.git@sqlalchemy; echo ''; echo '# ---'
             pip install tqdm pyvisa coveralls scikit-learn pyusb
-            export GIT_LFS_SKIP_SMUDGE=0
+            export GIT_LFS_SKIP_SMUDGE=0; set | grep GIT_LFS | grep -v _=
             export PYTHONPATH=$PYTHONPATH:$PWD/src
         fi
-        
+
     else
         echo "# ---   W A R N I N G   -- CONDA_TYPE [${CONDA_TYPE}] undefined !"
-            
+
     fi
 
-  # Setup anaconda. See http://conda.pydata.org/docs/travis.html
-  ## - echo "Using $CONDA_TYPE"
-  ## - wget $CONDA_VERS -O miniconda.sh
-  ## - bash miniconda.sh -h | sed '4q;d'
-  ## - bash miniconda.sh -b -p $HOME/miniconda
-  ## - export PATH="$HOME/miniconda/bin:$PATH"
-  ## - export BBN_DB="$PWD/bbn.sqlite"
-  ## - echo "Database file at $BBN_DB"
-  #
-  # Note -- Miniconda3 installs python version 3.7.1 (not git-lfs install logic)
-  # - which python; python --version
-  # Update the package descriptions and install libusb
-  #- sudo apt update
-  #
-  ## - which gcc; gcc --version
-  #- sudo apt-get update
-  # Sigh -- The following appears to try and overwrite it as a complete workstation
-  # (way too big and then fails in the end)
-  # - sudo apt-get -y upgrade --allow-unauthenticated
-  # On the off chance that we're missing the underlying dev tools (after having updated it)
-  # Debian's flavor (where yum groupinstall "Development Tools" on Centos)
-  #- which gcc; gcc --version
-  #- sudo apt install build-essential
-  # - sudo apt-get install build-essential
-  #- which gcc; gcc --version
-  #
-  # Prep for git-lfs
-  # Ouch -- I changed directory and didn't switch it back
-  # Commenting out git-lfs segment for now -- usb should NOT depend on it
-  #- pushd .; cd ~; mkdir GitWork; cd GitWork; pwd
-  #- curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh |  sudo bash
-  #- sudo apt install git-lfs
-  #- which git-lfs; git-lfs --version
-  #- popd
-  # Other builds render the awg file -- this make any diffeence IMI -- NO
-  # - mkdir /tmp/awg
-  #- sudo apt install libusb-1.0-0
-  #- sudo apt install libusb-1.0-0-dev
-  # Does the following give us libusb0 imi
-  #- sudo apt install libhidapi-libusb0
-  ## - apt search libusb
-  ## - apt list libusb-1.0-0
-  # - apt list libhidapi-libusb0
-  ## - which git-lfs; git-lfs --version
-  #
-  # Sadly this Linux varient does not appear to have any sort of libopenusb library
-  # (which may be relate to introspecting all the instrument dependencies IMI)
-  # - sudo apt install libopenusb-dev
-  # - apt search openusb
-  #
-  ## - hash -r
-  ## - conda config --set always_yes yes --set changeps1 no
-  ## - conda update -q conda
-  # Useful for debugging any issues with conda
-  ## - conda info -a
-
-  # Create conda environment with dependencies
-  #- conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION numpy scipy matplotlib h5py pandas networkx cffi bokeh jupyter psutil sqlalchemy
-  ## - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION numpy scipy matplotlib h5py pandas networkx cffi bokeh jupyter psutil sqlalchemy future pydot
-  ## - source activate test-environment
-  ## - export GIT_LFS_SKIP_SMUDGE=1
-  ## - pip install git+https://github.com/BBN-Q/bbndb.git
-  ## - pip install git+https://github.com/BBN-Q/Adapt.git
-  ## - pip install git+https://github.com/BBN-Q/QGL.git@sqlalchemy
-  ## - pip install tqdm pyvisa coveralls scikit-learn pyusb
-  ## - export GIT_LFS_SKIP_SMUDGE=0
-  ## - export PYTHONPATH=$PYTHONPATH:$PWD/src
-  #
-  # what if we pip install the AUspex source? -- NO difference
-  # - pip install -e ~/build/BBN-Q/Auspex; echo ''
 
 script:
  - |
@@ -245,7 +179,6 @@ script:
         if [ ${CONDA_TYPE} == "dockerImg" ]; then
 
             echo ''; echo "# --- Executing test over BBNQConda Docker Image << CONDA_TYPE [${CONDA_TYPE}]..."; echo ''
-            #---------- New BBNQconda docker image setup logic here
             
             docker run -v $PWD:/root/RepoCDir ${DI_ENV_VALS} ${BBNQConda_DI} /bin/sh -c "source ~/.bashrc; echo ''; echo '# --- DI Run-Time info:'; python --version; conda info; conda list; echo ''; echo '# --- PIP loading dependency mods...'; ${TGT_PIPLOADS}; cd ~/RepoCDir; echo ''; echo '# --- Pip Installing repo clone...'; pwd; pip install -e .; echo ''; ${LCI_SH}; echo '# --- Unittest begin...'; python -m unittest discover -v test"
 
@@ -254,8 +187,6 @@ script:
 
             echo ''; echo "# --- Executing test over MiniConda Image << CONDA_TYPE [${CONDA_TYPE}]..."; echo ''
             
-            #---------- ~Original Miniconda build-out logic here
-
             # Skipping global discovery case, for now (to see if it changes direct call results).
             # - coverage run -m unittest discover -v test
             #
@@ -298,38 +229,6 @@ script:
             
     fi
 
-  # Skipping global discovery case, for now (to see if it changes direct call results).
-  # - coverage run -m unittest discover -v test
-  #
-  # Aside -- the pushd . cited above revealed the source location.
-  ## - python --version
-  ## - echo ''; echo "Trying direct, singular, invocations:"
-  # - ls -l ~/build/BBN-Q/Auspex
-  #
-  ## - ls -l ~/build/BBN-Q/Auspex/test
-  #- python -m unittest test/test_*.py -v
-  #
-  # Seg faults
-  ## - export PYUSB_DEBUG_LEVEL=debug
-  ## - python -m unittest ~/build/BBN-Q/Auspex/test/test_adapt_1d.py -v
-  # make it very noisy
-  # - python -v -m unittest ~/build/BBN-Q/Auspex/test/test_adapt_1d.py -v
-  #
-  ## - python -m unittest ~/build/BBN-Q/Auspex/test/test_average.py -v
-  ## - python -m unittest ~/build/BBN-Q/Auspex/test/test_bitfields.py -v
-  ## - python -m unittest ~/build/BBN-Q/Auspex/test/test_buffer.py -v
-  ## - python -m unittest ~/build/BBN-Q/Auspex/test/test_correlator.py -v
-  ## - python -m unittest ~/build/BBN-Q/Auspex/test/test_experiment.py -v
-  ## - python -m unittest ~/build/BBN-Q/Auspex/test/test_fits.py -v
-  ## - python -m unittest ~/build/BBN-Q/Auspex/test/test_instrument.py -v
-  #
-  # Stalls for unsupported Synchronized and int
-  #- python -m unittest ~/build/BBN-Q/Auspex/test/test_pipeline.py -v
-  #- python -m unittest ~/build/BBN-Q/Auspex/test/test_pulsecal.py -v
-  #
-  ## - python -m unittest ~/build/BBN-Q/Auspex/test/test_singleshot_filter.py -v
-  ## - python -m unittest ~/build/BBN-Q/Auspex/test/test_sweeps.py -v
-  ## - python -m unittest ~/build/BBN-Q/Auspex/test/test_write.py -v
 
 after_script:
   - coveralls
