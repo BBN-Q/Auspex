@@ -18,17 +18,26 @@ env:
   
 before_install:  
     - |
+# NOT compatible with addons apt packages usage; try direct next
+#        if [ ! -z ${CONDA_TYPE} ] && [ ${} == "" ]; then
+#            export APT_PKGS="build-essential "
+#            export APT_PKGS+="libusb-1.0-0-dev "
+#            export APT_PKGS+="git-lfs --allow-unauthenticated"
+#            echo ''; echo "Optional APT package list defined: ${APT_PKGS}"; echo ''
+#        fi
         if [ ! -z ${CONDA_TYPE} ] && [ ${} == "" ]; then
-            export APT_PKGS="build-essential "
-            export APT_PKGS+="libusb-1.0-0-dev "
-            export APT_PKGS+="git-lfs --allow-unauthenticated"
-            echo ''; echo "Optional APT package list defined: ${APT_PKGS}"; echo ''
+            echo ''; echo "Adding Optional APT packages..."; echo ''
+            sudo apt update
+            sudo apt install -y build-essential
+            sudo apt install -y libusb-1.0-0-dev
+            sudo apt install -y git-lfs --allow-unauthenticated
+            echo ''
         fi
 
 # Ok -- back-track to this rendering -- late 25 Jan
-addons:
-  apt:
-    packages:
+#addons:
+#  apt:
+#    packages:
     #- libusb-1.0-0-dev
     #
     # - update It auto-updates don't need to cite that.
@@ -50,7 +59,7 @@ addons:
     #        libusb-1.0-0-dev    \
     #        git-lfs --allow-unauthenticated
     #    fi
-    - ${APT_PKGS}
+#    - ${APT_PKGS}
             
 
 install:
