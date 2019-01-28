@@ -18,13 +18,15 @@ addons:
     # - update It auto-updates don't need to cite that.
     - build-essential
     - libusb-1.0-0-dev
-    - libhidapi-libusb0
+    # Does adding libhidapi-libusb0 help IMI -- No.
+    # - libhidapi-libusb0
     # Adding usbutils unnecessary, console info suggests already loaded
     # - usbutils
     # Try Installing git-lfs here, perhaps a different version IMI
     # ok -- it tries to install but fails due to unathenticated packages,
     # needs --allow-unauthenticated tag
     # - git-lfs 
+    # Loading git-lfs, here, with the allow flag, appears to work.
     - git-lfs --allow-unauthenticated
 
 install:
@@ -70,7 +72,8 @@ install:
   #- sudo apt install libhidapi-libusb0
   - apt search libusb
   - apt list libusb-1.0-0
-  - apt list libhidapi-libusb0
+  # - apt list libhidapi-libusb0
+  - which git-lfs; git-lfs --version
   #
   # Sadly this Linux varient does not appear to have any sort of libopenusb library
   # (which may be relate to introspecting all the instrument dependencies IMI)
@@ -110,10 +113,10 @@ script:
   #- python -m unittest test/test_*.py -v
   #
   # Seg faults
-  #- python -m unittest ~/build/BBN-Q/Auspex/test/test_adapt_1d.py -v
-  # make it very noisy
   - export PYUSB_DEBUG_LEVEL=debug
-  - python -v -m unittest ~/build/BBN-Q/Auspex/test/test_adapt_1d.py -v
+  - python -m unittest ~/build/BBN-Q/Auspex/test/test_adapt_1d.py -v
+  # make it very noisy
+  # - python -v -m unittest ~/build/BBN-Q/Auspex/test/test_adapt_1d.py -v
   #
   - python -m unittest ~/build/BBN-Q/Auspex/test/test_average.py -v
   - python -m unittest ~/build/BBN-Q/Auspex/test/test_bitfields.py -v
