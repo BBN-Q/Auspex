@@ -18,14 +18,14 @@ env:
   
 before_install:  
 # NOT compatible with addons apt packages usage; try direct next
-#        if [ ! -z ${CONDA_TYPE} ] && [ ${} == "" ]; then
+#        if [ ! -z ${CONDA_TYPE} ] && [ ${CONDA_TYPE} == "miniconda" ]; then
 #            export APT_PKGS="build-essential "
 #            export APT_PKGS+="libusb-1.0-0-dev "
 #            export APT_PKGS+="git-lfs --allow-unauthenticated"
 #            echo ''; echo "Optional APT package list defined: ${APT_PKGS}"; echo ''
 #        fi
     - |
-        if [ ! -z ${CONDA_TYPE} ] && [ ${} == "" ]; then
+        if [ ! -z ${CONDA_TYPE} ] && [ ${CONDA_TYPE} == "miniconda" ]; then
             echo ''; echo "Adding Optional APT packages..."; echo ''
             sudo apt update
             sudo apt install -y build-essential
