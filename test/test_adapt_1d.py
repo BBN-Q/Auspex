@@ -10,7 +10,11 @@ import unittest
 import os
 import numpy as np
 import time
-import h5py
+#
+# Test runs fine WITHOUT h5py import, here, was this, perhaps pulling in more than was necessary IMI
+# python -m unittest test/test_adapt_1d.py -v
+#import h5py
+#
 import tempfile
 from adapt.refine import refine_1D
 

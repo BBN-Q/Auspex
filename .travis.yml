@@ -98,8 +98,8 @@ install:
   - export GIT_LFS_SKIP_SMUDGE=0
   - export PYTHONPATH=$PYTHONPATH:$PWD/src
   #
-  # what if we pip install the AUspex source?
-  - pip install -e ~/build/BBN-Q/Auspex; echo ''
+  # what if we pip install the AUspex source? -- NO difference
+  # - pip install -e ~/build/BBN-Q/Auspex; echo ''
 
 script:
   # Skipping global discovery case, for now (to see if it changes direct call results).
