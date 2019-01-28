@@ -5,7 +5,8 @@ language: python
 python:
   - "3.6"
 env:
-  - CONDA_TYPE=miniconda CONDA_VERS=https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh
+  # lets try one flavor for now.
+  #- CONDA_TYPE=miniconda CONDA_VERS=https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh
   - CONDA_TYPE=miniconda CONDA_VERS=https://repo.continuum.io/miniconda/Miniconda3-4.5.11-Linux-x86_64.sh
 
 # Ok -- back-track to this rendering -- late 25 Jan
@@ -18,8 +19,10 @@ addons:
     - build-essential
     - libusb-1.0-0-dev
     - libhidapi-libusb0
-    # Does the following help? (linux tools to query connected USB device types)
-    - usbutils
+    # Adding usbutils unnecessary, console info suggests already loaded
+    # - usbutils
+    # Try Installing git-lfs here, perhaps a different version IMI
+    - git-lfs
 
 install:
   # Setup anaconda. See http://conda.pydata.org/docs/travis.html
