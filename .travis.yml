@@ -16,6 +16,14 @@ env:
   #- CONDA_TYPE=dockerImg BBNQConda_DI="merlinbeast/bbnq:bbnqconda_centos7_4_bbnq_pylib_v1.0.1_19.12.2018" SUDO_VAL=false
   #- CONDA_TYPE=dockerImg BBNQConda_DI="merlinbeast/bbnq:bbnqconda_centos7_4_bbnq_pylib_v1.0.2_18.01.2019" SUDO_VAL=false
   
+before_install:  
+    - |
+        if [ ! -z ${CONDA_TYPE} ] && [ ${} == "" ]; then
+            export APT_PKGS="build-essential "
+            export APT_PKGS+="libusb-1.0-0-dev "
+            export APT_PKGS+="git-lfs --allow-unauthenticated"
+            echo ''; echo "Optional APT package list defined: ${APT_PKGS}"; echo ''
+        fi
 
 # Ok -- back-track to this rendering -- late 25 Jan
 addons:
@@ -36,12 +44,13 @@ addons:
     # - git-lfs 
     # Loading git-lfs, here, with the allow flag, appears to work.
     ## - git-lfs --allow-unauthenticated
-    - |
-        if [ ! -z ${CONDA_TYPE} ] && [ ${} == "" ]; then
-            build-essential     \
-            libusb-1.0-0-dev    \
-            git-lfs --allow-unauthenticated
-        fi
+    #- |
+    #    if [ ! -z ${CONDA_TYPE} ] && [ ${} == "" ]; then
+    #        build-essential     \
+    #        libusb-1.0-0-dev    \
+    #        git-lfs --allow-unauthenticated
+    #    fi
+    - ${APT_PKGS}
             
 
 install:
