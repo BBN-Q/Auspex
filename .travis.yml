@@ -2,12 +2,20 @@
 # https://gist.github.com/dan-blanchard/7045057
 
 language: python
+
 python:
   - "3.6"
+  
 env:
   # lets try one flavor for now.
   #- CONDA_TYPE=miniconda CONDA_VERS=https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh
-  - CONDA_TYPE=miniconda CONDA_VERS=https://repo.continuum.io/miniconda/Miniconda3-4.5.11-Linux-x86_64.sh
+  #- CONDA_TYPE=miniconda CONDA_VERS=https://repo.continuum.io/miniconda/Miniconda3-4.5.11-Linux-x86_64.sh
+  #
+  # Merging in alternate BBNQconda logic 
+  - CONDA_TYPE=miniconda CONDA_VERS=https://repo.continuum.io/miniconda/Miniconda3-4.5.11-Linux-x86_64.sh SUDO_VAL=false
+  #- CONDA_TYPE=dockerImg BBNQConda_DI="merlinbeast/bbnq:bbnqconda_centos7_4_bbnq_pylib_v1.0.1_19.12.2018" SUDO_VAL=false
+  #- CONDA_TYPE=dockerImg BBNQConda_DI="merlinbeast/bbnq:bbnqconda_centos7_4_bbnq_pylib_v1.0.2_18.01.2019" SUDO_VAL=false
+  
 
 # Ok -- back-track to this rendering -- late 25 Jan
 addons:
@@ -16,8 +24,8 @@ addons:
     #- libusb-1.0-0-dev
     #
     # - update It auto-updates don't need to cite that.
-    - build-essential
-    - libusb-1.0-0-dev
+    ##- build-essential
+    ##- libusb-1.0-0-dev
     # Does adding libhidapi-libusb0 help IMI -- No.
     # - libhidapi-libusb0
     # Adding usbutils unnecessary, console info suggests already loaded
@@ -27,7 +35,14 @@ addons:
     # needs --allow-unauthenticated tag
     # - git-lfs 
     # Loading git-lfs, here, with the allow flag, appears to work.
-    - git-lfs --allow-unauthenticated
+    ## - git-lfs --allow-unauthenticated
+    - |
+        if [ ! -z ${CONDA_TYPE} ] && [ ${} == "" ]; then
+            build-essential     \
+            libusb-1.0-0-dev    \
+            git-lfs --allow-unauthenticated
+        fi
+            
 
 install:
   # Setup anaconda. See http://conda.pydata.org/docs/travis.html
