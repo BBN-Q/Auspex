@@ -65,6 +65,7 @@ class Filter(Process, metaclass=MetaFilter):
         self.input_connectors = {}
         self.output_connectors = {}
         self.parameters = {}
+        self.qubit_name = ""
 
         # Event for killing the filter properly
         self.exit = Event()
@@ -169,8 +170,9 @@ class Filter(Process, metaclass=MetaFilter):
 
     def push_resource_usage(self):
         if self.perf_queue:
-            if (datetime.datetime.now() - self.last_performance_update).seconds > 0.1:
-                self.perf_queue.put((self.filter_name, datetime.datetime.now()-self.beginning, self.p.cpu_percent(), self.p.memory_info(), self.processed))
+            if (datetime.datetime.now() - self.last_performance_update).seconds > 1.0:
+                perf_info = (str(self), datetime.datetime.now()-self.beginning, self.p.cpu_percent(), self.p.memory_info(), self.processed)
+                self.perf_queue.put(perf_info)
                 self.last_performance_update = datetime.datetime.now()
 
     def main(self):
