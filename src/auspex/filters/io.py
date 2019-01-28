@@ -93,7 +93,7 @@ class DumbFileHandler(Process):
     def push_resource_usage(self):
         if self.perf_queue:
             if (datetime.datetime.now() - self.last_performance_update).seconds > 0.5:
-                self.perf_queue.put((self.filter_name, datetime.datetime.now()-self.beginning, self.p.cpu_percent(), self.p.memory_info()))
+                self.perf_queue.put((str(self), datetime.datetime.now()-self.beginning, self.p.cpu_percent(), self.p.memory_info()))
                 self.last_performance_update = datetime.datetime.now()
 
     def __repr__(self):
@@ -204,7 +204,7 @@ class H5Handler(Process):
     def push_resource_usage(self):
         if self.perf_queue:
             if (datetime.datetime.now() - self.last_performance_update).seconds > 0.5:
-                self.perf_queue.put((self.filter_name, datetime.datetime.now()-self.beginning, self.p.cpu_percent(), self.p.memory_info(), self.processed))
+                self.perf_queue.put((str(self), datetime.datetime.now()-self.beginning, self.p.cpu_percent(), self.p.memory_info(), self.processed))
                 self.last_performance_update = datetime.datetime.now()
 
     def __repr__(self):
