@@ -22,7 +22,10 @@ addons:
     # Adding usbutils unnecessary, console info suggests already loaded
     # - usbutils
     # Try Installing git-lfs here, perhaps a different version IMI
-    - git-lfs
+    # ok -- it tries to install but fails due to unathenticated packages,
+    # needs --allow-unauthenticated tag
+    # - git-lfs 
+    - git-lfs --allow-unauthenticated
 
 install:
   # Setup anaconda. See http://conda.pydata.org/docs/travis.html
