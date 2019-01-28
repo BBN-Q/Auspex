@@ -17,7 +17,6 @@ env:
   #- CONDA_TYPE=dockerImg BBNQConda_DI="merlinbeast/bbnq:bbnqconda_centos7_4_bbnq_pylib_v1.0.2_18.01.2019" SUDO_VAL=false
   
 before_install:  
-    - |
 # NOT compatible with addons apt packages usage; try direct next
 #        if [ ! -z ${CONDA_TYPE} ] && [ ${} == "" ]; then
 #            export APT_PKGS="build-essential "
@@ -25,6 +24,7 @@ before_install:
 #            export APT_PKGS+="git-lfs --allow-unauthenticated"
 #            echo ''; echo "Optional APT package list defined: ${APT_PKGS}"; echo ''
 #        fi
+    - |
         if [ ! -z ${CONDA_TYPE} ] && [ ${} == "" ]; then
             echo ''; echo "Adding Optional APT packages..."; echo ''
             sudo apt update
