@@ -165,29 +165,30 @@ script:
             docker run -v $PWD:/root/RepoCDir ${DI_ENV_VALS} ${BBNQConda_DI} /bin/sh -c "source ~/.bashrc; echo ''; echo '# --- DI Run-Time info:'; python --version; conda info; conda list; echo ''; echo '# --- PIP loading dependency mods...'; ${TGT_PIPLOADS}; cd ~/RepoCDir; echo ''; echo '# --- Pip Installing repo clone...'; pwd; pip install -e .; echo ''; ${LCI_SH}; echo '# --- Unittest begin...'; python -m unittest discover -v test"
 
         else
-            echo ''; echo "# --- Executing test over MiniConda Image << CONDA_TYPE [${CONDA_TYPE}]..."; echo ''
+            mcBundle:
+                - echo ''; echo "# --- Executing test over MiniConda Image << CONDA_TYPE [${CONDA_TYPE}]..."; echo ''
             
-            python --version
+                - python --version
             # Skipping global discovery case, for now (to see if it changes direct call results).
             ## echo ''; echo "Running coverage unittest discovery..."
             # coverage run -m unittest discover -v test
             #
             # Aside -- the pushd . cited above revealed the source location.
-            echo ''; echo "Trying direct, singular, invocations:"
+                - echo ''; echo "Trying direct, singular, invocations:"
             # - ls -l ~/build/BBN-Q/Auspex
             #
-            ls -l ~/build/BBN-Q/Auspex/test
+                - ls -l ~/build/BBN-Q/Auspex/test
             #- python -m unittest test/test_*.py -v
             #
             # python -m unittest ~/build/BBN-Q/Auspex/test/test_adapt_1d.py -v
-            coverage run -m unittest ~/build/BBN-Q/Auspex/test/test_adapt_1d.py -v; echo ''; echo '# ---'
+                - coverage run -m unittest ~/build/BBN-Q/Auspex/test/test_adapt_1d.py -v; echo ''; echo '# ---'
             # can't invoke run directly
             ## python -m unittest ~/build/BBN-Q/Auspex/test/test_adapt_1d.py -v; echo ''; echo '# ---'
             # make it very noisy
             # - python -v -m unittest ~/build/BBN-Q/Auspex/test/test_adapt_1d.py -v
             #
             # python -m unittest ~/build/BBN-Q/Auspex/test/test_average.py -v
-            coverage run -m unittest ~/build/BBN-Q/Auspex/test/test_average.py -v; echo ''; echo '# ---'
+                - coverage run -m unittest ~/build/BBN-Q/Auspex/test/test_average.py -v; echo ''; echo '# ---'
             # can't invoke run directly
             ## python -m unittest ~/build/BBN-Q/Auspex/test/test_average.py -v; echo ''; echo '# ---'
             ## python -m unittest ~/build/BBN-Q/Auspex/test/test_bitfields.py -v; echo ''; echo '# ---'
