@@ -115,12 +115,15 @@ install:
             # to do pip install, documentation rendereing and such.
             #
             # Define dependent/sibling repository modules to PiP load prior to testing.
-            export TGT_PIPLOADS="pip install git+https://github.com/BBN-Q/bbndb.git"
+            export TGT_PIPLOADS="export GIT_LFS_SKIP_SMUDGE=1"
+            export TGT_PIPLOADS+="; echo ''; pip install git+https://github.com/BBN-Q/bbndb.git"
             export TGT_PIPLOADS+="; echo ''; echo '# ---'; pip install git+https://github.com/BBN-Q/Adapt.git"
             export TGT_PIPLOADS+="; echo ''; echo '# ---'; pip install git+https://github.com/BBN-Q/QGL.git@sqlalchemy"
+            export TGT_PIPLOADS+="; echo ''; export GIT_LFS_SKIP_SMUDGE=0; echo ''"
             # the utf8 settings are required for documentation rendering logic.
             #export DI_ENV_VALS="-e BBN_MEAS_FILE=test/test_measure.yml -e LC_ALL=en_US.utf8 -e LANG=en_US.utf8"
-            export DI_ENV_VALS="-e LC_ALL=en_US.utf8 -e LANG=en_US.utf8"
+            # -p 8888:8888 sets it up for Jupyter notebook export
+            export DI_ENV_VALS="-e LC_ALL=en_US.utf8 -e LANG=en_US.utf8 -p 8888:8888 "
 
         else
 
@@ -236,38 +239,95 @@ install:
   # - pip install -e ~/build/BBN-Q/Auspex; echo ''
 
 script:
+ - |
+    if [ ! -z ${CONDA_TYPE} ]; then
+    
+        if [ ${CONDA_TYPE} == "dockerImg" ]; then
+
+            echo ''; echo "# --- Executing test over BBNQConda Docker Image << CONDA_TYPE [${CONDA_TYPE}]..."; echo ''
+            #---------- New BBNQconda docker image setup logic here
+            
+            docker run -v $PWD:/root/RepoCDir ${DI_ENV_VALS} ${BBNQConda_DI} /bin/sh -c "source ~/.bashrc; echo ''; echo '# --- DI Run-Time info:'; python --version; conda info; conda list; echo ''; echo '# --- PIP loading dependency mods...'; ${TGT_PIPLOADS}; cd ~/RepoCDir; echo ''; echo '# --- Pip Installing repo clone...'; pwd; pip install -e .; echo ''; ${LCI_SH}; echo '# --- Unittest begin...'; python -m unittest discover -v test"
+
+
+        else
+
+            echo ''; echo "# --- Executing test over MiniConda Image << CONDA_TYPE [${CONDA_TYPE}]..."; echo ''
+            
+            #---------- ~Original Miniconda build-out logic here
+
+            # Skipping global discovery case, for now (to see if it changes direct call results).
+            # - coverage run -m unittest discover -v test
+            #
+            # Aside -- the pushd . cited above revealed the source location.
+            python --version
+            echo ''; echo "Trying direct, singular, invocations:"
+            # - ls -l ~/build/BBN-Q/Auspex
+            #
+            ls -l ~/build/BBN-Q/Auspex/test
+            #- python -m unittest test/test_*.py -v
+            #
+            # Seg faults
+            export PYUSB_DEBUG_LEVEL=debug
+            python -m unittest ~/build/BBN-Q/Auspex/test/test_adapt_1d.py -v
+            # make it very noisy
+            # - python -v -m unittest ~/build/BBN-Q/Auspex/test/test_adapt_1d.py -v
+            #
+            python -m unittest ~/build/BBN-Q/Auspex/test/test_average.py -v
+            python -m unittest ~/build/BBN-Q/Auspex/test/test_bitfields.py -v
+            python -m unittest ~/build/BBN-Q/Auspex/test/test_buffer.py -v
+            python -m unittest ~/build/BBN-Q/Auspex/test/test_correlator.py -v
+            python -m unittest ~/build/BBN-Q/Auspex/test/test_experiment.py -v
+            python -m unittest ~/build/BBN-Q/Auspex/test/test_fits.py -v
+            python -m unittest ~/build/BBN-Q/Auspex/test/test_instrument.py -v
+            #
+            # Stalls for unsupported Synchronized and int
+            #- python -m unittest ~/build/BBN-Q/Auspex/test/test_pipeline.py -v
+            #- python -m unittest ~/build/BBN-Q/Auspex/test/test_pulsecal.py -v
+            #
+            python -m unittest ~/build/BBN-Q/Auspex/test/test_singleshot_filter.py -v
+            python -m unittest ~/build/BBN-Q/Auspex/test/test_sweeps.py -v
+            python -m unittest ~/build/BBN-Q/Auspex/test/test_write.py -v
+
+        fi
+        
+    else
+        echo ''; echo "# ---   W A R N I N G   -- CONDA_TYPE [${CONDA_TYPE}] undefined !"
+            
+    fi
+
   # Skipping global discovery case, for now (to see if it changes direct call results).
   # - coverage run -m unittest discover -v test
   #
   # Aside -- the pushd . cited above revealed the source location.
-  - python --version
-  - echo ''; echo "Trying direct, singular, invocations:"
+  ## - python --version
+  ## - echo ''; echo "Trying direct, singular, invocations:"
   # - ls -l ~/build/BBN-Q/Auspex
   #
-  - ls -l ~/build/BBN-Q/Auspex/test
+  ## - ls -l ~/build/BBN-Q/Auspex/test
   #- python -m unittest test/test_*.py -v
   #
   # Seg faults
-  - export PYUSB_DEBUG_LEVEL=debug
-  - python -m unittest ~/build/BBN-Q/Auspex/test/test_adapt_1d.py -v
+  ## - export PYUSB_DEBUG_LEVEL=debug
+  ## - python -m unittest ~/build/BBN-Q/Auspex/test/test_adapt_1d.py -v
   # make it very noisy
   # - python -v -m unittest ~/build/BBN-Q/Auspex/test/test_adapt_1d.py -v
   #
-  - python -m unittest ~/build/BBN-Q/Auspex/test/test_average.py -v
-  - python -m unittest ~/build/BBN-Q/Auspex/test/test_bitfields.py -v
-  - python -m unittest ~/build/BBN-Q/Auspex/test/test_buffer.py -v
-  - python -m unittest ~/build/BBN-Q/Auspex/test/test_correlator.py -v
-  - python -m unittest ~/build/BBN-Q/Auspex/test/test_experiment.py -v
-  - python -m unittest ~/build/BBN-Q/Auspex/test/test_fits.py -v
-  - python -m unittest ~/build/BBN-Q/Auspex/test/test_instrument.py -v
+  ## - python -m unittest ~/build/BBN-Q/Auspex/test/test_average.py -v
+  ## - python -m unittest ~/build/BBN-Q/Auspex/test/test_bitfields.py -v
+  ## - python -m unittest ~/build/BBN-Q/Auspex/test/test_buffer.py -v
+  ## - python -m unittest ~/build/BBN-Q/Auspex/test/test_correlator.py -v
+  ## - python -m unittest ~/build/BBN-Q/Auspex/test/test_experiment.py -v
+  ## - python -m unittest ~/build/BBN-Q/Auspex/test/test_fits.py -v
+  ## - python -m unittest ~/build/BBN-Q/Auspex/test/test_instrument.py -v
   #
   # Stalls for unsupported Synchronized and int
   #- python -m unittest ~/build/BBN-Q/Auspex/test/test_pipeline.py -v
   #- python -m unittest ~/build/BBN-Q/Auspex/test/test_pulsecal.py -v
   #
-  - python -m unittest ~/build/BBN-Q/Auspex/test/test_singleshot_filter.py -v
-  - python -m unittest ~/build/BBN-Q/Auspex/test/test_sweeps.py -v
-  - python -m unittest ~/build/BBN-Q/Auspex/test/test_write.py -v
+  ## - python -m unittest ~/build/BBN-Q/Auspex/test/test_singleshot_filter.py -v
+  ## - python -m unittest ~/build/BBN-Q/Auspex/test/test_sweeps.py -v
+  ## - python -m unittest ~/build/BBN-Q/Auspex/test/test_write.py -v
 
 after_script:
   - coveralls
