@@ -9,7 +9,7 @@ python:
 env:
   # Define several environments
   #
-  #- CONDA_TYPE=miniconda CONDA_VERS=https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh SUDO_VAL=false
+  - CONDA_TYPE=miniconda CONDA_VERS=https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh SUDO_VAL=false
   - CONDA_TYPE=miniconda CONDA_VERS=https://repo.continuum.io/miniconda/Miniconda3-4.5.11-Linux-x86_64.sh SUDO_VAL=false
   #- CONDA_TYPE=dockerImg BBNQConda_DI="merlinbeast/bbnq:bbnqconda_centos7_4_bbnq_pylib_v1.0.1_19.12.2018" SUDO_VAL=false
   - CONDA_TYPE=dockerImg BBNQConda_DI="merlinbeast/bbnq:bbnqconda_centos7_4_bbnq_pylib_v1.0.2_18.01.2019" SUDO_VAL=false
@@ -169,24 +169,25 @@ script:
             
             python --version
             # Skipping global discovery case, for now (to see if it changes direct call results).
-            coverage run -m unittest discover -v test
+            ## echo ''; echo "Running coverage unittest discovery..."
+            # coverage run -m unittest discover -v test
             #
             # Aside -- the pushd . cited above revealed the source location.
-            ## echo ''; echo "Trying direct, singular, invocations:"
+            echo ''; echo "Trying direct, singular, invocations:"
             # - ls -l ~/build/BBN-Q/Auspex
             #
-            ## ls -l ~/build/BBN-Q/Auspex/test
+            ls -l ~/build/BBN-Q/Auspex/test
             #- python -m unittest test/test_*.py -v
             #
             # python -m unittest ~/build/BBN-Q/Auspex/test/test_adapt_1d.py -v
-            #coverage run -m unittest ~/build/BBN-Q/Auspex/test/test_adapt_1d.py -v; echo ''; echo '# ---'
+            coverage run -m unittest ~/build/BBN-Q/Auspex/test/test_adapt_1d.py -v; echo ''; echo '# ---'
             # can't invoke run directly
             ## python -m unittest ~/build/BBN-Q/Auspex/test/test_adapt_1d.py -v; echo ''; echo '# ---'
             # make it very noisy
             # - python -v -m unittest ~/build/BBN-Q/Auspex/test/test_adapt_1d.py -v
             #
             # python -m unittest ~/build/BBN-Q/Auspex/test/test_average.py -v
-            #coverage run -m unittest ~/build/BBN-Q/Auspex/test/test_average.py -v; echo ''; echo '# ---'
+            coverage run -m unittest ~/build/BBN-Q/Auspex/test/test_average.py -v; echo ''; echo '# ---'
             # can't invoke run directly
             ## python -m unittest ~/build/BBN-Q/Auspex/test/test_average.py -v; echo ''; echo '# ---'
             ## python -m unittest ~/build/BBN-Q/Auspex/test/test_bitfields.py -v; echo ''; echo '# ---'
