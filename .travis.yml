@@ -7,34 +7,23 @@ python:
   - "3.6"
   
 env:
-  # lets try one flavor for now.
-  #- CONDA_TYPE=miniconda CONDA_VERS=https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh
-  #- CONDA_TYPE=miniconda CONDA_VERS=https://repo.continuum.io/miniconda/Miniconda3-4.5.11-Linux-x86_64.sh
+  # Define several environments
   #
-  # Merging in alternate BBNQconda logic 
+  #- CONDA_TYPE=miniconda CONDA_VERS=https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh SUDO_VAL=false
   - CONDA_TYPE=miniconda CONDA_VERS=https://repo.continuum.io/miniconda/Miniconda3-4.5.11-Linux-x86_64.sh SUDO_VAL=false
   #- CONDA_TYPE=dockerImg BBNQConda_DI="merlinbeast/bbnq:bbnqconda_centos7_4_bbnq_pylib_v1.0.1_19.12.2018" SUDO_VAL=false
   - CONDA_TYPE=dockerImg BBNQConda_DI="merlinbeast/bbnq:bbnqconda_centos7_4_bbnq_pylib_v1.0.2_18.01.2019" SUDO_VAL=false
   
 before_install:  
-# NOT compatible with addons apt packages usage; try direct next
-# addons fires before the above environment variables get read / instantiated.
-# so we're stuck with hardcoding it for all (even when not used) or defining
-# explicit sudo apt calls which fire after initial setup but before actual
-# installation logic
-#    - |
-#        if [ ! -z ${CONDA_TYPE} ] && [ ${CONDA_TYPE} == "miniconda" ]; then
-#            export APT_PKGS="build-essential "
-#            export APT_PKGS+="libusb-1.0-0-dev "
-#            export APT_PKGS+="git-lfs --allow-unauthenticated"
-#            echo ''; echo "Optional APT package list defined: ${APT_PKGS}"; echo ''
-#        fi
-# This one loaded, but not at the very top as the other die
+# NOT compatible with addons apt packages usage; addons fires before the above
+# environment variables get read / instantiated.  Defining explicit sudo apt
+# calls which fire after initial setup but before actual installation logic
+# appears to work.
     - |
         if [ ! -z ${CONDA_TYPE} ] && [ ${CONDA_TYPE} == "miniconda" ]; then
             echo ''; echo "Adding Optional APT packages..."; echo ''
             sudo apt update
-            sudo apt install -y build-essential
+            # sudo apt install -y build-essential
             sudo apt install -y libusb-1.0-0-dev
             sudo apt install -y git-lfs --allow-unauthenticated
             echo ''
@@ -107,9 +96,8 @@ install:
         
             echo "# --- Installing for test over BBNQConda Docker Image << CONDA_TYPE [${CONDA_TYPE}]..."; echo ''
             #---------- New BBNQconda docker image setup logic here
-            
             docker pull ${BBNQConda_DI}
-
+            #
             # Defining pip install commands for use in the docker session
             # Note -- script test was using direct clone, then walking the installation
             # to do pip install, documentation rendereing and such.
@@ -124,36 +112,36 @@ install:
             #export DI_ENV_VALS="-e BBN_MEAS_FILE=test/test_measure.yml -e LC_ALL=en_US.utf8 -e LANG=en_US.utf8"
             # -p 8888:8888 sets it up for Jupyter notebook export
             export DI_ENV_VALS="-e LC_ALL=en_US.utf8 -e LANG=en_US.utf8 -p 8888:8888 "
-
         else
-
             echo "# --- Install for test over MiniConda Image << CONDA_TYPE [${CONDA_TYPE}]..."; echo ''
-            
+            #
             wget $CONDA_VERS -O miniconda.sh
             bash miniconda.sh -h | sed '4q;d'
             bash miniconda.sh -b -p $HOME/miniconda
             export PATH="$HOME/miniconda/bin:$PATH"
             export BBN_DB="$PWD/bbn.sqlite"
             echo "Database file at $BBN_DB"
-            
+            #
             which gcc; gcc --version
-            
+            #
             apt search libusb
             apt list libusb-1.0-0
             # - apt list libhidapi-libusb0
             which git-lfs; git-lfs --version
-
+            #
             hash -r
             conda config --set always_yes yes --set changeps1 no
             conda update -q conda
             # Useful for debugging any issues with conda
             conda info -a
-
+            #
             # Reveal conda element install shell[s] to the console log.
             ${LCI_SH}
-
-            conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION numpy scipy matplotlib h5py pandas networkx cffi bokeh jupyter psutil sqlalchemy pydot
-
+            #
+            #conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION numpy scipy matplotlib h5py pandas networkx cffi bokeh jupyter psutil sqlalchemy pydot
+            # Root did NOT cite pydot
+            conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION numpy scipy matplotlib h5py pandas networkx cffi bokeh jupyter psutil sqlalchemy
+            #
             source activate test-environment
             export GIT_LFS_SKIP_SMUDGE=1; set | grep GIT_LFS | grep -v _=
             pip install git+https://github.com/BBN-Q/bbndb.git; echo ''; echo '# ---'
@@ -163,10 +151,8 @@ install:
             export GIT_LFS_SKIP_SMUDGE=0; set | grep GIT_LFS | grep -v _=
             export PYTHONPATH=$PYTHONPATH:$PWD/src
         fi
-
     else
         echo "# ---   W A R N I N G   -- CONDA_TYPE [${CONDA_TYPE}] undefined !"
-
     fi
 
 
