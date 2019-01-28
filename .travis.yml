@@ -269,11 +269,13 @@ script:
             #
             # Seg faults
             export PYUSB_DEBUG_LEVEL=debug
-            python -m unittest ~/build/BBN-Q/Auspex/test/test_adapt_1d.py -v
+            # python -m unittest ~/build/BBN-Q/Auspex/test/test_adapt_1d.py -v
+            coverage run -m unittest ~/build/BBN-Q/Auspex/test/test_adapt_1d.py -v
             # make it very noisy
             # - python -v -m unittest ~/build/BBN-Q/Auspex/test/test_adapt_1d.py -v
             #
-            python -m unittest ~/build/BBN-Q/Auspex/test/test_average.py -v
+            # python -m unittest ~/build/BBN-Q/Auspex/test/test_average.py -v
+            coverage run -m unittest ~/build/BBN-Q/Auspex/test/test_average.py -v
             python -m unittest ~/build/BBN-Q/Auspex/test/test_bitfields.py -v
             python -m unittest ~/build/BBN-Q/Auspex/test/test_buffer.py -v
             python -m unittest ~/build/BBN-Q/Auspex/test/test_correlator.py -v
