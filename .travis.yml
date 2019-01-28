@@ -18,28 +18,63 @@ env:
   
 before_install:  
 # NOT compatible with addons apt packages usage; try direct next
-    - |
-        if [ ! -z ${CONDA_TYPE} ] && [ ${CONDA_TYPE} == "miniconda" ]; then
-            export APT_PKGS="build-essential "
-            export APT_PKGS+="libusb-1.0-0-dev "
-            export APT_PKGS+="git-lfs --allow-unauthenticated"
-            echo ''; echo "Optional APT package list defined: ${APT_PKGS}"; echo ''
-        fi
-# This one loaded, but not at the very top as the other die
+# addons fires before the above environment variables get read / instantiated.
+# so we're stuck with hardcoding it for all (even when not used) or defining
+# explicit sudo apt calls which fire after initial setup but before actual
+# installation logic
 #    - |
 #        if [ ! -z ${CONDA_TYPE} ] && [ ${CONDA_TYPE} == "miniconda" ]; then
-#            echo ''; echo "Adding Optional APT packages..."; echo ''
-#            sudo apt update
-#            sudo apt install -y build-essential
-#            sudo apt install -y libusb-1.0-0-dev
-#            sudo apt install -y git-lfs --allow-unauthenticated
-#            echo ''
+#            export APT_PKGS="build-essential "
+#            export APT_PKGS+="libusb-1.0-0-dev "
+#            export APT_PKGS+="git-lfs --allow-unauthenticated"
+#            echo ''; echo "Optional APT package list defined: ${APT_PKGS}"; echo ''
 #        fi
+# This one loaded, but not at the very top as the other die
+    - |
+        if [ ! -z ${CONDA_TYPE} ] && [ ${CONDA_TYPE} == "miniconda" ]; then
+            echo ''; echo "Adding Optional APT packages..."; echo ''
+            sudo apt update
+            sudo apt install -y build-essential
+            sudo apt install -y libusb-1.0-0-dev
+            sudo apt install -y git-lfs --allow-unauthenticated
+            echo ''
+        fi
+
+    - echo "Travis PWD [${PWD}]"; echo ''
+    # Manually write script, to repo clone directory, which introspects
+    # conda-meta file data;  use this to reveal the Conda "installed_by"
+    # shell file name[s]
+    # (aside -- this should be available on both DockerImage and MiniConda modes)
+    - |
+        export LCI_SH=./listCondaInstaller.sh
+        if [ ! -f ${LCI_SH} ]; then
+           echo "Rendering ${LCI_SH}..."
+           echo "#\!/bin/bash"                         >  ${LCI_SH}
+           echo "echo ''"                              >> ${LCI_SH}
+           echo "export SH_NAME=\$0"                   >> ${LCI_SH}
+           echo "export TGT_KEY=\${CONDA_PREFIX}"      >> ${LCI_SH}
+           echo "export TGT_KEY2=\${HOME}/miniconda"   >> ${LCI_SH}
+           echo "if [ -z \${TGT_KEY} ] && [ ! -z \${TGT_KEY2} ]; then"                                                         >> ${LCI_SH}
+           echo "   export TGT_KEY=\${TGT_KEY2}"       >> ${LCI_SH}
+           echo "   echo \"# --- \${SH_NAME} -- Foop! NULL CONDA_PREFIX ref noted; used \$\{HOME\}/miniconda [\${TGT_KEY}].\"" >> ${LCI_SH}
+           echo "fi"                                   >> ${LCI_SH}
+           echo "if [ ! -z \${TGT_KEY} ]; then"        >> ${LCI_SH}
+           echo "   echo \"# --- \${SH_NAME} :: Session \${TGT_KEY} elements installed by:\""                                  >> ${LCI_SH}
+           echo "   grep -o '\"installed_by\": *\"[^\"]*\"' \${TGT_KEY}/conda-meta/*.json | grep -o '\"[^\"]*\"$' | sort -u"   >> ${LCI_SH}
+           echo "else"                                 >> ${LCI_SH}
+           echo "   echo \"# --- \${SH_NAME} :: NoOp << CONDA_PREFIX undefined << '\${TGT_KEY}'\""                             >> ${LCI_SH}
+           echo "fi"                                   >> ${LCI_SH}
+           echo "echo ''"                              >> ${LCI_SH}
+           chmod u+x ${LCI_SH}
+        else
+           echo "Skipped ${LCI_SH} rendering (already exists)"
+        fi
+        ls -l ${LCI_SH}; echo ''
 
 # Ok -- back-track to this rendering -- late 25 Jan
-addons:
-  apt:
-    packages:
+#addons:
+#  apt:
+#    packages:
     #- libusb-1.0-0-dev
     #
     # - update It auto-updates don't need to cite that.
@@ -61,25 +96,89 @@ addons:
     #        libusb-1.0-0-dev    \
     #        git-lfs --allow-unauthenticated
     #    fi
-    - ${APT_PKGS}
+#    - ${APT_PKGS}
             
 
 install:
+ - |
+    if [ ! -z ${CONDA_TYPE} ]; then
+    
+        if [ ${CONDA_TYPE} == "dockerImg" ]; then
+        
+            echo "# --- Installing for test over BBNQConda Docker Image << CONDA_TYPE [${CONDA_TYPE}]..."; echo ''
+            #---------- New BBNQconda docker image setup logic here
+            
+            docker pull ${BBNQConda_DI}
+
+            # Defining pip install commands for use in the docker session
+            # Note -- script test was using direct clone, then walking the installation
+            # to do pip install, documentation rendereing and such.
+            #
+            # Define dependent/sibling repository modules to PiP load prior to testing.
+            export TGT_PIPLOADS="pip install git+https://github.com/BBN-Q/bbndb.git"
+            export TGT_PIPLOADS+="; echo ''; echo '# ---'; pip install git+https://github.com/BBN-Q/Adapt.git"
+            export TGT_PIPLOADS+="; echo ''; echo '# ---'; pip install git+https://github.com/BBN-Q/QGL.git@sqlalchemy"
+            # the utf8 settings are required for documentation rendering logic.
+            #export DI_ENV_VALS="-e BBN_MEAS_FILE=test/test_measure.yml -e LC_ALL=en_US.utf8 -e LANG=en_US.utf8"
+            export DI_ENV_VALS="-e LC_ALL=en_US.utf8 -e LANG=en_US.utf8"
+
+        else
+
+            echo "# --- Install for test over MiniConda Image << CONDA_TYPE [${CONDA_TYPE}]..."; echo ''
+            
+            #---------- ~Original Miniconda build-out logic here
+            #echo "Using $CONDA_TYPE"
+            wget $CONDA_VERS -O miniconda.sh
+            bash miniconda.sh -h | sed '4q;d'
+            bash miniconda.sh -b -p $HOME/miniconda
+            export PATH="$HOME/miniconda/bin:$PATH"
+            export BBN_DB="$PWD/bbn.sqlite"
+            echo "Database file at $BBN_DB"
+            
+            which gcc; gcc --version
+            
+            apt search libusb
+            apt list libusb-1.0-0
+            # - apt list libhidapi-libusb0
+            which git-lfs; git-lfs --version
+
+            hash -r
+            conda config --set always_yes yes --set changeps1 no
+            conda update -q conda
+            # Useful for debugging any issues with conda
+            conda info -a
+
+            conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION numpy scipy matplotlib h5py pandas networkx cffi bokeh jupyter psutil sqlalchemy future pydot
+            source activate test-environment
+            export GIT_LFS_SKIP_SMUDGE=1
+            pip install git+https://github.com/BBN-Q/bbndb.git
+            pip install git+https://github.com/BBN-Q/Adapt.git
+            pip install git+https://github.com/BBN-Q/QGL.git@sqlalchemy
+            pip install tqdm pyvisa coveralls scikit-learn pyusb
+            export GIT_LFS_SKIP_SMUDGE=0
+            export PYTHONPATH=$PYTHONPATH:$PWD/src
+        fi
+        
+    else
+        echo "# ---   W A R N I N G   -- CONDA_TYPE [${CONDA_TYPE}] undefined !"
+            
+    fi
+
   # Setup anaconda. See http://conda.pydata.org/docs/travis.html
-  - echo "Using $CONDA_TYPE"
-  - wget $CONDA_VERS -O miniconda.sh
-  - bash miniconda.sh -h | sed '4q;d'
-  - bash miniconda.sh -b -p $HOME/miniconda
-  - export PATH="$HOME/miniconda/bin:$PATH"
-  - export BBN_DB="$PWD/bbn.sqlite"
-  - echo "Database file at $BBN_DB"
+  ## - echo "Using $CONDA_TYPE"
+  ## - wget $CONDA_VERS -O miniconda.sh
+  ## - bash miniconda.sh -h | sed '4q;d'
+  ## - bash miniconda.sh -b -p $HOME/miniconda
+  ## - export PATH="$HOME/miniconda/bin:$PATH"
+  ## - export BBN_DB="$PWD/bbn.sqlite"
+  ## - echo "Database file at $BBN_DB"
   #
   # Note -- Miniconda3 installs python version 3.7.1 (not git-lfs install logic)
   # - which python; python --version
   # Update the package descriptions and install libusb
   #- sudo apt update
   #
-  - which gcc; gcc --version
+  ## - which gcc; gcc --version
   #- sudo apt-get update
   # Sigh -- The following appears to try and overwrite it as a complete workstation
   # (way too big and then fails in the end)
@@ -105,21 +204,21 @@ install:
   #- sudo apt install libusb-1.0-0-dev
   # Does the following give us libusb0 imi
   #- sudo apt install libhidapi-libusb0
-  - apt search libusb
-  - apt list libusb-1.0-0
+  ## - apt search libusb
+  ## - apt list libusb-1.0-0
   # - apt list libhidapi-libusb0
-  - which git-lfs; git-lfs --version
+  ## - which git-lfs; git-lfs --version
   #
   # Sadly this Linux varient does not appear to have any sort of libopenusb library
   # (which may be relate to introspecting all the instrument dependencies IMI)
   # - sudo apt install libopenusb-dev
   # - apt search openusb
   #
-  - hash -r
-  - conda config --set always_yes yes --set changeps1 no
-  - conda update -q conda
+  ## - hash -r
+  ## - conda config --set always_yes yes --set changeps1 no
+  ## - conda update -q conda
   # Useful for debugging any issues with conda
-  - conda info -a
+  ## - conda info -a
 
   # Create conda environment with dependencies
   #- conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION numpy scipy matplotlib h5py pandas networkx cffi bokeh jupyter psutil sqlalchemy
