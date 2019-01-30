@@ -66,11 +66,11 @@ before_install:
 addons:
   apt:
     packages:
-    - libusb-1.0-0-dev
+    #- libusb-1.0-0-dev
     #
     # - update It auto-updates don't need to cite that.
-    ##- build-essential
-    ##- libusb-1.0-0-dev
+    - build-essential
+    - libusb-1.0-0-dev
     # Does adding libhidapi-libusb0 help IMI -- No.
     # - libhidapi-libusb0
     # Adding usbutils unnecessary, console info suggests already loaded
@@ -78,9 +78,9 @@ addons:
     # Try Installing git-lfs here, perhaps a different version IMI
     # ok -- it tries to install but fails due to unathenticated packages,
     # needs --allow-unauthenticated tag
-    - git-lfs 
+    #- git-lfs 
     # Loading git-lfs, here, with the allow flag, appears to work.
-    ## - git-lfs --allow-unauthenticated
+    - git-lfs --allow-unauthenticated
     #- |
     #    if [ ! -z ${CONDA_TYPE} ] && [ ${} == "" ]; then
     #        build-essential     \
