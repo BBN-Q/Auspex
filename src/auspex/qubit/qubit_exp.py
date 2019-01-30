@@ -268,11 +268,11 @@ class QubitExperiment(Experiment):
             if node1.qubit_name in self.measured_qubit_names and node2.qubit_name in self.measured_qubit_names:
                 if isinstance(node1, bbndb.auspex.FilterProxy):
                     filt1 = self.proxy_to_filter[node1]
-                    oc   = filt1.output_connectors["source"]
+                    oc   = filt1.output_connectors[graph[node1][node2]["connector_out"]]
                 elif isinstance(node1, bbndb.auspex.QubitProxy):
                     oc   = self.connector_by_qp[node1]
                 filt2 = self.proxy_to_filter[node2]
-                ic   = filt2.input_connectors["sink"]
+                ic   = filt2.input_connectors[graph[node1][node2]["connector_in"]]
                 graph_edges.append([oc, ic])
 
         # Define the experiment graph

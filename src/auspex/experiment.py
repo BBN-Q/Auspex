@@ -60,65 +60,44 @@ class ExpProgressBar(object):
     search for 'n = int(s[:npos])'\
     then replace it with 'n = float(s[:npos])'
     """
-    def __init__(self, stream=None, num=0, notebook=False):
+    def __init__(self, stream=None, num=0, notebook=True):
         super(ExpProgressBar,self).__init__()
-        logger.debug("initialize the progress bars.")
         self.stream = stream
         self.num = num
-        self.notebook = notebook
-        # self.reset(stream=stream)
-
-    def reset(self, stream=None):
-        """ Reset the progress bar(s) """
-        logger.debug("Update stream descriptor for progress bars.")
-        if stream is not None:
-            self.stream = stream
-        if self.stream is None:
-            logger.warning("No stream is associated with the progress bars!")
-            self.axes = []
+        self.progress = 0
+        if notebook:
+            self.bar = tqdm_notebook(total=100)
         else:
-            self.axes = self.stream.descriptor.axes
-        self.num = min(self.num, len(self.axes))
-        self.totals = [self.stream.descriptor.num_points_through_axis(axis) for axis in range(self.num)]
-        self.chunk_sizes = [max(1,self.stream.descriptor.num_points_through_axis(axis+1)) for axis in range(self.num)]
-        logger.debug("Reset the progress bars to initial states.")
-        self.bars   = []
-        for i in range(self.num):
-            if self.notebook:
-                self.bars.append(tqdm_notebook(total=self.totals[i]/self.chunk_sizes[i]))
-            else:
-                self.bars.append(tqdm(total=self.totals[i]/self.chunk_sizes[i]))
+            self.bar = tqdm(total=100)
 
     def close(self):
         """ Close all progress bar(s) """
-        logger.debug("Close all the progress bars.")
-        for bar in self.bars:
-            if self.notebook:
-                bar.sp(close=True)
-            else:
-                bar.close()
+        self.bar.close()
 
     def update(self):
         """ Update the status of the progress bar(s) """
-        if self.stream is None:
-            logger.warning("No stream is associated with the progress bars!")
-            num_data = 0
-        else:
-            num_data = self.stream.points_taken
-        logger.debug("Update the progress bars.")
-        for i in range(self.num):
-            if num_data == 0:
-                # Reset the progress bar with a new one
-                if self.notebook:
-                    self.bars[i].sp(close=True)
-                    self.bars[i] = tqdm_notebook(total=self.totals[i]/self.chunk_sizes[i])
-                else:
-                    self.bars[i].close()
-                    self.bars[i] = tqdm(total=self.totals[i]/self.chunk_sizes[i])
-            pos = int(10*num_data / self.chunk_sizes[i])/10.0 # One decimal is good enough
-            if pos > self.bars[i].n:
-                self.bars[i].update(pos - self.bars[i].n)
-            num_data = num_data % self.chunk_sizes[i]
+        new_percent = int(self.stream.percent_complete())
+        if new_percent > self.progress:
+            self.bar.update(new_percent - self.progress)
+            self.progress = new_percent
+
+
+
+
+
+        # for i in range(self.num):
+        #     if num_data == 0:
+        #         # Reset the progress bar with a new one
+        #         if self.notebook:
+        #             self.bars[i].sp(close=True)
+        #             self.bars[i] = tqdm_notebook(total=int(self.totals[i]/self.chunk_sizes[i]))
+        #         else:
+        #             self.bars[i].close()
+        #             self.bars[i] = tqdm(total=int(self.totals[i]/self.chunk_sizes[i]))
+        #     pos = int(10*num_data / self.chunk_sizes[i])/10.0 # One decimal is good enough
+        #     if pos > self.bars[i].n:
+        #         self.bars[i].update(int(pos - self.bars[i].n))
+        #     num_data = num_data % self.chunk_sizes[i]
 
 def auspex_plot_server():
     client_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),"plot_server.py")
@@ -300,14 +279,14 @@ class Experiment(metaclass=MetaExperiment):
         """Gets run after a sweep ends, or when the program is terminated."""
         pass
 
-    def init_progressbar(self, num=0, notebook=False):
+    def init_progressbar(self, num=0):
         """ initialize the progress bars."""
         oc = list(self.output_connectors.values())
         if len(oc)>0:
-            self.progressbar = ExpProgressBar(oc[0].output_streams[0], num=num, notebook=notebook)
+            self.progressbar = ExpProgressBar(oc[0].output_streams[0], num=num)
         else:
-            logger.warning("No stream is found for progress bars. Create a dummy bar.")
-            self.progressbar = ExpProgressBar(None, num=num, notebook=notebook)
+            logger.warning("No stream is found for progress bar.")
+            # self.progressbar = ExpProgressBar(None, num=num)
 
     def run(self):
         """This is the inner measurement loop, which is the smallest unit that
@@ -431,8 +410,8 @@ class Experiment(metaclass=MetaExperiment):
         # Make sure we are starting from scratch... is this necessary?
         self.reset()
         # Update the progress bar if need be
-        if self.progressbar is not None:
-            self.progressbar.reset()
+        # if self.progressbar is not None:
+        #     self.progressbar.reset()
 
         #Make sure we have axes.
         if not any([oc.descriptor.axes for oc in self.output_connectors.values()]):
@@ -551,10 +530,10 @@ class Experiment(metaclass=MetaExperiment):
                 vmem_fig.yaxis[0].axis_label = 'Throughput (MB)'
 
                 colors       = Category20[20] if len(self.other_nodes) <= 20 else viridis(len(self.other_nodes))
-                data_sources = {n.filter_name: ColumnDataSource(data=dict(time=[], cpu=[], mem=[], vmem=[], proc=[])) for n in self.other_nodes}
-                cpu_plots    = {n.filter_name: cpu_fig.line(x='time', y='cpu', color=colors[i], line_width=4, source=data_sources[n.filter_name]) for i, n in enumerate(self.other_nodes)}
-                mem_plots    = {n.filter_name: mem_fig.line(x='time', y='mem', color=colors[i], line_width=4, source=data_sources[n.filter_name]) for i, n in enumerate(self.other_nodes)}
-                vmem_plots   = {n.filter_name: vmem_fig.line(x='time', y='proc', color=colors[i], line_width=4, source=data_sources[n.filter_name]) for i, n in enumerate(self.other_nodes)}
+                data_sources = {str(n): ColumnDataSource(data=dict(time=[], cpu=[], mem=[], vmem=[], proc=[])) for n in self.other_nodes}
+                cpu_plots    = {str(n): cpu_fig.line(x='time', y='cpu', color=colors[i], line_width=4, source=data_sources[str(n)]) for i, n in enumerate(self.other_nodes)}
+                mem_plots    = {str(n): mem_fig.line(x='time', y='mem', color=colors[i], line_width=4, source=data_sources[str(n)]) for i, n in enumerate(self.other_nodes)}
+                vmem_plots   = {str(n): vmem_fig.line(x='time', y='proc', color=colors[i], line_width=4, source=data_sources[str(n)]) for i, n in enumerate(self.other_nodes)}
 
                 legend_1 = Legend(items=[(n , [l]) for n, l in mem_plots.items()], location=(0, 0))
                 legend_2 = Legend(items=[(n , [l]) for n, l in vmem_plots.items()], location=(0, 0))
@@ -621,7 +600,7 @@ class Experiment(metaclass=MetaExperiment):
                 for n in self.other_nodes:
                     if not n.done.is_set():
                         times[n] += 1
-                        logger.info(f"{n.filter_name} not done. Waited {times[n]} times. Is the pipeline backed up at IO stage?")
+                        logger.info(f"{str(n)} not done. Waited {times[n]} times. Is the pipeline backed up at IO stage?")
                     else:
                         dones[n] = True
                         n.join(timeout=0.1)
@@ -631,6 +610,10 @@ class Experiment(metaclass=MetaExperiment):
 
             for buff in self.buffers:
                 buff.output_data = buff.get_data()
+
+            if self.progressbar:
+                self.progressbar.update()
+                self.progressbar.close()
 
             if self.dashboard:
                 exit_perf.set()
@@ -657,7 +640,7 @@ class Experiment(metaclass=MetaExperiment):
             n.exit.set()
             n.join(0.1)
             if n.is_alive():
-                logger.info(f"Terminating {n.filter_name} aggressively")
+                logger.info(f"Terminating {str(n)} aggressively")
                 n.terminate()
 
         logger.debug("Shutting down instruments")

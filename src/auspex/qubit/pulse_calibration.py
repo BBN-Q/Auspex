@@ -70,7 +70,7 @@ class Calibration(object):
     def start_plots(self):
         # Create the descriptor and set uuids for each plot process
         plot_desc = {p.filter_name: p.desc() for p in self.plotters}
-        
+
         for p in self.plotters:
             p.uuid = self.uuid
         try:
@@ -119,12 +119,15 @@ class Calibration(object):
         for p in self.plotters:
             p.start()
 
-    def run_calibration(self):
+    def calibrate(self):
         if self.do_plotting:
             self.plotters = self.init_plots()
             self.start_plots()
 
-        self.calibrate()
+        self._calibrate()
+
+        if self.succeeded:
+            self.update_settings()
 
         if self.do_plotting:
             self.stop_plots()
@@ -132,7 +135,7 @@ class Calibration(object):
     def descriptor(self):
         return None
 
-    def calibrate(self):
+    def _calibrate(self):
         """Runs the actual calibration routine, must be overridden to provide any useful functionality.
         This function is responsible for calling self.update_plot()"""
         pass
@@ -159,36 +162,38 @@ class Calibration(object):
         data = {}
         var = {}
 
-        for qubit, output in zip(exp.qubits, [exp.proxy_to_filter[on] for on in exp.output_nodes]):
-            if not isinstance(output, DataBuffer):
+        for qubit, output_buff, var_buff in zip(exp.qubits,
+                                [exp.proxy_to_filter[on] for on in exp.output_nodes],
+                                [exp.proxy_to_filter[on] for on in exp.var_buffers]):
+            if not isinstance(output_buff, DataBuffer):
                 raise ValueError("Could not find data buffer for calibration.")
 
-            dataset, descriptor = output.get_data(), output.get_descriptor()
+            dataset, descriptor = output_buff.get_data(), output_buff.get_descriptor()
             if self.norm_points:
-                buff_data = normalize_data(dataset, zero_id=self.norm_points[qubit.label][0], 
+                buff_data = normalize_data(dataset, zero_id=self.norm_points[qubit.label][0],
                                            one_id=self.norm_points[self.qubit.label][1])
             else:
                 buff_data = dataset['Data']
 
             data[qubit.label] = self.quad_fun(buff_data)
-            if 'Variance' in dataset.dtype.names:
-                realvar = np.real(dataset['Variance'])
-                imagvar = np.imag(dataset['Variance'])
-                N = descriptor.metadata["num_averages"]
-                if self.quad in ['real', 'imag']:
-                    var[qubit.label] = self.quad_fun(dataset['Variance'])/N
-                elif self.quad == 'amp':
-                    var[qubit.label] = (realvar + imagvar)/N
-                elif self.quad == 'phase':
-                    # take the approach from Qlab assuming the noise is
-                    # Gaussian in both quadratures i.e. 'circular' in the IQ plane.
-                    stddata = np.sqrt(realvar + imagvar)
-                    stdtheta = 180/np.pi * 2 * np.arctan(stddata/abs(data[qubit.label]))
-                    var[qubit.label] = (stdtheta**2)/N
-                else:
-                    raise Exception('Variance of {} not available. Choose amp, phase, real or imag'.format(self.quad))
+
+            var_dataset, var_descriptor = var_buff.get_data(), var_buff.get_descriptor()
+            # if 'Variance' in dataset.dtype.names:
+            realvar = np.real(var_dataset['Variance'])
+            imagvar = np.imag(var_dataset['Variance'])
+            N = descriptor.metadata["num_averages"]
+            if self.quad in ['real', 'imag']:
+                var[qubit.label] = self.quad_fun(var_dataset['Variance'])/N
+            elif self.quad == 'amp':
+                var[qubit.label] = (realvar + imagvar)/N
+            elif self.quad == 'phase':
+                # take the approach from Qlab assuming the noise is
+                # Gaussian in both quadratures i.e. 'circular' in the IQ plane.
+                stddata = np.sqrt(realvar + imagvar)
+                stdtheta = 180/np.pi * 2 * np.arctan(stddata/abs(data[qubit.label]))
+                var[qubit.label] = (stdtheta**2)/N
             else:
-                var[qubit.label] = None
+                raise Exception('Variance of {} not available. Choose amp, phase, real or imag'.format(self.quad))
 
         # Return data and variance of the mean
         if len(data) == 1:
@@ -198,10 +203,11 @@ class Calibration(object):
         return data, var
 
 class CalibrationExperiment(QubitExperiment):
-    
+
     def __init__(self, qubits, output_nodes, *args, **kwargs):
         self.qubits = qubits
         self.output_nodes = output_nodes
+        self.var_buffers = []
         super(CalibrationExperiment, self).__init__(*args, **kwargs)
 
     def guess_output_nodes(self, graph):
@@ -244,6 +250,18 @@ class CalibrationExperiment(QubitExperiment):
             path  = nx.shortest_path(graph, self.qubit_proxies[qubit.label], output_node)
             new_graph.add_path(path)
 
+            # Fix connectors
+            for i in range(len(path)-1):
+                new_graph[path[i]][path[i+1]]['connector_in']  = graph[path[i]][path[i+1]]['connector_in']
+                new_graph[path[i]][path[i+1]]['connector_out'] = graph[path[i]][path[i+1]]['connector_out']
+
+            if not isinstance(path[-2], bbndb.auspex.Average):
+                raise Exception("There is no averager in line.")
+            else:
+                vb = bbndb.auspex.Buffer(label=f"{output_node.label}-VarBuffer", qubit_name=output_node.qubit_name)
+                self.var_buffers.append(vb)
+                new_graph.add_edge(path[-2], vb, connector_in="sink", connector_out="final_variance")
+
         return new_graph
 
     def add_cal_sweep(self, method, values):
@@ -265,7 +283,7 @@ class CavityTuneup(Calibration):
         cavity_source = exp._instruments[self.qubit.measure_chan.phys_chan.generator.label]
         exp.add_cal_sweep(cavity_source.set_frequency, self.frequencies)
 
-    def calibrate(self):
+    def _calibrate(self):
         data, _ = self.run_sweeps()
 
         self.plot["Data"] = (self.frequencies, data)
@@ -301,7 +319,7 @@ class QubitTuneup(Calibration):
         qubit_source = exp._instruments[self.qubit.phys_chan.generator.label]
         exp.add_cal_sweep(qubit_source.set_frequency, self.frequencies)
 
-    def calibrate(self):
+    def _calibrate(self):
         data, _ = self.run_sweeps()
         self.plot["Data"] = (self.frequencies, data)
 
@@ -370,14 +388,14 @@ class RabiAmpCalibration(Calibration):
         awg_chan.Q_channel_offset += round(amp_factor*self.amp2offset*self.i_offset, 5)
 
 class RamseyCalibration(Calibration):
-    def __init__(self, qubit, delays=np.linspace(0.0, 20.0, 41)*1e-6, 
+    def __init__(self, qubit, delays=np.linspace(0.0, 20.0, 41)*1e-6,
                 two_freqs=False, added_detuning=150e3, set_source=True, AIC=True, **kwargs):
         self.delays         = delays
         self.two_freqs      = two_freqs
         self.added_detuning = added_detuning
         self.set_source     = set_source
         self.AIC            = AIC #Akaike information criterion for model choice
-        
+
         super(RamseyCalibration, self).__init__(qubit, **kwargs)
         self.filename = 'Ramsey/Ramsey'
 
@@ -409,7 +427,7 @@ class RamseyCalibration(Calibration):
         else:
             exp._instruments[rcvr.label].exp_step = 1
 
-    def calibrate(self):
+    def _calibrate(self):
         self.first_ramsey = True
 
         if not self.set_source:
@@ -419,7 +437,7 @@ class RamseyCalibration(Calibration):
             fit_freqs, fit_errs, all_params, all_errs = fit_ramsey(self.delays, data, two_freqs=self.two_freqs, AIC=self.AIC)
         except Exception as e:
             raise Exception(f"Exception {e} while fitting in {self}")
-        
+
         # Plot the results
         self.plot["Data 1"] = (self.delays, data)
         finer_delays = np.linspace(np.min(self.delays), np.max(self.delays), 4*len(self.delays))
@@ -445,7 +463,7 @@ class RamseyCalibration(Calibration):
             fit_freqs, fit_errs, all_params, all_errs = fit_ramsey(self.delays, data, two_freqs=self.two_freqs, AIC=self.AIC)
         except Exception as e:
             raise Exception(f"Exception {e} while fitting in {self}")
-        
+
         # Plot the results
         self.plot["Data 2"] = (self.delays, data)
         ramsey_f = ramsey_2f if len(fit_freqs) == 2 else ramsey_1f
@@ -473,17 +491,117 @@ class RamseyCalibration(Calibration):
         # logger.info("Qubit set frequency = {} GHz".format(round(float(qubit_set_freq/1e9),5)))
         # return ('frequency', qubit_set_freq)
 
+class PhaseEstimation(Calibration):
+
+    amp2offset = 0.5
+
+    def __init__(self, qubit, num_pulses= 1, amplitude= 0.1, direction = 'X',
+                    target=np.pi/2, epsilon=1e-2, max_iter=5, **kwargs):
+        #for now, only do one qubit at a time
+        self.num_pulses = num_pulses
+        self.amplitude = amplitude
+        self.direction = direction
+
+        self.target = target
+        self.epsilon = epsilon
+        self.max_iter = max_iter
+
+        super(PhaseEstimation, self).__init__(qubit, **kwargs)
+
+        self.filename = 'PhaseCal/PhaseCal'
+
+    def sequence(self):
+        # Determine whether it is a single- or a two-qubit pulse calibration
+        if isinstance(self.qubit, list):
+            qubit = self.qubit[1]
+            cal_pulse = [ZX90_CR(*self.qubit, amp=self.amplitude)]
+        else:
+            qubit = self.qubit
+            cal_pulse = [Xtheta(self.qubit, amp=self.amplitude)]
+
+        # Exponentially growing repetitions of the target pulse, e.g.
+        # (1, 2, 4, 8, 16, 32, 64, 128, ...) x X90
+        seqs = [cal_pulse*n for n in 2**np.arange(self.num_pulses+1)]
+        # measure each along Z or Y
+        seqs = [s + m for s in seqs for m in [ [MEAS(qubit)], [X90m(qubit), MEAS(qubit)] ]]
+        # tack on calibrations to the beginning
+        seqs = [[Id(qubit), MEAS(qubit)], [X(qubit), MEAS(qubit)]] + seqs
+        # repeat each
+        return [copy(s) for s in seqs for _ in range(2)]
+
+    def _calibrate(self):
+
+        ct = 0
+        done = 0
+
+        start_amp = self.amplitude
+
+        phase_error = []
+
+        while not done and ct < self.max_iter:
+            ct += 1
+            data, var = self.run_sweeps()
+            phase, sigma = phase_estimation(data, var)
+            self.amplitude, done, error = phase_to_amplitude(phase, sigma, self.amplitude,
+                                                self.target, epsilon=self.epsilon)
+            phase_error.append(error)
+
+            self.data_plot['data'] = (np.array(range(1, len(data)+1)), data)
+            self.plot["angle_estimate"] = (np.array(range(1, len(phase_error)+1)), np.array(phase_error))
+
+        if done == -1:
+            self.succeeded = False
+        elif done == 1:
+            self.succeeded = True
+        else:
+            raise Exception()
+
+    def init_plots(self):
+        data_plot = ManualPlotter("Phase Cal", x_label="Sequence Number", y_label="{} (Arb. Units)".format(self.quad))
+        data_plot.add_data_trace("data", {'color': 'C1'})
+        plot = ManualPlotter("Phase Angle Error", x_label="Iteration", y_label="Angle (rad.)")
+        plot.add_data_trace("angle_estimate", {'color': 'C1'})
+        self.plot = plot
+        self.data_plot = data_plot
+        return [data_plot, plot]
+
+    def update_settings(self):
+        logger.warning("Nothing to update.")
+
+
+class Pi2Calibration(PhaseEstimation):
+
+    def __init__(self, qubit, num_pulses= 1, direction = 'X',
+                    epsilon=1e-2, max_iter=5, **kwargs):
+        super(Pi2Calibration, self).__init__(qubit, num_pulses=num_pulses,
+                        amplitude=qubit.pulse_params['pi2Amp'], direction =direction,
+                        target=np.pi/2, epsilon=epsilon, max_iter=max_iter, **kwargs)
+
+    def update_settings(self):
+        self.qubit.pulse_params['pi2Amp'] = round(self.amplitude, 5)
+
+class PiCalibration(PhaseEstimation):
+
+    def __init__(self, qubit, num_pulses= 1, direction = 'X',
+                    epsilon=1e-2, max_iter=5, **kwargs):
+        super(PiCalibration, self).__init__(qubit, num_pulses=num_pulses,
+                        amplitude=qubit.pulse_params['piAmp'], direction =direction,
+                        target=np.pi, epsilon=epsilon, max_iter=max_iter, **kwargs)
+
+    def update_settings(self):
+        self.qubit.pulse_params['piAmp'] =round(self.amplitude, 5)
+
 # class PhaseEstimation(Calibration):
 #     """Estimates pulse rotation angle from a sequence of P^k experiments, where
 #     k is of the form 2^n. Uses the modified phase estimation algorithm from
 #     Kimmel et al, quant-ph/1502.02677 (2015). Every experiment i doubled.
 #     vardata should be the variance of the mean"""
-
+#
 #     def __init__(self, qubit, num_pulses= 1, amplitude= 0.1, direction = 'X', **kwargs):
 #         """Phase estimation calibration. Direction is either 'X' or 'Y',
 #         num_pulses is log2(n) of the longest sequence n,
 #         and amplitude is self-explanatory."""
-
+#
 #         super(PhaseEstimation, self).__init__(qubit, **kwargs)
 #         self.filename        = 'RepeatCal/RepeatCal'
 #         self.direction       = direction
@@ -491,7 +609,7 @@ class RamseyCalibration(Calibration):
 #         self.num_pulses      = num_pulses
 #         self.target          = np.pi/2.0
 #         self.iteration_limit = 5
-
+#
 #     def sequence(self):
 #         # Determine whether it is a single- or a two-qubit pulse calibration
 #         if isinstance(self.qubit, list):
@@ -511,10 +629,10 @@ class RamseyCalibration(Calibration):
 #         seqs = [[Id(qubit), MEAS(qubit)], [X(qubit), MEAS(qubit)]] + seqs
 #         # repeat each
 #         return [copy(s) for s in seqs for _ in range(2)]
-
+#
 #     def calibrate(self):
 #         """Attempts to optimize the pulse amplitude for a pi/2 or pi pulse about X or Y. """
-
+#
 #         ct = 1
 #         amp = self.amplitude
 #         set_amp = 'pi2Amp' if isinstance(self, Pi2Calibration) else 'piAmp' if isinstance(self, PiCalibration) else 'amp'
@@ -528,33 +646,33 @@ class RamseyCalibration(Calibration):
 #                 temp_qubit_names = copy(self.qubit_names)
 #                 self.qubit = self.qubit[1]
 #                 self.qubit_names.pop(0)
-
+#
 #             [phase, sigma] = phase_estimation(*self.run())
-
+#
 #             if isinstance(self, CRAmpCalibration_PhEst):
 #                 self.qubit = copy(temp_qubit)
 #                 self.qubit_names = copy(temp_qubit_names)
-
+#
 #             logger.info("Phase: %.4f Sigma: %.4f"%(phase,sigma))
 #             #update amplitude
 #             self.amplitude, done_flag = phase_to_amplitude(phase, sigma, self.amplitude, self.target, ct, self.iteration_limit)
 #             ct+=1
-
+#
 #         logger.info("Found amplitude for {} calibration of: {}".format(type(self).__name__, self.amplitude))
 #         #set_chan = self.qubit_names[0] if len(self.qubit) == 1 else ChannelLibraries.EdgeFactory(*self.qubits).label
 #         return (set_amp, self.amplitude)
-
+#
 #     def update_settings(self):
 #         set_amp = 'pi2Amp' if isinstance(self, Pi2Calibration) else 'piAmp' if isinstance(self, PiCalibration) else 'amp'
 #         self.chan[set_amp] = round(float(self.amplitude), 5)
 #         super(PhaseEstimation, self).update_settings()
-
+#
 # class Pi2Calibration(PhaseEstimation):
 #     def __init__(self, qubit, num_pulses= 9, **kwargs):
 #         super(Pi2Calibration, self).__init__(qubit, num_pulses = num_pulses, **kwargs)
 #         self.amplitude = self.qubit.pulse_params['pi2Amp']
 #         self.target    = np.pi/2.0
-
+#
 # class PiCalibration(PhaseEstimation):
 #     def __init__(self, qubit, num_pulses= 9, **kwargs):
 #         super(PiCalibration, self).__init__(qubit, num_pulses = num_pulses, **kwargs)
@@ -928,7 +1046,7 @@ def phase_estimation( data_in, vardata_in, verbose=False):
 
     return phase, sigma
 
-def phase_to_amplitude(phase, sigma, amp, target, ct, iteration_limit=5):
+def phase_to_amplitude(phase, sigma, amp, target, epsilon=1e-2):
     # correct for some errors related to 2pi uncertainties
     if np.sign(phase) != np.sign(amp):
         phase += np.sign(amp)*2*np.pi
@@ -945,18 +1063,18 @@ def phase_to_amplitude(phase, sigma, amp, target, ct, iteration_limit=5):
 
     # check for stopping condition
     phase_error = phase - target
-    if np.abs(phase_error) < 1e-2 or np.abs(phase_error/sigma) < 1 or ct > iteration_limit:
-        if np.abs(phase_error) < 1e-2:
+    if np.abs(phase_error) < epsilon or np.abs(phase_error/sigma) < 1:
+        if np.abs(phase_error) < epsilon:
             logger.info('Reached target rotation angle accuracy');
         elif abs(phase_error/sigma) < 1:
             logger.info('Reached phase uncertainty limit');
-        else:
-            logger.info('Hit max iteration count');
         done_flag = 1
 
-    if amp > 1.0:
-        raise ValueError(f"Phase estimation would have returned amplitude greater than 1.0 ({amp})")
-    return amp, done_flag
+    if amp > 1.0 or amp < epsilon:
+        logger.warning(f"Phase estimation returned an unreasonable amplitude setting {amp}. Aborting.")
+        done_flag = -1
+
+    return amp, done_flag, phase_error
 
 def quick_norm_data(data): #TODO: generalize as in Qlab.jl
     """Rescale data assuming 2 calibrations / single qubit state at the end of the sequence"""
