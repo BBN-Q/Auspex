@@ -19,16 +19,18 @@ before_install:
 # environment variables get read / instantiated.  Defining explicit sudo apt
 # calls which fire after initial setup but before actual installation logic
 # appears to work.
-    - |
-        if [ ! -z ${CONDA_TYPE} ] && [ ${CONDA_TYPE} == "miniconda" ]; then
-            echo ''; echo "Adding Optional APT packages..."; echo ''
-            sudo apt update
-            # sudo apt install -y build-essential
-            sudo apt install -y libusb-1.0-0-dev
-            sudo apt install -y git-lfs --allow-unauthenticated
-            echo ''
-        fi
-
+#
+# 30 Jan 2019 -- what if we just add the libs here, regardless of miniconda vs dockerImg run 
+#    - |
+#        if [ ! -z ${CONDA_TYPE} ] && [ ${CONDA_TYPE} == "miniconda" ]; then
+#            echo ''; echo "Adding Optional APT packages..."; echo ''
+#            sudo apt update
+#            # sudo apt install -y build-essential
+#            sudo apt install -y libusb-1.0-0-dev
+#            sudo apt install -y git-lfs --allow-unauthenticated
+#            echo ''
+#        fi
+#
     - echo "Travis PWD [${PWD}]"; echo ''
     # Manually write script, to repo clone directory, which introspects
     # conda-meta file data;  use this to reveal the Conda "installed_by"
@@ -61,10 +63,10 @@ before_install:
         ls -l ${LCI_SH}; echo ''
 
 # Ok -- back-track to this rendering -- late 25 Jan
-#addons:
-#  apt:
-#    packages:
-    #- libusb-1.0-0-dev
+addons:
+  apt:
+    packages:
+    - libusb-1.0-0-dev
     #
     # - update It auto-updates don't need to cite that.
     ##- build-essential
@@ -76,7 +78,7 @@ before_install:
     # Try Installing git-lfs here, perhaps a different version IMI
     # ok -- it tries to install but fails due to unathenticated packages,
     # needs --allow-unauthenticated tag
-    # - git-lfs 
+    - git-lfs 
     # Loading git-lfs, here, with the allow flag, appears to work.
     ## - git-lfs --allow-unauthenticated
     #- |
