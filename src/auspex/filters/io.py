@@ -114,8 +114,8 @@ class H5Handler(Process):
         self.p = psutil.Process(os.getpid())
         self.perf_queue = None
         self.beginning = datetime.datetime.now()
-        self.dtype = None
-        self.write_buf = None
+        self.dtype = {}
+        self.write_buf = {}
         self.processed = 0
 
     def shutdown(self):
@@ -125,20 +125,20 @@ class H5Handler(Process):
     def process_queue_item(self, args, file):
         if args[0] == "write":
             # logger.info(f"Writing {args} to {self.filename}")
-            if self.dtype is None:
+            if args[1] not in self.dtype:
                 # Sometimes we get a scalar, deal with it by converting to numpy array
                 try:
                     len(args[4])
                 except:
                     args = (args[0], args[1], args[2], args[3], np.array([args[4]]))
                 # Set up datatype and write buffer if we haven't already
-                self.dtype = args[4].dtype
-                logger.debug(f"Dtype for writer is {self.dtype}")
+                self.dtype[args[1]] = args[4].dtype
+                # logger.info(f"Dtype for {args[1]} is {self.dtype[args[1]]}")
                 try:
                     l = len(args[4])
                 except:
                     l = 1
-                self.write_buf = np.zeros(l*1000, dtype=self.dtype)
+                self.write_buf[args[1]] = np.zeros(l*10000, dtype=self.dtype[args[1]])
             file[args[1]][args[2]:args[3]] = args[4]
             self.processed += args[4].nbytes
 
@@ -161,21 +161,34 @@ class H5Handler(Process):
 
     def concat_msgs(self, msgs):
         # If receiving a bunch of consecutive writes, coalesce them into one
-        # print(self.dtype, False not in [m[0]=='write' for m in msgs])
-        if (len(msgs) > 2) and self.dtype is not None and (False not in [m[0]=='write' for m in msgs]):
-            begs = [m[2] for m in msgs]
-            ends = [m[3] for m in msgs]
-            # print("*", begs[1:], ends[:-1])
-            if begs[1:] == ends[:-1]:
-                for m in msgs:
-                    # print(f"{self.filename}, self.write_buf[{m[2]-begs[0]}:{m[3]-begs[0]}] = {m[4][0]}...")
-                    try:
-                        self.write_buf[m[2]-begs[0]:m[3]-begs[0]] = m[4]
-                    except:
-                        logger.error(f"Write buffer overrun in {self.filename} handler")
-                # print(f"Catting {len(msgs)} msgs")
-                return [('write', msgs[0][1], begs[0], ends[-1], self.write_buf[:ends[-1]-begs[0]])]
-        return msgs
+
+        if any([m[0] != "write" for m in msgs]):
+            # logger.info(f"Has non-write messages")
+            return msgs
+
+        groups = list(set([m[1] for m in msgs if m[0] == "write"]))
+        # logger.info(f"groups {groups}")
+        final_msgs = []
+
+        for group in groups:
+            g_msgs = [m for m in msgs if m[1] == group]
+            # logger.info(f"{group} messages: {len(g_msgs)} -- {g_msgs[0][1]} -- {self.dtype}")
+            if (len(g_msgs) > 2) and g_msgs[0][1] in self.dtype:
+                begs = [m[2] for m in g_msgs]
+                ends = [m[3] for m in g_msgs]
+                # print("*", begs[1:], ends[:-1])
+                if begs[1:] == ends[:-1]:
+                    for m in g_msgs:
+                        # print(f"{self.filename}, self.write_buf[{m[2]-begs[0]}:{m[3]-begs[0]}] = {m[4][0]}...")
+                        try:
+                            self.write_buf[m[1]][m[2]-begs[0]:m[3]-begs[0]] = m[4]
+                        except:
+                            logger.error(f"Write buffer overrun in {self.filename} handler")
+                    # logger.info(f"Catting {len(g_msgs)} msgs")
+                    final_msgs.append([('write', g_msgs[0][1], begs[0], ends[-1], self.write_buf[m[1]][:ends[-1]-begs[0]])])
+            else:
+                final_msgs.extend(g_msgs)
+        return final_msgs
 
     def run(self):
         with h5py.File(self.filename, "r+", libver="latest") as file:
@@ -188,12 +201,12 @@ class H5Handler(Process):
                         try:
                             msgs.append(self.queue.get(False))
                         except queue.Empty as e:
-                            time.sleep(0.002)
+                            time.sleep(0.005)
                             break
-
-                    msgs = self.concat_msgs(msgs)
-                    for msg in msgs:
-                        self.process_queue_item(msg, file)
+                    if len(msgs) > 0:
+                        msgs = self.concat_msgs(msgs)
+                        for msg in msgs:
+                            self.process_queue_item(msg, file)
 
             if config.profile:
                 cProfile.runctx('thing()', globals(), locals(), 'prof-%s-%s.prof' % (self.__class__.__name__, self.filter_name))
@@ -482,7 +495,7 @@ class WriteToHDF5(Filter):
                     try:
                         msgs_by_stream[stream].append(stream.queue.get(False))
                     except queue.Empty as e:
-                        time.sleep(0.002)
+                        time.sleep(0.008)
                         break
 
             self.push_resource_usage()

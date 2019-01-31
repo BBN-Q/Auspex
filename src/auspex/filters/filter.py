@@ -157,7 +157,7 @@ class Filter(Process, metaclass=MetaFilter):
         else:
             self.execute_on_run()
             self.main()
-        logger.info(f"{self} done")
+        logger.debug(f"{self} done")
         self.done.set()
 
     def execute_on_run(self):
