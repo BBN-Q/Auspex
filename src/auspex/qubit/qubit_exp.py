@@ -31,7 +31,8 @@ filter_map = {
     bbndb.auspex.Integrate: auspex.filters.KernelIntegrator,
     bbndb.auspex.Write: auspex.filters.WriteToHDF5,
     bbndb.auspex.Buffer: auspex.filters.DataBuffer,
-    bbndb.auspex.Display: auspex.filters.Plotter
+    bbndb.auspex.Display: auspex.filters.Plotter,
+    bbndb.auspex.FidelityKernel: auspex.filters.SingleShotMeasurement
 }
 stream_sel_map = {
     'X6-1000M': auspex.filters.X6StreamSelector,
@@ -117,6 +118,7 @@ class QubitExperiment(Experiment):
         # In case we need to access more detailed foundational information
         self.factory = self
 
+
         # If no pipeline is defined, assumed we want to generate it automatically
         if not pipeline.pipelineMgr.meas_graph:
             raise Exception("No pipeline has been created, do so automatically using exp_factory.create_default_pipeline()")
@@ -168,6 +170,7 @@ class QubitExperiment(Experiment):
 
         # Now a pipeline exists, so we create Auspex filters from the proxy filters in the db
         self.proxy_to_filter  = {}
+        self.filters          = []
         self.connector_by_qp  = {}
         self.chan_to_dig      = {}
         self.chan_to_oc       = {}
@@ -257,6 +260,7 @@ class QubitExperiment(Experiment):
                     new_filt = filter_map[type(node)]()
                     new_filt.configure_with_proxy(node)
                     new_filt.proxy = node
+                    self.filters.append(new_filt)
                     self.proxy_to_filter[node] = new_filt
                     if isinstance(node, bbndb.auspex.OutputProxy):
                         self.qubits_by_output[new_filt] = node.qubit_name
