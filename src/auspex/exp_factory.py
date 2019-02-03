@@ -452,7 +452,7 @@ class QubitExpFactory(object):
                     plotters += [e for e in endpoints if check_endpoint(e, "Plotter")]
                     buffers += [e for e in endpoints if check_endpoint(e, "DataBuffer")]
                     singleshot += [e for e in endpoints if check_endpoint(e, "SingleShotMeasurement") and experiment.__class__.__name__ == "SingleShotFidelityExperiment"]
-            filt_to_enable.update(set().union(writers, plotters, singleshot, buffers))
+            filt_to_enable.update(set().union(writers, plotters, singleshot, buffers, X6_stream_selectors))
             if calibration:
                 # For calibrations the user should only have one writer enabled, otherwise we will be confused.
                 if len(writers) > 1:
