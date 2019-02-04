@@ -4,33 +4,24 @@
 language: python
 
 python:
-  - "3.6"
+    - "3.6"
   
 env:
-  # Define several environments
-  #
-  - CONDA_TYPE=miniconda CONDA_VERS=https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh SUDO_VAL=false
-  - CONDA_TYPE=miniconda CONDA_VERS=https://repo.continuum.io/miniconda/Miniconda3-4.5.11-Linux-x86_64.sh SUDO_VAL=false
-  #- CONDA_TYPE=dockerImg BBNQConda_DI="merlinbeast/bbnq:bbnqconda_centos7_4_bbnq_pylib_v1.0.1_19.12.2018" SUDO_VAL=false
-  - CONDA_TYPE=dockerImg BBNQConda_DI="merlinbeast/bbnq:bbnqconda_centos7_4_bbnq_pylib_v1.0.2_18.01.2019" SUDO_VAL=false
+    # Define several environments
+    #
+    - CONDA_TYPE=miniconda CONDA_VERS=https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh SUDO_VAL=false
+    - CONDA_TYPE=miniconda CONDA_VERS=https://repo.continuum.io/miniconda/Miniconda3-4.5.11-Linux-x86_64.sh SUDO_VAL=false
+    # - CONDA_TYPE=dockerImg BBNQConda_DI="merlinbeast/bbnq:bbnqconda_centos7_4_bbnq_pylib_v1.0.1_19.12.2018" SUDO_VAL=false
+    - CONDA_TYPE=dockerImg BBNQConda_DI="merlinbeast/bbnq:bbnqconda_centos7_4_bbnq_pylib_v1.0.2_18.01.2019" SUDO_VAL=false
   
 before_install:  
-# NOT compatible with addons apt packages usage; addons fires before the above
-# environment variables get read / instantiated.  Defining explicit sudo apt
-# calls which fire after initial setup but before actual installation logic
-# appears to work.
-#
-# 30 Jan 2019 -- what if we just add the libs here, regardless of miniconda vs dockerImg run 
-#    - |
-#        if [ ! -z ${CONDA_TYPE} ] && [ ${CONDA_TYPE} == "miniconda" ]; then
-#            echo ''; echo "Adding Optional APT packages..."; echo ''
-#            sudo apt update
-#            # sudo apt install -y build-essential
-#            sudo apt install -y libusb-1.0-0-dev
-#            sudo apt install -y git-lfs --allow-unauthenticated
-#            echo ''
-#        fi
-#
+    # NOT compatible with addons apt packages usage; addons fires before the above
+    # environment variables get read / instantiated.  Defining explicit sudo apt
+    # calls which fire after initial setup but before actual installation logic
+    # appears to work.
+    #
+    # 30 Jan 2019 -- what if we just add the libs here, regardless of miniconda vs dockerImg run 
+    #
     - echo "Travis PWD [${PWD}]"; echo ''
     # Manually write script, to repo clone directory, which introspects
     # conda-meta file data;  use this to reveal the Conda "installed_by"
@@ -64,167 +55,168 @@ before_install:
 
 # Ok -- back-track to this rendering -- late 25 Jan
 addons:
-  apt:
-    packages:
-    #- libusb-1.0-0-dev
-    #
-    # - update It auto-updates don't need to cite that.
-    ## - build-essential # commented out cross check to current q-graph-fiasco branch
-    - libusb-1.0-0-dev
-    # Does adding libhidapi-libusb0 help IMI -- No.
-    # - libhidapi-libusb0
-    # Adding usbutils unnecessary, console info suggests already loaded
-    # - usbutils
-    # Try Installing git-lfs here, perhaps a different version IMI
-    # ok -- it tries to install but fails due to unathenticated packages,
-    # needs --allow-unauthenticated tag
-    #- git-lfs 
-    # Loading git-lfs, here, with the allow flag, appears to work.
-    ## - git-lfs --allow-unauthenticated # commented out cross check to current q-graph-fiasco branch
+    apt:
+        packages:
+            #- libusb-1.0-0-dev
+            #
+            # - update It auto-updates don't need to cite that.
+            ## - build-essential # commented out cross check to current q-graph-fiasco branch
+            - libusb-1.0-0-dev
+            # Does adding libhidapi-libusb0 help IMI -- No.
+            # - libhidapi-libusb0
+            # Adding usbutils unnecessary, console info suggests already loaded
+            # - usbutils
+            # Try Installing git-lfs here, perhaps a different version IMI
+            # ok -- it tries to install but fails due to unathenticated packages,
+            # needs --allow-unauthenticated tag
+            #- git-lfs 
+            # Loading git-lfs, here, with the allow flag, appears to work.
+            ## - git-lfs --allow-unauthenticated # commented out cross check to current q-graph-fiasco branch
             
 
 install:
- - |
-    if [ ! -z ${CONDA_TYPE} ]; then
-    
-        if [ ${CONDA_TYPE} == "dockerImg" ]; then
+    - |
+        if [ ! -z ${CONDA_TYPE} ]; then
         
-            echo "# --- Installing for test over BBNQConda Docker Image << CONDA_TYPE [${CONDA_TYPE}]..."; echo ''
-            #---------- New BBNQconda docker image setup logic here
-            docker pull ${BBNQConda_DI}
-            #
-            # Defining pip install commands for use in the docker session
-            # Note -- script test was using direct clone, then walking the installation
-            # to do pip install, documentation rendereing and such.
-            #
-            # Define dependent/sibling repository modules to PiP load prior to testing.
-            export TGT_PIPLOADS="export GIT_LFS_SKIP_SMUDGE=1; set | grep GIT_LFS | grep -v _="
-            export TGT_PIPLOADS+="; echo ''; pip install git+https://github.com/BBN-Q/bbndb.git"
-            export TGT_PIPLOADS+="; echo ''; echo '# ---'; pip install git+https://github.com/BBN-Q/Adapt.git"
-            export TGT_PIPLOADS+="; echo ''; echo '# ---'; pip install git+https://github.com/BBN-Q/QGL.git@sqlalchemy"
-            export TGT_PIPLOADS+="; echo ''; export GIT_LFS_SKIP_SMUDGE=0; set | grep GIT_LFS | grep -v _=; echo ''"
-            # the utf8 settings are required for documentation rendering logic.
-            #export DI_ENV_VALS="-e BBN_MEAS_FILE=test/test_measure.yml -e LC_ALL=en_US.utf8 -e LANG=en_US.utf8"
-            # -p 8888:8888 sets it up for Jupyter notebook export
-            export DI_ENV_VALS="-e LC_ALL=en_US.utf8 -e LANG=en_US.utf8 -p 8888:8888 "
+            if [ ${CONDA_TYPE} == "dockerImg" ]; then
+            
+                echo "# --- Installing for test over BBNQConda Docker Image << CONDA_TYPE [${CONDA_TYPE}]..."; echo ''
+                #---------- New BBNQconda docker image setup logic here
+                docker pull ${BBNQConda_DI}
+                #
+                # Defining pip install commands for use in the docker session
+                # Note -- script test was using direct clone, then walking the installation
+                # to do pip install, documentation rendereing and such.
+                #
+                # Define dependent/sibling repository modules to PiP load prior to testing.
+                export TGT_PIPLOADS="export GIT_LFS_SKIP_SMUDGE=1; set | grep GIT_LFS | grep -v _="
+                export TGT_PIPLOADS+="; echo ''; pip install git+https://github.com/BBN-Q/bbndb.git"
+                export TGT_PIPLOADS+="; echo ''; echo '# ---'; pip install git+https://github.com/BBN-Q/Adapt.git"
+                export TGT_PIPLOADS+="; echo ''; echo '# ---'; pip install git+https://github.com/BBN-Q/QGL.git@sqlalchemy"
+                export TGT_PIPLOADS+="; echo ''; export GIT_LFS_SKIP_SMUDGE=0; set | grep GIT_LFS | grep -v _=; echo ''"
+                # the utf8 settings are required for documentation rendering logic.
+                #export DI_ENV_VALS="-e BBN_MEAS_FILE=test/test_measure.yml -e LC_ALL=en_US.utf8 -e LANG=en_US.utf8"
+                # -p 8888:8888 sets it up for Jupyter notebook export
+                export DI_ENV_VALS="-e LC_ALL=en_US.utf8 -e LANG=en_US.utf8 -p 8888:8888 "
+            else
+                echo "# --- Install for test over MiniConda Image << CONDA_TYPE [${CONDA_TYPE}]..."; echo ''
+                #
+                wget $CONDA_VERS -O miniconda.sh
+                bash miniconda.sh -h | sed '4q;d'
+                bash miniconda.sh -b -p $HOME/miniconda
+                export PATH="$HOME/miniconda/bin:$PATH"
+                export BBN_DB="$PWD/bbn.sqlite"
+                echo "Database file at $BBN_DB"
+                #
+                ## which gcc; gcc --version
+                #
+                ## apt search libusb
+                ## apt list libusb-1.0-0
+                # - apt list libhidapi-libusb0
+                ## which git-lfs; git-lfs --version
+                #
+                hash -r
+                conda config --set always_yes yes --set changeps1 no
+                conda update -q conda
+                # Useful for debugging any issues with conda
+                conda info -a
+                #
+                # Reveal conda element install shell[s] to the console log.
+                ${LCI_SH}
+                #
+                #conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION numpy scipy matplotlib h5py pandas networkx cffi bokeh jupyter psutil sqlalchemy pydot
+                # Root did NOT cite pydot
+                conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION numpy scipy matplotlib h5py pandas networkx cffi bokeh jupyter psutil sqlalchemy
+                #
+                source activate test-environment
+                export GIT_LFS_SKIP_SMUDGE=1; set | grep GIT_LFS | grep -v _=
+                pip install git+https://github.com/BBN-Q/bbndb.git; echo ''; echo '# ---'
+                pip install git+https://github.com/BBN-Q/Adapt.git; echo ''; echo '# ---'
+                pip install git+https://github.com/BBN-Q/QGL.git@sqlalchemy; echo ''; echo '# ---'
+                pip install tqdm pyvisa coveralls scikit-learn pyusb future
+                export GIT_LFS_SKIP_SMUDGE=0; set | grep GIT_LFS | grep -v _=
+                export PYTHONPATH=$PYTHONPATH:$PWD/src
+            fi
         else
-            echo "# --- Install for test over MiniConda Image << CONDA_TYPE [${CONDA_TYPE}]..."; echo ''
-            #
-            wget $CONDA_VERS -O miniconda.sh
-            bash miniconda.sh -h | sed '4q;d'
-            bash miniconda.sh -b -p $HOME/miniconda
-            export PATH="$HOME/miniconda/bin:$PATH"
-            export BBN_DB="$PWD/bbn.sqlite"
-            echo "Database file at $BBN_DB"
-            #
-            ## which gcc; gcc --version
-            #
-            ## apt search libusb
-            ## apt list libusb-1.0-0
-            # - apt list libhidapi-libusb0
-            ## which git-lfs; git-lfs --version
-            #
-            hash -r
-            conda config --set always_yes yes --set changeps1 no
-            conda update -q conda
-            # Useful for debugging any issues with conda
-            conda info -a
-            #
-            # Reveal conda element install shell[s] to the console log.
-            ${LCI_SH}
-            #
-            #conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION numpy scipy matplotlib h5py pandas networkx cffi bokeh jupyter psutil sqlalchemy pydot
-            # Root did NOT cite pydot
-            conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION numpy scipy matplotlib h5py pandas networkx cffi bokeh jupyter psutil sqlalchemy
-            #
-            source activate test-environment
-            export GIT_LFS_SKIP_SMUDGE=1; set | grep GIT_LFS | grep -v _=
-            pip install git+https://github.com/BBN-Q/bbndb.git; echo ''; echo '# ---'
-            pip install git+https://github.com/BBN-Q/Adapt.git; echo ''; echo '# ---'
-            pip install git+https://github.com/BBN-Q/QGL.git@sqlalchemy; echo ''; echo '# ---'
-            pip install tqdm pyvisa coveralls scikit-learn pyusb future
-            export GIT_LFS_SKIP_SMUDGE=0; set | grep GIT_LFS | grep -v _=
-            export PYTHONPATH=$PYTHONPATH:$PWD/src
+            echo "# ---   W A R N I N G   -- CONDA_TYPE [${CONDA_TYPE}] undefined !"
         fi
-    else
-        echo "# ---   W A R N I N G   -- CONDA_TYPE [${CONDA_TYPE}] undefined !"
-    fi
 
 
 script:
- - |
-    if [ ! -z ${CONDA_TYPE} ]; then
-        if [ ${CONDA_TYPE} == "dockerImg" ]; then
-            echo ''; echo "# --- Executing test over BBNQConda Docker Image << CONDA_TYPE [${CONDA_TYPE}]..."; echo ''
+    - |
+        if [ ! -z ${CONDA_TYPE} ]; then
+            if [ ${CONDA_TYPE} == "dockerImg" ]; then
+                echo ''; echo "# --- Executing test over BBNQConda Docker Image << CONDA_TYPE [${CONDA_TYPE}]..."; echo ''
 
-            docker run -v $PWD:/root/RepoCDir ${DI_ENV_VALS} ${BBNQConda_DI} /bin/sh -c "source ~/.bashrc; echo ''; echo '# --- DI Run-Time info:'; python --version; conda info; conda list; echo ''; echo '# --- PIP loading dependency mods...'; ${TGT_PIPLOADS}; cd ~/RepoCDir; echo ''; echo '# --- Pip Installing repo clone...'; pwd; pip install -e .; echo ''; ${LCI_SH}; echo '# --- Unittest begin...'; python -m unittest discover -v test"
+                docker run -v $PWD:/root/RepoCDir ${DI_ENV_VALS} ${BBNQConda_DI} /bin/sh -c "source ~/.bashrc; echo ''; echo '# --- DI Run-Time info:'; python --version; conda info; conda list; echo ''; echo '# --- PIP loading dependency mods...'; ${TGT_PIPLOADS}; cd ~/RepoCDir; echo ''; echo '# --- Pip Installing repo clone...'; pwd; pip install -e .; echo ''; ${LCI_SH}; echo '# --- Unittest begin...'; python -m unittest discover -v test"
 
+            else
+                # Note; adhoc cmd bundles not supported [e.g. ~mcBundle]
+                echo ''; echo "# --- Executing test over MiniConda Image << CONDA_TYPE [${CONDA_TYPE}]..."; echo ''
+                
+                python --version
+                # Skipping global discovery case, for now (to see if it changes direct call results).
+                ## echo ''; echo "Running coverage unittest discovery..."
+                # coverage run -m unittest discover -v test
+                #
+                # Aside -- the pushd . cited above revealed the source location.
+                echo ''; echo "Trying direct, singular, invocations:"
+                # - ls -l ~/build/BBN-Q/Auspex
+                #
+                ls -l ~/build/BBN-Q/Auspex/test
+                #- python -m unittest test/test_*.py -v
+                #
+                # python -m unittest ~/build/BBN-Q/Auspex/test/test_adapt_1d.py -v
+                coverage run -m unittest ~/build/BBN-Q/Auspex/test/test_adapt_1d.py -v
+                echo ''; echo '# ---'
+                # can't invoke run directly
+                ## python -m unittest ~/build/BBN-Q/Auspex/test/test_adapt_1d.py -v; echo ''; echo '# ---'
+                # make it very noisy
+                # - python -v -m unittest ~/build/BBN-Q/Auspex/test/test_adapt_1d.py -v
+                #
+                # python -m unittest ~/build/BBN-Q/Auspex/test/test_average.py -v
+                coverage run -m unittest ~/build/BBN-Q/Auspex/test/test_average.py -v
+                echo ''; echo '# ---'
+                # can't invoke run directly
+                python -m unittest ~/build/BBN-Q/Auspex/test/test_average.py -v
+                echo ''; echo '# ---'
+                python -m unittest ~/build/BBN-Q/Auspex/test/test_bitfields.py -v
+                echo ''; echo '# ---'
+                python -m unittest ~/build/BBN-Q/Auspex/test/test_buffer.py -v
+                echo ''; echo '# ---'
+                python -m unittest ~/build/BBN-Q/Auspex/test/test_correlator.py -v
+                echo ''; echo '# ---'
+                python -m unittest ~/build/BBN-Q/Auspex/test/test_experiment.py -v
+                echo ''; echo '# ---'
+                python -m unittest ~/build/BBN-Q/Auspex/test/test_fits.py -v
+                echo ''; echo '# ---'
+                python -m unittest ~/build/BBN-Q/Auspex/test/test_instrument.py -v
+                echo ''; echo '# ---'
+                #
+                # Stalls for unsupported Synchronized and int
+                #- python -m unittest ~/build/BBN-Q/Auspex/test/test_pipeline.py -v; echo ''; echo '# ---'
+                #- python -m unittest ~/build/BBN-Q/Auspex/test/test_pulsecal.py -v; echo ''; echo '# ---'
+                echo "Skipping test_pipeline.py and test_pulsecal.py temporarily..."
+                #
+                python -m unittest ~/build/BBN-Q/Auspex/test/test_singleshot_filter.py -v
+                echo ''; echo '# ---'
+                python -m unittest ~/build/BBN-Q/Auspex/test/test_sweeps.py -v
+                echo ''; echo '# ---'
+                python -m unittest ~/build/BBN-Q/Auspex/test/test_write.py -v
+            fi
         else
-            # Note; adhoc cmd bundles not supported [e.g. ~mcBundle]
-            echo ''; echo "# --- Executing test over MiniConda Image << CONDA_TYPE [${CONDA_TYPE}]..."; echo ''
-            
-            python --version
-            # Skipping global discovery case, for now (to see if it changes direct call results).
-            ## echo ''; echo "Running coverage unittest discovery..."
-            # coverage run -m unittest discover -v test
-            #
-            # Aside -- the pushd . cited above revealed the source location.
-            echo ''; echo "Trying direct, singular, invocations:"
-            # - ls -l ~/build/BBN-Q/Auspex
-            #
-            ls -l ~/build/BBN-Q/Auspex/test
-            #- python -m unittest test/test_*.py -v
-            #
-            # python -m unittest ~/build/BBN-Q/Auspex/test/test_adapt_1d.py -v
-            coverage run -m unittest ~/build/BBN-Q/Auspex/test/test_adapt_1d.py -v
-            echo ''; echo '# ---'
-            # can't invoke run directly
-            ## python -m unittest ~/build/BBN-Q/Auspex/test/test_adapt_1d.py -v; echo ''; echo '# ---'
-            # make it very noisy
-            # - python -v -m unittest ~/build/BBN-Q/Auspex/test/test_adapt_1d.py -v
-            #
-            # python -m unittest ~/build/BBN-Q/Auspex/test/test_average.py -v
-            coverage run -m unittest ~/build/BBN-Q/Auspex/test/test_average.py -v
-            echo ''; echo '# ---'
-            # can't invoke run directly
-            python -m unittest ~/build/BBN-Q/Auspex/test/test_average.py -v
-            echo ''; echo '# ---'
-            python -m unittest ~/build/BBN-Q/Auspex/test/test_bitfields.py -v
-            echo ''; echo '# ---'
-            python -m unittest ~/build/BBN-Q/Auspex/test/test_buffer.py -v
-            echo ''; echo '# ---'
-            python -m unittest ~/build/BBN-Q/Auspex/test/test_correlator.py -v
-            echo ''; echo '# ---'
-            python -m unittest ~/build/BBN-Q/Auspex/test/test_experiment.py -v
-            echo ''; echo '# ---'
-            python -m unittest ~/build/BBN-Q/Auspex/test/test_fits.py -v
-            echo ''; echo '# ---'
-            python -m unittest ~/build/BBN-Q/Auspex/test/test_instrument.py -v
-            echo ''; echo '# ---'
-            #
-            # Stalls for unsupported Synchronized and int
-            #- python -m unittest ~/build/BBN-Q/Auspex/test/test_pipeline.py -v; echo ''; echo '# ---'
-            #- python -m unittest ~/build/BBN-Q/Auspex/test/test_pulsecal.py -v; echo ''; echo '# ---'
-            echo "Skipping test_pipeline.py and test_pulsecal.py temporarily..."
-            #
-            python -m unittest ~/build/BBN-Q/Auspex/test/test_singleshot_filter.py -v
-            echo ''; echo '# ---'
-            python -m unittest ~/build/BBN-Q/Auspex/test/test_sweeps.py -v
-            echo ''; echo '# ---'
-            python -m unittest ~/build/BBN-Q/Auspex/test/test_write.py -v
+            echo ''; echo "# ---   W A R N I N G   -- CONDA_TYPE [${CONDA_TYPE}] undefined !"
         fi
-    else
-        echo ''; echo "# ---   W A R N I N G   -- CONDA_TYPE [${CONDA_TYPE}] undefined !"
-    fi
 
 
 after_script:
-  - coveralls
+    - coveralls
 
 # necessary to run on new container-based infrastructure
 sudo: false
 
 cache:
-  directories:
-    - $HOME/download
-    - $HOME/.cache/pip
+    directories:
+        - $HOME/download
+        - $HOME/.cache/pip
+    
