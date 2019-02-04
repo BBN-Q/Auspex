@@ -69,7 +69,7 @@ addons:
     #- libusb-1.0-0-dev
     #
     # - update It auto-updates don't need to cite that.
-    - build-essential
+    ## - build-essential # commented out cross check to current q-graph-fiasco branch
     - libusb-1.0-0-dev
     # Does adding libhidapi-libusb0 help IMI -- No.
     # - libhidapi-libusb0
@@ -80,14 +80,7 @@ addons:
     # needs --allow-unauthenticated tag
     #- git-lfs 
     # Loading git-lfs, here, with the allow flag, appears to work.
-    - git-lfs --allow-unauthenticated
-    #- |
-    #    if [ ! -z ${CONDA_TYPE} ] && [ ${} == "" ]; then
-    #        build-essential     \
-    #        libusb-1.0-0-dev    \
-    #        git-lfs --allow-unauthenticated
-    #    fi
-#    - ${APT_PKGS}
+    ## - git-lfs --allow-unauthenticated # commented out cross check to current q-graph-fiasco branch
             
 
 install:
@@ -124,12 +117,12 @@ install:
             export BBN_DB="$PWD/bbn.sqlite"
             echo "Database file at $BBN_DB"
             #
-            which gcc; gcc --version
+            ## which gcc; gcc --version
             #
-            apt search libusb
-            apt list libusb-1.0-0
+            ## apt search libusb
+            ## apt list libusb-1.0-0
             # - apt list libhidapi-libusb0
-            which git-lfs; git-lfs --version
+            ## which git-lfs; git-lfs --version
             #
             hash -r
             conda config --set always_yes yes --set changeps1 no
