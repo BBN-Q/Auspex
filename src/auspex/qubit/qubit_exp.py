@@ -4,6 +4,7 @@ from auspex.stream import DataStream, DataAxis, SweepAxis, DataStreamDescriptor,
 import auspex.instruments
 import auspex.filters
 import bbndb
+import numpy as np
 
 import sys
 import os
@@ -48,7 +49,8 @@ instrument_map = {
     'HolzworthHS9000': auspex.instruments.HolzworthHS9000,
     'Labbrick': auspex.instruments.Labbrick,
     'AgilentN5183A': auspex.instruments.AgilentN5183A,
-    'BNC845': auspex.instruments.BNC845
+    'BNC845': auspex.instruments.BNC845,
+    'SpectrumAnalyzer': auspex.instruments.SpectrumAnalyzer
 }
 
 class QubitExperiment(Experiment):
@@ -394,6 +396,7 @@ class QubitExperiment(Experiment):
             # Get method by name
             if hasattr(instr, "set_"+attribute):
                 param.assign_method(getattr(instr, "set_"+attribute)) # Couple the parameter to the instrument
+                param.add_post_push_hook(lambda: time.sleep(0.05))
             else:
                 raise ValueError("The instrument {} has no method {}".format(name, "set_"+attribute))
         # param.instr_tree = [instr.name, attribute] #TODO: extend tree to endpoint

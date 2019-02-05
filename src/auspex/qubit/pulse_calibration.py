@@ -16,10 +16,12 @@ except:
 import auspex.config as config
 from auspex.log import logger
 from copy import copy, deepcopy
+from adapt.refine import refine_1D
 import os
 import uuid
 import pandas as pd
 import networkx as nx
+import scipy as sp
 import subprocess
 import zmq
 import json
@@ -39,28 +41,9 @@ import numpy as np
 from itertools import product
 
 class Calibration(object):
-    calibration_experiment = None
-    def __init__(self, qubits, output_nodes=None, quad="real", auto_rollback=True, do_plotting=True, **kwargs):
-        self.qubits           = qubits if isinstance(qubits, list) else [qubits]
-        self.qubit            = None if isinstance(qubits, list) else qubits
-        self.output_nodes     = output_nodes if isinstance(output_nodes, list) else [output_nodes]
-        self.filename         = 'None'
-        self.axis_descriptor  = None
-        self.leave_plots_open = True
-        self.cw_mode          = False
-        self.quad             = quad
-        self.succeeded        = False
-        self.norm_points      = None
-        self.auto_rollback    = True # Rollback any db changes upon calibration failure
-        self.kwargs           = kwargs
-        self.plotters         = []
-        self.uuid             = str(uuid.uuid4())
-        self.do_plotting      = do_plotting
-        self.fake_data        = None
-        try:
-            self.quad_fun = {"real": np.real, "imag": np.imag, "amp": np.abs, "phase": np.angle}[quad]
-        except:
-            raise ValueError('Quadrature to calibrate must be one of ("real", "imag", "amp", "phase").')
+
+    def __init__(self):
+        self.uuid = str(uuid.uuid4())
 
     def init_plots(self):
         """Return a ManualPlotter object so we can plot calibrations. All
@@ -144,9 +127,33 @@ class Calibration(object):
         """Any final experiment configuration before it gets run."""
         pass
 
+class QubitCalibration(Calibration):
+    calibration_experiment = None
+    def __init__(self, qubits, output_nodes=None, quad="real", auto_rollback=True, do_plotting=True, **kwargs):
+        self.qubits           = qubits if isinstance(qubits, list) else [qubits]
+        self.qubit            = None if isinstance(qubits, list) else qubits
+        self.output_nodes     = output_nodes if isinstance(output_nodes, list) else [output_nodes]
+        self.filename         = 'None'
+        self.axis_descriptor  = None
+        self.leave_plots_open = True
+        self.cw_mode          = False
+        self.quad             = quad
+        self.succeeded        = False
+        self.norm_points      = None
+        self.auto_rollback    = True # Rollback any db changes upon calibration failure
+        self.kwargs           = kwargs
+        self.plotters         = []
+        self.do_plotting      = do_plotting
+        self.fake_data        = None
+        try:
+            self.quad_fun = {"real": np.real, "imag": np.imag, "amp": np.abs, "phase": np.angle}[quad]
+        except:
+            raise ValueError('Quadrature to calibrate must be one of ("real", "imag", "amp", "phase").')
+        super(QubitCalibration, self).__init__()
+
     def sequence(self):
         """Returns the sequence for the given calibration, must be overridden"""
-        return [[Id(self.qubit), MEAS(self.qubit)]]
+        raise NotImplementedError("Must run a specific qubit calibration.")
 
     def set_fake_data(self, *args, **kwargs):
         self.fake_data = (args, kwargs)
@@ -270,9 +277,10 @@ class CalibrationExperiment(QubitExperiment):
         self.add_sweep(par, values)
 
 
-class CavityTuneup(Calibration):
-    def __init__(self, qubit, frequencies=np.linspace(4e9, 5e9, 10), **kwargs):
-        self.frequencies = frequencies
+class CavityTuneup(QubitCalibration):
+    def __init__(self, qubit, frequencies, averages=750, **kwargs):
+        self.start_frequencies = frequencies
+        kwargs['averages'] = averages
         super(CavityTuneup, self).__init__(qubit, **kwargs)
         self.cw_mode = True
 
@@ -280,57 +288,203 @@ class CavityTuneup(Calibration):
         return [[Id(self.qubit), MEAS(self.qubit)]]
 
     def exp_config(self, exp):
-        cavity_source = exp._instruments[self.qubit.measure_chan.phys_chan.generator.label]
-        exp.add_cal_sweep(cavity_source.set_frequency, self.frequencies)
+        exp.add_qubit_sweep(self.qubit, "measure", "frequency", self.new_frequencies)
+        self.quad_fun = lambda x: x
 
     def _calibrate(self):
-        data, _ = self.run_sweeps()
+        # all_data = np.empty(dtype=np.complex128)
+        self.new_frequencies = self.start_frequencies
+        self.frequencies = np.empty(0, dtype=np.complex128)
+        self.group_delays = np.empty(0, dtype=np.complex128)
+        self.datas = np.empty(0, dtype=np.complex128)
+        # orig_avg = self.kwargs['averages']
+        # Adaptive refinement to find cavity feature
+        # for i in range(self.iterations + 1):
+        self.data, _      = self.run_sweeps()
+        self.datas        = np.append(self.datas, self.data)
+        self.frequencies  = np.append(self.frequencies, self.new_frequencies[:-1])
 
-        self.plot["Data"] = (self.frequencies, data)
+        ord = np.argsort(self.frequencies)
+        self.datas = self.datas[ord]
+        self.frequencies = self.frequencies[ord]
 
-        def sw_fit(f, *p):
-            return p[0] - p[1]*np.cos(2*np.pi*p[2]*f - p[3])
+        self.phases = np.unwrap(np.angle(self.datas))
+        self.group_delays = -np.diff(self.phases)/np.diff(self.frequencies)
+        phase_poly = np.poly1d(np.polyfit(self.frequencies, self.phases, 6))
+        # group_delay_poly = phase_poly.deriv()
+        # fine_freqs = np.linspace(self.frequencies[0], self.frequencies[-1], self.iterations*len(self.frequencies))
+        subtracted = self.phases - phase_poly(self.frequencies)
+        group_delay = np.diff(subtracted)/np.diff(self.frequencies)
 
-        popt, _ = curve_fit(sw_fit, self.frequencies*1e-9, data, \
-                [np.mean(data), 2.8*np.std(data), 1/0.3, 1.0])
+        # ordering = np.argsort(self.frequencies[:-1])
+        self.plot1["Phase"] = (self.frequencies, self.phases)
+        self.plot1["Phase Fit"] = (self.frequencies,phase_poly(self.frequencies))
+        self.plot1B["Group Delay"] = (self.frequencies[:-1],group_delay)
+        self.plot2["Amplitude"] = (self.frequencies,np.abs(self.datas))
 
-        self.plot["Fit"] = (self.frequencies, sw_fit(self.frequencies*1e-9, *popt))
-        self.plot["Data-Fit"] = (self.frequencies, data-sw_fit(self.frequencies*1e-9, *popt))
+        guess = np.abs(self.frequencies[np.argmax(np.abs(group_delay))])
+        self.new_frequencies = np.arange(guess-15e6, guess+15e6, 1e6)
+        self.frequencies = np.empty(0, dtype=np.complex128)
+        self.group_delays = np.empty(0, dtype=np.complex128)
+        self.datas = np.empty(0, dtype=np.complex128)
+
+        self.data, _      = self.run_sweeps()
+        self.datas        = np.append(self.datas, self.data)
+        self.frequencies  = np.append(self.frequencies, self.new_frequencies[:-1])
+
+        ord = np.argsort(self.frequencies)
+        self.datas = self.datas[ord]
+        self.frequencies = self.frequencies[ord]
+
+        self.phases = np.unwrap(np.angle(self.datas))
+        self.group_delays = -np.diff(self.phases)/np.diff(self.frequencies)
+        phase_poly = np.poly1d(np.polyfit(self.frequencies, self.phases, 6))
+        # group_delay_poly = phase_poly.deriv()
+        # fine_freqs = np.linspace(self.frequencies[0], self.frequencies[-1], self.iterations*len(self.frequencies))
+        subtracted = self.phases - phase_poly(self.frequencies)
+        group_delay = np.diff(subtracted)/np.diff(self.frequencies)
+
+        # ordering = np.argsort(self.frequencies[:-1])
+        self.plot1["Phase"] = (self.frequencies, self.phases)
+        self.plot1["Phase Fit"] = (self.frequencies,phase_poly(self.frequencies))
+        self.plot1B["Group Delay"] = (self.frequencies[:-1],group_delay)
+        self.plot2["Amplitude"] = (self.frequencies,np.abs(self.datas))
+
+        guess = np.abs(self.frequencies[np.argmax(np.abs(group_delay))])
+        self.new_frequencies = np.arange(guess-4e6, guess+4e6, 0.2e6)
+        self.frequencies = np.empty(0, dtype=np.complex128)
+        self.group_delays = np.empty(0, dtype=np.complex128)
+        self.datas = np.empty(0, dtype=np.complex128)
+
+        self.data, _      = self.run_sweeps()
+        self.datas        = np.append(self.datas, self.data)
+        self.frequencies  = np.append(self.frequencies, self.new_frequencies[:-1])
+
+        ord = np.argsort(self.frequencies)
+        self.datas = self.datas[ord]
+        self.frequencies = self.frequencies[ord]
+
+        self.phases = np.unwrap(np.angle(self.datas))
+        self.group_delays = -np.diff(self.phases)/np.diff(self.frequencies)
+        phase_poly = np.poly1d(np.polyfit(self.frequencies, self.phases, 6))
+        # group_delay_poly = phase_poly.deriv()
+        # fine_freqs = np.linspace(self.frequencies[0], self.frequencies[-1], self.iterations*len(self.frequencies))
+        subtracted = self.phases - phase_poly(self.frequencies)
+        group_delay = np.diff(subtracted)/np.diff(self.frequencies)
+
+        # ordering = np.argsort(self.frequencies[:-1])
+        self.plot1["Phase"] = (self.frequencies, self.phases)
+        self.plot1["Phase Fit"] = (self.frequencies,phase_poly(self.frequencies))
+        self.plot1B["Group Delay"] = (self.frequencies[:-1],group_delay)
+        self.plot2["Amplitude"] = (self.frequencies,np.abs(self.datas))
+
+        shifted_cav = np.real(self.datas) - np.mean(np.real(self.datas))
+        guess = np.abs(self.frequencies[np.argmax(np.abs(shifted_cav))])
+            # self.kwargs['averages'] = 2000
+
+            # import pdb; pdb.set_trace()
+            #
+            # self.new_frequencies = refine_1D(self.frequencies, subtracted, all_points=False,
+            #                             criterion="difference", threshold = "one_sigma")
+            # logger.info(f"new_frequencies {self.new_frequencies}")
+
+        # n, bins = sp.histogram(np.abs(self.frequencies), bins="auto")
+        # f_start = bins[np.argmax(n)]
+        # f_stop  = bins[np.argmax(n)+1]
+        # logger.info(f"Looking in bin from {f_start} to {f_stop}")
+
+        # # self.kwargs['averages'] = orig_avg
+        # self.new_frequencies = np.arange(f_start, f_stop, 2e6)
+        # self.frequencies = np.empty(0, dtype=np.complex128)
+        # self.group_delays = np.empty(0, dtype=np.complex128)
+        # self.datas = np.empty(0, dtype=np.complex128)
+        #
+        # for i in range(self.iterations + 3):
+        #     self.data, _      = self.run_sweeps()
+        #     self.datas        = np.append(self.datas, self.data)
+        #     self.frequencies  = np.append(self.frequencies, self.new_frequencies[:-1])
+        #
+        #     ord = np.argsort(self.frequencies)
+        #     self.datas = self.datas[ord]
+        #     self.frequencies = self.frequencies[ord]
+        #
+        #     self.group_delays = -np.diff(np.unwrap(np.angle(self.datas)))/np.diff(self.frequencies)
+        #     # self.group_delays = group_del
+        #
+        #     # ordering = np.argsort(self.frequencies[:-1])
+        #     self.plot3["Group Delay"] = (self.frequencies[1:],self.group_delays)
+        #     # self.plot2["Amplitude"] = (self.frequencies,np.abs(self.datas))
+        #     # self.kwargs['averages'] = 2000
+        #
+        #     self.new_frequencies = refine_1D(self.frequencies[:-1], self.group_delays, all_points=False,
+        #                                 criterion="integral", threshold = "one_sigma")
+        #     logger.info(f"new_frequencies {self.new_frequencies}")
+        # #
+        # # self.data, _ = self.run_sweeps()
+        # # group_delay = -np.diff(np.unwrap(np.angle(self.data)))/np.diff(self.new_frequencies)
+        # # self.plot3["Group Delay"] = (self.new_frequencies[1:],group_delay)
+        #
+        # def lor_der(x, a, x0, width, offset):
+        #     return offset-(x-x0)*a/((4.0*((x-x0)/width)**2 + a**2)**2)
+        # f0 = np.abs(self.frequencies[np.argmax(np.abs(self.group_delays))])
+        # p0 = [np.max(np.abs(self.group_delays))*1e-18, np.abs(f0), 200e6, np.abs(self.group_delays)[0]]
+        # popt, pcov = curve_fit(lor_der, np.abs(self.frequencies[1:]), np.abs(self.group_delays), p0=p0)
+        # self.plot3["Group Delay Fit"] = ( np.abs(self.frequencies[1:]),  lor_der( np.abs(self.frequencies[1:]), *popt))
 
 
     def init_plots(self):
-        plot = ManualPlotter("Cavity Search", x_label='Frequency (GHz)', y_label='Amplitude (Arb. Units)')
-        plot.add_data_trace("Data", {'color': 'C1'})
-        plot.add_fit_trace("Fit", {'color': 'C1'})
-        plot.add_data_trace("Data-Fit", {'color': 'C2'})
-        self.plot = plot
-        return [plot]
+        plot1 = ManualPlotter("Phase", x_label='Frequency (GHz)', y_label='Group Delay')
+        plot1.add_data_trace("Phase", {'color': 'C1'})
+        plot1.add_fit_trace("Phase Fit", {'color': 'C2'})
 
-class QubitTuneup(Calibration):
-    def __init__(self, qubit, frequencies=np.linspace(4e9, 5e9, 50), **kwargs):
-        self.frequencies = frequencies
+        plot1B = ManualPlotter("Group Delay", x_label='Frequency (GHz)', y_label='Group Delay')
+        plot1B.add_data_trace("Group Delay", {'color': 'C1'})
+        # plot1B.add_fit_trace("Phase Fit", {'color': 'C2'})
+
+        plot2 = ManualPlotter("Amplitude", x_label='Frequency (GHz)', y_label='Amplitude (Arb. Units)')
+        plot2.add_data_trace("Amplitude", {'color': 'C2'})
+
+        # plot3 = ManualPlotter("First refined sweep", x_label='Frequency (GHz)', y_label='Group Delay')
+        # plot3.add_data_trace("Group Delay", {'color': 'C3'})
+        # plot3.add_fit_trace("Group Delay Fit", {'color': 'C4'})
+        self.plot1 = plot1
+        self.plot1B = plot1B
+        self.plot2 = plot2
+        # self.plot3 = plot3
+        return [plot1, plot1B, plot2] #, plot3]
+
+class QubitTuneup(QubitCalibration):
+    def __init__(self, qubit, f_start=5e9, f_stop=6e9, coarse_step=0.1e9, fine_step=1.0e6, averages=500, amp=1.0, **kwargs):
+        self.coarse_frequencies = np.arange(f_start, f_stop, coarse_step) - 10.0e6 # Don't stray too close to the carrier tone
+        self.fine_frequencies   = np.arange(10.0e6, coarse_step+10.0e6, fine_step)
+        self.f_start = f_start
+        self.f_stop = f_stop
+        self.coarse_step = coarse_step
+        self.fine_step = fine_step
+        self.amp = amp
+        kwargs['averages'] = averages
         super(QubitTuneup, self).__init__(qubit, **kwargs)
-        self.cw_mode = True
 
     def sequence(self):
-        return [[X(self.qubit), MEAS(self.qubit)]]
+        return [[X(self.qubit, frequency=f, amp=self.amp), MEAS(self.qubit)] for f in self.fine_frequencies]
 
     def exp_config(self, exp):
-        qubit_source = exp._instruments[self.qubit.phys_chan.generator.label]
-        exp.add_cal_sweep(qubit_source.set_frequency, self.frequencies)
+        exp.add_qubit_sweep(self.qubit, "control", "frequency", self.coarse_frequencies)
+        self.quad_fun = lambda x: x
 
     def _calibrate(self):
-        data, _ = self.run_sweeps()
-        self.plot["Data"] = (self.frequencies, data)
+        self.data, _ = self.run_sweeps()
+        freqs = np.arange(self.f_start, self.f_stop, self.fine_step)
+        self.plot["Data"] = (freqs, self.data)
 
     def init_plots(self):
-        plot = ManualPlotter("Qubit Search", x_label='Frequency (GHz)', y_label='Amplitude (Arb. Units)')
+        plot = ManualPlotter("Qubit Search", x_label='Frequency (Hz)', y_label='Amplitude (Arb. Units)')
         plot.add_data_trace("Data", {'color': 'C1'})
         plot.add_fit_trace("Fit", {'color': 'C1'})
         self.plot = plot
         return [plot]
 
-class RabiAmpCalibration(Calibration):
+class RabiAmpCalibration(QubitCalibration):
 
     amp2offset = 0.5
 
@@ -338,7 +492,7 @@ class RabiAmpCalibration(Calibration):
         if num_steps % 2 != 0:
             raise ValueError("Number of steps for RabiAmp calibration must be even!")
         #for now, only do one qubit at a time
-        self.num_steps = num_steps
+        self.num_steps = num_stepsp
         self.amps = np.hstack((np.arange(-1, 0, 2./num_steps),
                                np.arange(2./num_steps, 1+2./num_steps, 2./num_steps)))
         super(RabiAmpCalibration, self).__init__(qubit, **kwargs)
@@ -348,7 +502,7 @@ class RabiAmpCalibration(Calibration):
         return ([[Xtheta(self.qubit, amp=a), MEAS(self.qubit)] for a in self.amps] +
                 [[Ytheta(self.qubit, amp=a), MEAS(self.qubit)] for a in self.amps])
 
-    def calibrate(self):
+    def _calibrate(self):
         data, _ = self.run_sweeps()
         N = len(data)
         piI, offI, poptI = fit_rabi_amp(self.amps, data[:N//2])
@@ -387,7 +541,7 @@ class RabiAmpCalibration(Calibration):
         awg_chan.I_channel_offset += round(amp_factor*self.amp2offset*self.i_offset, 5)
         awg_chan.Q_channel_offset += round(amp_factor*self.amp2offset*self.i_offset, 5)
 
-class RamseyCalibration(Calibration):
+class RamseyCalibration(QubitCalibration):
     def __init__(self, qubit, delays=np.linspace(0.0, 20.0, 41)*1e-6,
                 two_freqs=False, added_detuning=150e3, set_source=True, AIC=True, **kwargs):
         self.delays         = delays
@@ -491,7 +645,7 @@ class RamseyCalibration(Calibration):
         # logger.info("Qubit set frequency = {} GHz".format(round(float(qubit_set_freq/1e9),5)))
         # return ('frequency', qubit_set_freq)
 
-class PhaseEstimation(Calibration):
+class PhaseEstimation(QubitCalibration):
 
     amp2offset = 0.5
 

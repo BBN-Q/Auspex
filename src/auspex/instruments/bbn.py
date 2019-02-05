@@ -482,7 +482,8 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
         return self._sequence_filename
     @sequence_file.setter
     def sequence_file(self, filename):
-        self.wrapper.load_sequence_file(filename)
+        if filename:
+            self.wrapper.load_sequence_file(filename)
         self._sequence_filename = filename
 
     @property
