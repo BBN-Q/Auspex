@@ -116,7 +116,11 @@ class Plotter(Filter):
         if self.plot_dims.value == 2:
             self.y_values = self.descriptor.axes[-2].points
 
-        self.plot_buffer = (np.nan*np.ones(self.points_before_clear) + 1.0j*np.nan*np.ones(self.points_before_clear)).astype(self.descriptor.dtype)
+        #I'm so sorry everyone. Send Julia
+        if 'complex' in np.dtype(self.descriptor.dtype).name:
+            self.plot_buffer = (np.nan*np.ones(self.points_before_clear) + 1.0j*np.nan*np.ones(self.points_before_clear)).astype(self.descriptor.dtype)
+        else:
+            self.plot_buffer = np.nan*np.ones(self.points_before_clear)
         self.idx = 0
 
     def execute_on_run(self):
@@ -245,7 +249,7 @@ class MeshPlotter(Filter):
 
 class ManualPlotter(object):
     """
-    Establish a figure, then give the user complete control over plot creation and data. There isn't any reason to 
+    Establish a figure, then give the user complete control over plot creation and data. There isn't any reason to
     run this as a process, but we provide the same interface for convenience.
     """
     def __init__(self,  name="", x_label=['X'], y_label=["y"], y_lim=None, numplots = 1):
