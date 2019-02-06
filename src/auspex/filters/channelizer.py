@@ -242,8 +242,8 @@ class Channelizer(Filter):
                     if self.decim_factors[0] > 1:
                         filtered = filtered[:, ::self.decim_factors[0]]
                 else:
-                    filtered = np.empty_like(reshaped_data)
-                    libipp.filter_records_iir(stacked_coeffs, self.filters[0][0].size-1, reshaped_data, self.record_length, num_records, filtered)
+                    filtered = np.empty_like(reshaped_data, dtype=np.float32)
+                    libipp.filter_records_iir(stacked_coeffs, self.filters[0][0].size-1, np.ascontiguousarray(reshaped_data.real.astype(np.float32)), self.record_length, num_records, filtered)
 
                     # decimate
                     if self.decim_factors[0] > 1:
