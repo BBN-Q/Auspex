@@ -38,14 +38,13 @@ import zmq
 import numpy as np
 import scipy as sp
 import networkx as nx
-import h5py
 from tqdm import tqdm, tqdm_notebook
 
 from auspex.instruments.instrument import Instrument
 from auspex.parameter import ParameterGroup, FloatParameter, IntParameter, Parameter
 from auspex.sweep import Sweeper
 from auspex.stream import DataStream, DataAxis, SweepAxis, DataStreamDescriptor, InputConnector, OutputConnector
-from auspex.filters import Plotter, MeshPlotter, ManualPlotter, WriteToHDF5, H5Handler, DumbFileHandler, DataBuffer, Filter
+from auspex.filters import Plotter, MeshPlotter, ManualPlotter, WriteToFile, DataBuffer, Filter
 from auspex.log import logger
 import auspex.config
 
@@ -202,12 +201,7 @@ class Experiment(metaclass=MetaExperiment):
         self.manual_plotter_callbacks = [] # These are called at the end of run
         self._extra_plots_to_streams = {}
 
-        # Furthermore, keep references to all of the file writers.
-        # If multiple writers request acces to the same filename, they
-        # should share the same file object and write in separate
-        # hdf5 groups. Since we are now using multiprocessing, we need to
-        # be careful to avoid concurrent operations since HDF5 does not
-        # support threaded/concurrent write access.
+        # Furthermore, keep references to all of the file writers and buffers.
         self.writers = []
         self.buffers = []
 
@@ -418,35 +412,14 @@ class Experiment(metaclass=MetaExperiment):
             logger.warning("There do not appear to be any axes defined for this experiment!")
 
         # Go find any writers
-        self.writers = [n for n in self.nodes if isinstance(n, WriteToHDF5)]
+        self.writers = [n for n in self.nodes if isinstance(n, WriteToFile)]
         self.buffers = [n for n in self.nodes if isinstance(n, DataBuffer)]
         if self.name:
             for w in self.writers:
                 w.filename.value = os.path.join(os.path.dirname(w.filename.value), self.name)
         self.filenames = [w.filename.value for w in self.writers]
-        self.files = []
-
-        # Check for redundancy in filenames, and share plot file objects
-        self.h5_handlers = []
-        for filename in set(self.filenames):
-            wrs = [w for w in self.writers if w.filename.value == filename]
-
-            # Let the first writer with this filename create the file...
-            wrs[0].file = wrs[0].new_file()
-            wrs[0].queue = Queue()
-            wrs[0].ret_queue = Queue()
-            self.h5_handlers.append(H5Handler(wrs[0].filename.value, len(wrs), wrs[0].queue, wrs[0].ret_queue))
-            self.files.append(wrs[0].file)
-
-            # Make the rest of the writers use this same file object
-            for w in wrs[1:]:
-                w.file = wrs[0].file
-                w.queue = wrs[0].queue
-                w.ret_queue = wrs[0].ret_queue
-                w.filename.value = wrs[0].filename.value
 
         # Remove the nodes with 0 dimension
-
         self.nodes = [n for n in self.nodes if not(hasattr(n, 'input_connectors') and  n.input_connectors['sink'].descriptor.num_dims()==0)]
 
         # Go and find any plotters
@@ -465,9 +438,6 @@ class Experiment(metaclass=MetaExperiment):
             if hasattr(n, 'final_init'):
                 n.final_init()
 
-        # Close file objects and create file handler processes for H5 writers
-        for file in self.files:
-            file.close()
         # Launch plot servers.
         if len(self.plotters) > 0:
             self.connect_to_plot_server()
@@ -495,7 +465,6 @@ class Experiment(metaclass=MetaExperiment):
             # in the list of tasks.
             self.other_nodes = self.nodes[:]
             self.other_nodes.extend(self.extra_plotters)
-            self.other_nodes.extend(self.h5_handlers)
             self.other_nodes.remove(self)
 
             # If we are launching the process dashboard,

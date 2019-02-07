@@ -54,9 +54,9 @@ class PipelineTestCase(unittest.TestCase):
         holz4 = cl.new_source("Holz_4", "HolzworthHS9000", "HS9004A-009-4", power=-30)
 
         cl.set_control(q1, aps1, generator=holz1)
-        cl.set_measure(q1, aps2, x6_1.ch("1"), generator=holz2)
+        cl.set_measure(q1, aps2, x6_1["raw-1-1"], generator=holz2)
         cl.set_control(q2, aps3, generator=holz3)
-        cl.set_measure(q2, aps4, x6_2.ch("1"), generator=holz4)
+        cl.set_measure(q2, aps4, x6_2["raw-1-1"], generator=holz4)
         cl.set_master(aps1, aps1.ch("m2"))
 
         pl.create_default_pipeline()
@@ -92,9 +92,9 @@ class PipelineTestCase(unittest.TestCase):
         self.assertTrue(rack.get_transmitter("1").label == 'APS2Rack_U1')
 
         cl.set_control(q1, rack.get_transmitter("1"), generator=holz1)
-        cl.set_measure(q1, rack.get_transmitter("2"), x6_1.ch("1"), generator=holz2)
+        cl.set_measure(q1, rack.get_transmitter("2"), x6_1["raw-1-1"], generator=holz2)
         cl.set_control(q2, rack.get_transmitter("3"), generator=holz3)
-        cl.set_measure(q2, rack.get_transmitter("4"), x6_2.ch("1"), generator=holz4)
+        cl.set_measure(q2, rack.get_transmitter("4"), x6_2["raw-1-1"], generator=holz4)
         cl.set_master(rack.get_transmitter("1"), rack.get_transmitter("1").ch("m2"))
 
         
@@ -124,7 +124,7 @@ class PipelineTestCase(unittest.TestCase):
         holz1 = cl.new_source("Holz_1", "HolzworthHS9000", "HS9004A-009-1", power=-30)
         holz2 = cl.new_source("Holz_2", "HolzworthHS9000", "HS9004A-009-2", power=-30)
         cl.set_control(q1, aps1, generator=holz1)
-        cl.set_measure(q1, aps2, x6_1.ch("1"), generator=holz2)
+        cl.set_measure(q1, aps2, x6_1["raw-1-1"], generator=holz2)
         cl.set_master(aps1, aps1.ch("m2"))
         pl.create_default_pipeline()
 
@@ -143,7 +143,7 @@ class PipelineTestCase(unittest.TestCase):
         holz1 = cl.new_source("Holz_1", "HolzworthHS9000", "HS9004A-009-1", power=-30)
         holz2 = cl.new_source("Holz_2", "HolzworthHS9000", "HS9004A-009-2", power=-30)
         cl.set_control(q1, aps1, generator=holz1)
-        cl.set_measure(q1, aps2, x6_1.ch("1"), generator=holz2)
+        cl.set_measure(q1, aps2, x6_1["raw-1-1"], generator=holz2)
         cl.set_master(aps1, aps1.ch("m2"))
         pl.create_default_pipeline(buffers=True)
 
