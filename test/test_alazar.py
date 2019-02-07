@@ -21,9 +21,6 @@ auspex.config.KernelDir = kern_dir.name
 from auspex.qubit import *
 import bbndb
 
-cl = ChannelLibrary(db_resource_name=":memory:")
-pl = PipelineManager()
-
 class AlazarTestCase(unittest.TestCase):
 
     def basic(self, delay=1.0, averages=10, segments=20, record=1024):
@@ -77,10 +74,11 @@ class AlazarTestCase(unittest.TestCase):
                 self.queue.put(data)
                 self.points_taken.value += data.size
         oc = OC()
-
-        proc = Process(target=alz.receive_data, args=(ch, oc, exit))
+        ready = Value('i', 0)
+        proc = Process(target=alz.receive_data, args=(ch, oc, exit, ready))
         proc.start()
-        time.sleep(delay)
+        while ready.value < 1:
+            time.sleep(delay)
 
         alz.wait_for_acquisition(2.0, [oc])
 
@@ -103,13 +101,15 @@ class AlazarTestCase(unittest.TestCase):
         self.basic(delay=1.0, averages=100)
 
     def test_qubit_experiment(self):
+        cl = ChannelLibrary(db_resource_name=":memory:")
+        pl = PipelineManager()
         cl.clear()
         q1     = cl.new_qubit("q1")
         aps2_1 = cl.new_APS2("BBNAPS1", address="192.168.5.101")
         aps2_2 = cl.new_APS2("BBNAPS2", address="192.168.5.102")
         dig_1  = cl.new_Alazar("Alz1", address="1")
-        h1     = cl.new_source("Holz1", "HolzworthHS9000", "HS9004A-009-1", power=-30)
-        h2     = cl.new_source("Holz2", "HolzworthHS9000", "HS9004A-009-2", power=-30)
+        h1     = cl.new_source("Holz1", "HolzworthHS9000", "HS9004A-009-1", power=-30, reference='10MHz')
+        h2     = cl.new_source("Holz2", "HolzworthHS9000", "HS9004A-009-2", power=-30, reference='10MHz')
         cl.set_control(q1, aps2_1, generator=h1)
         cl.set_measure(q1, aps2_2, dig_1.ch("1"), generator=h2)
         cl.set_master(aps2_1, aps2_1.ch("m2"))

@@ -19,7 +19,7 @@ from auspex.experiment import Experiment
 from auspex.parameter import FloatParameter
 from auspex.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector
 from auspex.filters.debug import Print
-from auspex.filters.io import WriteToHDF5
+from auspex.filters.io import WriteToFile
 from auspex.log import logger
 
 class SweptTestExperiment(Experiment):
