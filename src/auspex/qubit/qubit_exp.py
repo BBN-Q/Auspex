@@ -30,7 +30,7 @@ filter_map = {
     bbndb.auspex.Demodulate: auspex.filters.Channelizer,
     bbndb.auspex.Average: auspex.filters.Averager,
     bbndb.auspex.Integrate: auspex.filters.KernelIntegrator,
-    bbndb.auspex.Write: auspex.filters.WriteToHDF5,
+    bbndb.auspex.Write: auspex.filters.WriteToFile,
     bbndb.auspex.Buffer: auspex.filters.DataBuffer,
     bbndb.auspex.Display: auspex.filters.Plotter,
     bbndb.auspex.FidelityKernel: auspex.filters.SingleShotMeasurement
@@ -290,6 +290,7 @@ class QubitExperiment(Experiment):
     def set_fake_data(self, instrument, ideal_data, increment=False):
         instrument.instr.ideal_data = ideal_data
         instrument.instr.increment_ideal_data = increment
+        instrument.instr.gen_fake_data = True
 
     def clear_fake_data(self, instrument):
         instrument.instr.ideal_data = None
