@@ -467,6 +467,12 @@ class DataStreamDescriptor(object):
         return "<DataStreamDescriptor(num_dims={}, num_points={})>".format(
             self.num_dims(), self.num_points())
 
+    def __getitem__(self, axis_name):
+        return self.axis(axis_name).points
+
+    def _ipython_key_completions_(self):
+        return [a.name for a in self.axes]
+
 class DataStream(object):
     """A stream of data"""
     def __init__(self, name=None, unit=None):
