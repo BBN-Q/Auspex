@@ -33,12 +33,12 @@ class AuspexDataContainer(object):
         filename = os.path.join(self.base_path,groupname,datasetname+'_meta.json')
         assert not os.path.exists(filename), "Existing dataset metafile found. Did you want to open instead?"
         meta = {'shape': tuple(descriptor.dims()), 'dtype': np.dtype(descriptor.dtype).str}
-        meta['axes'] = {a.name: list(np.array(a.points, dtype=float)) for a in descriptor.axes}
+        meta['axes'] = {a.name: a.points.tolist() for a in descriptor.axes}
         meta['units'] = {a.name: a.unit for a in descriptor.axes}
         meta['meta_data'] = {}
         for a in descriptor.axes:
             if a.metadata is not None:
-                meta['meta_data'][a.name] = list(np.array(a.metadata, dtype=float))
+                meta['meta_data'][a.name] = a.metadata
             else:
                 meta['meta_data'][a.name] = None
         with open(filename, 'w') as f:
@@ -59,12 +59,12 @@ class AuspexDataContainer(object):
         return ret
     def open_dataset(self, groupname, datasetname):
         filename = os.path.join(self.base_path,groupname,datasetname+'_meta.json')
-        assert os.path.exists(filename), "Could not find dataset metafile."
+        assert os.path.exists(filename), "Could not find dataset. Is this the correct name?"
         with open(filename, 'r') as f:
             meta = json.load(f)
             
         filename = os.path.join(self.base_path,groupname,datasetname+'.dat')
-        assert os.path.exists(filename), "Could not find dataset."
+        assert os.path.exists(filename), "Could not find dataset. Is this the correct name?"
         flat_shape = (np.product(meta['shape']),)
         mm = np.memmap(filename, dtype=meta['dtype'], mode='r', shape=flat_shape)
         data = np.array(mm).reshape(tuple(meta['shape']))

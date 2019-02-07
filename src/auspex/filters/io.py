@@ -6,7 +6,7 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-__all__ = ['WriteToFile', 'DataBuffer', 'ProgressBar']
+__all__ = ['WriteToFile', 'DataBuffer']
 
 import os
 import sys
@@ -23,15 +23,12 @@ else:
 from auspex.data_format import AuspexDataContainer
 
 import itertools
-import h5py
-# import h5py_cache as h5c
 import contextlib
 import queue
 import numpy as np
 import os.path
 import os, psutil
 import time
-import re
 import datetime
 import pandas as pd
 from shutil import copyfile
@@ -53,10 +50,8 @@ class WriteToFile(Filter):
     sink        = InputConnector()
     filename    = FilenameParameter()
     groupname   = Parameter(default='main')
-    # datasetname = Parameter(default='data')
-    add_date    = BoolParameter(default = False)
 
-    def __init__(self, filename=None, groupname=None, datasetname='data', add_date=False, **kwargs):
+    def __init__(self, filename=None, groupname=None, datasetname='data', **kwargs):
         super(WriteToFile, self).__init__(**kwargs)
         if filename: 
             self.filename.value = filename
@@ -64,49 +59,21 @@ class WriteToFile(Filter):
             self.groupname.value = groupname
         if datasetname:
             self.datasetname = datasetname
-        if add_date:
-            self.add_date.value = add_date
 
         self.ret_queue = None # MP queue For returning data
-
-    def update_filename(self):
-        """Update the file number and date."""
-        basename, _ = os.path.splitext(self.filename.value)
-        dirname  = os.path.dirname(os.path.abspath(self.filename.value))
-
-        if self.add_date.value:
-            date     = time.strftime("%y%m%d")
-            dirname  = os.path.join(dirname, date)
-            basename = os.path.join(dirname, os.path.basename(basename))
-
-        # Set the file number to the maximum in the current folder + 1
-        filenums = []
-        if os.path.exists(dirname):
-            for f in os.listdir(dirname):
-                if 'auspex' in f and os.path.exists(os.path.join(dirname, f)):
-                    nums = re.findall('-(\d{4})\.', f)
-                    if len(nums) > 0:
-                        filenums.append(int(nums[0]))
-
-        i = max(filenums) + 1 if filenums else 0
-        self.filename.value = "{}-{:04d}".format(basename,i)
 
     def final_init(self):
         assert self.filename.value, "Filename never supplied to writer."
         assert self.groupname.value, "Groupname never supplied to writer."
         assert self.datasetname, "Dataset name never supplied to writer."
 
-        self.update_filename() # updates self.filename.value
+        self.descriptor = self.sink.input_streams[0].descriptor
+        self.container  = AuspexDataContainer(self.filename.value)
+        self.group      = self.container.new_group(self.groupname.value)
+        self.mmap       = self.container.new_dataset(self.groupname.value, self.datasetname, self.descriptor)
 
-        streams = self.sink.input_streams
-        self.descriptor = streams[0].descriptor
-        for s in streams[1:]:
-            if not np.all(s.descriptor.expected_tuples() == self.descriptor.expected_tuples()):
-                raise ValueError("Multiple streams connected to writer must have matching descriptors.")
-
-        self.container = AuspexDataContainer(self.filename.value)
-        self.group     = self.container.new_group(self.groupname.value)
-        self.mmap      = self.container.new_dataset(self.groupname.value, self.datasetname, self.descriptor)
+        self.w_idx = 0
+        self.points_taken = 0
 
     def get_data_while_running(self, return_queue):
         """Return data to the main thread or user as requested. Use a MP queue to transmit."""
@@ -118,60 +85,11 @@ class WriteToFile(Filter):
         container = AuspexDataContainer(self.filename.value)
         return container.open_dataset(self.groupname.value, self.datasetname)
 
-    def main(self):
-        streams = self.sink.input_streams
-        desc = streams[0].descriptor
-        got_done_msg = {s: False for s in streams}
-
-        # Write pointer
-        w_idx = {s: 0 for s in streams}
-        points_taken = {s: 0 for s in streams}
-        i = 0
-        stream_done = False
-
-        while not self.exit.is_set():
-            i +=1
-            # Try to pull all messages in the queue. queue.empty() is not reliable, so we
-            # ask for forgiveness rather than permission.
-            msgs_by_stream = {s: [] for s in streams}
-
-            for stream in streams[::-1]:
-                while not self.exit.is_set():
-                    try:
-                        msgs_by_stream[stream].append(stream.queue.get(False))
-                    except queue.Empty as e:
-                        time.sleep(0.008)
-                        break
-
-            self.push_resource_usage()
-
-            # Process many messages for each stream
-            for stream, messages in msgs_by_stream.items():
-                for message in messages:
-                    if message['type'] == 'event':
-                        # logger.info('%s "%s" received event of type "%s"', self.__class__.__name__, self.name, message['event_type'])
-                        if message['event_type'] == 'done':
-                            got_done_msg[stream] = True
-                        elif message['event_type'] == 'refined':
-                            raise Exception("Refinement not yet implemented with new auspex file format.")
-                        elif message['event_type'] == 'new_tuples':
-                            raise Exception("Adding new tuples not yet implemented with new auspex file format.")
-                    elif message['type'] == 'data':
-                        message_data = message['data']
-                        self.processed += message_data.nbytes
-
-                        if not hasattr(message_data, 'size'):
-                            message_data = np.array([message_data])
-
-                        # Write the data
-                        self.mmap[w_idx[stream]:w_idx[stream]+message_data.size] = message_data
-                        w_idx[stream] += message_data.size
-                        points_taken[stream] = w_idx[stream]
-
-            if np.all(list(got_done_msg.values())):
-                stream_done = True
-                self.done.set()
-                break
+    def process_data(self, data):
+        # Write the data
+        self.mmap[self.w_idx:self.w_idx+data.size] = data
+        self.w_idx += data.size
+        self.points_taken = self.w_idx
 
 class DataBuffer(Filter):
     """Writes data to IO."""
@@ -295,66 +213,66 @@ class DataBuffer(Filter):
     def get_descriptor(self):
         return self.sink.input_streams[0].descriptor
 
-class ProgressBar(Filter):
-    """ Display progress bar(s) on the terminal/notebook.
+# class ProgressBar(Filter):
+#     """ Display progress bar(s) on the terminal/notebook.
 
-    num: number of progress bars to be display, \
-    corresponding to the number of axes (counting from outer most)
+#     num: number of progress bars to be display, \
+#     corresponding to the number of axes (counting from outer most)
 
-        For running in Jupyter Notebook:
-    Needs to open '_tqdm_notebook.py',\
-    search for 'n = int(s[:npos])'\
-    then replace it with 'n = float(s[:npos])'
-    """
-    sink = InputConnector()
-    def __init__(self, num=0, notebook=False):
-        super(ProgressBar,self).__init__()
-        self.num    = num
-        self.notebook = notebook
-        self.bars   = []
-        self.w_id   = 0
+#         For running in Jupyter Notebook:
+#     Needs to open '_tqdm_notebook.py',\
+#     search for 'n = int(s[:npos])'\
+#     then replace it with 'n = float(s[:npos])'
+#     """
+#     sink = InputConnector()
+#     def __init__(self, num=0, notebook=False):
+#         super(ProgressBar,self).__init__()
+#         self.num    = num
+#         self.notebook = notebook
+#         self.bars   = []
+#         self.w_id   = 0
 
-    def run(self):
-        if config.profile:
-            cProfile.runctx('self.main()', globals(), locals(), 'prof-%s.prof' % self.filter_name)
-        else:
-            self.main()
+#     def run(self):
+#         if config.profile:
+#             cProfile.runctx('self.main()', globals(), locals(), 'prof-%s.prof' % self.filter_name)
+#         else:
+#             self.main()
 
-    def main(self):
-        self.stream = self.sink.input_streams[0]
-        axes = self.stream.descriptor.axes
-        num_axes = len(axes)
-        totals = [self.stream.descriptor.num_points_through_axis(axis) for axis in range(num_axes)]
-        chunk_sizes = [max(1,self.stream.descriptor.num_points_through_axis(axis+1)) for axis in range(num_axes)]
-        self.num = min(self.num, num_axes)
+#     def main(self):
+#         self.stream = self.sink.input_streams[0]
+#         axes = self.stream.descriptor.axes
+#         num_axes = len(axes)
+#         totals = [self.stream.descriptor.num_points_through_axis(axis) for axis in range(num_axes)]
+#         chunk_sizes = [max(1,self.stream.descriptor.num_points_through_axis(axis+1)) for axis in range(num_axes)]
+#         self.num = min(self.num, num_axes)
 
-        self.bars   = []
-        for i in range(self.num):
-            if self.notebook:
-                self.bars.append(tqdm_notebook(total=totals[i]/chunk_sizes[i]))
-            else:
-                self.bars.append(tqdm(total=totals[i]/chunk_sizes[i]))
-        self.w_id   = 0
-        while not self.exit.is_set():
-            if self.stream.done() and self.w_id==self.stream.num_points():
-                break
+#         self.bars   = []
+#         for i in range(self.num):
+#             if self.notebook:
+#                 self.bars.append(tqdm_notebook(total=totals[i]/chunk_sizes[i]))
+#             else:
+#                 self.bars.append(tqdm(total=totals[i]/chunk_sizes[i]))
+#         self.w_id   = 0
+#         while not self.exit.is_set():
+#             if self.stream.done() and self.w_id==self.stream.num_points():
+#                 break
 
-            new_data = np.array(self.stream.queue.get()).flatten()
-            while self.stream.queue.qsize() > 0:
-                new_data = np.append(new_data, np.array(self.stream.queue.get_nowait()).flatten())
-            self.w_id += new_data.size
-            num_data = self.stream.points_taken.value
-            for i in range(self.num):
-                if num_data == 0:
-                    if self.notebook:
-                        self.bars[i].sp(close=True)
-                        # Reset the progress bar with a new one
-                        self.bars[i] = tqdm_notebook(total=totals[i]/chunk_sizes[i])
-                    else:
-                        # Reset the progress bar with a new one
-                        self.bars[i].close()
-                        self.bars[i] = tqdm(total=totals[i]/chunk_sizes[i])
-                pos = int(10*num_data / chunk_sizes[i])/10.0 # One decimal is good enough
-                if pos > self.bars[i].n:
-                    self.bars[i].update(pos - self.bars[i].n)
-                num_data = num_data % chunk_sizes[i]
+#             new_data = np.array(self.stream.queue.get()).flatten()
+#             while self.stream.queue.qsize() > 0:
+#                 new_data = np.append(new_data, np.array(self.stream.queue.get_nowait()).flatten())
+#             self.w_id += new_data.size
+#             num_data = self.stream.points_taken.value
+#             for i in range(self.num):
+#                 if num_data == 0:
+#                     if self.notebook:
+#                         self.bars[i].sp(close=True)
+#                         # Reset the progress bar with a new one
+#                         self.bars[i] = tqdm_notebook(total=totals[i]/chunk_sizes[i])
+#                     else:
+#                         # Reset the progress bar with a new one
+#                         self.bars[i].close()
+#                         self.bars[i] = tqdm(total=totals[i]/chunk_sizes[i])
+#                 pos = int(10*num_data / chunk_sizes[i])/10.0 # One decimal is good enough
+#                 if pos > self.bars[i].n:
+#                     self.bars[i].update(pos - self.bars[i].n)
+#                 num_data = num_data % chunk_sizes[i]

@@ -169,34 +169,8 @@ class WriteTestCase(unittest.TestCase):
             self.assertTrue(np.all(desc['field'] == np.linspace(0,100.0,4)))
             self.assertTrue(np.all(desc['freq'] == np.linspace(0,10.0,3)))
             self.assertTrue(np.all(desc['samples'] == np.linspace(0,4,5)))
-
-            # self.assertTrue(desc.axis('freq').attrs['time_val'] == 0)
             self.assertTrue(desc.axis('freq').unit == "Hz")
 
-    @unittest.skip("Need to update tests for new auspex data writer")
-    def test_write_with_settings(self):
-        with tempfile.TemporaryDirectory() as tmpdirname:
-            exp = SweptTestExperiment()
-            wr = WriteToFile(tmpdirname+"/test_write.auspex")
-
-            edges = [(exp.voltage, wr.sink)]
-            exp.set_graph(edges)
-
-            exp.add_sweep(exp.field, np.linspace(0,100.0,4))
-            exp.add_sweep(exp.freq, np.linspace(0,10.0,3))
-            exp.run_sweeps()
-            self.assertTrue(os.path.exists(tmpdirname+"/test_write-0000.auspex"))
-            with h5py.File(tmpdirname+"/test_write-0000.auspex", 'r') as f:
-                self.assertTrue(0.0 not in f['main/data/voltage'])
-                self.assertTrue(np.sum(f['main/data/field']) == 5*3*np.sum(np.linspace(0,100.0,4)) )
-                self.assertTrue(np.sum(f['main/data/freq']) == 5*4*np.sum(np.linspace(0,10.0,3)) )
-                self.assertTrue(np.sum(f['main/data/samples']) == 3*4*np.sum(np.linspace(0,4,5)) )
-                self.assertTrue("Here the run loop merely spews" in f.attrs['exp_src'])
-                self.assertTrue(f['main/data'].attrs['time_val'] == 0)
-                self.assertTrue(f['main/data'].attrs['unit_freq'] == "Hz")
-                # self.assertTrue(f['header'].attrs['settings'] == config.dump_meas_file(config.load_meas_file(config.meas_file), flatten = True))
-
-    @unittest.skip("Need to update tests for new auspex data writer")
     def test_filename_increment(self):
         with tempfile.TemporaryDirectory() as tmpdirname:
 
@@ -223,29 +197,6 @@ class WriteTestCase(unittest.TestCase):
             self.assertTrue(os.path.exists(tmpdirname+"/test_write-0000.auspex"))
             self.assertTrue(os.path.exists(tmpdirname+"/test_write-0001.auspex"))
 
-    @unittest.skip("Need to update tests for new auspex data writer")
-    def test_write_no_tuples(self):
-        with tempfile.TemporaryDirectory() as tmpdirname:
-            exp = SweptTestExperiment()
-            exp.samples = 1024
-            exp.init_streams()
-
-            wr = WriteToFile(tmpdirname+"/test_write_no_tuples.auspex", store_tuples=False)
-
-            edges = [(exp.voltage, wr.sink)]
-            exp.set_graph(edges)
-
-            exp.add_sweep(exp.field, np.linspace(0,100.0,5))
-            exp.add_sweep(exp.freq, np.linspace(0,10.0,4))
-            exp.run_sweeps()
-            self.assertTrue(os.path.exists(tmpdirname+"/test_write_no_tuples-0000.auspex"))
-            with h5py.File(tmpdirname+"/test_write_no_tuples-0000.auspex", 'r') as f:
-                self.assertTrue(0.0 not in f['main/data/voltage'])
-                self.assertTrue("Here the run loop merely spews" in f.attrs['exp_src'])
-                self.assertTrue(f['main/data'].attrs['time_val'] == 0)
-                self.assertTrue(f['main/data'].attrs['unit_freq'] == "Hz")
-
-    @unittest.skip("Need to update tests for new auspex data writer")
     def test_write_metadata(self):
         with tempfile.TemporaryDirectory() as tmpdirname:
             exp = SweptTestExperimentMetadata()
@@ -257,23 +208,17 @@ class WriteTestCase(unittest.TestCase):
             exp.add_sweep(exp.field, np.linspace(0,100.0,4))
             exp.add_sweep(exp.freq, np.linspace(0,10.0,3))
             exp.run_sweeps()
+
             self.assertTrue(os.path.exists(tmpdirname+"/test_write_metadata-0000.auspex"))
-            with h5py.File(tmpdirname+"/test_write_metadata-0000.auspex", 'r') as f:
-                self.assertTrue(0.0 not in f['main/data']['voltage'])
-                self.assertTrue(np.sum(f['main/data/field']) == 5*3*np.sum(np.linspace(0,100.0,4)) )
-                self.assertTrue(np.sum(f['main/data/freq']) == 5*4*np.sum(np.linspace(0,10.0,3)) )
-                self.assertTrue(np.sum(np.isnan(f['main/data/samples'])) == 3*4*2 )
-
-                md_enum = f['main/samples_metadata_enum'][:]
-                md = f['main/data/samples_metadata'][:]
-                md = md_enum[md]
-
-                self.assertTrue(np.sum(md == b'data') == 4*3*3)
-                self.assertTrue("Here the run loop merely spews" in f.attrs['exp_src'])
-                self.assertTrue(f['main/data'].attrs['time_val'] == 0)
-                self.assertTrue(f['main/data'].attrs['unit_freq'] == "Hz")
-                self.assertTrue('metadata' in f['main/samples'].attrs)
-                self.assertTrue(f[f['main/samples'].attrs['metadata']] == f['main/samples_metadata'])
+            container = AuspexDataContainer(tmpdirname+"/test_write_metadata-0000.auspex")
+            data, desc = container.open_dataset('main', 'data')
+            
+            self.assertTrue(0.0 not in data)
+            self.assertTrue(np.all(desc['field'] == np.linspace(0,100.0,4)))
+            self.assertTrue(np.all(desc['freq'] == np.linspace(0,10.0,3)))
+            self.assertTrue(np.all(desc['samples'][:3] == [0.0,1.0,2.0]))
+            self.assertTrue(np.all(np.isnan(desc['samples'][3:])))
+            self.assertTrue(np.all(desc.axis('samples').metadata == ["data", "data", "data", "0", "1"]))
 
     @unittest.skip("Need to update tests for new auspex data writer")
     def test_write_metadata_unstructured(self):
@@ -361,12 +306,11 @@ class WriteTestCase(unittest.TestCase):
                 self.assertTrue(f['main/data'].attrs['time_val'] == 0)
                 self.assertTrue(f['main/data'].attrs['unit_freq'] == "Hz")
 
-    @unittest.skip("Need to update tests for new auspex data writer")
     def test_write_samefile(self):
         with tempfile.TemporaryDirectory() as tmpdirname:
             exp = SweptTestExperiment()
-            wr1 = WriteToFile(tmpdirname+"/test_write_samefile.auspex", "group1")
-            wr2 = WriteToFile(tmpdirname+"/test_write_samefile.auspex", "group2")
+            wr1 = WriteToFile(tmpdirname+"/test_write_samefile.auspex", groupname="group1")
+            wr2 = WriteToFile(tmpdirname+"/test_write_samefile.auspex", groupname="group2")
 
             edges = [(exp.voltage, wr1.sink), (exp.current, wr2.sink)]
             exp.set_graph(edges)
@@ -374,23 +318,21 @@ class WriteTestCase(unittest.TestCase):
             exp.add_sweep(exp.field, np.linspace(0,100.0,4))
             exp.add_sweep(exp.freq, np.linspace(0,10.0,3))
             exp.run_sweeps()
-            self.assertTrue(os.path.exists(tmpdirname+"/test_write_samefile-0000.auspex"))
-            with h5py.File(tmpdirname+"/test_write_samefile-0000.auspex", 'r') as f:
-                self.assertTrue(0.0 not in f['group1']['data']['voltage'])
-                self.assertTrue(np.sum(f['group1/data/field']) == 5*3*np.sum(np.linspace(0,100.0,4)) )
-                self.assertTrue(np.sum(f['group1/data/freq']) == 5*4*np.sum(np.linspace(0,10.0,3)) )
-                self.assertTrue(np.sum(f['group1/data/samples']) == 3*4*np.sum(np.linspace(0,4,5)) )
-                self.assertTrue("Here the run loop merely spews" in f.attrs['exp_src'])
-                self.assertTrue(f['group1/data'].attrs['time_val'] == 0)
-                self.assertTrue(f['group1/data'].attrs['unit_freq'] == "Hz")
-                self.assertTrue(0.0 not in f['group2/data/current'])
-                self.assertTrue(np.sum(f['group2/data/field']) == 3*np.sum(np.linspace(0,100.0,4)) )
-                self.assertTrue(np.sum(f['group2/data/freq']) == 4*np.sum(np.linspace(0,10.0,3)) )
-                self.assertTrue("Here the run loop merely spews" in f.attrs['exp_src'])
-                self.assertTrue(f['group2/data'].attrs['time_val'] == 0)
-                self.assertTrue(f['group2/data'].attrs['unit_freq'] == "Hz")
 
-    @unittest.skip("Need to update tests for new auspex data writer")
+            container = AuspexDataContainer(tmpdirname+"/test_write_samefile-0000.auspex")
+            data1, desc1 = container.open_dataset('group1', 'data')
+            data2, desc2 = container.open_dataset('group2', 'data')
+            self.assertTrue(os.path.exists(tmpdirname+"/test_write_samefile-0000.auspex"))
+            self.assertTrue(0.0 not in data1)
+            self.assertTrue(0.0 not in data2)
+            self.assertTrue(np.all(desc1['field'] == np.linspace(0,100.0,4)))
+            self.assertTrue(np.all(desc1['freq'] == np.linspace(0,10.0,3)))
+            self.assertTrue(np.all(desc1['samples'] == np.linspace(0,4,5)))
+            self.assertTrue(np.all(desc2['field'] == np.linspace(0,100.0,4)))
+            self.assertTrue(np.all(desc2['freq'] == np.linspace(0,10.0,3)))
+            self.assertTrue(desc1.axis('freq').unit == "Hz")
+            self.assertTrue(desc1.axis('freq').unit == "Hz")
+
     def test_write_complex(self):
         with tempfile.TemporaryDirectory() as tmpdirname:
             exp = SweptTestExperiment()
@@ -404,34 +346,17 @@ class WriteTestCase(unittest.TestCase):
             exp.add_sweep(exp.field, np.linspace(0,100.0,4))
             exp.add_sweep(exp.freq, np.linspace(0,10.0,3))
             exp.run_sweeps()
+
             self.assertTrue(os.path.exists(tmpdirname+"/test_write_complex-0000.auspex"))
-            with h5py.File(tmpdirname+"/test_write_complex-0000.auspex", 'r') as f:
-                self.assertTrue(0.0 not in f['main/data/voltage'])
-                self.assertTrue(np.sum(f['main/data/field']) == 5*3*np.sum(np.linspace(0,100.0,4)) )
-                self.assertTrue(np.sum(f['main/data/freq']) == 5*4*np.sum(np.linspace(0,10.0,3)) )
-                self.assertTrue(np.sum(f['main/data/samples']) == 3*4*np.sum(np.linspace(0,4,5)) )
-                self.assertTrue(f['main/data'].attrs['time_val'] == 0)
-                self.assertTrue(f['main/data'].attrs['unit_freq'] == "Hz")
+            container = AuspexDataContainer(tmpdirname+"/test_write_complex-0000.auspex")
+            data, desc = container.open_dataset('main', 'data')
 
-    @unittest.skip("Need to update tests for new auspex data writer")
-    def test_write_multiple_streams(self):
-        with tempfile.TemporaryDirectory() as tmpdirname:
-            exp = SweptTestExperiment2()
-            wr = WriteToFile(tmpdirname+"/test_write_mult.auspex")
-
-            edges = [(exp.voltage, wr.sink), (exp.current, wr.sink)]
-            exp.set_graph(edges)
-            exp.add_sweep(exp.field, np.linspace(0,100.0,4))
-            exp.add_sweep(exp.freq, np.linspace(0,10.0,3))
-            exp.run_sweeps()
-            self.assertTrue(os.path.exists(tmpdirname+"/test_write_mult-0000.auspex"))
-            with h5py.File(tmpdirname+"/test_write_mult-0000.auspex", 'r') as f:
-                self.assertTrue(0.0 not in f['main/data/voltage'])
-                self.assertTrue(np.sum(f['main/data/field']) == 5*3*np.sum(np.linspace(0,100.0,4)) )
-                self.assertTrue(np.sum(f['main/data/freq']) == 5*4*np.sum(np.linspace(0,10.0,3)) )
-                self.assertTrue(np.sum(f['main/data/samples']) == 3*4*np.sum(np.linspace(0,4,5)) )
-                self.assertTrue(f['main/data'].attrs['time_val'] == 0)
-                self.assertTrue(f['main/data'].attrs['unit_freq'] == "Hz")
+            self.assertTrue(0.0 not in data)
+            self.assertTrue(np.all(desc['field'] == np.linspace(0,100.0,4)))
+            self.assertTrue(np.all(desc['freq'] == np.linspace(0,10.0,3)))
+            self.assertTrue(np.all(desc['samples'] == np.linspace(0,4,5)))
+            self.assertTrue(desc.axis('freq').unit == "Hz")
+            self.assertTrue(data.dtype.type is np.complex128)
 
     @unittest.skip("Need to update tests for new auspex data writer")
     def test_write_adaptive_sweep(self):

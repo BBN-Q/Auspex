@@ -215,15 +215,9 @@ class Filter(Process, metaclass=MetaFilter):
                     if message['event_type'] == 'done':
                         logger.debug(f"{self} received done message!")
                         stream_done = True
-                        # if not self.finished_processing.is_set():
-                        #     logger.warning("Filter {} being asked to finish before being done processing. ({} of {})".format(self.filter_name,stream_points,input_stream.num_points()))
-                        # self.exit.set()
-                        # self.finished_processing.set()
-                        # break
                     elif message['event_type'] == 'refined':
                         self.refine(message_data)
                         continue
-
                     elif message['event_type'] == 'new_tuples':
                         self.process_new_tuples(input_stream.descriptor, message_data)
                         # break

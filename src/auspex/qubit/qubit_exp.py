@@ -64,6 +64,7 @@ class QubitExperiment(Experiment):
 
         self.pipeline_name = pipeline_name
         self.cw_mode = False
+        self.add_date = True # add date to data files?
 
         self.create_from_meta(meta_file, averages)
 

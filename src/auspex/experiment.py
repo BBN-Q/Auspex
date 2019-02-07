@@ -31,6 +31,7 @@ import signal
 import numbers
 import subprocess
 import queue
+import re
 import cProfile
 from functools import partial
 
@@ -38,7 +39,6 @@ import zmq
 import numpy as np
 import scipy as sp
 import networkx as nx
-from tqdm import tqdm, tqdm_notebook
 
 from auspex.instruments.instrument import Instrument
 from auspex.parameter import ParameterGroup, FloatParameter, IntParameter, Parameter
@@ -48,59 +48,31 @@ from auspex.filters import Plotter, MeshPlotter, ManualPlotter, WriteToFile, Dat
 from auspex.log import logger
 import auspex.config
 
-class ExpProgressBar(object):
-    """ Display progress bar(s) on the terminal.
-
-    num: number of progress bars to be display, \
-    corresponding to the number of axes (counting from outer most)
-
-        For running in Jupyter Notebook:
-    Needs to open '_tqdm_notebook.py',\
-    search for 'n = int(s[:npos])'\
-    then replace it with 'n = float(s[:npos])'
-    """
-    def __init__(self, stream=None, num=0, notebook=True):
-        super(ExpProgressBar,self).__init__()
-        self.stream = stream
-        self.num = num
-        self.progress = 0
-        if notebook:
-            self.bar = tqdm_notebook(total=100)
-        else:
-            self.bar = tqdm(total=100)
-
-    def close(self):
-        """ Close all progress bar(s) """
-        self.bar.close()
-
-    def update(self):
-        """ Update the status of the progress bar(s) """
-        new_percent = int(self.stream.percent_complete())
-        if new_percent > self.progress:
-            self.bar.update(new_percent - self.progress)
-            self.progress = new_percent
-
-
-
-
-
-        # for i in range(self.num):
-        #     if num_data == 0:
-        #         # Reset the progress bar with a new one
-        #         if self.notebook:
-        #             self.bars[i].sp(close=True)
-        #             self.bars[i] = tqdm_notebook(total=int(self.totals[i]/self.chunk_sizes[i]))
-        #         else:
-        #             self.bars[i].close()
-        #             self.bars[i] = tqdm(total=int(self.totals[i]/self.chunk_sizes[i]))
-        #     pos = int(10*num_data / self.chunk_sizes[i])/10.0 # One decimal is good enough
-        #     if pos > self.bars[i].n:
-        #         self.bars[i].update(int(pos - self.bars[i].n))
-        #     num_data = num_data % self.chunk_sizes[i]
-
 def auspex_plot_server():
     client_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),"plot_server.py")
     subprocess.Popen(['python', client_path], env=os.environ.copy())
+
+def update_filename(filename, add_date=True):
+    """Update the file number and date."""
+    basename, _ = os.path.splitext(filename)
+    dirname  = os.path.dirname(os.path.abspath(filename))
+
+    if add_date:
+        date     = time.strftime("%y%m%d")
+        dirname  = os.path.join(dirname, date)
+        basename = os.path.join(dirname, os.path.basename(basename))
+
+    # Set the file number to the maximum in the current folder + 1
+    filenums = []
+    if os.path.exists(dirname):
+        for f in os.listdir(dirname):
+            if 'auspex' in f and os.path.exists(os.path.join(dirname, f)):
+                nums = re.findall('-(\d{4})\.', f)
+                if len(nums) > 0:
+                    filenums.append(int(nums[0]))
+
+    i = max(filenums) + 1 if filenums else 0
+    return "{}-{:04d}".format(basename,i)
 
 class ExperimentGraph(object):
     def __init__(self, edges):
@@ -213,6 +185,9 @@ class Experiment(metaclass=MetaExperiment):
 
         # indicates whether this is the first (or only) experiment in a series (e.g. for pulse calibrations)
         self.first_exp = True
+
+        # add date to data files?
+        self.add_date = False
 
         # Things we can't metaclass
         self.output_connectors = {}
@@ -417,6 +392,14 @@ class Experiment(metaclass=MetaExperiment):
         if self.name:
             for w in self.writers:
                 w.filename.value = os.path.join(os.path.dirname(w.filename.value), self.name)
+        self.filenames = [w.filename.value for w in self.writers]
+
+        # Auto increment the filenames
+        for filename in set(self.filenames):
+            wrs = [w for w in self.writers if w.filename.value == filename]
+            inc_filename = update_filename(filename, add_date=self.add_date)
+            for w in wrs:
+                w.filename.value = inc_filename
         self.filenames = [w.filename.value for w in self.writers]
 
         # Remove the nodes with 0 dimension
