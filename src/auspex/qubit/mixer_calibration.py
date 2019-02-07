@@ -181,7 +181,7 @@ class MixerCalibration(Calibration):
         self.exp = MixerCalibrationExperiment(self.channel, self.spectrum_analyzer, config_dict, mixer=self.mixer)
         self.exp.add_sweep(getattr(self.exp, sweep_parameter), pts)
         self.exp.run_sweeps()
-        return self.exp.buff.get_data()['amplitude']
+        return self.exp.buff.get_data()[0]
 
 class MixerCalibrationExperiment(Experiment):
 

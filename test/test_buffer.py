@@ -115,35 +115,10 @@ class BufferTestCase(unittest.TestCase):
         exp.add_sweep(exp.freq, np.linspace(0,10.0,3))
         exp.run_sweeps()
 
-        # data = db.get_data()
-        data = db.output_data
-        # print('test_buffer data = %s' % str(data))
-        db.join()
+        data, desc = db.get_data()
 
         self.assertTrue(len(data) == 4*3*5)
-        self.assertTrue(len(data['field']) == 4*3*5)
-
-    def test_buffer_multi(self):
-        exp = SweptTestExperiment()
-
-        db  = DataBuffer()
-
-        edges = [(exp.voltage, db.sink), (exp.current, db.sink)]
-        exp.set_graph(edges)
-
-        exp.add_sweep(exp.field, np.linspace(0,100.0,4))
-        exp.add_sweep(exp.freq, np.linspace(0,10.0,3))
-        exp.run_sweeps()
-
-        # data = db.get_data()
-        data = db.output_data
-        # print('test_buffer_multi data = %s' % str(data))
-        db.join()
-
-        self.assertTrue(len(data) == 4*3*5)
-        self.assertTrue(len(data['current']) == 4*3*5)
-        self.assertTrue(len(data['voltage']) == 4*3*5)
-        self.assertTrue(len(data['field']) == 4*3*5)
+        self.assertTrue(np.all(desc['field'] == np.linspace(0,100.0,4)))
 
     def test_buffer_metadata(self):
         exp = SweptTestExperimentMetadata()
@@ -156,13 +131,11 @@ class BufferTestCase(unittest.TestCase):
         exp.add_sweep(exp.freq, np.linspace(0,10.0,3))
         exp.run_sweeps()
 
-        # data = db.get_data()
-        data = db.output_data
-        # print('test_buffer_metadata data = %s' % str(data))
-        db.join()
+        data, desc = db.get_data()
 
         self.assertTrue(len(data) == 4*3*5)
-        self.assertTrue(len(data['samples_metadata']) == 4*3*5)
+        self.assertTrue(np.all(desc['field'] == np.linspace(0,100.0,4)))
+        self.assertTrue(np.all(desc.axis('samples').metadata == ["data", "data", "data", "0", "1"]))
 
 if __name__ == '__main__':
     unittest.main()

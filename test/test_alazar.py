@@ -119,7 +119,7 @@ class AlazarTestCase(unittest.TestCase):
         exp = QubitExperiment(RabiAmp(cl["q1"], np.linspace(-1, 1, 51)), averages=20)
         exp.set_fake_data(dig_1, np.cos(np.linspace(-np.pi, np.pi, 51)))
         exp.run_sweeps()
-        self.assertAlmostEqual(np.abs(exp.buffers[0].output_data["Data"]).sum(),459.2,places=1)
+        self.assertAlmostEqual(np.abs(exp.buffers[0].output_data).sum(),459.2,places=1)
 
 if __name__ == '__main__':
     unittest.main() 

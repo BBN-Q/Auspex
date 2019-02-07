@@ -561,7 +561,7 @@ class Experiment(metaclass=MetaExperiment):
                     break
 
             for buff in self.buffers:
-                buff.output_data = buff.get_data()
+                buff.output_data, buff.descriptor = buff.get_data()
 
             if self.progressbar:
                 self.progressbar.update()

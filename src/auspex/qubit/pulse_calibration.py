@@ -175,7 +175,7 @@ class QubitCalibration(Calibration):
             if not isinstance(output_buff, DataBuffer):
                 raise ValueError("Could not find data buffer for calibration.")
 
-            dataset, descriptor = output_buff.get_data(), output_buff.get_descriptor()
+            dataset, descriptor = output_buff.get_data()
             if self.norm_points:
                 buff_data = normalize_data(dataset, zero_id=self.norm_points[qubit.label][0],
                                            one_id=self.norm_points[self.qubit.label][1])
@@ -184,7 +184,7 @@ class QubitCalibration(Calibration):
 
             data[qubit.label] = self.quad_fun(buff_data)
 
-            var_dataset, var_descriptor = var_buff.get_data(), var_buff.get_descriptor()
+            var_dataset, var_descriptor = var_buff.get_data()
             # if 'Variance' in dataset.dtype.names:
             realvar = np.real(var_dataset['Variance'])
             imagvar = np.imag(var_dataset['Variance'])

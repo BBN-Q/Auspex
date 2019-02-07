@@ -72,9 +72,9 @@ if __name__ == '__main__':
     exp.run_sweeps()
 
     # ys = buff.get_data()['voltage']
-    ys = buff.output_data['voltage']
+    ys, desc = buff.get_data()
 
-    xs = buff.descriptor.axes[0].points
+    xs = desc.axes[0].points
     plt["Example Data"] = (xs, ys)
     plt["Example Fit"]  = (xs, ys+0.1)
 
