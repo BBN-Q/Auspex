@@ -30,7 +30,7 @@ config.load_meas_file(config.find_meas_file())
 class TestFitMethods(unittest.TestCase):
 
     def TestT1Fit(self):
-        """Test the fit_t1 experiement """
+        """Test the fit_t1 experiment """
 
         # Set parameters and generate synthetic data in natural units
         T1 = 40 * 1e3 # 40 us
@@ -45,7 +45,7 @@ class TestFitMethods(unittest.TestCase):
         self.assertAlmostEqual(T1, result[1], delta=result_err[1])
 
     def TestRamseyFit(self):
-        """Test the fit_ramsey experiement """
+        """Test the fit_ramsey experiment """
 
         # Set parameters and generate synthetic data
         # note the frequency is set relative to ns (the 'natural' units)

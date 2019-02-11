@@ -142,7 +142,7 @@ def fit_rabi_width(xdata, ydata, showPlot=False):
     perr : sqrt of the popt covariance matrix diagonal  (array like)
     """
 
-    frabi, Tcs, amps = KT_estimation(ydata, xdata, 1)
+    frabi, Tcs, amps = KT_estimation(ydata-np.mean(ydata), xdata, 1)
     offset = np.average(xdata)
     amp = np.max(ydata)
     trabi = xdata[np.size(ydata) // 3]# assume Trabi is 1/3 of the scan
@@ -217,31 +217,31 @@ def fit_t1(xdata, ydata, showPlot=False):
 def t1_model(x, *p):
     return p[0]*np.exp(-x/p[1]) + p[2]
 
-def fit_ramsey(xdata, ydata, two_freqs = False, AIC = True, showPlot=False):
+def fit_ramsey(xdata, ydata, two_freqs = False, AIC = True, showPlot=False, force=False):
     if two_freqs:
         # Initial KT estimation
-        freqs, Tcs, amps = KT_estimation(ydata, xdata, 2)
+        freqs, Tcs, amps = KT_estimation(ydata-np.mean(ydata), xdata, 2)
         p0 = [*freqs, *abs(amps), *Tcs, *np.angle(amps), np.mean(ydata)]
         try:
-            popt, pcov = curve_fit(ramsey_2f, xdata, ydata, p0 = p0)
-            fopt = [popt[0], popt[1]]
-            perr = np.sqrt(np.diag(pcov))
-            ferr = perr[:2]
-            fit_result_2 = (fopt, ferr, popt, perr)
+            popt2, pcov2 = curve_fit(ramsey_2f, xdata, ydata, p0 = p0, maxfev=5000)
+            fopt2 = [popt2[0], popt2[1]]
+            perr2 = np.sqrt(np.diag(pcov2))
+            ferr2 = perr2[:2]
+            fit_result_2 = (fopt2, ferr2, popt2, perr2)
             fit_model = ramsey_2f
 
             if not AIC:
                 if showPlot:
-                    plot_ramsey(xdata, ydata, popt, perr, fit_model=fit_model)
+                    plot_ramsey(xdata, ydata, popt2, perr2, fit_model=fit_model)
                 print('Using a two-frequency fit.')
-                print('T2 = {0:.3f} {1} {2:.3f} us'.format(popt[2]/1e3, \
-                    chr(177), perr[2]/1e3))
+                print('T2 = {0:.3f} {1} {2:.3f} us'.format(popt2[4]*1e6, \
+                    chr(177), perr2[4]*1e6))
                 return fit_result_2
         except:
             fit_model = ramsey_1f
             logger.info('Two-frequency fit failed. Trying with single frequency.')
         # Initial KT estimation
-    freqs, Tcs, amps = KT_estimation(ydata, xdata, 1)
+    freqs, Tcs, amps = KT_estimation(ydata-np.mean(ydata), xdata, 1)
     p0 = [freqs[0], abs(amps[0]), Tcs[0], np.angle(amps[0]), np.mean(ydata)]
     popt, pcov = curve_fit(ramsey_1f, xdata, ydata, p0 = p0)
     fopt = [popt[0]]
@@ -260,16 +260,17 @@ def fit_ramsey(xdata, ydata, two_freqs = False, AIC = True, showPlot=False):
             aic = aicc(sq_error(xdata, fit_result_2[2], ramsey_2f), 9, \
                 len(xdata)) \
              - aicc(sq_error(xdata, fit_result_1[2], ramsey_1f), 5, len(xdata))
-            if aic > 0:
+            if aic > 0 and not force:
                 if showPlot:
                     plot_ramsey(xdata, ydata, popt, perr, fit_model=fit_model)
                 print('Using a one-frequency fit.')
-                print('T2 = {0:.3f} {1} {2:.3f} us'.format(popt[2]/1e3, \
-                    chr(177), perr[2]/1e3))
+                print('T2 = {0:.3f} {1} {2:.3f} us'.format(popt[2]*1e6, \
+                    chr(177), perr[2]*1e6))
                 return fit_result_1
             else:
+                fit_model = ramsey_2f
                 if showPlot:
-                    plot_ramsey(xdata, ydata, popt, perr, fit_model=fit_model)
+                    plot_ramsey(xdata, ydata, popt2, perr2, fit_model=fit_model)
                 print('Using a two-frequency fit.')
                 print('T2 = {0:.3f} {1} {2:.3f}us'.format( \
                     fit_result_2[2,2]/1e3, chr(177), fit_result_2[3,2]/1e3))
@@ -277,13 +278,15 @@ def fit_ramsey(xdata, ydata, two_freqs = False, AIC = True, showPlot=False):
         except:
             pass
 
-    if showPlot:
+    if not two_freqs and showPlot:
         plot_ramsey(xdata, ydata, popt, perr, fit_model=fit_model)
 
-    print('Using a one-frequency fit.')
-    print('T2 = {0:.3f} {1} {2:.3f} us'.format(popt[2]/1e3, chr(177), \
-        perr[2]/1e3))
-    return fit_result_1
+        print('Using a one-frequency fit.')
+        print('T2 = {0:.3f} {1} {2:.3f} us'.format(popt[2]/1e3, chr(177), \
+            perr[2]/1e3))
+
+    if fit_model == ramsey_1f:
+        return fit_result_1
 
 def ramsey_1f(x, f, A, tau, phi, y0):
     return A*np.exp(-x/tau)*np.cos(2*np.pi*f*x + phi) + y0
@@ -308,16 +311,16 @@ def plot_ramsey(xdata, ydata, popt, perr, fit_model=ramsey_1f):
         popt[0]*1e3, chr(177), perr[0]*1e3), xy=(0.4, 0.05), \
                      xycoords='axes fraction', size=12)
     else:
-        plt.annotate(r'$T^{1}_{2}$ = {:.2e}  {} {:.2e} $\mu s$'.format( \
+        plt.annotate(r'$T^1_2$ = {0:.2e}  {1} {2:.2e} $\mu s$'.format( \
         popt[4]/1e3, chr(177), perr[4]/1e3), xy=(0.4, 0.35), \
                      xycoords='axes fraction', size=10)
-        plt.annotate(r'$T^{2}_{2}$ = {:.2e}  {} {:.2e} $\mu s$'.format( \
+        plt.annotate(r'$T^2_2$ = {0:.2e}  {1} {2:.2e} $\mu s$'.format( \
         popt[5]/1e3, chr(177), perr[5]/1e3), xy=(0.4, 0.25), \
                      xycoords='axes fraction', size=10)
-        plt.annotate(r'$f_1$ = {:.2e}  {} {:.2e} MHz'.format( \
-        popt[0]*1e3, chr(177), perr[0]*1e3), xy=(0.4, 0.05), \
+        plt.annotate(r'$f_1$ = {0:.2e}  {1} {2:.2e} MHz'.format( \
+        popt[0]*1e3, chr(177), perr[0]*1e3), xy=(0.4, 0.15), \
                      xycoords='axes fraction', size=10)
-        plt.annotate(r'$f_2$ = {:.2e}  {} {:.2e} MHz'.format( \
+        plt.annotate(r'$f_2$ = {0:.2e}  {1} {2:.2e} MHz'.format( \
         popt[1]*1e3, chr(177), perr[1]*1e3), xy=(0.4, 0.05), \
                      xycoords='axes fraction', size=10)
 
@@ -327,33 +330,28 @@ def fit_drag(data, DRAG_vec, pulse_vec):
     num_seqs = len(pulse_vec)
     xopt_vec = np.zeros(num_seqs)
     perr_vec = np.zeros(num_seqs)
-    popt_mat = np.zeros((4, num_seqs))
+    popt_mat = np.zeros((3, num_seqs))
     data = data.reshape(len(data)//num_DRAG, num_DRAG)
-    #first fit sine to lowest n, for the full range
-    data_n = data[1, :]
-    T0 = 2*(DRAG_vec[np.argmax(data_n)] - DRAG_vec[np.argmin(data_n)]) #rough estimate of period
-
-    p0 = [0, 1, T0, 0]
-    popt, pcov = curve_fit(sinf, DRAG_vec, data_n, p0 = p0)
-    perr_vec[0] = np.sqrt(np.diag(pcov))[0]
-    x_fine = np.linspace(min(DRAG_vec), max(DRAG_vec), 1001)
-    xopt_vec[0] = x_fine[np.argmin(sinf(x_fine, *popt))]
-    popt_mat[:,0] = popt
-    for ct in range(1, len(pulse_vec)):
-        #quadratic fit for subsequent steps, narrower range
+    popt_mat[:, 0] = [1, DRAG_vec[data[0,:].argmin()], 0]
+    for ct in range(len(pulse_vec)):
+        #quadratic fit with increasingly narrower range
         data_n = data[ct, :]
-        p0 = [1, xopt_vec[ct-1], 0]
-        #recenter for next fit
-        closest_ind =np.argmin(abs(DRAG_vec - xopt_vec[ct-1]))
-        fit_range = int(np.round(0.5*num_DRAG*pulse_vec[0]/pulse_vec[ct]))
-        curr_DRAG_vec = DRAG_vec[max(0, closest_ind - fit_range) : min(num_DRAG-1, closest_ind + fit_range)]
-        reduced_data_n = data_n[max(0, closest_ind - fit_range) : min(num_DRAG-1, closest_ind + fit_range)]
+        p0 = popt_mat[:, max(0,ct-1)]
+        if ct > 0:
+            #recenter for next fit
+            closest_ind =np.argmin(abs(DRAG_vec - p0[1]))
+            fit_range = int(np.round(0.5*num_DRAG*pulse_vec[0]/pulse_vec[ct]))
+            curr_DRAG_vec = DRAG_vec[max(0, closest_ind - fit_range) : min(num_DRAG-1, closest_ind + fit_range)]
+            reduced_data_n = data_n[max(0, closest_ind - fit_range) : min(num_DRAG-1, closest_ind + fit_range)]
+        else:
+            curr_DRAG_vec = DRAG_vec
+            reduced_data_n = data_n
         #quadratic fit
         popt, pcov = curve_fit(quadf, curr_DRAG_vec, reduced_data_n, p0 = p0)
         perr_vec[ct] = np.sqrt(np.diag(pcov))[0]
         x_fine = np.linspace(min(curr_DRAG_vec), max(curr_DRAG_vec), 1001)
         xopt_vec[ct] = x_fine[np.argmin(quadf(x_fine, *popt))] #why not x0?
-        popt_mat[:3,ct] = popt
+        popt_mat[:,ct] = popt
     return xopt_vec, perr_vec, popt_mat
 
 def sinf(x, f, A, phi, y0):

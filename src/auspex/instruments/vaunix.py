@@ -51,7 +51,12 @@ class Labbrick(Instrument, metaclass=MakeSettersGetters):
             path = os.path.realpath(__file__)
             with open(os.path.join(os.path.dirname(path),"vnx_LMS_api_python.h")) as fid:
                 self.ffi.cdef(fid.read())
-            self._lib = self.ffi.dlopen("vnx_fmsynth.dll")
+            if os.name == 'nt':
+                self._lib = self.ffi.dlopen("vnx_fmsynth.dll")
+            elif os.name == 'posix':
+                self._lib = self.ffi.dlopen("LMShid.so")
+            else:
+                raise Exception("Unknown OS")
         except:
             logger.warning("Could not find the Lab Brick driver.")
             self._lib = MagicMock()

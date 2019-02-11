@@ -116,29 +116,31 @@ class WriteToHDF5(Filter):
 
     def write_to_log(self):
         """ Record the experiment in a log file """
-        logfile = os.path.join(config.LogDir, "experiment_log.tsv")
-        if os.path.isfile(logfile):
-            lf = pd.read_csv(logfile, sep="\t")
-        else:
-            logger.info("Experiment log file created.")
-            lf = pd.DataFrame(columns = ["Filename", "Date", "Time"])
-        lf = lf.append(pd.DataFrame([[self.filename.value, time.strftime("%y%m%d"), time.strftime("%H:%M:%S")]],columns=["Filename", "Date", "Time"]),ignore_index=True)
-        lf.to_csv(logfile, sep = "\t", index = False)
+        if config.LogDir:
+            logfile = os.path.join(config.LogDir, "experiment_log.tsv")
+            if os.path.isfile(logfile):
+                lf = pd.read_csv(logfile, sep="\t")
+            else:
+                logger.info("Experiment log file created.")
+                lf = pd.DataFrame(columns = ["Filename", "Date", "Time"])
+            lf = lf.append(pd.DataFrame([[self.filename.value, time.strftime("%y%m%d"), time.strftime("%H:%M:%S")]],columns=["Filename", "Date", "Time"]),ignore_index=True)
+            lf.to_csv(logfile, sep = "\t", index = False)
 
     def save_yaml(self):
         """ Save a copy of current experiment settings """
-        head = os.path.dirname(self.filename.value)
-        fulldir = os.path.splitext(self.filename.value)[0]
-        if not os.path.exists(fulldir):
-            os.makedirs(fulldir)
-            config.dump_meas_file(config.load_meas_file(config.meas_file), os.path.join(fulldir, os.path.split(config.meas_file)[1]), flatten = True)
+        if config.meas_file:
+            head = os.path.dirname(self.filename.value)
+            fulldir = os.path.splitext(self.filename.value)[0]
+            if not os.path.exists(fulldir):
+                os.makedirs(fulldir)
+                config.dump_meas_file(config.load_meas_file(config.meas_file), os.path.join(fulldir, os.path.split(config.meas_file)[1]), flatten = True)
 
     def save_yaml_h5(self):
         """ Save a copy of current experiment settings in the h5 metadata"""
-        header = self.file.create_group("header")
-        # load them dump to get the 'include' information
-        header.attrs['settings'] = config.dump_meas_file(config.load_meas_file(config.meas_file), flatten = True)
-
+        if config.meas_file:
+            header = self.file.create_group("header")
+            # load them dump to get the 'include' information
+            header.attrs['settings'] = config.dump_meas_file(config.load_meas_file(config.meas_file), flatten = True)
 
     async def run(self):
         self.finished_processing = False
