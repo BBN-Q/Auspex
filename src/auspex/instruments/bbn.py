@@ -29,6 +29,7 @@ else:
         import aps2
         fake_aps2 = False
     except:
+        logger.warning("Creating fake APS2!")
         fake_aps2 = True
         aps2_missing = True
         aps2 = MagicMock()
@@ -44,6 +45,7 @@ else:
             raise ImportError("Old version of libaps found. Please update.")
         fake_aps1 = False
     except:
+        logger.warning("Creating fake APS1!")
         fake_aps1 = True
         aps1_missing = True
         libaps = MagicMock()
