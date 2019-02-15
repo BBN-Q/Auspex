@@ -664,7 +664,7 @@ class AgilentE8363C(SCPIInstrument):
                 "not a valid IPv4 address.".format(self.resource_name))
         super(AgilentE8363C, self).connect(resource_name=None,
             interface_type=interface_type)
-        self.interface._resource.read_termination = u"\n"
+        self.interface._resource._read_termination = u"\n"
         self.interface._resource.write_termination = u"\n"
 
     def averaging_restart(self):
