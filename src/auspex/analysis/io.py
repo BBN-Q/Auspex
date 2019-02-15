@@ -104,10 +104,8 @@ def load_from_HDF5_legacy(filename_or_fileobject):
     return data, descriptor
 
 def load_data(filepath=None, showPlot=False):
-    """
-    Reimplement load_data.  Takes a file path or None and loads the data.
+    """Reimplement load_data.  Takes a file path or None and loads the data."""
 
-    """
     if filepath == None:
         filepath = get_file_name()
     elif filepath == 'latest':
@@ -119,15 +117,18 @@ def load_data(filepath=None, showPlot=False):
 
     print("Loading file: {}".format(filepath))
 
+    # this load will be replaced by the new, non-H5 file loader
     data, descriptors = load_from_HDF5(filepath)
     if showPlot:
         if len(data.keys) == 1: # single qubit data
             for i in data.keys():
                 dims = descriptors[i].num_dims()
             if dims == 1: # single dimention data
-                #plt.plot()
+                #plot with new plotter
+                pass
             if dims == 2: # two dimention data
-                #plt.imshow()
+                #plot with new plotter
+                pass
         elif len(data.keys) > 1: # multi qubit data
             #pass for now
     return data, descriptors
@@ -146,12 +147,6 @@ def get_file_name():
     #https://stackoverflow.com/questions/21866537/what-could-cause-an-open-file-dialog-window-in-tkinter-python-to-be-really-slow
 
     return filepath
-
-def id_h5file_type(filename):
-    """determine .h5 data file version {matlab,legacy,current}"""
-    with h5py.File(filename_or_fileobject, 'r') as f:
-        # older matlab files with have a path
-        pass
 
 if __name__ == '__main__':
     filename = "test_writehdf5_adaptive_unstructured-0000.h5"
