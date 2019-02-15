@@ -98,7 +98,7 @@ class Labbrick(Instrument, metaclass=MakeSettersGetters):
     @frequency.setter
     def frequency(self, value):
         if value < self.min_freq:
-            value = self.min_freq
+            value = self.min_freqf
             logger.warning('Lab Brick frequency out of range. Set to min = {} GHz'.format(value/1e9))
         elif value > self.max_freq:
             value = self.max_freq
@@ -118,3 +118,19 @@ class Labbrick(Instrument, metaclass=MakeSettersGetters):
             value = self.min_power
             logger.warning('Lab Brick power out of range. Set to min = {} dBm'.format(value))
         self._lib.fnLMS_SetPowerLevel(self.device_id, int(value * 4)) # Convert to 0.25 dB
+
+
+    @property
+    def output(self):
+        if self._lib.fnLMS_GetRF_On(self.device_id) == 1: 
+            return "ON"
+        else: 
+            return "OFF"
+    @output.setter
+    def output(self, value):
+        if value == "ON": 
+            self._lib.fnLMS_SetRFOn(self.device_id,1)
+        elif value == "OFF":
+            self._lib.fnLMS_SetRFOn(self.device_id,0)
+        else: 
+            raise ValueError("RF must be ON or OFF.")
