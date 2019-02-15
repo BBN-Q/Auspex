@@ -28,8 +28,13 @@ from auspex.analysis import fits
 config.load_meas_file(config.find_meas_file())
 
 class TestFitMethods(unittest.TestCase):
-
+    # -----
+    # Note:  with the methods named "Test<xyz>" the unit test invocation
+    # cites zero tests run;  renaming the methods as "test<xyz>" render them
+    # runable and revealed call syntax issues...
+    #
     def TestT1Fit(self):
+    #def testT1Fit(self):  # Added try/except trap with alternate syntax -- TJR
         """Test the fit_t1 experiment """
 
         # Set parameters and generate synthetic data in natural units
@@ -41,10 +46,31 @@ class TestFitMethods(unittest.TestCase):
         # fit the T1 data
         result, result_err = fits.fit_t1(xdata,synth_data)
 
-        # check the outputs
-        self.assertAlmostEqual(T1, result[1], delta=result_err[1])
+        # -----
+        # EEE Original logic routinely raising IndexError to include:
+        #     self.assertAlmostEqual(T1, result[1], delta=result_err[1])
+        # IndexError: invalid index to scalar variable.
+        #
+        # Wrapped in a temporary try/except block for experimentation.
+        try:
+            self.assertAlmostEqual(T1, result[1], delta=result_err[1])
+            #
+            # EEE This routinely producing IndexError to include the following:
+            #     self.assertAlmostEqual(T1, result[1], delta=result_err[1])
+            # IndexError: invalid index to scalar variable.
+            #
+        except Exception as e:
+            logger.warning( "Original ~array centric assertAlmostEqual call failed!" \
+            "\n\r   << assertAlmostEqual(T1, result[1], delta=result_err[1])"
+            "\n\r      << EEE %s Exception %s" \
+            "\n\r      $$ type( result):%s, type( result_err):%s" \
+            "\n\r         -- repeating assertAlmostEqual call with simple value references..." \
+            "\n\r            << assertAlmostEqual(T1, result, delta=result_err)",
+            type( e), e, type( result), type( result_err))
+            self.assertAlmostEqual(T1, result, delta=result_err)
 
     def TestRamseyFit(self):
+    #def testRamseyFit(self):    # Raises errors with current definitions
         """Test the fit_ramsey experiment """
 
         # Set parameters and generate synthetic data
@@ -62,7 +88,8 @@ class TestFitMethods(unittest.TestCase):
 
 
     def TestRBFit(self):
-        """Test the fit_single_qubit_rb experiement """
+    #def testRBFit(self): # Runs ok with no changes -- TJR
+        """Test the fit_single_qubit_rb experiment """
 
         # Set parameters and generate synthetic data
         repeats = 32

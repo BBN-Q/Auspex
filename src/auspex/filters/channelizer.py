@@ -15,34 +15,110 @@ from copy import deepcopy
 import numpy as np
 import scipy.signal
 
+# ----- 31 Oct 2018 -- Added config import for ST-15 delta support
+# config mods include optional parameters to help constrain import prompted
+# MetaClass introspection.  This, in-turn, can help reduce irrelvant
+# boot-up warnings (such as the "Channelizer" warnings) where desired.
+#
+from auspex import config
+
 from .filter import Filter
 from auspex.parameter import Parameter, IntParameter, FloatParameter
 from auspex.stream import  DataStreamDescriptor, InputConnector, OutputConnector
 from auspex.log import logger
 
+#---- base ref members added here for try/except block usecase
+#
+tgtLibName          = "libchannelizer"
+libchannelizer_path = None
+
+# Common no-load warning text, cited in two places.
+#
+szNoLoadWarningBase = "Could not load (Intel dependent) IPP channelizer library!"               \
+    "\n\r   << Process will continue with fall-back Python IPP channelizer methods...\n\r"      \
+    "\n\r   Note:  Accelerated IPP function processing depends on Intel IPP channelizer logic"  \
+    "\n\r      IPP library load exception details include:"                                     \
+    "\n\r         %s: \"%s\""                                                                   \
+    "\n\r            << load_library( \"%s\", libchannelizer_path) call failed!"                \
+    "\n\r            -- libchannelizer_path:"                                                   \
+    "\n\r               %s\n\r"
+
 try:
-    # load libchannelizer to access Intel IPP filtering functions
-    import numpy.ctypeslib as npct
-    from ctypes import c_int, c_size_t
-    np_float  = npct.ndpointer(dtype=np.float32, flags='C_CONTIGUOUS')
+    # ----- /fix/unitTests_1 (ST-15) delta start...
+    # Added optional logic to exclude/skip the Intel IPP Channerlizer load when
+    # config.tgtFilterClass defined and content includes or omits a Channerlizer
+    # filterclass definition.
+    #
+    bSkipChDriverLoad = \
+        config.disjointNameRefz( "Channelizer",
+                                 acceptClassRefz = config.tgtFilterClass,
+                                 bEchoDetails    = config.bEchoInstrumentMetaInit,
+                                 szLogLabel      = "Channelizer driver load")
 
-    libchannelizer_path = os.path.abspath(os.path.join( os.path.dirname(__file__), "libchannelizer"))
-    if "Windows" in platform.platform():
-        os.environ["PATH"] += ";" + libchannelizer_path
-    libipp = npct.load_library("libchannelizer",  libchannelizer_path)
-    libipp.filter_records_fir.argtypes = [np_float, c_size_t, c_int, np_float, c_size_t, c_size_t, np_float]
-    libipp.filter_records_iir.argtypes = [np_float, c_size_t, np_float, c_size_t, c_size_t, np_float]
-    libipp.init()
+    if bSkipChDriverLoad:
+        # config.tgtFilterClass is defined and does NOT contain any Channerlizer
+        # filter class reference[s].
+        #
+        load_fallback = False # and in this case, do nothing
 
-    load_fallback = False
-except:
-    logger.warning("Could not load channelizer library; falling back to python methods.")
+        logger.debug( "Skipping Intel IPP filtering Channerlizer library load" \
+            "\n\r   (Channerlizer is NOT in the defined tgtFilterClass reference[s])\n\r")
+
+    else:
+        # either config.tgtFilterClass is NOT defined; or it is defined
+        # and includes one or more Channerlizer filter class reference[s].
+        #
+        # Fire original logic as before (original logic now indented)
+        # ----- /fix/unitTests_1 (ST-15) delta stop.
+
+        # load libchannelizer to access Intel IPP filtering functions
+        import numpy.ctypeslib as npct
+        from ctypes import c_int, c_size_t
+        np_float  = npct.ndpointer(dtype=np.float32, flags='C_CONTIGUOUS')
+
+        libchannelizer_path = os.path.abspath(os.path.join( os.path.dirname(__file__), "libchannelizer"))
+
+        # /fix/unitTests_1 observation:
+        # Note:  .../Auspex/src/auspex/filters/libchannelizer subdirectory not
+        #        installed with python setup build/install steps.  Rather,
+        #        "pip install -e ." usage pushes relevant development path
+        #        references (including the compiled binary path) into the
+        #        anaconda environment.
+
+        if "Windows" in platform.platform():
+            os.environ["PATH"] += ";" + libchannelizer_path
+        #libipp = npct.load_library("libchannelizer",  libchannelizer_path)
+        # npct.load_library raises OSError on failure; modified error trap, below...
+        libipp = npct.load_library( tgtLibName,  libchannelizer_path)
+        libipp.filter_records_fir.argtypes = [np_float, c_size_t, c_int, np_float, c_size_t, c_size_t, np_float]
+        libipp.filter_records_iir.argtypes = [np_float, c_size_t, np_float, c_size_t, c_size_t, np_float]
+        libipp.init()
+
+        load_fallback = False
+        # ----- Original logic, now indented, stop
+
+#except:
+    #logger.warning("Could not load channelizer library; falling back to python methods.")
+    #
+except OSError as e :
+    # Pulled in actual error text for greater transparancy
+    logger.info( szNoLoadWarningBase, "OSError",
+        e, tgtLibName, libchannelizer_path)
+
+    load_fallback = True
+
+except Error as e:
+    # Pulled in actual error text for greater transparancy
+    # For NON OSError citations (should that occur)
+    logger.info( szNoLoadWarningBase, "(generic) Error",
+        e, tgtLibName, libchannelizer_path)
+
     load_fallback = True
 
 
 class Channelizer(Filter):
-    """Digital demodulation and filtering to select a particular frequency multiplexed channel. If 
-    an axis name is supplied to `follow_axis` then the filter will demodulate at the freqency 
+    """Digital demodulation and filtering to select a particular frequency multiplexed channel. If
+    an axis name is supplied to `follow_axis` then the filter will demodulate at the freqency
     `axis_frequency_value - follow_freq_offset` otherwise it will demodulate at `frequency`. Note that
     the filter coefficients are still calculated with respect to the `frequency` paramter, so it should
     be chosen accordingly when `follow_axis` is defined."""
@@ -50,7 +126,7 @@ class Channelizer(Filter):
     sink               = InputConnector()
     source             = OutputConnector()
     follow_axis        = Parameter(default="") # Name of the axis to follow
-    follow_freq_offset = FloatParameter(default=0.0) # Offset 
+    follow_freq_offset = FloatParameter(default=0.0) # Offset
     decimation_factor  = IntParameter(value_range=(1,100), default=4, snap=1)
     frequency          = FloatParameter(value_range=(-10e9,10e9), increment=1.0e6, default=10e6)
     bandwidth          = FloatParameter(value_range=(0.00, 100e6), increment=0.1e6, default=5e6)
