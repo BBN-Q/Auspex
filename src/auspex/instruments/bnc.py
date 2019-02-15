@@ -40,7 +40,8 @@ class BNC845(SCPIInstrument):
                           value_map={'INTERNAL': 'INT', 'EXTERNAL': 'EXT'})
     freq_source  = StringCommand(scpi_string=":FREQ:SOUR",
                           value_map={'INTERNAL': 'INT', 'EXTERNAL': 'EXT'})
-
+    instrument_type = "Microwave Source"
+    
     def __init__(self, resource_name=None, *args, **kwargs):
         """Berkely Nucleonics BNC845-M RF Signal Generator
 
@@ -54,7 +55,7 @@ class BNC845(SCPIInstrument):
                 logger.error("Invalid IP address for BNC845: {}.".format(resource_name))
         super(BNC845, self).__init__(resource_name, *args, **kwargs)
 
-    def connect(self, resource_name=None, interface_type=None):
+    def connect(self, resource_name=None, interface_type="VISA"):
         """Connect to the RF source via a specified physical interface. Defaults
         to the IP address given at instatiation and the VISA interface if these
         arguments are not given.
@@ -71,6 +72,7 @@ class BNC845(SCPIInstrument):
                 resource_name = resource_name + "::inst0::INSTR"
             else:
                 logger.error("Invalid IP address for BNC845: {}.".format(resource_name))
+        
         super(BNC845, self).connect(resource_name, interface_type)
         self.interface._resource.read_termination = '\n'
         self.interface._resource.write_termination = '\n'
