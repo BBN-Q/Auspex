@@ -36,6 +36,8 @@ class SingleShotMeasurement(Filter):
 
     TOLERANCE = 1e-3
 
+    MAX_TRIES = 4
+
     def __init__(self, save_kernel=False, optimal_integration_time=False,
                     zero_mean=False, set_threshold=False,
                     logistic_regression=False, **kwargs):
@@ -78,16 +80,44 @@ class SingleShotMeasurement(Filter):
 
     async def process_data(self, data):
         """Fill the ground and excited data bins"""
-        if self.counter % 2 != 0:
-            N = (self.counter + 1) // 2 - 1
-            self.ground_data[:,N] = data
-        else:
-            N = self.counter // 2 - 1
-            self.excited_data[:,N] = data
-        self.counter += 1
+        if data.shape[0] == self.ground_data.size*2:
+            dsplit = np.array(np.split(data,self.num_segments))
+            gd = dsplit[::2]
+            ed = dsplit[1::2]
+            self.ground_data = gd.T
+            self.excited_data = ed.T
+            self.counter = self.num_segments+1
+        else: 
+            if self.counter % 2 != 0:
+                N = (self.counter + 1) // 2 - 1
+                self.ground_data[:,N] = data
+            else:
+                N = self.counter // 2 - 1
+                self.excited_data[:,N] = data
+            self.counter += 1
         if self.counter > self.num_segments:
             self.counter = 1
-            self.compute_filter()
+
+            filter_success = False 
+            filter_tries = 0
+            ORIG_TOL = self.TOLERANCE
+
+            while not filter_success:
+                try:
+                    filter_tries += 1
+                    self.compute_filter() 
+                    filter_success = True 
+                except np.linalg.linalg.LinAlgError as e:
+                    self.TOLERANCE *= 1.5
+                    logger.warning("Single shot filter failed with error: {}. Increasing kernel tolerance to {}.".format(e, self.TOLERANCE))
+                    logger.warning("Single shot filter retrying {} out of {} times.".format(filter_tries, self.MAX_TRIES))
+                if filter_tries > self.MAX_TRIES:
+                    logger.error("Could not find a non-singluar single-shot filter after {} tries with tolerance {}.".format(filter_tries, self.TOLERANCE))
+                    self.fidelity_result = np.complex128(0)
+                    break
+
+            self.TOLERANCE = ORIG_TOL
+
             if self.logistic_regression.value:
                 self.logistic_fidelity()
             if self.save_kernel.value:
@@ -96,8 +126,7 @@ class SingleShotMeasurement(Filter):
                 await os.push(self.fidelity_result)
 
     def compute_filter(self):
-        """Compute the single shot kernel and obtain single-shot measurement
-        fidelity.
+        """Compute the single shot kernel and obtain single-shot measurement fidelity.
 
         Expects that the data will be in self.ground_data and self.excited_data,
         which are (T, N)-shaped numpy arrays, with T the time axis and N the
