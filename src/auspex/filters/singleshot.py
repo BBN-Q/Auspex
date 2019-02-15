@@ -36,6 +36,8 @@ class SingleShotMeasurement(Filter):
 
     TOLERANCE = 1e-3
 
+    MAX_TRIES = 4
+
     def __init__(self, save_kernel=False, optimal_integration_time=False,
                     zero_mean=False, set_threshold=False,
                     logistic_regression=False, **kwargs):
@@ -87,7 +89,27 @@ class SingleShotMeasurement(Filter):
         self.counter += 1
         if self.counter > self.num_segments:
             self.counter = 1
-            self.compute_filter()
+
+            filter_success = False 
+            filter_tries = 0
+            ORIG_TOL = self.TOLERANCE
+
+            while not filter_success:
+                try:
+                    filter_tries += 1
+                    self.compute_filter() 
+                    filter_success = True 
+                except np.linalg.linalg.LinAlgError as e:
+                    self.TOLERANCE *= 1.5
+                    logger.warning("Single shot filter failed with error: {}. Increasing kernel tolerance to {}.".format(e, self.TOLERANCE))
+                    logger.warning("Single shot filter retrying {} out of {} times.".format(filter_tries, self.MAX_TRIES))
+                if filter_tries > self.MAX_TRIES:
+                    logger.error("Could not find a non-singluar single-shot filter after {} tries with tolerance {}.".format(filter_tries, self.TOLERANCE))
+                    self.fidelity_result = np.complex128(0)
+                    break
+
+            self.TOLERANCE = ORIG_TOL
+
             if self.logistic_regression.value:
                 self.logistic_fidelity()
             if self.save_kernel.value:
