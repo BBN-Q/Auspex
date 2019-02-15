@@ -35,7 +35,7 @@ setup(
     packages=[
         'auspex', 'auspex.instruments', 'auspex.filters', 'auspex.analysis', 'auspex.qubit'
     ],
-    scripts=[],
+    scripts=['utils/auspex-plot-client.py', 'utils/auspex-plot-server.py'],
     description='Automated system for python-based experiments.',
     long_description=open('README.md').read(),
     install_requires=install_requires
