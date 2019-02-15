@@ -10,7 +10,6 @@ import unittest
 import time
 import os
 import numpy as np
-import h5py
 
 import auspex.config as config
 config.auspex_dummy_mode = True

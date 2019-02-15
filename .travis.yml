@@ -29,7 +29,7 @@ install:
   - conda info -a
 
   # Create conda environment with dependencies
-  - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION numpy scipy matplotlib pandas networkx cffi bokeh jupyter psutil sqlalchemy
+  - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION numpy scipy h5py matplotlib pandas networkx cffi bokeh jupyter psutil sqlalchemy
   - source activate test-environment
   - export GIT_LFS_SKIP_SMUDGE=1
   - pip install git+https://github.com/BBN-Q/bbndb.git

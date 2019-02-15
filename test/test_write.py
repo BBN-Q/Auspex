@@ -13,7 +13,6 @@ import os, shutil
 import glob
 import time
 import numpy as np
-import h5py
 
 import auspex.config as config
 config.auspex_dummy_mode = True
