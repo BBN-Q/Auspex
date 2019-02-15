@@ -20,6 +20,7 @@ class BNC845(SCPIInstrument):
     Properties:
         frequency: Set the RF generator frequency, in Hz. 0.01-20 GHz.
         power: Set the RF generator output power, in dBm. No effect, BNC845M output is always +16dBm.
+        osc: Toggle 10 MHz reference on/off
         output: Toggle RF signal output on/off.
         pulse: Toggle RF pulsed mode on/off.
         alc: Toggle source Auto Leveling on/off.
@@ -30,10 +31,11 @@ class BNC845(SCPIInstrument):
 
     frequency = FloatCommand(scpi_string="SOURCE:FREQUENCY:FIXED")
     power     = FloatCommand(scpi_string="SOURCE:POWER:LEVEL:IMMEDIATE:AMPLITUDE")
+    osc       = StringCommand(scpi_string="SOURCE:ROSC:OUTPUT:STATE",value_map={True: '1', False: '0'})
     output    = StringCommand(scpi_string="OUTPUT:STATE",value_map={True: '1', False: '0'})
-    pulse     = StringCommand(scpi_string="PULSE", value_map={True: '0', False: '1'})
-    mod       = StringCommand(scpi_string="MOD", value_map={True: '0', False: '1'})
-    alc       = StringCommand(scpi_string="SOURCE:POWER:ALC ", value_map={True: '0', False: '1'})
+    pulse     = StringCommand(scpi_string="PULSE", value_map={True: '1', False: '0'})
+    mod       = StringCommand(scpi_string="MOD", value_map={True: '1', False: '0'})
+    alc       = StringCommand(scpi_string="SOURCE:POWER:ALC ", value_map={True: '1', False: '0'})
     pulse_source = StringCommand(scpi_string=":PULSE:SOUR",
                           value_map={'INTERNAL': 'INT', 'EXTERNAL': 'EXT'})
     freq_source  = StringCommand(scpi_string=":FREQ:SOUR",
