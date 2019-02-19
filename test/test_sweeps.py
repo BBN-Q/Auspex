@@ -10,7 +10,6 @@ import unittest
 import time
 import os
 import numpy as np
-import h5py
 
 import auspex.config as config
 config.auspex_dummy_mode = True
@@ -19,7 +18,7 @@ from auspex.experiment import Experiment
 from auspex.parameter import FloatParameter
 from auspex.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector
 from auspex.filters.debug import Print
-from auspex.filters.io import WriteToHDF5
+from auspex.filters.io import WriteToFile
 from auspex.log import logger
 
 class SweptTestExperiment(Experiment):

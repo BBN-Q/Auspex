@@ -70,7 +70,7 @@ class CorrelatorTestCase(unittest.TestCase):
         exp.set_graph(edges)
         exp.run_sweeps()
         time.sleep(0.1)
-        corr_data     = buff.output_data['corr']
+        corr_data     = buff.output_data
         expected_data = exp.vals*exp.vals
         self.assertTrue(np.abs(np.sum(corr_data - expected_data)) <= 1e-1)
 

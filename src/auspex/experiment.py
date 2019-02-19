@@ -31,6 +31,7 @@ import signal
 import numbers
 import subprocess
 import queue
+import re
 import cProfile
 from functools import partial
 
@@ -38,91 +39,40 @@ import zmq
 import numpy as np
 import scipy as sp
 import networkx as nx
-import h5py
-from tqdm import tqdm, tqdm_notebook
 
 from auspex.instruments.instrument import Instrument
 from auspex.parameter import ParameterGroup, FloatParameter, IntParameter, Parameter
 from auspex.sweep import Sweeper
 from auspex.stream import DataStream, DataAxis, SweepAxis, DataStreamDescriptor, InputConnector, OutputConnector
-from auspex.filters import Plotter, MeshPlotter, ManualPlotter, WriteToHDF5, H5Handler, DumbFileHandler, DataBuffer, Filter
+from auspex.filters import Plotter, MeshPlotter, ManualPlotter, WriteToFile, DataBuffer, Filter
 from auspex.log import logger
 import auspex.config
-
-class ExpProgressBar(object):
-    """ Display progress bar(s) on the terminal.
-
-    num: number of progress bars to be display, \
-    corresponding to the number of axes (counting from outer most)
-
-        For running in Jupyter Notebook:
-    Needs to open '_tqdm_notebook.py',\
-    search for 'n = int(s[:npos])'\
-    then replace it with 'n = float(s[:npos])'
-    """
-    def __init__(self, stream=None, num=0, notebook=False):
-        super(ExpProgressBar,self).__init__()
-        logger.debug("initialize the progress bars.")
-        self.stream = stream
-        self.num = num
-        self.notebook = notebook
-        # self.reset(stream=stream)
-
-    def reset(self, stream=None):
-        """ Reset the progress bar(s) """
-        logger.debug("Update stream descriptor for progress bars.")
-        if stream is not None:
-            self.stream = stream
-        if self.stream is None:
-            logger.warning("No stream is associated with the progress bars!")
-            self.axes = []
-        else:
-            self.axes = self.stream.descriptor.axes
-        self.num = min(self.num, len(self.axes))
-        self.totals = [self.stream.descriptor.num_points_through_axis(axis) for axis in range(self.num)]
-        self.chunk_sizes = [max(1,self.stream.descriptor.num_points_through_axis(axis+1)) for axis in range(self.num)]
-        logger.debug("Reset the progress bars to initial states.")
-        self.bars   = []
-        for i in range(self.num):
-            if self.notebook:
-                self.bars.append(tqdm_notebook(total=self.totals[i]/self.chunk_sizes[i]))
-            else:
-                self.bars.append(tqdm(total=self.totals[i]/self.chunk_sizes[i]))
-
-    def close(self):
-        """ Close all progress bar(s) """
-        logger.debug("Close all the progress bars.")
-        for bar in self.bars:
-            if self.notebook:
-                bar.sp(close=True)
-            else:
-                bar.close()
-
-    def update(self):
-        """ Update the status of the progress bar(s) """
-        if self.stream is None:
-            logger.warning("No stream is associated with the progress bars!")
-            num_data = 0
-        else:
-            num_data = self.stream.points_taken
-        logger.debug("Update the progress bars.")
-        for i in range(self.num):
-            if num_data == 0:
-                # Reset the progress bar with a new one
-                if self.notebook:
-                    self.bars[i].sp(close=True)
-                    self.bars[i] = tqdm_notebook(total=self.totals[i]/self.chunk_sizes[i])
-                else:
-                    self.bars[i].close()
-                    self.bars[i] = tqdm(total=self.totals[i]/self.chunk_sizes[i])
-            pos = int(10*num_data / self.chunk_sizes[i])/10.0 # One decimal is good enough
-            if pos > self.bars[i].n:
-                self.bars[i].update(pos - self.bars[i].n)
-            num_data = num_data % self.chunk_sizes[i]
 
 def auspex_plot_server():
     client_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),"plot_server.py")
     subprocess.Popen(['python', client_path], env=os.environ.copy())
+
+def update_filename(filename, add_date=True):
+    """Update the file number and date."""
+    basename, _ = os.path.splitext(filename)
+    dirname  = os.path.dirname(os.path.abspath(filename))
+
+    if add_date:
+        date     = time.strftime("%y%m%d")
+        dirname  = os.path.join(dirname, date)
+        basename = os.path.join(dirname, os.path.basename(basename))
+
+    # Set the file number to the maximum in the current folder + 1
+    filenums = []
+    if os.path.exists(dirname):
+        for f in os.listdir(dirname):
+            if 'auspex' in f and os.path.exists(os.path.join(dirname, f)):
+                nums = re.findall('-(\d{4})\.', f)
+                if len(nums) > 0:
+                    filenums.append(int(nums[0]))
+
+    i = max(filenums) + 1 if filenums else 0
+    return "{}-{:04d}".format(basename,i)
 
 class ExperimentGraph(object):
     def __init__(self, edges):
@@ -223,12 +173,7 @@ class Experiment(metaclass=MetaExperiment):
         self.manual_plotter_callbacks = [] # These are called at the end of run
         self._extra_plots_to_streams = {}
 
-        # Furthermore, keep references to all of the file writers.
-        # If multiple writers request acces to the same filename, they
-        # should share the same file object and write in separate
-        # hdf5 groups. Since we are now using multiprocessing, we need to
-        # be careful to avoid concurrent operations since HDF5 does not
-        # support threaded/concurrent write access.
+        # Furthermore, keep references to all of the file writers and buffers.
         self.writers = []
         self.buffers = []
 
@@ -240,6 +185,9 @@ class Experiment(metaclass=MetaExperiment):
 
         # indicates whether this is the first (or only) experiment in a series (e.g. for pulse calibrations)
         self.first_exp = True
+
+        # add date to data files?
+        self.add_date = False
 
         # Things we can't metaclass
         self.output_connectors = {}
@@ -300,14 +248,14 @@ class Experiment(metaclass=MetaExperiment):
         """Gets run after a sweep ends, or when the program is terminated."""
         pass
 
-    def init_progressbar(self, num=0, notebook=False):
+    def init_progressbar(self, num=0):
         """ initialize the progress bars."""
         oc = list(self.output_connectors.values())
         if len(oc)>0:
-            self.progressbar = ExpProgressBar(oc[0].output_streams[0], num=num, notebook=notebook)
+            self.progressbar = ExpProgressBar(oc[0].output_streams[0], num=num)
         else:
-            logger.warning("No stream is found for progress bars. Create a dummy bar.")
-            self.progressbar = ExpProgressBar(None, num=num, notebook=notebook)
+            logger.warning("No stream is found for progress bar.")
+            # self.progressbar = ExpProgressBar(None, num=num)
 
     def run(self):
         """This is the inner measurement loop, which is the smallest unit that
@@ -431,43 +379,30 @@ class Experiment(metaclass=MetaExperiment):
         # Make sure we are starting from scratch... is this necessary?
         self.reset()
         # Update the progress bar if need be
-        if self.progressbar is not None:
-            self.progressbar.reset()
+        # if self.progressbar is not None:
+        #     self.progressbar.reset()
 
         #Make sure we have axes.
         if not any([oc.descriptor.axes for oc in self.output_connectors.values()]):
             logger.warning("There do not appear to be any axes defined for this experiment!")
 
         # Go find any writers
-        self.writers = [n for n in self.nodes if isinstance(n, WriteToHDF5)]
+        self.writers = [n for n in self.nodes if isinstance(n, WriteToFile)]
         self.buffers = [n for n in self.nodes if isinstance(n, DataBuffer)]
         if self.name:
             for w in self.writers:
                 w.filename.value = os.path.join(os.path.dirname(w.filename.value), self.name)
         self.filenames = [w.filename.value for w in self.writers]
-        self.files = []
 
-        # Check for redundancy in filenames, and share plot file objects
-        self.h5_handlers = []
+        # Auto increment the filenames
         for filename in set(self.filenames):
             wrs = [w for w in self.writers if w.filename.value == filename]
-
-            # Let the first writer with this filename create the file...
-            wrs[0].file = wrs[0].new_file()
-            wrs[0].queue = Queue()
-            wrs[0].ret_queue = Queue()
-            self.h5_handlers.append(H5Handler(wrs[0].filename.value, len(wrs), wrs[0].queue, wrs[0].ret_queue))
-            self.files.append(wrs[0].file)
-
-            # Make the rest of the writers use this same file object
-            for w in wrs[1:]:
-                w.file = wrs[0].file
-                w.queue = wrs[0].queue
-                w.ret_queue = wrs[0].ret_queue
-                w.filename.value = wrs[0].filename.value
+            inc_filename = update_filename(filename, add_date=self.add_date)
+            for w in wrs:
+                w.filename.value = inc_filename
+        self.filenames = [w.filename.value for w in self.writers]
 
         # Remove the nodes with 0 dimension
-
         self.nodes = [n for n in self.nodes if not(hasattr(n, 'input_connectors') and  n.input_connectors['sink'].descriptor.num_dims()==0)]
 
         # Go and find any plotters
@@ -486,9 +421,6 @@ class Experiment(metaclass=MetaExperiment):
             if hasattr(n, 'final_init'):
                 n.final_init()
 
-        # Close file objects and create file handler processes for H5 writers
-        for file in self.files:
-            file.close()
         # Launch plot servers.
         if len(self.plotters) > 0:
             self.connect_to_plot_server()
@@ -516,7 +448,6 @@ class Experiment(metaclass=MetaExperiment):
             # in the list of tasks.
             self.other_nodes = self.nodes[:]
             self.other_nodes.extend(self.extra_plotters)
-            self.other_nodes.extend(self.h5_handlers)
             self.other_nodes.remove(self)
 
             # If we are launching the process dashboard,
@@ -551,10 +482,10 @@ class Experiment(metaclass=MetaExperiment):
                 vmem_fig.yaxis[0].axis_label = 'Throughput (MB)'
 
                 colors       = Category20[20] if len(self.other_nodes) <= 20 else viridis(len(self.other_nodes))
-                data_sources = {n.filter_name: ColumnDataSource(data=dict(time=[], cpu=[], mem=[], vmem=[], proc=[])) for n in self.other_nodes}
-                cpu_plots    = {n.filter_name: cpu_fig.line(x='time', y='cpu', color=colors[i], line_width=4, source=data_sources[n.filter_name]) for i, n in enumerate(self.other_nodes)}
-                mem_plots    = {n.filter_name: mem_fig.line(x='time', y='mem', color=colors[i], line_width=4, source=data_sources[n.filter_name]) for i, n in enumerate(self.other_nodes)}
-                vmem_plots   = {n.filter_name: vmem_fig.line(x='time', y='proc', color=colors[i], line_width=4, source=data_sources[n.filter_name]) for i, n in enumerate(self.other_nodes)}
+                data_sources = {str(n): ColumnDataSource(data=dict(time=[], cpu=[], mem=[], vmem=[], proc=[])) for n in self.other_nodes}
+                cpu_plots    = {str(n): cpu_fig.line(x='time', y='cpu', color=colors[i], line_width=4, source=data_sources[str(n)]) for i, n in enumerate(self.other_nodes)}
+                mem_plots    = {str(n): mem_fig.line(x='time', y='mem', color=colors[i], line_width=4, source=data_sources[str(n)]) for i, n in enumerate(self.other_nodes)}
+                vmem_plots   = {str(n): vmem_fig.line(x='time', y='proc', color=colors[i], line_width=4, source=data_sources[str(n)]) for i, n in enumerate(self.other_nodes)}
 
                 legend_1 = Legend(items=[(n , [l]) for n, l in mem_plots.items()], location=(0, 0))
                 legend_2 = Legend(items=[(n , [l]) for n, l in vmem_plots.items()], location=(0, 0))
@@ -621,7 +552,7 @@ class Experiment(metaclass=MetaExperiment):
                 for n in self.other_nodes:
                     if not n.done.is_set():
                         times[n] += 1
-                        logger.info(f"{n.filter_name} not done. Waited {times[n]} times. Is the pipeline backed up at IO stage?")
+                        logger.info(f"{str(n)} not done. Waited {times[n]} times. Is the pipeline backed up at IO stage?")
                     else:
                         dones[n] = True
                         n.join(timeout=0.1)
@@ -630,7 +561,11 @@ class Experiment(metaclass=MetaExperiment):
                     break
 
             for buff in self.buffers:
-                buff.output_data = buff.get_data()
+                buff.output_data, buff.descriptor = buff.get_data()
+
+            if self.progressbar:
+                self.progressbar.update()
+                self.progressbar.close()
 
             if self.dashboard:
                 exit_perf.set()
@@ -657,7 +592,7 @@ class Experiment(metaclass=MetaExperiment):
             n.exit.set()
             n.join(0.1)
             if n.is_alive():
-                logger.info(f"Terminating {n.filter_name} aggressively")
+                logger.info(f"Terminating {str(n)} aggressively")
                 n.terminate()
 
         logger.debug("Shutting down instruments")
@@ -759,8 +694,4 @@ class Experiment(metaclass=MetaExperiment):
             for p in self.plotters:
                 p.do_plotting = False
 
-        if len(self.plotters) > 0 and self.do_plotting:
-            client_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),"matplotlib-client.py")
-            preexec_fn  = os.setsid if hasattr(os, 'setsid') else None
-            subprocess.Popen(['python', client_path, 'localhost', self.uuid], env=os.environ.copy(), preexec_fn=preexec_fn)
-            time.sleep(1)
+        time.sleep(0.5)

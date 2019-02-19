@@ -15,11 +15,18 @@ from auspex import config
 from unittest.mock import MagicMock
 import ctypes
 
-if not config.auspex_dummy_mode:
-    try:
-        import usb
-    except:
-        logger.warning("Skipping import of pyusb")
+#check to see if we are in Travis
+istravis = os.environ.get('TRAVIS') == 'true'
+
+if istravis:
+    usb = MagicMock()
+    logger.warning("PyUSB not loaded for Travis CI build.")
+else:
+    if not config.auspex_dummy_mode:
+        try:
+            import usb
+        except:
+            logger.warning("Skipping import of pyusb")
 
 class HolzworthDevice(object):
 

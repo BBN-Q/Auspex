@@ -37,7 +37,7 @@ def check_session_dirty(f):
             kwargs.pop('force')
             return f(cls, *args, **kwargs)
         else:
-            raise Exception("Uncommitted transactions for working database. Either use force=True or commit/revert your changes.")        
+            raise Exception("Uncommitted transactions for working database. Either use force=True or commit/revert your changes.")
     return wrapper
 
 class PipelineManager(object):
@@ -62,7 +62,7 @@ class PipelineManager(object):
         cdb = self.session.query(bbndb.qgl.ChannelDatabase).filter_by(label="working").first()
         if not cdb:
             raise ValueError("Could not find working channel library.")
-        
+
         if not qubits:
             measurements = [c for c in cdb.channels if isinstance(c, bbndb.qgl.Measurement)]
             meas_labels  = [m.label for m in measurements]
@@ -103,7 +103,7 @@ class PipelineManager(object):
 
     def ls(self):
         i = 0
-        table_code = ""        
+        table_code = ""
 
         for name, time in self.session.query(bbndb.auspex.Connection.pipeline_name, bbndb.auspex.Connection.time).distinct().all():
             y, d, t = map(time.strftime, ["%Y", "%b. %d", "%I:%M:%S %p"])
@@ -117,7 +117,9 @@ class PipelineManager(object):
         for n1, n2 in self.meas_graph.edges():
             new_node1 = bbndb.copy_sqla_object(n1, self.session)
             new_node2 = bbndb.copy_sqla_object(n2, self.session)
-            c = bbndb.auspex.Connection(pipeline_name=name, node1=new_node1, node2=new_node2, time=now)
+            c = bbndb.auspex.Connection(pipeline_name=name, node1=new_node1, node2=new_node2, time=now,
+                                        node1_name=self.meas_graph[n1][n2]["connector_out"],
+                                        node2_name=self.meas_graph[n1][n2]["connector_in"])
             self.session.add_all([n1, n2, c])
         self.session.commit()
 
@@ -139,7 +141,7 @@ class PipelineManager(object):
                 new_by_old[n].pipeline = self
             # Add edges between new objects
             for c in cs:
-                edges.append((new_by_old[c.node1], new_by_old[c.node2]))
+                edges.append((new_by_old[c.node1], new_by_old[c.node2], {'connector_in':c.node2_name,  'connector_out':c.node1_name}))
             self.session.add_all(new_by_old.values())
             self.session.commit()
             self.meas_graph.clear()
@@ -152,7 +154,7 @@ class PipelineManager(object):
             if len(cs) == 0:
                 print(f"No results for pipeline {pipeline_name}")
                 return
-            temp_edges = [(c.node1, c.node2) for c in cs]
+            temp_edges = [(c.node1, c.node2, {'connector_in':c.node2_name,  'connector_out':c.node1_name}) for c in cs]
             graph = nx.DiGraph()
             graph.add_edges_from(temp_edges)
         else:
@@ -171,7 +173,7 @@ class PipelineManager(object):
         else:
             nodes = self.meas_graph.nodes()
         table_code = ""
-        
+
         for node in nodes:
             label = node.label if node.label else "Unlabeled"
             table_code += f"<tr><td><b>{node.node_type}</b> ({node.qubit_name})</td><td></td><td><i>{label}</i></td></td><td></tr>"

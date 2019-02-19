@@ -24,7 +24,7 @@ else:
 
 from .filter import Filter
 from auspex.parameter import Parameter, FloatParameter, IntParameter, BoolParameter
-from auspex.stream import DataStreamDescriptor, InputConnector, OutputConnector, SweepAxis
+from auspex.stream import DataStreamDescriptor, InputConnector, OutputConnector, SweepAxis, DataAxis
 from auspex.log import logger
 import auspex.config as config
 import time
@@ -38,7 +38,7 @@ class SingleShotMeasurement(Filter):
     logistic_regression = BoolParameter(default=False)
 
     sink = InputConnector()
-    fidelity = OutputConnector()
+    source = OutputConnector() # Single shot fidelity
 
     TOLERANCE = 1e-3
 
@@ -58,6 +58,8 @@ class SingleShotMeasurement(Filter):
 
         self.pdf_data_queue = Queue() #Output queue !?
 
+        self.fidelity = self.source #LAZY!!!
+
     def update_descriptors(self):
 
         logger.debug("Updating Plotter %s descriptors based on input descriptor %s", self.filter_name, self.sink.descriptor)
@@ -68,33 +70,42 @@ class SingleShotMeasurement(Filter):
             self.record_length = len(self.time_pts)
         except ValueError:
             raise ValueError("Single shot filter sink does not appear to have a time axis!")
+        self.num_averages = len(self.sink.descriptor.axes[self.descriptor.axis_num("averages")].points)
         self.num_segments = len(self.sink.descriptor.axes[self.descriptor.axis_num("segment")].points)
-        self.ground_data = np.zeros((self.record_length, self.num_segments//2), dtype=np.complex)
-        self.excited_data = np.zeros((self.record_length, self.num_segments//2), dtype=np.complex)
+        self.ground_data = np.zeros((self.record_length, self.num_averages), dtype=np.complex)
+        self.excited_data = np.zeros((self.record_length, self.num_averages), dtype=np.complex)
+        self.total_points = self.num_segments*self.record_length*self.num_averages # Total points BEFORE sweep axes
 
         output_descriptor = DataStreamDescriptor()
         output_descriptor.axes = [_ for _ in self.descriptor.axes if type(_) is SweepAxis]
         output_descriptor._exp_src = self.sink.descriptor._exp_src
         output_descriptor.dtype = np.complex128
+
+        if len(output_descriptor.axes) == 0:
+            output_descriptor.add_axis(DataAxis("Fidelity", [1]))
+
         for os in self.fidelity.output_streams:
             os.set_descriptor(output_descriptor)
             os.end_connector.update_descriptors()
 
 
     def final_init(self):
-        self.counter = 1
+        self.fid_buffer = np.empty((self.record_length, self.num_averages*self.num_segments), dtype=np.complex)
+        self.idx = 0
 
     def process_data(self, data):
         """Fill the ground and excited data bins"""
-        if self.counter % 2 != 0:
-            N = (self.counter + 1) // 2 - 1
-            self.ground_data[:,N] = data
-        else:
-            N = self.counter // 2 - 1
-            self.excited_data[:,N] = data
-        self.counter += 1
-        if self.counter > self.num_segments:
-            self.counter = 1
+        d     = data.reshape(self.record_length,-1)
+        shots = d.shape[1]
+
+        self.fid_buffer[:, self.idx:self.idx+shots] = d
+        self.idx += shots
+
+        if self.idx == self.num_averages*self.num_segments-1:
+            self.idx = 0
+            N = self.fid_buffer[1]
+            self.ground_data = self.fid_buffer[:, ::2]
+            self.excited_data = self.fid_buffer[:, 1::2]
             self.compute_filter()
             if self.logistic_regression.value:
                 self.logistic_fidelity()
@@ -119,7 +130,7 @@ class SingleShotMeasurement(Filter):
             raise Exception("Single shot filter does not appear to have any data!")
         distance = np.abs(np.mean(ground_mean - excited_mean))
         bias = np.mean(ground_mean + excited_mean) / distance
-        logger.info("Found single-shot measurement distance: {} and bias {}.".format(distance, bias))
+        logger.debug("Found single-shot measurement distance: {} and bias {}.".format(distance, bias))
         #construct matched filter kernel
         old_settings = np.seterr(divide='ignore', invalid='ignore')
         kernel = np.nan_to_num(np.divide(np.conj(ground_mean - excited_mean), np.var(self.ground_data, ddof=1, axis=1)))
@@ -131,7 +142,7 @@ class SingleShotMeasurement(Filter):
         #raw data (not demod)
         if self.zero_mean.value:
             kernel = kernel - np.mean(kernel)
-        logger.info("Found single shot filter norm: {}.".format(np.sum(np.abs(kernel))))
+        logger.debug("Found single shot filter norm: {}.".format(np.sum(np.abs(kernel))))
         #annoyingly numpy's isreal has the opposite behavior to MATLAB's
         if not np.any(np.imag(kernel) > np.finfo(np.complex128).eps):
             #construct analytic signal from Hilbert transform
@@ -268,9 +279,16 @@ class SingleShotMeasurement(Filter):
                 "{:.2f}% ({:.2f}, {:.2f})".format(100*score, 100*flo, 100*fhi)))
 
     def _save_kernel(self):
+        if not config.KernelDir or not os.path.exists(config.KernelDir):
+            logger.warning("No kernel directory provided, please set auspex.config.KernelDir")
+            logger.warning("Saving kernel to local directory.")
+            dir = "./"
+        else:
+            dir = config.KernelDir
         try:
-            filename = self.sink.parent.name + "_kernel.txt"
-            header = "Single shot fidelity filter - {}:\nSource: {}".format(time.strftime("%m/%d/%y -- %H:%M"), self.sink.parent.name)
-            np.savetxt(os.path.join(config.KernelDir, filename), self.kernel, header=header, comments="#")
+            logger.info(self.filter_name)
+            filename = self.filter_name + "_kernel.txt"
+            header = "Single shot fidelity filter - {}:\nSource: {}".format(time.strftime("%m/%d/%y -- %H:%M"), self.filter_name)
+            np.savetxt(os.path.join(dir, filename), self.kernel, header=header, comments="#")
         except (AttributeError, IOError) as ex:
             raise AttributeError("Could not save single shot fidelity kernel!") from ex

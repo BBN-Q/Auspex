@@ -4,6 +4,7 @@ from auspex.stream import DataStream, DataAxis, SweepAxis, DataStreamDescriptor,
 import auspex.instruments
 import auspex.filters
 import bbndb
+import numpy as np
 
 import sys
 import os
@@ -29,9 +30,10 @@ filter_map = {
     bbndb.auspex.Demodulate: auspex.filters.Channelizer,
     bbndb.auspex.Average: auspex.filters.Averager,
     bbndb.auspex.Integrate: auspex.filters.KernelIntegrator,
-    bbndb.auspex.Write: auspex.filters.WriteToHDF5,
+    bbndb.auspex.Write: auspex.filters.WriteToFile,
     bbndb.auspex.Buffer: auspex.filters.DataBuffer,
-    bbndb.auspex.Display: auspex.filters.Plotter
+    bbndb.auspex.Display: auspex.filters.Plotter,
+    bbndb.auspex.FidelityKernel: auspex.filters.SingleShotMeasurement
 }
 stream_sel_map = {
     'X6-1000M': auspex.filters.X6StreamSelector,
@@ -42,11 +44,13 @@ instrument_map = {
     'X6-1000M': auspex.instruments.X6,
     'AlazarATS9870': auspex.instruments.AlazarATS9870,
     'APS2': auspex.instruments.APS2,
+    'TDM': auspex.instruments.TDM,
     'APS': auspex.instruments.APS,
     'HolzworthHS9000': auspex.instruments.HolzworthHS9000,
     'Labbrick': auspex.instruments.Labbrick,
     'AgilentN5183A': auspex.instruments.AgilentN5183A,
-    'BNC845': auspex.instruments.BNC845
+    'BNC845': auspex.instruments.BNC845,
+    'SpectrumAnalyzer': auspex.instruments.SpectrumAnalyzer
 }
 
 class QubitExperiment(Experiment):
@@ -60,6 +64,7 @@ class QubitExperiment(Experiment):
 
         self.pipeline_name = pipeline_name
         self.cw_mode = False
+        self.add_date = True # add date to data files?
 
         self.create_from_meta(meta_file, averages)
 
@@ -103,11 +108,19 @@ class QubitExperiment(Experiment):
         self.generators        = list(set([q.phys_chan.generator for q in self.measured_qubits + self.controlled_qubits + self.measurements if q.phys_chan.generator]))
         self.qubits_by_name    = {q.label: q for q in self.measured_qubits + self.controlled_qubits}
 
+        # Locate transmitters relying on processors
+        self.transceivers = list(set([t.transceiver for t in self.transmitters + self.receivers if t.transceiver]))
+        self.processors = list(set([p for t in self.transceivers for p in t.processors]))
+
+        # Determine if the digitizer trigger lives on another transmitter that isn't included already
+        self.transmitters = list(set([mq.measure_chan.trig_chan.phys_chan.transmitter for mq in self.measured_qubits] + self.transmitters))
+
         # The exception being any instruments that are declared as standalone
-        self.all_standalone   = [i for i in self.chan_db.all_instruments() if i.standalone and i not in self.transmitters + self.receivers + self.generators]
+        self.all_standalone = [i for i in self.chan_db.all_instruments() if i.standalone and i not in self.transmitters + self.receivers + self.generators]
 
         # In case we need to access more detailed foundational information
         self.factory = self
+
 
         # If no pipeline is defined, assumed we want to generate it automatically
         if not pipeline.pipelineMgr.meas_graph:
@@ -160,6 +173,7 @@ class QubitExperiment(Experiment):
 
         # Now a pipeline exists, so we create Auspex filters from the proxy filters in the db
         self.proxy_to_filter  = {}
+        self.filters          = []
         self.connector_by_qp  = {}
         self.chan_to_dig      = {}
         self.chan_to_oc       = {}
@@ -168,7 +182,7 @@ class QubitExperiment(Experiment):
 
         # Create microwave sources and receiver instruments from the database objects.
         # We configure the self.receivers later after adding channels.
-        self.instrument_proxies = self.generators + self.receivers + self.transmitters + self.all_standalone
+        self.instrument_proxies = self.generators + self.receivers + self.transmitters + self.all_standalone + self.processors
         self.instruments = []
         for instrument in self.instrument_proxies:
             instr = instrument_map[instrument.model](instrument.address, instrument.label) # Instantiate
@@ -191,7 +205,7 @@ class QubitExperiment(Experiment):
             stream_sel.configure_with_proxy(rcv)
             stream_sel.receiver = stream_sel.proxy = rcv
 
-            # Construct the channel from the receiver
+            # Construct the channel from the receiver channel
             channel = stream_sel.get_channel(rcv)
 
             # Get the base descriptor from the channel
@@ -249,6 +263,7 @@ class QubitExperiment(Experiment):
                     new_filt = filter_map[type(node)]()
                     new_filt.configure_with_proxy(node)
                     new_filt.proxy = node
+                    self.filters.append(new_filt)
                     self.proxy_to_filter[node] = new_filt
                     if isinstance(node, bbndb.auspex.OutputProxy):
                         self.qubits_by_output[new_filt] = node.qubit_name
@@ -260,11 +275,11 @@ class QubitExperiment(Experiment):
             if node1.qubit_name in self.measured_qubit_names and node2.qubit_name in self.measured_qubit_names:
                 if isinstance(node1, bbndb.auspex.FilterProxy):
                     filt1 = self.proxy_to_filter[node1]
-                    oc   = filt1.output_connectors["source"]
+                    oc   = filt1.output_connectors[graph[node1][node2]["connector_out"]]
                 elif isinstance(node1, bbndb.auspex.QubitProxy):
                     oc   = self.connector_by_qp[node1]
                 filt2 = self.proxy_to_filter[node2]
-                ic   = filt2.input_connectors["sink"]
+                ic   = filt2.input_connectors[graph[node1][node2]["connector_in"]]
                 graph_edges.append([oc, ic])
 
         # Define the experiment graph
@@ -276,6 +291,7 @@ class QubitExperiment(Experiment):
     def set_fake_data(self, instrument, ideal_data, increment=False):
         instrument.instr.ideal_data = ideal_data
         instrument.instr.increment_ideal_data = increment
+        instrument.instr.gen_fake_data = True
 
     def clear_fake_data(self, instrument):
         instrument.instr.ideal_data = None
@@ -297,7 +313,6 @@ class QubitExperiment(Experiment):
 
         self.digitizers = [v for _, v in self._instruments.items() if "Digitizer" in v.instrument_type]
         self.awgs       = [v for _, v in self._instruments.items() if "AWG" in v.instrument_type]
-
         # Swap the master AWG so it is last in the list
         try:
             master_awg_idx = next(ct for ct,awg in enumerate(self.awgs) if awg.master)
@@ -361,7 +376,7 @@ class QubitExperiment(Experiment):
             thing = thing[0]
         elif measure_or_control == "control":
             logger.debug(f"Sweeping {qubit} control")
-            thing = qubit        
+            thing = qubit
         if thing.phys_chan.generator and attribute=="frequency":
             # Mixed up to final frequency
             name  = thing.phys_chan.generator.label
@@ -383,6 +398,7 @@ class QubitExperiment(Experiment):
             # Get method by name
             if hasattr(instr, "set_"+attribute):
                 param.assign_method(getattr(instr, "set_"+attribute)) # Couple the parameter to the instrument
+                param.add_post_push_hook(lambda: time.sleep(0.05))
             else:
                 raise ValueError("The instrument {} has no method {}".format(name, "set_"+attribute))
         # param.instr_tree = [instr.name, attribute] #TODO: extend tree to endpoint

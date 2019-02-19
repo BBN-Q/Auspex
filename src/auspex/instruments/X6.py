@@ -59,10 +59,10 @@ class X6Channel(ReceiverChannel):
         self.ideal_data = None
 
         if receiver_channel:
-            self.set_by_receiver(receiver_channel)
+            self.set_by_receiver_channel(receiver_channel)
             self.receiver_channel = receiver_channel
 
-    def set_by_receiver(self, receiver):
+    def set_by_receiver_channel(self, receiver):
         for name in ["stream_type", "kernel_bias", "threshold", "threshold_invert"]:
             if hasattr(receiver, name) and getattr(receiver, name):
                 setattr(self, name, getattr(receiver, name))
@@ -74,11 +74,12 @@ class X6Channel(ReceiverChannel):
             self.kernel = receiver.kernel
         if self.stream_type == "integrated":
             self.demod_channel = 0
-            self.result_channel = self.dsp_channel
+            self.result_channel = receiver.dsp_channel
             self.dtype = np.complex128
         elif self.stream_type == "demodulated":
-            self.demod_channel = self.dsp_channel
+            self.demod_channel = receiver.dsp_channel
             self.result_channel = 0
+            self.if_freq = receiver.if_freq
             self.dtype = np.complex128
         else: #Raw
             self.demod_channel  = 0
@@ -102,7 +103,7 @@ class X6(Instrument):
         self.name          = name
 
         self.last_timestamp = Value('d', datetime.datetime.now().timestamp())
-        
+
         self.gen_fake_data        = gen_fake_data
         self.increment_ideal_data = False
         self.ideal_counter        = 0
@@ -154,10 +155,7 @@ class X6(Instrument):
 
     def configure_with_dict(self, settings_dict):
         # Take these directly from the proxy obj
-        self.number_averages  = self.proxy_obj.number_averages
-        self.number_waveforms = self.proxy_obj.number_waveforms
-        self.number_segments  = self.proxy_obj.number_segments
-        self.record_length    = settings_dict['record_length']
+        super(X6, self).configure_with_dict(settings_dict)
 
         # perform channel setup
         for chan in self._channels:
@@ -265,11 +263,11 @@ class X6(Instrument):
 
     def receive_data(self, channel, oc, exit, ready):
         sock = self._chan_to_rsocket[channel]
-        sock.settimeout(1)
+        sock.settimeout(2)
         self.last_timestamp.value = datetime.datetime.now().timestamp()
-
         total = 0
-        ready += 1
+        ready.value += 1
+
         while not exit.is_set():
             # push data from a socket into an OutputConnector (oc)
             # wire format is just: [size, buffer...]

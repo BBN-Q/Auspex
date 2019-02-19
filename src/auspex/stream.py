@@ -62,10 +62,7 @@ class DataAxis(object):
         self.points        = np.array(points)
         self.unit          = unit
         self.refine_func   = None
-        self.metadata      = None
-        self.metadata_enum = None
-        if metadata is not None:
-            self.set_metadata(metadata)
+        self.metadata      = metadata
 
         # By definition data axes will be done after every experiment.run() call
         self.done         = True
@@ -81,10 +78,6 @@ class DataAxis(object):
                 raise ValueError("DataAxis unit length {} and tuples length {} must match.".format(len(unit),len(name)))
         if self.unstructured and len(name) != len(points[0]):
             raise ValueError("DataAxis points length {} and names length {} must match.".format(len(points[0]), len(name)))
-
-    def set_metadata(self, metadata):
-        # Convert the metadata to an enum
-        self.metadata_enum, self.metadata = np.unique(metadata, return_inverse=True)
 
     def data_type(self, with_metadata=False):
         dtype = []
@@ -143,6 +136,10 @@ class DataAxis(object):
         self.num_new_points = 0
 
     def __repr__(self):
+        return "<DataAxis(name={}, start={}, stop={}, num={}, unit={})>".format(
+            self.name, self.points[0], self.points[-1], len(self.points), self.unit)
+
+    def __str__(self):
         return "<DataAxis(name={}, start={}, stop={}, num={}, unit={})>".format(
             self.name, self.points[0], self.points[-1], len(self.points), self.unit)
 
@@ -462,6 +459,12 @@ class DataStreamDescriptor(object):
     def __repr__(self):
         return "<DataStreamDescriptor(num_dims={}, num_points={})>".format(
             self.num_dims(), self.num_points())
+
+    def __getitem__(self, axis_name):
+        return self.axis(axis_name).points
+
+    def _ipython_key_completions_(self):
+        return [a.name for a in self.axes]
 
 class DataStream(object):
     """A stream of data"""

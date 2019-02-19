@@ -65,6 +65,7 @@ class Filter(Process, metaclass=MetaFilter):
         self.input_connectors = {}
         self.output_connectors = {}
         self.parameters = {}
+        self.qubit_name = ""
 
         # Event for killing the filter properly
         self.exit = Event()
@@ -156,7 +157,7 @@ class Filter(Process, metaclass=MetaFilter):
         else:
             self.execute_on_run()
             self.main()
-
+        logger.debug(f"{self} done")
         self.done.set()
 
     def execute_on_run(self):
@@ -169,8 +170,9 @@ class Filter(Process, metaclass=MetaFilter):
 
     def push_resource_usage(self):
         if self.perf_queue:
-            if (datetime.datetime.now() - self.last_performance_update).seconds > 0.1:
-                self.perf_queue.put((self.filter_name, datetime.datetime.now()-self.beginning, self.p.cpu_percent(), self.p.memory_info(), self.processed))
+            if (datetime.datetime.now() - self.last_performance_update).seconds > 1.0:
+                perf_info = (str(self), datetime.datetime.now()-self.beginning, self.p.cpu_percent(), self.p.memory_info(), self.processed)
+                self.perf_queue.put(perf_info)
                 self.last_performance_update = datetime.datetime.now()
 
     def main(self):
@@ -213,15 +215,9 @@ class Filter(Process, metaclass=MetaFilter):
                     if message['event_type'] == 'done':
                         logger.debug(f"{self} received done message!")
                         stream_done = True
-                        # if not self.finished_processing.is_set():
-                        #     logger.warning("Filter {} being asked to finish before being done processing. ({} of {})".format(self.filter_name,stream_points,input_stream.num_points()))
-                        # self.exit.set()
-                        # self.finished_processing.set()
-                        # break
                     elif message['event_type'] == 'refined':
                         self.refine(message_data)
                         continue
-
                     elif message['event_type'] == 'new_tuples':
                         self.process_new_tuples(input_stream.descriptor, message_data)
                         # break

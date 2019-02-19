@@ -454,7 +454,7 @@ if __name__ == '__main__':
     # Convince windows that this is a separate application to get the task bar icon working
     # https://stackoverflow.com/questions/1551605/how-to-set-applications-taskbar-icon-in-windows-7/1552105#1552105
     if (os.name == 'nt'):
-        myappid = u'BBN.auspex.matplotlib-client.0001' # arbitrary string
+        myappid = u'BBN.auspex.auspex-plot-client.0001' # arbitrary string
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
 
     if len(sys.argv) > 3:
