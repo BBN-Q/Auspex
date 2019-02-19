@@ -185,7 +185,7 @@ class AlazarATS9870(Instrument):
         config_dict = {
             'acquireMode': 'digitizer',
             'bandwidth': "Full" ,
-            'clockType': "int",
+            'clockType': "ref",
             'delay': 0.0,
             'enabled': True,
             'label': 'Alazar',
@@ -193,14 +193,14 @@ class AlazarATS9870(Instrument):
             'nbrSegments': self.proxy_obj.number_segments,
             'nbrWaveforms': self.proxy_obj.number_waveforms,
             'nbrRoundRobins': self.proxy_obj.number_averages,
-            'samplingRate': 500e6,
+            'samplingRate': self.proxy_obj.samplingRate,
             'triggerCoupling': "DC",
             'triggerLevel': 100,
             'triggerSlope': "rising",
             'triggerSource': "Ext",
-            'verticalCoupling': "DC",
+            'verticalCoupling': "AC",
             'verticalOffset': 0.0,
-            'verticalScale': 1.0
+            'verticalScale': self.proxy_obj.verticalScale
         }
 
         self._lib.setAll(config_dict)

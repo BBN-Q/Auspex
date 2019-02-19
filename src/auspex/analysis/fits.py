@@ -209,6 +209,7 @@ def fit_t1(xdata, ydata, showPlot=False):
         plt.annotate(r'$T_1$ = {0:.2e}  {1} {2:.2e} $\mu s$'.format( \
         popt[1]/1e3, chr(177), perr[1]/1e3), xy=(0.4, 0.10), \
                      xycoords='axes fraction', size=12)
+        plt.show()
 
     print(r'T1 = {0:.2e}  {1} {2:.2e} us'.format(popt[1]/1e3, \
                     chr(177), perr[1]/1e3))
