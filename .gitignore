@@ -16,3 +16,4 @@ config/config.json
 *.prof
 *.bak
 .DS*
+yokogawa.py

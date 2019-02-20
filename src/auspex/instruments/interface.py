@@ -69,6 +69,7 @@ class VisaInterface(Interface):
     def ESR(self):
         return self._resource.query("*ESR?") # Standard Event Status Register Query
     def IDN(self):
+        import pdb;pdb.set_trace()
         return self._resource.query("*IDN?") # Identification Query
     def OPC(self):
         return self._resource.query("*OPC?") # Operation Complete Command
