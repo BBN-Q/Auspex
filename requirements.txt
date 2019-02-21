@@ -1,6 +1,7 @@
 numpy >= 1.11.1
 scipy >= 0.17.1
 PyVISA >= 1.8
+python-usbtmc >= 0.8
 tqdm >= 4.7.0
 sqlalchemy >= 1.2.17
 pandas >= 0.18.1

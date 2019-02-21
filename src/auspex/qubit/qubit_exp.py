@@ -50,7 +50,8 @@ instrument_map = {
     'Labbrick': auspex.instruments.Labbrick,
     'AgilentN5183A': auspex.instruments.AgilentN5183A,
     'BNC845': auspex.instruments.BNC845,
-    'SpectrumAnalyzer': auspex.instruments.SpectrumAnalyzer
+    'SpectrumAnalyzer': auspex.instruments.SpectrumAnalyzer,
+    'YokogawaGS200': auspex.instruments.YokogawaGS200
 }
 
 class QubitExperiment(Experiment):

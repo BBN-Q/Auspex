@@ -109,7 +109,9 @@ class Labbrick(Instrument, metaclass=MakeSettersGetters):
     @property
     def power(self):
         atten = self._lib.fnLMS_GetPowerLevel(self.device_id) * 0.25 # Convert from 0.25 dB
-        return self.max_power - atten
+        if os.name == 'posix':
+            return atten
+        return self.max_power - atten  # relative power in Windows. Alternatively, use fnLMS_GetAbsPowerLevel
     @power.setter
     def power(self, value):
         if value > self.max_power:

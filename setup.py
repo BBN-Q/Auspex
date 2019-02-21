@@ -20,6 +20,7 @@ install_requires = [
     "pyzmq >= 16.0.0",
     "pyusb >= 1.0.2",
     "pydotplus >= 2.0.0",
+    "python-usbtmc >= 0.8"
 ]
 
 #Use PyVISA-Py if running on Linux or MacOS
