@@ -35,7 +35,7 @@ install:
   - pip install git+https://github.com/BBN-Q/bbndb.git
   - pip install git+https://github.com/BBN-Q/Adapt.git
   - pip install git+https://github.com/BBN-Q/QGL.git@sqlalchemy
-  - pip install tqdm pyvisa coveralls scikit-learn pyusb future
+  - pip install tqdm pyvisa coveralls scikit-learn pyusb future python-usbtmc
   - export GIT_LFS_SKIP_SMUDGE=0
   - export PYTHONPATH=$PYTHONPATH:$PWD/src
 
