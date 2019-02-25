@@ -60,7 +60,7 @@ if __name__ == '__main__':
                     if launch_client:
                         client_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),"auspex-plot-client.py")
                         preexec_fn  = os.setsid if hasattr(os, 'setsid') else None
-                        subprocess.Popen(['python', client_path, 'localhost', uid], env=os.environ.copy(), preexec_fn=preexec_fn)
+                        subprocess.Popen(['python', client_path, 'localhost', uid.decode("utf8")], env=os.environ.copy(), preexec_fn=preexec_fn)
 
                 if socks.get(auspex_data_sock) == zmq.POLLIN:
                     # The expected data order is [msg, name, json.dumps(metadata), np.ascontiguousarray(dat)]
