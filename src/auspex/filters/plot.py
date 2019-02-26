@@ -168,6 +168,7 @@ class Plotter(Filter):
         elif self.plot_dims.value == 2:
             self.send({'name': self.filter_name, "msg": "data", 'data': [self.x_values, self.y_values, self.plot_buffer.copy()]})
         if self.do_plotting:
+            self.set_done()
             self.socket.close()
             self.context.term()
 

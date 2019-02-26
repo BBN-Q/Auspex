@@ -12,7 +12,7 @@ auspex_desc_port = 7761
 client_data_port = 7772
 auspex_data_port = 7762
 
-launch_client = True
+launch_client = False
 
 if __name__ == '__main__':
     context = zmq.Context()
@@ -32,6 +32,8 @@ if __name__ == '__main__':
 
     # Should be empty by default
     plot_descriptors = {}
+    uids             = []
+    client_ident     = None
     
     print("Welcome to the Auspex plot server!")
     print("Waiting for auspex to connect on ports 7761/7762")
@@ -46,24 +48,35 @@ if __name__ == '__main__':
             try:
                 socks = dict(poller.poll(50))
 
+                # A new client has connected. Send the most recent information:
                 if socks.get(client_desc_sock) == zmq.POLLIN:
-                    ident, uid, msg = client_desc_sock.recv_multipart()
-                    print(f"Sending plot descriptor for session {uid} to client {ident}")
-                    if msg == b"WHATSUP":
-                        client_desc_sock.send_multipart([ident, b"HI!", json.dumps(plot_descriptors[uid]).encode('utf8')])
+                    ident, msg = client_desc_sock.recv_multipart()
+                    if msg == b"new_client":
+                        print(f"Sending plot descriptor for session to client {ident}")
+                        if len(uids) > 0:
+                            client_desc_sock.send_multipart([ident, b"new", uids[-1], json.dumps(plot_descriptors[uids[-1]]).encode('utf8')])
+                        else:
+                            print("No current plots availiable. Waiting for auspex.")
+                        client_ident = ident
+                # A new auspex data run has started!
                 if socks.get(auspex_desc_sock) == zmq.POLLIN:
                     msg = auspex_desc_sock.recv_multipart()
                     ident, uid, plot_desc = msg
+                    uids.append(uid)
                     plot_descriptors[uid] = json.loads(plot_desc)
-                    print(f"Received auspex plot descriptor for new session {uid} from {ident}")
+                    print(f"Received auspex plot descriptor for new plotter {uid} from {ident}")
                     auspex_desc_sock.send_multipart([ident, b"ACK"])
+                    
+                    # Contact any connected clients and tell them to make a new plotter
+                    client_desc_sock.send_multipart([client_ident, b"new", uid, json.dumps(plot_descriptors[uid]).encode('utf8')])
+
                     if launch_client:
                         client_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),"auspex-plot-client.py")
                         preexec_fn  = os.setsid if hasattr(os, 'setsid') else None
-                        subprocess.Popen(['python', client_path, 'localhost', uid.decode("utf8")], env=os.environ.copy(), preexec_fn=preexec_fn)
+                        subprocess.Popen(['python', client_path, 'localhost'], env=os.environ.copy(), preexec_fn=preexec_fn)
 
                 if socks.get(auspex_data_sock) == zmq.POLLIN:
-                    # The expected data order is [msg, name, json.dumps(metadata), np.ascontiguousarray(dat)]
+                    # The expected data order is [uid, msg, plot name, json.dumps(metadata), np.ascontiguousarray(dat)]
                     # We assume that this is true and merely pass along the message
                     msg = auspex_data_sock.recv_multipart()
                     client_data_sock.send_multipart(msg[1:])
