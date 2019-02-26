@@ -17,6 +17,14 @@ import random
 import json
 import ctypes
 
+single_window = False
+plot_windows  = []
+
+import logging
+logger = logging.getLogger('auspex_plot_client')
+logger.setLevel(logging.INFO)
+logging.basicConfig(format='%(name)s-%(levelname)s: %(asctime)s ----> %(message)s')
+
 from scipy.spatial import Delaunay
 
 import matplotlib
@@ -31,7 +39,7 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
 progname = os.path.basename(sys.argv[0])
-progversion = "0.1"
+progversion = "0.5"
 
 import zmq
 
@@ -63,8 +71,10 @@ class DataListener(QtCore.QObject):
                 name     = msg[2].decode()
                 if msg_type == "quit":
                     self.bail.emit(True)
+                    logger.debug(f"Data listener thread for {self.uuid} got quit message.")
                 elif msg_type == "done":
                     self.finished.emit(True)
+                    logger.debug(f"Data listener thread for {self.uuid} got done message.")
                 elif msg_type == "data":
                     result = [name, uuid]
                     # How many pairs of metadata and data are there?
@@ -75,6 +85,45 @@ class DataListener(QtCore.QObject):
                         A = np.frombuffer(data, dtype=md['dtype'])
                         result.append(A)
                     self.message.emit(tuple(result))
+        self.socket.close()
+        self.context.term()
+        logger.debug(f"Data listener thread for {self.uuid} exiting.")
+
+class DescListener(QtCore.QObject):
+
+    new_plot   = QtCore.pyqtSignal(tuple)
+    first_plot = QtCore.pyqtSignal()
+
+    def __init__(self, host, port=7771):
+        QtCore.QObject.__init__(self)
+        self.got_plot = False
+
+        self.context = zmq.Context()
+        self.socket = self.context.socket(zmq.DEALER)
+        self.socket.identity = "Matplotlib_Qt_Client".encode()
+        self.socket.connect("tcp://{}:{}".format(host, port))
+        self.socket.send_multipart([b"new_client"])
+        self.socket.setsockopt(zmq.LINGER, 0)
+        self.poller = zmq.Poller()
+        self.poller.register(self.socket, zmq.POLLIN)
+        time.sleep(0.1)
+        logger.debug("desc listener init")
+
+        self.running = True
+
+    def loop(self):
+        logger.debug("desc loop")
+        while self.running:
+            evts = dict(self.poller.poll(1000))
+            if self.socket in evts and evts[self.socket] == zmq.POLLIN:
+                msg_type, uuid, desc = [e.decode() for e in self.socket.recv_multipart()]
+                logger.debug(f"GOT: {msg_type}, {uuid}, {desc}")
+                if msg_type == "new":
+                    if not self.got_plot:
+                        self.got_plot = True
+                        self.first_plot.emit()
+                    self.new_plot.emit(tuple([uuid, desc]))
+        logger.debug("Desc listener at end")
         self.socket.close()
         self.context.term()
 
@@ -288,7 +337,7 @@ class CanvasMesh(MplCanvas):
         return mesh
 
 class MatplotClientWindow(QtWidgets.QMainWindow):
-    def __init__(self, hostname=None, uuid="", status_port=7771, data_port=7772):
+    def __init__(self):
         QtWidgets.QMainWindow.__init__(self)
         self.setAttribute(QtCore.Qt.WA_DeleteOnClose)
         self.setWindowTitle("Auspex Plotting")
@@ -300,7 +349,15 @@ class MatplotClientWindow(QtWidgets.QMainWindow):
                                  QtCore.Qt.CTRL + QtCore.Qt.Key_O)
         self.file_menu.addAction('&Open Localhost', lambda: self.open_connection("localhost", 7771, 7772),
                                  QtCore.Qt.SHIFT + QtCore.Qt.CTRL + QtCore.Qt.Key_O)
+
         self.recent = self.file_menu.addMenu("Open Recent")
+
+        self.settings_menu = self.menuBar().addMenu('&Settings')
+        auto_close = QtWidgets.QAction('Auto Close Plots', self, checkable=True)
+        auto_close.setChecked(False)
+        self.settings_menu.addAction(auto_close)
+
+        auto_close.triggered.connect(self.toggleAutoClose)
 
         self.main_widget = QtWidgets.QWidget(self)
         self.main_widget.setMinimumWidth(800)
@@ -310,55 +367,24 @@ class MatplotClientWindow(QtWidgets.QMainWindow):
         self.main_widget.setFocus()
         self.setCentralWidget(self.main_widget)
 
-        self.uuid = uuid
         self.context = zmq.Context()
+        self.uuid = None
+        self.data_listener_thread = None
 
-        self.listener_thread = None
+    def toggleAutoClose(self, state):
+        global single_window
+        single_window = state
 
-        if hostname:
-            self.open_connection(hostname, status_port, data_port)
-
-    def open_connection(self, address, status_port, data_port):
-        self.statusBar().showMessage("Open session to {}:{}".format(address, status_port), 2000)
-        socket = self.context.socket(zmq.DEALER)
-        socket.identity = "Matplotlib_Qt_Client".encode()
-        socket.connect("tcp://{}:{}".format(address, status_port))
-        socket.send_multipart([self.uuid.encode(), b"WHATSUP"])
-
-        poller = zmq.Poller()
-        poller.register(socket, zmq.POLLOUT)
-        time.sleep(0.1)
-
-        evts = dict(poller.poll(100))
-        if socket in evts:
-            try:
-                reply, desc = [e.decode() for e in socket.recv_multipart()]
-                desc = json.loads(desc)
-                self.statusBar().showMessage("Connection established. Pulling plot information.", 2000)
-            except:
-                self.statusBar().showMessage("Could not connect to server.", 2000)
-                return
-        else:
-            self.statusBar().showMessage("Server did not respond.", 2000)
-
-        socket.close()
-        self.construct_plots(desc)
-
-        # Actual data listener
-        if self.listener_thread:
-            self.Datalistener.running = False
-            self.listener_thread.quit()
-            self.listener_thread.wait()
-
-        self.listener_thread = QtCore.QThread()
-        self.Datalistener = DataListener(address, self.uuid, data_port)
-        self.Datalistener.moveToThread(self.listener_thread)
-        self.listener_thread.started.connect(self.Datalistener.loop)
+    def listen_for_data(self, uuid, address="localhost", data_port=7772):
+        self.uuid = uuid
+        self.data_listener_thread = QtCore.QThread()
+        self.Datalistener = DataListener(address, uuid, data_port)
+        self.Datalistener.moveToThread(self.data_listener_thread)
+        self.data_listener_thread.started.connect(self.Datalistener.loop)
         self.Datalistener.message.connect(self.data_signal_received)
         self.Datalistener.finished.connect(self.stop_listening)
         self.Datalistener.bail.connect(self.bail)
-
-        QtCore.QTimer.singleShot(0, self.listener_thread.start)
+        QtCore.QTimer.singleShot(0, self.data_listener_thread.start)
 
     def open_connection_dialog(self):
         address, ok = QtWidgets.QInputDialog.getText(self, 'Open Connection',
@@ -436,13 +462,72 @@ class MatplotClientWindow(QtWidgets.QMainWindow):
     def stop_listening(self, _):
         self.statusBar().showMessage("Disconnecting from server.", 10000)
         self.Datalistener.running = False
-        self.listener_thread.quit()
-        self.listener_thread.wait()
+        self.data_listener_thread.quit()
+        self.data_listener_thread.wait()
 
     def closeEvent(self, ce):
-        if self.listener_thread:
+        if self.data_listener_thread:
             self.stop_listening(True)
         self.fileQuit()
+
+def new_plotter_window(message):
+    global plot_windows
+
+    uuid, desc = message
+    desc = json.loads(desc)
+
+    pw = MatplotClientWindow()
+    pw.setWindowTitle("%s" % progname)
+    pw.show()
+    pw.setWindowState(pw.windowState() & ~QtCore.Qt.WindowMinimized | QtCore.Qt.WindowActive)
+    pw.activateWindow()
+    pw.construct_plots(desc)
+    pw.listen_for_data(uuid)
+
+    if single_window and len(plot_windows) > 0:
+        for w in plot_windows:
+            w.closeEvent(0)
+            plot_windows.remove(w)
+
+    plot_windows.append(pw)
+
+class WaitAndListenWidget(QtWidgets.QWidget):
+
+    def __init__(self, parent=None):
+        super(WaitAndListenWidget, self).__init__(parent)
+        layout = QtWidgets.QVBoxLayout(self)
+
+        # Create a progress bar and a button and add them to the main layout
+        self.progressBar = QtWidgets.QProgressBar(self)
+        self.progressBar.setRange(0,0)
+        self.progressBar.setValue(0)
+        layout.addWidget(QtWidgets.QLabel("Waiting for an available Auspex plot..."))
+        layout.addWidget(self.progressBar)
+        button = QtWidgets.QPushButton("Quit", self)
+        layout.addWidget(button)  
+        button.clicked.connect(self.closeEvent)
+
+        # Start listener thread
+        self.desc_listener_thread = QtCore.QThread()
+        self.Desclistener = DescListener("localhost", 7771)
+        self.Desclistener.moveToThread(self.desc_listener_thread)
+        self.desc_listener_thread.started.connect(self.Desclistener.loop)
+        self.Desclistener.new_plot.connect(new_plotter_window)
+        self.Desclistener.first_plot.connect(self.done_waiting)
+        QtCore.QTimer.singleShot(0, self.desc_listener_thread.start)
+
+    def stop_listening(self, _):
+        self.Desclistener.running = False
+        self.desc_listener_thread.quit()
+        self.desc_listener_thread.wait()
+
+    def closeEvent(self, ce):
+        if self.desc_listener_thread:
+            self.stop_listening(True)
+        self.close()
+
+    def done_waiting(self):
+        self.hide()
 
 if __name__ == '__main__':
     qApp = QtWidgets.QApplication(sys.argv)
@@ -457,14 +542,7 @@ if __name__ == '__main__':
         myappid = u'BBN.auspex.auspex-plot-client.0001' # arbitrary string
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
 
-    if len(sys.argv) > 3:
-        sys.argv = sys.argv[:3] + [int(arg) for arg in sys.argv[3:]]
-    if len(sys.argv) > 2:
-        aw = MatplotClientWindow(*sys.argv[1:])
-    else:
-        aw = MatplotClientWindow()
-    aw.setWindowTitle("%s" % progname)
-    aw.show()
-    aw.setWindowState(aw.windowState() & ~QtCore.Qt.WindowMinimized | QtCore.Qt.WindowActive)
-    aw.activateWindow()
+    window = WaitAndListenWidget()
+    window.show()
+
     sys.exit(qApp.exec_())
