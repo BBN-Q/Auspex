@@ -94,6 +94,13 @@ class Labbrick(Instrument, metaclass=MakeSettersGetters):
             logger.warning('Could not close Lab Brick device with id: %d, returned error %d', self.device_id, status)
 
     @property
+    def output(self):
+        return self._lib.fnLMS_GetRF_On(self.device_id)
+    @output.setter
+    def output(self, value):
+        self._lib.fnLMS_SetRFOn(self.device_id, value)
+
+    @property
     def frequency(self):
         return self._lib.fnLMS_GetFrequency(self.device_id) * 10 # Convert from tens of Hz to Hz
     @frequency.setter
