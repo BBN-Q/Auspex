@@ -140,7 +140,7 @@ class AlazarATS9870(Instrument):
             self.channels.append(channel)
             self._chan_to_buf[channel] = channel.phys_channel
 
-    def spew_fake_data(self, counter, ideal_datapoint=0, random_mag=0.5, random_seed=12345):
+    def spew_fake_data(self, counter, ideal_datapoint=0, random_mag=0.1, random_seed=12345):
         """
         Generate fake data on the stream. For unittest usage.
         ideal_datapoint: mean of the expected signal
