@@ -13,21 +13,23 @@ def correct_resource_name(resource_name):
         resource_name = resource_name.replace(k, v)
     return resource_name
 
-def pulse_marker(marker_name, length = 100e-9):
+def pulse_marker(mkr, length = 100e-9):
     """ Utility to generate a square pulse on a APS2 marker. Used for instance to switch a signal between spectrum analyzer and input line
     marker_name"""
 
-    mkr = cl[marker_name]  # here query for logical markers. They should be created beforehand with new_marker
+    from QGL import TRIG
+    from QGL.Compiler import compile_to_hardware
+
     APS = bbn.APS2(mkr.phys_chan.transmitter.address)
     APS.connect()
     APS.set_trigger_source('Software')
     seq = [[TRIG(mkr, length)]]
-    APS.set_sequence_file(compile_to_hardware(seq, 'Switch\Switch').replace('meta.json', mkr.phys_chan.transmitter.label+'.aps2'))
+    APS.set_sequence_file(compile_to_hardware(seq, 'Switch/Switch').replace('meta.json', mkr.phys_chan.transmitter.label+'.aps2'))
     APS.run()
     APS.trigger()
     APS.stop()
     APS.disconnect()
-    logger.info('Switched marker {} ({})'.format(marker_name, mkr))
+    logger.info('Switched marker {} ({})'.format(mkr.label, mkr))
 
 
 # class InstrumentFactory(object):
