@@ -274,6 +274,13 @@ class DataStreamDescriptor(object):
         # Number of axes
         return len(self.axes)
 
+    def extent(self, flip=False):
+        """Convenience function for matplotlib.imshow, which expects extent=(left, right, bottom, top)."""
+        if self.num_dims() == 2:
+            return (self.axes[1].points[0], self.axes[1].points[-1], self.axes[0].points[0], self.axes[0].points[-1])
+        else:
+            raise Exception("Can't get extent for any number of axes other than two.")
+
     def data_dims(self):
         # Return dimension (length) of the data axes, exclude sweep axes (return 1 for each)
         dims = []
