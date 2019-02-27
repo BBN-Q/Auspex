@@ -7,8 +7,6 @@ import auspex.config
 from auspex.log import logger
 from auspex.instruments.instrument import Instrument, SCPIInstrument, CLibInstrument, ReceiverChannel
 
-__all__  = ['InstrumentFactory']
-
 def correct_resource_name(resource_name):
     substs = {"USB::": "USB0::", }
     for k, v in substs.items():
