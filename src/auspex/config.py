@@ -31,10 +31,7 @@ single_plotter_mode = False
 # the requested qubit frequency and sidebanding.
 qubit_IF_priority = False
 
-# Configuration information
-AWGDir            = None
 ConfigurationFile = None
-KernelDir         = None
 LogDir            = None
 
 # The db file, where the channel libraries are stored
