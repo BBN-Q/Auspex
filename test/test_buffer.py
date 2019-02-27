@@ -115,8 +115,7 @@ class BufferTestCase(unittest.TestCase):
         exp.run_sweeps()
 
         data, desc = db.get_data()
-
-        self.assertTrue(len(data) == 4*3*5)
+        self.assertTrue(data.shape == (3, 4, 5))
         self.assertTrue(np.all(desc['field'] == np.linspace(0,100.0,4)))
 
     def test_buffer_metadata(self):
@@ -132,7 +131,7 @@ class BufferTestCase(unittest.TestCase):
 
         data, desc = db.get_data()
 
-        self.assertTrue(len(data) == 4*3*5)
+        self.assertTrue(data.shape == (3, 4, 5))
         self.assertTrue(np.all(desc['field'] == np.linspace(0,100.0,4)))
         self.assertTrue(np.all(desc.axis('samples').metadata == ["data", "data", "data", "0", "1"]))
 
