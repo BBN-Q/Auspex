@@ -81,6 +81,7 @@ class AlazarATS9870(Instrument):
         self.increment_ideal_data = False
         self.ideal_counter        = 0
         self.ideal_data           = None
+        np.random.seed(12345)
 
     def connect(self, resource_name=None):
         if config.auspex_dummy_mode or self.gen_fake_data:
@@ -139,7 +140,7 @@ class AlazarATS9870(Instrument):
             self.channels.append(channel)
             self._chan_to_buf[channel] = channel.phys_channel
 
-    def spew_fake_data(self, counter, ideal_datapoint=0, random_mag=0.1, random_seed=12345):
+    def spew_fake_data(self, counter, ideal_datapoint=0, random_mag=0.5, random_seed=12345):
         """
         Generate fake data on the stream. For unittest usage.
         ideal_datapoint: mean of the expected signal
@@ -149,8 +150,7 @@ class AlazarATS9870(Instrument):
         the test with fake data
         """
         total = 0
-        np.random.seed(random_seed)
-
+        
         for chan, wsock in self._chan_to_wsocket.items():
             length = int(self.record_length)
             signal = np.sin(np.linspace(0,10.0*np.pi,int(length/2)))
