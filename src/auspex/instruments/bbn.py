@@ -247,15 +247,15 @@ class APS(Instrument, metaclass=MakeSettersGetters):
             self.wrapper.set_offset(int(chs[3]), value)
 
     def configure_with_proxy(self, proxy_obj):
-        super(APS2, self).configure_with_proxy(proxy_obj)
-        self.wrapper.set_offset(0, proxy_obj.ch("12").I_channel_offset)
-        self.wrapper.set_offset(1, proxy_obj.ch("12").Q_channel_offset)
-        self.wrapper.set_offset(0, proxy_obj.ch("34").I_channel_offset)
-        self.wrapper.set_offset(1, proxy_obj.ch("34").Q_channel_offset)
-        self.wrapper.set_amplitude(0, proxy_obj.ch("12").I_channel_amp_factor)
-        self.wrapper.set_amplitude(1, proxy_obj.ch("12").Q_channel_amp_factor)
-        self.wrapper.set_amplitude(0, proxy_obj.ch("34").I_channel_amp_factor)
-        self.wrapper.set_amplitude(1, proxy_obj.ch("34").Q_channel_amp_factor)
+        super(APS, self).configure_with_proxy(proxy_obj)
+        self.wrapper.set_offset(1, proxy_obj.ch("12").I_channel_offset)
+        self.wrapper.set_offset(2, proxy_obj.ch("12").Q_channel_offset)
+        self.wrapper.set_offset(3, proxy_obj.ch("34").I_channel_offset)
+        self.wrapper.set_offset(4, proxy_obj.ch("34").Q_channel_offset)
+        self.wrapper.set_amplitude(1, proxy_obj.ch("12").I_channel_amp_factor)
+        self.wrapper.set_amplitude(2, proxy_obj.ch("12").Q_channel_amp_factor)
+        self.wrapper.set_amplitude(3, proxy_obj.ch("34").I_channel_amp_factor)
+        self.wrapper.set_amplitude(4, proxy_obj.ch("34").Q_channel_amp_factor)
 
     def load_waveform(self, channel, data):
         if channel not in (1, 2, 3, 4):
