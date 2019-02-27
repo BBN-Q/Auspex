@@ -279,12 +279,13 @@ class SingleShotMeasurement(Filter):
                 "{:.2f}% ({:.2f}, {:.2f})".format(100*score, 100*flo, 100*fhi)))
 
     def _save_kernel(self):
-        if not config.KernelDir or not os.path.exists(config.KernelDir):
+        import QGL.config as qconfig
+        if not qconfig.KernelDir or not os.path.exists(qconfig.KernelDir):
             logger.warning("No kernel directory provided, please set auspex.config.KernelDir")
             logger.warning("Saving kernel to local directory.")
             dir = "./"
         else:
-            dir = config.KernelDir
+            dir = qconfig.KernelDir
         try:
             logger.info(self.filter_name)
             filename = self.filter_name + "_kernel.txt"
