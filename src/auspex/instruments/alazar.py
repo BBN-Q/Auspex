@@ -182,16 +182,10 @@ class AlazarATS9870(Instrument):
                 continue
             msg_size = struct.unpack('n', msg)[0]
             buf = sock_recvall(sock, msg_size)
-            if len(buf) != msg_size:
+            while len(buf) < msg_size:
                 time.sleep(0.01)
-                try:
-                    buf2 = sock_recvall(sock, msg_size-len(buf))
-                    if(len(buf2)==msg_size-len(buf)):
-                        buf = buf+buf2
-                    else:
-                        logger.error("Buffer mismatch...")
-                except:
-                    pass
+                buf2 = sock_recvall(sock, msg_size-len(buf))
+                buf = buf+buf2
             data = np.frombuffer(buf, dtype=np.float32)
             self.total_received.value += len(data)
             oc.push(data)
@@ -264,14 +258,14 @@ class AlazarATS9870(Instrument):
             'nbrSegments': self.proxy_obj.number_segments,
             'nbrWaveforms': self.proxy_obj.number_waveforms,
             'nbrRoundRobins': self.proxy_obj.number_averages,
-            'samplingRate': self.proxy_obj.samplingRate,
+            'samplingRate': self.proxy_obj.sampling_rate,
             'triggerCoupling': "DC",
             'triggerLevel': 100,
             'triggerSlope': "rising",
             'triggerSource': "Ext",
             'verticalCoupling': "AC",
             'verticalOffset': 0.0,
-            'verticalScale': self.proxy_obj.verticalScale
+            'verticalScale': self.proxy_obj.vertical_scale
         }
 
         self._lib.setAll(config_dict)
