@@ -67,7 +67,7 @@ class Calibration(object):
             poller = zmq.Poller()
             poller.register(socket, zmq.POLLIN)
 
-            evts = dict(poller.poll(1000))
+            evts = dict(poller.poll(5000))
             if socket in evts:
                 try:
                     if socket.recv_multipart()[0] == b'ACK':
