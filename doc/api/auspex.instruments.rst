@@ -4,13 +4,6 @@ auspex\.instruments package
 Submodules
 ----------
 
-auspex\.instruments\.X6 module
-------------------------------
-
-.. automodule:: auspex.instruments.X6
-    :members:
-    :undoc-members:
-
 auspex\.instruments\.agilent module
 -----------------------------------
 
@@ -109,6 +102,13 @@ auspex\.instruments\.lakeshore module
     :members:
     :undoc-members:
 
+auspex\.instruments\.lecroy module
+---------------------------------
+
+.. automodule:: auspex.instruments.lecroy
+    :members:
+    :undoc-members:
+
 auspex\.instruments\.magnet module
 ----------------------------------
 
@@ -155,6 +155,13 @@ auspex\.instruments\.vaunix module
 ----------------------------------
 
 .. automodule:: auspex.instruments.vaunix
+    :members:
+    :undoc-members:
+
+auspex\.instruments\.X6 module
+------------------------------
+
+.. automodule:: auspex.instruments.X6
     :members:
     :undoc-members:
 

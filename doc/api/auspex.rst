@@ -10,6 +10,20 @@ Subpackages
     auspex.instruments
     auspex.qubit
 
+auspex\.config module
+-------------------------
+
+.. automodule:: auspex.config
+    :members:
+    :undoc-members:
+
+auspex\.data_format module
+-------------------------
+
+.. automodule:: auspex.data_format
+    :members:
+    :undoc-members:
+
 auspex\.experiment module
 -------------------------
 
@@ -28,13 +42,6 @@ auspex\.parameter module
 ------------------------
 
 .. automodule:: auspex.parameter
-    :members:
-    :undoc-members:
-
-auspex\.refine module
----------------------
-
-.. automodule:: auspex.refine
     :members:
     :undoc-members:
 

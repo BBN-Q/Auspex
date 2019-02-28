@@ -18,6 +18,13 @@ auspex\.qubit\.qubit_exp module
     :members:
     :undoc-members:
 
+auspex\.qubit\.mixer_calibration module
+---------------------------------------
+
+.. automodule:: auspex.qubit.mixer_calibration
+    :members:
+    :undoc-members:
+
 auspex\.qubit\.pulse_calibration module
 ---------------------------------------
 

@@ -3,7 +3,7 @@
 Qubit Experiments
 =================
 
-Auspex and QGL comprise BBN's qubit measurement system. Both packages utilize the underlying database schema provided by bbndb that allows them to easily share state and allows the user to take advantage of versioned measurement configurations. 
+Auspex and QGL comprise BBN's qubit measurement softwre stack. Both packages utilize the underlying database schema provided by bbndb that allows them to easily share state and allows the user to take advantage of versioned measurement configurations. 
 
 Important Changes in the BBN-Q Software Ecosystem
 *************************************************
@@ -27,18 +27,9 @@ The best way to gain experience is to follow through with these tutorials:
    Q3 Tutorial: Using the Pipeline Manager <examples/Example-Q3.ipynb>
    Q4 Tutorial: Running a Basic Qubit Experiment <examples/Example-Q4.ipynb>
    Q5 Tutorial: Adding Sweeps to Experiments <examples/Example-Q5.ipynb>
-
-The Filter Pipeline
-*******************
-Coming soon.
-
-Pulse Calibration
-*****************
-Coming soon.
-
-Automated Tuneup
-****************
-Coming soon.
+   Q6 Tutorial: Pulse Calibration <examples/Example-Q6.ipynb>
+   Q7 Tutorial: Single Shot Fidelity <examples/Example-Q7.ipynb>
+   Q8 Tutorial: Benchmarking and Tomography <examples/Example-Q8.ipynb>
 
 Instrument Drivers
 ******************

@@ -41,6 +41,7 @@ extensions = [
     'nbsphinx',
     'sphinx.ext.autodoc',
     'sphinx.ext.mathjax',
+    'sphinx.ext.napoleon',
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -61,7 +62,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = 'auspex'
-copyright = '2017, Auspex Developers'
+copyright = '2019, Auspex Developers'
 author = 'Auspex Developers'
 
 # The version info for the project you're documenting, acts as replacement for
