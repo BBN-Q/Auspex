@@ -195,7 +195,7 @@ class AlazarATS9870(Instrument):
         self.fetch_count.value += 1
         return getattr(self._lib, 'ch{}Buffer'.format(self._chan_to_buf[channel]))
 
-    def wait_for_acquisition(self, timeout=5, ocs=None):
+    def wait_for_acquisition(self, timeout=5, ocs=None, progressbar=None):
         if self.gen_fake_data:
             total_spewed = 0
 
@@ -233,7 +233,8 @@ class AlazarATS9870(Instrument):
                         # logger.info('TOTAL fake data received %d', oc.points_taken.value - initial_points[oc])
                     if total_taken == total_spewed:
                         break
-
+                    if progressbar:
+                        progressbar.value = ocs[0].points_taken.value
                     # logger.info('WAITING for acquisition to finish %d < %d', total_taken, total_spewed)
                     time.sleep(0.025)
 
@@ -242,6 +243,8 @@ class AlazarATS9870(Instrument):
                 if (datetime.datetime.now().timestamp() - self.last_timestamp.value) > timeout:
                     logger.error("Digitizer %s timed out.", self.name)
                     raise Exception("Alazar timed out.")
+                if progressbar:
+                    progressbar.value = ocs[0].points_taken.value
                 time.sleep(0.2)
 
         logger.debug("Digitizer %s finished getting data.", self.name)

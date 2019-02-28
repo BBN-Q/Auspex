@@ -67,6 +67,8 @@ class QubitExperiment(Experiment):
         self.cw_mode = False
         self.add_date = True # add date to data files?
 
+        self.outputs_by_qubit = {}
+
         self.create_from_meta(meta_file, averages)
 
     def create_from_meta(self, meta_file, averages):
@@ -121,7 +123,6 @@ class QubitExperiment(Experiment):
 
         # In case we need to access more detailed foundational information
         self.factory = self
-
 
         # If no pipeline is defined, assumed we want to generate it automatically
         if not pipeline.pipelineMgr.meas_graph:
@@ -429,6 +430,26 @@ class QubitExperiment(Experiment):
         for instr in self.instruments:
             instr.disconnect()
 
+    def final_init(self):
+        super(QubitExperiment, self).final_init()
+        self.init_progress_bar()
+
+        # In order to fetch data more easily later
+        self.outputs_by_qubit =  {q.label: [f for f in self.modified_graph.nodes if isinstance(f, (bbndb.auspex.Write, bbndb.auspex.Buffer,))] for q in self.measured_qubits}
+
+    def init_progress_bar(self):
+        """ initialize the progress bars."""
+        from ipywidgets import IntProgress
+        from IPython.display import display
+
+        ocs = list(self.output_connectors.values())
+        if len(ocs)>0:
+            self.progressbar = IntProgress(min=0, max=ocs[0].output_streams[0].descriptor.num_points(), bar_style='success',
+                                            description='Data Returned:', style={'description_width': 'initial'})
+            display(self.progressbar)
+        else:
+            logger.warning("No stream is found for progress bar.")
+
     def run(self):
         # Begin acquisition before enabling the AWGs
         for dig in self.digitizers:
@@ -443,7 +464,7 @@ class QubitExperiment(Experiment):
         # Wait for all of the acquisitions to complete
         timeout = 20
         for dig in self.digitizers:
-            dig.wait_for_acquisition(timeout, self.chan_to_oc.values())
+            dig.wait_for_acquisition(timeout, ocs=list(self.chan_to_oc.values()), progressbar=self.progressbar)
 
         # Bring everything to a stop
         for dig in self.digitizers:

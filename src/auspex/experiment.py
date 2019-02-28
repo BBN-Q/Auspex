@@ -248,15 +248,6 @@ class Experiment(metaclass=MetaExperiment):
         """Gets run after a sweep ends, or when the program is terminated."""
         pass
 
-    def init_progressbar(self, num=0):
-        """ initialize the progress bars."""
-        oc = list(self.output_connectors.values())
-        if len(oc)>0:
-            self.progressbar = ExpProgressBar(oc[0].output_streams[0], num=num)
-        else:
-            logger.warning("No stream is found for progress bar.")
-            # self.progressbar = ExpProgressBar(None, num=num)
-
     def run(self):
         """This is the inner measurement loop, which is the smallest unit that
         is repeated across various sweep variables. For more complicated run control
@@ -342,10 +333,6 @@ class Experiment(metaclass=MetaExperiment):
             # through the filter pipeline.
             self.sweeper.check_for_refinement(self.output_connectors)
 
-            # Update progress bars
-            if self.progressbar is not None:
-                self.progressbar.update()
-
             # Finish up, checking to see whether we've received all of our data
             if self.sweeper.done():
                 self.declare_done()
@@ -373,14 +360,17 @@ class Experiment(metaclass=MetaExperiment):
     #     else:
     #         self._run_sweeps()
 
+    def final_init(self):
+        # Call any final initialization on the filter pipeline
+        for n in self.nodes + self.extra_plotters:
+            if n != self and hasattr(n, 'final_init'):
+                n.final_init()
+
     def run_sweeps(self):
         # Propagate the descriptors through the network
         self.update_descriptors()
         # Make sure we are starting from scratch... is this necessary?
         self.reset()
-        # Update the progress bar if need be
-        # if self.progressbar is not None:
-        #     self.progressbar.reset()
 
         #Make sure we have axes.
         if not any([oc.descriptor.axes for oc in self.output_connectors.values()]):
@@ -416,10 +406,8 @@ class Experiment(metaclass=MetaExperiment):
         # These use neither streams nor the filter pipeline
         self.plotters.extend(self.manual_plotters)
 
-        # Call any final initialization on the filter pipeline
-        for n in self.nodes + self.extra_plotters:
-            if hasattr(n, 'final_init'):
-                n.final_init()
+        # Last minute init
+        self.final_init()
 
         # Launch plot servers.
         if len(self.plotters) > 0:
@@ -562,10 +550,6 @@ class Experiment(metaclass=MetaExperiment):
 
             for buff in self.buffers:
                 buff.output_data, buff.descriptor = buff.get_data()
-
-            if self.progressbar:
-                self.progressbar.update()
-                self.progressbar.close()
 
             if self.dashboard:
                 exit_perf.set()
