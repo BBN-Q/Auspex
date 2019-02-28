@@ -77,10 +77,10 @@ class WriteToFile(Filter):
 
     def get_data_while_running(self, return_queue):
         """Return data to the main thread or user as requested. Use a MP queue to transmit."""
-        assert not self.done.is_set(), Exception("Experiment is over and filter done. Please use load_data")
+        assert not self.done.is_set(), Exception("Experiment is over and filter done. Please use get_data")
         self.return_queue.put(np.array(self.mmap))
 
-    def load_data(self):
+    def get_data(self):
         assert self.done.is_set(), Exception("Experiment is still running. Please use get_data_while_running")
         container = AuspexDataContainer(self.filename.value)
         return container.open_dataset(self.groupname.value, self.datasetname)
