@@ -137,8 +137,8 @@ class Labbrick(Instrument, metaclass=MakeSettersGetters):
         using_internal_ref = self._lib.fnLMS_GetUseInternalRef(self.device_id)
         return using_internal_ref
     @use_internal_ref.setter
-    def power(self, value):
-        if value != 1 && value != 0:
+    def use_internal_ref(self, value):
+        if value != 1 and value != 0:
             using_internal_ref = self._lib.fnLMS_SetUseInternalRef(self.device_id,1)
             logger.warning('Lab Brick internal reference use must be 0 or 1. Set to: 1')
         else:
