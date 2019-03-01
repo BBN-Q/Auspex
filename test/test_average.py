@@ -11,8 +11,37 @@ import asyncio
 import time
 import numpy as np
 
-import auspex.config as config
-config.auspex_dummy_mode = True
+_bNO_METACLASS_INTROSPECTION_CONSTRAINTS = True  # Use original dummy flag logic
+#_bNO_METACLASS_INTROSPECTION_CONSTRAINTS = False # Enable instrument and filter introspection constraints
+
+if _bNO_METACLASS_INTROSPECTION_CONSTRAINTS:
+    #
+    # The original unittest quieting logic
+    import auspex.config as config
+    config.auspex_dummy_mode = True
+    #
+else:
+    # ----- fix/unitTests_1 (ST-15) delta Start...
+    # Added the followiing 05 Nov 2018 to test Instrument and filter metaclass load
+    # introspection minimization (during import)
+    #
+    from auspex import config
+
+    # Filter out Holzworth warning noise noise by citing the specific instrument[s]
+    # used for this test.
+    config.tgtInstrumentClass       = ""  # No Instruments
+
+    # Filter out Channerlizer noise by citing the specific filters used for this
+    # test.
+    # ...Actually Print, Channelizer, and KernelIntegrator are NOT used in this test;
+    # hence commented them out, below, as well.
+    config.tgtFilterClass           = {"Print", "Passthrough", "DataBuffer", "Averager"}
+
+    # Uncomment to the following to show the Instrument MetaClass __init__ arguments
+    # config.bEchoInstrumentMetaInit  = True
+    #
+    # ----- fix/unitTests_1 (ST-15) delta Stop.
+
 
 from auspex.experiment import Experiment
 from auspex.parameter import FloatParameter
@@ -67,7 +96,7 @@ class VarianceExperiment(Experiment):
     trials  = 5
     repeats = 10
     idx     = 0
-    
+
     # For variance comparison
     vals = np.random.random((samples*trials*repeats))
 
