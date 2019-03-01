@@ -306,7 +306,7 @@ class X6(Instrument):
     def get_buffer_for_channel(self, channel):
         return self._lib.transfer_stream(*channel.channel)
 
-    def wait_for_acquisition(self, timeout=15, ocs=None, progressbar=None):
+    def wait_for_acquisition(self, timeout=15, ocs=None, progressbars=None):
 
         if self.gen_fake_data:
             total_spewed = 0
@@ -341,11 +341,11 @@ class X6(Instrument):
                     total_taken = 0
                     for oc in ocs:
                         total_taken += oc.points_taken.value - initial_points[oc]
+                        if progressbars:
+                            progressbars[oc].value = ocs[0].points_taken.value
                         # logger.info('TOTAL fake data received %d', oc.points_taken.value - initial_points[oc])
                     if total_taken == total_spewed:
                         break
-                    if progressbar:
-                        progressbar.value = ocs[0].points_taken.value
                     # logger.info('WAITING for acquisition to finish %d < %d', total_taken, total_spewed)
                     time.sleep(0.025)
 
@@ -354,8 +354,9 @@ class X6(Instrument):
                 if (datetime.datetime.now().timestamp() - self.last_timestamp.value) > timeout:
                     logger.error("Digitizer %s timed out.", self.name)
                     break
-                if progressbar:
-                    progressbar.value = ocs[0].points_taken.value
+                if progressbars:
+                    for oc in ocs:
+                        progressbars[oc].value = oc.points_taken.value
                 time.sleep(0.1)
 
     # pass thru properties

@@ -432,23 +432,25 @@ class QubitExperiment(Experiment):
 
     def final_init(self):
         super(QubitExperiment, self).final_init()
-        self.init_progress_bar()
-
+        
         # In order to fetch data more easily later
         self.outputs_by_qubit =  {q.label: [f for f in self.modified_graph.nodes if isinstance(f, (bbndb.auspex.Write, bbndb.auspex.Buffer,))] for q in self.measured_qubits}
 
-    def init_progress_bar(self):
+    def init_progress_bars(self):
         """ initialize the progress bars."""
-        from ipywidgets import IntProgress
+        from ipywidgets import IntProgress, VBox
         from IPython.display import display
 
         ocs = list(self.output_connectors.values())
+        self.progressbars = {}
         if len(ocs)>0:
-            self.progressbar = IntProgress(min=0, max=ocs[0].output_streams[0].descriptor.num_points(), bar_style='success',
-                                            description='Data Returned:', style={'description_width': 'initial'})
-            display(self.progressbar)
-        else:
-            logger.warning("No stream is found for progress bar.")
+            for oc in ocs:
+                self.progressbars[oc] = IntProgress(min=0, max=oc.output_streams[0].descriptor.num_points(), bar_style='success',
+                                                    description=f'Digitizer Data {oc.name}:', style={'description_width': 'initial'})
+        for axis in self.sweeper.axes:
+            self.progressbars[axis] = IntProgress(min=0, max=axis.num_points(),
+                                                    description=f'{axis.name}:', style={'description_width': 'initial'})
+        display(VBox(list(self.progressbars.values())))
 
     def run(self):
         # Begin acquisition before enabling the AWGs
@@ -464,7 +466,7 @@ class QubitExperiment(Experiment):
         # Wait for all of the acquisitions to complete
         timeout = 20
         for dig in self.digitizers:
-            dig.wait_for_acquisition(timeout, ocs=list(self.chan_to_oc.values()), progressbar=self.progressbar)
+            dig.wait_for_acquisition(timeout, ocs=list(self.chan_to_oc.values()), progressbars=self.progressbars)
 
         # Bring everything to a stop
         for dig in self.digitizers:
