@@ -156,6 +156,15 @@ class KCU105(object):
         datagrams_written = 0
         init_addr = addr
         idx = 0
+
+        if isinstance(data, int):
+            data = [data]
+        elif isinstance(data, list):
+            if not all([isinstance(v, int) for v in data]):
+                raise ValueError("Data must be a list of integers.")
+        else:
+            raise ValueError("Data must be a list of integers or an integer.")
+
         while(len(data) - idx > 0):
             ct_left = len(data) - idx
             ct = ct_left if (ct_left < max_ct) else max_ct
@@ -185,6 +194,11 @@ class KCU105(object):
         resp_header = self.recv_bytes(2 * 4) #4 bytes per word
         #print([hex(x) for x in resp_header])
         return self.recv_bytes(4 * num_words) #4 bytes per word
+
+    def read_memory_hex(self, addr, num_words):
+        data = self.read_memory(addr, num_words)
+        for d in data:
+            print(hex(d))
 
 CSR_AXI_ADDR = 0x44a00000
 CSR_CONTROL_OFFSET = 0x00
