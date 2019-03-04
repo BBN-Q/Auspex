@@ -30,7 +30,6 @@ import os.path
 import os, psutil
 import time
 import datetime
-import pandas as pd
 from shutil import copyfile
 import cProfile
 

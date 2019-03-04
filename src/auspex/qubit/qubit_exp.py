@@ -461,7 +461,6 @@ class QubitExperiment(Experiment):
         if not self.cw_mode:
             for awg in self.awgs:
                 awg.run()
-                #logger.info(f"Started {awg}")
 
         # Wait for all of the acquisitions to complete
         timeout = 20
