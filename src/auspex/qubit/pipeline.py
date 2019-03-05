@@ -147,9 +147,11 @@ class PipelineManager(object):
             self.meas_graph.clear()
             self.meas_graph.add_edges_from(edges)
 
-    def show_pipeline(self, pipeline_name=None):
+    def show_pipeline(self, subgraph=None, pipeline_name=None):
         """If a pipeline name is specified query the database, otherwise show the current pipeline."""
-        if pipeline_name:
+        if subgraph:
+            graph = subgraph
+        elif pipeline_name:
             cs = self.session.query(bbndb.auspex.Connection).filter_by(pipeline_name=pipeline_name).all()
             if len(cs) == 0:
                 print(f"No results for pipeline {pipeline_name}")
@@ -163,11 +165,36 @@ class PipelineManager(object):
         if not graph or len(graph.nodes()) == 0:
             print("Could not find any nodes. Has a pipeline been created (try running create_default_pipeline())")
         else:
-            labels = {n: n.node_label() for n in graph.nodes()}
-            colors = ["#3182bd" if isinstance(n, bbndb.auspex.QubitProxy) else "#ff9933" for n in graph.nodes()]
-            self.plot_graph(graph, labels, colors=colors)
+            from bqplot import Figure
+            from bqplot.marks import Graph
+            from ipywidgets import Layout, HTML
 
-    def print(self, qubit_name=None):
+            indices = {n.node_label(): i for i, n in enumerate(graph.nodes())}
+            node_data = [{'label': n.node_label(), 'data': n.print(display=False)} for n in graph.nodes()]
+            link_data = [{'source': indices[s.node_label()], 'target': indices[t.node_label()]} for s, t in graph.edges()]
+
+            # Update the tooltip chart
+            table = HTML("<b>Table Here</b>")
+            hovered_symbol = ''
+            def hover_handler(self, content, hovered_symbol=hovered_symbol, table=table):
+                symbol = content.get('data', '')
+                
+                if(symbol != hovered_symbol):
+                    hovered_symbol = symbol
+                    table.value = symbol['data']
+                    # if(gdp_data.get(hovered_symbol) is not None):
+                    #     line.y = gdp_data[hovered_symbol].values
+                    #     fig_tooltip.title = content.get('ref_data', {}).get('Name', '')
+
+            fig_layout = Layout(width='960px', height='500px')
+            graph      = Graph(node_data=node_data, link_data=link_data, charge=-600, link_type='line', colors=['orange'] * len(node_data), directed=True)
+            fig        = Figure(marks=[graph], layout=fig_layout)
+            graph.tooltip = table
+            graph.on_hover(hover_handler)
+            return fig
+
+
+    def print(self, qubit_name=None, display=True):
         if qubit_name:
             nodes = nx.algorithms.dag.descendants(self.meas_graph, self.qubit(qubit_name))
         else:
@@ -196,28 +223,6 @@ class PipelineManager(object):
 
     def show_connectivity(self):
         pass
-
-    def plot_graph(self, graph, labels, prog="dot", colors='r'):
-        import matplotlib.pyplot as plt
-        plt.figure(figsize=(12, 4))
-        pos = nx.drawing.nx_pydot.graphviz_layout(graph, prog=prog)
-
-        # Create position copies for shadows, and shift shadows
-        pos_shadow = copy.copy(pos)
-        pos_labels = copy.copy(pos)
-        for idx in pos_shadow.keys():
-            pos_shadow[idx] = (pos_shadow[idx][0] + 0.01, pos_shadow[idx][1] - 0.01)
-            pos_labels[idx] = (pos_labels[idx][0] + 0, pos_labels[idx][1] + 15 )
-        nx.draw_networkx_nodes(graph, pos_shadow, node_size=100, node_color='k', alpha=0.5)
-        nx.draw_networkx_nodes(graph, pos, node_size=100, node_color=colors, linewidths=1, alpha=1.0)
-        nx.draw_networkx_edges(graph, pos, width=1)
-        nx.draw_networkx_labels(graph, pos_labels, labels, font_size=10, bbox=dict(facecolor='white', alpha=0.95), horizontalalignment="center")
-
-        ax = plt.gca()
-        ax.axis('off')
-        ax.set_xlim((ax.get_xlim()[0]-20.0, ax.get_xlim()[1]+20.0))
-        ax.set_ylim((ax.get_ylim()[0]-20.0, ax.get_ylim()[1]+20.0))
-        plt.show()
 
     def __getitem__(self, key):
         return self.qubit(key)
