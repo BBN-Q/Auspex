@@ -345,9 +345,6 @@ class Experiment(metaclass=MetaExperiment):
                 self.declare_done()
                 break
 
-    # def filters_finished(self):
-    #     return all([n.finished_processing.is_set() for n in self.other_nodes if isinstance(n, Filter)])
-
     def connect_instruments(self):
         # Connect the instruments to their resources
         if not self.instrs_connected:
@@ -360,12 +357,6 @@ class Experiment(metaclass=MetaExperiment):
         for instrument in self._instruments.values():
             instrument.disconnect()
         self.instrs_connected = False
-
-    # def run_sweeps(self):
-    #     if auspex.config.profile:
-    #         cProfile.runctx('self._run_sweeps()', globals(), locals(), 'prof-run_sweeps.prof')
-    #     else:
-    #         self._run_sweeps()
 
     def init_dashboard(self):
         from bqplot import DateScale, LinearScale, DateScale, Axis, Lines, Figure, Tooltip
@@ -649,6 +640,16 @@ class Experiment(metaclass=MetaExperiment):
         """Push data to a direct plotter."""
         stream = self._extra_plots_to_streams[plotter]
         stream.push_direct(data)
+
+    def get_final_plots(self, quad_funcs=[np.abs, np.angle]):
+        from ipywidgets import Tab
+        tab = Tab()
+        plots = []
+        for i, p in enumerate(self.plotters):
+            tab.set_title(i, p.filter_name);
+            plots.append(p.get_final_plot(quad_funcs=quad_funcs))
+        tab.children = plots
+        return tab
 
     def connect_to_plot_server(self):
         logger.debug("Found %d plotters", len(self.plotters))
