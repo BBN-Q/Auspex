@@ -13,6 +13,8 @@ from functools import wraps
 
 import numpy as np
 import networkx as nx
+import operator
+from functools import reduce
 from IPython.display import HTML, display
 from sqlalchemy import inspect
 
@@ -165,16 +167,38 @@ class PipelineManager(object):
         if not graph or len(graph.nodes()) == 0:
             print("Could not find any nodes. Has a pipeline been created (try running create_default_pipeline())")
         else:
-            from bqplot import Figure
+            from bqplot import Figure, LinearScale
             from bqplot.marks import Graph
             from ipywidgets import Layout, HTML
+            from IPython.display import HTML as IPHTML, display
 
-            indices = {n.node_label(): i for i, n in enumerate(graph.nodes())}
-            node_data = [{'label': n.node_label(), 'data': n.print(display=False)} for n in graph.nodes()]
+            nodes     = list(graph.nodes())
+            indices   = {n.node_label(): i for i, n in enumerate(nodes)}
+            node_data = [{'label': n.node_label(), 'data': n.print(display=False)} for n in nodes]
             link_data = [{'source': indices[s.node_label()], 'target': indices[t.node_label()]} for s, t in graph.edges()]
 
             # Update the tooltip chart
-            table = HTML("<b>Table Here</b>")
+            table = HTML("<b>Re-evaluate this plot to see information about filters. Otherwise it will be stale.</b>")
+            table.add_class("hover_tooltip")
+            display(IPHTML("""
+            <style>
+                .hover_tooltip table {
+                  border-collapse: collapse;
+                  padding: 8px;
+                }
+
+                .hover_tooltip th, .hover_tooltip td {
+                  text-align: left;
+                  padding: 8px;
+                }
+
+                .hover_tooltip tr:nth-child(even) {
+                  background-color: #cccccc;
+                  padding: 8px;
+                }
+                
+            </style>
+            """))
             hovered_symbol = ''
             def hover_handler(self, content, hovered_symbol=hovered_symbol, table=table):
                 symbol = content.get('data', '')
@@ -182,19 +206,47 @@ class PipelineManager(object):
                 if(symbol != hovered_symbol):
                     hovered_symbol = symbol
                     table.value = symbol['data']
-                    # if(gdp_data.get(hovered_symbol) is not None):
-                    #     line.y = gdp_data[hovered_symbol].values
-                    #     fig_tooltip.title = content.get('ref_data', {}).get('Name', '')
 
+            node_locations = {}
+
+            qubits = [n for n in graph.nodes() if isinstance(n, bbndb.auspex.QubitProxy)]
+            loc = {}
+            def next_level(nodes, iteration=0, offset=0, accum=[]):
+                if len(accum) == 0:
+                    loc[nodes[0]] = {'x': 0, 'y': 0}
+                    accum = [nodes]
+                next_gen_nodes = list(reduce(operator.add, [list(graph.successors(n)) for n in nodes]))
+                l = len(next_gen_nodes)
+                if l > 0:
+                    for k,n in enumerate(next_gen_nodes):
+                        loc[n] = {'x': k, 'y': -(iteration+1)}
+                    accum.append(next_gen_nodes)
+                    return next_level(next_gen_nodes, iteration=iteration+1, offset=2.5*l, accum=accum)
+                else:
+                    return accum
+
+            hierarchy = [next_level([q]) for q in qubits]
+            widest = [max([len(row) for row in qh]) for qh in hierarchy]
+            for i in range(1, len(qubits)):
+                offset = sum(widest[:i])
+                loc[qubits[i]]['x'] += offset
+                for n in nx.descendants(graph, qubits[i]):
+                    loc[n]['x'] += offset
+            
+            x = [loc[n]['x'] for n in nodes]
+            y = [loc[n]['y'] for n in nodes]
+            xs = LinearScale(min=min(x)-0.5, max=max(x)+0.5)
+            ys = LinearScale(min=min(y)-0.5, max=max(y)+0.5)
             fig_layout = Layout(width='960px', height='500px')
-            graph      = Graph(node_data=node_data, link_data=link_data, charge=-600, link_type='line', colors=['orange'] * len(node_data), directed=True)
+            graph      = Graph(node_data=node_data, link_data=link_data, x=x, y=y, scales={'x': xs, 'y': ys},
+                                link_type='line', colors=['orange'] * len(node_data), directed=True)
             fig        = Figure(marks=[graph], layout=fig_layout)
             graph.tooltip = table
             graph.on_hover(hover_handler)
             return fig
 
 
-    def print(self, qubit_name=None, display=True):
+    def print(self, qubit_name=None):
         if qubit_name:
             nodes = nx.algorithms.dag.descendants(self.meas_graph, self.qubit(qubit_name))
         else:
