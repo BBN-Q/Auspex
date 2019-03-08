@@ -259,7 +259,8 @@ class QubitExperiment(Experiment):
 
     def instantiate_filters(self, graph):
         # Configure the individual filter nodes
-        for node in graph.nodes():
+        for _, dat in graph.nodes(data=True):
+            node = dat['node_obj']
             if isinstance(node, bbndb.auspex.FilterProxy):
                 if node.qubit_name in self.measured_qubit_names:
                     new_filt = filter_map[type(node)]()
@@ -273,15 +274,16 @@ class QubitExperiment(Experiment):
         # Connect the filters together
         graph_edges = []
         pipeline.pipelineMgr.session.commit()
-        for node1, node2 in graph.edges():
+        for l1, l2 in graph.edges():
+            node1, node2 = graph.nodes[l1]['node_obj'], graph.nodes[l2]['node_obj']
             if node1.qubit_name in self.measured_qubit_names and node2.qubit_name in self.measured_qubit_names:
                 if isinstance(node1, bbndb.auspex.FilterProxy):
                     filt1 = self.proxy_to_filter[node1]
-                    oc   = filt1.output_connectors[graph[node1][node2]["connector_out"]]
+                    oc   = filt1.output_connectors[graph[l1][l2]["connector_out"]]
                 elif isinstance(node1, bbndb.auspex.QubitProxy):
                     oc   = self.connector_by_qp[node1]
                 filt2 = self.proxy_to_filter[node2]
-                ic   = filt2.input_connectors[graph[node1][node2]["connector_in"]]
+                ic   = filt2.input_connectors[graph[l1][l2]["connector_in"]]
                 graph_edges.append([oc, ic])
 
         # Define the experiment graph
@@ -434,7 +436,7 @@ class QubitExperiment(Experiment):
         super(QubitExperiment, self).final_init()
         
         # In order to fetch data more easily later
-        self.outputs_by_qubit =  {q.label: [f for f in self.modified_graph.nodes if isinstance(f, (bbndb.auspex.Write, bbndb.auspex.Buffer,))] for q in self.measured_qubits}
+        self.outputs_by_qubit =  {q.label: [self.proxy_to_filter[dat['node_obj']] for f,dat in self.modified_graph.nodes(data=True) if isinstance(dat['node_obj'], (bbndb.auspex.Write, bbndb.auspex.Buffer,))] for q in self.measured_qubits}
 
     def init_progress_bars(self):
         """ initialize the progress bars."""
@@ -461,7 +463,6 @@ class QubitExperiment(Experiment):
         if not self.cw_mode:
             for awg in self.awgs:
                 awg.run()
-                #logger.info(f"Started {awg}")
 
         # Wait for all of the acquisitions to complete
         timeout = 20

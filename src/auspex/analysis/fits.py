@@ -509,22 +509,39 @@ def cal_scale(data):
 def cal_data(data, quad=np.real, qubit_name="q1", group_name="main", \
         return_type=np.float32, key=""):
     """
-    Rescale data to sigma_z expectation value based on calibration sequences.
+    Rescale data to :math:`\\sigma_z`. expectation value based on calibration sequences.
 
     Parameters:
-    -----------
-    data        : This should be the data formate returned by load_from_HDF5.
-                This is tuple of dictionaries ->
-                ({'q1-mian'} : array([(0.0+0.0j, ...), (...), ...]))
-    quad        : numpy function : This should be the quadrature where most of
-                the data can be found.  Options are: np.real, np.imag, np.abs
-                and np.angle
-    qubit_name  : string : Name of the qubit in the data file. Default is 'q1'
-    group_name  : string : Name of the HDF5 group to calibrate. Default is 'main'
-    return_type : numpy data type : Default is np.float32
-    key         : string : In the case where the dictionary keys don't conform
-                to the default format a string can be passed in specifying the
-                data key to scale.
+        data (numpy array)       
+            The data from the writer or buffer, which is a dictionary
+            whose keys are typically in the format qubit_name-group_name, e.g.
+            ({'q1-main'} : array([(0.0+0.0j, ...), (...), ...]))
+        quad (numpy function)       
+            This should be the quadrature where most of
+            the data can be found.  Options are: np.real, np.imag, np.abs
+            and np.angle
+        qubit_name (string)  
+            Name of the qubit in the data file. Default is 'q1'
+        group_name (string)  
+            Name of the data group to calibrate. Default is 'main'
+        return_type (numpy data type)  
+            Type of the returned data. Default is np.float32.
+        key (string)         
+            In the case where the dictionary keys don't conform
+            to the default format a string can be passed in specifying the
+            data key to scale.
+    Returns:
+        numpy array (type ``return_type``)
+            Returns the data rescaled to match the calibration results for the :math:`\\sigma_z` expectation value.
+
+
+    Examples:
+        Loading and calibrating data 
+
+        >>> exp = QubitExperiment(T1(q1),averages=500)
+        >>> exp.run_sweeps()
+        >>> data, desc = exp.writers[0].get_data()
+
     """
     if key:
         pass
