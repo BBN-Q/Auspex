@@ -267,7 +267,8 @@ class CalibrationExperiment(QubitExperiment):
             else:
                 vb = bbndb.auspex.Buffer(label=f"{output_node.label}-VarBuffer", qubit_name=output_node.qubit_name)
                 self.var_buffers.append(vb)
-                new_graph.add_edge(path[-2], vb, connector_in="sink", connector_out="final_variance")
+                new_graph.add_node(str(vb), node_obj=vb)
+                new_graph.add_edge(path[-2], str(vb), node_obj=vb, connector_in="sink", connector_out="final_variance")
 
         return new_graph
 
