@@ -117,12 +117,12 @@ class PipelineManager(object):
     def save_as(self, name):
         now = datetime.datetime.now()
         for n1, n2 in self.meas_graph.edges():
-            new_node1 = bbndb.copy_sqla_object(n1, self.session)
-            new_node2 = bbndb.copy_sqla_object(n2, self.session)
+            new_node1 = bbndb.copy_sqla_object(self.meas_graph.nodes[n1]['node_obj'], self.session)
+            new_node2 = bbndb.copy_sqla_object(self.meas_graph.nodes[n2]['node_obj'], self.session)
             c = bbndb.auspex.Connection(pipeline_name=name, node1=new_node1, node2=new_node2, time=now,
                                         node1_name=self.meas_graph[n1][n2]["connector_out"],
                                         node2_name=self.meas_graph[n1][n2]["connector_in"])
-            self.session.add_all([n1, n2, c])
+            self.session.add_all([self.meas_graph.nodes[n1]['node_obj'], self.meas_graph.nodes[n2]['node_obj'], c])
         self.session.commit()
 
     @check_session_dirty
@@ -131,6 +131,7 @@ class PipelineManager(object):
         if len(cs) == 0:
             raise Exception(f"Could not find pipeline named {pipeline_name}")
         else:
+            self.clear_pipelines()
             nodes = []
             new_by_old = {}
             edges = []
@@ -143,10 +144,12 @@ class PipelineManager(object):
                 new_by_old[n].pipeline = self
             # Add edges between new objects
             for c in cs:
-                edges.append((new_by_old[c.node1], new_by_old[c.node2], {'connector_in':c.node2_name,  'connector_out':c.node1_name}))
+                edges.append((str(new_by_old[c.node1]), str(new_by_old[c.node2]), {'connector_in':c.node2_name,  'connector_out':c.node1_name}))
             self.session.add_all(new_by_old.values())
             self.session.commit()
             self.meas_graph.clear()
+            for new_node in new_by_old.values():
+                self.meas_graph.add_node(str(new_node), node_obj=new_node)
             self.meas_graph.add_edges_from(edges)
 
     def show_pipeline(self, subgraph=None, pipeline_name=None):
@@ -158,7 +161,10 @@ class PipelineManager(object):
             if len(cs) == 0:
                 print(f"No results for pipeline {pipeline_name}")
                 return
-            temp_edges = [(c.node1, c.node2, {'connector_in':c.node2_name,  'connector_out':c.node1_name}) for c in cs]
+            temp_edges = [(str(c.node1), str(c.node2), {'connector_in':c.node2_name,  'connector_out':c.node1_name}) for c in cs]
+            nodes = set([c.node1 for c in cs] + [c.node2 for c in cs])
+            for node in nodes:
+                self.meas_graph.add_node(str(node), node_obj=node)
             graph = nx.DiGraph()
             graph.add_edges_from(temp_edges)
         else:
@@ -172,31 +178,19 @@ class PipelineManager(object):
             from ipywidgets import Layout, HTML
             from IPython.display import HTML as IPHTML, display
 
-            nodes     = list(graph.nodes())
-            indices   = {n.node_label(): i for i, n in enumerate(nodes)}
-            node_data = [{'label': n.node_label(), 'data': n.print(display=False)} for n in nodes]
-            link_data = [{'source': indices[s.node_label()], 'target': indices[t.node_label()]} for s, t in graph.edges()]
+            # nodes     = list(graph.nodes())
+            indices   = {n: i for i, n in enumerate(graph.nodes())}
+            node_data = [{'label': dat['node_obj'].node_label(), 'data': dat['node_obj'].print(show=False)} for n,dat in graph.nodes(data=True)]
+            link_data = [{'source': indices[s], 'target': indices[t]} for s, t in graph.edges()]
 
             # Update the tooltip chart
             table = HTML("<b>Re-evaluate this plot to see information about filters. Otherwise it will be stale.</b>")
             table.add_class("hover_tooltip")
             display(IPHTML("""
             <style>
-                .hover_tooltip table {
-                  border-collapse: collapse;
-                  padding: 8px;
-                }
-
-                .hover_tooltip th, .hover_tooltip td {
-                  text-align: left;
-                  padding: 8px;
-                }
-
-                .hover_tooltip tr:nth-child(even) {
-                  background-color: #cccccc;
-                  padding: 8px;
-                }
-                
+                .hover_tooltip table { border-collapse: collapse; padding: 8px; }
+                .hover_tooltip th, .hover_tooltip td { text-align: left; padding: 8px; }
+                .hover_tooltip tr:nth-child(even) { background-color: #cccccc; padding: 8px; }
             </style>
             """))
             hovered_symbol = ''
@@ -209,7 +203,7 @@ class PipelineManager(object):
 
             node_locations = {}
 
-            qubits = [n for n in graph.nodes() if isinstance(n, bbndb.auspex.QubitProxy)]
+            qubits = [n for n,dat in graph.nodes(data=True) if isinstance(dat['node_obj'], bbndb.auspex.QubitProxy)]
             loc = {}
             def next_level(nodes, iteration=0, offset=0, accum=[]):
                 if len(accum) == 0:
@@ -233,8 +227,8 @@ class PipelineManager(object):
                 for n in nx.descendants(graph, qubits[i]):
                     loc[n]['x'] += offset
             
-            x = [loc[n]['x'] for n in nodes]
-            y = [loc[n]['y'] for n in nodes]
+            x = [loc[n]['x'] for n in graph.nodes()]
+            y = [loc[n]['y'] for n in graph.nodes()]
             xs = LinearScale(min=min(x)-0.5, max=max(x)+0.5)
             ys = LinearScale(min=min(y)-0.5, max=max(y)+0.5)
             fig_layout = Layout(width='960px', height='500px')
@@ -248,12 +242,13 @@ class PipelineManager(object):
 
     def print(self, qubit_name=None):
         if qubit_name:
-            nodes = nx.algorithms.dag.descendants(self.meas_graph, self.qubit(qubit_name))
+            nodes = nx.algorithms.dag.descendants(self.meas_graph, str(self.qubit(qubit_name)))
         else:
             nodes = self.meas_graph.nodes()
         table_code = ""
 
         for node in nodes:
+            node = self.meas_graph.nodes[node]['node_obj']
             label = node.label if node.label else "Unlabeled"
             table_code += f"<tr><td><b>{node.node_type}</b> ({node.qubit_name})</td><td></td><td><i>{label}</i></td></td><td></tr>"
             inspr = inspect(node)
