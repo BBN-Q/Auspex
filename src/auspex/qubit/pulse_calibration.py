@@ -180,17 +180,17 @@ class QubitCalibration(Calibration):
                 buff_data = normalize_data(dataset, zero_id=self.norm_points[qubit.label][0],
                                            one_id=self.norm_points[self.qubit.label][1])
             else:
-                buff_data = dataset['Data']
+                buff_data = dataset
 
             data[qubit.label] = self.quad_fun(buff_data)
 
             var_dataset, var_descriptor = var_buff.get_data()
             # if 'Variance' in dataset.dtype.names:
-            realvar = np.real(var_dataset['Variance'])
-            imagvar = np.imag(var_dataset['Variance'])
+            realvar = np.real(var_dataset)
+            imagvar = np.imag(var_dataset)
             N = descriptor.metadata["num_averages"]
             if self.quad in ['real', 'imag']:
-                var[qubit.label] = self.quad_fun(var_dataset['Variance'])/N
+                var[qubit.label] = self.quad_fun(var_dataset)/N
             elif self.quad == 'amp':
                 var[qubit.label] = (realvar + imagvar)/N
             elif self.quad == 'phase':
