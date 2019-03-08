@@ -39,8 +39,6 @@ from auspex.stream import InputConnector, OutputConnector
 from auspex.log import logger
 import auspex.config as config
 
-from tqdm import tqdm, tqdm_notebook
-
 class WriteToFile(Filter):
     """Writes data to file using the Auspex container type, which is a simple directory structure
     with subdirectories, binary datafiles, and json meta files that store the axis descriptors
