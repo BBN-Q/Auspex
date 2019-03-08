@@ -70,7 +70,7 @@ class X6Channel(ReceiverChannel):
             self.phys_channel = receiver.channel
         if hasattr(receiver, 'ideal_data') and receiver.ideal_data:
             self.ideal_data = np.load(os.path.abspath(receiver.ideal_data+'.npy'))
-        if hasattr(receiver, "kernel") and receiver.kernel:
+        if hasattr(receiver, "kernel") and receiver.kernel is not None:
             self.kernel = receiver.kernel
         if self.stream_type == "integrated":
             self.demod_channel = 0
