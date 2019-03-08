@@ -220,8 +220,8 @@ class CalibrationExperiment(QubitExperiment):
     def guess_output_nodes(self, graph):
         output_nodes = []
         for qubit in self.qubits:
-            ds = nx.descendants(graph, self.qubit_proxies[qubit.label])
-            outputs = [d for d in ds if isinstance(d, (bbndb.auspex.Write, bbndb.auspex.Buffer))]
+            ds = nx.descendants(graph, str(self.qubit_proxies[qubit.label]))
+            outputs = [graph.nodes[d]['node_obj'] for d in ds if isinstance(graph.nodes[d]['node_obj'], (bbndb.auspex.Write, bbndb.auspex.Buffer))]
             if len(outputs) != 1:
                 raise Exception(f"More than one output node found for {qubit}, please explicitly define output node using output_nodes argument.")
             output_nodes.append(outputs[0])
@@ -233,11 +233,11 @@ class CalibrationExperiment(QubitExperiment):
             self.output_nodes = self.guess_output_nodes(graph)
 
         for output_node in self.output_nodes:
-            if output_node not in graph:
+            if str(output_node) not in graph:
                 raise ValueError(f"Could not find specified output node {output_node} in graph.")
 
         for qubit in self.qubits:
-            if self.qubit_proxies[qubit.label] not in graph:
+            if str(self.qubit_proxies[qubit.label]) not in graph:
                 raise ValueError(f"Could not find specified qubit {qubit} in graph.")
 
         mapping = {}
@@ -254,15 +254,15 @@ class CalibrationExperiment(QubitExperiment):
         # Disable any paths not involving the buffer
         new_graph = nx.DiGraph()
         for output_node, qubit in zip(self.output_nodes, self.qubits):
-            path  = nx.shortest_path(graph, self.qubit_proxies[qubit.label], output_node)
-            new_graph.add_path(path)
+            path  = nx.shortest_path(graph, str(self.qubit_proxies[qubit.label]), str(output_node))
+            new_graph = nx.compose(new_graph, graph.subgraph(path))
 
             # Fix connectors
             for i in range(len(path)-1):
                 new_graph[path[i]][path[i+1]]['connector_in']  = graph[path[i]][path[i+1]]['connector_in']
                 new_graph[path[i]][path[i+1]]['connector_out'] = graph[path[i]][path[i+1]]['connector_out']
 
-            if not isinstance(path[-2], bbndb.auspex.Average):
+            if not isinstance(new_graph.nodes(True)[path[-2]]['node_obj'], bbndb.auspex.Average):
                 raise Exception("There is no averager in line.")
             else:
                 vb = bbndb.auspex.Buffer(label=f"{output_node.label}-VarBuffer", qubit_name=output_node.qubit_name)
