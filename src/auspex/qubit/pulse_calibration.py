@@ -231,7 +231,7 @@ class CalibrationExperiment(QubitExperiment):
         """Change the graph as needed. By default we changes all writers to buffers"""
         if None in self.output_nodes:
             self.output_nodes = self.guess_output_nodes(graph)
-
+            
         for output_node in self.output_nodes:
             if str(output_node) not in graph:
                 raise ValueError(f"Could not find specified output node {output_node} in graph.")
@@ -245,10 +245,11 @@ class CalibrationExperiment(QubitExperiment):
             output_node = self.output_nodes[i]
             if isinstance(output_node, bbndb.auspex.Write):
                 # Change the output node to a buffer
-                mapping[output_node] = bbndb.auspex.Buffer(label=output_node.label, qubit_name=output_node.qubit_name)
-                self.output_nodes[i] = mapping[output_node]
+                self.output_nodes[i] = bbndb.auspex.Buffer(label=output_node.label, qubit_name=output_node.qubit_name)
+                mapping[output_node.node_label()] = self.output_nodes[i].node_label()
             if not isinstance(self.output_nodes[i], bbndb.auspex.Buffer):
                 raise ValueError(f"Specified output {self.output_nodes[i]} node is not a buffer or could not be converted to a buffer")
+            graph.nodes[output_node.node_label()]['node_obj'] = self.output_nodes[i] # update values
         nx.relabel_nodes(graph, mapping, copy=False)
 
         # Disable any paths not involving the buffer
