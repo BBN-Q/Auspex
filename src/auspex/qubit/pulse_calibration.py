@@ -755,63 +755,69 @@ class PiCalibration(PhaseEstimation):
 #         self.target    = np.pi/2
 #         self.edge_name = self.CRchan.label
 
-# class DRAGCalibration(Calibration):
-#     def __init__(self, qubit, deltas = np.linspace(-1,1,21), num_pulses = np.arange(8, 48, 4)):
-#         self.filename = 'DRAG/DRAG'
-#         self.deltas = deltas
-#         self.num_pulses = num_pulses
-#         super(DRAGCalibration, self).__init__(qubit, **kwargs)
+class DRAGCalibration(QubitCalibration):
+    def __init__(self, qubit, deltas = np.linspace(-1,1,21), num_pulses = np.arange(8, 48, 4), **kwargs):
+        self.filename = 'DRAG/DRAG'
+        self.deltas = deltas
+        self.num_pulses = num_pulses
+        super(DRAGCalibration, self).__init__(qubit, **kwargs)
 
-#     def sequence(self):
-#         seqs = []
-#         for n in self.num_pulses:
-#             seqs += [[X90(self.qubit, drag_scaling = d), X90m(self.qubit, drag_scaling = d)]*n + [X90(self.qubit, drag_scaling = d), MEAS(self.qubit)] for d in self.deltas]
-#         seqs += create_cal_seqs((self.qubit,),2)
-#         return seqs
+    def sequence(self):
+        seqs = []
+        for n in self.num_pulses:
+            seqs += [[X90(self.qubit, drag_scaling = d), X90m(self.qubit, drag_scaling = d)]*n + [X90(self.qubit, drag_scaling = d), MEAS(self.qubit)] for d in self.deltas]
+        seqs += create_cal_seqs((self.qubit,),2)
+        return seqs
 
-#     def init_plots(self):
-#         plot = ManualPlotter("DRAG Cal", x_label=['DRAG parameter', 'Number of pulses'], y_label=['Amplitude (Arb. Units)', 'Fit DRAG parameter'], numplots = 2)
-#         cmap = cm.viridis(np.linspace(0, 1, len(self.num_pulses)))
-#         for n in range(len(self.num_pulses)):
-#             plot.add_data_trace('Data_{}'.format(n), {'color': list(cmap[n])})
-#             plot.add_fit_trace('Fit_{}'.format(n), {'color': list(cmap[n])})
-#         plot.add_data_trace('Data_opt', subplot_num = 1) #TODO: error bars
-#         return plot
+    def init_plots(self):
+        plot = ManualPlotter("DRAG Cal", x_label=['DRAG parameter', 'Number of pulses'], y_label=['Amplitude (Arb. Units)', 'Fit DRAG parameter'], numplots = 2)
+        cmap = cm.viridis(np.linspace(0, 1, len(self.num_pulses)))
+        for n in range(len(self.num_pulses)):
+            plot.add_data_trace('Data_{}'.format(n), {'color': list(cmap[n]), 'linestyle': 'None'})
+            plot.add_fit_trace('Fit_{}'.format(n), {'color': list(cmap[n])})
+        plot.add_data_trace('Data_opt', subplot_num = 1) #TODO: error bars
+        self.plot = plot
+        return [plot]
 
-#     def calibrate(self):
-#         # run twice for different DRAG parameter ranges
-#         steps = 2
-#         for k in range(steps):
-#         #generate sequence
-#             self.set(exp_step = k)
-#             #first run
-#             data, _ = self.run()
-#             finer_deltas = np.linspace(np.min(self.deltas), np.max(self.deltas), 4*len(self.deltas))
-#             #normalize data with cals
-#             data = quick_norm_data(data)
-#             opt_drag, error_drag, popt_mat = fit_drag(data, self.deltas, self.num_pulses)
+    def exp_config(self, exp):
+        rcvr = self.qubit.measure_chan.receiver_chan.receiver
+        exp._instruments[rcvr.label].exp_step = self.step #where from?
 
-#             #plot
-#             norm_data = data.reshape((len(self.num_pulses), len(self.deltas)))
-#             for n in range(len(self.num_pulses)):
-#                 self.plot['Data_{}'.format(n)] = (self.deltas, norm_data[n, :])
-#                 finer_deltas = np.linspace(np.min(self.deltas), np.max(self.deltas), 4*len(self.deltas))
-#                 self.plot['Fit_{}'.format(n)] = (finer_deltas, quadf(finer_deltas, *popt_mat[:, n]))
-#             self.plot["Data_opt"] = (self.num_pulses, opt_drag) #TODO: add error bars
+    def _calibrate(self):
+        # run twice for different DRAG parameter ranges
+        for k in range(2):
+            self.step = k
+            data, _ = self.run_sweeps()
+            finer_deltas = np.linspace(np.min(self.deltas), np.max(self.deltas), 4*len(self.deltas))
+            #normalize data with cals
+            data = quick_norm_data(data)
+            try:
+                opt_drag, error_drag, popt_mat = fit_drag(data, self.deltas, self.num_pulses)
+                if k==1:
+                    self.succeeded = True
+            except Exception as e:
+                raise Exception(f"Exception {e} while fitting in {self}")
 
-#             if k < steps-1:
-#                 #generate sequence with new pulses and drag parameters
-#                 new_drag_step = 0.25*(max(self.deltas) - min(self.deltas))
-#                 self.deltas = np.linspace(opt_drag[-1] - new_drag_step, opt_drag[-1] + new_drag_step, len(self.deltas))
-#                 new_pulse_step = int(np.floor(2*(max(self.num_pulses)-min(self.num_pulses))/len(self.num_pulses)))
-#                 self.num_pulses = np.arange(max(self.num_pulses) - new_pulse_step, max(self.num_pulses) + new_pulse_step*(len(self.num_pulses)-1), new_pulse_step)
+            norm_data = data.reshape((len(self.num_pulses), len(self.deltas)))
+            for n in range(len(self.num_pulses)):
+                self.plot['Data_{}'.format(n)] = (self.deltas, norm_data[n, :])
+                finer_deltas = np.linspace(np.min(self.deltas), np.max(self.deltas), 4*len(self.deltas))
+                self.plot['Fit_{}'.format(n)] = (finer_deltas, quadf(finer_deltas, *popt_mat[:, n]))
+            self.plot["Data_opt"] = (self.num_pulses, opt_drag) #TODO: add error bars
 
-#             if not self.leave_plots_open:
-#                 self.plot.set_quit()
+            if k==0:
+                #generate sequence with new pulses and drag parameters
+                new_drag_step = 0.25*(max(self.deltas) - min(self.deltas))
+                self.deltas = np.linspace(opt_drag[-1] - new_drag_step, opt_drag[-1] + new_drag_step, len(self.deltas))
+                new_pulse_step = int(np.floor(2*(max(self.num_pulses)-min(self.num_pulses))/len(self.num_pulses)))
+                self.num_pulses = np.arange(max(self.num_pulses) - new_pulse_step, max(self.num_pulses) + new_pulse_step*(len(self.num_pulses)-1), new_pulse_step)
 
-#         self.saved_settings['qubits'][self.qubit.label]['control']['pulse_params']['drag_scaling'] = round(float(opt_drag[-1]), 5)
-#         self.drag = opt_drag[-1]
-#         return ('drag_scaling', opt_drag[-1])
+            if not self.leave_plots_open:
+                self.plot.set_quit()
+        self.opt_drag = round(float(opt_drag[-1]), 5)
+
+    def update_settings(self):
+        self.qubit.pulse_params['drag_scaling'] = self.opt_drag
 
 # class MeasCalibration(Calibration):
 #     def __init__(self, qubit_name):
