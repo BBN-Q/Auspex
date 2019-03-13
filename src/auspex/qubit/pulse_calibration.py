@@ -817,6 +817,7 @@ class DRAGCalibration(QubitCalibration):
         self.opt_drag = round(float(opt_drag[-1]), 5)
 
     def update_settings(self):
+        logger.info(f'{self.qubit.label} DRAG parameter set to {self.opt_drag}')
         self.qubit.pulse_params['drag_scaling'] = self.opt_drag
 
 # class MeasCalibration(Calibration):
