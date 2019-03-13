@@ -81,6 +81,10 @@ class X6Channel(ReceiverChannel):
             self.result_channel = 0
             self.if_freq = receiver.if_freq
             self.dtype = np.complex128
+        elif self.stream_type == "state":
+            self.demod_channel = 0
+            self.result_channel = receiver.dsp_channel
+            self.dtype = np.complex128
         else: #Raw
             self.demod_channel  = 0
             self.result_channel = 0
@@ -192,6 +196,8 @@ class X6(Instrument):
             self._lib.set_kernel_bias(a, b, c, channel.kernel_bias)
             self._lib.set_threshold(a, c, channel.threshold)
             self._lib.set_threshold_invert(a, c, channel.threshold_invert)
+        elif channel.stream_type == 'state':
+            return
         else:
             logger.error("Unrecognized stream type %s" % channel.stream_type)
 
@@ -222,7 +228,7 @@ class X6(Instrument):
         if not isinstance(channel, X6Channel):
             raise TypeError("X6 passed {} rather than an X6Channel object.".format(str(channel)))
 
-        if channel.stream_type not in ['raw', 'demodulated', 'integrated']:
+        if channel.stream_type not in ['raw', 'demodulated', 'integrated', 'stream']:
             raise ValueError("Stream type of {} not recognized by X6".format(str(channel.stream_type)))
 
         # todo: other checking here
