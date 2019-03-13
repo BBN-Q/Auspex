@@ -118,10 +118,10 @@ class Labbrick(Instrument, metaclass=MakeSettersGetters):
 
     @property
     def power(self):
-        atten = self._lib.fnLMS_GetPowerLevel(self.device_id) * 0.25 # Convert from 0.25 dB
+        atten = self._lib.fnLMS_GetPowerLevel(self.device_id)
         if os.name == 'posix':
             return atten
-        return self.max_power - atten  # relative power in Windows. Alternatively, use fnLMS_GetAbsPowerLevel
+        return self.max_power - atten*0.25  # relative power in Windows. Alternatively, use fnLMS_GetAbsPowerLevel
     @power.setter
     def power(self, value):
         if value > self.max_power:
@@ -130,7 +130,9 @@ class Labbrick(Instrument, metaclass=MakeSettersGetters):
         elif value < self.min_power:
             value = self.min_power
             logger.warning('Lab Brick power out of range. Set to min = {} dBm'.format(value))
-        self._lib.fnLMS_SetPowerLevel(self.device_id, int(value * 4)) # Convert to 0.25 dB
+        if os.name != 'posix':
+            value*=4 # Convert to 0.25 dB
+        self._lib.fnLMS_SetPowerLevel(self.device_id, int(value))
 
     @property
     def use_internal_ref(self):
