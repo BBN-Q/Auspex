@@ -85,6 +85,7 @@ class Labbrick(Instrument, metaclass=MakeSettersGetters):
         if status != 0:
             logger.warning('Could not open Lab Brick device with id: %d, returned error %d', self.device_id, status)
 
+        self.set_use_internal_ref(0)
         self.max_power = self._lib.fnLMS_GetMaxPwr(self.device_id) / 4.0
         self.min_power = self._lib.fnLMS_GetMinPwr(self.device_id) / 4.0
         self.max_freq = self._lib.fnLMS_GetMaxFreq(self.device_id) * 10
