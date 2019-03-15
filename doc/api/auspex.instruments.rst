@@ -103,7 +103,7 @@ auspex\.instruments\.lakeshore module
     :undoc-members:
 
 auspex\.instruments\.lecroy module
----------------------------------
+----------------------------------
 
 .. automodule:: auspex.instruments.lecroy
     :members:
