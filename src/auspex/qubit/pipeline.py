@@ -60,7 +60,7 @@ class PipelineManager(object):
         available_pipelines = list(set([pn[0] for pn in list(self.session.query(bbndb.auspex.Connection.pipeline_name).all())]))
         if "working" in available_pipelines:
             connections = list(self.session.query(bbndb.auspex.Connection).filter_by(pipeline_name="working").all())
-            edges = [(str(c.node1), str(c.node2), {'connector_in':c.node2_name,  'connector_out':c.node1_name}) for c in connections]
+            edges = [(c.node1.node_label(), c.node2.node_label(), {'connector_in':c.node2_name,  'connector_out':c.node1_name}) for c in connections]
             nodes = []
             nodes.extend(list(set([c.node1 for c in connections])))
             nodes.extend(list(set([c.node2 for c in connections])))
@@ -68,7 +68,7 @@ class PipelineManager(object):
             self.meas_graph = nx.DiGraph()
             for node in nodes:
                 node.pipelineMgr = self
-                self.meas_graph.add_node(str(node), node_obj=node)
+                self.meas_graph.add_node(node.node_label(), node_obj=node)
             self.meas_graph.add_edges_from(edges)
             bbndb.auspex.__current_pipeline__ = self
 
@@ -160,12 +160,12 @@ class PipelineManager(object):
                 new_by_old[n].pipeline = self
             # Add edges between new objects
             for c in cs:
-                edges.append((str(new_by_old[c.node1]), str(new_by_old[c.node2]), {'connector_in':c.node2_name,  'connector_out':c.node1_name}))
+                edges.append((new_by_old[c.node1].node_label(), new_by_old[c.node2].node_label(), {'connector_in':c.node2_name,  'connector_out':c.node1_name}))
             self.session.add_all(new_by_old.values())
             self.session.commit()
             self.meas_graph.clear()
             for new_node in new_by_old.values():
-                self.meas_graph.add_node(str(new_node), node_obj=new_node)
+                self.meas_graph.add_node(new_node.node_label(), node_obj=new_node)
             self.meas_graph.add_edges_from(edges)
 
     def show_pipeline(self, subgraph=None, pipeline_name=None):
@@ -177,10 +177,10 @@ class PipelineManager(object):
             if len(cs) == 0:
                 print(f"No results for pipeline {pipeline_name}")
                 return
-            temp_edges = [(str(c.node1), str(c.node2), {'connector_in':c.node2_name,  'connector_out':c.node1_name}) for c in cs]
+            temp_edges = [(c.node1.node_label(), c.node2.node_label(), {'connector_in':c.node2_name,  'connector_out':c.node1_name}) for c in cs]
             nodes = set([c.node1 for c in cs] + [c.node2 for c in cs])
             for node in nodes:
-                self.meas_graph.add_node(str(node), node_obj=node)
+                self.meas_graph.add_node(node.node_label(), node_obj=node)
             graph = nx.DiGraph()
             graph.add_edges_from(temp_edges)
         else:
@@ -212,7 +212,7 @@ class PipelineManager(object):
             hovered_symbol = ''
             def hover_handler(self, content, hovered_symbol=hovered_symbol, table=table):
                 symbol = content.get('data', '')
-                
+
                 if(symbol != hovered_symbol):
                     hovered_symbol = symbol
                     table.value = symbol['data']
@@ -242,7 +242,7 @@ class PipelineManager(object):
                 loc[qubits[i]]['x'] += offset
                 for n in nx.descendants(graph, qubits[i]):
                     loc[n]['x'] += offset
-            
+
             x = [loc[n]['x'] for n in graph.nodes()]
             y = [loc[n]['y'] for n in graph.nodes()]
             xs = LinearScale(min=min(x)-0.5, max=max(x)+0.5)
