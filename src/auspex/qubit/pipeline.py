@@ -255,6 +255,11 @@ class PipelineManager(object):
             graph.on_hover(hover_handler)
             return fig
 
+    def commit(self):
+        self.session.commit()
+
+    def rollback(self):
+        self.session.rollback()
 
     def print(self, qubit_name=None):
         if qubit_name:
