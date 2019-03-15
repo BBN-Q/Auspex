@@ -89,7 +89,7 @@ class DataAxis(object):
             dtype.append((name, 'f'))
 
         if with_metadata and self.metadata is not None:
-            dtype.append((name + "_metadata", 'f'))
+            dtype.append((name + "_metadata", str))
         return dtype
 
     def points_with_metadata(self):
