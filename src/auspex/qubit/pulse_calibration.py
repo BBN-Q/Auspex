@@ -57,6 +57,7 @@ class Calibration(object):
         for p in self.plotters:
             p.uuid = self.uuid
         try:
+            time.sleep(1.0)
             context = zmq.Context()
             socket = context.socket(zmq.DEALER)
             socket.setsockopt(zmq.LINGER, 0)

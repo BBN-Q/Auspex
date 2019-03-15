@@ -56,6 +56,22 @@ class PipelineManager(object):
         else:
             raise Exception("Auspex expects db to be loaded already by QGL")
 
+        # Check to see whether there is already a temp database
+        available_pipelines = list(set([pn[0] for pn in list(self.session.query(bbndb.auspex.Connection.pipeline_name).all())]))
+        if "working" in available_pipelines:
+            connections = list(self.session.query(bbndb.auspex.Connection).filter_by(pipeline_name="working").all())
+            edges = [(str(c.node1), str(c.node2), {'connector_in':c.node2_name,  'connector_out':c.node1_name}) for c in connections]
+            nodes = []
+            nodes.extend(list(set([c.node1 for c in connections])))
+            nodes.extend(list(set([c.node2 for c in connections])))
+
+            self.meas_graph = nx.DiGraph()
+            for node in nodes:
+                node.pipelineMgr = self
+                self.meas_graph.add_node(str(node), node_obj=node)
+            self.meas_graph.add_edges_from(edges)
+            bbndb.auspex.__current_pipeline__ = self
+
         pipelineMgr = self
 
     def create_default_pipeline(self, qubits=None, buffers=False):
@@ -239,6 +255,11 @@ class PipelineManager(object):
             graph.on_hover(hover_handler)
             return fig
 
+    def commit(self):
+        self.session.commit()
+
+    def rollback(self):
+        self.session.rollback()
 
     def print(self, qubit_name=None):
         if qubit_name:

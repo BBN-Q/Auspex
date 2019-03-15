@@ -18,7 +18,7 @@ auspex\.config module
     :undoc-members:
 
 auspex\.data_format module
--------------------------
+---------------------------
 
 .. automodule:: auspex.data_format
     :members:
