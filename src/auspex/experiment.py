@@ -248,15 +248,6 @@ class Experiment(metaclass=MetaExperiment):
         """Gets run after a sweep ends, or when the program is terminated."""
         pass
 
-    def init_progressbar(self, num=0):
-        """ initialize the progress bars."""
-        oc = list(self.output_connectors.values())
-        if len(oc)>0:
-            self.progressbar = ExpProgressBar(oc[0].output_streams[0], num=num)
-        else:
-            logger.warning("No stream is found for progress bar.")
-            # self.progressbar = ExpProgressBar(None, num=num)
-
     def run(self):
         """This is the inner measurement loop, which is the smallest unit that
         is repeated across various sweep variables. For more complicated run control
@@ -315,6 +306,13 @@ class Experiment(metaclass=MetaExperiment):
             # values of the SweepAxes (no DataAxes).
             sweep_values, axis_names = self.sweeper.update()
 
+            if hasattr(self, 'progressbars'):
+                for axis in self.sweeper.axes:
+                    if axis.done:
+                        self.progressbars[axis].value = axis.num_points()
+                    else:
+                        self.progressbars[axis].value = axis.step
+
             if self.sweeper.is_adaptive():
                 # Add the new tuples to the stream descriptors
                 for oc in self.output_connectors.values():
@@ -342,17 +340,10 @@ class Experiment(metaclass=MetaExperiment):
             # through the filter pipeline.
             self.sweeper.check_for_refinement(self.output_connectors)
 
-            # Update progress bars
-            if self.progressbar is not None:
-                self.progressbar.update()
-
             # Finish up, checking to see whether we've received all of our data
             if self.sweeper.done():
                 self.declare_done()
                 break
-
-    # def filters_finished(self):
-    #     return all([n.finished_processing.is_set() for n in self.other_nodes if isinstance(n, Filter)])
 
     def connect_instruments(self):
         # Connect the instruments to their resources
@@ -367,20 +358,96 @@ class Experiment(metaclass=MetaExperiment):
             instrument.disconnect()
         self.instrs_connected = False
 
-    # def run_sweeps(self):
-    #     if auspex.config.profile:
-    #         cProfile.runctx('self._run_sweeps()', globals(), locals(), 'prof-run_sweeps.prof')
-    #     else:
-    #         self._run_sweeps()
+    def init_dashboard(self):
+        from bqplot import DateScale, LinearScale, DateScale, Axis, Lines, Figure, Tooltip
+        from bqplot.colorschemes import CATEGORY10, CATEGORY20
+        from bqplot.toolbar import Toolbar
+        from ipywidgets import VBox, Tab
+        from IPython.display import display
+        from tornado import gen
+
+        cpu_sx = LinearScale(); cpu_sy = LinearScale()
+        cpu_x = Axis(label='Time (s)', scale=cpu_sx)
+        cpu_y = Axis(label='CPU Usage (%)', scale=cpu_sy, orientation='vertical')
+        mem_sx = LinearScale(); mem_sy = LinearScale()
+        mem_x = Axis(label='Time (s)', scale=mem_sx)
+        mem_y = Axis(label='Memory Usage (MB)', scale=mem_sy, orientation='vertical')
+        thru_sx = LinearScale(); thru_sy = LinearScale()
+        thru_x = Axis(label='Time (s)', scale=thru_sx)
+        thru_y = Axis(label='Data Processed (MB)', scale=thru_sy, orientation='vertical')
+
+        colors            = CATEGORY20
+        self.cpu_lines    = {str(n): Lines(labels=[str(n)], x=[0.0], y=[0.0], colors=[colors[i]],
+                                scales={'x': cpu_sx, 'y': cpu_sy}) for i, n in enumerate(self.other_nodes)}
+        self.mem_lines    = {str(n): Lines(labels=[str(n)], x=[0.0], y=[0.0], colors=[colors[i]],
+                                scales={'x': mem_sx, 'y': mem_sy}) for i, n in enumerate(self.other_nodes)}
+        self.thru_lines   = {str(n): Lines(labels=[str(n)], x=[0.0], y=[0.0], colors=[colors[i]],
+                                scales={'x': thru_sx, 'y': thru_sy}) for i, n in enumerate(self.other_nodes)}
+        
+        self.cpu_fig = Figure(marks=list(self.cpu_lines.values()), axes=[cpu_x, cpu_y], title='CPU Usage', animation_duration=50)
+        self.mem_fig = Figure(marks=list(self.mem_lines.values()), axes=[mem_x, mem_y], title='Memory Usage', animation_duration=50)
+        self.thru_fig = Figure(marks=list(self.thru_lines.values()), axes=[thru_x, thru_y], title='Data Processed', animation_duration=50)
+
+        tab = Tab()
+        tab.children = [self.cpu_fig, self.mem_fig, self.thru_fig]
+        tab.set_title(0, 'CPU'); tab.set_title(1, 'Memory'); tab.set_title(2, 'Throughput');
+        display(tab)
+
+        perf_queue = Queue()
+        self.exit_perf = Event()
+        def wait_for_perf_updates(q, exit, cpu_lines, mem_lines, thru_lines):
+            while not exit.is_set():
+                messages = []
+
+                while not exit.is_set():
+                    try:
+                        messages.append(q.get(False))
+                    except queue.Empty as e:
+                        time.sleep(0.05)
+                        break
+
+                for message in messages:
+                    filter_name, time_val, cpu, mem_info, processed = message
+                    mem = mem_info[0]/2.**20
+                    vmem = mem_info[1]/2.**20
+                    proc = processed/2.**20
+                    cpu_lines[filter_name].x = np.append(cpu_lines[filter_name].x, [time_val.total_seconds()])
+                    cpu_lines[filter_name].y = np.append(cpu_lines[filter_name].y, [cpu])
+                    mem_lines[filter_name].x = np.append(mem_lines[filter_name].x, [time_val.total_seconds()])
+                    mem_lines[filter_name].y = np.append(mem_lines[filter_name].y, [mem/2.**20])
+                    thru_lines[filter_name].x = np.append(thru_lines[filter_name].x, [time_val.total_seconds()])
+                    thru_lines[filter_name].y = np.append(thru_lines[filter_name].y, [proc/2.**20])
+
+        for n in self.other_nodes:
+            n.perf_queue = perf_queue
+
+        self.perf_thread = Thread(target=wait_for_perf_updates, args=(perf_queue, self.exit_perf, self.cpu_lines, self.mem_lines, self.thru_lines))
+        self.perf_thread.start()
+
+
+    def final_init(self):
+        # Call any final initialization on the filter pipeline
+        for n in self.nodes + self.extra_plotters:
+            if n != self and hasattr(n, 'final_init'):
+                n.final_init()
+        self.init_progress_bars()
+
+    def init_progress_bars(self):
+        """ initialize the progress bars."""
+        from ipywidgets import IntProgress, VBox
+        from IPython.display import display
+
+        self.progressbars = {}
+        for axis in self.sweeper.axes:
+            self.progressbars[axis] = IntProgress(min=0, max=axis.num_points(),
+                                                    description=f'Sweep {axis.name}:', style={'description_width': 'initial'})
+        display(VBox(list(self.progressbars.values())))
 
     def run_sweeps(self):
         # Propagate the descriptors through the network
         self.update_descriptors()
         # Make sure we are starting from scratch... is this necessary?
         self.reset()
-        # Update the progress bar if need be
-        # if self.progressbar is not None:
-        #     self.progressbar.reset()
 
         #Make sure we have axes.
         if not any([oc.descriptor.axes for oc in self.output_connectors.values()]):
@@ -416,10 +483,8 @@ class Experiment(metaclass=MetaExperiment):
         # These use neither streams nor the filter pipeline
         self.plotters.extend(self.manual_plotters)
 
-        # Call any final initialization on the filter pipeline
-        for n in self.nodes + self.extra_plotters:
-            if hasattr(n, 'final_init'):
-                n.final_init()
+        # Last minute init
+        self.final_init()
 
         # Launch plot servers.
         if len(self.plotters) > 0:
@@ -456,80 +521,7 @@ class Experiment(metaclass=MetaExperiment):
             # communication to the bokeh server instance.
 
             if self.dashboard:
-                from .dashboard_server import BokehServerProcess
-                from bokeh.plotting import Figure
-                from bokeh.client import push_session
-                from bokeh.layouts import row, column
-                from bokeh.io import curdoc
-                from tornado import gen
-                from bokeh.models import ColumnDataSource, Legend
-                from bokeh.palettes import viridis, Category20 #here viridis is a function that takes\
-                #parameter n and provides a palette with n equally(almost) spaced colors.
-
-                bokeh_process = BokehServerProcess(notebook=False)
-                bokeh_process.run()
-                perf_queue = Queue()
-
-                cpu_fig  = Figure(plot_width=1000, plot_height=300, x_axis_type="datetime", title="CPU Usage")
-                mem_fig  = Figure(plot_width=1000, plot_height=300, x_axis_type="datetime", title="Memory Usage")
-                vmem_fig = Figure(plot_width=1000, plot_height=300, x_axis_type="datetime", title="Data Processed")
-
-                cpu_fig.xaxis[0].axis_label  = 'Time (s)'
-                mem_fig.xaxis[0].axis_label  = 'Time (s)'
-                vmem_fig.xaxis[0].axis_label = 'Time (s)'
-                cpu_fig.yaxis[0].axis_label  = 'CPU (%)'
-                mem_fig.yaxis[0].axis_label  = 'Memory (MB)'
-                vmem_fig.yaxis[0].axis_label = 'Throughput (MB)'
-
-                colors       = Category20[20] if len(self.other_nodes) <= 20 else viridis(len(self.other_nodes))
-                data_sources = {str(n): ColumnDataSource(data=dict(time=[], cpu=[], mem=[], vmem=[], proc=[])) for n in self.other_nodes}
-                cpu_plots    = {str(n): cpu_fig.line(x='time', y='cpu', color=colors[i], line_width=4, source=data_sources[str(n)]) for i, n in enumerate(self.other_nodes)}
-                mem_plots    = {str(n): mem_fig.line(x='time', y='mem', color=colors[i], line_width=4, source=data_sources[str(n)]) for i, n in enumerate(self.other_nodes)}
-                vmem_plots   = {str(n): vmem_fig.line(x='time', y='proc', color=colors[i], line_width=4, source=data_sources[str(n)]) for i, n in enumerate(self.other_nodes)}
-
-                legend_1 = Legend(items=[(n , [l]) for n, l in mem_plots.items()], location=(0, 0))
-                legend_2 = Legend(items=[(n , [l]) for n, l in vmem_plots.items()], location=(0, 0))
-                legend_3 = Legend(items=[(n , [l]) for n, l in cpu_plots.items()], location=(0, 0))
-                mem_fig.add_layout(legend_1, 'right')
-                vmem_fig.add_layout(legend_2, 'right')
-                cpu_fig.add_layout(legend_3, 'right')
-                container = column([cpu_fig, mem_fig, vmem_fig])
-                doc = curdoc()
-
-                exit_perf = Event()
-
-                @gen.coroutine
-                def update_perf(name, time_val, cpu, mem, vmem, proc):
-                    data_sources[name].stream(dict(time=[time_val], cpu=[cpu], mem=[mem], vmem=[vmem], proc=[proc]))
-
-                def wait_for_perf_updates(q, exit):
-                    while not exit.is_set():
-                        messages = []
-
-                        while not exit.is_set():
-                            try:
-                                messages.append(q.get(False))
-                            except queue.Empty as e:
-                                time.sleep(0.05)
-                                break
-
-                        for message in messages:
-                            filter_name, time_val, cpu, mem_info, processed = message
-                            mem = mem_info[0]/2.**20
-                            vmem = mem_info[1]/2.**20
-                            proc = processed/2.**20
-                            update_perf(filter_name, time_val, cpu, mem, vmem, proc)
-
-                perf_thread = Thread(target=wait_for_perf_updates, args=(perf_queue, exit_perf))
-                perf_thread.start()
-
-                for f in self.other_nodes:
-                    f.perf_queue = perf_queue
-
-                doc.clear()
-                doc.add_root(container)
-                session = push_session(doc)
-                session.show(container)
+                self.init_dashboard()
 
             # Start the filter processes
             for n in self.other_nodes:
@@ -563,13 +555,9 @@ class Experiment(metaclass=MetaExperiment):
             for buff in self.buffers:
                 buff.output_data, buff.descriptor = buff.get_data()
 
-            if self.progressbar:
-                self.progressbar.update()
-                self.progressbar.close()
-
             if self.dashboard:
-                exit_perf.set()
-                perf_thread.join()
+                self.exit_perf.set()
+                self.perf_thread.join()
 
         except Exception as e:
             logger.warning("Encountered error in run sweeps after initializing experiments")
@@ -652,6 +640,16 @@ class Experiment(metaclass=MetaExperiment):
         """Push data to a direct plotter."""
         stream = self._extra_plots_to_streams[plotter]
         stream.push_direct(data)
+
+    def get_final_plots(self, quad_funcs=[np.abs, np.angle]):
+        from ipywidgets import Tab
+        tab = Tab()
+        plots = []
+        for i, p in enumerate(self.plotters):
+            tab.set_title(i, p.filter_name);
+            plots.append(p.get_final_plot(quad_funcs=quad_funcs))
+        tab.children = plots
+        return tab
 
     def connect_to_plot_server(self):
         logger.debug("Found %d plotters", len(self.plotters))

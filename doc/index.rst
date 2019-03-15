@@ -35,18 +35,7 @@ And subsequently installed using pip::
 	cd auspex
 	pip install -e .
 
-Which will automatically fetch and install all of the requirements. If you are using an anaconda python distribution, some of the requirements should be install with *conda install* (like ruamel_yaml for example). The following, from *requirements.txt*, are required by Auspex:
-
-- numpy >= 1.11.1
-- scipy >= 0.17.1
-- PyVISA >= 1.8
-- h5py >= 2.6.0
-- tqdm >= 4.7.0
-- pandas >= 0.18.1
-- networkx >= 1.11
-- matplotlib >= 2.0.0
-- cffi >= 1.10.0
-- scikit-learn >= 1.16 
+Which will automatically fetch and install all of the requirements. If you are using an anaconda python distribution, some of the requirements should be install with *conda install* (like ruamel_yaml for example). The packages enumerated in *requirements.txt* are required by Auspex.
 
 Qubit Experiments
 *****************

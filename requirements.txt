@@ -2,8 +2,7 @@ numpy >= 1.11.1
 scipy >= 0.17.1
 PyVISA >= 1.8
 python-usbtmc >= 0.8
-tqdm >= 4.7.0
-sqlalchemy >= 1.2.17
+sqlalchemy >= 1.2.15
 pandas >= 0.18.1
 networkx >= 1.11
 matplotlib >= 2.0.0
@@ -13,6 +12,6 @@ psutil >= 5.0.0
 pyzmq >= 16.0.0
 git+https://github.com/bbn-q/bbndb.git@master
 pyusb >= 1.0.2
-sphinx>=1.4
-ipykernel
+ipykernel>=5.0.0
+ipywidgets>=7.0.0
 git+https://github.com/spatialaudio/nbsphinx.git@master

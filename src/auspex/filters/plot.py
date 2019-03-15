@@ -12,12 +12,20 @@ import time
 import zmq
 import json
 import uuid
+import sys, os
 import numpy as np
 
 from .filter import Filter
 from auspex.parameter import Parameter, IntParameter
 from auspex.log import logger
 from auspex.stream import InputConnector, OutputConnector
+
+if sys.platform == 'win32' or 'NOFORKING' in os.environ:
+    import threading as mp
+    from queue import Queue
+else:
+    import multiprocessing as mp
+    from multiprocessing import Queue
 
 class Plotter(Filter):
     sink      = InputConnector()
@@ -35,6 +43,9 @@ class Plotter(Filter):
         self.update_interval = 2.0 # slower for partial updates
         self.last_update = time.time()
         self.last_full_update = time.time()
+
+        self._final_buffer = Queue()
+        self.final_buffer = None
 
         self.quince_parameters = [self.plot_dims, self.plot_mode]
 
@@ -61,6 +72,36 @@ class Plotter(Filter):
                 )
                 msg_contents.extend([json.dumps(md).encode(), np.ascontiguousarray(dat)])
             self.socket.send_multipart(msg_contents)
+
+    def get_final_plot(self, quad_funcs=[np.abs, np.angle]):
+        if not self.done.is_set():
+            raise Exception("Cannot get final plot since plotter is not done or was not run.")
+
+        from bqplot import LinearScale, ColorScale, ColorAxis, Axis, Lines, Figure, Tooltip, HeatMap
+        from bqplot.toolbar import Toolbar
+        from ipywidgets import VBox, HBox
+
+        if self.final_buffer is None:
+            self.final_buffer = self._final_buffer.get()
+        if self.plot_dims.value == 2:
+            pass
+        elif self.plot_dims.value == 1:
+            figs = []
+            for quad_func in quad_funcs:
+                sx   = LinearScale()
+                sy   = LinearScale()
+                ax   = Axis(label=self.axis_label(-1), scale=sx)
+                ay   = Axis(label=f"{self.descriptor.data_name} ({self.descriptor.data_unit})", scale=sy, orientation='vertical')
+                line = Lines(x=self.x_values, y=quad_func(self.final_buffer), scales={'x': sx, 'y': sy})
+                fig  = Figure(marks=[line], axes=[ax, ay], title=self.filter_name)
+                figs.append(fig)
+        if len(figs) <= 2:
+            return HBox(figs)
+        elif len(figs) == 4:
+            return VBox([HBox([figs[0], figs[1]]), HBox([figs[2], figs[3]])])
+        elif len(figs) == 3 or len(figs) > 4:
+            raise Exception("Please use 1, 2, or 4 quadrature functions.")
+
 
     def desc(self):
         d =    {'plot_type': 'standard',
@@ -167,6 +208,7 @@ class Plotter(Filter):
             self.send({'name': self.filter_name, "msg": "data", 'data': [self.x_values, self.plot_buffer.copy()], })
         elif self.plot_dims.value == 2:
             self.send({'name': self.filter_name, "msg": "data", 'data': [self.x_values, self.y_values, self.plot_buffer.copy()]})
+        self._final_buffer.put(self.plot_buffer)
         if self.do_plotting:
             self.set_done()
             self.socket.close()

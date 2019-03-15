@@ -13,6 +13,8 @@ from functools import wraps
 
 import numpy as np
 import networkx as nx
+import operator
+from functools import reduce
 from IPython.display import HTML, display
 from sqlalchemy import inspect
 
@@ -53,6 +55,22 @@ class PipelineManager(object):
             self.session = bbndb.session
         else:
             raise Exception("Auspex expects db to be loaded already by QGL")
+
+        # Check to see whether there is already a temp database
+        available_pipelines = list(set([pn[0] for pn in list(self.session.query(bbndb.auspex.Connection.pipeline_name).all())]))
+        if "working" in available_pipelines:
+            connections = list(self.session.query(bbndb.auspex.Connection).filter_by(pipeline_name="working").all())
+            edges = [(str(c.node1), str(c.node2), {'connector_in':c.node2_name,  'connector_out':c.node1_name}) for c in connections]
+            nodes = []
+            nodes.extend(list(set([c.node1 for c in connections])))
+            nodes.extend(list(set([c.node2 for c in connections])))
+
+            self.meas_graph = nx.DiGraph()
+            for node in nodes:
+                node.pipelineMgr = self
+                self.meas_graph.add_node(str(node), node_obj=node)
+            self.meas_graph.add_edges_from(edges)
+            bbndb.auspex.__current_pipeline__ = self
 
         pipelineMgr = self
 
@@ -115,12 +133,12 @@ class PipelineManager(object):
     def save_as(self, name):
         now = datetime.datetime.now()
         for n1, n2 in self.meas_graph.edges():
-            new_node1 = bbndb.copy_sqla_object(n1, self.session)
-            new_node2 = bbndb.copy_sqla_object(n2, self.session)
+            new_node1 = bbndb.copy_sqla_object(self.meas_graph.nodes[n1]['node_obj'], self.session)
+            new_node2 = bbndb.copy_sqla_object(self.meas_graph.nodes[n2]['node_obj'], self.session)
             c = bbndb.auspex.Connection(pipeline_name=name, node1=new_node1, node2=new_node2, time=now,
                                         node1_name=self.meas_graph[n1][n2]["connector_out"],
                                         node2_name=self.meas_graph[n1][n2]["connector_in"])
-            self.session.add_all([n1, n2, c])
+            self.session.add_all([self.meas_graph.nodes[n1]['node_obj'], self.meas_graph.nodes[n2]['node_obj'], c])
         self.session.commit()
 
     @check_session_dirty
@@ -129,6 +147,7 @@ class PipelineManager(object):
         if len(cs) == 0:
             raise Exception(f"Could not find pipeline named {pipeline_name}")
         else:
+            self.clear_pipelines()
             nodes = []
             new_by_old = {}
             edges = []
@@ -141,20 +160,27 @@ class PipelineManager(object):
                 new_by_old[n].pipeline = self
             # Add edges between new objects
             for c in cs:
-                edges.append((new_by_old[c.node1], new_by_old[c.node2], {'connector_in':c.node2_name,  'connector_out':c.node1_name}))
+                edges.append((str(new_by_old[c.node1]), str(new_by_old[c.node2]), {'connector_in':c.node2_name,  'connector_out':c.node1_name}))
             self.session.add_all(new_by_old.values())
             self.session.commit()
             self.meas_graph.clear()
+            for new_node in new_by_old.values():
+                self.meas_graph.add_node(str(new_node), node_obj=new_node)
             self.meas_graph.add_edges_from(edges)
 
-    def show_pipeline(self, pipeline_name=None):
+    def show_pipeline(self, subgraph=None, pipeline_name=None):
         """If a pipeline name is specified query the database, otherwise show the current pipeline."""
-        if pipeline_name:
+        if subgraph:
+            graph = subgraph
+        elif pipeline_name:
             cs = self.session.query(bbndb.auspex.Connection).filter_by(pipeline_name=pipeline_name).all()
             if len(cs) == 0:
                 print(f"No results for pipeline {pipeline_name}")
                 return
-            temp_edges = [(c.node1, c.node2, {'connector_in':c.node2_name,  'connector_out':c.node1_name}) for c in cs]
+            temp_edges = [(str(c.node1), str(c.node2), {'connector_in':c.node2_name,  'connector_out':c.node1_name}) for c in cs]
+            nodes = set([c.node1 for c in cs] + [c.node2 for c in cs])
+            for node in nodes:
+                self.meas_graph.add_node(str(node), node_obj=node)
             graph = nx.DiGraph()
             graph.add_edges_from(temp_edges)
         else:
@@ -163,18 +189,87 @@ class PipelineManager(object):
         if not graph or len(graph.nodes()) == 0:
             print("Could not find any nodes. Has a pipeline been created (try running create_default_pipeline())")
         else:
-            labels = {n: n.node_label() for n in graph.nodes()}
-            colors = ["#3182bd" if isinstance(n, bbndb.auspex.QubitProxy) else "#ff9933" for n in graph.nodes()]
-            self.plot_graph(graph, labels, colors=colors)
+            from bqplot import Figure, LinearScale
+            from bqplot.marks import Graph
+            from ipywidgets import Layout, HTML
+            from IPython.display import HTML as IPHTML, display
+
+            # nodes     = list(graph.nodes())
+            indices   = {n: i for i, n in enumerate(graph.nodes())}
+            node_data = [{'label': dat['node_obj'].node_label(), 'data': dat['node_obj'].print(show=False)} for n,dat in graph.nodes(data=True)]
+            link_data = [{'source': indices[s], 'target': indices[t]} for s, t in graph.edges()]
+
+            # Update the tooltip chart
+            table = HTML("<b>Re-evaluate this plot to see information about filters. Otherwise it will be stale.</b>")
+            table.add_class("hover_tooltip")
+            display(IPHTML("""
+            <style>
+                .hover_tooltip table { border-collapse: collapse; padding: 8px; }
+                .hover_tooltip th, .hover_tooltip td { text-align: left; padding: 8px; }
+                .hover_tooltip tr:nth-child(even) { background-color: #cccccc; padding: 8px; }
+            </style>
+            """))
+            hovered_symbol = ''
+            def hover_handler(self, content, hovered_symbol=hovered_symbol, table=table):
+                symbol = content.get('data', '')
+                
+                if(symbol != hovered_symbol):
+                    hovered_symbol = symbol
+                    table.value = symbol['data']
+
+            node_locations = {}
+
+            qubits = [n for n,dat in graph.nodes(data=True) if isinstance(dat['node_obj'], bbndb.auspex.QubitProxy)]
+            loc = {}
+            def next_level(nodes, iteration=0, offset=0, accum=[]):
+                if len(accum) == 0:
+                    loc[nodes[0]] = {'x': 0, 'y': 0}
+                    accum = [nodes]
+                next_gen_nodes = list(reduce(operator.add, [list(graph.successors(n)) for n in nodes]))
+                l = len(next_gen_nodes)
+                if l > 0:
+                    for k,n in enumerate(next_gen_nodes):
+                        loc[n] = {'x': k, 'y': -(iteration+1)}
+                    accum.append(next_gen_nodes)
+                    return next_level(next_gen_nodes, iteration=iteration+1, offset=2.5*l, accum=accum)
+                else:
+                    return accum
+
+            hierarchy = [next_level([q]) for q in qubits]
+            widest = [max([len(row) for row in qh]) for qh in hierarchy]
+            for i in range(1, len(qubits)):
+                offset = sum(widest[:i])
+                loc[qubits[i]]['x'] += offset
+                for n in nx.descendants(graph, qubits[i]):
+                    loc[n]['x'] += offset
+            
+            x = [loc[n]['x'] for n in graph.nodes()]
+            y = [loc[n]['y'] for n in graph.nodes()]
+            xs = LinearScale(min=min(x)-0.5, max=max(x)+0.5)
+            ys = LinearScale(min=min(y)-0.5, max=max(y)+0.5)
+            fig_layout = Layout(width='960px', height='500px')
+            graph      = Graph(node_data=node_data, link_data=link_data, x=x, y=y, scales={'x': xs, 'y': ys},
+                                link_type='line', colors=['orange'] * len(node_data), directed=True)
+            fig        = Figure(marks=[graph], layout=fig_layout)
+            graph.tooltip = table
+            graph.on_hover(hover_handler)
+            return fig
+
+    def commit(self):
+        self.session.commit()
+
+    def rollback(self):
+        self.session.rollback()
 
     def print(self, qubit_name=None):
         if qubit_name:
-            nodes = nx.algorithms.dag.descendants(self.meas_graph, self.qubit(qubit_name))
+            nodes = nx.algorithms.dag.descendants(self.meas_graph, str(self.qubit(qubit_name)))
         else:
             nodes = self.meas_graph.nodes()
         table_code = ""
 
         for node in nodes:
+            node = self.meas_graph.nodes[node]['node_obj']
             label = node.label if node.label else "Unlabeled"
             table_code += f"<tr><td><b>{node.node_type}</b> ({node.qubit_name})</td><td></td><td><i>{label}</i></td></td><td></tr>"
             inspr = inspect(node)
@@ -196,28 +291,6 @@ class PipelineManager(object):
 
     def show_connectivity(self):
         pass
-
-    def plot_graph(self, graph, labels, prog="dot", colors='r'):
-        import matplotlib.pyplot as plt
-        plt.figure(figsize=(12, 4))
-        pos = nx.drawing.nx_pydot.graphviz_layout(graph, prog=prog)
-
-        # Create position copies for shadows, and shift shadows
-        pos_shadow = copy.copy(pos)
-        pos_labels = copy.copy(pos)
-        for idx in pos_shadow.keys():
-            pos_shadow[idx] = (pos_shadow[idx][0] + 0.01, pos_shadow[idx][1] - 0.01)
-            pos_labels[idx] = (pos_labels[idx][0] + 0, pos_labels[idx][1] + 15 )
-        nx.draw_networkx_nodes(graph, pos_shadow, node_size=100, node_color='k', alpha=0.5)
-        nx.draw_networkx_nodes(graph, pos, node_size=100, node_color=colors, linewidths=1, alpha=1.0)
-        nx.draw_networkx_edges(graph, pos, width=1)
-        nx.draw_networkx_labels(graph, pos_labels, labels, font_size=10, bbox=dict(facecolor='white', alpha=0.95), horizontalalignment="center")
-
-        ax = plt.gca()
-        ax.axis('off')
-        ax.set_xlim((ax.get_xlim()[0]-20.0, ax.get_xlim()[1]+20.0))
-        ax.set_ylim((ax.get_ylim()[0]-20.0, ax.get_ylim()[1]+20.0))
-        plt.show()
 
     def __getitem__(self, key):
         return self.qubit(key)

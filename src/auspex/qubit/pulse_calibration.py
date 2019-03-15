@@ -57,6 +57,7 @@ class Calibration(object):
         for p in self.plotters:
             p.uuid = self.uuid
         try:
+            time.sleep(1.0)
             context = zmq.Context()
             socket = context.socket(zmq.DEALER)
             socket.setsockopt(zmq.LINGER, 0)
@@ -220,8 +221,8 @@ class CalibrationExperiment(QubitExperiment):
     def guess_output_nodes(self, graph):
         output_nodes = []
         for qubit in self.qubits:
-            ds = nx.descendants(graph, self.qubit_proxies[qubit.label])
-            outputs = [d for d in ds if isinstance(d, (bbndb.auspex.Write, bbndb.auspex.Buffer))]
+            ds = nx.descendants(graph, str(self.qubit_proxies[qubit.label]))
+            outputs = [graph.nodes[d]['node_obj'] for d in ds if isinstance(graph.nodes[d]['node_obj'], (bbndb.auspex.Write, bbndb.auspex.Buffer))]
             if len(outputs) != 1:
                 raise Exception(f"More than one output node found for {qubit}, please explicitly define output node using output_nodes argument.")
             output_nodes.append(outputs[0])
@@ -233,11 +234,11 @@ class CalibrationExperiment(QubitExperiment):
             self.output_nodes = self.guess_output_nodes(graph)
 
         for output_node in self.output_nodes:
-            if output_node not in graph:
+            if output_node.node_label() not in graph:
                 raise ValueError(f"Could not find specified output node {output_node} in graph.")
 
         for qubit in self.qubits:
-            if self.qubit_proxies[qubit.label] not in graph:
+            if str(self.qubit_proxies[qubit.label]) not in graph:
                 raise ValueError(f"Could not find specified qubit {qubit} in graph.")
 
         mapping = {}
@@ -245,29 +246,31 @@ class CalibrationExperiment(QubitExperiment):
             output_node = self.output_nodes[i]
             if isinstance(output_node, bbndb.auspex.Write):
                 # Change the output node to a buffer
-                mapping[output_node] = bbndb.auspex.Buffer(label=output_node.label, qubit_name=output_node.qubit_name)
-                self.output_nodes[i] = mapping[output_node]
+                self.output_nodes[i] = bbndb.auspex.Buffer(label=output_node.label, qubit_name=output_node.qubit_name)
+                mapping[output_node.node_label()] = self.output_nodes[i].node_label()
             if not isinstance(self.output_nodes[i], bbndb.auspex.Buffer):
                 raise ValueError(f"Specified output {self.output_nodes[i]} node is not a buffer or could not be converted to a buffer")
+            graph.nodes[output_node.node_label()]['node_obj'] = self.output_nodes[i] # update values
         nx.relabel_nodes(graph, mapping, copy=False)
 
         # Disable any paths not involving the buffer
         new_graph = nx.DiGraph()
         for output_node, qubit in zip(self.output_nodes, self.qubits):
-            path  = nx.shortest_path(graph, self.qubit_proxies[qubit.label], output_node)
-            new_graph.add_path(path)
+            path  = nx.shortest_path(graph, str(self.qubit_proxies[qubit.label]), output_node.node_label())
+            new_graph = nx.compose(new_graph, graph.subgraph(path))
 
             # Fix connectors
             for i in range(len(path)-1):
                 new_graph[path[i]][path[i+1]]['connector_in']  = graph[path[i]][path[i+1]]['connector_in']
                 new_graph[path[i]][path[i+1]]['connector_out'] = graph[path[i]][path[i+1]]['connector_out']
 
-            if not isinstance(path[-2], bbndb.auspex.Average):
+            if not isinstance(new_graph.nodes(True)[path[-2]]['node_obj'], bbndb.auspex.Average):
                 raise Exception("There is no averager in line.")
             else:
                 vb = bbndb.auspex.Buffer(label=f"{output_node.label}-VarBuffer", qubit_name=output_node.qubit_name)
                 self.var_buffers.append(vb)
-                new_graph.add_edge(path[-2], vb, connector_in="sink", connector_out="final_variance")
+                new_graph.add_node(str(vb), node_obj=vb)
+                new_graph.add_edge(path[-2], str(vb), node_obj=vb, connector_in="sink", connector_out="final_variance")
 
         return new_graph
 
@@ -575,7 +578,7 @@ class RamseyCalibration(QubitCalibration):
             self.qubit_source = exp._instruments[self.source_proxy.label] # auspex instrument
             self.orig_freq    = self.source_proxy.frequency
             if self.set_source:
-                self.source_proxy.frequency = round(self.orig_freq + self.added_detuning + fit_freq_A/2, 10)
+                self.source_proxy.frequency = round(self.orig_freq + self.added_detuning, 10)
                 self.qubit_source.frequency = self.source_proxy.frequency
             exp._instruments[rcvr.label].exp_step = 0
         else:
@@ -753,63 +756,70 @@ class PiCalibration(PhaseEstimation):
 #         self.target    = np.pi/2
 #         self.edge_name = self.CRchan.label
 
-# class DRAGCalibration(Calibration):
-#     def __init__(self, qubit, deltas = np.linspace(-1,1,21), num_pulses = np.arange(8, 48, 4)):
-#         self.filename = 'DRAG/DRAG'
-#         self.deltas = deltas
-#         self.num_pulses = num_pulses
-#         super(DRAGCalibration, self).__init__(qubit, **kwargs)
+class DRAGCalibration(QubitCalibration):
+    def __init__(self, qubit, deltas = np.linspace(-1,1,21), num_pulses = np.arange(8, 48, 4), **kwargs):
+        self.filename = 'DRAG/DRAG'
+        self.deltas = deltas
+        self.num_pulses = num_pulses
+        super(DRAGCalibration, self).__init__(qubit, **kwargs)
 
-#     def sequence(self):
-#         seqs = []
-#         for n in self.num_pulses:
-#             seqs += [[X90(self.qubit, drag_scaling = d), X90m(self.qubit, drag_scaling = d)]*n + [X90(self.qubit, drag_scaling = d), MEAS(self.qubit)] for d in self.deltas]
-#         seqs += create_cal_seqs((self.qubit,),2)
-#         return seqs
+    def sequence(self):
+        seqs = []
+        for n in self.num_pulses:
+            seqs += [[X90(self.qubit, drag_scaling = d), X90m(self.qubit, drag_scaling = d)]*n + [X90(self.qubit, drag_scaling = d), MEAS(self.qubit)] for d in self.deltas]
+        seqs += create_cal_seqs((self.qubit,),2)
+        return seqs
 
-#     def init_plots(self):
-#         plot = ManualPlotter("DRAG Cal", x_label=['DRAG parameter', 'Number of pulses'], y_label=['Amplitude (Arb. Units)', 'Fit DRAG parameter'], numplots = 2)
-#         cmap = cm.viridis(np.linspace(0, 1, len(self.num_pulses)))
-#         for n in range(len(self.num_pulses)):
-#             plot.add_data_trace('Data_{}'.format(n), {'color': list(cmap[n])})
-#             plot.add_fit_trace('Fit_{}'.format(n), {'color': list(cmap[n])})
-#         plot.add_data_trace('Data_opt', subplot_num = 1) #TODO: error bars
-#         return plot
+    def init_plots(self):
+        plot = ManualPlotter("DRAG Cal", x_label=['DRAG parameter', 'Number of pulses'], y_label=['Amplitude (Arb. Units)', 'Fit DRAG parameter'], numplots = 2)
+        cmap = cm.viridis(np.linspace(0, 1, len(self.num_pulses)))
+        for n in range(len(self.num_pulses)):
+            plot.add_data_trace('Data_{}'.format(n), {'color': list(cmap[n]), 'linestyle': 'None'})
+            plot.add_fit_trace('Fit_{}'.format(n), {'color': list(cmap[n])})
+        plot.add_data_trace('Data_opt', subplot_num = 1) #TODO: error bars
+        self.plot = plot
+        return [plot]
 
-#     def calibrate(self):
-#         # run twice for different DRAG parameter ranges
-#         steps = 2
-#         for k in range(steps):
-#         #generate sequence
-#             self.set(exp_step = k)
-#             #first run
-#             data, _ = self.run()
-#             finer_deltas = np.linspace(np.min(self.deltas), np.max(self.deltas), 4*len(self.deltas))
-#             #normalize data with cals
-#             data = quick_norm_data(data)
-#             opt_drag, error_drag, popt_mat = fit_drag(data, self.deltas, self.num_pulses)
+    def exp_config(self, exp):
+        rcvr = self.qubit.measure_chan.receiver_chan.receiver
+        exp._instruments[rcvr.label].exp_step = self.step #where from?
 
-#             #plot
-#             norm_data = data.reshape((len(self.num_pulses), len(self.deltas)))
-#             for n in range(len(self.num_pulses)):
-#                 self.plot['Data_{}'.format(n)] = (self.deltas, norm_data[n, :])
-#                 finer_deltas = np.linspace(np.min(self.deltas), np.max(self.deltas), 4*len(self.deltas))
-#                 self.plot['Fit_{}'.format(n)] = (finer_deltas, quadf(finer_deltas, *popt_mat[:, n]))
-#             self.plot["Data_opt"] = (self.num_pulses, opt_drag) #TODO: add error bars
+    def _calibrate(self):
+        # run twice for different DRAG parameter ranges
+        for k in range(2):
+            self.step = k
+            data, _ = self.run_sweeps()
+            finer_deltas = np.linspace(np.min(self.deltas), np.max(self.deltas), 4*len(self.deltas))
+            #normalize data with cals
+            data = quick_norm_data(data)
+            try:
+                opt_drag, error_drag, popt_mat = fit_drag(data, self.deltas, self.num_pulses)
+                if k==1:
+                    self.succeeded = True
+            except Exception as e:
+                raise Exception(f"Exception {e} while fitting in {self}")
 
-#             if k < steps-1:
-#                 #generate sequence with new pulses and drag parameters
-#                 new_drag_step = 0.25*(max(self.deltas) - min(self.deltas))
-#                 self.deltas = np.linspace(opt_drag[-1] - new_drag_step, opt_drag[-1] + new_drag_step, len(self.deltas))
-#                 new_pulse_step = int(np.floor(2*(max(self.num_pulses)-min(self.num_pulses))/len(self.num_pulses)))
-#                 self.num_pulses = np.arange(max(self.num_pulses) - new_pulse_step, max(self.num_pulses) + new_pulse_step*(len(self.num_pulses)-1), new_pulse_step)
+            norm_data = data.reshape((len(self.num_pulses), len(self.deltas)))
+            for n in range(len(self.num_pulses)):
+                self.plot['Data_{}'.format(n)] = (self.deltas, norm_data[n, :])
+                finer_deltas = np.linspace(np.min(self.deltas), np.max(self.deltas), 4*len(self.deltas))
+                self.plot['Fit_{}'.format(n)] = (finer_deltas, quadf(finer_deltas, *popt_mat[:, n]))
+            self.plot["Data_opt"] = (self.num_pulses, opt_drag) #TODO: add error bars
 
-#             if not self.leave_plots_open:
-#                 self.plot.set_quit()
+            if k==0:
+                #generate sequence with new pulses and drag parameters
+                new_drag_step = 0.25*(max(self.deltas) - min(self.deltas))
+                self.deltas = np.linspace(opt_drag[-1] - new_drag_step, opt_drag[-1] + new_drag_step, len(self.deltas))
+                new_pulse_step = int(np.floor(2*(max(self.num_pulses)-min(self.num_pulses))/len(self.num_pulses)))
+                self.num_pulses = np.arange(max(self.num_pulses) - new_pulse_step, max(self.num_pulses) + new_pulse_step*(len(self.num_pulses)-1), new_pulse_step)
 
-#         self.saved_settings['qubits'][self.qubit.label]['control']['pulse_params']['drag_scaling'] = round(float(opt_drag[-1]), 5)
-#         self.drag = opt_drag[-1]
-#         return ('drag_scaling', opt_drag[-1])
+            if not self.leave_plots_open:
+                self.plot.set_quit()
+        self.opt_drag = round(float(opt_drag[-1]), 5)
+
+    def update_settings(self):
+        logger.info(f'{self.qubit.label} DRAG parameter set to {self.opt_drag}')
+        self.qubit.pulse_params['drag_scaling'] = self.opt_drag
 
 # class MeasCalibration(Calibration):
 #     def __init__(self, qubit_name):
