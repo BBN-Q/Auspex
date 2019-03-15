@@ -191,6 +191,8 @@ class Instrument(metaclass=MetaInstrument):
         parameters using the key/value pairs."""
         for name, value in settings_dict.items():
             if name not in ["id", "label", "model", "address", "channel_db_id", "standalone"]:
+                if "_id" in name:
+                    continue
                 # Python is insane, and attempts to run a property's getter
                 # when queried by hasattr. Avoid this behavior with the
                 # "ask for forgiveness" paradigm.

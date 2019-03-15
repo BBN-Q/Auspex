@@ -631,6 +631,14 @@ class AgilentN5183A(SCPIInstrument):
     def set_all(self, settings):
         super(AgilentN5183A, self).set_all(settings)
 
+    @property
+    def reference(self):
+        return None
+
+    @reference.setter
+    def reference(self, ref=None):
+        pass
+
 class AgilentE8363C(SCPIInstrument):
     """Agilent E8363C VNA"""
     instrument_type = "Vector Network Analyzer"
