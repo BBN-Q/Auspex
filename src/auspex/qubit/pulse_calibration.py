@@ -269,8 +269,13 @@ class CalibrationExperiment(QubitExperiment):
             else:
                 vb = bbndb.auspex.Buffer(label=f"{output_node.label}-VarBuffer", qubit_name=output_node.qubit_name)
                 self.var_buffers.append(vb)
-                new_graph.add_node(str(vb), node_obj=vb)
-                new_graph.add_edge(path[-2], str(vb), node_obj=vb, connector_in="sink", connector_out="final_variance")
+                new_graph.add_node(vb.node_label(), node_obj=vb)
+                new_graph.add_edge(path[-2], vb.node_label(), node_obj=vb, connector_in="sink", connector_out="final_variance")
+            # maintain standard plots
+            plot_nodes = [output_node for output_node in nx.descendants(graph, path[-2]) if isinstance(graph.nodes[output_node]['node_obj'], bbndb.auspex.Display)]
+            for plot_node in plot_nodes:
+                plot_path = nx.shortest_path(graph, path[-2], plot_node)
+                new_graph = nx.compose(new_graph, graph.subgraph(plot_path))
 
         return new_graph
 
