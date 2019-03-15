@@ -384,6 +384,7 @@ class CavityTuneup(QubitCalibration):
         self.plot1["Phase"] = (self.frequencies, self.phases)
         self.plot1["Phase Fit"] = (self.frequencies,phase_poly(self.frequencies))
         self.plot1B["Group Delay"] = (self.frequencies[:-1],group_delay)
+
         self.plot2["Amplitude"] = (self.frequencies,np.abs(self.datas))
 
         shifted_cav = np.real(self.datas) - np.mean(np.real(self.datas))
@@ -428,6 +429,7 @@ class CavityTuneup(QubitCalibration):
         #                                 criterion="integral", threshold = "one_sigma")
         #     logger.info(f"new_frequencies {self.new_frequencies}")
         # #
+
         # # self.data, _ = self.run_sweeps()
         # # group_delay = -np.diff(np.unwrap(np.angle(self.data)))/np.diff(self.new_frequencies)
         # # self.plot3["Group Delay"] = (self.new_frequencies[1:],group_delay)
@@ -500,7 +502,7 @@ class RabiAmpCalibration(QubitCalibration):
         if num_steps % 2 != 0:
             raise ValueError("Number of steps for RabiAmp calibration must be even!")
         #for now, only do one qubit at a time
-        self.num_steps = num_stepsp
+        self.num_steps = num_steps
         self.amps = np.hstack((np.arange(-1, 0, 2./num_steps),
                                np.arange(2./num_steps, 1+2./num_steps, 2./num_steps)))
         super(RabiAmpCalibration, self).__init__(qubit, **kwargs)
