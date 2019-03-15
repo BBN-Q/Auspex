@@ -232,9 +232,9 @@ class CalibrationExperiment(QubitExperiment):
         """Change the graph as needed. By default we changes all writers to buffers"""
         if None in self.output_nodes:
             self.output_nodes = self.guess_output_nodes(graph)
-            
+
         for output_node in self.output_nodes:
-            if str(output_node) not in graph:
+            if output_node.node_label() not in graph:
                 raise ValueError(f"Could not find specified output node {output_node} in graph.")
 
         for qubit in self.qubits:
@@ -256,7 +256,7 @@ class CalibrationExperiment(QubitExperiment):
         # Disable any paths not involving the buffer
         new_graph = nx.DiGraph()
         for output_node, qubit in zip(self.output_nodes, self.qubits):
-            path  = nx.shortest_path(graph, str(self.qubit_proxies[qubit.label]), str(output_node))
+            path  = nx.shortest_path(graph, str(self.qubit_proxies[qubit.label]), output_node.node_label())
             new_graph = nx.compose(new_graph, graph.subgraph(path))
 
             # Fix connectors
