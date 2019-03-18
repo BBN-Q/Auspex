@@ -9,7 +9,7 @@
 __all__ = ['KeysightM8190A', 'Sequence', 'Scenario']
 
 from auspex.log import logger
-from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand
+from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand, Command
 from .binutils import BitField, BitFieldUnion
 
 import logging
@@ -174,6 +174,7 @@ class KeysightM8190A(SCPIInstrument):
     sample_freq_ext    = FloatCommand(scpi_string=":FREQ:RAST:EXT")   # external sample frequency
     sample_freq_source = StringCommand(scpi_string=":FREQ:RAST:SOUR", # sample frequency source
                           allowed_values=("INTERNAL", "EXTERNAL"))
+    coupled            = Command(scpi_string=":INST:COUP:STAT", value_map={True:"1", False:"0"})
 
     waveform_output_mode  = StringCommand(scpi_string=":TRAC{channel:d}:DWID", additional_args=['channel'],
                              allowed_values=("WSPEED", "WPRECISION", "INTX3", "INTX12", "INTX24", "INT48"))
@@ -221,12 +222,10 @@ class KeysightM8190A(SCPIInstrument):
         super(KeysightM8190A, self).connect(resource_name=resource_name, interface_type=interface_type)
         self.interface._resource.read_termination = u"\n"
 
-    def abort(self, channel=None):
+    def abort(self):
         """Abort/stop signal generation on a channel"""
-        if channel is None:
-            self.interface.write(":ABORT")
-        else:
-            self.interface.write(":ABORT{:d}")
+        # Never add channel number, or 't' !!!!!
+        self.interface.write(":ABOR")
 
     def initiate(self, channel=1):
         self.interface.write(":INIT:IMM{:d}".format(channel))
@@ -280,7 +279,6 @@ class KeysightM8190A(SCPIInstrument):
         if segment_id:
             self.delete_waveform(segment_id, channel=channel)
         segment_id = self.define_waveform(len(wf_data), segment_id=segment_id, channel=channel)
-        print("Returned segment id {}".format(segment_id))
         self.upload_waveform(wf_data, segment_id, channel=channel)
         self.select_waveform(segment_id, channel=channel)
         self.initiate(channel=channel)
@@ -316,7 +314,7 @@ class KeysightM8190A(SCPIInstrument):
         return bin_data
 
     def reset_sequence_table(self, channel=1):
-        self.interface.write(":STAB:RES{:d}.format(channel)")
+        self.interface.write(":STAB{:d}:RESet".format(channel))
 
     def upload_scenario(self, scenario, channel=1, start_idx=0, binary=True):
         if binary:

@@ -12,3 +12,4 @@ config/config.json
 *.log
 *.prof
 *.bak
+.DS*

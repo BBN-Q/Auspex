@@ -11,6 +11,27 @@ import os
 import numpy as np
 import sys
 
+# ----- fix/unitTests_1 (ST-15) delta Start...
+# Added the followiing 25 Oct 2018 to test Instrument and filter metaclass load
+# introspection minimization (during import)
+#
+from auspex import config
+
+# Filter out Holzworth warning noise noise by citing the specific instrument[s]
+# used for this test.
+config.tgtInstrumentClass       = "TestInstrument"
+
+# Can't filter out Channerlizer noise as it's actually used in this test;
+# this does serve to limit the number of filter stubs generated to only those
+# used.
+config.tgtFilterClass           = {"Plotter", "Averager", "Print", "Channelizer", "KernelIntegrator"}
+
+# Uncomment to the following to show the Instrument MetaClass __init__ arguments
+# config.bEchoInstrumentMetaInit  = True
+#
+# ----- fix/unitTests_1 (ST-15) delta Stop.
+
+
 from auspex.instruments.instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand
 from auspex.experiment import Experiment, FloatParameter
 from auspex.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector

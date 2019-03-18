@@ -51,7 +51,12 @@ class Labbrick(Instrument, metaclass=MakeSettersGetters):
             path = os.path.realpath(__file__)
             with open(os.path.join(os.path.dirname(path),"vnx_LMS_api_python.h")) as fid:
                 self.ffi.cdef(fid.read())
-            self._lib = self.ffi.dlopen("vnx_fmsynth.dll")
+            if os.name == 'nt':
+                self._lib = self.ffi.dlopen("vnx_fmsynth.dll")
+            elif os.name == 'posix':
+                self._lib = self.ffi.dlopen("LMShid.so")
+            else:
+                raise Exception("Unknown OS")
         except:
             logger.warning("Could not find the Lab Brick driver.")
             self._lib = MagicMock()
@@ -63,10 +68,9 @@ class Labbrick(Instrument, metaclass=MakeSettersGetters):
             num_devices = self._lib.fnLMS_GetNumDevices()
             dev_ids = self.ffi.new("unsigned int[]", [0 for i in range(num_devices)])
             self._lib.fnLMS_GetDevInfo(dev_ids)
-            dev_from_serial_nums = {self._lib.fnLMS_GetSerialNumber(d): d for d in dev_ids}
             self.dev_ids = [d for d in dev_ids]
             self.previous_num_devices = num_devices
-        return dev_from_serial_nums
+        return {self._lib.fnLMS_GetSerialNumber(d): d for d in self.dev_ids}
 
     def connect(self, resource_name=None):
         if resource_name is not None:
@@ -94,7 +98,7 @@ class Labbrick(Instrument, metaclass=MakeSettersGetters):
     @frequency.setter
     def frequency(self, value):
         if value < self.min_freq:
-            value = self.min_freq
+            value = self.min_freqf
             logger.warning('Lab Brick frequency out of range. Set to min = {} GHz'.format(value/1e9))
         elif value > self.max_freq:
             value = self.max_freq
@@ -114,3 +118,19 @@ class Labbrick(Instrument, metaclass=MakeSettersGetters):
             value = self.min_power
             logger.warning('Lab Brick power out of range. Set to min = {} dBm'.format(value))
         self._lib.fnLMS_SetPowerLevel(self.device_id, int(value * 4)) # Convert to 0.25 dB
+
+
+    @property
+    def output(self):
+        if self._lib.fnLMS_GetRF_On(self.device_id) == 1: 
+            return "ON"
+        else: 
+            return "OFF"
+    @output.setter
+    def output(self, value):
+        if value == "ON": 
+            self._lib.fnLMS_SetRFOn(self.device_id,1)
+        elif value == "OFF":
+            self._lib.fnLMS_SetRFOn(self.device_id,0)
+        else: 
+            raise ValueError("RF must be ON or OFF.")

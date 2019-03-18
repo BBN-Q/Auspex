@@ -16,8 +16,48 @@ cfg_file = os.path.abspath(os.path.join(curr_dir, "test_measure.yml"))
 ChannelLibrary(library_file=cfg_file)
 import auspex.config
 # Dummy mode
-import auspex.config as config
-config.auspex_dummy_mode = True
+
+_bNO_METACLASS_INTROSPECTION_CONSTRAINTS = True  # Use original dummy flag logic
+#_bNO_METACLASS_INTROSPECTION_CONSTRAINTS = False # Enable instrument and filter introspection constraints
+
+if _bNO_METACLASS_INTROSPECTION_CONSTRAINTS:
+    #
+    # The original unittest quieting logic
+    import auspex.config as config
+    config.auspex_dummy_mode = True
+    #
+else:
+    # ----- fix/unitTests_1 (ST-15) delta Start...
+    # Added the followiing 05 Nov 2018 to test Instrument and filter metaclass load
+    # introspection minimization (during import)
+    #
+    from auspex import config
+
+    # Filter out Holzworth warning noise noise by citing the specific instrument[s]
+    # used for this test.
+    #config.tgtInstrumentClass       = {"APS2"}
+    # Appear to need the holzworth_driver too, citing yml Holz2 construct
+    #config.tgtInstrumentClass       = {"APS2", "holzworth"}
+    # Actually, Holz1 & 2, from test_measure.yml cite HolzworthHS9000
+    #config.tgtInstrumentClass       = {"APS2", "HolzworthHS9000"}
+    # also seems to need the X6 instrument  X6-1 cites an X6 instrument
+    config.tgtInstrumentClass       = {"APS", "APS2", "HolzworthHS9000", "X6"}
+
+    # Filter out Channerlizer noise by citing the specific filters used for this
+    # test.
+    # ...Actually Print, Channelizer, and KernelIntegrator are NOT used in this test;
+    # hence commented them out, below, as well.
+    config.tgtFilterClass           = {"Averager", "DataBuffer", "WriteToHDF5", "X6StreamSelector"}
+
+    # Uncomment to the following to show the Instrument MetaClass __init__ arguments
+    # config.bEchoInstrumentMetaInit  = True
+
+    # Override (default false) to force MagicMock assignment after load attempt
+    # warning & errors.
+    config.bUseMockOnLoadError      = True
+
+    # ----- fix/unitTests_1 (ST-15) delta Stop.
+
 
 auspex.config.meas_file  = cfg_file
 auspex.config.AWGDir     = awg_dir

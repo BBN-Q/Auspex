@@ -40,7 +40,7 @@ def calibrate(calibrations, update_settings=True, cal_log=True):
             cal_result = calibration.calibrate()
             if update_settings:
                 calibration.update_settings()
-            if cal_log:
+            if cal_log and not isinstance(calibration, MeasCalibration):
                 calibration.write_to_log(cal_result)
         except Exception as ex:
             logger.warning('Calibration {} could not complete: got exception: {}.'.format(type(calibration).__name__, ex))
@@ -152,7 +152,7 @@ class PulseCalibration(object):
                         var[qubit_name] = (realvar + imagvar) / N
                     elif self.quad == 'phase':
                         # take the approach from Qlab assuming the noise is
-                        # Gaussian in both quadratures i.e. 'circular' in the 
+                        # Gaussian in both quadratures i.e. 'circular' in the
                         # IQ plane.
                         stddata = np.sqrt(realvar + imagvar)
                         stdtheta = 180/np.pi * 2 * np.arctan(stddata \
@@ -352,13 +352,20 @@ class RamseyCalibration(PulseCalibration):
         #find qubit control source (from config)
         qubit_source = self.settings['qubits'][self.qubit.label]['control']['generator']
         orig_freq = self.settings['instruments'][qubit_source]['frequency']
-        set_freq = round(orig_freq + self.added_detuning, 10)
         #plot settings
         finer_delays = np.linspace(np.min(self.delays), np.max(self.delays), 4*len(self.delays))
+        if self.set_source:
+            self.settings['instruments'][qubit_source]['frequency'] = round(orig_freq + self.added_detuning, 10)
+        else:
+            self.qubit.frequency += float(self.added_detuning)
+            self.settings['qubits'][self.qubit.label]['control']['frequency'] += float(self.added_detuning)
+            config.dump_meas_file(self.settings, config.meas_file) # kludge to update qubit frequency
         self.set()
-        self.exp.settings['instruments'][qubit_source]['frequency'] = set_freq
         data, _ = self.run()
-        fit_freqs, fit_errs, all_params, all_errs = fit_ramsey(self.delays, data, two_freqs = self.two_freqs, AIC = self.AIC)
+        try:
+            fit_freqs, fit_errs, all_params, all_errs = fit_ramsey(self.delays, data, two_freqs = self.two_freqs, AIC = self.AIC)
+        except:
+            self.update_settings()
         # Plot the results
         self.plot["Data"] = (self.delays, data)
         ramsey_f = ramsey_2f if len(fit_freqs) == 2 else ramsey_1f #1-freq fit if the 2-freq has failed
@@ -366,13 +373,19 @@ class RamseyCalibration(PulseCalibration):
 
         #TODO: set conditions for success
         fit_freq_A = np.mean(fit_freqs) #the fit result can be one or two frequencies
-        set_freq = round(orig_freq + self.added_detuning + fit_freq_A/2, 10)
+        if self.set_source:
+            self.qubit.frequency = round(orig_freq + self.added_detuning + fit_freq_A/2, 10)
+            self.settings['instruments'][qubit_source]['frequency'] = round(orig_freq + self.added_detuning + fit_freq_A/2, 10)
+        else:
+            self.settings['qubits'][self.qubit.label]['control']['frequency'] += float(fit_freq_A/2)
+            config.dump_meas_file(self.settings, config.meas_file)
         self.set(exp_step = 1)
-        self.exp.settings['instruments'][qubit_source]['frequency'] = set_freq
         data, _ = self.run()
 
-        fit_freqs, fit_errs, all_params, all_errs = fit_ramsey(self.delays, data, two_freqs = self.two_freqs, AIC = self.AIC)
-
+        try:
+            fit_freqs, fit_errs, all_params, all_errs = fit_ramsey(self.delays, data, two_freqs = self.two_freqs, AIC = self.AIC)
+        except:
+            self.update_settings() # restore settings
         # Plot the results
         self.init_plot()
         self.plot["Data"] = (self.delays, data)
@@ -387,13 +400,15 @@ class RamseyCalibration(PulseCalibration):
         if self.set_source:
             self.saved_settings['instruments'][qubit_source]['frequency'] = float(round(self.fit_freq))
         else:
-            self.saved_settings['qubits'][self.qubit_names[0]]['control']['frequency'] += float(round(self.fit_freq - orig_freq))
+            self.saved_settings['qubits'][self.qubit.label]['control']['frequency'] += float(round(self.fit_freq - orig_freq))
             # update edges where this is the target qubit
             for predecessor in ChannelLibraries.channelLib.connectivityG.predecessors(self.qubit):
-                edge = ChannelLibraries.channelLib.connectivityG.edge[predecessor][self.qubit]['channel']
-                self.saved_settings['edges'][edge.label]['frequency'] = self.saved_settings['qubits'][self.qubit_names[0]]['control']['frequency']
-        logger.info("Qubit set frequency = {} GHz".format(round(float(self.fit_freq/1e9),5)))
-        return ('frequency', self.saved_settings['instruments'][qubit_source]['frequency'] + self.saved_settings['qubits'][self.qubit_names[0]]['control']['frequency'])
+                edge = ChannelLibraries.channelLib.connectivityG[predecessor][self.qubit]['channel']
+                edge_source = self.saved_settings['edges'][edge.label]['generator']
+                self.saved_settings['edges'][edge.label]['frequency'] = self.saved_settings['qubits'][self.qubit_names[0]]['control']['frequency'] + (self.saved_settings['instruments'][qubit_source]['frequency'] - self.saved_settings['instruments'][edge_source]['frequency'])
+        qubit_set_freq = self.saved_settings['instruments'][qubit_source]['frequency'] + self.saved_settings['qubits'][self.qubit.label]['control']['frequency']
+        logger.info("Qubit set frequency = {} GHz".format(round(float(qubit_set_freq/1e9),5)))
+        return ('frequency', qubit_set_freq)
 
 class PhaseEstimation(PulseCalibration):
     """Estimates pulse rotation angle from a sequence of P^k experiments, where
@@ -492,11 +507,11 @@ class CRAmpCalibration_PhEst(PhaseEstimation):
         self.edge_name = self.CRchan.label
 
 class DRAGCalibration(PulseCalibration):
-    def __init__(self, qubit_name, deltas = np.linspace(-1,1,11), num_pulses = np.arange(16, 64, 4)):
+    def __init__(self, qubit_name, deltas = np.linspace(-1,1,21), num_pulses = np.arange(8, 48, 4), **kwargs):
         self.filename = 'DRAG/DRAG'
         self.deltas = deltas
         self.num_pulses = num_pulses
-        super(DRAGCalibration, self).__init__(qubit_name)
+        super(DRAGCalibration, self).__init__(qubit_name, **kwargs)
 
     def sequence(self):
         seqs = []
@@ -516,7 +531,8 @@ class DRAGCalibration(PulseCalibration):
 
     def calibrate(self):
         # run twice for different DRAG parameter ranges
-        for k in range(2):
+        steps = 2
+        for k in range(steps):
         #generate sequence
             self.set(exp_step = k)
             #first run
@@ -531,18 +547,18 @@ class DRAGCalibration(PulseCalibration):
             for n in range(len(self.num_pulses)):
                 self.plot['Data_{}'.format(n)] = (self.deltas, norm_data[n, :])
                 finer_deltas = np.linspace(np.min(self.deltas), np.max(self.deltas), 4*len(self.deltas))
-                self.plot['Fit_{}'.format(n)] = (finer_deltas, sinf(finer_deltas, *popt_mat[:, n])) if n==0 else (finer_deltas, quadf(finer_deltas, *popt_mat[:3, n]))
+                self.plot['Fit_{}'.format(n)] = (finer_deltas, quadf(finer_deltas, *popt_mat[:, n]))
             self.plot["Data_opt"] = (self.num_pulses, opt_drag) #TODO: add error bars
 
-            if k>0:
+            if k < steps-1:
                 #generate sequence with new pulses and drag parameters
                 new_drag_step = 0.25*(max(self.deltas) - min(self.deltas))
-                self.deltas = np.arange(opt_drag[-1] - new_drag_step, opt_drag[-1] + new_drag_step, len(self.deltas))
-                new_pulse_step = 2*(max(self.num_pulses)-min(self.num_pulses))/len(self.num_pulses)
+                self.deltas = np.linspace(opt_drag[-1] - new_drag_step, opt_drag[-1] + new_drag_step, len(self.deltas))
+                new_pulse_step = int(np.floor(2*(max(self.num_pulses)-min(self.num_pulses))/len(self.num_pulses)))
                 self.num_pulses = np.arange(max(self.num_pulses) - new_pulse_step, max(self.num_pulses) + new_pulse_step*(len(self.num_pulses)-1), new_pulse_step)
 
         self.saved_settings['qubits'][self.qubit.label]['control']['pulse_params']['drag_scaling'] = round(float(opt_drag[-1]), 5)
-
+        self.drag = opt_drag[-1]
         return ('drag_scaling', opt_drag[-1])
 
 class MeasCalibration(PulseCalibration):
@@ -553,27 +569,25 @@ class MeasCalibration(PulseCalibration):
 class CLEARCalibration(MeasCalibration):
     '''
     Calibration of cavity reset pulse
-    aux_qubit: auxiliary qubit used for CLEAR pulse
     kappa: cavity linewidth (angular frequency: 1/s)
     chi: half of the dispershive shift (angular frequency: 1/s)
-    tau: duration of each of the 2 depletion steps (s)
+    t_empty: total time for active depletion (s)
     alpha: scaling factor
     T1factor: decay due to T1 between end of msm't and start of Ramsey
     T2: measured T2*
     nsteps: calibration steps/sweep
     cal_steps: choose ranges for calibration steps. 1: +-100%; 0: skip step
     '''
-    def __init__(self, qubit_name, aux_qubit, kappa = 2e6, chi = 1e6, t_empty = 200e-9, ramsey_delays=np.linspace(0.0, 50.0, 51)*1e-6, ramsey_freq = 100e3, meas_delay = 0, tau = 200e-9, \
-    alpha = 1, T1factor = 1, T2 = 30e-6, nsteps = 11, eps1 = None, eps2 = None, cal_steps = (1,1,1)):
+    def __init__(self, qubit_name, kappa = 2*np.pi*2e6, chi = -2*np.pi*1e6, t_empty = 400e-9, ramsey_delays=np.linspace(0.0, 50.0, 51)*1e-6, ramsey_freq = 100e3, meas_delay = 0, preramsey_delay=0, alpha = 1, T1factor = 1, T2 = 30e-6, nsteps = 11, eps1 = None, eps2 = None, cal_steps = (1,1,1)):
         super(CLEARCalibration, self).__init__(qubit_name)
         self.filename = 'CLEAR/CLEAR'
-        self.aux_qubit = aux_qubit
         self.kappa = kappa
         self.chi = chi
         self.ramsey_delays = ramsey_delays
         self.ramsey_freq = ramsey_freq
         self.meas_delay = meas_delay
-        self.tau = tau
+        self.preramsey_delay = preramsey_delay
+        self.tau = t_empty/2
         self.alpha = alpha
         self.T1factor = T1factor
         self.T2 = T2
@@ -582,12 +596,15 @@ class CLEARCalibration(MeasCalibration):
             # theoretical values as default
             self.eps1 = (1 - 2*np.exp(kappa*t_empty/4)*np.cos(chi*t_empty/2))/(1+np.exp(kappa*t_empty/2)-2*np.exp(kappa*t_empty/4)*np.cos(chi*t_empty/2))
             self.eps2 = 1/(1+np.exp(kappa*t_empty/2)-2*np.exp(kappa*t_empty/4)*np.cos(chi*t_empty/2))
+            logger.info('Theoretical step amplitudes: {} (eps1), {} (eps2)'.format(self.eps1, self.eps2))
+        else:
+            self.eps1 = eps1
+            self.eps2 = eps2
         self.cal_steps = cal_steps
 
     def sequence(self, **params):
-        qM = QubitFactory(self.aux_qubit) #TODO: replace with MEAS(q) devoid of digitizer trigger
         prep = X(self.qubit) if params['state'] else Id(self.qubit)
-        seqs = [[prep, MEAS(qM, amp1 = params['eps1'], amp2 =  params['eps2'], step_length = self.tau), X90(self.qubit), Id(self.qubit,d), U90(self.qubit,phase = self.ramsey_freq*d),
+        seqs = [[prep, MEAS(self.qubit, amp1 = self.alpha*params['eps1'], amp2 =  self.alpha*params['eps2'], step_length = self.tau, dig_trig=None), Id(self.qubit, self.preramsey_delay), X90(self.qubit), Id(self.qubit,d), U90(self.qubit,phase = 2*pi*self.ramsey_freq*d),
         Id(self.qubit, self.meas_delay), MEAS(self.qubit)] for d in self.ramsey_delays]
         seqs += create_cal_seqs((self.qubit,), 2, delay = self.meas_delay)
         return seqs
@@ -636,26 +653,27 @@ class CLEARCalibration(MeasCalibration):
             popt_0,_ = fit_quad(xpoints, n0vec)
             popt_1,_ = fit_quad(xpoints, n1vec)
             finer_xpoints = np.linspace(np.min(xpoints), np.max(xpoints), 4*len(xpoints))
-            opt_scaling = np.mean(popt_0[0], popt_1[0])
+            opt_scaling = np.mean([popt_0[1], popt_1[1]])
             logger.info("Optimal scaling factor for step {} = {}".format(ct+1, opt_scaling))
 
             if ct<2:
                 self.eps1*=opt_scaling
             if ct!=1:
                 self.eps2*=opt_scaling
-            self.plot[1]['Fit sweep {}, state 0'.format(ct)] = (finer_xpoints, quadf(finer_xpoints, popt_0))
-            self.plot[1]['Fit sweep {}, state 1'.format(ct)] = (finer_xpoints, quadf(finer_xpoints, popt_1))
+            self.plot[1]['Fit sweep {}, state 0'.format(ct)] = (finer_xpoints, quadf(finer_xpoints, *popt_0))
+            self.plot[1]['Fit sweep {}, state 1'.format(ct)] = (finer_xpoints, quadf(finer_xpoints, *popt_1))
+        return [('eps1', round(float(self.eps1), 5)), ('eps2', round(float(self.eps1), 5))]
 
-        def update_settings(self):
-            #update library (default amp1, amp2 for MEAS)
-            self.saved_settings['qubits'][self.qubit.label]['measure']['pulse_params']['amp1'] = round(float(self.eps1), 5)
-            self.saved_settings['qubits'][self.qubit.label]['measure']['pulse_params']['amp2'] = round(float(self.eps2), 5)
-            self.saved_settings['qubits'][self.qubit.label]['measure']['pulse_params']['step_length'] = round(float(self.tau), 5)
-            super(CLEARCalibration, self).update_settings()
+    def update_settings(self):
+        #update library (default amp1, amp2 for MEAS)
+        self.saved_settings['qubits'][self.qubit.label]['measure']['pulse_params']['amp1'] = round(float(self.eps1), 5)
+        self.saved_settings['qubits'][self.qubit.label]['measure']['pulse_params']['amp2'] = round(float(self.eps2), 5)
+        self.saved_settings['qubits'][self.qubit.label]['measure']['pulse_params']['step_length'] = round(float(self.tau), 9)
+        super(CLEARCalibration, self).update_settings()
 
 '''Two-qubit gate calibrations'''
 class CRCalibration(PulseCalibration):
-    def __init__(self, qubit_names, lengths=np.linspace(20, 1020, 21)*1e-9, phase = 0, amp = 0.8, rise_fall = 40e-9):
+    def __init__(self, qubit_names, lengths=np.linspace(20, 1020, 21)*1e-9, phase = 0, amp = 0.8, rise_fall = 40e-9, control_meas=False):
         super(CRCalibration, self).__init__(qubit_names)
         self.lengths = lengths
         self.phases = phase
@@ -663,6 +681,7 @@ class CRCalibration(PulseCalibration):
         self.rise_fall = rise_fall
         self.filename = 'CR/CR'
         self.edge_name = ChannelLibraries.EdgeFactory(*self.qubit).label
+        self.control_meas = control_meas
 
     def init_plot(self):
         plot = ManualPlotter("CR"+str.lower(self.cal_type.name)+"Fit", x_label=str.lower(self.cal_type.name), y_label='$<Z_{'+self.qubit_names[1]+'}>$', y_lim=(-1.02,1.02))
@@ -694,16 +713,35 @@ class CRCalibration(PulseCalibration):
         self.saved_settings['edges'][self.edge_name]['pulse_params'][str.lower(self.cal_type.name)] = float(self.opt_par)
         super(CRCalibration, self).update_settings()
 
+    def _cal_seqs(self, numRepeats):
+        if self.control_meas:
+            measBlock = MEAS(self.qubit[0])*MEAS(self.qubit[1])
+        else:
+            measBlock = MEAS(self.qubit[0], amp=0.0)*MEAS(self.qubit[1])
+
+        cal_seqs = create_cal_seqs((self.qubit[1], self.qubit[0]), numRepeats)
+
+        cseqs =  [[seq[0], measBlock] for seq in cal_seqs]
+        return cseqs
+
+
 class CRLenCalibration(CRCalibration):
-    def __init__(self, qubit_names, lengths=np.linspace(20, 1020, 21)*1e-9, phase = 0, amp = 0.8, rise_fall = 40e-9, cal_type = CR_cal_type.LENGTH):
+    def __init__(self, qubit_names, lengths=np.linspace(20, 1020, 21)*1e-9, phase = 0, amp = 0.8, rise_fall = 40e-9, cal_type = CR_cal_type.LENGTH, control_meas=False):
         self.cal_type = cal_type
-        super(CRLenCalibration, self).__init__(qubit_names, lengths, phase, amp, rise_fall)
+        super(CRLenCalibration, self).__init__(qubit_names, lengths, phase, amp, rise_fall, control_meas)
 
     def sequence(self):
         qc, qt = self.qubit
-        seqs = [[Id(qc)] + echoCR(qc, qt, length=l, phase = self.phases, amp=self.amps, riseFall=self.rise_fall).seq + [Id(qc), MEAS(qt)*MEAS(qc)]
-        for l in self.lengths]+ [[X(qc)] + echoCR(qc, qt, length=l, phase= self.phases, amp=self.amps, riseFall=self.rise_fall).seq + [X(qc), MEAS(qt)*MEAS(qc)]
-        for l in self.lengths] + create_cal_seqs((qt,qc), 2, measChans=(qt,qc))
+
+        if self.control_meas:
+            cMEAS = MEAS(qc)
+        else:
+            logger.info("Setting qubit {} measurement amplitude to 0.".format(qc.label))
+            cMEAS = MEAS(qc, amp=0.0)
+
+        seqs = [[Id(qc)] + echoCR(qc, qt, length=l, phase = self.phases, amp=self.amps, riseFall=self.rise_fall).seq + [Id(qc), MEAS(qt)*cMEAS]
+        for l in self.lengths]+ [[X(qc)] + echoCR(qc, qt, length=l, phase= self.phases, amp=self.amps, riseFall=self.rise_fall).seq + [X(qc), MEAS(qt)*cMEAS]
+        for l in self.lengths] + self._cal_seqs(2)
 
         self.axis_descriptor=[
             delay_descriptor(np.concatenate((self.lengths, self.lengths))),
@@ -713,18 +751,23 @@ class CRLenCalibration(CRCalibration):
         return seqs
 
 class CRPhaseCalibration(CRCalibration):
-    def __init__(self, qubit_names, phases = np.linspace(0,2*np.pi,21), amp = 0.8, rise_fall = 40e-9, cal_type = CR_cal_type.PHASE):
+    def __init__(self, qubit_names, phases = np.linspace(0,2*np.pi,21), amp = 0.8, rise_fall = 40e-9, cal_type = CR_cal_type.PHASE, control_meas=False):
         self.cal_type = cal_type
-        super(CRPhaseCalibration, self).__init__(qubit_names, 0, phases, amp, rise_fall)
+        super(CRPhaseCalibration, self).__init__(qubit_names, 0, phases, amp, rise_fall, control_meas)
         CRchan = ChannelLibraries.EdgeFactory(*self.qubit)
         self.lengths = CRchan.pulse_params['length']
 
 
     def sequence(self):
         qc, qt = self.qubit
-        seqs = [[Id(qc)] + echoCR(qc, qt, length=self.lengths, phase=ph, amp=self.amps, riseFall=self.rise_fall).seq + [X90(qt)*Id(qc), MEAS(qt)*MEAS(qc)]
-        for ph in self.phases]+ [[X(qc)] + echoCR(qc, qt, length=self.lengths, phase= ph, amp=self.amps, riseFall=self.rise_fall).seq + [X90(qt)*X(qc), MEAS(qt)*MEAS(qc)]
-        for ph in self.phases] + create_cal_seqs((qt,qc), 2, measChans=(qt,qc))
+        if self.control_meas:
+            cMEAS = MEAS(qc)
+        else:
+            logger.info("Setting qubit {} measurement amplitude to 0.".format(qc.label))
+            cMEAS = MEAS(qc, amp=0.0)
+        seqs = [[Id(qc)] + echoCR(qc, qt, length=self.lengths, phase=ph, amp=self.amps, riseFall=self.rise_fall).seq + [X90(qt)*Id(qc), MEAS(qt)*cMEAS]
+        for ph in self.phases]+ [[X(qc)] + echoCR(qc, qt, length=self.lengths, phase= ph, amp=self.amps, riseFall=self.rise_fall).seq + [X90(qt)*X(qc), MEAS(qt)*cMEAS]
+        for ph in self.phases] + self._cal_seqs(2)
 
         self.axis_descriptor = [
             {
@@ -739,22 +782,27 @@ class CRPhaseCalibration(CRCalibration):
         return seqs
 
 class CRAmpCalibration(CRCalibration):
-    def __init__(self, qubit_names, amp_range = 0.4, phase = 0, amp = 0.8, rise_fall = 40e-9, num_CR = 1, cal_type = CR_cal_type.AMP):
+    def __init__(self, qubit_names, amp_range = 0.4, amp = 0.8, rise_fall = 40e-9, num_CR = 1, cal_type = CR_cal_type.AMP, control_meas=False):
         self.num_CR = num_CR
         if num_CR % 2 == 0:
             logger.error('The number of ZX90 must be odd')
         self.cal_type = cal_type
         amps = np.linspace((1-amp_range/2)*amp, (1+amp_range/2)*amp, 21)
-        super(CRAmpCalibration, self).__init__(qubit_names, 0, 0, amps, rise_fall)
+        super(CRAmpCalibration, self).__init__(qubit_names, 0, 0, amps, rise_fall, control_meas)
         CRchan = ChannelLibraries.EdgeFactory(*self.qubit)
         self.lengths = CRchan.pulse_params['length']
         self.phases = CRchan.pulse_params['phase']
 
     def sequence(self):
         qc, qt = self.qubit
-        seqs = [[Id(qc)] + self.num_CR*echoCR(qc, qt, length=self.lengths, phase=self.phases, amp=a, riseFall=self.rise_fall).seq + [Id(qc), MEAS(qt)*MEAS(qc)]
-        for a in self.amps]+ [[X(qc)] + self.num_CR*echoCR(qc, qt, length=self.lengths, phase= self.phases, amp=a, riseFall=self.rise_fall).seq + [X(qc), MEAS(qt)*MEAS(qc)]
-        for a in self.amps] + create_cal_seqs((qt,qc), 2, measChans=(qt,qc))
+        if self.control_meas:
+            cMEAS = MEAS(qc)
+        else:
+            logger.info("Setting qubit {} measurement amplitude to 0.".format(qc.label))
+            cMEAS = MEAS(qc, amp=0.0)
+        seqs = [[Id(qc)] + self.num_CR*echoCR(qc, qt, length=self.lengths, phase=self.phases, amp=a, riseFall=self.rise_fall).seq + [Id(qc), MEAS(qt)*cMEAS]
+        for a in self.amps]+ [[X(qc)] + self.num_CR*echoCR(qc, qt, length=self.lengths, phase= self.phases, amp=a, riseFall=self.rise_fall).seq + [X(qc), MEAS(qt)*cMEAS]
+        for a in self.amps] + self._cal_seqs(2)
 
         self.axis_descriptor = [
             {

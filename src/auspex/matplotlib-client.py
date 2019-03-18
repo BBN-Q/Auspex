@@ -130,7 +130,7 @@ class MplCanvas(FigureCanvas):
 class Canvas1D(MplCanvas):
     def compute_initial_figure(self):
         for ax in self.axes:
-            plt, = ax.plot([0,0,0])
+            plt, = ax.plot([0,0,0], marker='o', markersize=4)
             ax.ticklabel_format(style='sci', axis='x', scilimits=(-3,3))
             ax.ticklabel_format(style='sci', axis='y', scilimits=(-3,3))
             self.plots.append(plt)

@@ -35,6 +35,7 @@ from auspex.stream import OutputConnector, DataStreamDescriptor, DataAxis
 from auspex.experiment import FloatParameter, IntParameter
 from auspex.instruments.X6 import X6Channel
 from auspex.instruments.alazar import AlazarChannel
+from auspex.instruments.dummydig import DummydigChannel
 from auspex.mixer_calibration import MixerCalibrationExperiment, find_null_offset
 
 def correct_resource_name(resource_name):
@@ -110,13 +111,19 @@ class QubitExperiment(Experiment):
         self.add_sweep(param, range(num_averages))
 
     def shutdown_instruments(self):
-        # remove socket readers
+        # remove socket readers, stop AWGS and turn off microwave sources
+
+        # turn off microwave sources
+        super(QubitExperiment,self).shutdown_instruments()
+
         if self.cw_mode:
             for awg in self.awgs:
                 awg.stop()
+
         for chan, dig in self.chan_to_dig.items():
             socket = dig.get_socket(chan)
             self.loop.remove_reader(socket)
+
         for name, instr in self._instruments.items():
             instr.disconnect()
 
@@ -188,7 +195,6 @@ class QubitExpFactory(object):
         experiment.save_data       = save_data
         experiment.name            = expname
         experiment.cw_mode         = cw_mode
-        experiment.calibration     = calibration
         experiment.repeats         = repeats
 
         if meta_file:
@@ -310,14 +316,21 @@ class QubitExpFactory(object):
 
         sweep_offset(cals[second_cal], cal_pts[second_cal])
         amps2 = np.array([x[1] for x in buff.get_data()])
-        offset2, xpts, ypts = find_null_offset(cal_pts[second_cal][1:], amps2[1:], default=cal_defaults[second_cal])
+        try:
+            offset2, xpts, ypts = find_null_offset(cal_pts[second_cal][1:], amps2[1:], default=cal_defaults[second_cal])
+        except:
+            mce.extra_plot_server.stop()
+            return
         plt2[cals[second_cal]] = (cal_pts[second_cal], amps2)
         plt2["Fit "+cals[second_cal]] = (xpts, ypts)
         logger.info("Found {} of {}.".format(str.replace(cals[first_cal], '_', ' '), offset2))
         getattr(mce, cals[second_cal]).value = offset2
 
         mce.disconnect_instruments()
-        mce.extra_plot_server.stop()
+        try:
+            mce.extra_plot_server.stop()
+        except:
+            logger.info('Mixer plot server was not successfully stopped.')
 
         if write_to_file:
             mce.write_to_file()
@@ -381,8 +394,12 @@ class QubitExpFactory(object):
             if len(receivers) > 1:
                 raise NotImplementedError("Single shot fidelity for more than one qubit is not yet implemented.")
             stream_sel_name_orig = receivers[0][0].replace('RecvChan-', '')
-            X6_stream_selectors = [k for k,v in filters.items() if v["type"] == 'X6StreamSelector' and v["source"] == filters[stream_sel_name_orig]['source'] and v['channel'] == filters[stream_sel_name_orig]['channel']]
-            for s in X6_stream_selectors:
+
+            stream_selectors = [k for k,v in filters.items() if "AlazarStreamSelector" in v["type"] and v["source"] == filters[stream_sel_name_orig]['source']]
+            stream_selectors += [k for k,v in filters.items() if v["type"] == 'X6StreamSelector' and v["source"] == filters[stream_sel_name_orig]['source']\
+             and v['channel'] == filters[stream_sel_name_orig]['channel'] and np.mod(v["dsp_channel"]-1,5)+1 == np.mod(filters[stream_sel_name_orig]["dsp_channel"]-1,5)+1]
+
+            for s in stream_selectors:
                 if filters[s]['stream_type'] == experiment.ss_stream_type:
                     filters[s]['enabled'] = True
                     stream_sel_name = s
@@ -416,10 +433,10 @@ class QubitExpFactory(object):
 
             # Find the enabled X6 stream selectors with the same channel as the receiver. Allow to plot/save raw/demod/int streams belonging to the same receiver
             if calibration:
-                X6_stream_selectors = []
+                stream_selectors = []
             else:
-                X6_stream_selectors = [k for k,v in filters.items() if (v["type"] == 'X6StreamSelector' and v["source"] == filters[stream_sel_name]['source'] and v["enabled"] == True and v["channel"] == filters[stream_sel_name]["channel"] and v["dsp_channel"] == filters[stream_sel_name]["dsp_channel"])]
-
+                stream_selectors = [k for k,v in filters.items() if ("AlazarStreamSelector" in v["type"]) and (v["source"] == filters[stream_sel_name_orig]['source'])]
+                stream_selectors += [k for k,v in filters.items() if (v["type"] == 'X6StreamSelector' and v["source"] == filters[stream_sel_name]['source'] and v["enabled"] == True and v["channel"] == filters[stream_sel_name]["channel"] and (np.mod(v["dsp_channel"]-1,5)+1 == np.mod(filters[stream_sel_name_orig]["dsp_channel"]-1,5)+1 or v["dsp_channel"]>5))]
             # Enable the tree for single-shot fidelity experiment. Change stream_sel_name to raw (by default)
             writers = []
             plotters = []
@@ -430,7 +447,9 @@ class QubitExpFactory(object):
                 source_type = filters[filters[endpoint_name]['source'].split(' ')[0]]['type']
                 return filters[endpoint_name]['type'] == endpoint_type and (not hasattr(filters[endpoint_name], 'enabled') or filters[endpoint_name]['enabled']) and not (calibration and source_type == 'Correlator') and (not source_type == 'SingleShotMeasurement' or experiment.__class__.__name__ == 'SingleShotFidelityExperiment')
             for filt_name, filt in filters.items():
-                if filt_name in [stream_sel_name] + X6_stream_selectors:
+                if filt['enabled'] == False:
+                    continue
+                if filt_name in [stream_sel_name] + stream_selectors:
                     # Find descendants of the channel selector
                     chan_descendants = nx.descendants(dag, filt_name)
                     # Find endpoints within the descendants
@@ -440,7 +459,7 @@ class QubitExpFactory(object):
                     plotters += [e for e in endpoints if check_endpoint(e, "Plotter")]
                     buffers += [e for e in endpoints if check_endpoint(e, "DataBuffer")]
                     singleshot += [e for e in endpoints if check_endpoint(e, "SingleShotMeasurement") and experiment.__class__.__name__ == "SingleShotFidelityExperiment"]
-            filt_to_enable.update(set().union(writers, plotters, singleshot, buffers))
+            filt_to_enable.update(set().union(writers, plotters, singleshot, buffers, stream_selectors))
             if calibration:
                 # For calibrations the user should only have one writer enabled, otherwise we will be confused.
                 if len(writers) > 1:
@@ -483,20 +502,17 @@ class QubitExpFactory(object):
             singleshot_ancestors = []
             buffer_ancestors = []
             # Trace back our ancestors, using plotters if no writers are available
-            if len(writers) == 1:
-                writer_ancestors = nx.ancestors(dag, writers[0])
-                # We will have gotten the digitizer, which should be removed since we're already taking care of it
-                writer_ancestors.remove(dig_name)
+            if writers:
+                writer_ancestors = set().union(*[nx.ancestors(dag, wr) for wr in writers])
             if plotters:
                 plotter_ancestors = set().union(*[nx.ancestors(dag, pl) for pl in plotters])
-                plotter_ancestors.remove(dig_name)
             if singleshot:
                 singleshot_ancestors = set().union(*[nx.ancestors(dag, ss) for ss in singleshot])
-                singleshot_ancestors.remove(dig_name)
             if buffers:
                 buffer_ancestors = set().union(*[nx.ancestors(dag, bf) for bf in buffers])
-                buffer_ancestors.remove(dig_name)
             filt_to_enable.update(set().union(writer_ancestors, plotter_ancestors, singleshot_ancestors, buffer_ancestors))
+            # remove all the digitizers, which are already taken care of
+            filt_to_enable.difference_update([f for f in filt_to_enable if dag.in_degree()[f] == 0])
 
         if calibration:
             # One to one writers to qubits
@@ -654,7 +670,9 @@ class QubitExpFactory(object):
         else:
             sweeps = experiment.settings['sweeps']
             order = experiment.settings['sweepOrder']
-        qubits = experiment.settings['qubits']
+        channels = experiment.settings['qubits']
+        if 'edges' in experiment.settings:
+            channels.update(experiment.settings['edges'])
 
         for name in order:
             par = sweeps[name]
@@ -677,23 +695,28 @@ class QubitExpFactory(object):
 
                 # Figure our what we are sweeping
                 target_info = par["target"].split()
-                if target_info[0] in experiment.qubits:
+                if target_info[0] in channels:
                     # We are sweeping a qubit, so we must lookup the instrument
                     target = par["target"].split()
-                    name, meas_or_control, prop = target[:3]
-                    if len(target) > 3:
-                        ch_ind = target[3]
-                    qubit = qubits[name]
+                    if target_info[0] in experiment.qubits:
+                        name, meas_or_control, prop = target[:3]
+                        isqubit = True
+                    else:
+                        name, prop = target[:2]
+                        isqubit = False
+                    if len(target) > 2 + isqubit:
+                        ch_ind = target[2 + isqubit]
+                    channel_params = channels[name][meas_or_control] if isqubit else channels[name]
                     method_name = "set_{}".format(prop.lower())
 
                     # If sweeping frequency, we should allow for either mixed up signals or direct synthesis.
                     # Sweeping amplitude is always through the AWG channels.
-                    if 'generator' in qubit[meas_or_control] and prop.lower() == "frequency":
-                        name = qubit[meas_or_control]['generator']
+                    if 'generator' in channel_params and prop.lower() == "frequency":
+                        name = channel_params['generator']
                         instr = experiment._instruments[name]
                     else:
                         # Construct a function that sets a per-channel property
-                        name, chan = qubit[meas_or_control]['AWG'].split()
+                        name, chan = channel_params['AWG'].split()
                         if len(target) > 3:
                             chan = chan[int(ch_ind)-1]
                         instr = experiment._instruments[name]
@@ -809,9 +832,21 @@ class QubitExpFactory(object):
                     descrip.add_axis(DataAxis("segments", range(source_instr_settings['nbr_segments'])))
 
             # Digitizer mode preserves round_robins, averager mode collapsing along them:
-            if 'acquire_mode' not in source_instr_settings.keys() or source_instr_settings['acquire_mode'] == 'digitizer':
+            acq_mode_instr = 'digitizer'
+            acq_mode_chan = 'digitizer'
+            if 'acquire_mode' in source_instr_settings.keys():
+                acq_mode_instr = source_instr_settings['acquire_mode']
+            if settings['channel'] in source_instr_settings['rx_channels'].keys():
+                chan_settings = source_instr_settings['rx_channels'][settings['channel']]
+                if 'acquire_mode' in chan_settings.keys():
+                    acq_mode_chan = chan_settings['acquire_mode']
+
+            if acq_mode_instr == 'digitizer' and acq_mode_chan == 'digitizer':
                 if source_instr_settings['nbr_round_robins'] > 1:
                     descrip.add_axis(DataAxis("round_robins", range(source_instr_settings['nbr_round_robins'])))
+            elif acq_mode_instr == 'averager' or acq_mode_chan == 'averager':
+                descrip.add_axis(DataAxis("round_robins", range(1)))
+                logger.warning("'%s' HW averaging enabled, added singleton axis", name)
 
             oc.set_descriptor(descrip)
 

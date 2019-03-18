@@ -5,7 +5,7 @@ BBNAPS1:
   address: 192.168.5.20
   seq_file: thing.h5
   trigger_interval: 5.0e-06
-  trigger-source: Internal
+  trigger_source: Internal
   delay: 0.0
   tx_channels:
     '12':
@@ -35,7 +35,68 @@ BBNAPS2:
   address: 192.168.5.21
   seq_file: thing2.h5
   trigger_interval: 5.0e-06
-  trigger-source: External
+  trigger_source: External
+  delay: 0.0
+  tx_channels:
+    '12':
+      phase_skew: 10
+      amp_factor: 0.898
+      '1':
+        enabled: true
+        offset: 0.1
+        amplitude: 0.9
+      '2':
+        enabled: true
+        offset: 0.02
+        amplitude: 0.8
+  markers:
+    12m1:
+      delay: -5.0e-08
+    12m2:
+      delay: 0.0
+    12m3:
+      delay: 0.0
+    12m4:
+      delay: 0.0
+
+BBNAPS3:
+  type: APS2
+  master: false
+  slave_trig: 12m4
+  address: 192.168.5.22
+  seq_file: thing.h5
+  trigger_interval: 5.0e-06
+  trigger_source: Internal
+  delay: 0.0
+  tx_channels:
+    '12':
+      phase_skew: -11.73
+      amp_factor: 0.898
+      '1':
+        enabled: true
+        offset: 0.1
+        amplitude: 0.9
+      '2':
+        enabled: true
+        offset: 0.02
+        amplitude: 0.8
+  markers:
+    12m1:
+      delay: -5.0e-08
+    12m2:
+      delay: 0.0
+    12m3:
+      delay: 0.0
+    12m4:
+      delay: 0.0
+
+BBNAPS4:
+  type: APS2
+  master: false
+  address: 192.168.5.23
+  seq_file: thing2.h5
+  trigger_interval: 5.0e-06
+  trigger_source: External
   delay: 0.0
   tx_channels:
     '12':
@@ -64,6 +125,7 @@ X6-1:
   address: 0
   acquire_mode: digitizer
   gen_fake_data: true
+  ideal_data: cal_fake_data
   reference: external
   record_length: 1024
   nbr_segments: 1

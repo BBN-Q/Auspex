@@ -8,12 +8,42 @@
 
 __all__ = ['Filter']
 
+# Following were used to isolate import related console warnings;
+# Mark false or remove when no-longer relevant -- TJR, 02 Nov 2018
+_bEchoImportRefs = False # True
+if _bEchoImportRefs:
+    print ("\n\r#----- FILT: Pre import asyncio")
+    #
 import asyncio
+
+if _bEchoImportRefs:
+    print ("\n\r#----- FILT: Pre import zlib")
+    #
 import zlib
+
+if _bEchoImportRefs:
+    print ("\n\r#----- FILT: Pre import pickle")
+    #
 import pickle
+
+if _bEchoImportRefs:
+    print ("\n\r#----- FILT: Pre import copy")
+    #
 import copy
+# copy uses pickle; import, above cites a deprecation warning about using
+# importlib; web traffic suggests this was fixed in a subsequent ?picklecloud?
+# release -- perhaps bbnqconda refinement can dial this noise out
+
 import numpy as np
 from concurrent.futures import FIRST_COMPLETED
+
+# ----- 32 Oct 2018 -- Added config import for ST-15 delta support
+# config mods include optional parameters to help constrain import prompted
+# MetaClass introspection.  This, in-turn, can help reduce irrelvant
+# boot-up warnings (such as the "Channelizer" warnings).
+#
+from auspex import config
+
 
 from auspex.parameter import Parameter
 from auspex.stream import DataStream, InputConnector, OutputConnector
@@ -23,6 +53,35 @@ class MetaFilter(type):
     """Meta class to bake the input/output connectors into a Filter class description
     """
     def __init__(self, name, bases, dct):
+
+        # ----- 25 Oct 2018 -- ST-15 delta start...
+        # defined as the Instrument metaclass, this logic
+        # fires upon module load (prompted by mearly an unused import statement)
+        # regardless of use; moreover, it iterates thru ALL Instrument sub-class
+        # definitions.  Thus prompts the holzworth module warnings even where
+        # such a specific reference is NOT in use -- TJR
+        # (deeper still the HW warning occurs due to in essence a static block
+        # load where the class gets validated thru this process).
+        #
+        # 30 Oct -- generalized such logic as config.skipMetaInit function.
+        #
+        # 31 Oct -- Embelished such that where tgtInstrumentClass defined,
+        # this function limits the meta class stub instantiation to only those
+        # cited;  where tgtInstrumentClass NOT defined -- all logic fires as
+        # before (with no boot-up behavior changes produced)
+        #
+        if config.skipMetaInit( name, bases, dct,
+                                acceptClassRefz = config.tgtFilterClass,
+                                bEchoDetails    = config.bEchoInstrumentMetaInit,
+                                szLogLabel      = "MetaF"):
+            #
+            return None
+        # else continue __init__ logic as normal
+        # (No behavior changes)
+
+        # ----- 25 Oct 2018 -- ST-15 delta stop.
+
+
         type.__init__(self, name, bases, dct)
         logger.debug("Adding connectors to %s", name)
         self._input_connectors  = []
