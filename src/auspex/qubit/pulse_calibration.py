@@ -247,29 +247,27 @@ class CalibrationExperiment(QubitExperiment):
             if isinstance(output_node, bbndb.auspex.Write):
                 # Change the output node to a buffer
                 mapping[output_node] = bbndb.auspex.Buffer(label=output_node.label, qubit_name=output_node.qubit_name)
-                self.output_nodes[i] = mapping[output_node]
-                # self.output_nodes[i] = bbndb.auspex.Buffer(label=output_node.label, qubit_name=output_node.qubit_name)
-                # mapping[output_node.node_label()] = self.output_nodes[i].node_label()
-            # if not isinstance(self.output_nodes[i], bbndb.auspex.Buffer):
-            #     raise ValueError(f"Specified output {self.output_nodes[i]} node is not a buffer or could not be converted to a buffer")
-            # graph.nodes[output_node.node_label()]['node_obj'] = self.output_nodes[i] # update values
-        # nx.relabel_nodes(graph, mapping, copy=False)
 
         # Disable any paths not involving the buffer
         new_graph = nx.DiGraph()
+        new_output_nodes = []
         for output_node, qubit in zip(self.output_nodes, self.qubits):
-            old_path  = nx.shortest_path(graph, str(self.qubit_proxies[qubit.label]), output_node.node_label())
-            # new_graph = nx.compose(new_graph, graph.subgraph(path))
-            path      = old_path[:-1] + [mapping[output_node].node_label()]
+            new_output = mapping[output_node]
+            new_output_nodes.append(new_output)
+
+            old_path  = nx.shortest_path(graph, self.qubit_proxies[qubit.label].node_label(), output_node.node_label())
+            path      = old_path[:-1] + [new_output.node_label()]
             new_graph.add_path(path)
-            new_graph.nodes[path[-1].node_label()]['node_obj'] = mapping[output_node]
+            for n in old_path[:-1]:
+                new_graph.nodes[n]['node_obj'] = graph.nodes[n]['node_obj']
+            new_graph.nodes[new_output.node_label()]['node_obj'] = mapping[output_node]
 
             # Fix connectors
             for i in range(len(path)-1):
-                new_graph[path[i]][path[i+1]]['connector_in']  = graph[path[i]][path[i+1]]['connector_in']
-                new_graph[path[i]][path[i+1]]['connector_out'] = graph[path[i]][path[i+1]]['connector_out']
+                new_graph[path[i]][path[i+1]]['connector_in']  = graph[old_path[i]][old_path[i+1]]['connector_in']
+                new_graph[path[i]][path[i+1]]['connector_out'] = graph[old_path[i]][old_path[i+1]]['connector_out']
 
-            if not isinstance(new_graph.nodes(True)[path[-2]]['node_obj'], bbndb.auspex.Average):
+            if not isinstance(new_graph.nodes(data=True)[path[-2]]['node_obj'], bbndb.auspex.Average):
                 raise Exception("There is no averager in line.")
             else:
                 vb = bbndb.auspex.Buffer(label=f"{output_node.label}-VarBuffer", qubit_name=output_node.qubit_name)
@@ -282,6 +280,7 @@ class CalibrationExperiment(QubitExperiment):
                 plot_path = nx.shortest_path(graph, path[-2], plot_node)
                 new_graph = nx.compose(new_graph, graph.subgraph(plot_path))
 
+        self.output_nodes = new_output_nodes
         return new_graph
 
     def add_cal_sweep(self, method, values):
