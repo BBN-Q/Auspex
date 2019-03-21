@@ -1,4 +1,28 @@
+from auspex.data_format import AuspexDataContainer
+import datetime
+import os, re
+from os import path
 import numpy as np
+
+def open_data(num, folder, groupname, datasetname="data", date=datetime.date.today().strftime('%y%m%d')):
+    
+    if date is not None:
+        folder = path.join(folder, date)
+    assert path.isdir(folder), f"Could not find data folder: {folder}"
+
+    p = re.compile(r".+-(\d+).auspex")
+    files = [x.name for x in os.scandir(folder) if x.is_dir()]
+    data_file = [x for x in files if p.match(x) and int(p.match(x).groups()[0]) == num]
+
+    if len(data_file) == 0:
+        raise ValueError("Could not find file!")
+    elif len(data_file) > 1:
+        raise ValueError(f"Ambiguous file information: found {data_file}")
+
+    data_container = AuspexDataContainer(path.join(folder, data_file[0]))
+    return data_container.open_dataset(groupname, datasetname)
+
+
 def normalize_data(data, zero_id = 0, one_id = 1):
     metadata_str = [f for f in data.dtype.fields.keys() if 'metadata' in f]
     if len(metadata_str)!=1:
