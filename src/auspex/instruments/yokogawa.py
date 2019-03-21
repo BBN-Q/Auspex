@@ -10,6 +10,7 @@ __all__ = ['YokogawaGS200']
 
 from auspex.log import logger
 from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand, RampCommand
+import usbtmc
 
 class YokogawaGS200(SCPIInstrument):
     """YokogawaGS200 Current source"""
@@ -31,6 +32,9 @@ class YokogawaGS200(SCPIInstrument):
         super(YokogawaGS200, self).__init__(resource_name, *args, **kwargs)
 
     def connect(self):
-        super(YokogawaGS200, self).connect(resource_name=self.resource_name)
-        self.interface.write(":sense:trigger immediate")
-        self.interface._resource.read_termination = "\n"
+        self.interface = usbtmc.Instrument(self.resource_name)
+        self.interface.query = self.interface.ask
+        try:  # connection always fails the first time...
+            self.interface.write(":sense:trigger immediate")
+        except:
+            self.interface.write(":sense:trigger immediate")

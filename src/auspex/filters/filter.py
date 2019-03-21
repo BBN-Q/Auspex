@@ -8,86 +8,41 @@
 
 __all__ = ['Filter']
 
-# Following were used to isolate import related console warnings;
-# Mark false or remove when no-longer relevant -- TJR, 02 Nov 2018
-_bEchoImportRefs = False # True
-if _bEchoImportRefs:
-    print ("\n\r#----- FILT: Pre import asyncio")
-    #
-import asyncio
+import os
+import sys
+import psutil
 
-if _bEchoImportRefs:
-    print ("\n\r#----- FILT: Pre import zlib")
-    #
-import zlib
+if sys.platform == 'win32' or 'NOFORKING' in os.environ:
+    from threading import Thread as Process
+    from threading import Event
+    from queue import Queue
+else:
+    from multiprocessing import Process
+    from multiprocessing import Event
+    from multiprocessing import Queue
 
-if _bEchoImportRefs:
-    print ("\n\r#----- FILT: Pre import pickle")
-    #
-import pickle
-
-if _bEchoImportRefs:
-    print ("\n\r#----- FILT: Pre import copy")
-    #
+import cProfile
+import itertools
+import time, datetime
+import queue
 import copy
-# copy uses pickle; import, above cites a deprecation warning about using
-# importlib; web traffic suggests this was fixed in a subsequent ?picklecloud?
-# release -- perhaps bbnqconda refinement can dial this noise out
-
 import numpy as np
-from concurrent.futures import FIRST_COMPLETED
-
-# ----- 32 Oct 2018 -- Added config import for ST-15 delta support
-# config mods include optional parameters to help constrain import prompted
-# MetaClass introspection.  This, in-turn, can help reduce irrelvant
-# boot-up warnings (such as the "Channelizer" warnings).
-#
-from auspex import config
-
 
 from auspex.parameter import Parameter
 from auspex.stream import DataStream, InputConnector, OutputConnector
 from auspex.log import logger
+import auspex.config
 
 class MetaFilter(type):
     """Meta class to bake the input/output connectors into a Filter class description
     """
     def __init__(self, name, bases, dct):
-
-        # ----- 25 Oct 2018 -- ST-15 delta start...
-        # defined as the Instrument metaclass, this logic
-        # fires upon module load (prompted by mearly an unused import statement)
-        # regardless of use; moreover, it iterates thru ALL Instrument sub-class
-        # definitions.  Thus prompts the holzworth module warnings even where
-        # such a specific reference is NOT in use -- TJR
-        # (deeper still the HW warning occurs due to in essence a static block
-        # load where the class gets validated thru this process).
-        #
-        # 30 Oct -- generalized such logic as config.skipMetaInit function.
-        #
-        # 31 Oct -- Embelished such that where tgtInstrumentClass defined,
-        # this function limits the meta class stub instantiation to only those
-        # cited;  where tgtInstrumentClass NOT defined -- all logic fires as
-        # before (with no boot-up behavior changes produced)
-        #
-        if config.skipMetaInit( name, bases, dct,
-                                acceptClassRefz = config.tgtFilterClass,
-                                bEchoDetails    = config.bEchoInstrumentMetaInit,
-                                szLogLabel      = "MetaF"):
-            #
-            return None
-        # else continue __init__ logic as normal
-        # (No behavior changes)
-
-        # ----- 25 Oct 2018 -- ST-15 delta stop.
-
-
         type.__init__(self, name, bases, dct)
         logger.debug("Adding connectors to %s", name)
         self._input_connectors  = []
         self._output_connectors = []
         self._parameters        = []
-        self.quince_parameters  = []
+
         for k,v in dct.items():
             if isinstance(v, InputConnector):
                 logger.debug("Found '%s' input connector.", k)
@@ -101,21 +56,27 @@ class MetaFilter(type):
                     v.name = k
                 self._parameters.append(v)
 
-class Filter(metaclass=MetaFilter):
+class Filter(Process, metaclass=MetaFilter):
     """Any node on the graph that takes input streams with optional output streams"""
 
     def __init__(self, name=None, **kwargs):
-        self.name = name
+        super(Filter, self).__init__()
+        self.filter_name = name
         self.input_connectors = {}
         self.output_connectors = {}
         self.parameters = {}
-        self.experiment = None # Keep a reference to the parent experiment
+        self.qubit_name = ""
+
+        # Event for killing the filter properly
+        self.exit = Event()
+        self.done = Event()
+
+        # Keep track of data throughput
+        self.processed = 0
 
         # For objectively measuring doneness
-        self.finished_processing = False
-
-        # For signaling to Quince that something is wrong
-        self.out_of_spec = False
+        self.finished_processing = Event()
+        self.finished_processing.clear()
 
         for ic in self._input_connectors:
             a = InputConnector(name=ic, parent=self)
@@ -132,6 +93,28 @@ class Filter(metaclass=MetaFilter):
             a.parent = self
             self.parameters[param.name] = a
             setattr(self, param.name, a)
+
+        # For sending performance information
+        self.last_performance_update = datetime.datetime.now()
+        self.beginning = datetime.datetime.now()
+        self.perf_queue = None
+
+    def __repr__(self):
+        return "<{} Process (name={})>".format(self.__class__.__name__, self.filter_name)
+
+    def configure_with_proxy(self, proxy_obj):
+        """For use with bbndb, sets this filter's properties using a FilterProxy object
+        taken from the filter database."""
+
+        if proxy_obj.label:
+            self.filter_name = proxy_obj.label
+
+        for name, param in self.parameters.items():
+            if hasattr(proxy_obj, name):
+                if getattr(proxy_obj, name): # Not none
+                    param.value = getattr(proxy_obj, name)
+            else:
+                raise ValueError(f"{proxy_obj} was expected to have parameter {name}")
 
     def __repr__(self):
         return "<{}(name={})>".format(self.__class__.__name__, self.name)
@@ -155,69 +138,171 @@ class Filter(metaclass=MetaFilter):
         """Return a dict of the output descriptors."""
         return {'source': v for v in input_descriptors.values()}
 
-    async def on_done(self):
+    def on_done(self):
         """To be run when the done signal is received, in case additional steps are
         needed (such as flushing a plot or data)."""
         pass
 
-    async def run(self):
+    def shutdown(self):
+        self.exit.set()
+
+    def run(self):
+        self.p = psutil.Process(os.getpid())
+        if auspex.config.profile:
+            if not self.filter_name:
+                name = "Unlabeled"
+            else:
+                name = self.filter_name
+            cProfile.runctx('self.main()', globals(), locals(), 'prof-%s-%s.prof' % (self.__class__.__name__, name))
+        else:
+            self.execute_on_run()
+            self.main()
+        logger.debug(f"{self} done")
+        self.done.set()
+
+    def execute_on_run(self):
+        pass
+
+    def push_to_all(self, message):
+        for oc in self.output_connectors.values():
+            for ost in oc.output_streams:
+                ost.queue.put(message)
+
+    def push_resource_usage(self):
+        if self.perf_queue and (datetime.datetime.now() - self.last_performance_update).seconds > 1.0:
+            perf_info = (str(self), datetime.datetime.now()-self.beginning, self.p.cpu_percent(), self.p.memory_info(), self.processed)
+            self.perf_queue.put(perf_info)
+            self.last_performance_update = datetime.datetime.now()
+
+    def main(self):
         """
         Generic run method which waits on a single stream and calls `process_data` on any new_data
         """
-        logger.debug('Running "%s" run loop', self.name)
-        self.finished_processing = False
+        logger.debug('Running "%s" run loop', self.filter_name)
+        # self.finished_processing.clear()
         input_stream = getattr(self, self._input_connectors[0]).input_streams[0]
+        desc = input_stream.descriptor
 
-        while True:
+        stream_done = False
+        stream_points = 0
 
-            message = await input_stream.queue.get()
-            message_type = message['type']
-            message_data = message['data']
-            message_comp = message['compression']
+        while not self.exit.is_set():# and not self.finished_processing.is_set():
+            # Try to pull all messages in the queue. queue.empty() is not reliable, so we
+            # ask for forgiveness rather than permission.
+            messages = []
 
-            if message_comp == 'zlib':
-                message_data = pickle.loads(zlib.decompress(message_data))
-            # If we receive a message
-            if message['type'] == 'event':
-                logger.debug('%s "%s" received event "%s"', self.__class__.__name__, self.name, message_data)
-
-                # Propagate along the graph
-                for oc in self.output_connectors.values():
-                    for os in oc.output_streams:
-                        logger.debug('%s "%s" pushed event "%s" to %s, %s', self.__class__.__name__, self.name, message_data, oc, os)
-                        await os.queue.put(message)
-
-                # Check to see if we're done
-                if message['event_type'] == 'done':
-                    if not self.finished_processing:
-                        logger.warning("Filter {} being asked to finish before being done processing.".format(self.name))
-                    await self.on_done()
+            while not self.exit.is_set():
+                try:
+                    messages.append(input_stream.queue.get(False))
+                except queue.Empty as e:
+                    time.sleep(0.002)
                     break
-                elif message['event_type'] == 'refined':
-                    await self.refine(message_data)
 
-            elif message['type'] == 'data':
-                if not hasattr(message_data, 'size'):
-                    message_data = np.array([message_data])
-                logger.debug('%s "%s" received %d points.', self.__class__.__name__, self.name, message_data.size)
-                logger.debug("Now has %d of %d points.", input_stream.points_taken, input_stream.num_points())
-                await self.process_data(message_data.flatten())
+            self.push_resource_usage()
 
-            elif message['type'] == 'data_direct':
-                await self.process_direct(message_data)
+            for message in messages:
+                message_type = message['type']
+                message_data = message['data']
 
-            # If we have gotten all our data and process_data has returned, then we are done!
-            if all([v.done() for v in self.input_connectors.values()]):
-                self.finished_processing = True
+                if message['type'] == 'event':
+                    logger.debug('%s "%s" received event "%s"', self.__class__.__name__, self.filter_name, message_data)
 
-    async def process_data(self, data):
+                    # Propagate along the graph
+                    self.push_to_all(message)
+
+                    # Check to see if we're done
+                    if message['event_type'] == 'done':
+                        logger.debug(f"{self} received done message!")
+                        stream_done = True
+                    elif message['event_type'] == 'refined':
+                        self.refine(message_data)
+                        continue
+                    elif message['event_type'] == 'new_tuples':
+                        self.process_new_tuples(input_stream.descriptor, message_data)
+                        # break
+
+                elif message['type'] == 'data':
+                    if not hasattr(message_data, 'size'):
+                        message_data = np.array([message_data])
+                    logger.debug('%s "%s" received %d points.', self.__class__.__name__, self.filter_name, message_data.size)
+                    logger.debug("Now has %d of %d points.", input_stream.points_taken.value, input_stream.num_points())
+                    stream_points += len(message_data.flatten())
+                    self.process_data(message_data.flatten())
+                    self.processed += message_data.nbytes
+
+                elif message['type'] == 'data_direct':
+                    self.processed += message_data.nbytes
+                    self.process_direct(message_data)
+
+                # if stream_points == input_stream.num_points():
+                #     self.finished_processing.set()
+                #     break
+
+            if stream_done:
+                # outputs = self.output_connectors.values()
+
+                # if outputs:
+                #     output_status = [v.done() for v in outputs]
+                #     print('x dones: %s' % str(output_status))
+
+                #     if not np.all(output_status):
+                #         print('------------------->>>>>>>>> NOT ALL DONE YET')
+
+                self.done.set()
+                break
+            # if desc.is_adaptive():
+            #     if stream_done and np.all([len(desc.visited_tuples) == points_taken[s] for s in streams]):
+            #         # self.finished_processing.set()
+            #         break
+            # else:
+            #     if stream_done and np.all([v.done() for v in self.input_connectors.values()]):
+            #         self.finished_processing.set()
+            #         break
+
+        # When we've finished, either prematurely or as expected
+        # print(self.filter_name, "leaving main loop")
+        self.on_done()
+
+    def process_data(self, data):
         """Process data coming through the filter pipeline"""
         pass
 
-    async def process_direct(self, data):
+    def process_direct(self, data):
         """Process direct data, ignore things like the data descriptors."""
         pass
 
-    async def refine(self, axis):
+    def process_new_tuples(self, descriptor, message_data):
+        axis_names, sweep_values = message_data
+        # All the axis names for this connector
+        ic_axis_names = [ax.name for ax in descriptor.axes]
+        # The sweep values from sweep axes that are present (axes may have been dropped)
+        sweep_values = [sv for an, sv in zip(axis_names, sweep_values) if an in ic_axis_names]
+        vals = [a for a in descriptor.data_axis_values()]
+        if sweep_values:
+            vals  = [[v] for v in sweep_values] + vals
+
+        # Create the outer product of axes
+        nested_list    = list(itertools.product(*vals))
+        flattened_list = [tuple((val for sublist in line for val in sublist)) for line in nested_list]
+        descriptor.visited_tuples = descriptor.visited_tuples + flattened_list
+
+        for oc in self.output_connectors.values():
+            oc.push_event("new_tuples", message_data)
+
+        return len(flattened_list)
+
+    def refine(self, refine_data):
         """Try to deal with a refinement along the given axes."""
-        pass
+        axis_name, reset_axis, points = refine_data
+
+        for ic in self.input_connectors.values():
+            for desc in [ic.descriptor] + [s.descriptor for s in ic.input_streams]:
+                for ax in desc.axes:
+                    if ax.name == axis_name:
+                        if reset_axis:
+                            ax.points = points
+                        else:
+                            ax.points = np.append(ax.points, points)
+
+        for oc in self.output_connectors.values():
+            oc.push_event("refined", refine_data)

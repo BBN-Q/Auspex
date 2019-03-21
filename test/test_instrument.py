@@ -8,37 +8,8 @@
 
 import unittest
 
-_bNO_METACLASS_INTROSPECTION_CONSTRAINTS = True  # Use original dummy flag logic
-#_bNO_METACLASS_INTROSPECTION_CONSTRAINTS = False # Enable instrument and filter introspection constraints
-
-if _bNO_METACLASS_INTROSPECTION_CONSTRAINTS:
-    #
-    # The original unittest quieting logic
-	import auspex.config as config
-	config.auspex_dummy_mode = True
-    #
-else:
-	# ----- fix/unitTests_1 (ST-15) delta Start...
-	# Added the followiing 05 Nov 2018 to test Instrument and filter metaclass load
-	# introspection minimization (during import)
-	#
-	from auspex import config
-
-	# Filter out Holzworth warning noise noise by citing the specific instrument[s]
-	# used for this test.
-	config.tgtInstrumentClass       = "TestInstrument"
-
-	# Filter out Channerlizer noise by citing the specific filters used for this
-	# test.
-	# ...Actually Print, Channelizer, and KernelIntegrator are NOT used in this test;
-	# hence commented them out, below, as well.
-	config.tgtFilterClass           = "" # No Filters
-
-	# Uncomment to the following to show the Instrument MetaClass __init__ arguments
-	# config.bEchoInstrumentMetaInit  = True
-	#
-	# ----- fix/unitTests_1 (ST-15) delta Stop.
-
+import auspex.config as config
+config.auspex_dummy_mode = True
 
 from auspex.instruments.instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand
 

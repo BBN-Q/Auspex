@@ -7,41 +7,12 @@
 #    http://www.apache.org/licenses/LICENSE-2.0
 
 import unittest
-import asyncio
+import time
 import os
 import numpy as np
-import h5py
 
-_bNO_METACLASS_INTROSPECTION_CONSTRAINTS = True  # Use original dummy flag logic
-#_bNO_METACLASS_INTROSPECTION_CONSTRAINTS = False # Enable instrument and filter introspection constraints
-
-if _bNO_METACLASS_INTROSPECTION_CONSTRAINTS:
-    #
-    # The original unittest quieting logic
-    import auspex.config as config
-    config.auspex_dummy_mode = True
-    #
-else:
-    # ----- fix/unitTests_1 (ST-15) delta Start...
-    # Added the followiing 05 Nov 2018 to test Instrument and filter metaclass load
-    # introspection minimization (during import)
-    #
-    from auspex import config
-
-    # Filter out Holzworth warning noise noise by citing the specific instrument[s]
-    # used for this test.
-    config.tgtInstrumentClass       = "" # No Instruments
-
-    # Filter out Channerlizer noise by citing the specific filters used for this
-    # test.
-    # ...Actually Print, Channelizer, and KernelIntegrator are NOT used in this test;
-    # hence commented them out, below, as well.
-    config.tgtFilterClass           = {"Print", "DataBuffer"}
-
-    # Uncomment to the following to show the Instrument MetaClass __init__ arguments
-    # config.bEchoInstrumentMetaInit  = True
-    #
-    # ----- fix/unitTests_1 (ST-15) delta Stop.
+import auspex.config as config
+config.auspex_dummy_mode = True
 
 from auspex.experiment import Experiment
 from auspex.parameter import FloatParameter
@@ -79,14 +50,14 @@ class SweptTestExperiment(Experiment):
     def __repr__(self):
         return "<SweptTestExperiment>"
 
-    async def run(self):
+    def run(self):
         logger.debug("Data taker running (inner loop)")
         time_step = 0.1
-        await asyncio.sleep(0.002)
+        time.sleep(0.002)
         data_row = np.sin(2*np.pi*self.time_val)*np.ones(5) + 0.1*np.random.random(5)
         self.time_val += time_step
-        await self.voltage.push(data_row)
-        await self.current.push(data_row*2.0)
+        self.voltage.push(data_row)
+        self.current.push(data_row*2.0)
         logger.debug("Stream pushed points {}.".format(data_row))
         logger.debug("Stream has filled {} of {} points".format(self.voltage.points_taken, self.voltage.num_points() ))
 
@@ -118,14 +89,14 @@ class SweptTestExperimentMetadata(Experiment):
     def __repr__(self):
         return "<SweptTestExperimentMetadata>"
 
-    async def run(self):
+    def run(self):
         logger.debug("Data taker running (inner loop)")
         time_step = 0.1
-        await asyncio.sleep(0.002)
+        time.sleep(0.002)
         data_row = np.sin(2*np.pi*self.time_val)*np.ones(5) + 0.1*np.random.random(5)
         self.time_val += time_step
-        await self.voltage.push(data_row)
-        await self.current.push(np.sin(2*np.pi*self.time_val) + 0.1*np.random.random(1))
+        self.voltage.push(data_row)
+        self.current.push(np.sin(2*np.pi*self.time_val) + 0.1*np.random.random(1))
         logger.debug("Stream pushed points {}.".format(data_row))
         logger.debug("Stream has filled {} of {} points".format(self.voltage.points_taken, self.voltage.num_points() ))
 
@@ -133,6 +104,7 @@ class BufferTestCase(unittest.TestCase):
 
     def test_buffer(self):
         exp = SweptTestExperiment()
+
         db  = DataBuffer()
 
         edges = [(exp.voltage, db.sink)]
@@ -142,26 +114,9 @@ class BufferTestCase(unittest.TestCase):
         exp.add_sweep(exp.freq, np.linspace(0,10.0,3))
         exp.run_sweeps()
 
-        data = db.get_data()
-        self.assertTrue(len(data) == 4*3*5)
-        self.assertTrue(len(data['field']) == 4*3*5)
-
-    def test_buffer_multi(self):
-        exp = SweptTestExperiment()
-        db  = DataBuffer()
-
-        edges = [(exp.voltage, db.sink), (exp.current, db.sink)]
-        exp.set_graph(edges)
-
-        exp.add_sweep(exp.field, np.linspace(0,100.0,4))
-        exp.add_sweep(exp.freq, np.linspace(0,10.0,3))
-        exp.run_sweeps()
-
-        data = db.get_data()
-        self.assertTrue(len(data) == 4*3*5)
-        self.assertTrue(len(data['current']) == 4*3*5)
-        self.assertTrue(len(data['voltage']) == 4*3*5)
-        self.assertTrue(len(data['field']) == 4*3*5)
+        data, desc = db.get_data()
+        self.assertTrue(data.shape == (3, 4, 5))
+        self.assertTrue(np.all(desc['field'] == np.linspace(0,100.0,4)))
 
     def test_buffer_metadata(self):
         exp = SweptTestExperimentMetadata()
@@ -174,9 +129,11 @@ class BufferTestCase(unittest.TestCase):
         exp.add_sweep(exp.freq, np.linspace(0,10.0,3))
         exp.run_sweeps()
 
-        data = db.get_data()
-        self.assertTrue(len(data) == 4*3*5)
-        self.assertTrue(len(data['samples_metadata']) == 4*3*5)
+        data, desc = db.get_data()
+
+        self.assertTrue(data.shape == (3, 4, 5))
+        self.assertTrue(np.all(desc['field'] == np.linspace(0,100.0,4)))
+        self.assertTrue(np.all(desc.axis('samples').metadata == ["data", "data", "data", "0", "1"]))
 
 if __name__ == '__main__':
     unittest.main()

@@ -19,14 +19,14 @@ import auspex.config as config
 
 class KernelIntegrator(Filter):
 
-    sink   = InputConnector()
-    source = OutputConnector()
-    kernel = Parameter()
-    bias   = FloatParameter(default=0.0)
-    simple_kernel = BoolParameter(default=True)
-    box_car_start = FloatParameter(default=0.0)
-    box_car_stop = FloatParameter(default=100e-9)
-    frequency = FloatParameter(default=0.0)
+    sink            = InputConnector()
+    source          = OutputConnector()
+    kernel          = Parameter()
+    bias            = FloatParameter(default=0.0)
+    simple_kernel   = BoolParameter(default=True)
+    box_car_start   = FloatParameter(default=0.0)
+    box_car_stop    = FloatParameter(default=100e-9)
+    demod_frequency = FloatParameter(default=0.0)
 
     """Integrate with a given kernel. Kernel will be padded/truncated to match record length"""
     def __init__(self, **kwargs):
@@ -40,13 +40,13 @@ class KernelIntegrator(Filter):
             self.pre_int_op = kwargs["pre_integration_operation"]
         if "post_integration_operation" in kwargs:
             self.post_int_op = kwargs["post_integration_operation"]
-        self.quince_parameters = [self.simple_kernel, self.frequency, self.box_car_start, self.box_car_stop]
+        # self.quince_parameters = [self.simple_kernel, self.demod_frequency, self.box_car_start, self.box_car_stop]
 
     def update_descriptors(self):
         if not self.simple_kernel and self.kernel.value is None:
             raise ValueError("Integrator was passed kernel None")
 
-        logger.debug('Updating KernelIntegrator "%s" descriptors based on input descriptor: %s.', self.name, self.sink.descriptor)
+        logger.debug('Updating KernelIntegrator "%s" descriptors based on input descriptor: %s.', self.filter_name, self.sink.descriptor)
 
         record_length = self.sink.descriptor.axes[-1].num_points()
         if self.simple_kernel.value:
@@ -57,7 +57,7 @@ class KernelIntegrator(Filter):
             sample_stop = int(self.box_car_stop.value / time_step) + 1
             kernel[sample_start:sample_stop] = 1.0
             # add modulation
-            kernel *= np.exp(2j * np.pi * self.frequency.value * time_step * time_pts)
+            kernel *= np.exp(2j * np.pi * self.demod_frequency.value * time_step * time_pts)
         elif os.path.exists(os.path.join(config.KernelDir, self.kernel.value+'.txt')):
             kernel = np.loadtxt(os.path.join(config.KernelDir, self.kernel.value+'.txt'), dtype=complex, converters={0: lambda s: complex(s.decode().replace('+-', '-'))})
         else:
@@ -82,7 +82,7 @@ class KernelIntegrator(Filter):
             ost.set_descriptor(output_descriptor)
             ost.end_connector.update_descriptors()
 
-    async def process_data(self, data):
+    def process_data(self, data):
 
         # TODO: handle variable partial records
         if self.pre_int_op:
@@ -91,5 +91,5 @@ class KernelIntegrator(Filter):
         if self.post_int_op:
             filtered = self.post_int_op(filtered)
         # push to ouptut connectors
-        for ost in self.source.output_streams:
-            await ost.push(filtered)
+        for os in self.source.output_streams:
+            os.push(filtered)

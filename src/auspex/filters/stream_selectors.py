@@ -6,7 +6,7 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-__all__ = ['AlazarStreamSelector', 'X6StreamSelector', 'DummydigStreamSelector']
+__all__ = ['AlazarStreamSelector', 'X6StreamSelector']
 
 from auspex.log import logger
 from auspex.instruments import *
@@ -23,19 +23,23 @@ class AlazarStreamSelector(Filter):
     source  = OutputConnector()
     channel = IntParameter(value_range=(1,2), snap=1)
 
-    def __init__(self, name=""):
-        super(AlazarStreamSelector, self).__init__(name=name)
-        self.channel.value = 1 # Either 1 or 2
-        self.quince_parameters = [self.channel]
+    # def __init__(self, name=""):
+    #     super(AlazarStreamSelector, self).__init__(name=name)
+        # self.channel.value = 1 # Either 1 or 2
+        # self.quince_parameters = [self.channel]
 
-    def get_descriptor(self, source_instr_settings, channel_settings):
-        channel = AlazarChannel(channel_settings)
+    def get_channel(self, channel_proxy):
+        """Create and return a channel object corresponding to this stream selector"""
+        return AlazarChannel(channel_proxy)
 
-        # Add the time axis
-        samp_time = 1.0/source_instr_settings['sampling_rate']
+    def get_descriptor(self, channel_proxy):
+        """Get the axis descriptor corresponding to this stream selector. For the Alazar cards this
+        is always just a time axis."""
+        samp_time = 1.0/channel_proxy.receiver.sampling_rate
         descrip = DataStreamDescriptor()
-        descrip.add_axis(DataAxis("time", samp_time*np.arange(source_instr_settings['nbr_samples'])))
-        return channel, descrip
+        descrip.add_axis(DataAxis("time", samp_time*np.arange(channel_proxy.receiver.record_length)))
+        return descrip
+
 
 class X6StreamSelector(Filter):
     """Digital demodulation and filtering to select a particular frequency multiplexed channel"""
@@ -45,53 +49,29 @@ class X6StreamSelector(Filter):
 
     channel     = IntParameter(value_range=(1,3), snap=1)
     dsp_channel = IntParameter(value_range=(0,4), snap=1)
-    stream_type = Parameter(allowed_values=["Raw", "Demodulated", "Integrated", "State", "Correlated"], default='Demodulated')
+    stream_type = Parameter(allowed_values=["raw", "demodulated", "integrated"], default='demodulated')
 
-    def __init__(self, name=""):
-        super(X6StreamSelector, self).__init__(name=name)
-        self.stream_type.value = "Raw" # One of Raw, Demodulated, Integrated, Correlated, State
-        self.quince_parameters = [self.channel, self.dsp_channel, self.stream_type]
-        logger.debug("X6StreamSelector init")
+    # def __init__(self, name=""):
+    #     super(X6StreamSelector, self).__init__(name=name)
+        # self.stream_type.value = "Raw" # One of Raw, Demodulated, Integrated
+        # self.quince_parameters = [self.channel, self.dsp_channel, self.stream_type]
 
-    def get_descriptor(self, source_instr_settings, channel_settings):
-        # Create a channel
-        channel = X6Channel(channel_settings)
+    def get_channel(self, channel_proxy):
+        """Create and return a channel object corresponding to this stream selector"""
+        return X6Channel(channel_proxy)
 
+    def get_descriptor(self, channel_proxy):
+        """Get the axis descriptor corresponding to this stream selector. If it's an integrated stream,
+        then the time axis has already been eliminated. Otherswise, add the time axis."""
         descrip = DataStreamDescriptor()
-        # If it's an integrated stream, then the time axis has already been eliminated.
-        # Otherwise, add the time axis.
-        if channel_settings['stream_type'] == 'Raw':
+        if channel_proxy.stream_type == 'raw':
             samp_time = 4.0e-9
-            descrip.add_axis(DataAxis("time", samp_time*np.arange(source_instr_settings['record_length']//4)))
+            descrip.add_axis(DataAxis("time", samp_time*np.arange(channel_proxy.receiver.record_length//4)))
             descrip.dtype = np.float64
-        elif channel_settings['stream_type'] == 'Demodulated':
+        elif channel_proxy.stream_type == 'demodulated':
             samp_time = 32.0e-9
-            descrip.add_axis(DataAxis("time", samp_time*np.arange(source_instr_settings['record_length']//32)))
+            descrip.add_axis(DataAxis("time", samp_time*np.arange(channel_proxy.receiver.record_length//32)))
             descrip.dtype = np.complex128
-        elif channel_settings['stream_type'] == 'Integrated':
+        else: # Integrated
             descrip.dtype = np.complex128
-        elif channel_settings['stream_type'] == 'Correlated': # Same as integrated
-            descrip.dtype = np.complex128
-        elif channel_settings['stream_type'] == 'State':
-            descrip.dtype = np.complex128
-        return channel, descrip
-    
-class DummydigStreamSelector(Filter):
-
-    sink    = InputConnector()
-    source  = OutputConnector()
-    channel = IntParameter(value_range=(1,2), snap=1)
-
-    def __init__(self, name=""):
-        super(DummydigStreamSelector, self).__init__(name=name)
-        self.channel.value = 1 # Either 1 or 2
-        self.quince_parameters = [self.channel]
-
-    def get_descriptor(self, source_instr_settings, channel_settings):
-        channel = DummydigChannel(channel_settings)
-
-        # Add the time axis
-        samp_time = 1.0/source_instr_settings['sampling_rate']
-        descrip = DataStreamDescriptor()
-        descrip.add_axis(DataAxis("time", samp_time*np.arange(source_instr_settings['record_length'])))
-        return channel, descrip
+        return descrip

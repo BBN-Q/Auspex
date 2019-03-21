@@ -62,7 +62,7 @@ class Framer(Filter):
         self.idx = 0
         self.carry = np.zeros(0, dtype=self.sink.descriptor.dtype)
 
-    async def process_data(self, data):
+    def process_data(self, data):
         # Append any data carried from the last run
         if self.carry.size > 0:
             data = np.concatenate((self.carry, data))
@@ -85,4 +85,4 @@ class Framer(Filter):
         if num_frames > 0:
             for i in range(num_frames):
                 for os in self.source.output_streams:
-                    await os.push(data[i*self.frame_points:(i+1)*self.frame_points])
+                    os.push(data[i*self.frame_points:(i+1)*self.frame_points])

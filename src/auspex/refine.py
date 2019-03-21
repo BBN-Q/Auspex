@@ -7,7 +7,7 @@
 #    http://www.apache.org/licenses/LICENSE-2.0
 
 import auspex.analysis.switching as sw
-from auspex.analysis.io import load_from_HDF5
+# from auspex.analysis.io import load_from_HDF5
 try:
     from adapt import refine
 except:
@@ -16,7 +16,8 @@ import numpy as np
 import time
 
 def delaunay_refine_from_file(writer, x_name, y_name, z_name, max_points=500, criterion="integral", threshold = "one_sigma", plotter=None):
-    async def refine_func(sweep_axis, experiment):
+    raise Exception("Refinement needs to be updated for new data format")
+    def refine_func(sweep_axis, experiment):
         data, desc = load_from_HDF5(writer.filename.value, reshape=False)
         groupname = writer.groupname.value
         zs = data[groupname][z_name]
@@ -34,8 +35,8 @@ def delaunay_refine_from_file(writer, x_name, y_name, z_name, max_points=500, cr
 
         if plotter:
             data = np.array([xs, ys, zs]).transpose()            
-            await experiment.push_to_plot(plotter, data)
+            experiment.push_to_plot(plotter, data)
 
-        time.sleep(0.02)
+        # time.sleep(0.02)
         return True
     return refine_func

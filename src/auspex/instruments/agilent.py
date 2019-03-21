@@ -623,7 +623,6 @@ class AgilentN5183A(SCPIInstrument):
         if is_valid_ipv4(self.resource_name):
             if "::5025::SOCKET" not in self.resource_name:
                 self.resource_name += "::5025::SOCKET"
-        print(self.resource_name)
         super(AgilentN5183A, self).connect(resource_name=resource_name, interface_type=interface_type)
         self.interface._resource.read_termination = u"\n"
         self.interface._resource.write_termination = u"\n"
@@ -631,6 +630,14 @@ class AgilentN5183A(SCPIInstrument):
 
     def set_all(self, settings):
         super(AgilentN5183A, self).set_all(settings)
+
+    @property
+    def reference(self):
+        return None
+
+    @reference.setter
+    def reference(self, ref=None):
+        pass
 
 class AgilentE8363C(SCPIInstrument):
     """Agilent E8363C VNA"""
@@ -760,7 +767,3 @@ class AgilentE9010A(SCPIInstrument):
     def restart_sweep(self):
         """ Aborts current sweep and restarts. """
         self.interface.write(":INITiate:RESTart")
-
-    @property
-    def power(self):
-        return self.interface.query_ascii_values("MEAS:CHP:CHP?",converter='e')[0]

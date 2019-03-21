@@ -1,7 +1,4 @@
-# __all__ = ['Command', 'FloatCommand', 'StringCommand', 'IntCommand', 'RampCommand',
-#             'SCPICommand',
-#             'DigitizerChannel',
-__all__ = ['Instrument'] # 'SCPIInstrument', 'CLibInstrument', 'MetaInstrument']
+__all__ = ['Instrument']
 
 import numpy as np
 import os
@@ -11,13 +8,6 @@ from unittest.mock import MagicMock
 
 from auspex.log import logger
 from .interface import Interface, VisaInterface, PrologixInterface
-
-# ----- 25 Oct 2018 -- Added config import for ST-15 delta support
-# config mods include optional parameters to help constrain import prompted
-# MetaClass introspection.  This, in-turn, can help reduce irrelvant
-# boot-up warnings (such as the "No Holzworths" warning).
-#
-from auspex import config
 
 #Helper function to check for IPv4 address
 #See http://stackoverflow.com/a/11264379
@@ -156,38 +146,10 @@ class SCPIFloatCommand(SCPICommand, FloatCommand): pass
 class SCPIIntCommand(SCPICommand, IntCommand): pass
 class SCPIRampCommand(SCPICommand, RampCommand): pass
 
-class DigitizerChannel(object): pass
+class ReceiverChannel(object): pass
 
 class MetaInstrument(type):
     def __init__(self, name, bases, dct):
-
-        # ----- 25 Oct 2018 -- ST-15 delta start...
-        # defined as the Instrument metaclass, this logic
-        # fires upon module load (prompted by mearly an unused import statement)
-        # regardless of use; moreover, it iterates thru ALL Instrument sub-class
-        # definitions.  Thus prompts the holzworth module warnings even where
-        # such a specific reference is NOT in use -- TJR
-        # (deeper still the HW warning occurs due to in essence a static block
-        # load where the class gets validated thru this process).
-        #
-        # 30 Oct -- generalized such logic as config.skipMetaInit function.
-        #
-        # 31 Oct -- Embelished such that where tgtInstrumentClass defined,
-        # this function limits the meta class stub instantiation to only those
-        # cited;  where tgtInstrumentClass NOT defined -- all logic fires as
-        # before (with no boot-up behavior changes produced)
-        #
-        if config.skipMetaInit( name, bases, dct,
-                                acceptClassRefz = config.tgtInstrumentClass,
-                                bEchoDetails    = config.bEchoInstrumentMetaInit,
-                                szLogLabel      = "MetaI"):
-            #
-            return None
-        # else continue __init__ logic as normal
-        # (No behavior changes)
-
-        # ----- 25 Oct 2018 -- ST-15 delta stop.
-
         type.__init__(self, name, bases, dct)
 
         # What sort of instrument are we?
@@ -221,22 +183,24 @@ class Instrument(metaclass=MetaInstrument):
     def disconnect(self):
         pass
 
-    # We now expect the main experiment to deal with shutting down the instruments
-    # def __del__(self):
-    #     self.disconnect()
+    def configure_with_proxy(self, proxy):
+        self.configure_with_dict(dict((col, getattr(proxy, col)) for col in proxy.__table__.columns.keys()))
 
-    def set_all(self, settings_dict):
-        """Accept a settings dictionary and attempt to set all of the instrument
+    def configure_with_dict(self, settings_dict):
+        """Accept a sdettings dictionary and attempt to set all of the instrument
         parameters using the key/value pairs."""
         for name, value in settings_dict.items():
-            # Python is insane, and attempts to run a property's getter
-            # when queried by hasattr. Avoid this behavior with the
-            # "asl for forgiveness" paradigm.
-            try:
-                setattr(self, name, value)
-            except (AttributeError, TypeError) as e:
-                logger.debug("Instrument {} property: {} could not be set to {}.".format(self.name,name,value))
-                pass
+            if name not in ["id", "label", "model", "address", "channel_db_id", "standalone"]:
+                if "_id" in name:
+                    continue
+                # Python is insane, and attempts to run a property's getter
+                # when queried by hasattr. Avoid this behavior with the
+                # "ask for forgiveness" paradigm.
+                try:
+                    setattr(self, name, value)
+                except (AttributeError, TypeError) as e:
+                    logger.info("Instrument {} property: {} could not be set to {}.".format(self.name,name,value))
+                    pass
 
 class CLibInstrument(Instrument): pass
 
@@ -247,6 +211,7 @@ class SCPIInstrument(Instrument):
     def __init__(self, resource_name=None, name="Yet-to-be-named SCPI Instrument"):
         self.name            = name
         self.resource_name   = resource_name
+        self.proxy_obj       = None
         if not hasattr(self, "instrument_type"):
             self.instrument_type = None # This can be AWG, Digitizer, etc.
         self.interface       = None

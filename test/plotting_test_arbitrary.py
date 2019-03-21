@@ -6,7 +6,6 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-import asyncio
 import os
 import time
 import datetime
@@ -14,27 +13,7 @@ import sys
 import itertools
 
 import numpy as np
-import h5py
 import matplotlib.pyplot as plt
-
-# ----- fix/unitTests_1 (ST-15) delta Start...
-# Added the followiing 26 Oct 2018 to test Instrument and filter metaclass load
-# introspection minimization (during import)
-#
-from auspex import config
-
-# Filter out Holzworth warning noise noise by citing the specific instrument[s]
-# used for this test.
-config.tgtInstrumentClass       = "TestInstrument"
-
-# Filter out Channerlizer noise by citing the specific filters used for this
-# test.
-config.tgtFilterClass           = {"Plotter", "ManualPlotter", "WriteToHDF5", "DataBuffer"}
-
-# Uncomment to the following to show the Instrument MetaClass __init__ arguments
-# config.bEchoInstrumentMetaInit  = True
-#
-# ----- fix/unitTests_1 (ST-15) delta Stop.
 
 from auspex.experiment import Experiment, FloatParameter
 from auspex.stream import OutputConnector, DataStreamDescriptor
@@ -59,10 +38,10 @@ class TestExperiment(Experiment):
     def init_streams(self):
         pass
 
-    async def run(self):
+    def run(self):
         r = np.power(self.amplitude.value,2) + 0.1*np.random.random()
-        await self.voltage.push(r)
-        await asyncio.sleep(0.01)
+        self.voltage.push(r)
+        time.sleep(0.01)
 
 if __name__ == '__main__':
 
@@ -73,6 +52,7 @@ if __name__ == '__main__':
     plt  = ManualPlotter("Manual Plotting Test", x_label='X Thing', y_label='Y Thing')
     plt.add_data_trace("Example Data")
     plt.add_fit_trace("Example Fit")
+
     buff = DataBuffer()
 
     edges = [(exp.voltage, buff.sink)]
@@ -80,7 +60,7 @@ if __name__ == '__main__':
 
     # Create a plotter callback
     def plot_me(plot):
-        ys = buff.get_data()['voltage']
+        ys = buff.output_data['voltage']
         xs = buff.descriptor.axes[0].points
         plot["Example Data"] = (xs, ys)
         plot["Example Fit"]  = (xs, ys+0.1)
@@ -90,8 +70,10 @@ if __name__ == '__main__':
     exp.add_sweep(exp.amplitude, np.linspace(-5.0, 5.0, 100))
     exp.run_sweeps()
 
-    ys = buff.get_data()['voltage']
-    xs = buff.descriptor.axes[0].points
+    # ys = buff.get_data()['voltage']
+    ys, desc = buff.get_data()
+
+    xs = desc.axes[0].points
     plt["Example Data"] = (xs, ys)
     plt["Example Fit"]  = (xs, ys+0.1)
 
