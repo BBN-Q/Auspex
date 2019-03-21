@@ -246,18 +246,23 @@ class CalibrationExperiment(QubitExperiment):
             output_node = self.output_nodes[i]
             if isinstance(output_node, bbndb.auspex.Write):
                 # Change the output node to a buffer
-                self.output_nodes[i] = bbndb.auspex.Buffer(label=output_node.label, qubit_name=output_node.qubit_name)
-                mapping[output_node.node_label()] = self.output_nodes[i].node_label()
-            if not isinstance(self.output_nodes[i], bbndb.auspex.Buffer):
-                raise ValueError(f"Specified output {self.output_nodes[i]} node is not a buffer or could not be converted to a buffer")
-            graph.nodes[output_node.node_label()]['node_obj'] = self.output_nodes[i] # update values
-        nx.relabel_nodes(graph, mapping, copy=False)
+                mapping[output_node] = bbndb.auspex.Buffer(label=output_node.label, qubit_name=output_node.qubit_name)
+                self.output_nodes[i] = mapping[output_node]
+                # self.output_nodes[i] = bbndb.auspex.Buffer(label=output_node.label, qubit_name=output_node.qubit_name)
+                # mapping[output_node.node_label()] = self.output_nodes[i].node_label()
+            # if not isinstance(self.output_nodes[i], bbndb.auspex.Buffer):
+            #     raise ValueError(f"Specified output {self.output_nodes[i]} node is not a buffer or could not be converted to a buffer")
+            # graph.nodes[output_node.node_label()]['node_obj'] = self.output_nodes[i] # update values
+        # nx.relabel_nodes(graph, mapping, copy=False)
 
         # Disable any paths not involving the buffer
         new_graph = nx.DiGraph()
         for output_node, qubit in zip(self.output_nodes, self.qubits):
-            path  = nx.shortest_path(graph, str(self.qubit_proxies[qubit.label]), output_node.node_label())
-            new_graph = nx.compose(new_graph, graph.subgraph(path))
+            old_path  = nx.shortest_path(graph, str(self.qubit_proxies[qubit.label]), output_node.node_label())
+            # new_graph = nx.compose(new_graph, graph.subgraph(path))
+            path      = old_path[:-1] + [mapping[output_node].node_label()]
+            new_graph.add_path(path)
+            new_graph.nodes[path[-1].node_label()]['node_obj'] = mapping[output_node]
 
             # Fix connectors
             for i in range(len(path)-1):
