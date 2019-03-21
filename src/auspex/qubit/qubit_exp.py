@@ -55,7 +55,31 @@ instrument_map = {
 }
 
 class QubitExperiment(Experiment):
-    """Experiment with specialized config and run methods for qubit experiments"""
+    """Create an `Experiment` with specialized config and run methods for qubit experiments.
+
+    Parameters:
+        meta_file (string)       
+            The filename of the QGL metainfo (*.json) corresponding to the desired
+            experiment.
+        pipeline_name (string)       
+            Not currently used. Specify a pipeline other than the current working pipeline.
+        averages (int)  
+            The number of shots to take. Results are only actually averaged
+            if an `Averager` node is present in the processing pipeline.
+        kwargs  
+            Additional keyword arguments passed to the base Auspex `Experiment`
+            class.
+    Returns:
+        experiment instance (`Experiment`)
+            Returns the initialized Auspex `Experiment`.
+
+    Examples:
+        Creating a simple experiment. 
+
+        >>> mf = RabiAmp(q1, [-1,0,1])
+        >>> exp = QubitExperiment(mf, averages=500)
+
+    """
 
     def __init__(self, meta_file, pipeline_name=None, averages=100, exp_name=None, **kwargs):
         super(QubitExperiment, self).__init__(**kwargs)
@@ -75,6 +99,11 @@ class QubitExperiment(Experiment):
         self.create_from_meta(meta_file, averages)
 
     def create_from_meta(self, meta_file, averages):
+        """Method called during creation. Implementing a subclass of `QubitExperiment` this method
+        may be overridden to provide additional functionality. However, this is a complex method, and
+        it is recommended that the user instead override the `modify_graph` method to provide
+        custom subclass behavior.
+        """
         try:
             with open(meta_file, 'r') as FID:
                 meta_info = json.load(FID)
@@ -293,14 +322,53 @@ class QubitExperiment(Experiment):
         self.set_graph(graph_edges)
 
     def modify_graph(self, graph):
+        """Method called near the end of `create_from_meta` to allow custom manipulation of the filter
+        pipeline. For example, `CalibrationExperiment` implements a version of `modify_graph` that
+        selectively removes portions of the graph and creates buffers as needed to perform the desired
+        calibrations on specific qubits.
+        """
         return graph
 
     def set_fake_data(self, instrument, ideal_data, increment=False):
+        """Enabled and use the fake data interface for digitizers in order that auspex can 
+        be run without hardware.
+
+        Parameters:
+            instrument (`Digitizer` instance)       
+                The digitizer instrument to be used for fake data generation.
+            ideal_data (numpy array)       
+                The actual data to be used. If `increment` is False, a 1D array with a single value 
+                per segment is used. The digitizer drivers automatical convert to a integrated, demodulated, 
+                or raw signal depending on the stream type being used. If `increment` is True, then this may be a 
+                2D array, which is incremented through to emulate sweeps such a qubit measurement frequency sweep.
+            increment (boolean)  
+                Whether or not to step through a 2D data array after to incorporate extra sweeps. The behavior is
+                defined above.
+
+        Examples:
+            Make sure to set auspex dummy mode at import time.
+
+            >>> import auspex.config as config
+            >>> config.auspex_dummy_mode = True
+            >>> # Configure channels and pipelines here
+            >>> amps = np.linspace(-1,1,51)
+            >>> exp = QubitExperiment(RabiAmp(q1,amps),averages=50)
+            >>> exp.set_fake_data(digitizer_1, np.cos(np.linspace(0, 2*np.pi,51)))
+            >>> exp.run_sweeps() 
+
+        """
         instrument.instr.ideal_data = ideal_data
         instrument.instr.increment_ideal_data = increment
         instrument.instr.gen_fake_data = True
 
     def clear_fake_data(self, instrument):
+        """Disable using fake data interface for a digitizer. Take note that dummy mode may
+        still be active.
+
+        Parameters:
+            instrument (`Digitizer` instance)       
+                The digitizer instrument that should no longer use fake data generation.
+        """
         instrument.instr.ideal_data = None
 
     def add_connector(self, qubit):
@@ -312,11 +380,7 @@ class QubitExperiment(Experiment):
 
     def init_instruments(self):
         for name, instr in self._instruments.items():
-            # Configure with dictionary from the instrument proxy
-            # if hasattr(instr, "configure_with_proxy"):
             instr.configure_with_proxy(instr.proxy_obj)
-            # else:
-            #     instr.configure_with_dict(dict(instr.proxy_obj))
 
         self.digitizers = [v for _, v in self._instruments.items() if "Digitizer" in v.instrument_type]
         self.awgs       = [v for _, v in self._instruments.items() if "AWG" in v.instrument_type]

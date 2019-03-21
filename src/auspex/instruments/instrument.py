@@ -308,6 +308,10 @@ def add_command_SCPI(instr, name, cmd):
                 raise ValueError(err_msg)
 
         if isinstance(cmd, RampCommand):
+            if 'increment' in kwargs:
+                new_cmd.increment = kwargs['increment'] 
+            if 'pause' in kwargs:
+                new_cmd.pause = kwargs['pause']
             # Ramp from one value to another, making sure we actually take some steps
             start_value = float(self.interface.query(new_cmd.get_string))
             approx_steps = int(abs(val-start_value)/new_cmd.increment)
