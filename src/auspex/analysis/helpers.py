@@ -5,6 +5,33 @@ from os import path
 import numpy as np
 
 def open_data(num, folder, groupname, datasetname="data", date=datetime.date.today().strftime('%y%m%d')):
+    """Convenience Load data from an `AuspexDataContainer` given a file number and folder.
+        Assumes that files are named with the convention `ExperimentName-NNNNN.auspex`
+
+    Parameters:
+        num (int)       
+            File number to be loaded.
+        folder (string)       
+            Base folder where file is stored. If the `date` parameter is not None, assumes file is a dated folder.
+        groupname (string)  
+            Group name of data to be loaded.
+        datasetname (string, optional) 
+            Data set name to be loaded. Default is "data".
+        date (string, optional)
+            Date folder from which data is to be loaded. Format is "YYMMDD" Defaults to today's date. 
+
+    Returns:
+        data (numpy.array)
+            Data loaded from file.
+        desc (DataSetDescriptor)
+            Dataset descriptor loaded from file.
+
+    Examples:
+        Loading a data container
+
+        >>> data, desc = open_data(42, '/path/to/my/data', "q1-main", date="190301")
+
+    """
     
     if date is not None:
         folder = path.join(folder, date)

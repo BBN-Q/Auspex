@@ -66,6 +66,9 @@ class QubitExperiment(Experiment):
         averages (int)  
             The number of shots to take. Results are only actually averaged
             if an `Averager` node is present in the processing pipeline.
+        exp_name (string)
+            Name of experiment. Used by any writers in pipeline to pick a data container name.
+
         kwargs  
             Additional keyword arguments passed to the base Auspex `Experiment`
             class.
