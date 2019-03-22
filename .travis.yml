@@ -32,7 +32,7 @@ install:
   - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION numpy scipy h5py sphinx matplotlib pandas networkx cffi jupyter psutil sqlalchemy ipykernel ipywidgets
   - source activate test-environment
   - export GIT_LFS_SKIP_SMUDGE=1
-  - pip install git+https://github.com/BBN-Q/bbndb.git
+  - pip install git+https://github.com/BBN-Q/bbndb.git@develop
   - pip install git+https://github.com/BBN-Q/Adapt.git
   - pip install git+https://github.com/BBN-Q/QGL.git@sqlalchemy
   - pip install git+https://github.com/spatialaudio/nbsphinx.git@master
