@@ -46,6 +46,7 @@ import bbndb
 class Calibration(object):
 
     def __init__(self):
+        self.do_plotting = True
         self.uuid = str(uuid.uuid4())
 
     def init_plots(self):
@@ -768,6 +769,12 @@ class Pi2Calibration(PhaseEstimation):
     def update_settings(self):
         self.qubit.pulse_params['pi2Amp'] = round(self.amplitude, 5)
 
+        if self.sample:
+            c = bbndb.calibration.Calibration(value=self.amplitude, sample=self.sample, name="Pi2Amp", category="PhaseEstimation")
+            c.date = datetime.datetime.now()
+            bbndb.session.add(c)
+            bbndb.session.commit()
+
 class PiCalibration(PhaseEstimation):
 
     def __init__(self, qubit, num_pulses= 1, direction = 'X',
@@ -777,7 +784,13 @@ class PiCalibration(PhaseEstimation):
                         target=np.pi, epsilon=epsilon, max_iter=max_iter, **kwargs)
 
     def update_settings(self):
-        self.qubit.pulse_params['piAmp'] =round(self.amplitude, 5)
+        self.qubit.pulse_params['piAmp'] = round(self.amplitude, 5)
+
+        if self.sample:
+            c = bbndb.calibration.Calibration(value=self.amplitude, sample=self.sample, name="PiAmp", category="PhaseEstimation")
+            c.date = datetime.datetime.now()
+            bbndb.session.add(c)
+            bbndb.session.commit()
 
 # class CRAmpCalibration_PhEst(PhaseEstimation):
 #     def __init__(self, qubit_names, num_pulses= 9):
@@ -851,6 +864,12 @@ class DRAGCalibration(QubitCalibration):
     def update_settings(self):
         logger.info(f'{self.qubit.label} DRAG parameter set to {self.opt_drag}')
         self.qubit.pulse_params['drag_scaling'] = self.opt_drag
+
+        if self.sample:
+            c = bbndb.calibration.Calibration(value=self.opt_drag, sample=self.sample, name="drag_scaling")
+            c.date = datetime.datetime.now()
+            bbndb.session.add(c)
+            bbndb.session.commit()
 
 # class MeasCalibration(Calibration):
 #     def __init__(self, qubit_name):
