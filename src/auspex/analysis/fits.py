@@ -4,94 +4,104 @@ from numpy.fft import fft
 from scipy.linalg import svd, eig, inv, pinv
 from enum import Enum
 from auspex.log import logger
+from collections.abc import Iterable
 import matplotlib.pyplot as plt
+
+from .signal_analysis import hilbert, KT_estimation
 
 plt.style.use('ggplot')
 
-def hilbert(signal):
-    # construct the Hilbert transform of the signal via the FFT
-    # in essense, we just want to set negative frequency components to zero
-    spectrum = np.fft.fft(signal)
-    n = len(signal)
-    midpoint = int(np.ceil(n/2))
+class AuspexFit(object):
 
-    kernel = np.zeros(n)
-    kernel[0] = 1
-    if n%2 == 0:
-        kernel[midpoint] = 1
-    kernel[1:midpoint] = 2
-    return np.fft.ifft(kernel * spectrum)
+    def __init__(self, xpts, ypts):
 
-def KT_estimation(data, times, order):
-    # Find the hilbert transform
-    analytic_signal = hilbert(data)
-    time_step = times[1]-times[0]
+        assert len(xpts) == len(ypts), "Length of X and Y points must match!"
+        
+        self.xpts = xpts 
+        self.ypts = ypts 
+        self._do_fit()
 
-    # Create the Hankel matrix
-    N = len(analytic_signal)
-    K = order
-    M = (N//2)-1
-    L = N-M+1
-    H = np.zeros((L, M), dtype=np.complex128)
-    for ct in range(M):
-        H[:,ct] = analytic_signal[ct:ct+L]
+    def _initial_guess(self):
+        raise NotImplementedError("Not implemented!")
 
-    #Try and seperate the signal and noise subspace via the svd
-    U,S,V = svd(H, False) # V is not transposed/conjugated in numpy svd
+    def _model(self, x, *p):
+        raise NotImplementedError("Not implemented!")
 
-    #Reconstruct the approximate Hankel matrix with the first K singular values
-    #Here we can iterate and modify the singular values
-    S_k = np.diag(S[:K])
+    def _fit_dict(self, p):
+        raise NotImplementedError("Not implemented!")
 
-    #Estimate the variance from the rest of the singular values
-    varEst = (1/((M-K)*L)) * np.sum(S[K:]**2)
-    Sfilt = np.matmul(S_k**2 - L*varEst*np.eye(K), inv(S_k))
-    Hbar = np.matmul(np.matmul(U[:,:K], Sfilt), V[:K,:])
+    def _do_fit(self):
 
-    #Reconstruct the data from the averaged anti-diagonals
-    cleanedData = np.zeros(N, dtype=np.complex128)
-    tmpMat = np.flip(Hbar,1)
-    idx = -L+1
-    for ct in range(N-1,-1,-1):
-        cleanedData[ct] = np.mean(np.diag(tmpMat,idx))
-        idx += 1
+        p0 = self._initial_guess()
+        popt, pcov = curve_fit(self._model, self.xpts, self.ypts, p0)
+        perr = np.sqrt(np.diag(pcov))
+        fit = np.array([self._model(x, *popt) for x in self.xpts])
+        self.sq_error = np.sum((fit - self.ypts)**2)
+        dof = len(self.xpts) - len(p0)
 
-    #Create a cleaned Hankel matrix
-    cleanedH = np.empty_like(H)
-    cleanedAnalyticSig = hilbert(cleanedData)
-    for ct in range(M):
-        cleanedH[:,ct] = cleanedAnalyticSig[ct:ct+L]
+        # Compute badness of fit:
+        # Under the null hypothesis (that the model is valid and that the observations
+        # do indeed have Gaussian statistics), the mean squared error is χ² distributed
+        # with `dof` degrees of freedom. We can quantify badness-of-fit in terms of how
+        # far the observed MSE is from the expected value, in units of σ = 2dof (the expected
+        # standard deviation for the χ² distribution)
+        self.Nsigma = self.sq_error/np.sqrt(2*dof) - dof/np.sqrt(2*dof) 
+        self.fit_function = lambda x: self._model(x, *popt)
 
-    #Compute Q with total least squares
-    #U_K1*Q = U_K2
-    U = svd(cleanedH, False)[0]
-    U_K = U[:,0:K]
-    tmpMat = np.hstack((U_K[:-1,:],U_K[1:,:]))
-    V = svd(tmpMat, False)[2].T.conj()
-    n = np.size(U_K,1)
-    V_AB = V[:n,n:]
-    V_BB = V[n:,n:]
-    Q = np.linalg.lstsq(V_BB.conj().T, -V_AB.conj().T)[0].conj().T
+        self.fit_params = self._fit_dict(popt)
+        self.fit_errors = self._fit_dict(perr)
 
-    #Now poles are eigenvalues of Q
-    poles, _ = eig(Q)
+    def model(self, x):
+        if isinstance(x, Iterable): 
+            return np.array([self.fit_function(_) for _ in x])
+        else:
+            return self.fit_function(x)
 
-    #Take the log and return the decay constant and frequency
-    freqs = np.zeros(K)
-    Tcs   = np.zeros(K)
-    for ct in range(K):
-        sk = np.log(poles[ct])
-        freqs[ct] = np.imag(sk)/(2*np.pi*time_step)
-        Tcs[ct] = -1.0/np.real(sk)*time_step
+class LorentzFit(AuspexFit):
 
-    #Refit the data to get the amplitude
-    A = np.zeros((N, K), dtype=np.complex128)
-    for ct in range(K):
-        A[:,ct] = np.power(poles[ct], range(0,N))
+    def __init__(self, xpts, ypts):
+        super(LorentzFit, self).__init__(xpts, ypts)
 
-    amps = np.linalg.lstsq(A, cleanedData)[0]
+    def _model(self, x, *p):
+        """Model for a simple Lorentzian"""
+        return p[0]/((x-p[1])**2 + (p[2]/2)**2) + p[3]
 
-    return freqs, Tcs, amps
+    def _initial_guess(self):
+        """Initial guess for a Lorentzian fit."""
+        y0 = np.median(self.ypts)
+        if np.abs(np.max(self.ypts) - y0) <= np.abs(np.min(self.ypts) - y0):
+            idx = np.argmin(self.ypts)
+            direc = -1
+        else:
+            idx = np.argmax(self.ypts)
+            direc = 1
+        f0 = self.xpts[idx]
+        half = direc*np.abs(y0 + self.ypts[idx]) / 2.0
+        if direc == -1:
+            zeros = np.where((self.ypts-half)<0)[0]
+        elif direc == 1:
+            zeros = np.where((self.ypts-half)>0)[0]
+        if len(zeros) >= 2:
+            idx_l = zeros[0]
+            idx_r = zeros[-1]
+        else:
+            idx_l = 0
+            idx_r = len(self.xpts)-1
+        width = np.abs(self.xpts[idx_l] - self.xpts[idx_r])
+        amp = direc * width**2 * abs(self.ypts[idx] - y0) / 4
+        return [amp, f0, width, y0]
+
+    def _fit_dict(self, p):
+
+        return {"A": p[0], 
+                "b": p[1],
+                "c": p[2],
+                "d": p[3]}
+
+    def __str__(self):
+        return "A /((x-b)^2 + (c/2)^2) + d"
+
+
 
 def fit_rabi_amp(xdata, ydata, showPlot=False):
     """
