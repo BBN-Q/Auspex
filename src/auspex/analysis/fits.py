@@ -13,13 +13,17 @@ plt.style.use('ggplot')
 
 class AuspexFit(object):
 
-    def __init__(self, xpts, ypts):
+    xlabel = "X points"
+    ylabel = "Y points"
+    title = "Auspex Fit"
 
+    def __init__(self, xpts, ypts, make_plots=False):
         assert len(xpts) == len(ypts), "Length of X and Y points must match!"
-        
         self.xpts = xpts 
         self.ypts = ypts 
         self._do_fit()
+        if make_plots:
+            self.make_plots()
 
     def _initial_guess(self):
         raise NotImplementedError("Not implemented!")
@@ -30,8 +34,20 @@ class AuspexFit(object):
     def _fit_dict(self, p):
         raise NotImplementedError("Not implemented!")
 
-    def _do_fit(self):
+    def make_plots(self):
+        plt.figure()
+        plt.plot(self.xpts, self.ypts, ".", markersize=15, label="Data")
+        plt.plot(self.xpts, self.model(self.xpts), "-", linewidth=3, label="Fit")
+        plt.xlabel(self.xlabel, fontsize=14)
+        plt.ylabel(self.ylabel, fontsize=14)
+        plt.title(self.title, fontsize=14)
+        plt.annotate(self.annotation(), xy=(0.4, 0.10), 
+                     xycoords='axes fraction', size=12)
 
+    def annotation(self):
+        return str(self)
+
+    def _do_fit(self):
         p0 = self._initial_guess()
         popt, pcov = curve_fit(self._model, self.xpts, self.ypts, p0)
         perr = np.sqrt(np.diag(pcov))
@@ -59,8 +75,9 @@ class AuspexFit(object):
 
 class LorentzFit(AuspexFit):
 
-    def __init__(self, xpts, ypts):
-        super(LorentzFit, self).__init__(xpts, ypts)
+    xlabel = "X Data"
+    ylabel = "Y Data"
+    title = "Lorentzian Fit"
 
     def _model(self, x, *p):
         """Model for a simple Lorentzian"""
