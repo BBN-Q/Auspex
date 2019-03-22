@@ -68,3 +68,89 @@ def normalize_data(data, zero_id = 0, one_id = 1):
     #remove calibration points
     norm_data = [d for ind, d in enumerate(norm_data) if metadata[ind] == max(metadata)]
     return norm_data
+
+def cal_scale(data):
+    """
+    Scale the data assuming 4 cal points
+
+    Parameters
+    ----------
+    data : unscaled data with cal points
+
+    Returns
+    -------
+    data : scaled data array
+    """
+    # assume with have 2 cal repeats
+    # TO-DO: make this general!!
+    numRepeats = 2
+    pi_cal = np.mean(data[-1*numRepeats:])
+    zero_cal = np.mean(data[-2*numRepeats:-1*numRepeats])
+
+    # negative to convert to <z>
+    scale_factor = -(pi_cal - zero_cal) / 2
+    data = data[:-2*numRepeats]
+    data = (data - zero_cal)/scale_factor + 1
+
+    return data
+
+def cal_data(data, quad=np.real, qubit_name="q1", group_name="main", \
+        return_type=np.float32, key=""):
+    """
+    Rescale data to :math:`\\sigma_z`. expectation value based on calibration sequences.
+
+    Parameters:
+        data (numpy array)
+            The data from the writer or buffer, which is a dictionary
+            whose keys are typically in the format qubit_name-group_name, e.g.
+            ({'q1-main'} : array([(0.0+0.0j, ...), (...), ...]))
+        quad (numpy function)
+            This should be the quadrature where most of
+            the data can be found.  Options are: np.real, np.imag, np.abs
+            and np.angle
+        qubit_name (string)
+            Name of the qubit in the data file. Default is 'q1'
+        group_name (string)
+            Name of the data group to calibrate. Default is 'main'
+        return_type (numpy data type)
+            Type of the returned data. Default is np.float32.
+        key (string)
+            In the case where the dictionary keys don't conform
+            to the default format a string can be passed in specifying the
+            data key to scale.
+    Returns:
+        numpy array (type ``return_type``)
+            Returns the data rescaled to match the calibration results for the :math:`\\sigma_z` expectation value.
+
+
+    Examples:
+        Loading and calibrating data
+
+        >>> exp = QubitExperiment(T1(q1),averages=500)
+        >>> exp.run_sweeps()
+        >>> data, desc = exp.writers[0].get_data()
+
+    """
+    if key:
+        pass
+    else:
+        key = qubit_name + "-" + group_name
+
+    fields = data[key].dtype.fields.keys()
+    meta_field = [f for f in fields if 'metadata' in f][0]
+    ind_axis = meta_field.replace("_metadata", "")
+
+    ind0 = np.where(data[key][meta_field] == 0 )[0]
+    ind1 = np.where(data[key][meta_field] == 1 )[0]
+
+    dat = quad(data[key]["Data"])
+    zero_cal = np.mean(dat[ind0])
+    one_cal = np.mean(dat[ind1])
+
+    scale_factor = -(one_cal - zero_cal)/2
+
+    #assumes calibrations at the end only
+    y_dat = dat[:-(len(ind0) + len(ind1))]
+    x_dat = data[key][ind_axis][:-(len(ind0) + len(ind1))]
+    y_dat = (y_dat - zero_cal)/scale_factor + 1
+    return y_dat.astype(return_type), x_dat
