@@ -118,10 +118,7 @@ class LorentzFit(AuspexFit):
     def __str__(self):
         return "A /((x-b)^2 + (c/2)^2) + d"
 
-class CR_cal_type(Enum):
-    LENGTH = 1
-    PHASE = 2
-    AMP = 3
+
 
 def fit_CR(xpoints, data, cal_type):
     """Fit CR calibration curves for variable pulse length, phase, or amplitude"""

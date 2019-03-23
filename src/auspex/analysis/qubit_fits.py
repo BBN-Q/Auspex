@@ -147,7 +147,7 @@ class RamseyFit(AuspexFit):
         freqs, Tcs, amps = KT_estimation(ydata-np.mean(ydata), xdata, 2)
         p0 = [*freqs, *abs(amps), *Tcs, *np.angle(amps), np.mean(ydata)]
 
-	def _ramsey(x, f, A, tau, phi, y0):
+	def _ramsey_1f(self, x, f, A, tau, phi, y0):
     	return A*np.exp(-x/tau)*np.cos(2*np.pi*f*x + phi) + y0
 
 	def _model_2f(self, x, *p):
@@ -157,7 +157,7 @@ class RamseyFit(AuspexFit):
 	def _model_1f(self, x, *p):
 			return self._ramsey_1f(x, p[0], p[1], p[2], p[3], p[4])
 
-    def _aicc(e, k, n):
+    def _aicc(self, e, k, n):
         return 2*k+e+(k+1)*(k+1)/(n-k-2)
 
     def _do_fit(self):
