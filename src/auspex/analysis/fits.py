@@ -1,8 +1,5 @@
 from scipy.optimize import curve_fit
 import numpy as np
-from numpy.fft import fft
-from scipy.linalg import svd, eig, inv, pinv
-from enum import Enum
 from auspex.log import logger
 from collections.abc import Iterable
 import matplotlib.pyplot as plt
@@ -28,7 +25,8 @@ class AuspexFit(object):
     def _initial_guess(self):
         raise NotImplementedError("Not implemented!")
 
-    def _model(self, x, *p):
+    @staticmethod
+    def _model(x, *p):
         raise NotImplementedError("Not implemented!")
 
     def _fit_dict(self, p):
@@ -79,7 +77,8 @@ class LorentzFit(AuspexFit):
     ylabel = "Y Data"
     title = "Lorentzian Fit"
 
-    def _model(self, x, *p):
+    @staticmethod
+    def _model(x, *p):
         """Model for a simple Lorentzian"""
         return p[0]/((x-p[1])**2 + (p[2]/2)**2) + p[3]
 
@@ -117,42 +116,3 @@ class LorentzFit(AuspexFit):
 
     def __str__(self):
         return "A /((x-b)^2 + (c/2)^2) + d"
-
-
-
-def fit_CR(xpoints, data, cal_type):
-    """Fit CR calibration curves for variable pulse length, phase, or amplitude"""
-    data0 = data[:len(data)//2]
-    data1 = data[len(data)//2:]
-    if cal_type == CR_cal_type.LENGTH:
-        xpoints = xpoints[0]
-        x_fine = np.linspace(min(xpoints), max(xpoints), 1001)
-        p0 = [1/(2*xpoints[-1]), 1, np.pi/2, 0]
-        popt0, _ = curve_fit(sinf, xpoints, data0, p0 = p0)
-        popt1, _ = curve_fit(sinf, xpoints, data1, p0 = p0)
-        #find the first zero crossing
-        yfit0 = sinf(x_fine[:int(1/abs(popt0[0])/2/(x_fine[1]-x_fine[0]))], *popt0)
-        yfit1 = sinf(x_fine[:int(1/abs(popt1[0])/2/(x_fine[1]-x_fine[0]))], *popt1)
-        #average between the two qc states, rounded to 10 ns
-        xopt = round((x_fine[np.argmin(abs(yfit0))] + x_fine[np.argmin(abs(yfit1))])/2/10e-9)*10e-9
-        logger.info('CR length = {} ns'.format(xopt*1e9))
-    elif cal_type == CR_cal_type.PHASE:
-        xpoints = xpoints[1]
-        x_fine = np.linspace(min(xpoints), max(xpoints), 1001)
-        p0 = [1/(xpoints[-1]), 1, np.pi, 0]
-        popt0, _ = curve_fit(sinf, xpoints, data0, p0 = p0)
-        popt1, _ = curve_fit(sinf, xpoints, data1, p0 = p0)
-        #find the phase for maximum contrast
-        contrast = (sinf(x_fine, *popt0) - sinf(x_fine, *popt1))/2
-        logger.info('CR contrast = {}'.format(max(contrast)))
-        xopt = x_fine[np.argmax(contrast)] - np.pi
-    elif cal_type == CR_cal_type.AMP:
-        xpoints = xpoints[2]
-        x_fine = np.linspace(min(xpoints), max(xpoints), 1001)
-        popt0 = np.polyfit(xpoints, data0, 1) # tentatively linearize
-        popt1 = np.polyfit(xpoints, data1, 1)
-        #average between optimum amplitudes
-        xopt = -(popt0[1]/popt0[0] + popt1[1]/popt1[0])/2
-        logger.info('CR amplitude = {}'.format(xopt))
-    return xopt, popt0, popt1
-
