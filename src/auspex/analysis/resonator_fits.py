@@ -7,12 +7,58 @@
 #    http://www.apache.org/licenses/LICENSE-2.0
 
 import numpy
+import numpy as np
 import scipy
 import scipy.stats
 from scipy.optimize import newton
 from numpy.linalg import det
 
 from .fits import AuspexFit
+
+class ResonatorCircleFit(AuspexFit):
+
+    def __init__(self, data, freqs, initial_Qc=None, make_plots=False):
+        assert len(freqs) == len(data), "Length of X and Y points must match!"
+        self.data = data 
+        self.freqs = freqs 
+        self.make_plots 
+        self.initial_Qc = Qc
+        self._do_fit()
+
+    @staticmethod
+    def _model(x, *p):
+        scaling = p[1] * np.exp(1j*p[2]) * np.exp(-2j*np.pi * x * p[0])
+        A = (p[5]/np.abs(p[6])) * np.exp(-1j * p[4])
+        B = 1 + 2j*p[5]*(x / p[3] - 1)
+        return scaling*A/B
+
+    def _do_fit(self):
+
+        result = resonator_circle_fit(self.freqs, self.data, makePlots=self.makePlots, 
+                                                            manual_qc=self.initial_Qc) 
+
+        popt = result[:-1]
+        self.fit_params = {"tau": popt[0],
+                           "a": popt[1],
+                           "alpha": popt[2],
+                           "fr": popt[3],
+                           "phi0": popt[4],
+                           "Ql": popt[5],
+                           "Qc": popt[6],
+                           "Qi": popt[7]}
+
+        self.fit_errors = result[-1]
+        self.fit_function = lambda x: self._model(x, *popt)
+
+        fit = np.array([self.fit_function(f) for f in self.freqs])
+        self.sq_error = np.sum(np.abs(fit - self.data)**2)
+        dof = len(self.freqs) - len(popt)
+        #See AuspexFit class for explanation of Nsigma
+        self.Nsigma = self.sq_error/np.sqrt(2*dof) - dof/np.sqrt(2*dof) 
+
+    def __str__(self):
+        return "Resonator Circle Fit"
+
 
 def circle_fit(data, freqs):
     '''
@@ -247,6 +293,7 @@ def resonator_circle_fit(data, freqs, makePlots=False, manual_qc=None):
     Qi = 1.0/((1.0/Ql) - numpy.real(1.0/Qc))
     
     # Get an error bar
+    sigma_f = numpy.sqrt(corrected_phase_cov[0][0])
     sigma_Ql = numpy.sqrt(corrected_phase_cov[1][1])
     sigma_r = numpy.sqrt(
         (1/(len(transformed_data)-1))*
@@ -260,5 +307,7 @@ def resonator_circle_fit(data, freqs, makePlots=False, manual_qc=None):
     sigma_ReOneOverQc = numpy.real(1/Qc)*numpy.sqrt((2*sigma_r/r_corrected)**2 + (sigma_Ql/Ql)**2) if not manual_qc else 0
     sigma_OneOverQl = sigma_Ql
     sigma_Qi = numpy.sqrt((sigma_ReOneOverQc*Qi**2)**2 + (sigma_OneOverQl*(Qi/Ql)**2)**2)
+
+    errors = {"fr": sigma_f, "Ql": sigma_Ql, "R": sigma_r, "ReQc": sigma_ReOneOverQc, "Qi": sigma_Qi}
     
-    return [tau, a, alpha, fr, phi0, Ql, Qc, Qi, sigma_Qi]
+    return [tau, a, alpha, fr, phi0, Ql, Qc, Qi, errors]
