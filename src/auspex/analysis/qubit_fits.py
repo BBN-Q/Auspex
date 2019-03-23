@@ -7,6 +7,8 @@
 #    http://www.apache.org/licenses/LICENSE-2.0
 
 import numpy as np
+from auspex.log import logger
+from copy import copy
 from .fits import AuspexFit
 from .signal_analysis import KT_estimation
 
@@ -15,6 +17,7 @@ fit_rabi_amp
 fit_rabi_width
 fit_t1
 fit_single_qubit_rb
+fit_ramsey
 """
 
 class RabiAmpFit(AuspexFit):
@@ -125,31 +128,82 @@ class RamseyFit(AuspexFit):
 	title = "Ramsey Fit"
 
 	def __init__(self, xpts, ypts, two_freqs=False, AIC=True, make_plots=False, force=False):
-
 		self.AIC = AIC
 		self.two_freqs = two_freqs 
 		self.force = force 
+        self.plots = make_plots
 
-		super().__init__(xpts, ypts, make_plots=make_plots)
+        assert len(xpts) == len(ypts), "Length of X and Y points must match!"
+        self.xpts = xpts 
+        self.ypts = ypts 
+        self._do_fit()
 
-	def _initial_guess(self):
 
-		if self.two_freqs:
-			freqs, TCs, amps = KT_estimation(self.ypts-np.mean(self.ypts), self.xpts, 2)
-			return [*freqs, *abs(amps), *Tcs, *np.ange(amps), np.mean(self.ypts)]
-		else:
-			freqs, Tcs, amps = KT_estimation(self.ypts-np.mean(self.ypts), self.xpts, 1)
-			return [freqs[0], abs(amps[0]), Tcs[0], np.angle(amps[0]), np.mean(ydata)]
+	def _initial_guess_1f(self):
+		freqs, Tcs, amps = KT_estimation(self.ypts-np.mean(self.ypts), self.xpts, 1)
+		return [freqs[0], abs(amps[0]), Tcs[0], np.angle(amps[0]), np.mean(ydata)]
 
-	def _ramsey_1f(x, f, A, tau, phi, y0):
+    def _initial_guess_2f(self):
+        freqs, Tcs, amps = KT_estimation(ydata-np.mean(ydata), xdata, 2)
+        p0 = [*freqs, *abs(amps), *Tcs, *np.angle(amps), np.mean(ydata)]
+
+	def _ramsey(x, f, A, tau, phi, y0):
     	return A*np.exp(-x/tau)*np.cos(2*np.pi*f*x + phi) + y0
 
-	def _model(self, x, *p):
-		if self.two_freqs:
+	def _model_2f(self, x, *p):
 			return (self._ramsey_1f(x, p[0], p[2], p[4], p[6], p[8]) + 
 					self._ramsey_1f(x, p[1], p[3], p[5], p[7], p[9]))
-		else:
+
+	def _model_1f(self, x, *p):
 			return self._ramsey_1f(x, p[0], p[1], p[2], p[3], p[4])
+
+    def _aicc(e, k, n):
+        return 2*k+e+(k+1)*(k+1)/(n-k-2)
+
+    def _do_fit(self):
+        if self.two_freqs:
+            self._initial_guess = self._initial_guess_2f
+            self._model = self._model_2f
+            try:
+                super()._do_fit()
+                if not self.AIC:
+                    if self.plots:
+                        self.make_plots()
+                    return
+                two_freq_chi2 = self.sq_error
+            except:
+                logger.info("Two-frequency fit failed. Trying single-frequency fit.")
+
+        self._initial_guess = self._initial_guess_1f
+        self._model = self._model_1f
+        super()._do_fit()
+        one_freq_chi2 = self.sq_error
+
+        #Compare the one and two frequency fits
+        aic = self._aicc(two_freq_chi2, 9, len(self.xpts)) - self._aicc(one_freq_chi2, 5, len(self.xpts))
+
+        if aic > 0 and not self.force:
+            self.two_freqs = False
+            logger.info(f"Selecting one-frequency fit with AIC = {aic}")
+            if self.plots:
+                self.make_plots()
+        else:
+            self.two_freqs = True
+            self._initial_guess = self._initial_guess_2f
+            self._model = self._model_2f
+            super()._do_fit()
+
+    def annotation(self):
+        #TODO: fixme
+        pass
+
+    @parameter
+    def T2(self):
+        return self.fit_params["tau"]
+
+    @parameter
+    def ramsey_freq(self):
+        return self.fit_params["f"]
 
 	def _fit_dict(self, p):
 		if self.two_freqs:
@@ -164,116 +218,6 @@ class RamseyFit(AuspexFit):
 					"tau": p[2],
 					"phi": p[3],
 					"y0": p[4]}
-
-
-def fit_ramsey(xdata, ydata, two_freqs = False, AIC = True, showPlot=False, force=False):
-    if two_freqs:
-        # Initial KT estimation
-        freqs, Tcs, amps = KT_estimation(ydata-np.mean(ydata), xdata, 2)
-        p0 = [*freqs, *abs(amps), *Tcs, *np.angle(amps), np.mean(ydata)]
-        try:
-            popt2, pcov2 = curve_fit(ramsey_2f, xdata, ydata, p0 = p0, maxfev=5000)
-            fopt2 = [popt2[0], popt2[1]]
-            perr2 = np.sqrt(np.diag(pcov2))
-            ferr2 = perr2[:2]
-            fit_result_2 = (fopt2, ferr2, popt2, perr2)
-            fit_model = ramsey_2f
-
-            if not AIC:
-                if showPlot:
-                    plot_ramsey(xdata, ydata, popt2, perr2, fit_model=fit_model)
-                print('Using a two-frequency fit.')
-                print('T2 = {0:.3f} {1} {2:.3f} us'.format(popt2[4]*1e6, \
-                    chr(177), perr2[4]*1e6))
-                return fit_result_2
-        except:
-            fit_model = ramsey_1f
-            logger.info('Two-frequency fit failed. Trying with single frequency.')
-        # Initial KT estimation
-    freqs, Tcs, amps = KT_estimation(ydata-np.mean(ydata), xdata, 1)
-    p0 = [freqs[0], abs(amps[0]), Tcs[0], np.angle(amps[0]), np.mean(ydata)]
-    popt, pcov = curve_fit(ramsey_1f, xdata, ydata, p0 = p0)
-    fopt = [popt[0]]
-    perr = np.sqrt(np.diag(pcov))
-    fopt = [popt[0]]
-    ferr = [perr[0]]
-    fit_result_1 = (fopt, ferr, popt, perr)
-    fit_model = ramsey_1f
-
-    if two_freqs and AIC:
-        def aicc(e, k, n):
-            return 2*k+e+(k+1)*(k+1)/(n-k-2)
-        def sq_error(xdata, popt, model):
-            return sum((model(xdata, *popt) - ydata)**2)
-        try:
-            aic = aicc(sq_error(xdata, fit_result_2[2], ramsey_2f), 9, \
-                len(xdata)) \
-             - aicc(sq_error(xdata, fit_result_1[2], ramsey_1f), 5, len(xdata))
-            if aic > 0 and not force:
-                if showPlot:
-                    plot_ramsey(xdata, ydata, popt, perr, fit_model=fit_model)
-                print('Using a one-frequency fit.')
-                print('T2 = {0:.3f} {1} {2:.3f} us'.format(popt[2]*1e6, \
-                    chr(177), perr[2]*1e6))
-                return fit_result_1
-            else:
-                fit_model = ramsey_2f
-                if showPlot:
-                    plot_ramsey(xdata, ydata, popt2, perr2, fit_model=fit_model)
-                print('Using a two-frequency fit.')
-                print('T2 = {0:.3f} {1} {2:.3f}us'.format( \
-                    fit_result_2[2,2]/1e3, chr(177), fit_result_2[3,2]/1e3))
-                return fit_result_2
-        except:
-            pass
-
-    if not two_freqs and showPlot:
-        plot_ramsey(xdata, ydata, popt, perr, fit_model=fit_model)
-
-        print('Using a one-frequency fit.')
-        print('T2 = {0:.3f} {1} {2:.3f} us'.format(popt[2]/1e3, chr(177), \
-            perr[2]/1e3))
-
-    if fit_model == ramsey_1f:
-        return fit_result_1
-
-def ramsey_1f(x, f, A, tau, phi, y0):
-    return A*np.exp(-x/tau)*np.cos(2*np.pi*f*x + phi) + y0
-
-def ramsey_2f(x, f1, f2, A1, A2, tau1, tau2, phi1, phi2, y0):
-    return ramsey_1f(x, f1, A1, tau1, phi1, y0/2) + \
-        ramsey_1f(x, f2, A2, tau2, phi2, y0/2)
-
-def plot_ramsey(xdata, ydata, popt, perr, fit_model=ramsey_1f):
-    xpts = np.linspace(xdata[0],xdata[-4],num=1000)
-
-    plt.plot(xdata,ydata,'.',markersize=15.0, label='data')
-    plt.plot(xpts, fit_model(xpts, *popt), label='fit')
-    plt.xlabel('time [ns]')
-    plt.ylabel(r'<$\sigma_z$>')
-    plt.legend()
-    if fit_model == ramsey_1f:
-        plt.annotate(r'$T_2$ = {:.2e}  {} {:.2e} $\mu s$'.format( \
-        popt[2]/1e3, chr(177), perr[2]/1e3), xy=(0.4, 0.15), \
-                     xycoords='axes fraction', size=12)
-        plt.annotate(r'$f_1$ = {:.2e}  {} {:.2e} MHz'.format( \
-        popt[0]*1e3, chr(177), perr[0]*1e3), xy=(0.4, 0.05), \
-                     xycoords='axes fraction', size=12)
-    else:
-        plt.annotate(r'$T^1_2$ = {0:.2e}  {1} {2:.2e} $\mu s$'.format( \
-        popt[4]/1e3, chr(177), perr[4]/1e3), xy=(0.4, 0.35), \
-                     xycoords='axes fraction', size=10)
-        plt.annotate(r'$T^2_2$ = {0:.2e}  {1} {2:.2e} $\mu s$'.format( \
-        popt[5]/1e3, chr(177), perr[5]/1e3), xy=(0.4, 0.25), \
-                     xycoords='axes fraction', size=10)
-        plt.annotate(r'$f_1$ = {0:.2e}  {1} {2:.2e} MHz'.format( \
-        popt[0]*1e3, chr(177), perr[0]*1e3), xy=(0.4, 0.15), \
-                     xycoords='axes fraction', size=10)
-        plt.annotate(r'$f_2$ = {0:.2e}  {1} {2:.2e} MHz'.format( \
-        popt[1]*1e3, chr(177), perr[1]*1e3), xy=(0.4, 0.05), \
-                     xycoords='axes fraction', size=10)
-
-
 
 class SingleQubitRBFit(AuspexFit):
 
