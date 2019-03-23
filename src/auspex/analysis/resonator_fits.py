@@ -10,6 +10,7 @@ import numpy
 import numpy as np
 import scipy
 import scipy.stats
+from matplotlib import pyplot
 from scipy.optimize import newton
 from numpy.linalg import det
 
@@ -22,7 +23,7 @@ class ResonatorCircleFit(AuspexFit):
         self.data = data 
         self.freqs = freqs 
         self.make_plots 
-        self.initial_Qc = Qc
+        self.initial_Qc = initial_Qc
         self._do_fit()
 
     @staticmethod
@@ -30,11 +31,11 @@ class ResonatorCircleFit(AuspexFit):
         scaling = p[1] * np.exp(1j*p[2]) * np.exp(-2j*np.pi * x * p[0])
         A = (p[5]/np.abs(p[6])) * np.exp(-1j * p[4])
         B = 1 + 2j*p[5]*(x / p[3] - 1)
-        return scaling*A/B
+        return scaling*(1.0-A/B)
 
     def _do_fit(self):
 
-        result = resonator_circle_fit(self.freqs, self.data, makePlots=self.makePlots, 
+        result = resonator_circle_fit(self.freqs, self.data, makePlots=self.make_plots, 
                                                             manual_qc=self.initial_Qc) 
 
         popt = result[:-1]
@@ -308,6 +309,6 @@ def resonator_circle_fit(data, freqs, makePlots=False, manual_qc=None):
     sigma_OneOverQl = sigma_Ql
     sigma_Qi = numpy.sqrt((sigma_ReOneOverQc*Qi**2)**2 + (sigma_OneOverQl*(Qi/Ql)**2)**2)
 
-    errors = {"fr": sigma_f, "Ql": sigma_Ql, "R": sigma_r, "ReQc": sigma_ReOneOverQc, "Qi": sigma_Qi}
+    errors = {"fr": sigma_f, "Ql": sigma_Ql, "R": sigma_r, "Qc": sigma_ReOneOverQc, "Qi": sigma_Qi}
     
     return [tau, a, alpha, fr, phi0, Ql, Qc, Qi, errors]

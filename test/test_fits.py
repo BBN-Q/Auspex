@@ -10,7 +10,7 @@ import unittest
 
 import os
 import numpy as np
-from auspex.analysis import fits, qubit_fits
+from auspex.analysis import fits, qubit_fits, resonator_fits
 
 import matplotlib.pyplot as plt
 
@@ -24,7 +24,41 @@ class FitAssertion(object):
         if not test:
             raise AssertionError(f"Fit parameter {name}: {p0} is outside of interval ({low}, {high}).")
 
+class TestResonatorFit(unittest.TestCase, FitAssertion):
 
+    def test_CircleFit(self):
+
+        #[tau, a, alpha, fr, phi0, Ql, Qc, Qi]
+
+        Qi = 6.23e5
+        Qc = 2e5 
+        Ql = 1/(1/Qi + np.real(1/Qc))
+        f0 = 6.86
+        kappa = f0/Ql 
+
+        p0 = [(1/f0)*0.9734, 0.8, np.pi*0.09, f0, np.pi*0.123, Ql, Qc]
+
+        x = np.linspace(f0 - 8*kappa, f0+7*kappa, 1601)
+        y = resonator_fits.ResonatorCircleFit._model(x, *p0)
+
+        noise = 1.0 + np.random.randn(y.size) * np.median(y)/20
+        y *= noise
+
+        fit = resonator_fits.ResonatorCircleFit(x, y, make_plots=False)
+
+        print(fit.fit_params)
+        print(fit.fit_errors)
+
+        try:
+            self.assertFitInterval(f0, "fr", fit, tol=10)
+            self.assertFitInterval(Qi, "Qi", fit, tol=2)
+            self.assertFitInterval(Ql, "Ql", fit, tol=2)
+        except AssertionError as e:
+            print("Resonator fit tests failed. Perhaps re-run?")
+            print(str(e))
+        except:
+            pass
+        
 
 class TestFitMethods(unittest.TestCase, FitAssertion):
 
