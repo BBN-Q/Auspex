@@ -1,10 +1,20 @@
+# Copyright 2019 Raytheon BBN Technologies
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+
 import numpy
 import scipy
 import scipy.stats
 from scipy.optimize import newton
 from numpy.linalg import det
 
-def circleFit(data, freqs):
+from .fits import AuspexFit
+
+def circle_fit(data, freqs):
     '''
     Fits a trace of data to a circle.
     Parameters:
@@ -58,7 +68,7 @@ def circleFit(data, freqs):
     
     return [1.0/(2.0*numpy.absolute(A[0]))*numpy.sqrt(A[1]**2 + A[2]**2 - 4*A[0]*A[3]), -A[1]/(2.0*A[0]), -A[2]/(2.0*A[0])]
 
-def _circleResiduals(tau, data, freqs):
+def _circle_residuals(tau, data, freqs):
     '''
     Computes the error residuals from the circle fit for a given tau
     Parameters:
@@ -70,10 +80,10 @@ def _circleResiduals(tau, data, freqs):
     Vector of error residuals resulting from fitting trace to a circle
     '''
     transformed_data = data * numpy.exp(2*numpy.pi*1j*freqs*1e-9*tau)
-    [r,xc,yc] = circleFit(transformed_data, freqs)
+    [r,xc,yc] = circle_fit(transformed_data, freqs)
     return numpy.sum(r**2 - ((numpy.real(transformed_data)-xc)**2 + (numpy.imag(transformed_data)-yc)**2))
 
-def dataFit(data, freqs, makePlots=False, manual_qc=None):
+def resonator_circle_fit(data, freqs, makePlots=False, manual_qc=None):
     '''
     Fits a data trace to a resonance circle by finding the corresponding environmental parameters and 
     resonator properties.
@@ -122,7 +132,7 @@ def dataFit(data, freqs, makePlots=False, manual_qc=None):
     phases = numpy.unwrap(numpy.angle(data))
     m,b,r,p,err = scipy.stats.linregress(freqs*1e-9,phases)
     bound = 2*numpy.absolute(m)/(2*numpy.pi)
-    result = scipy.optimize.minimize_scalar(_circleResiduals, 0, method='Bounded', args=(data,freqs), bounds=(0, bound))
+    result = scipy.optimize.minimize_scalar(_circle_residuals, 0, method='Bounded', args=(data,freqs), bounds=(0, bound))
     tau = result.x
     
     '''
@@ -141,7 +151,7 @@ def dataFit(data, freqs, makePlots=False, manual_qc=None):
     delay_corrected_data = numpy.multiply(data, numpy.exp(2 * numpy.pi * 1j * freqs * 1e-9 * tau))
     
     # Get the circle parameters from the optimization
-    [r,xc,yc] = circleFit(delay_corrected_data, freqs)
+    [r,xc,yc] = circle_fit(delay_corrected_data, freqs)
     translated_data = delay_corrected_data - xc - 1j*yc
     
     if(makePlots):
@@ -203,7 +213,7 @@ def dataFit(data, freqs, makePlots=False, manual_qc=None):
     
     # Correct for the environmental factors and redo the fit
     transformed_data = delay_corrected_data * numpy.exp(-1j * alpha) / a
-    [r_corrected, x_corrected, y_corrected] = circleFit(transformed_data, freqs)
+    [r_corrected, x_corrected, y_corrected] = circle_fit(transformed_data, freqs)
     
     if(makePlots):
         transformed_Pr = Pr * numpy.exp(-1j * alpha) / a
