@@ -88,8 +88,8 @@ class Labbrick(Instrument, metaclass=MakeSettersGetters):
         self.set_use_internal_ref(0)
         self.max_power = self._lib.fnLMS_GetMaxPwr(self.device_id) / 4.0
         self.min_power = self._lib.fnLMS_GetMinPwr(self.device_id) / 4.0
-        self.max_freq = self._lib.fnLMS_GetMaxFreq(self.device_id) * 10
-        self.min_freq = self._lib.fnLMS_GetMinFreq(self.device_id) * 10
+        self.max_freq  = self._lib.fnLMS_GetMaxFreq(self.device_id) * 10
+        self.min_freq  = self._lib.fnLMS_GetMinFreq(self.device_id) * 10
 
     def disconnect(self):
         status = self._lib.fnLMS_CloseDevice(self.device_id)
@@ -101,7 +101,7 @@ class Labbrick(Instrument, metaclass=MakeSettersGetters):
         return self._lib.fnLMS_GetRF_On(self.device_id)
     @output.setter
     def output(self, value):
-        self._lib.fnLMS_SetRFOn(self.device_id, value)
+        return self._lib.fnLMS_SetRFOn(self.device_id, value)
 
     @property
     def frequency(self):
@@ -121,18 +121,17 @@ class Labbrick(Instrument, metaclass=MakeSettersGetters):
     def power(self):
         atten = self._lib.fnLMS_GetPowerLevel(self.device_id)
         if os.name == 'posix':
-            return atten
+            return (atten+1)/4
         return self.max_power - atten*0.25  # relative power in Windows. Alternatively, use fnLMS_GetAbsPowerLevel
     @power.setter
     def power(self, value):
-        if value > self.max_power:
-            value = self.max_power
+        if value >= self.max_power:
+            value = self.max_power - 0.25
             logger.warning('Lab Brick power out of range. Set to max = {} dBm'.format(value))
         elif value < self.min_power:
             value = self.min_power
             logger.warning('Lab Brick power out of range. Set to min = {} dBm'.format(value))
-        if os.name != 'posix':
-            value*=4 # Convert to 0.25 dB
+        value = value * 4
         self._lib.fnLMS_SetPowerLevel(self.device_id, int(value))
 
     @property
