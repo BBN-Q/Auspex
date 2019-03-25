@@ -4,7 +4,9 @@ from auspex.log import logger
 from collections.abc import Iterable
 import matplotlib.pyplot as plt
 
-from .signal_analysis import hilbert, KT_estimation
+from .signal_analysis import *
+from .qubit_fits import *
+from .resonator_fits import *
 
 plt.style.use('ggplot')
 
@@ -16,8 +18,8 @@ class AuspexFit(object):
 
     def __init__(self, xpts, ypts, make_plots=False):
         assert len(xpts) == len(ypts), "Length of X and Y points must match!"
-        self.xpts = xpts 
-        self.ypts = ypts 
+        self.xpts = xpts
+        self.ypts = ypts
         self._do_fit()
         if make_plots:
             self.make_plots()
@@ -39,7 +41,7 @@ class AuspexFit(object):
         plt.xlabel(self.xlabel, fontsize=14)
         plt.ylabel(self.ylabel, fontsize=14)
         plt.title(self.title, fontsize=14)
-        plt.annotate(self.annotation(), xy=(0.4, 0.10), 
+        plt.annotate(self.annotation(), xy=(0.4, 0.10),
                      xycoords='axes fraction', size=12)
 
     def annotation(self):
@@ -59,14 +61,14 @@ class AuspexFit(object):
         # with `dof` degrees of freedom. We can quantify badness-of-fit in terms of how
         # far the observed MSE is from the expected value, in units of σ = 2dof (the expected
         # standard deviation for the χ² distribution)
-        self.Nsigma = self.sq_error/np.sqrt(2*dof) - dof/np.sqrt(2*dof) 
+        self.Nsigma = self.sq_error/np.sqrt(2*dof) - dof/np.sqrt(2*dof)
         self.fit_function = lambda x: self._model(x, *popt)
 
         self.fit_params = self._fit_dict(popt)
         self.fit_errors = self._fit_dict(perr)
 
     def model(self, x):
-        if isinstance(x, Iterable): 
+        if isinstance(x, Iterable):
             return np.array([self.fit_function(_) for _ in x])
         else:
             return self.fit_function(x)
@@ -109,7 +111,7 @@ class LorentzFit(AuspexFit):
 
     def _fit_dict(self, p):
 
-        return {"A": p[0], 
+        return {"A": p[0],
                 "b": p[1],
                 "c": p[2],
                 "d": p[3]}

@@ -13,14 +13,6 @@ import matplotlib.pyplot as plt
 from .fits import AuspexFit
 from .signal_analysis import KT_estimation
 
-"""
-fit_rabi_amp
-fit_rabi_width
-fit_t1
-fit_single_qubit_rb
-fit_ramsey
-"""
-
 class RabiAmpFit(AuspexFit):
 
     xlabel = "Amplitude"
@@ -46,7 +38,7 @@ class RabiAmpFit(AuspexFit):
 
     def _fit_dict(self, p):
 
-        return {"y0": p[0], 
+        return {"y0": p[0],
                 "Api": p[1],
                 "f": p[2],
                 "phi": p[3]}
@@ -81,7 +73,7 @@ class RabiWidthFit(AuspexFit):
 
     def _fit_dict(self, p):
 
-        return {"y0": p[0], 
+        return {"y0": p[0],
                 "A": p[1],
                 'T': p[2],
                 "f": p[3],
@@ -95,7 +87,7 @@ class RabiWidthFit(AuspexFit):
         return self.fit_params["T"]
 
     def annotation(self):
-        return r"$T_\pi$ = {0:.2e} {1} {2:.2e}".format(self.fit_params["T"], chr(177), self.fit_errors["T"])  
+        return r"$T_\pi$ = {0:.2e} {1} {2:.2e}".format(self.fit_params["T"], chr(177), self.fit_errors["T"])
 
 class T1Fit(AuspexFit):
 
@@ -124,7 +116,7 @@ class T1Fit(AuspexFit):
         return self.fit_params["T1"]
 
     def annotation(self):
-        return r"$T_1$ = {0:.2e} {1} {2:.2e}".format(self.fit_params["T1"], chr(177), self.fit_errors["T1"])  
+        return r"$T_1$ = {0:.2e} {1} {2:.2e}".format(self.fit_params["T1"], chr(177), self.fit_errors["T1"])
 
 class RamseyFit(AuspexFit):
 
@@ -134,13 +126,13 @@ class RamseyFit(AuspexFit):
 
     def __init__(self, xpts, ypts, two_freqs=False, AIC=True, make_plots=False, force=False):
         self.AIC = AIC
-        self.two_freqs = two_freqs 
-        self.force = force 
+        self.two_freqs = two_freqs
+        self.force = force
         self.plots = make_plots
 
         assert len(xpts) == len(ypts), "Length of X and Y points must match!"
-        self.xpts = xpts 
-        self.ypts = ypts 
+        self.xpts = xpts
+        self.ypts = ypts
         self._do_fit()
 
 
@@ -158,7 +150,7 @@ class RamseyFit(AuspexFit):
 
     @staticmethod
     def _model_2f(x, *p):
-            return (RamseyFit._ramsey_1f(x, p[0], p[2], p[4], p[6], p[8]) + 
+            return (RamseyFit._ramsey_1f(x, p[0], p[2], p[4], p[6], p[8]) +
                     RamseyFit._ramsey_1f(x, p[1], p[3], p[5], p[7], p[9]))
 
     @staticmethod
@@ -222,7 +214,7 @@ class RamseyFit(AuspexFit):
     def _fit_dict(self, p):
         if self.two_freqs:
             return {"f": (p[0], p[1]),
-                    "A": (p[2], p[3]), 
+                    "A": (p[2], p[3]),
                     "tau": (p[4], p[5]),
                     "phi": (p[6], p[7]),
                     "y0": (p[8], p[9])}
@@ -278,7 +270,7 @@ class SingleQubitRBFit(AuspexFit):
         plt.xlabel(self.xlabel)
         plt.ylabel(self.ylabel)
         plt.legend()
-        plt.annotate(self.annotation(), xy=(0.4, 0.10), 
+        plt.annotate(self.annotation(), xy=(0.4, 0.10),
                      xycoords='axes fraction', size=12)
 
 class PhotonNumberFit(AuspexFit):
@@ -292,7 +284,7 @@ class PhotonNumberFit(AuspexFit):
     6 - initial qubit state (0/1)
     '''
     def __init__(self, xpts, ypts, params, make_plots=False):
-        self.params = params 
+        self.params = params
 
     def _initial_guess(self):
         return [0, 1]
@@ -301,7 +293,7 @@ class PhotonNumberFit(AuspexFit):
     def _model(x, *p):
         pa = p[0]
         pb = p[1]
-        params = self.params 
+        params = self.params
 
         if params[5] == 1:
             return params[4]*model_0(t, pa, pb) + (1-params[4])*model_0(t, pa+np.pi, pb)
@@ -353,4 +345,3 @@ def fit_quad(xdata, ydata):
     popt, pcov = curve_fit(quadf, xdata, ydata, p0 = [1, min(ydata), 0])
     perr = np.sqrt(np.diag(pcov))
     return popt, perr
-

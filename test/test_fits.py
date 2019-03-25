@@ -31,10 +31,10 @@ class TestResonatorFit(unittest.TestCase, FitAssertion):
         #[tau, a, alpha, fr, phi0, Ql, Qc, Qi]
 
         Qi = 6.23e5
-        Qc = 2e5 
+        Qc = 2e5
         Ql = 1/(1/Qi + np.real(1/Qc))
         f0 = 6.86
-        kappa = f0/Ql 
+        kappa = f0/Ql
 
         p0 = [(1/f0)*0.9734, 0.8, np.pi*0.09, f0, np.pi*0.123, Ql, Qc]
 
@@ -46,8 +46,8 @@ class TestResonatorFit(unittest.TestCase, FitAssertion):
 
         fit = resonator_fits.ResonatorCircleFit(x, y, make_plots=False)
 
-        print(fit.fit_params)
-        print(fit.fit_errors)
+        #print(fit.fit_params)
+        #print(fit.fit_errors)
 
         try:
             self.assertFitInterval(f0, "fr", fit, tol=10)
@@ -58,7 +58,7 @@ class TestResonatorFit(unittest.TestCase, FitAssertion):
             print(str(e))
         except:
             pass
-        
+
 
 class TestFitMethods(unittest.TestCase, FitAssertion):
 
@@ -80,7 +80,7 @@ class TestFitMethods(unittest.TestCase, FitAssertion):
         x = np.linspace(0, 80, 201)
         y = qubit_fits.T1Fit._model(x, *p0)
         noise = np.random.randn(y.size)/10
-        y += noise 
+        y += noise
         fit = qubit_fits.T1Fit(x, y, make_plots=False)
         self.assertFitInterval(p0[0], "A", fit)
         self.assertFitInterval(p0[1], "T1", fit)
@@ -138,11 +138,11 @@ class TestFitMethods(unittest.TestCase, FitAssertion):
         x = np.array([2**n for n in range(10)])
         y = qubit_fits.SingleQubitRBFit._model(x, *p0)
         noise = np.random.randn(y.size) * p0[0]/100
-        y += noise 
+        y += noise
 
         fit = qubit_fits.SingleQubitRBFit(x, y, make_plots=False)
         self.assertFitInterval(p0[1], "r", fit, tol=20)
-        
+
 
 
 if __name__ == '__main__':
