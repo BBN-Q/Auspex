@@ -14,6 +14,8 @@ from .fits import AuspexFit
 from .signal_analysis import KT_estimation
 
 class RabiAmpFit(AuspexFit):
+    """A fit to a Rabi amplitude curve, assuming a cosine model.
+    """
 
     xlabel = "Amplitude"
     ylabel = r"<$\sigma_z$>"
@@ -48,13 +50,16 @@ class RabiAmpFit(AuspexFit):
 
     @property
     def pi_amp(self):
+        """Returns the pi-pulse amplitude of the fit.
+        """
         return self.fit_params["Api"]
 
     def annotation(self):
         return r"$A_\pi$ = {0:.2e} {1} {2:.2e}".format(self.fit_params["Api"], chr(177), self.fit_errors["Api"])
 
 class RabiWidthFit(AuspexFit):
-
+    """Fit to a single-frequency decaying cosine for fitting Rabi-vs-time experiments
+    """
     xlabel = "Delay"
     ylabel = r"<$\sigma_z$>"
     title = "Rabi Width Fit"
@@ -90,7 +95,8 @@ class RabiWidthFit(AuspexFit):
         return r"$T_\pi$ = {0:.2e} {1} {2:.2e}".format(self.fit_params["T"], chr(177), self.fit_errors["T"])
 
 class T1Fit(AuspexFit):
-
+    """Fit to a decaying exponential for T1 measurement experiments.
+    """
     xlabel = "Delay"
     ylabel = r"<$\sigma_z$>"
     title = r"$T_1$ Fit"
@@ -113,6 +119,8 @@ class T1Fit(AuspexFit):
 
     @property
     def T1(self):
+        """Return the measured T1 (i.e. decay constant of exponential).
+        """
         return self.fit_params["T1"]
 
     def annotation(self):
@@ -120,11 +128,29 @@ class T1Fit(AuspexFit):
 
 class RamseyFit(AuspexFit):
 
+    """Fit to a Ramsey experiment using either a one or two frequency decaying
+        sine model.
+    """
+
     xlabel = "Delay"
     ylabel = r"<$\sigma_z$>"
     title = "Ramsey Fit"
 
     def __init__(self, xpts, ypts, two_freqs=False, AIC=True, make_plots=False, force=False):
+        """One or two frequency Ramsey experiment fit. If a two-frequency fit is selected
+            by the user or by comparing AIC scores, fit parameters are returned as tuples instead
+            of single numbers.
+
+        Args:
+            xpts (numpy.array): Time data points.
+            ypts (numpy.array): Qubit measurements.
+            two_freqs (Bool): If true, attempt a two-frequency fit of the data.
+            AIC (Bool): Decide between one and two frequency fits using  the Akaike
+                information criterion.
+            make_plots (Bool): Display a plot of data and fit result.
+            force (Bool): Force the selection of a two-frequency fit regardless of AIC score.
+        """
+
         self.AIC = AIC
         self.two_freqs = two_freqs
         self.force = force
@@ -226,6 +252,8 @@ class RamseyFit(AuspexFit):
                     "y0": p[4]}
 
 class SingleQubitRBFit(AuspexFit):
+    """Fit to an RB decay curve using the model A*(r^n) + B
+    """
 
     xlabel = r"$log_2$ Clifford Number"
     ylabel = r"<$\sigma_z$>"
@@ -274,7 +302,7 @@ class SingleQubitRBFit(AuspexFit):
                      xycoords='axes fraction', size=12)
 
 class PhotonNumberFit(AuspexFit):
-    ''' Fit number of measurement photons before a Ramsey. See McClure et al., Phys. Rev. App. 2016
+    """Fit number of measurement photons before a Ramsey. See McClure et al., Phys. Rev. App. 2016
     input params:
     1 - cavity decay rate kappa (MHz)
     2 - detuning Delta (MHz)
@@ -282,7 +310,7 @@ class PhotonNumberFit(AuspexFit):
     4 - Ramsey decay time T2* (us)
     5 - exp(-t_meas/T1) (us), only if starting from |1> (to include relaxation during the 1st msm't)
     6 - initial qubit state (0/1)
-    '''
+    """
     def __init__(self, xpts, ypts, params, make_plots=False):
         self.params = params
 
