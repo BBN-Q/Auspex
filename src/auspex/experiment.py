@@ -590,6 +590,12 @@ class Experiment(metaclass=MetaExperiment):
             logger.debug("Disconnecting instruments")
             self.disconnect_instruments()
 
+        for n in self.other_nodes:
+            del n
+
+        import gc
+        gc.collect()
+
     def add_axis(self, axis, position=0):
         for oc in self.output_connectors.values():
             logger.debug("Adding axis %s to connector %s.", axis, oc.name)

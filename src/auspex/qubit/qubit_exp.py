@@ -488,6 +488,7 @@ class QubitExperiment(Experiment):
             if listener.is_alive():
                 logger.info(f"Terminating listener {listener} aggressively")
                 listener.terminate()
+            del listener
         if self.cw_mode:
             for awg in self.awgs:
                 awg.stop()
@@ -495,6 +496,8 @@ class QubitExperiment(Experiment):
             gen_proxy.instr.output = False
         for instr in self.instruments:
             instr.disconnect()
+        import gc
+        gc.collect()
 
     def final_init(self):
         super(QubitExperiment, self).final_init()
