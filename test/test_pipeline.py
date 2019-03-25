@@ -5,18 +5,19 @@ import shutil
 import time
 import tempfile
 import numpy as np
-from QGL import *
-import QGL.config
-import auspex.config
 
 # Dummy mode
+import auspex.config
 auspex.config.auspex_dummy_mode = True
 
+import QGL.config
 # Set temporary output directories
 awg_dir = tempfile.TemporaryDirectory()
 kern_dir = tempfile.TemporaryDirectory()
 auspex.config.AWGDir = QGL.config.AWGDir = awg_dir.name
 auspex.config.KernelDir = kern_dir.name
+
+from QGL import *
 
 from auspex.qubit import *
 import bbndb
@@ -37,7 +38,6 @@ class PipelineTestCase(unittest.TestCase):
     filts  = ['avg-q1-int', 'q1-WriteToHDF5'] #'partial-avg-buff'
     nbr_round_robins = 50
 
-    @unittest.skip("Fix me for updated MP/DB api")
     def test_create(self):
         cl.clear()
         q1    = cl.new_qubit("q1")
@@ -76,12 +76,11 @@ class PipelineTestCase(unittest.TestCase):
         self.assertTrue(len(exp.output_connectors["q1"].descriptor.axes) == 2)
         self.assertTrue(len(exp.output_connectors["q1"].descriptor.axes[0].points) == 5)
 
-    @unittest.skip("Fix me for updated MP/DB api")
     def test_create_transceiver(self):
         cl.clear()
         q1    = cl.new_qubit("q1")
         q2    = cl.new_qubit("q2")
-        rack  = cl.new_APS2_rack("APS2Rack", 4, "192.168.5.102")
+        rack  = cl.new_APS2_rack("APS2Rack", [f"192.168.5.10{i}" for i in range(4)])
         x6_1  = cl.new_X6("X6_1", address="1", record_length=512)
         x6_2  = cl.new_X6("X6_2", address="1", record_length=512)
         holz1 = cl.new_source("Holz_1", "HolzworthHS9000", "HS9004A-009-1", power=-30)
@@ -89,15 +88,14 @@ class PipelineTestCase(unittest.TestCase):
         holz3 = cl.new_source("Holz_3", "HolzworthHS9000", "HS9004A-009-3", power=-30)
         holz4 = cl.new_source("Holz_4", "HolzworthHS9000", "HS9004A-009-4", power=-30)
 
-        self.assertTrue(rack.get_transmitter("1").label == 'APS2Rack_U1')
+        self.assertTrue(rack.tx("1").label == 'APS2Rack_U1')
 
-        cl.set_control(q1, rack.get_transmitter("1"), generator=holz1)
-        cl.set_measure(q1, rack.get_transmitter("2"), x6_1["raw-1-1"], generator=holz2)
-        cl.set_control(q2, rack.get_transmitter("3"), generator=holz3)
-        cl.set_measure(q2, rack.get_transmitter("4"), x6_2["raw-1-1"], generator=holz4)
-        cl.set_master(rack.get_transmitter("1"), rack.get_transmitter("1").ch("m2"))
+        cl.set_control(q1, rack.tx("1"), generator=holz1)
+        cl.set_measure(q1, rack.tx("2"), x6_1["raw-1-1"], generator=holz2)
+        cl.set_control(q2, rack.tx("3"), generator=holz3)
+        cl.set_measure(q2, rack.tx("4"), x6_2["raw-1-1"], generator=holz4)
+        cl.set_master(rack.tx("1"), rack.tx("1").ch("m2"))
 
-        
         pl.create_default_pipeline()
         pl.qubit("q1").clear_pipeline()
         pl.qubit("q1").set_stream_type("raw")
@@ -108,13 +106,12 @@ class PipelineTestCase(unittest.TestCase):
         # These should only be related to q1
         self.assertTrue([q1] == exp.measured_qubits)
         self.assertTrue([q1] == exp.controlled_qubits)
-        self.assertTrue(set(exp.transmitters) == set([rack.get_transmitter("1"), rack.get_transmitter("2")]))
+        self.assertTrue(set(exp.transmitters) == set([rack.tx("1"), rack.tx("2")]))
         self.assertTrue(set(exp.generators) == set([holz1, holz2]))
         self.assertTrue(set(exp.receivers) == set([x6_1]))
         self.assertTrue(len(exp.output_connectors["q1"].descriptor.axes) == 2)
         self.assertTrue(len(exp.output_connectors["q1"].descriptor.axes[0].points) == 5)
 
-    @unittest.skip("Fix me for updated MP/DB api")
     def test_add_qubit_sweep(self):
         cl.clear()
         q1    = cl.new_qubit("q1")
@@ -133,7 +130,6 @@ class PipelineTestCase(unittest.TestCase):
         self.assertTrue(len(exp.output_connectors["q1"].descriptor.axes[0].points) == 500)
         self.assertTrue(exp.output_connectors["q1"].descriptor.axes[0].points[-1] == 6.5e9)
 
-    @unittest.skip("Fix me for updated MP/DB api")
     def test_run_direct(self):
         cl.clear()
         q1    = cl.new_qubit("q1")
@@ -145,28 +141,23 @@ class PipelineTestCase(unittest.TestCase):
         cl.set_control(q1, aps1, generator=holz1)
         cl.set_measure(q1, aps2, x6_1["raw-1-1"], generator=holz2)
         cl.set_master(aps1, aps1.ch("m2"))
-        pl.create_default_pipeline(buffers=True)
-
+        pl.create_default_pipeline()
+        pl.reset_pipelines()
+        pl["q1"].clear_pipeline()
+        pl["q1"].set_stream_type("raw")
+        pl["q1"].create_default_pipeline(buffers=True)
         exp = QubitExperiment(RabiAmp(q1, np.linspace(-1,1,21)), averages=5)
+        exp.set_fake_data(x6_1, np.random.random(21))
         exp.run_sweeps()
         
         buf = list(exp.qubits_by_output.keys())[0]
         ax  = buf.input_connectors["sink"].descriptor.axes[0]
 
         # self.assertTrue(buf.done.is_set())
-        self.assertTrue(len(buf.output_data) == 21) # Record length * segments * averages (record decimated by 4x)
+        data, desc = buf.get_data()
+        self.assertTrue(len(data) == 21) # Record length * segments * averages (record decimated by 4x)
         self.assertTrue(np.all(np.array(ax.points) == np.linspace(-1,1,21)))
         self.assertTrue(ax.name == 'amplitude')
-
-    # Figure out how to buffer a partial average for testing...
-    @unittest.skip("Partial average for buffers to be fixed")
-    def test_final_vs_partial_avg(self):
-        clear_test_data()
-        qq = QubitFactory("q1")
-        exp = QubitExpFactory.run(RabiAmp(qq, np.linspace(-1,1,21)))
-        fab = exp.filters['final-avg-buff'].output_data['Data']
-        pab = exp.filters['partial-avg-buff'].output_data['Data']
-        self.assertTrue(np.abs(np.sum(fab-pab)) < 1e-8)
 
 if __name__ == '__main__':
     unittest.main()
