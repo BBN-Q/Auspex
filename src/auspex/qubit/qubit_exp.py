@@ -66,6 +66,9 @@ class QubitExperiment(Experiment):
         averages (int)  
             The number of shots to take. Results are only actually averaged
             if an `Averager` node is present in the processing pipeline.
+        exp_name (string)
+            Name of experiment. Used by any writers in pipeline to pick a data container name.
+
         kwargs  
             Additional keyword arguments passed to the base Auspex `Experiment`
             class.
@@ -81,7 +84,7 @@ class QubitExperiment(Experiment):
 
     """
 
-    def __init__(self, meta_file, pipeline_name=None, averages=100, **kwargs):
+    def __init__(self, meta_file, pipeline_name=None, averages=100, exp_name=None, **kwargs):
         super(QubitExperiment, self).__init__(**kwargs)
 
         if not pipeline.pipelineMgr:
@@ -90,6 +93,9 @@ class QubitExperiment(Experiment):
         self.pipeline_name = pipeline_name
         self.cw_mode = False
         self.add_date = True # add date to data files?
+
+
+        self.name = exp_name
 
         self.outputs_by_qubit = {}
 

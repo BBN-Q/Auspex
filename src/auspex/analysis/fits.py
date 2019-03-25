@@ -158,7 +158,7 @@ def fit_rabi_width(xdata, ydata, showPlot=False):
     if showPlot:
         xpts = np.linspace(xdata[0],xdata[-1],num=1000)
 
-        plt.plot(xdata,ydata,'.',markersize=1.0, label='data')
+        plt.plot(xdata,ydata,'.',markersize=15.0, label='data')
         plt.plot(xpts, rabi_width_model(xpts, *popt), label='fit')
         plt.xlabel('time [ns]')
         plt.ylabel(r'<$\sigma_z$>')
@@ -201,7 +201,7 @@ def fit_t1(xdata, ydata, showPlot=False):
     if showPlot:
         xpts = np.linspace(xdata[0],xdata[-1],num=1000)
 
-        plt.plot(xdata,ydata,'.',markersize=1.0, label='data')
+        plt.plot(xdata,ydata,'.',markersize=15.0, label='data')
         plt.plot(xpts, t1_model(xpts, *popt), label='fit')
         plt.xlabel('time [ns]')
         plt.ylabel(r'<$\sigma_z$>')
@@ -299,7 +299,7 @@ def ramsey_2f(x, f1, f2, A1, A2, tau1, tau2, phi1, phi2, y0):
 def plot_ramsey(xdata, ydata, popt, perr, fit_model=ramsey_1f):
     xpts = np.linspace(xdata[0],xdata[-4],num=1000)
 
-    plt.plot(xdata,ydata,'.',markersize=3.0, label='data')
+    plt.plot(xdata,ydata,'.',markersize=15.0, label='data')
     plt.plot(xpts, fit_model(xpts, *popt), label='fit')
     plt.xlabel('time [ns]')
     plt.ylabel(r'<$\sigma_z$>')
@@ -465,7 +465,7 @@ def fit_single_qubit_rb(data, lengths, showPlot=False):
     avg_infidelity_err = perr[1] / 2
 
     if showPlot:
-        plt.plot(xpts,data,'.',markersize=0.7, label='data')
+        plt.plot(xpts,data,'.',markersize=15, label='data')
         plt.errorbar(lengths, avg_points, yerr=errors/np.sqrt(len(lengths)),\
         fmt='*', elinewidth=2.0, capsize=4.0, label='mean')
         plt.plot(range(lengths[-1]), rb_model(range(lengths[-1]), *popt), \
@@ -512,21 +512,21 @@ def cal_data(data, quad=np.real, qubit_name="q1", group_name="main", \
     Rescale data to :math:`\\sigma_z`. expectation value based on calibration sequences.
 
     Parameters:
-        data (numpy array)       
+        data (numpy array)
             The data from the writer or buffer, which is a dictionary
             whose keys are typically in the format qubit_name-group_name, e.g.
             ({'q1-main'} : array([(0.0+0.0j, ...), (...), ...]))
-        quad (numpy function)       
+        quad (numpy function)
             This should be the quadrature where most of
             the data can be found.  Options are: np.real, np.imag, np.abs
             and np.angle
-        qubit_name (string)  
+        qubit_name (string)
             Name of the qubit in the data file. Default is 'q1'
-        group_name (string)  
+        group_name (string)
             Name of the data group to calibrate. Default is 'main'
-        return_type (numpy data type)  
+        return_type (numpy data type)
             Type of the returned data. Default is np.float32.
-        key (string)         
+        key (string)
             In the case where the dictionary keys don't conform
             to the default format a string can be passed in specifying the
             data key to scale.
@@ -536,7 +536,7 @@ def cal_data(data, quad=np.real, qubit_name="q1", group_name="main", \
 
 
     Examples:
-        Loading and calibrating data 
+        Loading and calibrating data
 
         >>> exp = QubitExperiment(T1(q1),averages=500)
         >>> exp.run_sweeps()
