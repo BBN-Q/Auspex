@@ -134,7 +134,6 @@ class QubitExperiment(Experiment):
         all_transceivers = self.chan_db.transceivers
         all_qubits       = [c for c in all_channels if isinstance(c, bbndb.qgl.Qubit)]
         all_measurements = [c for c in all_channels if isinstance(c, bbndb.qgl.Measurement)]
-
         # Restrict to current qubits, channels, etc. involved in this actual experiment
         self.controlled_qubits = [c for c in self.chan_db.channels if c.label in meta_info["qubits"]]
         self.measurements      = [c for c in self.chan_db.channels if c.label in meta_info["measurements"]]
@@ -142,6 +141,7 @@ class QubitExperiment(Experiment):
         self.phys_chans        = list(set([e.phys_chan for e in self.controlled_qubits + self.measurements]))
         self.transmitters      = list(set([e.phys_chan.transmitter for e in self.controlled_qubits + self.measurements]))
         self.receiver_chans    = list(set([e.receiver_chan for e in self.measurements]))
+        
         self.receivers         = list(set([e.receiver_chan.receiver for e in self.measurements]))
         self.generators        = list(set([q.phys_chan.generator for q in self.measured_qubits + self.controlled_qubits + self.measurements if q.phys_chan.generator]))
         self.qubits_by_name    = {q.label: q for q in self.measured_qubits + self.controlled_qubits}
@@ -209,13 +209,14 @@ class QubitExperiment(Experiment):
             receiver.stream_type = self.qubit_proxies[qubit_label].stream_type
 
         # Now a pipeline exists, so we create Auspex filters from the proxy filters in the db
-        self.proxy_to_filter  = {}
-        self.filters          = []
-        self.connector_by_qp  = {}
-        self.chan_to_dig      = {}
-        self.chan_to_oc       = {}
-        self.qubit_to_dig     = {}
-        self.qubits_by_output = {}
+        self.proxy_to_filter          = {}
+        self.filters                  = []
+        self.connector_by_qp          = {}
+        self.chan_to_dig              = {}
+        self.chan_to_oc               = {}
+        self.qubit_to_dig             = {}
+        self.qubits_by_output         = {}
+        self.proxy_name_to_instrument = {}
 
         # Create microwave sources and receiver instruments from the database objects.
         # We configure the self.receivers later after adding channels.
@@ -225,7 +226,10 @@ class QubitExperiment(Experiment):
             instr = instrument_map[instrument.model](instrument.address, instrument.label) # Instantiate
             # For easy lookup
             instr.proxy_obj = instrument
-            instrument.instr = instr
+            instrument.instr = instr # This shouldn't be relied upon
+
+            self.proxy_name_to_instrument[instrument.label] = instr
+
             # Add to the experiment's instrument list
             self._instruments[instrument.label] = instr
             self.instruments.append(instr)
@@ -332,13 +336,13 @@ class QubitExperiment(Experiment):
         """
         return graph
 
-    def set_fake_data(self, instrument, ideal_data, increment=False):
+    def set_fake_data(self, digitizer_proxy, ideal_data, increment=False):
         """Enabled and use the fake data interface for digitizers in order that auspex can 
         be run without hardware.
 
         Parameters:
-            instrument (`Digitizer` instance)       
-                The digitizer instrument to be used for fake data generation.
+            digitizer_proxy (bbndb `Receiver` instance)       
+                The digitizer instrument proxy to be used for fake data generation. 
             ideal_data (numpy array)       
                 The actual data to be used. If `increment` is False, a 1D array with a single value 
                 per segment is used. The digitizer drivers automatical convert to a integrated, demodulated, 
@@ -360,19 +364,22 @@ class QubitExperiment(Experiment):
             >>> exp.run_sweeps() 
 
         """
-        instrument.instr.ideal_data = ideal_data
-        instrument.instr.increment_ideal_data = increment
-        instrument.instr.gen_fake_data = True
+        auspex_instr = self.proxy_name_to_instrument[digitizer_proxy.label]
+        auspex_instr.ideal_data = ideal_data
+        auspex_instr.increment_ideal_data = increment
+        auspex_instr.gen_fake_data = True
 
-    def clear_fake_data(self, instrument):
+    def clear_fake_data(self, digitizer_proxy):
         """Disable using fake data interface for a digitizer. Take note that dummy mode may
         still be active.
 
         Parameters:
-            instrument (`Digitizer` instance)       
-                The digitizer instrument that should no longer use fake data generation.
+            digitizer_proxy (bbndb `Receiver` instance)       
+                The digitizer instrument proxy to be used for fake data generation. 
         """
-        instrument.instr.ideal_data = None
+        auspex_instr = self.proxy_name_to_instrument[digitizer_proxy.label]
+        auspex_instr.ideal_data = ideal_data
+        auspex_instr.gen_fake_data = False
 
     def add_connector(self, qubit):
         logger.debug(f"Adding {qubit.qubit_name} output connector to experiment.")
@@ -494,6 +501,7 @@ class QubitExperiment(Experiment):
             if listener.is_alive():
                 logger.info(f"Terminating listener {listener} aggressively")
                 listener.terminate()
+            del listener
         if self.cw_mode:
             for awg in self.awgs:
                 awg.stop()
@@ -501,6 +509,8 @@ class QubitExperiment(Experiment):
             gen_proxy.instr.output = False
         for instr in self.instruments:
             instr.disconnect()
+        import gc
+        gc.collect()
 
     def final_init(self):
         super(QubitExperiment, self).final_init()

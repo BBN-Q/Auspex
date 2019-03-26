@@ -151,7 +151,8 @@ class X6(Instrument):
             sock.close()
         self._chan_to_rsocket.clear()
         self._chan_to_wsocket.clear()
-        self._lib.disconnect()
+        if hasattr(self, '_lib'):
+            self._lib.disconnect()
 
     def configure_with_dict(self, settings_dict):
         # Take these directly from the proxy obj

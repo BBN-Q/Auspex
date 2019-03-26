@@ -20,8 +20,8 @@ install:
   - bash miniconda.sh -h | sed '4q;d'
   - bash miniconda.sh -b -p $HOME/miniconda
   - export PATH="$HOME/miniconda/bin:$PATH"
-  - export BBN_DB="$PWD/bbn.sqlite"
-  - echo "Database file at $BBN_DB"
+  # - export BBN_DB="$PWD/bbn.sqlite"
+  # - echo "Database file at $BBN_DB"
   - hash -r
   - conda config --set always_yes yes --set changeps1 no
   - conda update -q conda
