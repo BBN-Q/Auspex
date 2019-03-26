@@ -53,10 +53,10 @@ class RabiAmpFit(AuspexFit):
     def pi_amp(self):
         """Returns the pi-pulse amplitude of the fit.
         """
-        return self.fit_params["Api"]
+        return 0.5/self.fit_params["f"]
 
     def annotation(self):
-        return r"$A_\pi$ = {0:.2e} {1} {2:.2e}".format(self.fit_params["Api"], chr(177), self.fit_errors["Api"])
+        return r"$A_\pi$ = {0:.2e} {1} {2:.2e}".format(self.pi_amp, chr(177), self.fit_errors["Api"])
 
 class RabiWidthFit(AuspexFit):
     """Fit to a single-frequency decaying cosine for fitting Rabi-vs-time experiments

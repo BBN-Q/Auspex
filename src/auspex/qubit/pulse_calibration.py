@@ -537,11 +537,11 @@ class RabiAmpCalibration(QubitCalibration):
     def _calibrate(self):
         data, _ = self.run_sweeps()
         N = len(data)
-        I_fit = RabiAmpFit(self.amps, data[:N//2])
+        I_fit = RabiAmpFit(self.amps, data[N//2:])
         Q_fit = RabiAmpFit(self.amps, data[:N//2])
         #Arbitary extra division by two so that it doesn't push the offset too far.
-        self.pi_amp = I_fit.fit_params["Api"]
-        self.pi2_amp = I_fit.fit_params["Api"]/2.0
+        self.pi_amp = I_fit.pi_amp
+        self.pi2_amp = I_fit.pi_amp/2.0
         self.i_offset = I_fit.fit_params["phi"]*self.amp2offset
         self.q_offset = Q_fit.fit_params["phi"]*self.amp2offset
         logger.info("Found X180 amplitude: {}".format(self.pi_amp))
