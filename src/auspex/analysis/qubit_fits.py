@@ -107,10 +107,24 @@ class T1Fit(AuspexFit):
         return p[0]*np.exp(-x/p[1]) + p[2]
 
     def _initial_guess(self):
-        amp = np.max(self.ypts)
-        offset = self.ypts[-1]
-        t1 = self.xpts[np.size(self.ypts) // 3]
-        return [amp, t1, offset]
+        ## Initial guess using method of linear regression via integral equations
+        ## https://www.scribd.com/doc/14674814/Regressions-et-equations-integrales
+        N = len(self.xpts)
+        S = np.zeros(N)
+        for j in range(2, N):
+            S[j] = S[j-1] + 0.5*((self.ypts[j] + self.ypts[j-1]) *
+                                    (self.xpts[j] - self.xpts[j-1]))
+        xs = self.xpts - self.xpts[0]
+        ys = self.ypts - self.ypts[0]
+        M = np.array([[np.sum(xs**2), np.sum(xs * S)],
+                      [np.sum(xs * S), np.sum(S**2)]])
+        B1 = (np.linalg.inv(M) @ np.array([np.sum(ys * xs), np.sum(ys * S)]).T)[1]
+        theta = np.exp(B1 * self.xpts)
+        M2 = np.array([[N, np.sum(theta)], [np.sum(theta), np.sum(theta**2)]])
+        A = np.linalg.inv(M2) @ np.array([np.sum(self.ypts), np.sum(self.ypts * theta)]).T
+
+        return [A[1], -1.0/B1, A[0]]
+
 
     def _fit_dict(self, p):
         return {"A": p[0], "T1": p[1], "A0": p[2]}
@@ -278,7 +292,23 @@ class SingleQubitRBFit(AuspexFit):
         return p[0] * (1-p[1])**x + p[2]
 
     def _initial_guess(self):
-        return [0.5, 0.01, 0.5]
+        ## Initial guess using method of linear regression via integral equations
+        ## https://www.scribd.com/doc/14674814/Regressions-et-equations-integrales
+        N = len(self.xpts)
+        S = np.zeros(N)
+        for j in range(2, N):
+            S[j] = S[j-1] + 0.5*((self.ypts[j] + self.ypts[j-1]) *
+                                    (self.xpts[j] - self.xpts[j-1]))
+        xs = self.xpts - self.xpts[0]
+        ys = self.ypts - self.ypts[0]
+        M = np.array([[np.sum(xs**2), np.sum(xs * S)],
+                      [np.sum(xs * S), np.sum(S**2)]])
+        B1 = (np.linalg.inv(M) @ np.array([np.sum(ys * xs), np.sum(ys * S)]).T)[1]
+        theta = np.exp(B1 * self.xpts)
+        M2 = np.array([[N, np.sum(theta)], [np.sum(theta), np.sum(theta**2)]])
+        A = np.linalg.inv(M2) @ np.array([np.sum(self.ypts), np.sum(self.ypts * theta)]).T
+
+        return [A[1], 1-np.exp(B1), A[0]]
 
     def __str__(self):
         return "A*(1 - r)^N + B"
