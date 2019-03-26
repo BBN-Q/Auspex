@@ -435,14 +435,17 @@ class Experiment(metaclass=MetaExperiment):
 
     def init_progress_bars(self):
         """ initialize the progress bars."""
-        from ipywidgets import IntProgress, VBox
-        from IPython.display import display
+        from auspex.config import isnotebook
 
-        self.progressbars = {}
-        for axis in self.sweeper.axes:
-            self.progressbars[axis] = IntProgress(min=0, max=axis.num_points(),
-                                                    description=f'Sweep {axis.name}:', style={'description_width': 'initial'})
-        display(VBox(list(self.progressbars.values())))
+        if isnotebook():
+            from ipywidgets import IntProgress, VBox
+            from IPython.display import display
+
+            self.progressbars = {}
+            for axis in self.sweeper.axes:
+                self.progressbars[axis] = IntProgress(min=0, max=axis.num_points(),
+                                                        description=f'Sweep {axis.name}:', style={'description_width': 'initial'})
+            display(VBox(list(self.progressbars.values())))
 
     def run_sweeps(self):
         # Propagate the descriptors through the network
