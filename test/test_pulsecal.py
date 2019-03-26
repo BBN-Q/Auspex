@@ -12,6 +12,9 @@ import time
 import numpy as np
 import tempfile
 
+pl = None
+cl = None
+
 import QGL.config
 import auspex.config
 auspex.config.auspex_dummy_mode = True
@@ -26,8 +29,6 @@ from QGL import *
 from auspex.qubit import *
 import bbndb
 
-cl = ChannelLibrary(db_resource_name=":memory:")
-pl = PipelineManager()
 
 def simulate_rabiAmp(num_steps = 20, over_rotation_factor = 0):
     """
@@ -106,6 +107,13 @@ class SingleQubitCalTestCase(unittest.TestCase):
     Ideal data are generated and stored into a temporary file, whose name is set by the X6 property `ideal_data`. Calibrations which span over multiple experiments load different columns of these ideal data. The column (and experiment) number is set by an incremental counter, also a digitizer property `exp_step`. Artificial noise is added by the X6 dummy instrument.
     """
     
+    @classmethod
+    def setUpClass(cls):
+        global cl, pl
+
+        cl = ChannelLibrary(db_resource_name=":memory:")
+        pl = PipelineManager()
+
     def _setUp(self, num_averages=50):
         self.num_averages = num_averages
         cl.clear()
@@ -123,6 +131,7 @@ class SingleQubitCalTestCase(unittest.TestCase):
         pl["q1"].clear_pipeline()
         pl["q1"].set_stream_type("integrated")
         pl["q1"].create_default_pipeline()
+        cl.commit()
 
         # Clear calibration table
         bbndb.session.query(bbndb.calibration.Sample).delete()

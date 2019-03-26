@@ -6,11 +6,14 @@ import time
 import tempfile
 import numpy as np
 
-# Dummy mode
+pl = None
+cl = None
+
+
+import QGL.config
 import auspex.config
 auspex.config.auspex_dummy_mode = True
 
-import QGL.config
 # Set temporary output directories
 awg_dir = tempfile.TemporaryDirectory()
 kern_dir = tempfile.TemporaryDirectory()
@@ -18,12 +21,8 @@ auspex.config.AWGDir = QGL.config.AWGDir = awg_dir.name
 auspex.config.KernelDir = kern_dir.name
 
 from QGL import *
-
 from auspex.qubit import *
 import bbndb
-
-cl = ChannelLibrary(db_resource_name=":memory:")
-pl = PipelineManager()
 
 def clear_test_data():
     for file in glob.glob("test_*.h5"):
@@ -37,6 +36,13 @@ class PipelineTestCase(unittest.TestCase):
     instrs = ['BBNAPS1', 'BBNAPS2', 'X6-1', 'Holz1', 'Holz2']
     filts  = ['avg-q1-int', 'q1-WriteToHDF5'] #'partial-avg-buff'
     nbr_round_robins = 50
+
+    @classmethod
+    def setUpClass(cls):
+        global cl, pl
+
+        cl = ChannelLibrary(db_resource_name=":memory:")
+        pl = PipelineManager()
 
     def test_create(self):
         cl.clear()
@@ -58,6 +64,7 @@ class PipelineTestCase(unittest.TestCase):
         cl.set_control(q2, aps3, generator=holz3)
         cl.set_measure(q2, aps4, x6_2["raw-1-1"], generator=holz4)
         cl.set_master(aps1, aps1.ch("m2"))
+        cl.commit()
 
         pl.create_default_pipeline()
         pl.qubit("q1").clear_pipeline()
@@ -95,6 +102,7 @@ class PipelineTestCase(unittest.TestCase):
         cl.set_control(q2, rack.tx("3"), generator=holz3)
         cl.set_measure(q2, rack.tx("4"), x6_2["raw-1-1"], generator=holz4)
         cl.set_master(rack.tx("1"), rack.tx("1").ch("m2"))
+        cl.commit()
 
         pl.create_default_pipeline()
         pl.qubit("q1").clear_pipeline()
@@ -124,6 +132,7 @@ class PipelineTestCase(unittest.TestCase):
         cl.set_measure(q1, aps2, x6_1["raw-1-1"], generator=holz2)
         cl.set_master(aps1, aps1.ch("m2"))
         pl.create_default_pipeline()
+        cl.commit()
 
         exp = QubitExperiment(PulsedSpec(q1), averages=5)
         exp.add_qubit_sweep(q1, "measure", "frequency", np.linspace(6e9, 6.5e9, 500))
@@ -141,6 +150,7 @@ class PipelineTestCase(unittest.TestCase):
         cl.set_control(q1, aps1, generator=holz1)
         cl.set_measure(q1, aps2, x6_1["raw-1-1"], generator=holz2)
         cl.set_master(aps1, aps1.ch("m2"))
+        cl.commit()
         pl.create_default_pipeline()
         pl.reset_pipelines()
         pl["q1"].clear_pipeline()
