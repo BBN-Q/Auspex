@@ -35,6 +35,7 @@ from . import pipeline
 from auspex.parameter import FloatParameter
 from auspex.filters.plot import ManualPlotter
 from auspex.analysis.fits import *
+from auspex.analysis.qubit_fits import *
 from auspex.analysis.helpers import normalize_data
 from matplotlib import cm
 from scipy.optimize import curve_fit
@@ -536,21 +537,21 @@ class RabiAmpCalibration(QubitCalibration):
     def _calibrate(self):
         data, _ = self.run_sweeps()
         N = len(data)
-        piI, offI, poptI = fit_rabi_amp(self.amps, data[:N//2])
-        piQ, offQ, poptQ = fit_rabi_amp(self.amps, data[N//2:])
+        I_fit = RabiAmpFit(self.amps, data[N//2:])
+        Q_fit = RabiAmpFit(self.amps, data[:N//2])
         #Arbitary extra division by two so that it doesn't push the offset too far.
-        self.pi_amp = piI
-        self.pi2_amp = piI/2.0
-        self.i_offset = offI*self.amp2offset
-        self.q_offset = offQ*self.amp2offset
+        self.pi_amp = I_fit.pi_amp
+        self.pi2_amp = I_fit.pi_amp/2.0
+        self.i_offset = I_fit.fit_params["phi"]*self.amp2offset
+        self.q_offset = Q_fit.fit_params["phi"]*self.amp2offset
         logger.info("Found X180 amplitude: {}".format(self.pi_amp))
         logger.info("Shifting I offset by: {}".format(self.i_offset))
         logger.info("Shifting Q offset by: {}".format(self.q_offset))
         finer_amps = np.linspace(np.min(self.amps), np.max(self.amps), 4*len(self.amps))
         self.plot["I Data"] = (self.amps, data[:N//2])
         self.plot["Q Data"] = (self.amps, data[N//2:])
-        self.plot["I Fit"] = (finer_amps, rabi_amp_model(finer_amps, *poptI))
-        self.plot["Q Fit"] = (finer_amps, rabi_amp_model(finer_amps, *poptQ))
+        self.plot["I Fit"] = (finer_amps, I_fit.model(finer_amps))
+        self.plot["Q Fit"] = (finer_amps, Q_fit.model(finer_amps))
 
         if self.pi_amp <= 1.0 and self.pi2_amp <= 1.0:
             self.succeeded = True
@@ -627,15 +628,15 @@ class RamseyCalibration(QubitCalibration):
             self.qubit.frequency += float(self.added_detuning)
         data, _ = self.run_sweeps()
         try:
-            fit_freqs, fit_errs, all_params, all_errs = fit_ramsey(self.delays, data, two_freqs=self.two_freqs, AIC=self.AIC)
+            ramsey_fit = RamseyFit(self.delays, data, two_freqs=self.two_freqs, AIC=self.AIC)
+            fit_freqs = ramsey_fit.fit_params["f"]
         except Exception as e:
             raise Exception(f"Exception {e} while fitting in {self}")
 
         # Plot the results
         self.plot["Data 1"] = (self.delays, data)
         finer_delays = np.linspace(np.min(self.delays), np.max(self.delays), 4*len(self.delays))
-        ramsey_f = ramsey_2f if len(fit_freqs) == 2 else ramsey_1f #1-freq fit if the 2-freq has failed
-        self.plot["Fit 1"] = (finer_delays, ramsey_f(finer_delays, *all_params))
+        self.plot["Fit 1"] = (finer_delays, ramsey_fit.model(finer_delays))
 
         #TODO: set conditions for success
         fit_freq_A = np.mean(fit_freqs) #the fit result can be one or two frequencies
@@ -653,14 +654,14 @@ class RamseyCalibration(QubitCalibration):
         data, _ = self.run_sweeps()
 
         try:
-            fit_freqs, fit_errs, all_params, all_errs = fit_ramsey(self.delays, data, two_freqs=self.two_freqs, AIC=self.AIC)
+            ramsey_fit = RamseyFit(self.delays, data, two_freqs=self.two_freqs, AIC=self.AIC)
+            fit_freqs = ramsey_fit.fit_params["f"]
         except Exception as e:
             raise Exception(f"Exception {e} while fitting in {self}")
 
         # Plot the results
         self.plot["Data 2"] = (self.delays, data)
-        ramsey_f = ramsey_2f if len(fit_freqs) == 2 else ramsey_1f
-        self.plot["Fit 2"]  = (finer_delays, ramsey_f(finer_delays, *all_params))
+        self.plot["Fit 2"]  = (finer_delays, ramsey_fit.model(finer_delays))
 
         fit_freq_B = np.mean(fit_freqs)
         if fit_freq_B < fit_freq_A:
