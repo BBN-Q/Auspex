@@ -117,4 +117,5 @@ class DataBuffer(Filter):
     def get_data(self):
         if self.final_buffer is None:
             self.final_buffer = self._final_buffer.get()
+        time.sleep(0.05)
         return np.reshape(self.final_buffer, self.descriptor.dims()), self.descriptor

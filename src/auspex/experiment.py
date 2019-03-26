@@ -377,11 +377,12 @@ class Experiment(metaclass=MetaExperiment):
         thru_y = Axis(label='Data Processed (MB)', scale=thru_sy, orientation='vertical')
 
         colors            = CATEGORY20
-        self.cpu_lines    = {str(n): Lines(labels=[str(n)], x=[0.0], y=[0.0], colors=[colors[i]],
+        tt                = Tooltip(fields=['name'], labels=['Filter Name'])
+        self.cpu_lines    = {str(n): Lines(labels=[str(n)], x=[0.0], y=[0.0], colors=[colors[i]], tooltip=tt,
                                 scales={'x': cpu_sx, 'y': cpu_sy}) for i, n in enumerate(self.other_nodes)}
-        self.mem_lines    = {str(n): Lines(labels=[str(n)], x=[0.0], y=[0.0], colors=[colors[i]],
+        self.mem_lines    = {str(n): Lines(labels=[str(n)], x=[0.0], y=[0.0], colors=[colors[i]], tooltip=tt,
                                 scales={'x': mem_sx, 'y': mem_sy}) for i, n in enumerate(self.other_nodes)}
-        self.thru_lines   = {str(n): Lines(labels=[str(n)], x=[0.0], y=[0.0], colors=[colors[i]],
+        self.thru_lines   = {str(n): Lines(labels=[str(n)], x=[0.0], y=[0.0], colors=[colors[i]], tooltip=tt,
                                 scales={'x': thru_sx, 'y': thru_sy}) for i, n in enumerate(self.other_nodes)}
         
         self.cpu_fig = Figure(marks=list(self.cpu_lines.values()), axes=[cpu_x, cpu_y], title='CPU Usage', animation_duration=50)
@@ -414,9 +415,9 @@ class Experiment(metaclass=MetaExperiment):
                     cpu_lines[filter_name].x = np.append(cpu_lines[filter_name].x, [time_val.total_seconds()])
                     cpu_lines[filter_name].y = np.append(cpu_lines[filter_name].y, [cpu])
                     mem_lines[filter_name].x = np.append(mem_lines[filter_name].x, [time_val.total_seconds()])
-                    mem_lines[filter_name].y = np.append(mem_lines[filter_name].y, [mem/2.**20])
+                    mem_lines[filter_name].y = np.append(mem_lines[filter_name].y, [mem])
                     thru_lines[filter_name].x = np.append(thru_lines[filter_name].x, [time_val.total_seconds()])
-                    thru_lines[filter_name].y = np.append(thru_lines[filter_name].y, [proc/2.**20])
+                    thru_lines[filter_name].y = np.append(thru_lines[filter_name].y, [proc])
 
         for n in self.other_nodes:
             n.perf_queue = perf_queue
@@ -434,14 +435,17 @@ class Experiment(metaclass=MetaExperiment):
 
     def init_progress_bars(self):
         """ initialize the progress bars."""
-        from ipywidgets import IntProgress, VBox
-        from IPython.display import display
+        from auspex.config import isnotebook
 
-        self.progressbars = {}
-        for axis in self.sweeper.axes:
-            self.progressbars[axis] = IntProgress(min=0, max=axis.num_points(),
-                                                    description=f'Sweep {axis.name}:', style={'description_width': 'initial'})
-        display(VBox(list(self.progressbars.values())))
+        if isnotebook():
+            from ipywidgets import IntProgress, VBox
+            from IPython.display import display
+
+            self.progressbars = {}
+            for axis in self.sweeper.axes:
+                self.progressbars[axis] = IntProgress(min=0, max=axis.num_points(),
+                                                        description=f'Sweep {axis.name}:', style={'description_width': 'initial'})
+            display(VBox(list(self.progressbars.values())))
 
     def run_sweeps(self):
         # Propagate the descriptors through the network
