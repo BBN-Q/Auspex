@@ -25,6 +25,7 @@ import scipy as sp
 import subprocess
 import zmq
 import json
+import datetime
 
 import time
 import bbndb
@@ -40,9 +41,12 @@ from scipy.optimize import curve_fit
 import numpy as np
 from itertools import product
 
+import bbndb
+
 class Calibration(object):
 
     def __init__(self):
+        self.do_plotting = True
         self.uuid = str(uuid.uuid4())
 
     def init_plots(self):
@@ -90,12 +94,6 @@ class Calibration(object):
             for p in self.plotters:
                 p.do_plotting = False
 
-        if len(self.plotters) > 0 and self.do_plotting:
-            client_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),"../matplotlib-client.py")
-            preexec_fn  = os.setsid if hasattr(os, 'setsid') else None
-            subprocess.Popen(['python', client_path, 'localhost', self.uuid], env=os.environ.copy(), preexec_fn=preexec_fn)
-            time.sleep(1)
-
         for p in self.plotters:
             p.start()
 
@@ -116,6 +114,10 @@ class Calibration(object):
         if self.do_plotting:
             self.stop_plots()
 
+    def update_settings(self):
+        # Must be overriden in child class
+        pass
+
     def descriptor(self):
         return None
 
@@ -130,7 +132,7 @@ class Calibration(object):
 
 class QubitCalibration(Calibration):
     calibration_experiment = None
-    def __init__(self, qubits, output_nodes=None, quad="real", auto_rollback=True, do_plotting=True, **kwargs):
+    def __init__(self, qubits, sample_name=None, output_nodes=None, quad="real", auto_rollback=True, do_plotting=True, **kwargs):
         self.qubits           = qubits if isinstance(qubits, list) else [qubits]
         self.qubit            = None if isinstance(qubits, list) else qubits
         self.output_nodes     = output_nodes if isinstance(output_nodes, list) else [output_nodes]
@@ -146,11 +148,26 @@ class QubitCalibration(Calibration):
         self.plotters         = []
         self.do_plotting      = do_plotting
         self.fake_data        = None
+        self.sample           = None
         try:
             self.quad_fun = {"real": np.real, "imag": np.imag, "amp": np.abs, "phase": np.angle}[quad]
         except:
             raise ValueError('Quadrature to calibrate must be one of ("real", "imag", "amp", "phase").')
         super(QubitCalibration, self).__init__()
+
+        if sample_name:
+            if not bbndb.session:
+                raise Exception("Attempting to load Calibrations database, \
+                    but no database session is open! Have the ChannelLibrary and PipelineManager been created?")
+            existing_samples = list(bbndb.session.query(bbndb.calibration.Sample).filter_by(name=sample_name).all())
+            if len(existing_samples) == 0:
+                logger.info("Creating a new sample in the calibration database.")
+                self.sample = bbndb.calibration.Sample(name=sample_name)
+                bbndb.session.add(self.sample)
+            elif len(existing_samples) == 1:
+                self.sample = existing_samples[0]
+            else:
+                raise Exception("Multiple samples found in calibration database with the same name! How?")
 
     def sequence(self):
         """Returns the sequence for the given calibration, must be overridden"""
@@ -550,10 +567,18 @@ class RabiAmpCalibration(QubitCalibration):
     def update_settings(self):
         s = round(self.pi_amp, 5)
         self.qubit.pulse_params['pi2Amp'] = round(self.pi2_amp, 5)
+        self.qubit.pulse_params['piAmp'] = round(self.pi_amp, 5)
         awg_chan   = self.qubit.phys_chan
         amp_factor = self.qubit.phys_chan.amp_factor
         awg_chan.I_channel_offset += round(amp_factor*self.amp2offset*self.i_offset, 5)
         awg_chan.Q_channel_offset += round(amp_factor*self.amp2offset*self.i_offset, 5)
+
+        if self.sample:
+            c1 = bbndb.calibration.Calibration(value=self.pi2_amp, sample=self.sample, name="Pi2Amp", category="Rabi")
+            c2 = bbndb.calibration.Calibration(value=self.pi_amp, sample=self.sample, name="PiAmp", category="Rabi")
+            c1.date = c2.date = datetime.datetime.now()
+            bbndb.session.add_all([c1, c2])
+            bbndb.session.commit()
 
 class RamseyCalibration(QubitCalibration):
     def __init__(self, qubit, delays=np.linspace(0.0, 20.0, 41)*1e-6,
@@ -748,6 +773,12 @@ class Pi2Calibration(PhaseEstimation):
     def update_settings(self):
         self.qubit.pulse_params['pi2Amp'] = round(self.amplitude, 5)
 
+        if self.sample:
+            c = bbndb.calibration.Calibration(value=self.amplitude, sample=self.sample, name="Pi2Amp", category="PhaseEstimation")
+            c.date = datetime.datetime.now()
+            bbndb.session.add(c)
+            bbndb.session.commit()
+
 class PiCalibration(PhaseEstimation):
 
     def __init__(self, qubit, num_pulses= 1, direction = 'X',
@@ -757,7 +788,13 @@ class PiCalibration(PhaseEstimation):
                         target=np.pi, epsilon=epsilon, max_iter=max_iter, **kwargs)
 
     def update_settings(self):
-        self.qubit.pulse_params['piAmp'] =round(self.amplitude, 5)
+        self.qubit.pulse_params['piAmp'] = round(self.amplitude, 5)
+
+        if self.sample:
+            c = bbndb.calibration.Calibration(value=self.amplitude, sample=self.sample, name="PiAmp", category="PhaseEstimation")
+            c.date = datetime.datetime.now()
+            bbndb.session.add(c)
+            bbndb.session.commit()
 
 # class CRAmpCalibration_PhEst(PhaseEstimation):
 #     def __init__(self, qubit_names, num_pulses= 9):
@@ -831,6 +868,12 @@ class DRAGCalibration(QubitCalibration):
     def update_settings(self):
         logger.info(f'{self.qubit.label} DRAG parameter set to {self.opt_drag}')
         self.qubit.pulse_params['drag_scaling'] = self.opt_drag
+
+        if self.sample:
+            c = bbndb.calibration.Calibration(value=self.opt_drag, sample=self.sample, name="drag_scaling")
+            c.date = datetime.datetime.now()
+            bbndb.session.add(c)
+            bbndb.session.commit()
 
 # class MeasCalibration(Calibration):
 #     def __init__(self, qubit_name):
