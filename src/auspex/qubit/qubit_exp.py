@@ -98,7 +98,8 @@ class QubitExperiment(Experiment):
         self.name = exp_name
 
         self.outputs_by_qubit = {}
-
+        self.progressbars = None
+        
         self.create_from_meta(meta_file, averages)
 
     def create_from_meta(self, meta_file, averages):
@@ -520,19 +521,23 @@ class QubitExperiment(Experiment):
 
     def init_progress_bars(self):
         """ initialize the progress bars."""
-        from ipywidgets import IntProgress, VBox
-        from IPython.display import display
 
-        ocs = list(self.output_connectors.values())
-        self.progressbars = {}
-        if len(ocs)>0:
-            for oc in ocs:
-                self.progressbars[oc] = IntProgress(min=0, max=oc.output_streams[0].descriptor.num_points(), bar_style='success',
-                                                    description=f'Digitizer Data {oc.name}:', style={'description_width': 'initial'})
-        for axis in self.sweeper.axes:
-            self.progressbars[axis] = IntProgress(min=0, max=axis.num_points(),
-                                                    description=f'{axis.name}:', style={'description_width': 'initial'})
-        display(VBox(list(self.progressbars.values())))
+        from auspex.config import isnotebook
+
+        if isnotebook():
+            from ipywidgets import IntProgress, VBox
+            from IPython.display import display
+
+            ocs = list(self.output_connectors.values())
+            self.progressbars = {}
+            if len(ocs)>0:
+                for oc in ocs:
+                    self.progressbars[oc] = IntProgress(min=0, max=oc.output_streams[0].descriptor.num_points(), bar_style='success',
+                                                        description=f'Digitizer Data {oc.name}:', style={'description_width': 'initial'})
+            for axis in self.sweeper.axes:
+                self.progressbars[axis] = IntProgress(min=0, max=axis.num_points(),
+                                                        description=f'{axis.name}:', style={'description_width': 'initial'})
+            display(VBox(list(self.progressbars.values())))
 
     def run(self):
         # Begin acquisition before enabling the AWGs
