@@ -35,6 +35,7 @@ from . import pipeline
 from auspex.parameter import FloatParameter
 from auspex.filters.plot import ManualPlotter
 from auspex.analysis.fits import *
+from auspex.analysis.qubit_fits import *
 from auspex.analysis.helpers import normalize_data
 from matplotlib import cm
 from scipy.optimize import curve_fit

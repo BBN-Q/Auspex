@@ -7,6 +7,7 @@
 #    http://www.apache.org/licenses/LICENSE-2.0
 
 import numpy as np
+from scipy.optimize import curve_fit
 from auspex.log import logger
 from copy import copy
 import matplotlib.pyplot as plt
