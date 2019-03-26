@@ -118,7 +118,7 @@ class T1Fit(AuspexFit):
         ys = self.ypts - self.ypts[0]
         M = np.array([[np.sum(xs**2), np.sum(xs * S)],
                       [np.sum(xs * S), np.sum(S**2)]])
-        B1 = (np.linalg.inv(M) @ np.array([np.sum(ys * xs), np.sum(ys * S)]).T)
+        B1 = (np.linalg.inv(M) @ np.array([np.sum(ys * xs), np.sum(ys * S)]).T)[1]
         theta = np.exp(B1 * self.xpts)
         M2 = np.array([[N, np.sum(theta)], [np.sum(theta), np.sum(theta**2)]])
         A = np.linalg.inv(M2) @ np.array([np.sum(self.ypts), np.sum(self.ypts * theta)]).T
@@ -303,7 +303,7 @@ class SingleQubitRBFit(AuspexFit):
         ys = self.ypts - self.ypts[0]
         M = np.array([[np.sum(xs**2), np.sum(xs * S)],
                       [np.sum(xs * S), np.sum(S**2)]])
-        B1 = (np.linalg.inv(M) @ np.array([np.sum(ys * xs), np.sum(ys * S)]).T)
+        B1 = (np.linalg.inv(M) @ np.array([np.sum(ys * xs), np.sum(ys * S)]).T)[1]
         theta = np.exp(B1 * self.xpts)
         M2 = np.array([[N, np.sum(theta)], [np.sum(theta), np.sum(theta**2)]])
         A = np.linalg.inv(M2) @ np.array([np.sum(self.ypts), np.sum(self.ypts * theta)]).T
