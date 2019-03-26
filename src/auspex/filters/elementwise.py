@@ -9,7 +9,6 @@
 __all__ = ['ElementwiseFilter']
 
 import queue
-import h5py
 import itertools
 import numpy as np
 import os.path
