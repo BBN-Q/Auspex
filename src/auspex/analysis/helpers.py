@@ -47,7 +47,7 @@ def open_data(num=None, folder=None, groupname="main", datasetname="data", date=
         >>> data, desc = open_data(42, '/path/to/my/data', "q1-main", date="190301")
 
     """
-    if num or folder is None:
+    if num is None or folder is None:
         # pull up dialog box
         data_file = get_file_name()
     else:
