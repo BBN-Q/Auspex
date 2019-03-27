@@ -41,6 +41,7 @@ class AuspexDataContainer(object):
                 meta['meta_data'][a.name] = a.metadata
             else:
                 meta['meta_data'][a.name] = None
+        meta['filename'] = os.path.join(self.base_path,groupname,datasetname)
         with open(filename, 'w') as f:
             json.dump(meta, f)
     def _create_memmap(self, groupname, datasetname, shape, dtype, mode='w+'):
