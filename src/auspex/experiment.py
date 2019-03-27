@@ -589,11 +589,15 @@ class Experiment(metaclass=MetaExperiment):
         # This includes stopping the flow of data, and must be done before terminating nodes
         self.shutdown_instruments()
 
-        for n in self.other_nodes:
-            n.exit.set()
-            n.join(0.1)
-            if n.is_alive():
-                logger.info(f"Terminating {str(n)} aggressively")
+        try:
+            while True:
+                time.sleep(2)
+                if any([n.is_alive() for n in self.other_nodes]):
+                    logger.warning("Filter pipeline has not finished processing yet. Use keyboard interrupt to terminate.")
+                else:
+                    break
+        except KeyboardInterrupt as e:
+            for n in self.other_nodes:
                 n.terminate()
 
         if not self.keep_instruments_connected:

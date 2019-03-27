@@ -191,8 +191,7 @@ class Filter(Process, metaclass=MetaFilter):
         try:
 
             logger.debug('Running "%s" run loop', self.filter_name)
-            setproctitle('python auspex: '+str(self))
-            # self.finished_processing.clear()
+            setproctitle(f"python auspex filter: {self}")
             input_stream = getattr(self, self._input_connectors[0]).input_streams[0]
             desc = input_stream.descriptor
 
@@ -252,33 +251,12 @@ class Filter(Process, metaclass=MetaFilter):
                         self.processed += message_data.nbytes
                         self.process_direct(message_data)
 
-                    # if stream_points == input_stream.num_points():
-                    #     self.finished_processing.set()
-                    #     break
-
                 if stream_done:
-                    # outputs = self.output_connectors.values()
-
-                    # if outputs:
-                    #     output_status = [v.done() for v in outputs]
-                    #     print('x dones: %s' % str(output_status))
-
-                    #     if not np.all(output_status):
-                    #         print('------------------->>>>>>>>> NOT ALL DONE YET')
-
                     self.done.set()
                     break
-                # if desc.is_adaptive():
-                #     if stream_done and np.all([len(desc.visited_tuples) == points_taken[s] for s in streams]):
-                #         # self.finished_processing.set()
-                #         break
-                # else:
-                #     if stream_done and np.all([v.done() for v in self.input_connectors.values()]):
-                #         self.finished_processing.set()
-                #         break
 
             # When we've finished, either prematurely or as expected
-            logger.info(f"{self} leaving main loop")
+            logger.debug(f"{self} leaving main loop")
             self.on_done()
 
         except Exception as e:
