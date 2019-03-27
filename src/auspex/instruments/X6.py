@@ -145,6 +145,8 @@ class X6(Instrument):
         self._lib.connect(int(self.resource_name))
 
     def disconnect(self):
+        if self._lib.get_is_running():
+            self._lib.stop()
         for sock in self._chan_to_rsocket.values():
             sock.close()
         for sock in self._chan_to_wsocket.values():
@@ -263,46 +265,50 @@ class X6(Instrument):
         return total
 
     def receive_data(self, channel, oc, exit, ready):
-        sock = self._chan_to_rsocket[channel]
-        sock.settimeout(2)
-        self.last_timestamp.value = datetime.datetime.now().timestamp()
-        total = 0
-        ready.value += 1
+        try:
+            sock = self._chan_to_rsocket[channel]
+            sock.settimeout(2)
+            self.last_timestamp.value = datetime.datetime.now().timestamp()
+            total = 0
+            ready.value += 1
 
-        while not exit.is_set():
-            # push data from a socket into an OutputConnector (oc)
-            # wire format is just: [size, buffer...]
-            # TODO receive 4 or 8 bytes depending on sizeof(size_t)
-            try:
-                msg = sock.recv(8)
-                self.last_timestamp.value = datetime.datetime.now().timestamp()
-            except:
-                continue
-
-            # reinterpret as int (size_t)
-            msg_size = struct.unpack('n', msg)[0]
-            buf = sock_recvall(sock, msg_size)
-            if len(buf) != msg_size:
-                logger.error("Channel %s socket msg shorter than expected" % channel.channel)
-                logger.error("Expected %s bytes, received %s bytes" % (msg_size, len(buf)))
-                return
-            data = np.frombuffer(buf, dtype=channel.dtype)
-            total += len(data)
-            oc.push(data)
-
-        # logger.info('RECEIVED %d %d', total, oc.points_taken.value)
-        # TODO: this is suspeicious
-        for stream in oc.output_streams:
-            abc = 0
-            while True:
+            logger.info(f"{self} receiver launched with pid {os.getpid()}. ppid {os.getppid()}")
+            while not exit.is_set():
+                # push data from a socket into an OutputConnector (oc)
+                # wire format is just: [size, buffer...]
+                # TODO receive 4 or 8 bytes depending on sizeof(size_t)
                 try:
-                    dat = stream.queue.get(False)
-                    abc += 1
-                    time.sleep(0.005)
-                except queue.Empty as e:
-                    # logger.info(f"All my data {oc} has been consumed {abc}")
-                    break
-        # logger.info("X6 receive data exiting")
+                    msg = sock.recv(8)
+                    self.last_timestamp.value = datetime.datetime.now().timestamp()
+                except:
+                    continue
+
+                # reinterpret as int (size_t)
+                msg_size = struct.unpack('n', msg)[0]
+                buf = sock_recvall(sock, msg_size)
+                if len(buf) != msg_size:
+                    logger.error("Channel %s socket msg shorter than expected" % channel.channel)
+                    logger.error("Expected %s bytes, received %s bytes" % (msg_size, len(buf)))
+                    return
+                data = np.frombuffer(buf, dtype=channel.dtype)
+                total += len(data)
+                oc.push(data)
+
+            # logger.info('RECEIVED %d %d', total, oc.points_taken.value)
+            # TODO: this is suspeicious
+            for stream in oc.output_streams:
+                abc = 0
+                while True:
+                    try:
+                        dat = stream.queue.get(False)
+                        abc += 1
+                        time.sleep(0.005)
+                    except queue.Empty as e:
+                        # logger.info(f"All my data {oc} has been consumed {abc}")
+                        break
+            # logger.info("X6 receive data exiting")
+        except Exception as e:
+            logger.warning(f"{self} receiver raised exception {e}. Bailing.")
 
     def get_buffer_for_channel(self, channel):
         return self._lib.transfer_stream(*channel.channel)

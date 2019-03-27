@@ -496,6 +496,15 @@ class QubitExperiment(Experiment):
     def shutdown_instruments(self):
         # remove socket listeners
         logger.debug("Shutting down instruments")
+        
+        for awg in self.awgs:
+            awg.stop()
+        for dig in self.digitizers:
+            dig.stop()
+        for gen_proxy in self.generators:
+            gen_proxy.instr.output = False
+        for instr in self.instruments:
+            instr.disconnect()
         for listener, exit in self.dig_listeners.items():
             exit.set()
             listener.join(2)
@@ -503,13 +512,7 @@ class QubitExperiment(Experiment):
                 logger.info(f"Terminating listener {listener} aggressively")
                 listener.terminate()
             del listener
-        if self.cw_mode:
-            for awg in self.awgs:
-                awg.stop()
-        for gen_proxy in self.generators:
-            gen_proxy.instr.output = False
-        for instr in self.instruments:
-            instr.disconnect()
+        
         import gc
         gc.collect()
 

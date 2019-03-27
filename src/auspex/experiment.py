@@ -502,15 +502,16 @@ class Experiment(metaclass=MetaExperiment):
             #initialize instruments
             self.init_instruments()
 
-            def catch_ctrl_c(signum, frame):
-                logger.info("Caught SIGINT. Shutting down.")
-                self.declare_done() # Ask nicely
+            # def catch_ctrl_c(signum, frame):
+            #     import ipdb; ipdb.set_trace();
+            #     logger.info("Caught SIGINT. Shutting down.")
+            #     self.declare_done() # Ask nicely
 
-                self.shutdown()
-                raise NameError("Shutting down.")
-                sys.exit(0)
+            #     self.shutdown()
+            #     raise NameError("Shutting down.")
+            #     sys.exit(0)
 
-            signal.signal(signal.SIGINT, catch_ctrl_c)
+            # signal.signal(signal.SIGINT, catch_ctrl_c)
 
             # We want to wait for the sweep method above,
             # not the experiment's run method, so replace this
@@ -566,6 +567,10 @@ class Experiment(metaclass=MetaExperiment):
         except Exception as e:
             logger.warning("Encountered error in run sweeps after initializing experiments")
             raise e
+        except KeyboardInterrupt as e:
+            print("Caught KeyboardInterrupt, terminating.")
+            self.shutdown()
+            sys.exit(0)
         finally:
             self.shutdown()
 
@@ -580,15 +585,16 @@ class Experiment(metaclass=MetaExperiment):
     def shutdown(self):
         logger.debug("Shutting Down!")
 
+        logger.debug("Shutting down instruments")
+        # This includes stopping the flow of data, and must be done before terminating nodes
+        self.shutdown_instruments()
+
         for n in self.other_nodes:
             n.exit.set()
             n.join(0.1)
             if n.is_alive():
                 logger.info(f"Terminating {str(n)} aggressively")
                 n.terminate()
-
-        logger.debug("Shutting down instruments")
-        self.shutdown_instruments()
 
         if not self.keep_instruments_connected:
             logger.debug("Disconnecting instruments")
