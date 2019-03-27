@@ -14,4 +14,5 @@ git+https://github.com/bbn-q/bbndb.git
 pyusb >= 1.0.2
 ipykernel>=5.0.0
 ipywidgets>=7.0.0
+setproctitle
 git+https://github.com/spatialaudio/nbsphinx.git@master

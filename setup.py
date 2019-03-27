@@ -21,7 +21,8 @@ install_requires = [
     "python-usbtmc >= 0.8",
     "ipykernel>=5.0.0",
     "ipywidgets>=7.0.0",
-    "sqlalchemy >= 1.2.15"
+    "sqlalchemy >= 1.2.15",
+    "setproctitle"
 ]
 
 #Use PyVISA-Py if running on Linux or MacOS

@@ -157,7 +157,7 @@ class Filter(Process, metaclass=MetaFilter):
 
     def run(self):
         self.p = psutil.Process(os.getpid())
-        logger.info(f"{self} launched with pid {os.getpid()}. ppid {os.getppid()}")
+        logger.debug(f"{self} launched with pid {os.getpid()}. ppid {os.getppid()}")
         if auspex.config.profile:
             if not self.filter_name:
                 name = "Unlabeled"
