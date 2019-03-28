@@ -229,13 +229,10 @@ class APS(Instrument, metaclass=MakeSettersGetters):
             self.connected = False
 
     def set_amplitude(self, chs, value):
-        import pdb; pdb.set_trace()
         if isinstance(chs, int) or len(chs)==1:
             self.wrapper.set_amplitude(int(chs), value)
         else:
             self.wrapper.set_amplitude(int(chs[0]), value)
-#            self.wrapper.set_amplitude(int(chs[2]), value)
-#            self.wrapper.set_amplitude(int(chs[3]), value)
             self.wrapper.set_amplitude(int(chs[1]), value)
 
     def set_offset(self, chs, value):
@@ -244,8 +241,6 @@ class APS(Instrument, metaclass=MakeSettersGetters):
         else:
             self.wrapper.set_offset(int(chs[0]), value)
             self.wrapper.set_offset(int(chs[1]), value)
-            self.wrapper.set_offset(int(chs[2]), value)
-            self.wrapper.set_offset(int(chs[3]), value)
 
     def configure_with_proxy(self, proxy_obj):
         super(APS, self).configure_with_proxy(proxy_obj)
