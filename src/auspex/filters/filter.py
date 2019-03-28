@@ -167,7 +167,6 @@ class Filter(Process, metaclass=MetaFilter):
         else:
             self.execute_on_run()
             self.main()
-        logger.debug(f"{self} done")
         self.done.set()
 
     def execute_on_run(self):
@@ -256,7 +255,6 @@ class Filter(Process, metaclass=MetaFilter):
                     break
 
             # When we've finished, either prematurely or as expected
-            logger.debug(f"{self} leaving main loop")
             self.on_done()
 
         except Exception as e:

@@ -543,19 +543,22 @@ class Experiment(metaclass=MetaExperiment):
             # Wait for the
             time.sleep(0.1)
             times = {n: 0 for n in self.other_nodes}
-            dones = {n: False for n in self.other_nodes}
+            dones = {n: n.done.is_set() for n in self.other_nodes}
             while False in dones.values():
-                time.sleep(1)
+                time.sleep(1.0)
                 for n in self.other_nodes:
                     if not n.done.is_set():
                         times[n] += 1
-                        logger.info(f"{str(n)} not done. Waited {times[n]} times. Is the pipeline backed up at IO stage?")
+                        logger.info(f"{str(n)} not done. Is the pipeline backed up at IO stage?")
                     else:
                         dones[n] = True
-                        n.join(timeout=0.1)
-                # We've had enough...
-                if any([t > 10 for t in times.values()]):
-                    break
+            
+            # Get the final buffers, otherwise we won't be able to join reliably
+            for n in self.plotters + self.buffers:
+                n.final_buffer = n._final_buffer.get()
+
+            for n in self.other_nodes:
+                n.join()
 
             for buff in self.buffers:
                 buff.output_data, buff.descriptor = buff.get_data()
@@ -583,17 +586,15 @@ class Experiment(metaclass=MetaExperiment):
             mp.stop()
 
     def shutdown(self):
-        logger.debug("Shutting Down!")
-
         logger.debug("Shutting down instruments")
         # This includes stopping the flow of data, and must be done before terminating nodes
         self.shutdown_instruments()
 
         try:
             while True:
-                time.sleep(2)
                 if any([n.is_alive() for n in self.other_nodes]):
-                    logger.warning("Filter pipeline has not finished processing yet. Use keyboard interrupt to terminate.")
+                    logger.warning("Filter pipeline appears stuck. Use keyboard interrupt to terminate.")
+                    time.sleep(2.0)
                 else:
                     break
         except KeyboardInterrupt as e:

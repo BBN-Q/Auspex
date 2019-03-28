@@ -272,7 +272,7 @@ class X6(Instrument):
             total = 0
             ready.value += 1
 
-            logger.info(f"{self} receiver launched with pid {os.getpid()}. ppid {os.getppid()}")
+            logger.debug(f"{self} receiver launched with pid {os.getpid()}. ppid {os.getppid()}")
             while not exit.is_set():
                 # push data from a socket into an OutputConnector (oc)
                 # wire format is just: [size, buffer...]
