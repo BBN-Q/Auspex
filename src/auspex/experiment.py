@@ -606,7 +606,7 @@ class Experiment(metaclass=MetaExperiment):
             self.disconnect_instruments()
 
         for n in self.other_nodes:
-            del n
+            n.done.set()
 
         import gc
         gc.collect()
