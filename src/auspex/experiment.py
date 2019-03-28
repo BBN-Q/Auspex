@@ -306,7 +306,7 @@ class Experiment(metaclass=MetaExperiment):
             # values of the SweepAxes (no DataAxes).
             sweep_values, axis_names = self.sweeper.update()
 
-            if hasattr(self, 'progressbars'):
+            if hasattr(self, 'progressbars') and self.progressbars:
                 for axis in self.sweeper.axes:
                     if axis.done:
                         self.progressbars[axis].value = axis.num_points()
@@ -568,7 +568,7 @@ class Experiment(metaclass=MetaExperiment):
                 self.perf_thread.join()
 
         except Exception as e:
-            logger.warning("Encountered error in run sweeps after initializing experiments")
+            logger.warning(f"Encountered error '{e}' in run sweeps after initializing experiments")
             raise e
         except KeyboardInterrupt as e:
             print("Caught KeyboardInterrupt, terminating.")
