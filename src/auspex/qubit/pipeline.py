@@ -122,6 +122,13 @@ class PipelineManager(object):
         self.session.commit()
         self.save_as("working")
 
+    def recreate_pipeline(self, qubits=None, buffers=False):
+        if not self.stream_selectors:
+            raise Exception("Cannot recreate a pipeline that has not been created. Try create_default_pipeline first.")
+        for sel in self.stream_selectors.values():
+            sel.clear_pipeline()
+            sel.create_default_pipeline(buffers=buffers)
+
     def qubit_pipeline(self, qubit_name):
         return self.stream_selectors[qubit_name]
 
