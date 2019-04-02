@@ -48,7 +48,7 @@ class PipelineManager(object):
         global pipelineMgr
 
         self.pipeline      = None
-        self.qubit_proxies = {}
+        self.stream_selectors = {}
         self.meas_graph    = None
 
         if bbndb.session:
@@ -71,6 +71,8 @@ class PipelineManager(object):
                 self.meas_graph.add_node(node.node_label(), node_obj=node)
             self.meas_graph.add_edges_from(edges)
             bbndb.auspex.__current_pipeline__ = self
+        else:
+            logger.info("Could not find an existing pipeline. Please create one.")
 
         pipelineMgr = self
 
@@ -89,8 +91,8 @@ class PipelineManager(object):
             meas_labels = ["M-"+q.label for q in qubits]
             measurements = [c for c in cdb.channels if c.label in meas_labels]
         self.qubits = qubits
-        self.qubit_proxies = {q.label: bbndb.auspex.QubitProxy(pipelineMgr=self, qubit_name=q.label) for q in qubits}
-        for q in self.qubit_proxies.values():
+        self.stream_selectors = {q.label: bbndb.auspex.StreamSelect(pipelineMgr=self, qubit_name=q.label) for q in qubits}
+        for q in self.stream_selectors.values():
             q.pipelineMgr = self
 
         # Build a mapping of qubits to receivers, construct qubit proxies
@@ -102,22 +104,26 @@ class PipelineManager(object):
             available_streams_by_qubit[q] = m.receiver_chan.receiver.stream_types
 
         for q, r in receiver_chans_by_qubit.items():
-            qp = self.qubit_proxies[q.label]
-            qp.available_streams = [st.strip() for st in r.receiver.stream_types.split(",")]
-            qp.stream_type = qp.available_streams[-1]
+            sel = self.stream_selectors[q.label]
+            sel.available_streams = [st.strip() for st in r.receiver.stream_types.split(",")]
+            sel.stream_type = sel.available_streams[-1]
+
+            # Set a default kernel
+            if sel.stream_type == "integrated":
+                sel.kernel = np.ones(r.receiver.record_length)
 
         # generate the pipeline automatically
         self.meas_graph = nx.DiGraph()
-        for qp in self.qubit_proxies.values():
-            qp.create_default_pipeline(buffers=buffers)
+        for sel in self.stream_selectors.values():
+            sel.create_default_pipeline(buffers=buffers)
 
         # for el in self.meas_graph.nodes():
         #     self.session.add(el)
         self.session.commit()
         self.save_as("working")
 
-    def qubit(self, qubit_name):
-        return self.qubit_proxies[qubit_name]
+    def qubit_pipeline(self, qubit_name):
+        return self.stream_selectors[qubit_name]
 
     def ls(self):
         i = 0
@@ -190,7 +196,7 @@ class PipelineManager(object):
             print("Could not find any nodes. Has a pipeline been created (try running create_default_pipeline())")
         else:
             from bqplot import Figure, LinearScale
-            from bqplot.marks import Graph
+            from bqplot.marks import Graph, Lines, Label
             from ipywidgets import Layout, HTML
             from IPython.display import HTML as IPHTML, display
 
@@ -219,7 +225,8 @@ class PipelineManager(object):
 
             node_locations = {}
 
-            qubits = [n for n,dat in graph.nodes(data=True) if isinstance(dat['node_obj'], bbndb.auspex.QubitProxy)]
+            selectors = [n for n,dat in graph.nodes(data=True) if isinstance(dat['node_obj'], bbndb.auspex.StreamSelect)]
+            qubit_names = [dat['node_obj'].qubit_name for n,dat in graph.nodes(data=True) if isinstance(dat['node_obj'], bbndb.auspex.StreamSelect)]
             loc = {}
             def next_level(nodes, iteration=0, offset=0, accum=[]):
                 if len(accum) == 0:
@@ -235,22 +242,43 @@ class PipelineManager(object):
                 else:
                     return accum
 
-            hierarchy = [next_level([q]) for q in qubits]
+            hierarchy = [next_level([q]) for q in selectors]
             widest = [max([len(row) for row in qh]) for qh in hierarchy]
-            for i in range(1, len(qubits)):
+            for i in range(1, len(selectors)):
                 offset = sum(widest[:i])
-                loc[qubits[i]]['x'] += offset
-                for n in nx.descendants(graph, qubits[i]):
+                loc[selectors[i]]['x'] += offset
+                for n in nx.descendants(graph, selectors[i]):
                     loc[n]['x'] += offset
 
             x = [loc[n]['x'] for n in graph.nodes()]
             y = [loc[n]['y'] for n in graph.nodes()]
-            xs = LinearScale(min=min(x)-0.5, max=max(x)+0.5)
-            ys = LinearScale(min=min(y)-0.5, max=max(y)+0.5)
+            xs = LinearScale(min=min(x)-0.5, max=max(x)+0.6)
+            ys = LinearScale(min=min(y)-0.5, max=max(y)+0.6)
             fig_layout = Layout(width='960px', height='500px')
             graph      = Graph(node_data=node_data, link_data=link_data, x=x, y=y, scales={'x': xs, 'y': ys},
                                 link_type='line', colors=['orange'] * len(node_data), directed=True)
-            fig        = Figure(marks=[graph], layout=fig_layout)
+            bgs_lines = []
+            middles   = []
+            for i in range(len(selectors)):
+                if i==0:
+                    start = -0.4
+                    end = widest[0]-0.6
+                elif i == len(selectors):
+                    start = sum(widest)-0.4
+                    end = max(x)+0.4 
+                else:
+                    start = sum(widest[:i])-0.4
+                    end = sum(widest[:i+1])-0.6
+                middles.append(0.5*(start+end))
+                bgs_lines.append(Lines(x=[start, end], y=[[min(y)-0.5,min(y)-0.5],[max(y)+0.5,max(y)+0.5]], scales= {'x': xs, 'y': ys}, 
+                                      fill='between',   # opacity does not work with this option
+                                      fill_opacities = [0.1+0.5*i/len(selectors)],
+                                      stroke_width = 0.0
+                                     ))
+            labels = Label(x=middles, y=[max(y)+0.65 for m in middles], text=qubit_names, align='middle', scales= {'x': xs, 'y': ys},
+                default_size=14, font_weight='bolder', colors=['#4f6367'])
+
+            fig        = Figure(marks=bgs_lines+[graph, labels], layout=fig_layout)
             graph.tooltip = table
             graph.on_hover(hover_handler)
             return fig
@@ -263,13 +291,14 @@ class PipelineManager(object):
 
     def print(self, qubit_name=None):
         if qubit_name:
-            nodes = nx.algorithms.dag.descendants(self.meas_graph, str(self.qubit(qubit_name)))
+            nodes = list(nx.algorithms.dag.descendants(self.meas_graph, str(self.qubit_pipeline(qubit_name)))) + [self.qubit_pipeline(qubit_name)]
         else:
             nodes = self.meas_graph.nodes()
         table_code = ""
 
         for node in nodes:
-            node = self.meas_graph.nodes[node]['node_obj']
+            if not isinstance(node, bbndb.auspex.StreamSelect):
+                node = self.meas_graph.nodes[node]['node_obj']
             label = node.label if node.label else "Unlabeled"
             table_code += f"<tr><td><b>{node.node_type}</b> ({node.qubit_name})</td><td></td><td><i>{label}</i></td></td><td></tr>"
             inspr = inspect(node)
@@ -277,20 +306,23 @@ class PipelineManager(object):
                 if c.name not in ["id", "label", "qubit_name", "node_type"]:
                     hist = getattr(inspr.attrs, c.name).history
                     dirty = "Yes" if hist.has_changes() else ""
-                    table_code += f"<tr><td></td><td>{c.name}</td><td>{getattr(node,c.name)}</td><td>{dirty}</td></tr>"
+                    if c.name == "kernel_data":
+                        table_code += f"<tr><td></td><td>{c.name}</td><td>Binary Data of length {len(node.kernel)}</td><td>{dirty}</td></tr>"
+                    else:
+                        table_code += f"<tr><td></td><td>{c.name}</td><td>{getattr(node,c.name)}</td><td>{dirty}</td></tr>"
         display(HTML(f"<table><tr><th>Name</th><th>Attribute</th><th>Value</th><th>Uncommitted Changes</th></tr><tr>{table_code}</tr></table>"))
 
     def reset_pipelines(self):
-        for qp in self.qubit_proxies.values():
+        for qp in self.stream_selectors.values():
             qp.clear_pipeline()
             qp.create_default_pipeline()
 
     def clear_pipelines(self):
-        for qp in self.qubit_proxies.values():
+        for qp in self.stream_selectors.values():
             qp.clear_pipeline()
 
     def show_connectivity(self):
         pass
 
     def __getitem__(self, key):
-        return self.qubit(key)
+        return self.qubit_pipeline(key)
