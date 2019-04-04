@@ -48,7 +48,7 @@ class PipelineManager(object):
         global pipelineMgr
 
         self.pipeline      = None
-        self.stream_selectors = {}
+        # self.stream_selectors = {}
         self.meas_graph    = None
 
         if bbndb.session:
@@ -60,7 +60,7 @@ class PipelineManager(object):
         available_pipelines = list(set([pn[0] for pn in list(self.session.query(bbndb.auspex.Connection.pipeline_name).all())]))
         if "working" in available_pipelines:
             connections = list(self.session.query(bbndb.auspex.Connection).filter_by(pipeline_name="working").all())
-            edges = [(c.node1.node_label(), c.node2.node_label(), {'connector_in':c.node2_name,  'connector_out':c.node1_name}) for c in connections]
+            edges = [(c.node1.hash_val, c.node2.hash_val, {'connector_in':c.node2_name,  'connector_out':c.node1_name}) for c in connections]
             nodes = []
             nodes.extend(list(set([c.node1 for c in connections])))
             nodes.extend(list(set([c.node2 for c in connections])))
@@ -68,13 +68,27 @@ class PipelineManager(object):
             self.meas_graph = nx.DiGraph()
             for node in nodes:
                 node.pipelineMgr = self
-                self.meas_graph.add_node(node.node_label(), node_obj=node)
+                self.meas_graph.add_node(node.hash_val, node_obj=node)
             self.meas_graph.add_edges_from(edges)
             bbndb.auspex.__current_pipeline__ = self
         else:
             logger.info("Could not find an existing pipeline. Please create one.")
 
         pipelineMgr = self
+
+    def add_qubit_pipeline(self, qubit_label, stream_type, auto_create=True):
+        # if qubit_label not in self.stream_selectors:
+        m = bbndb.qgl.Measurement
+        mqs = [l[0] for l in self.session.query(m.label).join(m.channel_db, aliased=True).filter_by(label="working").all()]
+        if f'M-{qubit_label}' not in mqs:
+            raise Exception(f"Could not find qubit {qubit_label} in pipeline...")
+        
+        select = bbndb.auspex.StreamSelect(pipelineMgr=self, stream_type=stream_type, qubit_name=qubit_label)
+        self.session.add(select)
+        self.meas_graph.add_node(select.hash_val, node_obj=select)
+
+        if auto_create:
+            select.create_default_pipeline()
 
     def create_default_pipeline(self, qubits=None, buffers=False):
         """Look at the QGL channel library and create our pipeline from the current
@@ -91,9 +105,9 @@ class PipelineManager(object):
             meas_labels = ["M-"+q.label for q in qubits]
             measurements = [c for c in cdb.channels if c.label in meas_labels]
         self.qubits = qubits
-        self.stream_selectors = {q.label: bbndb.auspex.StreamSelect(pipelineMgr=self, qubit_name=q.label) for q in qubits}
-        for q in self.stream_selectors.values():
-            q.pipelineMgr = self
+
+        # A qubit can have multiple stream selectors, which are named. We use the name "default" here.
+        stream_selectors = {q.label: {'default': bbndb.auspex.StreamSelect(pipelineMgr=self, qubit_name=q.label)} for q in qubits}
 
         # Build a mapping of qubits to receivers, construct qubit proxies
         receiver_chans_by_qubit = {}
@@ -104,33 +118,46 @@ class PipelineManager(object):
             available_streams_by_qubit[q] = m.receiver_chan.receiver.stream_types
 
         for q, r in receiver_chans_by_qubit.items():
-            sel = self.stream_selectors[q.label]
-            sel.available_streams = [st.strip() for st in r.receiver.stream_types.split(",")]
-            sel.stream_type = sel.available_streams[-1]
+            sels = stream_selectors[q.label]
+            for sel in sels.values():
+                sel.available_streams = [st.strip() for st in r.receiver.stream_types.split(",")]
+                sel.stream_type = sel.available_streams[-1]
 
-            # Set a default kernel
-            if sel.stream_type == "integrated":
-                sel.kernel = np.ones(r.receiver.record_length)
+                # Set a default kernel
+                if sel.stream_type == "integrated":
+                    sel.kernel = np.ones(r.receiver.record_length)
 
         # generate the pipeline automatically
         self.meas_graph = nx.DiGraph()
-        for sel in self.stream_selectors.values():
-            sel.create_default_pipeline(buffers=buffers)
+        for sels in stream_selectors.values():
+            for sel in sels.values():
+                sel.create_default_pipeline(buffers=buffers)
+            self.session.add(sel)
 
-        # for el in self.meas_graph.nodes():
-        #     self.session.add(el)
+        self._push_meas_graph_to_db(self.meas_graph, "working")
         self.session.commit()
-        self.save_as("working")
 
     def recreate_pipeline(self, qubits=None, buffers=False):
-        if not self.stream_selectors:
+        sels = self._get_current_stream_sels()
+        if len(sels) == 0:
             raise Exception("Cannot recreate a pipeline that has not been created. Try create_default_pipeline first.")
-        for sel in self.stream_selectors.values():
+        for sel in sels:
             sel.clear_pipeline()
             sel.create_default_pipeline(buffers=buffers)
+        self._push_meas_graph_to_db(self.meas_graph, "working")
 
-    def qubit_pipeline(self, qubit_name):
-        return self.stream_selectors[qubit_name]
+    def get_stream_selector(self, pipeline_name):
+        sels = self._get_current_stream_sels() 
+        sels.sort(key=lambda x: x.qubit_name)
+        selectors = [sel.hash_val for sel in sels]
+        qubit_names = [sel.qubit_name for sel in sels]
+
+        name_f = lambda s: s.qubit_name if qubit_names.count(s.qubit_name) == 1 else s.qubit_name + " " + s.stream_type
+        sel_by_name = {name_f(sel): sel for sel in sels}
+
+        if pipeline_name not in sel_by_name:
+            raise Exception(f"Name {pipeline_name} does not specify a pipeline. If there are multiple pipelines for a qubit you must specify 'qubit_name pipeline_name'")
+        return sel_by_name[pipeline_name]
 
     def ls(self):
         i = 0
@@ -173,13 +200,29 @@ class PipelineManager(object):
                 new_by_old[n].pipeline = self
             # Add edges between new objects
             for c in cs:
-                edges.append((new_by_old[c.node1].node_label(), new_by_old[c.node2].node_label(), {'connector_in':c.node2_name,  'connector_out':c.node1_name}))
+                edges.append((new_by_old[c.node1].hash_val, new_by_old[c.node2].hash_val, {'connector_in':c.node2_name,  'connector_out':c.node1_name}))
             self.session.add_all(new_by_old.values())
             self.session.commit()
             self.meas_graph.clear()
             for new_node in new_by_old.values():
-                self.meas_graph.add_node(new_node.node_label(), node_obj=new_node)
+                self.meas_graph.add_node(new_node.hash_val, node_obj=new_node)
             self.meas_graph.add_edges_from(edges)
+
+    def _push_meas_graph_to_db(self, graph, pipeline_name):
+        # Clear out existing connections if on working:
+        if pipeline_name == "working":
+            self.session.query(bbndb.auspex.Connection).filter_by(pipeline_name=pipeline_name).delete()
+        now = datetime.datetime.now()
+        for n1, n2 in graph.edges():    
+            new_node1 = bbndb.copy_sqla_object(graph.nodes[n1]['node_obj'], self.session)
+            new_node2 = bbndb.copy_sqla_object(graph.nodes[n2]['node_obj'], self.session)
+            c = bbndb.auspex.Connection(pipeline_name=pipeline_name, node1=new_node1, node2=new_node2, time=now,
+                                        node1_name=graph[n1][n2]["connector_out"],
+                                        node2_name=graph[n1][n2]["connector_in"])
+            self.session.add(c)
+
+    def _get_current_stream_sels(self):
+        return [dat['node_obj'] for n, dat in self.meas_graph.nodes(data=True) if isinstance(dat['node_obj'], bbndb.auspex.StreamSelect)]
 
     def show_pipeline(self, subgraph=None, pipeline_name=None):
         """If a pipeline name is specified query the database, otherwise show the current pipeline."""
@@ -190,24 +233,24 @@ class PipelineManager(object):
             if len(cs) == 0:
                 print(f"No results for pipeline {pipeline_name}")
                 return
-            temp_edges = [(c.node1.node_label(), c.node2.node_label(), {'connector_in':c.node2_name,  'connector_out':c.node1_name}) for c in cs]
+            temp_edges = [(c.node1.hash_val, c.node2.hash_val, {'connector_in':c.node2_name,  'connector_out':c.node1_name}) for c in cs]
             nodes = set([c.node1 for c in cs] + [c.node2 for c in cs])
             for node in nodes:
-                self.meas_graph.add_node(node.node_label(), node_obj=node)
+                self.meas_graph.add_node(node.hash_val, node_obj=node)
             graph = nx.DiGraph()
             graph.add_edges_from(temp_edges)
         else:
             graph = self.meas_graph
 
         if not graph or len(graph.nodes()) == 0:
-            print("Could not find any nodes. Has a pipeline been created (try running create_default_pipeline())")
+            raise Exception("Could not find any nodes. Has a pipeline been created (try running create_default_pipeline())")
         else:
             from bqplot import Figure, LinearScale
             from bqplot.marks import Graph, Lines, Label
             from ipywidgets import Layout, HTML
             from IPython.display import HTML as IPHTML, display
 
-            # nodes     = list(graph.nodes())
+            # nodes     = list(dgraph.nodes())
             indices   = {n: i for i, n in enumerate(graph.nodes())}
             node_data = [{'label': dat['node_obj'].node_label(), 'data': dat['node_obj'].print(show=False)} for n,dat in graph.nodes(data=True)]
             link_data = [{'source': indices[s], 'target': indices[t]} for s, t in graph.edges()]
@@ -231,9 +274,16 @@ class PipelineManager(object):
                     table.value = symbol['data']
 
             node_locations = {}
+            # sel_objs = [dat['node_obj'] for n,dat in graph.nodes(data=True) if isinstance(dat['node_obj'], bbndb.auspex.StreamSelect)]
+            # qubit_names = [dat['node_obj'].qubit_name for n,dat in graph.nodes(data=True) if isinstance(dat['node_obj'], bbndb.auspex.StreamSelect)]
 
-            selectors = [n for n,dat in graph.nodes(data=True) if isinstance(dat['node_obj'], bbndb.auspex.StreamSelect)]
-            qubit_names = [dat['node_obj'].qubit_name for n,dat in graph.nodes(data=True) if isinstance(dat['node_obj'], bbndb.auspex.StreamSelect)]
+            # sel_objs = self._get_current_stream_sels()
+            sel_objs = [dat['node_obj'] for n,dat in graph.nodes(data=True) if isinstance(dat['node_obj'], bbndb.auspex.StreamSelect)]
+            sel_objs.sort(key=lambda x: x.qubit_name)
+            selectors = [sel.hash_val for sel in sel_objs]
+            qubit_names = [sel.qubit_name for sel in sel_objs]
+            pipeline_names = [sel.qubit_name if qubit_names.count(sel.qubit_name) == 1 else sel.qubit_name + " " + sel.stream_type for sel in sel_objs]
+
             loc = {}
             def next_level(nodes, iteration=0, offset=0, accum=[]):
                 if len(accum) == 0:
@@ -282,7 +332,7 @@ class PipelineManager(object):
                                       fill_opacities = [0.1+0.5*i/len(selectors)],
                                       stroke_width = 0.0
                                      ))
-            labels = Label(x=middles, y=[max(y)+0.65 for m in middles], text=qubit_names, align='middle', scales= {'x': xs, 'y': ys},
+            labels = Label(x=middles, y=[max(y)+0.65 for m in middles], text=pipeline_names, align='middle', scales= {'x': xs, 'y': ys},
                 default_size=14, font_weight='bolder', colors=['#4f6367'])
 
             fig        = Figure(marks=bgs_lines+[graph, labels], layout=fig_layout)
@@ -296,9 +346,9 @@ class PipelineManager(object):
     def rollback(self):
         self.session.rollback()
 
-    def print(self, qubit_name=None):
-        if qubit_name:
-            nodes = list(nx.algorithms.dag.descendants(self.meas_graph, str(self.qubit_pipeline(qubit_name)))) + [self.qubit_pipeline(qubit_name)]
+    def print(self, pipeline_name=None):
+        if pipeline_name:
+            nodes = list(nx.algorithms.dag.descendants(self.meas_graph, self.get_stream_selector(pipeline_name).hash_val)) + [self.get_stream_selector(pipeline_name).hash_val]
         else:
             nodes = self.meas_graph.nodes()
         table_code = ""
@@ -320,16 +370,14 @@ class PipelineManager(object):
         display(HTML(f"<table><tr><th>Name</th><th>Attribute</th><th>Value</th><th>Uncommitted Changes</th></tr><tr>{table_code}</tr></table>"))
 
     def reset_pipelines(self):
-        for qp in self.stream_selectors.values():
-            qp.clear_pipeline()
-            qp.create_default_pipeline()
+        for sel in self._get_current_stream_sels():
+            sel.clear_pipeline()
+            sel.create_default_pipeline()
 
     def clear_pipelines(self):
-        for qp in self.stream_selectors.values():
-            qp.clear_pipeline()
-
-    def show_connectivity(self):
-        pass
+        for sel in self._get_current_stream_sels():
+            sel.clear_pipeline()
+            sel.clear_pipeline()
 
     def __getitem__(self, key):
-        return self.qubit_pipeline(key)
+        return self.get_stream_selector(key)
