@@ -21,6 +21,7 @@ else:
     from multiprocessing import Event
     from multiprocessing import Queue
 
+from setproctitle import setproctitle
 import cProfile
 import itertools
 import time, datetime
@@ -146,8 +147,17 @@ class Filter(Process, metaclass=MetaFilter):
     def shutdown(self):
         self.exit.set()
 
+    def _parent_process_running(self):
+        try:
+            os.kill(os.getppid(), 0)
+        except OSError:
+            return False
+        else:
+            return True
+
     def run(self):
         self.p = psutil.Process(os.getpid())
+        logger.debug(f"{self} launched with pid {os.getpid()}. ppid {os.getppid()}")
         if auspex.config.profile:
             if not self.filter_name:
                 name = "Unlabeled"
@@ -157,7 +167,6 @@ class Filter(Process, metaclass=MetaFilter):
         else:
             self.execute_on_run()
             self.main()
-        logger.debug(f"{self} done")
         self.done.set()
 
     def execute_on_run(self):
@@ -178,90 +187,79 @@ class Filter(Process, metaclass=MetaFilter):
         """
         Generic run method which waits on a single stream and calls `process_data` on any new_data
         """
-        logger.debug('Running "%s" run loop', self.filter_name)
-        # self.finished_processing.clear()
-        input_stream = getattr(self, self._input_connectors[0]).input_streams[0]
-        desc = input_stream.descriptor
+        try:
 
-        stream_done = False
-        stream_points = 0
+            logger.debug('Running "%s" run loop', self.filter_name)
+            setproctitle(f"python auspex filter: {self}")
+            input_stream = getattr(self, self._input_connectors[0]).input_streams[0]
+            desc = input_stream.descriptor
 
-        while not self.exit.is_set():# and not self.finished_processing.is_set():
-            # Try to pull all messages in the queue. queue.empty() is not reliable, so we
-            # ask for forgiveness rather than permission.
-            messages = []
+            stream_done = False
+            stream_points = 0
 
-            while not self.exit.is_set():
-                try:
-                    messages.append(input_stream.queue.get(False))
-                except queue.Empty as e:
-                    time.sleep(0.002)
+            while not self.exit.is_set():# and not self.finished_processing.is_set():
+                # Try to pull all messages in the queue. queue.empty() is not reliable, so we
+                # ask for forgiveness rather than permission.
+                messages = []
+
+                # Check to see if the parent process still exists:
+                if not self._parent_process_running():
+                    logger.warning(f"{self} with pid {os.getpid()} could not find parent with pid {os.getppid()}. Assuming something has gone wrong. Exiting.")
                     break
 
-            self.push_resource_usage()
+                while not self.exit.is_set():
+                    try:
+                        messages.append(input_stream.queue.get(False))
+                    except queue.Empty as e:
+                        time.sleep(0.002)
+                        break
 
-            for message in messages:
-                message_type = message['type']
-                message_data = message['data']
+                self.push_resource_usage()
 
-                if message['type'] == 'event':
-                    logger.debug('%s "%s" received event "%s"', self.__class__.__name__, self.filter_name, message_data)
+                for message in messages:
+                    message_type = message['type']
+                    message_data = message['data']
 
-                    # Propagate along the graph
-                    self.push_to_all(message)
+                    if message['type'] == 'event':
+                        logger.debug('%s "%s" received event "%s"', self.__class__.__name__, self.filter_name, message_data)
 
-                    # Check to see if we're done
-                    if message['event_type'] == 'done':
-                        logger.debug(f"{self} received done message!")
-                        stream_done = True
-                    elif message['event_type'] == 'refined':
-                        self.refine(message_data)
-                        continue
-                    elif message['event_type'] == 'new_tuples':
-                        self.process_new_tuples(input_stream.descriptor, message_data)
-                        # break
+                        # Propagate along the graph
+                        self.push_to_all(message)
 
-                elif message['type'] == 'data':
-                    if not hasattr(message_data, 'size'):
-                        message_data = np.array([message_data])
-                    logger.debug('%s "%s" received %d points.', self.__class__.__name__, self.filter_name, message_data.size)
-                    logger.debug("Now has %d of %d points.", input_stream.points_taken.value, input_stream.num_points())
-                    stream_points += len(message_data.flatten())
-                    self.process_data(message_data.flatten())
-                    self.processed += message_data.nbytes
+                        # Check to see if we're done
+                        if message['event_type'] == 'done':
+                            logger.debug(f"{self} received done message!")
+                            stream_done = True
+                        elif message['event_type'] == 'refined':
+                            self.refine(message_data)
+                            continue
+                        elif message['event_type'] == 'new_tuples':
+                            self.process_new_tuples(input_stream.descriptor, message_data)
+                            # break
 
-                elif message['type'] == 'data_direct':
-                    self.processed += message_data.nbytes
-                    self.process_direct(message_data)
+                    elif message['type'] == 'data':
+                        if not hasattr(message_data, 'size'):
+                            message_data = np.array([message_data])
+                        logger.debug('%s "%s" received %d points.', self.__class__.__name__, self.filter_name, message_data.size)
+                        logger.debug("Now has %d of %d points.", input_stream.points_taken.value, input_stream.num_points())
+                        stream_points += len(message_data.flatten())
+                        self.process_data(message_data.flatten())
+                        self.processed += message_data.nbytes
 
-                # if stream_points == input_stream.num_points():
-                #     self.finished_processing.set()
-                #     break
+                    elif message['type'] == 'data_direct':
+                        self.processed += message_data.nbytes
+                        self.process_direct(message_data)
 
-            if stream_done:
-                # outputs = self.output_connectors.values()
+                if stream_done:
+                    self.done.set()
+                    break
 
-                # if outputs:
-                #     output_status = [v.done() for v in outputs]
-                #     print('x dones: %s' % str(output_status))
+            # When we've finished, either prematurely or as expected
+            self.on_done()
 
-                #     if not np.all(output_status):
-                #         print('------------------->>>>>>>>> NOT ALL DONE YET')
+        except Exception as e:
+            logger.warning(f"Filter {self} raised exception {e}. Bailing.")
 
-                self.done.set()
-                break
-            # if desc.is_adaptive():
-            #     if stream_done and np.all([len(desc.visited_tuples) == points_taken[s] for s in streams]):
-            #         # self.finished_processing.set()
-            #         break
-            # else:
-            #     if stream_done and np.all([v.done() for v in self.input_connectors.values()]):
-            #         self.finished_processing.set()
-            #         break
-
-        # When we've finished, either prematurely or as expected
-        # print(self.filter_name, "leaving main loop")
-        self.on_done()
 
     def process_data(self, data):
         """Process data coming through the filter pipeline"""

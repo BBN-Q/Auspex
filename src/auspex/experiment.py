@@ -306,7 +306,7 @@ class Experiment(metaclass=MetaExperiment):
             # values of the SweepAxes (no DataAxes).
             sweep_values, axis_names = self.sweeper.update()
 
-            if hasattr(self, 'progressbars'):
+            if hasattr(self, 'progressbars') and self.progressbars:
                 for axis in self.sweeper.axes:
                     if axis.done:
                         self.progressbars[axis].value = axis.num_points()
@@ -502,15 +502,16 @@ class Experiment(metaclass=MetaExperiment):
             #initialize instruments
             self.init_instruments()
 
-            def catch_ctrl_c(signum, frame):
-                logger.info("Caught SIGINT. Shutting down.")
-                self.declare_done() # Ask nicely
+            # def catch_ctrl_c(signum, frame):
+            #     import ipdb; ipdb.set_trace();
+            #     logger.info("Caught SIGINT. Shutting down.")
+            #     self.declare_done() # Ask nicely
 
-                self.shutdown()
-                raise NameError("Shutting down.")
-                sys.exit(0)
+            #     self.shutdown()
+            #     raise NameError("Shutting down.")
+            #     sys.exit(0)
 
-            signal.signal(signal.SIGINT, catch_ctrl_c)
+            # signal.signal(signal.SIGINT, catch_ctrl_c)
 
             # We want to wait for the sweep method above,
             # not the experiment's run method, so replace this
@@ -542,19 +543,22 @@ class Experiment(metaclass=MetaExperiment):
             # Wait for the
             time.sleep(0.1)
             times = {n: 0 for n in self.other_nodes}
-            dones = {n: False for n in self.other_nodes}
+            dones = {n: n.done.is_set() for n in self.other_nodes}
             while False in dones.values():
-                time.sleep(1)
+                time.sleep(1.0)
                 for n in self.other_nodes:
                     if not n.done.is_set():
                         times[n] += 1
-                        logger.info(f"{str(n)} not done. Waited {times[n]} times. Is the pipeline backed up at IO stage?")
+                        logger.info(f"{str(n)} not done. Is the pipeline backed up at IO stage?")
                     else:
                         dones[n] = True
-                        n.join(timeout=0.1)
-                # We've had enough...
-                if any([t > 10 for t in times.values()]):
-                    break
+            
+            # Get the final buffers, otherwise we won't be able to join reliably
+            for n in self.plotters + self.buffers:
+                n.final_buffer = n._final_buffer.get()
+
+            for n in self.other_nodes:
+                n.join()
 
             for buff in self.buffers:
                 buff.output_data, buff.descriptor = buff.get_data()
@@ -564,8 +568,12 @@ class Experiment(metaclass=MetaExperiment):
                 self.perf_thread.join()
 
         except Exception as e:
-            logger.warning("Encountered error in run sweeps after initializing experiments")
+            logger.warning(f"Encountered error '{e}' in run sweeps after initializing experiments")
             raise e
+        except KeyboardInterrupt as e:
+            print("Caught KeyboardInterrupt, terminating.")
+            self.shutdown()
+            sys.exit(0)
         finally:
             self.shutdown()
 
@@ -578,24 +586,27 @@ class Experiment(metaclass=MetaExperiment):
             mp.stop()
 
     def shutdown(self):
-        logger.debug("Shutting Down!")
-
-        for n in self.other_nodes:
-            n.exit.set()
-            n.join(0.1)
-            if n.is_alive():
-                logger.info(f"Terminating {str(n)} aggressively")
-                n.terminate()
-
         logger.debug("Shutting down instruments")
+        # This includes stopping the flow of data, and must be done before terminating nodes
         self.shutdown_instruments()
+
+        try:
+            while True:
+                if any([n.is_alive() for n in self.other_nodes]):
+                    logger.warning("Filter pipeline appears stuck. Use keyboard interrupt to terminate.")
+                    time.sleep(2.0)
+                else:
+                    break
+        except KeyboardInterrupt as e:
+            for n in self.other_nodes:
+                n.terminate()
 
         if not self.keep_instruments_connected:
             logger.debug("Disconnecting instruments")
             self.disconnect_instruments()
 
         for n in self.other_nodes:
-            del n
+            n.done.set()
 
         import gc
         gc.collect()

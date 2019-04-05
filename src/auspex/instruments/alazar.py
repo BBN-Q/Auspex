@@ -164,7 +164,7 @@ class AlazarATS9870(Instrument):
 
         return total
 
-    def receive_data(self, channel, oc, exit, ready):
+    def receive_data(self, channel, oc, exit, ready, run):
         sock = self._chan_to_rsocket[channel]
         sock.settimeout(2)
         self.last_timestamp.value = datetime.datetime.now().timestamp()
@@ -174,6 +174,7 @@ class AlazarATS9870(Instrument):
             # push data from a socket into an OutputConnector (oc)
             # wire format is just: [size, buffer...]
             # TODO receive 4 or 8 bytes depending on sizeof(size_t)
+            run.wait() # Block until we are running again
             try:
                 msg = sock.recv(8)
                 self.last_timestamp.value = datetime.datetime.now().timestamp()
@@ -195,7 +196,7 @@ class AlazarATS9870(Instrument):
         self.fetch_count.value += 1
         return getattr(self._lib, 'ch{}Buffer'.format(self._chan_to_buf[channel]))
 
-    def wait_for_acquisition(self, timeout=5, ocs=None, progressbars=None):
+    def wait_for_acquisition(self, dig_run, timeout=5, ocs=None, progressbars=None):
         if self.gen_fake_data:
             total_spewed = 0
 
@@ -241,6 +242,8 @@ class AlazarATS9870(Instrument):
 
         else:
             while not self.done():
+                if not dig_run.is_set():
+                    self.last_timestamp.value = datetime.datetime.now().timestamp()
                 if (datetime.datetime.now().timestamp() - self.last_timestamp.value) > timeout:
                     logger.error("Digitizer %s timed out.", self.name)
                     raise Exception("Alazar timed out.")

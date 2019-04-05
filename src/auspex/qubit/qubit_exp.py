@@ -18,6 +18,7 @@ else:
 
 from . import pipeline
 import time
+import datetime
 import json
 
 stream_hierarchy = [
@@ -408,11 +409,13 @@ class QubitExperiment(Experiment):
         # Start socket listening processes, store as keys in a dictionary with exit commands as values
         self.dig_listeners = {}
         ready = Value('i', 0)
+        self.dig_run  = Event()
+        self.dig_exit = Event()
         for chan, dig in self.chan_to_dig.items():
             socket = dig.get_socket(chan)
             oc = self.chan_to_oc[chan]
-            exit = Event()
-            self.dig_listeners[Process(target=dig.receive_data, args=(chan, oc, exit, ready))] = exit
+            p = Process(target=dig.receive_data, args=(chan, oc, self.dig_exit, ready, self.dig_run))
+            self.dig_listeners[p] = self.dig_exit
         assert None not in self.dig_listeners.keys()
         for listener in self.dig_listeners.keys():
             listener.start()
@@ -496,20 +499,23 @@ class QubitExperiment(Experiment):
     def shutdown_instruments(self):
         # remove socket listeners
         logger.debug("Shutting down instruments")
-        for listener, exit in self.dig_listeners.items():
-            exit.set()
+        
+        for awg in self.awgs:
+            awg.stop()
+        for dig in self.digitizers:
+            dig.stop()
+        for gen_proxy in self.generators:
+            gen_proxy.instr.output = False
+        for instr in self.instruments:
+            instr.disconnect()
+        self.dig_exit.set()
+        for listener in self.dig_listeners:
             listener.join(2)
             if listener.is_alive():
                 logger.info(f"Terminating listener {listener} aggressively")
                 listener.terminate()
             del listener
-        if self.cw_mode:
-            for awg in self.awgs:
-                awg.stop()
-        for gen_proxy in self.generators:
-            gen_proxy.instr.output = False
-        for instr in self.instruments:
-            instr.disconnect()
+        
         import gc
         gc.collect()
 
@@ -543,6 +549,10 @@ class QubitExperiment(Experiment):
         # Begin acquisition before enabling the AWGs
         for dig in self.digitizers:
             dig.acquire()
+            dig.last_timestamp.value = datetime.datetime.now().timestamp()
+
+        # Set flag to enable acquisition process
+        self.dig_run.set()
 
         # Start the AWGs
         if not self.cw_mode:
@@ -550,13 +560,16 @@ class QubitExperiment(Experiment):
                 awg.run()
 
         # Wait for all of the acquisitions to complete
-        timeout = 20
+        timeout = 2
         for dig in self.digitizers:
-            dig.wait_for_acquisition(timeout, ocs=list(self.chan_to_oc.values()), progressbars=self.progressbars)
+            dig.wait_for_acquisition(self.dig_run, timeout=timeout, ocs=list(self.chan_to_oc.values()), progressbars=self.progressbars)
 
         # Bring everything to a stop
         for dig in self.digitizers:
             dig.stop()
+
+        # Pause the receiver processes so they don't time out
+        self.dig_run.clear()
 
         # Stop the AWGs
         if not self.cw_mode:
