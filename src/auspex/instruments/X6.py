@@ -58,6 +58,8 @@ class X6Channel(ReceiverChannel):
         self.dtype = np.float64
         self.ideal_data = None
 
+        np.random.seed(12345)
+
         if receiver_channel:
             self.set_by_receiver_channel(receiver_channel)
             self.receiver_channel = receiver_channel
@@ -231,7 +233,7 @@ class X6(Instrument):
         # todo: other checking here
         self._channels.append(channel)
 
-    def spew_fake_data(self, counter, ideal_datapoint=0, random_mag=0.1, random_seed=12345):
+    def spew_fake_data(self, counter, ideal_datapoint=0, random_mag=3.1, random_seed=12345):
         """
         Generate fake data on the stream. For unittest usage.
         ideal_datapoint: mean of the expected signal for stream_type =  "Integrated".
@@ -241,7 +243,6 @@ class X6(Instrument):
         the test with fake data
         """
         total = 0
-        np.random.seed(random_seed)
 
         for chan, wsock in self._chan_to_wsocket.items():
             if chan.stream_type == "integrated":
@@ -258,6 +259,7 @@ class X6(Instrument):
                 data = np.zeros(length, dtype=chan.dtype)
                 data[int(length/4):int(length/4)+len(signal)] = signal * (1.0 if ideal_datapoint == 0 else ideal_datapoint)
                 data += random_mag*np.random.random(length)
+
             total += length
             wsock.send(struct.pack('n', length*data.dtype.itemsize) + data.tostring())
             counter[chan] += length
