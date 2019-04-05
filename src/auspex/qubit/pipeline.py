@@ -138,7 +138,7 @@ class PipelineManager(object):
         self.session.commit()
 
     def recreate_pipeline(self, qubits=None, buffers=False):
-        sels = self._get_current_stream_sels()
+        sels = self.get_current_stream_selectors()
         if len(sels) == 0:
             raise Exception("Cannot recreate a pipeline that has not been created. Try create_default_pipeline first.")
         for sel in sels:
@@ -147,7 +147,7 @@ class PipelineManager(object):
         self._push_meas_graph_to_db(self.meas_graph, "working")
 
     def get_stream_selector(self, pipeline_name):
-        sels = self._get_current_stream_sels() 
+        sels = self.get_current_stream_selectors() 
         sels.sort(key=lambda x: x.qubit_name)
         selectors = [sel.hash_val for sel in sels]
         qubit_names = [sel.qubit_name for sel in sels]
@@ -221,7 +221,7 @@ class PipelineManager(object):
                                         node2_name=graph[n1][n2]["connector_in"])
             self.session.add(c)
 
-    def _get_current_stream_sels(self):
+    def get_current_stream_selectors(self):
         return [dat['node_obj'] for n, dat in self.meas_graph.nodes(data=True) if isinstance(dat['node_obj'], bbndb.auspex.StreamSelect)]
 
     def show_pipeline(self, subgraph=None, pipeline_name=None):
@@ -273,11 +273,6 @@ class PipelineManager(object):
                     hovered_symbol = symbol
                     table.value = symbol['data']
 
-            node_locations = {}
-            # sel_objs = [dat['node_obj'] for n,dat in graph.nodes(data=True) if isinstance(dat['node_obj'], bbndb.auspex.StreamSelect)]
-            # qubit_names = [dat['node_obj'].qubit_name for n,dat in graph.nodes(data=True) if isinstance(dat['node_obj'], bbndb.auspex.StreamSelect)]
-
-            # sel_objs = self._get_current_stream_sels()
             sel_objs = [dat['node_obj'] for n,dat in graph.nodes(data=True) if isinstance(dat['node_obj'], bbndb.auspex.StreamSelect)]
             sel_objs.sort(key=lambda x: x.qubit_name)
             selectors = [sel.hash_val for sel in sel_objs]
@@ -370,12 +365,12 @@ class PipelineManager(object):
         display(HTML(f"<table><tr><th>Name</th><th>Attribute</th><th>Value</th><th>Uncommitted Changes</th></tr><tr>{table_code}</tr></table>"))
 
     def reset_pipelines(self):
-        for sel in self._get_current_stream_sels():
+        for sel in self.get_current_stream_selectors():
             sel.clear_pipeline()
             sel.create_default_pipeline()
 
     def clear_pipelines(self):
-        for sel in self._get_current_stream_sels():
+        for sel in self.get_current_stream_selectors():
             sel.clear_pipeline()
             sel.clear_pipeline()
 
