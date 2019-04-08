@@ -280,12 +280,24 @@ class Experiment(metaclass=MetaExperiment):
             oc.update_descriptors()
 
     def declare_done(self):
+        while True:
+            all_done = True
+            for oc in self.output_connectors.values():
+                for os in oc.output_streams:
+                    # TODO: why does any queue interaction prevent adding out of order?
+                    if os.queue.qsize() > 0:
+                        all_done = False
+
+                if not all_done:
+                    time.sleep(1)
+                else:
+                    print("All Queues Done")
+                    break
+
         for oc in self.output_connectors.values():
             for os in oc.output_streams:
-                # TODO: why does any queue interaction prevent adding out of order?
-                while not os.queue.empty():
-                    time.sleep(0.05)
                 os.push_event("done")
+
         for p in self.extra_plotters:
             stream = self._extra_plots_to_streams[p]
             stream.push_event("done")
@@ -384,7 +396,7 @@ class Experiment(metaclass=MetaExperiment):
                                 scales={'x': mem_sx, 'y': mem_sy}) for i, n in enumerate(self.other_nodes)}
         self.thru_lines   = {str(n): Lines(labels=[str(n)], x=[0.0], y=[0.0], colors=[colors[i]], tooltip=tt,
                                 scales={'x': thru_sx, 'y': thru_sy}) for i, n in enumerate(self.other_nodes)}
-        
+
         self.cpu_fig = Figure(marks=list(self.cpu_lines.values()), axes=[cpu_x, cpu_y], title='CPU Usage', animation_duration=50)
         self.mem_fig = Figure(marks=list(self.mem_lines.values()), axes=[mem_x, mem_y], title='Memory Usage', animation_duration=50)
         self.thru_fig = Figure(marks=list(self.thru_lines.values()), axes=[thru_x, thru_y], title='Data Processed', animation_duration=50)
@@ -552,7 +564,7 @@ class Experiment(metaclass=MetaExperiment):
                         logger.info(f"{str(n)} not done. Is the pipeline backed up at IO stage?")
                     else:
                         dones[n] = True
-            
+
             # Get the final buffers, otherwise we won't be able to join reliably
             for n in self.plotters + self.buffers:
                 n.final_buffer = n._final_buffer.get()

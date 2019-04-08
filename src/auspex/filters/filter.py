@@ -112,7 +112,7 @@ class Filter(Process, metaclass=MetaFilter):
 
         for name, param in self.parameters.items():
             if hasattr(proxy_obj, name):
-                if getattr(proxy_obj, name): # Not none
+                if getattr(proxy_obj, name) is not None:
                     param.value = getattr(proxy_obj, name)
             else:
                 raise ValueError(f"{proxy_obj} was expected to have parameter {name}")
