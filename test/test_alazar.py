@@ -26,7 +26,7 @@ class AlazarTestCase(unittest.TestCase):
     def basic(self, delay=1.0, averages=10, segments=20, record=1024):
         oc   = Queue()
         exit = Event()
-
+        run  = Event()
         alz  = AlazarATS9870(resource_name="1")
         ch   = AlazarChannel()
         ch.phys_channel = 1
@@ -75,12 +75,13 @@ class AlazarTestCase(unittest.TestCase):
                 self.points_taken.value += data.size
         oc = OC()
         ready = Value('i', 0)
-        proc = Process(target=alz.receive_data, args=(ch, oc, exit, ready))
+        proc = Process(target=alz.receive_data, args=(ch, oc, exit, ready, run))
         proc.start()
         while ready.value < 1:
             time.sleep(delay)
 
-        alz.wait_for_acquisition(2.0, [oc])
+        run.set()
+        alz.wait_for_acquisition(run, timeout=5, ocs=[oc])
 
         exit.set()
         time.sleep(1)

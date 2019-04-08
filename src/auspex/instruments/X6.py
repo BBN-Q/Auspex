@@ -147,7 +147,7 @@ class X6(Instrument):
         self._lib.connect(int(self.resource_name))
 
     def disconnect(self):
-        if self._lib.device_id and self._lib.get_is_running():
+        if hasattr(self, '_lib') and self._lib.device_id and self._lib.get_is_running():
             self._lib.stop()
         for sock in self._chan_to_rsocket.values():
             sock.close()
