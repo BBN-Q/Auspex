@@ -233,7 +233,7 @@ class X6(Instrument):
         # todo: other checking here
         self._channels.append(channel)
 
-    def spew_fake_data(self, counter, ideal_datapoint=0, random_mag=3.1, random_seed=12345):
+    def spew_fake_data(self, counter, ideal_datapoint=0, random_mag=0.1, random_seed=12345):
         """
         Generate fake data on the stream. For unittest usage.
         ideal_datapoint: mean of the expected signal for stream_type =  "Integrated".

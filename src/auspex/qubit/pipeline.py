@@ -76,7 +76,7 @@ class PipelineManager(object):
 
         pipelineMgr = self
 
-    def add_qubit_pipeline(self, qubit_label, stream_type, auto_create=True):
+    def add_qubit_pipeline(self, qubit_label, stream_type, auto_create=True, buffers=False):
         # if qubit_label not in self.stream_selectors:
         m = bbndb.qgl.Measurement
         mqs = [l[0] for l in self.session.query(m.label).join(m.channel_db, aliased=True).filter_by(label="working").all()]
@@ -88,7 +88,7 @@ class PipelineManager(object):
         self.meas_graph.add_node(select.hash_val, node_obj=select)
 
         if auto_create:
-            select.create_default_pipeline()
+            select.create_default_pipeline(buffers=buffers)
 
     def create_default_pipeline(self, qubits=None, buffers=False):
         """Look at the QGL channel library and create our pipeline from the current

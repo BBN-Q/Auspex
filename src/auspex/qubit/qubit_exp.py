@@ -238,7 +238,6 @@ class QubitExperiment(Experiment):
             # Stream selectors from the pipeline database:
             # These contain all information except for the physical channel
             mq_stream_sels = [s for s in self.stream_selectors if s.qubit_name == mq.label]
-            print(mq, "has", len(mq_stream_sels))
 
             # The receiver channel only specifies the physical channel
             rcv = receiver_chans_by_qubit_label[mq.label]
@@ -342,7 +341,7 @@ class QubitExperiment(Experiment):
         """
         return graph
 
-    def set_fake_data(self, digitizer_proxy, ideal_data, increment=False):
+    def set_fake_data(self, digitizer_proxy, ideal_data, increment=False, random_mag=0.1):
         """Enabled and use the fake data interface for digitizers in order that auspex can 
         be run without hardware.
 
@@ -374,6 +373,7 @@ class QubitExperiment(Experiment):
         auspex_instr.ideal_data = ideal_data
         auspex_instr.increment_ideal_data = increment
         auspex_instr.gen_fake_data = True
+        auspex_instr.fake_data_random_mag = random_mag
 
     def clear_fake_data(self, digitizer_proxy):
         """Disable using fake data interface for a digitizer. Take note that dummy mode may
