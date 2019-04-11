@@ -124,12 +124,12 @@ class SingleQubitCalTestCase(unittest.TestCase):
         holz1 = cl.new_source("Holz_1", "HolzworthHS9000", "HS9004A-009-1", power=-30)
         holz2 = cl.new_source("Holz_2", "HolzworthHS9000", "HS9004A-009-2", power=-30)
         cl.set_control(q, aps1, generator=holz1)
-        cl.set_measure(q, aps2, x6_1.ch("integrated-1-1"), generator=holz2)
+        cl.set_measure(q, aps2, x6_1.ch(1), generator=holz2)
         cl.set_master(aps1, aps1.ch("m2"))
         pl.create_default_pipeline()
         pl.reset_pipelines()
         pl["q1"].clear_pipeline()
-        pl["q1"].set_stream_type("integrated")
+        pl["q1"].stream_type = "integrated"
         pl["q1"].create_default_pipeline()
         cl.commit()
 

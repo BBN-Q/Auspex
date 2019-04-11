@@ -62,8 +62,6 @@ class QubitExperiment(Experiment):
         meta_file (string)       
             The filename of the QGL metainfo (*.json) corresponding to the desired
             experiment.
-        pipeline_name (string)       
-            Not currently used. Specify a pipeline other than the current working pipeline.
         averages (int)  
             The number of shots to take. Results are only actually averaged
             if an `Averager` node is present in the processing pipeline.
@@ -85,13 +83,12 @@ class QubitExperiment(Experiment):
 
     """
 
-    def __init__(self, meta_file, pipeline_name=None, averages=100, exp_name=None, **kwargs):
+    def __init__(self, meta_file, averages=100, exp_name=None, **kwargs):
         super(QubitExperiment, self).__init__(**kwargs)
 
         if not pipeline.pipelineMgr:
             raise Exception("Could not find pipeline manager, have you declared one using PipelineManager()?")
 
-        self.pipeline_name = pipeline_name
         self.cw_mode = False
         self.add_date = True # add date to data files?
 
@@ -121,11 +118,6 @@ class QubitExperiment(Experiment):
         library_name     = meta_info['database_info']['library_name']
         library_id       = meta_info['database_info']['library_id']
 
-        # Load necessary qubit information and map to qubit proxies
-        self.qubit_proxies = pipeline.pipelineMgr.qubit_proxies
-        if self.qubit_proxies is {}:
-            raise Exception("No filter pipeline has been created. You can try running the create_default_pipeline() method of the Pipeline Manager")
-
         # Load the channel library by ID
         sess = pipeline.pipelineMgr.session
         self.chan_db     = sess.query(bbndb.qgl.ChannelDatabase).filter_by(id=library_id).first()
@@ -147,6 +139,12 @@ class QubitExperiment(Experiment):
         self.receivers         = list(set([e.receiver_chan.receiver for e in self.measurements]))
         self.generators        = list(set([q.phys_chan.generator for q in self.measured_qubits + self.controlled_qubits + self.measurements if q.phys_chan.generator]))
         self.qubits_by_name    = {q.label: q for q in self.measured_qubits + self.controlled_qubits}
+
+        # Load the relevant stream selectors from the pipeline.
+        self.stream_selectors = pipeline.pipelineMgr.get_current_stream_selectors()
+        if len(self.stream_selectors) == 0:
+            raise Exception("No filter pipeline has been created. You can try running the create_default_pipeline() method of the Pipeline Manager")
+        self.stream_selectors = [s for s in self.stream_selectors if s.qubit_name in self.qubits_by_name.keys()]
 
         # Locate transmitters relying on processors
         self.transceivers = list(set([t.transceiver for t in self.transmitters + self.receivers if t.transceiver]))
@@ -206,14 +204,10 @@ class QubitExperiment(Experiment):
             q = [c for c in self.chan_db.channels if c.label==m.label[2:]][0]
             receiver_chans_by_qubit_label[q.label] = m.receiver_chan
 
-        # Impose the qubit proxy's stream type on the receiver
-        for qubit_label, receiver in receiver_chans_by_qubit_label.items():
-            receiver.stream_type = self.qubit_proxies[qubit_label].stream_type
-
         # Now a pipeline exists, so we create Auspex filters from the proxy filters in the db
         self.proxy_to_filter          = {}
         self.filters                  = []
-        self.connector_by_qp          = {}
+        self.connector_by_sel          = {}
         self.chan_to_dig              = {}
         self.chan_to_oc               = {}
         self.qubit_to_dig             = {}
@@ -241,44 +235,53 @@ class QubitExperiment(Experiment):
 
         for mq in self.measured_qubits:
 
-            # Create the stream selectors
+            # Stream selectors from the pipeline database:
+            # These contain all information except for the physical channel
+            mq_stream_sels = [s for s in self.stream_selectors if s.qubit_name == mq.label]
+
+            # The receiver channel only specifies the physical channel
             rcv = receiver_chans_by_qubit_label[mq.label]
-            dig = rcv.receiver
-            stream_sel = stream_sel_map[dig.model](name=rcv.label+'-SS')
-            stream_sel.configure_with_proxy(rcv)
-            stream_sel.receiver = stream_sel.proxy = rcv
 
-            # Construct the channel from the receiver channel
-            channel = stream_sel.get_channel(rcv)
+            # Create the auspex stream selectors
+            dig = rcv.receiver # The digitizer instrument in the database
 
-            # Get the base descriptor from the channel
-            descriptor = stream_sel.get_descriptor(rcv)
+            for mq_stream_sel in mq_stream_sels:
+                auspex_stream_sel = stream_sel_map[dig.model](name=f"{rcv.label}-{mq_stream_sel.stream_type}-stream_sel")
+                mq_stream_sel.channel = rcv.channel
+                auspex_stream_sel.configure_with_proxy(mq_stream_sel)
+                auspex_stream_sel.receiver = auspex_stream_sel.proxy = mq_stream_sel
 
-            # Update the descriptor based on the number of segments
-            # The segment axis should already be defined if the sequence
-            # is greater than length 1
-            if hasattr(self, "segment_axis"):
-                descriptor.add_axis(self.segment_axis)
+                # Construct the channel from the receiver channel
+                channel = auspex_stream_sel.get_channel(mq_stream_sel)
+                # Manually set the physical channel
+                channel.phys_channel = rcv.channel
 
-            # Add averaging if necessary
-            if averages > 1:
-                descriptor.add_axis(DataAxis("averages", range(averages)))
+                # Get the base descriptor from the channel
+                descriptor = auspex_stream_sel.get_descriptor(mq_stream_sel, rcv)
 
-            # Add the output connectors to the experiment and set their base descriptor
-            mqp = self.qubit_proxies[mq.label]
+                # Update the descriptor based on the number of segments
+                # The segment axis should already be defined if the sequence
+                # is greater than length 1
+                if hasattr(self, "segment_axis"):
+                    descriptor.add_axis(self.segment_axis)
 
-            self.connector_by_qp[mqp] = self.add_connector(mqp)
-            self.connector_by_qp[mqp].set_descriptor(descriptor)
+                # Add averaging if necessary
+                if averages > 1:
+                    descriptor.add_axis(DataAxis("averages", range(averages)))
 
-            # Add the channel to the instrument
-            dig.instr.add_channel(channel)
-            self.chan_to_dig[channel] = dig.instr
-            self.chan_to_oc [channel] = self.connector_by_qp[mqp]
-            self.qubit_to_dig[mq.id]  = dig
+                # Add the output connectors to the experiment and set their base descriptor
+                self.connector_by_sel[mq_stream_sel] = self.add_connector(mq_stream_sel)
+                self.connector_by_sel[mq_stream_sel].set_descriptor(descriptor)
+
+                # Add the channel to the instrument
+                dig.instr.add_channel(channel)
+                self.chan_to_dig[channel] = dig.instr
+                self.chan_to_oc [channel] = self.connector_by_sel[mq_stream_sel]
+                self.qubit_to_dig[mq.id]  = dig
 
         # Find the number of self.measurements
-        segments_per_dig = {receiver_chan.receiver: meta_info["receivers"][receiver.label] for receiver_chan in self.receiver_chans
-                                                         if receiver.label in meta_info["receivers"].keys()}
+        segments_per_dig = {receiver_chan.receiver: meta_info["receivers"][receiver_chan.label] for receiver_chan in self.receiver_chans
+                                                         if receiver_chan.label in meta_info["receivers"].keys()}
 
         # Configure receiver instruments from the database objects
         # this must be done after adding channels.
@@ -321,8 +324,8 @@ class QubitExperiment(Experiment):
                 if isinstance(node1, bbndb.auspex.FilterProxy):
                     filt1 = self.proxy_to_filter[node1]
                     oc   = filt1.output_connectors[graph[l1][l2]["connector_out"]]
-                elif isinstance(node1, bbndb.auspex.QubitProxy):
-                    oc   = self.connector_by_qp[node1]
+                elif isinstance(node1, bbndb.auspex.StreamSelect):
+                    oc   = self.connector_by_sel[node1]
                 filt2 = self.proxy_to_filter[node2]
                 ic   = filt2.input_connectors[graph[l1][l2]["connector_in"]]
                 graph_edges.append([oc, ic])
@@ -338,7 +341,7 @@ class QubitExperiment(Experiment):
         """
         return graph
 
-    def set_fake_data(self, digitizer_proxy, ideal_data, increment=False):
+    def set_fake_data(self, digitizer_proxy, ideal_data, increment=False, random_mag=0.1):
         """Enabled and use the fake data interface for digitizers in order that auspex can 
         be run without hardware.
 
@@ -370,6 +373,7 @@ class QubitExperiment(Experiment):
         auspex_instr.ideal_data = ideal_data
         auspex_instr.increment_ideal_data = increment
         auspex_instr.gen_fake_data = True
+        auspex_instr.fake_data_random_mag = random_mag
 
     def clear_fake_data(self, digitizer_proxy):
         """Disable using fake data interface for a digitizer. Take note that dummy mode may
@@ -383,11 +387,12 @@ class QubitExperiment(Experiment):
         auspex_instr.ideal_data = ideal_data
         auspex_instr.gen_fake_data = False
 
-    def add_connector(self, qubit):
-        logger.debug(f"Adding {qubit.qubit_name} output connector to experiment.")
-        oc = OutputConnector(name=qubit.qubit_name, parent=self)
-        self.output_connectors[qubit.qubit_name] = oc
-        setattr(self, qubit.qubit_name, oc)
+    def add_connector(self, stream_selector):
+        name = stream_selector.qubit_name+'-'+stream_selector.stream_type
+        logger.debug(f"Adding {name} output connector to experiment.")
+        oc = OutputConnector(name=name, parent=self)
+        self.output_connectors[name] = oc
+        setattr(self, name, oc)
         return oc
 
     def init_instruments(self):
@@ -523,7 +528,7 @@ class QubitExperiment(Experiment):
         super(QubitExperiment, self).final_init()
 
         # In order to fetch data more easily later
-        self.outputs_by_qubit =  {q.label: [self.proxy_to_filter[dat['node_obj']] for f,dat in self.modified_graph.nodes(data=True) if (isinstance(dat['node_obj'], (bbndb.auspex.Write, bbndb.auspex.Buffer,)) and q.label in f)] for q in self.measured_qubits}
+        self.outputs_by_qubit =  {q.label: [self.proxy_to_filter[dat['node_obj']] for f,dat in self.modified_graph.nodes(data=True) if (isinstance(dat['node_obj'], (bbndb.auspex.Write, bbndb.auspex.Buffer,)) and q.label in dat['node_obj'].qubit_name)] for q in self.measured_qubits}
 
     def init_progress_bars(self):
         """ initialize the progress bars."""

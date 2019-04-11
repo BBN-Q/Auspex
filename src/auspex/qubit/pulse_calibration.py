@@ -133,10 +133,11 @@ class Calibration(object):
 
 class QubitCalibration(Calibration):
     calibration_experiment = None
-    def __init__(self, qubits, sample_name=None, output_nodes=None, quad="real", auto_rollback=True, do_plotting=True, **kwargs):
+    def __init__(self, qubits, sample_name=None, output_nodes=None, stream_selectors=None, quad="real", auto_rollback=True, do_plotting=True, **kwargs):
         self.qubits           = qubits if isinstance(qubits, list) else [qubits]
         self.qubit            = None if isinstance(qubits, list) else qubits
         self.output_nodes     = output_nodes if isinstance(output_nodes, list) else [output_nodes]
+        self.stream_selectors = stream_selectors if isinstance(stream_selectors, list) else [stream_selectors]
         self.filename         = 'None'
         self.axis_descriptor  = None
         self.leave_plots_open = True
@@ -179,7 +180,7 @@ class QubitCalibration(Calibration):
 
     def run_sweeps(self):
         meta_file = compile_to_hardware(self.sequence(), fileName=self.filename, axis_descriptor=self.descriptor())
-        exp       = CalibrationExperiment(self.qubits, self.output_nodes, meta_file, **self.kwargs)
+        exp       = CalibrationExperiment(self.qubits, self.output_nodes, self.stream_selectors, meta_file, **self.kwargs)
         if self.fake_data:
             exp.set_fake_data(*self.fake_data[0], **self.fake_data[1])
         self.exp_config(exp)
@@ -230,20 +231,26 @@ class QubitCalibration(Calibration):
 
 class CalibrationExperiment(QubitExperiment):
 
-    def __init__(self, qubits, output_nodes, *args, **kwargs):
+    def __init__(self, qubits, output_nodes, stream_selectors, *args, **kwargs):
         self.qubits = qubits
         self.output_nodes = output_nodes
+        self.input_selectors = stream_selectors # name collision otherwise
         self.var_buffers = []
         super(CalibrationExperiment, self).__init__(*args, **kwargs)
 
     def guess_output_nodes(self, graph):
         output_nodes = []
+        qubit_labels = [q.label for q in self.qubits]
         for qubit in self.qubits:
-            ds = nx.descendants(graph, str(self.qubit_proxies[qubit.label]))
+            stream_sels = [ss for ss in self.stream_selectors if ss.qubit_name == qubit.label]
+            if len(stream_sels) > 1:
+                raise Exception(f"More than one stream selector found for {qubit}, please explicitly define output node using output_nodes argument.")
+            ds = nx.descendants(graph, stream_sels[0].hash_val)
             outputs = [graph.nodes[d]['node_obj'] for d in ds if isinstance(graph.nodes[d]['node_obj'], (bbndb.auspex.Write, bbndb.auspex.Buffer))]
-            if len(outputs) != 1:
+            if len(outputs) > 1:
                 raise Exception(f"More than one output node found for {qubit}, please explicitly define output node using output_nodes argument.")
             output_nodes.append(outputs[0])
+
         return output_nodes
 
     def modify_graph(self, graph):
@@ -252,11 +259,12 @@ class CalibrationExperiment(QubitExperiment):
             self.output_nodes = self.guess_output_nodes(graph)
 
         for output_node in self.output_nodes:
-            if output_node.node_label() not in graph:
+            if output_node.hash_val not in graph:
                 raise ValueError(f"Could not find specified output node {output_node} in graph.")
 
         for qubit in self.qubits:
-            if str(self.qubit_proxies[qubit.label]) not in graph:
+            stream_sels = [ss for ss in self.stream_selectors if ss.qubit_name == qubit.label]
+            if not any([ss.hash_val in graph for ss in stream_sels]):
                 raise ValueError(f"Could not find specified qubit {qubit} in graph.")
 
         mapping = {}
@@ -273,12 +281,18 @@ class CalibrationExperiment(QubitExperiment):
             new_output = mapping[output_node]
             new_output_nodes.append(new_output)
 
-            old_path  = nx.shortest_path(graph, self.qubit_proxies[qubit.label].node_label(), output_node.node_label())
-            path      = old_path[:-1] + [new_output.node_label()]
-            new_graph.add_path(path)
+            ancestors   = [graph.nodes[n]['node_obj'] for n in nx.ancestors(graph, output_node.hash_val)]
+            stream_sels = [a for a in ancestors if isinstance(a, bbndb.auspex.StreamSelect)]
+            if len(stream_sels) != 1:
+                raise Exception(f"Expected to find one stream selector for {qubit}. Instead found {len(stream_sels)}")
+            stream_sel = stream_sels[0]
+
+            old_path  = nx.shortest_path(graph, stream_sel.hash_val, output_node.hash_val)
+            path      = old_path[:-1] + [new_output.hash_val]
+            nx.add_path(new_graph, path)
             for n in old_path[:-1]:
                 new_graph.nodes[n]['node_obj'] = graph.nodes[n]['node_obj']
-            new_graph.nodes[new_output.node_label()]['node_obj'] = mapping[output_node]
+            new_graph.nodes[new_output.hash_val]['node_obj'] = mapping[output_node]
 
             # Fix connectors
             for i in range(len(path)-1):
@@ -290,8 +304,8 @@ class CalibrationExperiment(QubitExperiment):
             else:
                 vb = bbndb.auspex.Buffer(label=f"{output_node.label}-VarBuffer", qubit_name=output_node.qubit_name)
                 self.var_buffers.append(vb)
-                new_graph.add_node(vb.node_label(), node_obj=vb)
-                new_graph.add_edge(path[-2], vb.node_label(), node_obj=vb, connector_in="sink", connector_out="final_variance")
+                new_graph.add_node(vb.hash_val, node_obj=vb)
+                new_graph.add_edge(path[-2], vb.hash_val, node_obj=vb, connector_in="sink", connector_out="final_variance")
             # maintain standard plots
             plot_nodes = [output_node for output_node in nx.descendants(graph, path[-2]) if isinstance(graph.nodes[output_node]['node_obj'], bbndb.auspex.Display)]
             for plot_node in plot_nodes:

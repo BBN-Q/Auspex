@@ -32,12 +32,12 @@ class AlazarStreamSelector(Filter):
         """Create and return a channel object corresponding to this stream selector"""
         return AlazarChannel(channel_proxy)
 
-    def get_descriptor(self, channel_proxy):
+    def get_descriptor(self, stream_selector, receiver_channel):
         """Get the axis descriptor corresponding to this stream selector. For the Alazar cards this
         is always just a time axis."""
-        samp_time = 1.0/channel_proxy.receiver.sampling_rate
+        samp_time = 1.0/receiver_channel.receiver.sampling_rate
         descrip = DataStreamDescriptor()
-        descrip.add_axis(DataAxis("time", samp_time*np.arange(channel_proxy.receiver.record_length)))
+        descrip.add_axis(DataAxis("time", samp_time*np.arange(receiver_channel.receiver.record_length)))
         return descrip
 
 
@@ -60,17 +60,17 @@ class X6StreamSelector(Filter):
         """Create and return a channel object corresponding to this stream selector"""
         return X6Channel(channel_proxy)
 
-    def get_descriptor(self, channel_proxy):
+    def get_descriptor(self, stream_selector, receiver_channel):
         """Get the axis descriptor corresponding to this stream selector. If it's an integrated stream,
         then the time axis has already been eliminated. Otherswise, add the time axis."""
         descrip = DataStreamDescriptor()
-        if channel_proxy.stream_type == 'raw':
+        if stream_selector.stream_type == 'raw':
             samp_time = 4.0e-9
-            descrip.add_axis(DataAxis("time", samp_time*np.arange(channel_proxy.receiver.record_length//4)))
+            descrip.add_axis(DataAxis("time", samp_time*np.arange(receiver_channel.receiver.record_length//4)))
             descrip.dtype = np.float64
-        elif channel_proxy.stream_type == 'demodulated':
+        elif stream_selector.stream_type == 'demodulated':
             samp_time = 32.0e-9
-            descrip.add_axis(DataAxis("time", samp_time*np.arange(channel_proxy.receiver.record_length//32)))
+            descrip.add_axis(DataAxis("time", samp_time*np.arange(receiver_channel.receiver.record_length//32)))
             descrip.dtype = np.complex128
         else: # Integrated
             descrip.dtype = np.complex128
