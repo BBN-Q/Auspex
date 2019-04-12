@@ -6,7 +6,7 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-__all__ = ['Agilent33220A', 'Agilent33500B', 'Agilent34970A', 'AgilentE8363C', 'AgilentN5183A', 'AgilentE9010A']
+__all__ = ['Agilent33220A', 'Agilent33500B', 'Agilent34970A', 'AgilentE8363C', 'AgilentN5183A', 'AgilentE9010A','HP33120A']
 
 import socket
 import time
@@ -15,6 +15,63 @@ import re
 import numpy as np
 from .instrument import SCPIInstrument, Command, StringCommand, FloatCommand, IntCommand, is_valid_ipv4
 from auspex.log import logger
+
+class HP33120A(SCPIInstrument):
+    """HP33120A Arb Waveform Generator"""
+    def __init__(self, resource_name=None, *args, **kwargs):
+        super(HP33120A, self).__init__(resource_name, *args, **kwargs)
+        self.name = "HP33120A AWG"
+
+    def connect(self, resource_name=None, interface_type=None):
+        if resource_name is not None:
+            self.resource_name = resource_name
+        super(HP33120A, self).connect(resource_name=self.resource_name, interface_type=interface_type)
+        self.interface._resource.read_termination = u"\n"
+        self.interface._resource.write_termination = u"\n"
+
+    # Frequency & Shape
+    frequency = FloatCommand(scpi_string="FREQ") #can use scientific notation (1e4 = 10,000)
+    function = StringCommand(scpi_string="FUNCtion:SHAPe") #don't need a map here
+    duty_cycle= StringCommand(scpi_string="PULSe:DCYCle") #Give duty cycle in %, needs number as a string
+
+    # Arbitrary Waveform
+             # “SINC”,“NEG_RAMP”, “EXP_RISE”, “EXP_FALL”, “CARDIAC”, “VOLATILE”,
+            # or the name of any user-defined waveforms
+    def arb_function(self,name):
+        self.interface.write("FUNCtion:User " + name)
+        self.interface.write("FUNCtion:Shape User")
+
+    def upload_waveform(self,data,name="volatile"):
+        #Takes data as float between -1 and +1. The data will scale with amplitude when used
+        cmdString="Data:Dac Volatile,"
+        # import pdb; pdb.set_trace()
+        dataValues=np.round(np.array(data)*2047).astype(np.int32)
+        # dataValues=list(dataValues)
+        self.interface.write_binary_values(cmdString,dataValues,datatype='h',is_big_endian=True)
+
+        if name.lower() != 'volatile':
+            self.interface.write('DATA:COPY '+name)
+
+    def delete_waveform(self,name='all'):
+        #deletes arbitrary waveform with specified name. by default deletes all
+        #can't delete anything when outputting an arb function
+        if name == 'all':
+            name=':'+name
+        else:
+            name=' '+name
+
+        self.interface.write('data:del'+name)
+    # Voltage
+    amplitude = FloatCommand(scpi_string="VOLT")
+    offset = FloatCommand(scpi_string="VOLTage:offset")
+    voltage_unit= StringCommand(scpi_string='VOLT:UNIT')#{VPP|VRMS|DBM|DEFault}
+
+    load = StringCommand(scpi_string="OUTPut:LOAD") #50, infinit, max ,min
+
+    #Burst
+    burst_state=Command(scpi_string="BM:STATe", value_map={False: '0', True: '1'})# {OFF|ON}
+    burst_cycles=IntCommand(scpi_string="BM:NCYCles")
+    burst_source=StringCommand(scpi_string='BM:SOURce') # {INTernal|EXTernal}
 
 class Agilent33220A(SCPIInstrument):
     """Agilent 33220A Function Generator"""
