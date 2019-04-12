@@ -274,7 +274,7 @@ class SingleQubitRBFit(AuspexFit):
     ylabel = r"<$\sigma_z$>"
     title = "Single Qubit RB Fit"
 
-    def __init__(self, lengths, data, make_plots=False):
+    def __init__(self, lengths, data, make_plots=False, log_scale_x=True):
 
         repeats = len(data) // len(lengths)
         xpts = np.repeat(lengths[:], repeats)
@@ -284,6 +284,7 @@ class SingleQubitRBFit(AuspexFit):
         self.lengths = lengths
         self.data_points = np.reshape(data,(len(lengths),repeats))
         self.errors = np.std(self.data_points, 1)
+        self.log_scale_x = log_scale_x
 
         super().__init__(xpts, ypts, make_plots=make_plots)
 
@@ -326,6 +327,9 @@ class SingleQubitRBFit(AuspexFit):
         plt.errorbar(self.lengths, self.ypts, yerr=self.errors/np.sqrt(len(self.lengths)),
                         fmt='*', elinewidth=2.0, capsize=4.0, label='mean')
         plt.plot(range(int(self.lengths[-1])), self.model(range(self.lengths[-1])), label='fit')
+        if self.log_scale_x:
+            plt.xscale('log')
+
         plt.xlabel(self.xlabel)
         plt.ylabel(self.ylabel)
         plt.legend()
