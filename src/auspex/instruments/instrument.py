@@ -12,6 +12,13 @@ from unittest.mock import MagicMock
 from auspex.log import logger
 from .interface import Interface, VisaInterface, PrologixInterface
 
+# ----- 25 Oct 2018 -- Added config import for ST-15 delta support
+# config mods include optional parameters to help constrain import prompted
+# MetaClass introspection.  This, in-turn, can help reduce irrelvant
+# boot-up warnings (such as the "No Holzworths" warning).
+#
+from auspex import config
+
 #Helper function to check for IPv4 address
 #See http://stackoverflow.com/a/11264379
 def is_valid_ipv4(ipv4_address):
@@ -153,6 +160,34 @@ class DigitizerChannel(object): pass
 
 class MetaInstrument(type):
     def __init__(self, name, bases, dct):
+
+        # ----- 25 Oct 2018 -- ST-15 delta start...
+        # defined as the Instrument metaclass, this logic
+        # fires upon module load (prompted by mearly an unused import statement)
+        # regardless of use; moreover, it iterates thru ALL Instrument sub-class
+        # definitions.  Thus prompts the holzworth module warnings even where
+        # such a specific reference is NOT in use -- TJR
+        # (deeper still the HW warning occurs due to in essence a static block
+        # load where the class gets validated thru this process).
+        #
+        # 30 Oct -- generalized such logic as config.skipMetaInit function.
+        #
+        # 31 Oct -- Embelished such that where tgtInstrumentClass defined,
+        # this function limits the meta class stub instantiation to only those
+        # cited;  where tgtInstrumentClass NOT defined -- all logic fires as
+        # before (with no boot-up behavior changes produced)
+        #
+        if config.skipMetaInit( name, bases, dct,
+                                acceptClassRefz = config.tgtInstrumentClass,
+                                bEchoDetails    = config.bEchoInstrumentMetaInit,
+                                szLogLabel      = "MetaI"):
+            #
+            return None
+        # else continue __init__ logic as normal
+        # (No behavior changes)
+
+        # ----- 25 Oct 2018 -- ST-15 delta stop.
+
         type.__init__(self, name, bases, dct)
 
         # What sort of instrument are we?
@@ -316,6 +351,10 @@ def add_command_SCPI(instr, name, cmd):
                 raise ValueError(err_msg)
 
         if isinstance(cmd, RampCommand):
+            if 'increment' in kwargs:
+                new_cmd.increment = kwargs['increment'] 
+            if 'pause' in kwargs:
+                new_cmd.pause = kwargs['pause']
             # Ramp from one value to another, making sure we actually take some steps
             start_value = float(self.interface.query(new_cmd.get_string))
             approx_steps = int(abs(val-start_value)/new_cmd.increment)

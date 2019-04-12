@@ -61,6 +61,10 @@ class Plotter(Filter):
         logger.debug("Updating Plotter %s descriptors based on input descriptor %s", self.name, self.sink.descriptor)
         self.stream = self.sink.input_streams[0]
         self.descriptor = self.sink.descriptor
+        for axis in self.descriptor.axes:
+            if axis.name == 'round_robins' and len(axis.points) == 1:
+                self.descriptor.pop_axis('round_robins')
+                logger.warning("Popping singleton axis 'round_robins' axis from '%s'", self.name)
 
     def final_init(self):
 
