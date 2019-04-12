@@ -56,9 +56,8 @@ class SingleShotMeasurement(Filter):
         self.quince_parameters = [self.save_kernel, self.optimal_integration_time,
             self.zero_mean, self.set_threshold, self.logistic_regression]
 
-        self.pdf_data_queue = Queue() #Output queue !?
-
-        self.fidelity = self.source #LAZY!!!
+        self.pdf_data_queue = Queue() #Output queue 
+        self.fidelity       = self.source 
 
     def update_descriptors(self):
 
@@ -90,22 +89,20 @@ class SingleShotMeasurement(Filter):
 
 
     def final_init(self):
-        self.fid_buffer = np.empty((self.record_length, self.num_averages*self.num_segments), dtype=np.complex)
+        self.fid_buffer = np.empty(self.record_length*self.num_averages*self.num_segments, dtype=np.complex)
         self.idx = 0
 
     def process_data(self, data):
         """Fill the ground and excited data bins"""
-        d     = data.reshape(self.record_length,-1)
-        shots = d.shape[1]
 
-        self.fid_buffer[:, self.idx:self.idx+shots] = d
-        self.idx += shots
+        self.fid_buffer[self.idx:self.idx+len(data)] = data
+        self.idx += len(data)
 
-        if self.idx == self.num_averages*self.num_segments-1:
+        if self.idx == self.record_length*self.num_averages*self.num_segments:
             self.idx = 0
-            N = self.fid_buffer[1]
-            self.ground_data = self.fid_buffer[:, ::2]
-            self.excited_data = self.fid_buffer[:, 1::2]
+            reshaped = self.fid_buffer.reshape(self.record_length, -1, order='F')
+            self.ground_data = reshaped[:, ::2]
+            self.excited_data = reshaped[:, 1::2]
             self.compute_filter()
             if self.logistic_regression.value:
                 self.logistic_fidelity()
