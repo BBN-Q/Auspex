@@ -27,7 +27,7 @@ install_requires = [
 
 #Use PyVISA-Py if running on Linux or MacOS
 if os.name == "posix":
-    install_requires.append("PyVISA-Py >= 0.2")
+    install_requires.append("PyVISA-Py == 0.2")
     install_requires.append("pyserial >= 3.4")
 
 setup(
