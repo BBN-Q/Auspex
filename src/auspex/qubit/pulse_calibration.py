@@ -62,7 +62,6 @@ class Calibration(object):
         for p in self.plotters:
             p.uuid = self.uuid
         try:
-            time.sleep(1.0)
             context = zmq.Context()
             socket = context.socket(zmq.DEALER)
             socket.setsockopt(zmq.LINGER, 0)
@@ -100,7 +99,7 @@ class Calibration(object):
 
     def stop_plots(self):
         for p in self.plotters:
-            p.start()
+            p.stop()
 
     def calibrate(self):
         if self.do_plotting:
@@ -158,14 +157,14 @@ class QubitCalibration(Calibration):
         super(QubitCalibration, self).__init__()
 
         if sample_name:
-            if not bbndb.session:
+            if not bbndb.get_cl_session():
                 raise Exception("Attempting to load Calibrations database, \
                     but no database session is open! Have the ChannelLibrary and PipelineManager been created?")
-            existing_samples = list(bbndb.session.query(bbndb.calibration.Sample).filter_by(name=sample_name).all())
+            existing_samples = list(bbndb.get_cl_session().query(bbndb.calibration.Sample).filter_by(name=sample_name).all())
             if len(existing_samples) == 0:
                 logger.info("Creating a new sample in the calibration database.")
                 self.sample = bbndb.calibration.Sample(name=sample_name)
-                bbndb.session.add(self.sample)
+                bbndb.get_cl_session().add(self.sample)
             elif len(existing_samples) == 1:
                 self.sample = existing_samples[0]
             else:
@@ -592,8 +591,8 @@ class RabiAmpCalibration(QubitCalibration):
             c1 = bbndb.calibration.Calibration(value=self.pi2_amp, sample=self.sample, name="Pi2Amp", category="Rabi")
             c2 = bbndb.calibration.Calibration(value=self.pi_amp, sample=self.sample, name="PiAmp", category="Rabi")
             c1.date = c2.date = datetime.datetime.now()
-            bbndb.session.add_all([c1, c2])
-            bbndb.session.commit()
+            bbndb.get_cl_session().add_all([c1, c2])
+            bbndb.get_cl_session().commit()
 
 class RamseyCalibration(QubitCalibration):
     def __init__(self, qubit, delays=np.linspace(0.0, 20.0, 41)*1e-6,
@@ -791,8 +790,8 @@ class Pi2Calibration(PhaseEstimation):
         if self.sample:
             c = bbndb.calibration.Calibration(value=self.amplitude, sample=self.sample, name="Pi2Amp", category="PhaseEstimation")
             c.date = datetime.datetime.now()
-            bbndb.session.add(c)
-            bbndb.session.commit()
+            bbndb.get_cl_session().add(c)
+            bbndb.get_cl_session().commit()
 
 class PiCalibration(PhaseEstimation):
 
@@ -808,8 +807,8 @@ class PiCalibration(PhaseEstimation):
         if self.sample:
             c = bbndb.calibration.Calibration(value=self.amplitude, sample=self.sample, name="PiAmp", category="PhaseEstimation")
             c.date = datetime.datetime.now()
-            bbndb.session.add(c)
-            bbndb.session.commit()
+            bbndb.get_cl_session().add(c)
+            bbndb.get_cl_session().commit()
 
 # class CRAmpCalibration_PhEst(PhaseEstimation):
 #     def __init__(self, qubit_names, num_pulses= 9):
@@ -887,8 +886,8 @@ class DRAGCalibration(QubitCalibration):
         if self.sample:
             c = bbndb.calibration.Calibration(value=self.opt_drag, sample=self.sample, name="drag_scaling")
             c.date = datetime.datetime.now()
-            bbndb.session.add(c)
-            bbndb.session.commit()
+            bbndb.get_cl_session().add(c)
+            bbndb.get_cl_session().commit()
 
 # class MeasCalibration(Calibration):
 #     def __init__(self, qubit_name):

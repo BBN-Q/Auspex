@@ -134,8 +134,8 @@ class SingleQubitCalTestCase(unittest.TestCase):
         cl.commit()
 
         # Clear calibration table
-        bbndb.session.query(bbndb.calibration.Sample).delete()
-        bbndb.session.query(bbndb.calibration.Calibration).delete()
+        bbndb.get_cl_session().query(bbndb.calibration.Sample).delete()
+        bbndb.get_cl_session().query(bbndb.calibration.Calibration).delete()
 
     def test_rabi_amp(self):
         self._setUp()
@@ -151,11 +151,11 @@ class SingleQubitCalTestCase(unittest.TestCase):
         self.assertAlmostEqual(pce.pi_amp, cl["q1"].pulse_params['piAmp'], places=3)
         self.assertAlmostEqual(pce.pi2_amp, cl["q1"].pulse_params['pi2Amp'], places=3)
 
-        self.assertTrue(bbndb.session.query(bbndb.calibration.Sample).filter_by(name="Testing123").first().name == "Testing123")
-        self.assertAlmostEqual(bbndb.session.query(bbndb.calibration.Calibration).filter_by(name="Pi2Amp").first().value, pce.pi2_amp, places=3)
-        self.assertAlmostEqual(bbndb.session.query(bbndb.calibration.Calibration).filter_by(name="PiAmp").first().value, pce.pi_amp, places=3)
+        self.assertTrue(bbndb.get_cl_session().query(bbndb.calibration.Sample).filter_by(name="Testing123").first().name == "Testing123")
+        self.assertAlmostEqual(bbndb.get_cl_session().query(bbndb.calibration.Calibration).filter_by(name="Pi2Amp").first().value, pce.pi2_amp, places=3)
+        self.assertAlmostEqual(bbndb.get_cl_session().query(bbndb.calibration.Calibration).filter_by(name="PiAmp").first().value, pce.pi_amp, places=3)
 
-        self.assertTrue(bbndb.session.query(bbndb.calibration.Calibration).filter_by(name="Pi2Amp").first().date)
+        self.assertTrue(bbndb.get_cl_session().query(bbndb.calibration.Calibration).filter_by(name="Pi2Amp").first().date)
 
     def run_ramsey(self, set_source = True):
         """
@@ -242,7 +242,7 @@ class SingleQubitCalTestCase(unittest.TestCase):
             pi_cal.calibrate()
             self.assertAlmostEqual(pi_cal.amplitude, amp, places=2)
 
-        picals = list(bbndb.session.query(bbndb.calibration.Calibration).filter_by(name="PiAmp", category="PhaseEstimation").all())
+        picals = list(bbndb.get_cl_session().query(bbndb.calibration.Calibration).filter_by(name="PiAmp", category="PhaseEstimation").all())
         self.assertTrue(len(picals)>0)
         for pical in picals:
             if pical.sample.name == "TestingPi":
@@ -270,7 +270,7 @@ class SingleQubitCalTestCase(unittest.TestCase):
         self.assertAlmostEqual(drag_cal.opt_drag, ideal_drag, places=2)
         self.assertAlmostEqual(drag_cal.opt_drag, cl["q1"].pulse_params['drag_scaling'], places=2)
  
-        dragcalss = list(bbndb.session.query(bbndb.calibration.Calibration).filter_by(name="drag_scaling").all())
+        dragcalss = list(bbndb.get_cl_session().query(bbndb.calibration.Calibration).filter_by(name="drag_scaling").all())
         self.assertTrue(len(dragcalss)>0)
         for dragcals in dragcalss:
             if dragcals.sample.name == "TestingPi":
