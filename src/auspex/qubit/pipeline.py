@@ -23,6 +23,7 @@ import auspex.instruments
 import auspex.filters
 from auspex.stream import DataAxis
 import bbndb
+import bbndb.auspex as adb
 from auspex.log import logger
 
 pipelineMgr = None
@@ -48,18 +49,17 @@ class PipelineManager(object):
         global pipelineMgr
 
         self.pipeline      = None
-        # self.stream_selectors = {}
         self.meas_graph    = None
 
-        if bbndb.session:
-            self.session = bbndb.session
-        else:
-            raise Exception("Auspex expects db to be loaded already by QGL")
+        if not bbndb.get_cl_session():
+            raise Exception("Auspex expects db to be created already by QGL. Please create a ChannelLibrary.")
+        
+        self.session = bbndb.get_pl_session()
 
         # Check to see whether there is already a temp database
-        available_pipelines = list(set([pn[0] for pn in list(self.session.query(bbndb.auspex.Connection.pipeline_name).all())]))
+        available_pipelines = list(set([pn[0] for pn in list(self.session.query(adb.Connection.pipeline_name).all())]))
         if "working" in available_pipelines:
-            connections = list(self.session.query(bbndb.auspex.Connection).filter_by(pipeline_name="working").all())
+            connections = list(self.session.query(adb.Connection).filter_by(pipeline_name="working").all())
             edges = [(c.node1.hash_val, c.node2.hash_val, {'connector_in':c.node2_name,  'connector_out':c.node1_name}) for c in connections]
             nodes = []
             nodes.extend(list(set([c.node1 for c in connections])))
@@ -70,7 +70,7 @@ class PipelineManager(object):
                 node.pipelineMgr = self
                 self.meas_graph.add_node(node.hash_val, node_obj=node)
             self.meas_graph.add_edges_from(edges)
-            bbndb.auspex.__current_pipeline__ = self
+            adb.__current_pipeline__ = self
         else:
             logger.info("Could not find an existing pipeline. Please create one.")
 
@@ -83,7 +83,7 @@ class PipelineManager(object):
         if f'M-{qubit_label}' not in mqs:
             raise Exception(f"Could not find qubit {qubit_label} in pipeline...")
         
-        select = bbndb.auspex.StreamSelect(pipelineMgr=self, stream_type=stream_type, qubit_name=qubit_label)
+        select = adb.StreamSelect(pipelineMgr=self, stream_type=stream_type, qubit_name=qubit_label)
         self.session.add(select)
         self.meas_graph.add_node(select.hash_val, node_obj=select)
 
@@ -107,7 +107,7 @@ class PipelineManager(object):
         self.qubits = qubits
 
         # A qubit can have multiple stream selectors, which are named. We use the name "default" here.
-        stream_selectors = {q.label: {'default': bbndb.auspex.StreamSelect(pipelineMgr=self, qubit_name=q.label)} for q in qubits}
+        stream_selectors = {q.label: {'default': adb.StreamSelect(pipelineMgr=self, qubit_name=q.label)} for q in qubits}
 
         # Build a mapping of qubits to receivers, construct qubit proxies
         receiver_chans_by_qubit = {}
@@ -163,7 +163,7 @@ class PipelineManager(object):
         i = 0
         table_code = ""
 
-        for name, time in self.session.query(bbndb.auspex.Connection.pipeline_name, bbndb.auspex.Connection.time).distinct().all():
+        for name, time in self.session.query(adb.Connection.pipeline_name, adb.Connection.time).distinct().all():
             y, d, t = map(time.strftime, ["%Y", "%b. %d", "%I:%M:%S %p"])
             table_code += f"<tr><td>{i}</td><td>{y}</td><td>{d}</td><td>{t}</td><td>{name}</td></tr>"
             i += 1
@@ -175,7 +175,7 @@ class PipelineManager(object):
         for n1, n2 in self.meas_graph.edges():
             new_node1 = bbndb.copy_sqla_object(self.meas_graph.nodes[n1]['node_obj'], self.session)
             new_node2 = bbndb.copy_sqla_object(self.meas_graph.nodes[n2]['node_obj'], self.session)
-            c = bbndb.auspex.Connection(pipeline_name=name, node1=new_node1, node2=new_node2, time=now,
+            c = adb.Connection(pipeline_name=name, node1=new_node1, node2=new_node2, time=now,
                                         node1_name=self.meas_graph[n1][n2]["connector_out"],
                                         node2_name=self.meas_graph[n1][n2]["connector_in"])
             self.session.add_all([self.meas_graph.nodes[n1]['node_obj'], self.meas_graph.nodes[n2]['node_obj'], c])
@@ -183,7 +183,7 @@ class PipelineManager(object):
 
     @check_session_dirty
     def load(self, pipeline_name):
-        cs = self.session.query(bbndb.auspex.Connection).filter_by(pipeline_name=pipeline_name).all()
+        cs = self.session.query(adb.Connection).filter_by(pipeline_name=pipeline_name).all()
         if len(cs) == 0:
             raise Exception(f"Could not find pipeline named {pipeline_name}")
         else:
@@ -211,25 +211,25 @@ class PipelineManager(object):
     def _push_meas_graph_to_db(self, graph, pipeline_name):
         # Clear out existing connections if on working:
         if pipeline_name == "working":
-            self.session.query(bbndb.auspex.Connection).filter_by(pipeline_name=pipeline_name).delete()
+            self.session.query(adb.Connection).filter_by(pipeline_name=pipeline_name).delete()
         now = datetime.datetime.now()
         for n1, n2 in graph.edges():    
             new_node1 = bbndb.copy_sqla_object(graph.nodes[n1]['node_obj'], self.session)
             new_node2 = bbndb.copy_sqla_object(graph.nodes[n2]['node_obj'], self.session)
-            c = bbndb.auspex.Connection(pipeline_name=pipeline_name, node1=new_node1, node2=new_node2, time=now,
+            c = adb.Connection(pipeline_name=pipeline_name, node1=new_node1, node2=new_node2, time=now,
                                         node1_name=graph[n1][n2]["connector_out"],
                                         node2_name=graph[n1][n2]["connector_in"])
             self.session.add(c)
 
     def get_current_stream_selectors(self):
-        return [dat['node_obj'] for n, dat in self.meas_graph.nodes(data=True) if isinstance(dat['node_obj'], bbndb.auspex.StreamSelect)]
+        return [dat['node_obj'] for n, dat in self.meas_graph.nodes(data=True) if isinstance(dat['node_obj'], adb.StreamSelect)]
 
     def show_pipeline(self, subgraph=None, pipeline_name=None):
         """If a pipeline name is specified query the database, otherwise show the current pipeline."""
         if subgraph:
             graph = subgraph
         elif pipeline_name:
-            cs = self.session.query(bbndb.auspex.Connection).filter_by(pipeline_name=pipeline_name).all()
+            cs = self.session.query(adb.Connection).filter_by(pipeline_name=pipeline_name).all()
             if len(cs) == 0:
                 print(f"No results for pipeline {pipeline_name}")
                 return
@@ -273,7 +273,7 @@ class PipelineManager(object):
                     hovered_symbol = symbol
                     table.value = symbol['data']
 
-            sel_objs = [dat['node_obj'] for n,dat in graph.nodes(data=True) if isinstance(dat['node_obj'], bbndb.auspex.StreamSelect)]
+            sel_objs = [dat['node_obj'] for n,dat in graph.nodes(data=True) if isinstance(dat['node_obj'], adb.StreamSelect)]
             sel_objs.sort(key=lambda x: x.qubit_name)
             selectors = [sel.hash_val for sel in sel_objs]
             qubit_names = [sel.qubit_name for sel in sel_objs]
@@ -349,7 +349,7 @@ class PipelineManager(object):
         table_code = ""
 
         for node in nodes:
-            if not isinstance(node, bbndb.auspex.StreamSelect):
+            if not isinstance(node, adb.StreamSelect):
                 node = self.meas_graph.nodes[node]['node_obj']
             label = node.label if node.label else "Unlabeled"
             table_code += f"<tr><td><b>{node.node_type}</b> ({node.qubit_name})</td><td></td><td><i>{label}</i></td></td><td></tr>"

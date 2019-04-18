@@ -118,9 +118,12 @@ class QubitExperiment(Experiment):
         library_name     = meta_info['database_info']['library_name']
         library_id       = meta_info['database_info']['library_id']
 
+        # Respect separate sessions for channel library and pipeline
+        self.cl_session = bbndb.get_cl_session()
+        self.pl_session = bbndb.get_pl_session()
+
         # Load the channel library by ID
-        sess = pipeline.pipelineMgr.session
-        self.chan_db     = sess.query(bbndb.qgl.ChannelDatabase).filter_by(id=library_id).first()
+        self.chan_db     = self.cl_session.query(bbndb.qgl.ChannelDatabase).filter_by(id=library_id).first()
         all_channels     = self.chan_db.channels
         all_generators   = self.chan_db.generators
         all_transmitters = self.chan_db.transmitters
@@ -293,7 +296,7 @@ class QubitExperiment(Experiment):
 
         # Restrict the graph to the relevant qubits
         self.measured_qubit_names = [q.label for q in self.measured_qubits]
-        pipeline.pipelineMgr.session.commit()
+        self.pl_session.commit()
 
         # Any modifications to be done by subclasses, just a passthrough here
         self.modified_graph = self.modify_graph(pipeline.pipelineMgr.meas_graph)
@@ -317,7 +320,7 @@ class QubitExperiment(Experiment):
 
         # Connect the filters together
         graph_edges = []
-        pipeline.pipelineMgr.session.commit()
+        self.pl_session.commit()
         for l1, l2 in graph.edges():
             node1, node2 = graph.nodes[l1]['node_obj'], graph.nodes[l2]['node_obj']
             if node1.qubit_name in self.measured_qubit_names and node2.qubit_name in self.measured_qubit_names:
