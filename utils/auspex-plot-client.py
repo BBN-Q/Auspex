@@ -350,7 +350,6 @@ class MatplotWindowMixin(object):
         self.uuid = None
         self.data_listener_thread = None
 
-
     def listen_for_data(self, uuid, address="localhost", data_port=7772):
         self.uuid = uuid
         self.data_listener_thread = QtCore.QThread()
@@ -422,13 +421,18 @@ class MatplotWindowMixin(object):
 
     def stop_listening(self):
         if self.data_listener_thread and self.Datalistener.running:
-            #self.statusBar().showMessage("Disconnecting from server.", 10000)
+            # update status bar if possible
+            try:
+                self.statusBar().showMessage("Disconnecting from server.", 10000)
+            except:
+                pass
             self.Datalistener.running = False
             self.data_listener_thread.quit()
             self.data_listener_thread.wait()
 
     def closeEvent(self, event):
         self._quit()
+
 
 class MatplotClientSubWindow(MatplotWindowMixin,QtWidgets.QMdiSubWindow):
     def __init__(self):
@@ -440,12 +444,9 @@ class MatplotClientSubWindow(MatplotWindowMixin,QtWidgets.QMdiSubWindow):
         self.build_main_window(self.setWidget)
         self.init_comms()
 
-
-
     def _quit(self):
         self.stop_listening()
         self.close()
-
 
 
 class MatplotClientWindow(MatplotWindowMixin, QtWidgets.QMainWindow):
@@ -633,5 +634,4 @@ if __name__ == '__main__':
     else:
         wait_window = WaitAndListenWidget()
     wait_window.show()
-   
     sys.exit(qApp.exec_())
