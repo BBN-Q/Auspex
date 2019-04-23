@@ -13,10 +13,14 @@ def get_file_name():
     root = tk.Tk()
     root.withdraw() # remove edges
 
-    filepath = filedialog.askopenfilename()
+    # TO-DO support legacy .h5 files...
+    #filepath = filedialog.askopenfilename()
+    # note .auspex 'files' are actually directories
+    filepath = filedialog.askdirectory()
     root.update() # fixes OSX hanging issue
     #https://stackoverflow.com/questions/21866537/what-could-cause-an-open-file-dialog-window-in-tkinter-python-to-be-really-slow
 
+    print(filepath)
     return filepath
 
 def open_data(num=None, folder=None, groupname="main", datasetname="data", date=datetime.date.today().strftime('%y%m%d')):
@@ -67,6 +71,45 @@ def open_data(num=None, folder=None, groupname="main", datasetname="data", date=
     data_container = AuspexDataContainer(path.join(folder, data_file[0]))
     return data_container.open_dataset(groupname, datasetname)
 
+def open_file(filepath=None, groupname="main", datasetname="data"):
+    """Convenience Load data from an `AuspexDataContainer` given a file.
+
+    Parameters:
+        filepath (string)
+            path to file
+        groupname (string)
+            Group name of data to be loaded.
+        datasetname (string, optional)
+            Data set name to be loaded. Default is "data".
+        date (string, optional)
+            Date folder from which data is to be loaded. Format is "YYMMDD" Defaults to today's date.
+
+    Returns:
+        data (numpy.array)
+            Data loaded from file.
+        desc (DataSetDescriptor)
+            Dataset descriptor loaded from file.
+
+    Examples:
+        Loading a data container
+
+        >>> data, desc = open_data('/path/to/my/data.auspex', "q1-main", date="190301")
+
+    """
+    if filepath is None:
+        # pull up dialog box
+        filepath = get_file_name()
+    else:
+        # assert we have an auspex file
+        p = re.compile(r".+-(\d+).auspex")
+        if not p.match(filepath):
+            filepath = None
+
+    if filepath is None:
+        raise ValueError("Could not find file!")
+
+    data_container = AuspexDataContainer(filepath)
+    return data_container.open_dataset(groupname, datasetname)
 
 def normalize_data(data, zero_id = 0, one_id = 1):
     metadata_str = [f for f in data.dtype.fields.keys() if 'metadata' in f]
