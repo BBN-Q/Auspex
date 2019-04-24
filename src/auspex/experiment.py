@@ -567,7 +567,8 @@ class Experiment(metaclass=MetaExperiment):
 
             # Get the final buffers, otherwise we won't be able to join reliably
             for n in self.plotters + self.buffers:
-                n.final_buffer = n._final_buffer.get()
+                if n not in self.manual_plotters:
+                    n.final_buffer = n._final_buffer.get()
 
             for n in self.other_nodes:
                 n.join()
@@ -704,6 +705,7 @@ class Experiment(metaclass=MetaExperiment):
             poller.register(socket, zmq.POLLIN)
 
             evts = dict(poller.poll(5000))
+            poller.unregister(socket)
             if socket in evts:
                 try:
                     if socket.recv_multipart()[0] == b'ACK':

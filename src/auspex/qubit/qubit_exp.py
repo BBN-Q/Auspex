@@ -204,7 +204,7 @@ class QubitExperiment(Experiment):
 
         # Create microwave sources and receiver instruments from the database objects.
         # We configure the self.receivers later after adding channels.
-        self.instrument_proxies = self.generators + self.receivers + self.transmitters + self.all_standalone + self.processors
+        self.instrument_proxies = self.generators + self.transceivers + self.receivers + self.transmitters + self.all_standalone + self.processors
         self.instruments = []
         for instrument in self.instrument_proxies:
             instr = instrument_map[instrument.model](instrument.address, instrument.label) # Instantiate
@@ -232,9 +232,9 @@ class QubitExperiment(Experiment):
 
             # Create the auspex stream selectors
             dig = rcv.receiver # The digitizer instrument in the database
-
+            stream_sel_class = stream_sel_map[dig.stream_sel]
             for mq_stream_sel in mq_stream_sels:
-                auspex_stream_sel = stream_sel_map[dig.model](name=f"{rcv.label}-{mq_stream_sel.stream_type}-stream_sel")
+                auspex_stream_sel = stream_sel_class(name=f"{rcv.label}-{mq_stream_sel.stream_type}-stream_sel")
                 mq_stream_sel.channel = rcv.channel
                 auspex_stream_sel.configure_with_proxy(mq_stream_sel)
                 auspex_stream_sel.receiver = auspex_stream_sel.proxy = mq_stream_sel
