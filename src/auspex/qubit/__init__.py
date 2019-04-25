@@ -4,4 +4,4 @@ from .pulse_calibration import RabiAmpCalibration, RamseyCalibration, DRAGCalibr
 from .single_shot_fidelity import SingleShotFidelityExperiment
 from .mixer_calibration import MixerCalibrationExperiment, MixerCalibration
 
-from bbndb.auspex import Demodulate, Integrate, Average, Display, Write, Buffer, FidelityKernel
+from bbndb.auspex import Demodulate, Integrate, Framer, Average, Display, Write, Buffer, FidelityKernel
