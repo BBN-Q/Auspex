@@ -700,7 +700,7 @@ class AgilentE8363C(SCPIInstrument):
     """Agilent E8363C VNA"""
     instrument_type = "Vector Network Analyzer"
 
-    AVERAGE_TIMEOUT = 12. * 60. * 60. * 1000. #milliseconds
+    TIMEOUT = 60. * 1000. #milliseconds
 
     power              = FloatCommand(scpi_string=":SOURce:POWer:LEVel:IMMediate:AMPLitude", value_range=(-27, 20))
     frequency_center   = FloatCommand(scpi_string=":SENSe:FREQuency:CENTer")
@@ -730,6 +730,10 @@ class AgilentE8363C(SCPIInstrument):
             interface_type=interface_type)
         self.interface._resource._read_termination = u"\n"
         self.interface._resource.write_termination = u"\n"
+        self.interface._resource.timeout = self.TIMEOUT
+
+        self.interface.OPC() #wait for any previous commands to complete
+        self.interface.write("SENSe1:SWEep:TIME:AUTO ON") #automatic sweep time
 
     def averaging_restart(self):
         """ Restart trace averaging """
@@ -745,13 +749,14 @@ class AgilentE8363C(SCPIInstrument):
         else:
             #restart current sweep and send a trigger
             self.interface.write("ABORT;SENS:SWE:MODE SING")
-        #wait for the measurement to finish, with a temporary long timeout
-        tmout = self.interface._resource.timeout
-        self.interface._resource.timeout = self.AVERAGE_TIMEOUT
-        self.interface.WAI()
-        while not self.averaging_complete:
-            time.sleep(0.1) #TODO: Asynchronous check of SRQ
-        self.interface._resource.timeout = tmout
+
+        meas_done = False
+        self.interface.write('*OPC')
+        while not meas_done:
+            time.sleep(0.1)
+            opc_bit = int(self.interface.ESR()) & 0x1
+            if opc_bit == 1:
+                meas_done = True
 
     def get_trace(self, measurement=None):
         """ Return a tupple of the trace frequencies and corrected complex points """
@@ -761,9 +766,11 @@ class AgilentE8363C(SCPIInstrument):
             #traces come e.g. as  u'"CH1_S11_1,S11,CH1_S21_2,S21"'
             #so split on comma and avoid first quote
             measurement = traces.split(",")[0][1:]
+        self.reaverage()
         #Select the measurment
         self.interface.write(":CALCulate:PARameter:SELect '{}'".format(measurement))
         #Take the data as interleaved complex values
+        self.interface.WAI()
         interleaved_vals = self.interface.values(":CALCulate:DATA? SDATA")
         vals = interleaved_vals[::2] + 1j*interleaved_vals[1::2]
         #Get the associated frequencies
