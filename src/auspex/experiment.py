@@ -288,11 +288,11 @@ class Experiment(metaclass=MetaExperiment):
                     if os.queue.qsize() > 0:
                         all_done = False
 
-                if not all_done:
-                    time.sleep(1)
-                else:
-                    print("All Queues Done")
-                    break
+            if not all_done:
+                time.sleep(1)
+            else:
+                print("All Queues Done")
+                break
 
         for oc in self.output_connectors.values():
             for os in oc.output_streams:
