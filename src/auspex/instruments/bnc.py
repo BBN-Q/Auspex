@@ -8,7 +8,7 @@
 
 __all__ = ['BNC845']
 
-from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand, is_valid_ipv4
+from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand, is_valid_ipv4, BooleanCommand
 from auspex.log import logger
 import time
 import numpy as np
@@ -30,7 +30,7 @@ class BNC845(SCPIInstrument):
 
     frequency = FloatCommand(scpi_string="SOURCE:FREQUENCY:FIXED")
     power     = FloatCommand(scpi_string="SOURCE:POWER:LEVEL:IMMEDIATE:AMPLITUDE")
-    output    = StringCommand(scpi_string="OUTPUT:STATE",value_map={True: '1', False: '0'})
+    output    = BooleanCommand(scpi_string="OUTPUT:STATE",value_map={True: '1', False: '0'})
     pulse     = StringCommand(scpi_string="PULSE", value_map={True: '0', False: '1'})
     mod       = StringCommand(scpi_string="MOD", value_map={True: '0', False: '1'})
     alc       = StringCommand(scpi_string="SOURCE:POWER:ALC ", value_map={True: '0', False: '1'})
@@ -39,7 +39,7 @@ class BNC845(SCPIInstrument):
     freq_source  = StringCommand(scpi_string=":FREQ:SOUR",
                           value_map={'INTERNAL': 'INT', 'EXTERNAL': 'EXT'})
     instrument_type = "Microwave Source"
-    
+
     def __init__(self, resource_name=None, *args, **kwargs):
         """Berkely Nucleonics BNC845-M RF Signal Generator
 
