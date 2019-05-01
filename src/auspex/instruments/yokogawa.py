@@ -10,7 +10,6 @@ __all__ = ['YokogawaGS200']
 
 from auspex.log import logger
 from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand, RampCommand
-import usbtmc
 
 class YokogawaGS200(SCPIInstrument):
     """YokogawaGS200 Current source"""
@@ -28,13 +27,19 @@ class YokogawaGS200(SCPIInstrument):
     averaging_nplc     = IntCommand(scpi_string=":sense:nplc") # Number of power level cycles (60Hz)
     ramp               = RampCommand(increment=1e-4, pause=20e-3, scpi_string=":source:level", value_range=(-100e-3,100e-3))
 
-    def __init__(self, resource_name, *args, **kwargs):
+    def __init__(self, resource_name=None, *args, **kwargs):
         super(YokogawaGS200, self).__init__(resource_name, *args, **kwargs)
 
-    def connect(self):
-        self.interface = usbtmc.Instrument(self.resource_name)
-        self.interface.query = self.interface.ask
-        try:  # connection always fails the first time...
-            self.interface.write(":sense:trigger immediate")
-        except:
-            self.interface.write(":sense:trigger immediate")
+    def connect(self, resource_name=None, interface_type="VISA"):
+        if resource_name is not None:
+            self.resource_name = resource_name
+
+        super().connect(resource_name=None, interface_type=interface_type)
+        self.interface._resource.read_termination = "\n"
+        self.interface.RST()
+
+
+        # try:  # connection always fails the first time...
+        #     self.interface.write(":sense:trigger immediate")
+        # except:
+        #     self.interface.write(":sense:trigger immediate")

@@ -241,6 +241,8 @@ class SCPIInstrument(Instrument):
             elif interface_type == "VISA":
                 if "GPIB" in self.full_resource_name:
                     pass
+                if "USB" in self.full_resource_name:
+                    pass
                 elif any(is_valid_ipv4(substr) for substr in self.full_resource_name.split("::")) and "TCPIP" not in self.full_resource_name:
                     # assume single NIC for now
                     self.full_resource_name = "TCPIP0::" + self.full_resource_name
@@ -309,7 +311,7 @@ def add_command_SCPI(instr, name, cmd):
 
         if isinstance(cmd, RampCommand):
             if 'increment' in kwargs:
-                new_cmd.increment = kwargs['increment'] 
+                new_cmd.increment = kwargs['increment']
             if 'pause' in kwargs:
                 new_cmd.pause = kwargs['pause']
             # Ramp from one value to another, making sure we actually take some steps
