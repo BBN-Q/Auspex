@@ -62,20 +62,22 @@ class Calibration(object):
         for p in self.plotters:
             p.uuid = self.uuid
         try:
-            context = zmq.Context()
-            socket = context.socket(zmq.DEALER)
-            socket.setsockopt(zmq.LINGER, 0)
-            socket.identity = "Auspex_Experiment".encode()
-            socket.connect("tcp://localhost:7761")
-            socket.send_multipart([self.uuid.encode(), json.dumps(plot_desc).encode('utf8')])
+            time.sleep(1.0)
+            self.context = zmq.Context()
+            self.socket = self.context.socket(zmq.DEALER)
+            self.socket.setsockopt(zmq.LINGER, 0)
+            self.socket.identity = "Auspex_Experiment".encode()
+            self.socket.connect("tcp://localhost:7761")
+            self.socket.send_multipart([self.uuid.encode(), json.dumps(plot_desc).encode('utf8')])
 
-            poller = zmq.Poller()
-            poller.register(socket, zmq.POLLIN)
+            self.poller = zmq.Poller()
+            self.poller.register(self.socket, zmq.POLLIN)
 
-            evts = dict(poller.poll(5000))
-            if socket in evts:
+            time.sleep(1)
+            evts = dict(self.poller.poll(5000))
+            if self.socket in evts:
                 try:
-                    if socket.recv_multipart()[0] == b'ACK':
+                    if self.socket.recv_multipart()[0] == b'ACK':
                         logger.info("Connection established to plot server.")
                         self.do_plotting = True
                     else:
@@ -88,6 +90,8 @@ class Calibration(object):
                 logger.info("Server did not respond.")
                 for p in self.plotters:
                     p.do_plotting = False
+                self.socket.close()
+                self.context.term()
 
         except Exception as e:
             logger.warning(f"Exception {e} occured while contacting the plot server. Is it running?")
@@ -624,15 +628,14 @@ class RamseyCalibration(QubitCalibration):
     def exp_config(self, exp):
         rcvr = self.qubit.measure_chan.receiver_chan.receiver
         if self.first_ramsey:
-            self.source_proxy = self.qubit.phys_chan.generator # DB object
-            self.qubit_source = exp._instruments[self.source_proxy.label] # auspex instrument
-            self.orig_freq    = self.source_proxy.frequency
             if self.set_source:
+                self.source_proxy = self.qubit.phys_chan.generator # DB object
+                self.qubit_source = exp._instruments[self.source_proxy.label] # auspex instrument
+                self.orig_freq    = self.source_proxy.frequency
                 self.source_proxy.frequency = round(self.orig_freq + self.added_detuning, 10)
                 self.qubit_source.frequency = self.source_proxy.frequency
-            exp._instruments[rcvr.label].exp_step = 0
-        else:
-            exp._instruments[rcvr.label].exp_step = 1
+            else:
+                self.orig_freq = self.qubit.frequency
 
     def _calibrate(self):
         self.first_ramsey = True
@@ -681,6 +684,7 @@ class RamseyCalibration(QubitCalibration):
             self.fit_freq = round(self.orig_freq + self.added_detuning + 0.5*(fit_freq_A + 0.5*fit_freq_A + fit_freq_B), 10)
         else:
             self.fit_freq = round(self.orig_freq + self.added_detuning - 0.5*(fit_freq_A - 0.5*fit_freq_A + fit_freq_B), 10)
+        logger.info(f"Found qubit Frequency {self.fit_freq}")
 
     def update_settings(self):
         if self.set_source:

@@ -33,8 +33,8 @@ if __name__ == '__main__':
     # Should be empty by default
     plot_descriptors = {}
     uids             = []
-    client_ident     = None
-    
+    client_ident     = b'Matplotlib_Qt_Client'
+
     print("Welcome to the Auspex plot server!")
     print("Waiting for auspex to connect on ports 7761/7762")
     print("Waiting for plot client to connect on ports 7771/7772")
@@ -44,7 +44,7 @@ if __name__ == '__main__':
 
     # Loop and accept messages
     try:
-        while True: 
+        while True:
             try:
                 socks = dict(poller.poll(50))
 
@@ -57,7 +57,7 @@ if __name__ == '__main__':
                             client_desc_sock.send_multipart([ident, b"new", uids[-1], json.dumps(plot_descriptors[uids[-1]]).encode('utf8')])
                         else:
                             print("No current plots availiable. Waiting for auspex.")
-                        client_ident = ident
+                        #client_ident = ident
                 # A new auspex data run has started!
                 if socks.get(auspex_desc_sock) == zmq.POLLIN:
                     msg = auspex_desc_sock.recv_multipart()
@@ -66,7 +66,7 @@ if __name__ == '__main__':
                     plot_descriptors[uid] = json.loads(plot_desc)
                     print(f"Received auspex plot descriptor for new plotter {uid} from {ident}")
                     auspex_desc_sock.send_multipart([ident, b"ACK"])
-                    
+
                     # Contact any connected clients and tell them to make a new plotter
                     client_desc_sock.send_multipart([client_ident, b"new", uid, json.dumps(plot_descriptors[uid]).encode('utf8')])
 

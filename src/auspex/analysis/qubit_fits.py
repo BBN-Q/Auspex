@@ -182,7 +182,7 @@ class RamseyFit(AuspexFit):
         return [freqs[0], abs(amps[0]), Tcs[0], np.angle(amps[0]), np.mean(self.ypts)]
 
     def _initial_guess_2f(self):
-        freqs, Tcs, amps = KT_estimation(self.ypts-np.mean(self.ypts), xdata, 2)
+        freqs, Tcs, amps = KT_estimation(self.ypts-np.mean(self.ypts), self.xpts, 2)
         p0 = [*freqs, *abs(amps), *Tcs, *np.angle(amps), np.mean(self.ypts)]
 
     @staticmethod
@@ -277,7 +277,7 @@ class SingleQubitRBFit(AuspexFit):
     def __init__(self, lengths, data, make_plots=False, log_scale_x=True):
 
         repeats = len(data) // len(lengths)
-        xpts = np.repeat(lengths[:], repeats)
+        xpts = np.array(lengths)
         ypts = np.mean(np.reshape(data,(len(lengths),repeats)),1)
 
         self.data = data
@@ -323,7 +323,7 @@ class SingleQubitRBFit(AuspexFit):
     def make_plots(self):
 
         plt.figure()
-        plt.plot(self.xpts, self.data,'.',markersize=15, label='data')
+        #plt.plot(self.xpts, self.data,'.',markersize=15, label='data')
         plt.errorbar(self.lengths, self.ypts, yerr=self.errors/np.sqrt(len(self.lengths)),
                         fmt='*', elinewidth=2.0, capsize=4.0, label='mean')
         plt.plot(range(int(self.lengths[-1])), self.model(range(self.lengths[-1])), label='fit')

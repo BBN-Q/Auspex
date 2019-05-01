@@ -166,7 +166,7 @@ class SingleQubitCalTestCase(unittest.TestCase):
                       simulate_ramsey(num_steps = 50, detuning = 45e3)]
         ramsey_cal = RamseyCalibration(cl["q1"], do_plotting=False, added_detuning = 0e3, 
                         delays=np.linspace(0.0, 50.0, 50)*1e-6, set_source = set_source)
-        ramsey_cal.set_fake_data(cl["X6_1"], ideal_data)
+        ramsey_cal.set_fake_data(cl["X6_1"], ideal_data, increment=True)
         ramsey_cal.calibrate()
         return ramsey_cal
 
