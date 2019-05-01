@@ -513,17 +513,6 @@ class Experiment(metaclass=MetaExperiment):
             #initialize instruments
             self.init_instruments()
 
-            # def catch_ctrl_c(signum, frame):
-            #     import ipdb; ipdb.set_trace();
-            #     logger.info("Caught SIGINT. Shutting down.")
-            #     self.declare_done() # Ask nicely
-
-            #     self.shutdown()
-            #     raise NameError("Shutting down.")
-            #     sys.exit(0)
-
-            # signal.signal(signal.SIGINT, catch_ctrl_c)
-
             # We want to wait for the sweep method above,
             # not the experiment's run method, so replace this
             # in the list of tasks.
@@ -708,13 +697,13 @@ class Experiment(metaclass=MetaExperiment):
                         logger.info("Connection established to plot server.")
                         self.do_plotting = True
                     else:
-                        raise Exception("Server returned invalid message, expected ACK.")
+                        raise PlottingError("Plot server returned invalid message, expected ACK.")
                 except:
-                    logger.info("Could not connect to server.")
+                    logger.info("Could not connect to plot server.")
                     for p in self.plotters:
                         p.do_plotting = False
             else:
-                logger.info("Server did not respond.")
+                logger.info("Plot server did not respond.")
                 for p in self.plotters:
                     p.do_plotting = False
 

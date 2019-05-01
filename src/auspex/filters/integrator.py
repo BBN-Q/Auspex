@@ -15,6 +15,7 @@ from .filter import Filter
 from auspex.parameter import Parameter, FloatParameter, IntParameter, BoolParameter
 from auspex.stream import DataStreamDescriptor, InputConnector, OutputConnector
 from auspex.log import logger
+from auspex.error import PipelineError
 import auspex.config as config
 
 class KernelIntegrator(Filter):
@@ -44,7 +45,7 @@ class KernelIntegrator(Filter):
 
     def update_descriptors(self):
         if not self.simple_kernel and self.kernel.value is None:
-            raise ValueError("Integrator was passed kernel None")
+            raise PipelineError("Integrator was passed kernel None")
 
         logger.debug('Updating KernelIntegrator "%s" descriptors based on input descriptor: %s.', self.filter_name, self.sink.descriptor)
 
@@ -64,7 +65,7 @@ class KernelIntegrator(Filter):
             try:
                 kernel = eval(self.kernel.value.encode('unicode_escape'))
             except:
-                raise ValueError('Kernel invalid. Provide a file name or an expression to evaluate')
+                raise PipelineError('Kernel invalid. Provide a file name or an expression to evaluate')
         # pad or truncate the kernel to match the record length
         if kernel.size < record_length:
             self.aligned_kernel = np.append(kernel, np.zeros(record_length-kernel.size, dtype=np.complex128))

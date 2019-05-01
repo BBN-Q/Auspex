@@ -25,6 +25,7 @@ from auspex.stream import DataAxis
 import bbndb
 import bbndb.auspex as adb
 from auspex.log import logger
+from auspex.error import PipelineError, DatabaseError, ChannelLibraryError
 
 pipelineMgr = None
 
@@ -40,7 +41,7 @@ def check_session_dirty(f):
             kwargs.pop('force')
             return f(cls, *args, **kwargs)
         else:
-            raise Exception("Uncommitted transactions for working database. Either use force=True or commit/revert your changes.")
+            raise DatabaseError("Uncommitted transactions for working database. Either use force=True or commit/revert your changes.")
     return wrapper
 
 class PipelineManager(object):
@@ -52,7 +53,7 @@ class PipelineManager(object):
         self.meas_graph    = None
 
         if not bbndb.get_cl_session():
-            raise Exception("Auspex expects db to be created already by QGL. Please create a ChannelLibrary.")
+            raise DatabaseError("Auspex expects db to be created already by QGL. Please create a ChannelLibrary.")
         
         self.session = bbndb.get_pl_session()
 
@@ -81,7 +82,7 @@ class PipelineManager(object):
         m = bbndb.qgl.Measurement
         mqs = [l[0] for l in self.session.query(m.label).join(m.channel_db, aliased=True).filter_by(label="working").all()]
         if f'M-{qubit_label}' not in mqs:
-            raise Exception(f"Could not find qubit {qubit_label} in pipeline...")
+            raise PipelineError(f"Could not find qubit {qubit_label} in pipeline...")
         
         select = adb.StreamSelect(pipelineMgr=self, stream_type=stream_type, qubit_name=qubit_label)
         self.session.add(select)
@@ -95,7 +96,7 @@ class PipelineManager(object):
         qubits."""
         cdb = self.session.query(bbndb.qgl.ChannelDatabase).filter_by(label="working").first()
         if not cdb:
-            raise ValueError("Could not find working channel library.")
+            raise ChannelLibraryError("Could not find working channel library.")
 
         if not qubits:
             measurements = [c for c in cdb.channels if isinstance(c, bbndb.qgl.Measurement)]
@@ -140,7 +141,7 @@ class PipelineManager(object):
     def recreate_pipeline(self, qubits=None, buffers=False):
         sels = self.get_current_stream_selectors()
         if len(sels) == 0:
-            raise Exception("Cannot recreate a pipeline that has not been created. Try create_default_pipeline first.")
+            raise PipelineError("Cannot recreate a pipeline that has not been created. Try create_default_pipeline first.")
         for sel in sels:
             sel.clear_pipeline()
             sel.create_default_pipeline(buffers=buffers)
@@ -156,7 +157,7 @@ class PipelineManager(object):
         sel_by_name = {name_f(sel): sel for sel in sels}
 
         if pipeline_name not in sel_by_name:
-            raise Exception(f"Name {pipeline_name} does not specify a pipeline. If there are multiple pipelines for a qubit you must specify 'qubit_name pipeline_name'")
+            raise PipelineError(f"Name {pipeline_name} does not specify a pipeline. If there are multiple pipelines for a qubit you must specify 'qubit_name pipeline_name'")
         return sel_by_name[pipeline_name]
 
     def ls(self):
@@ -185,7 +186,7 @@ class PipelineManager(object):
     def load(self, pipeline_name):
         cs = self.session.query(adb.Connection).filter_by(pipeline_name=pipeline_name).all()
         if len(cs) == 0:
-            raise Exception(f"Could not find pipeline named {pipeline_name}")
+            raise PipelineError(f"Could not find pipeline named {pipeline_name}")
         else:
             self.clear_pipelines()
             nodes = []
@@ -243,7 +244,7 @@ class PipelineManager(object):
             graph = self.meas_graph
 
         if not graph or len(graph.nodes()) == 0:
-            raise Exception("Could not find any nodes. Has a pipeline been created (try running create_default_pipeline())")
+            raise PipelineError("Could not find any nodes. Has a pipeline been created (try running create_default_pipeline())")
         else:
             from bqplot import Figure, LinearScale
             from bqplot.marks import Graph, Lines, Label

@@ -6,6 +6,7 @@ import time
 import socket
 from unittest.mock import MagicMock
 
+from auspex.error import InstrumentError, InstrumentConstructionError
 from auspex.log import logger
 from .interface import Interface, VisaInterface, PrologixInterface
 
@@ -54,10 +55,10 @@ class Command(object):
             self.instr_to_python = {v: k for k, v in self.value_map.items()}
 
             if self.value_range is not None:
-                raise Exception("Cannot specify both value_range and value_map as they are redundant.")
+                raise InstrumentConstructionError("Cannot specify both value_range and value_map as they are redundant.")
 
             if self.allowed_values is not None:
-                raise Exception("Cannot specify both value_map and allowed_values as they are redundant.")
+                raise InstrumentConstructionError("Cannot specify both value_map and allowed_values as they are redundant.")
             else:
                 self.allowed_values=list(self.python_to_instr.keys())
 
@@ -96,7 +97,7 @@ class SCPICommand(Command):
 
         # We need to do something or other
         if self.set_string is None and self.get_string is None:
-            raise ValueError("Neither a setter nor a getter was specified.")
+            raise InstrumentConstructionError("Neither a setter nor a getter was specified.")
 
 class StringCommand(Command):
     formatter = '{:s}'
@@ -135,7 +136,7 @@ class RampCommand(FloatCommand):
         if 'increment' in self.kwargs:
             self.increment = self.kwargs.pop('increment')
         else:
-            raise Exception("RampCommand requires a ramp increment")
+            raise InstrumentConstructionError("RampCommand requires a ramp increment")
         if 'pause' in self.kwargs:
             self.pause = self.kwargs.pop('pause')
         else:
@@ -223,7 +224,7 @@ class SCPIInstrument(Instrument):
 
         self._unfreeze()
         if resource_name is None and self.resource_name is None:
-            raise Exception("Must supply a resource name to 'connect' if the instrument was initialized without one.")
+            raise InstrumentError("Must supply a resource name to 'connect' if the instrument was initialized without one.")
         elif resource_name is not None:
             self.resource_name = resource_name
         self.full_resource_name = self.resource_name
@@ -250,7 +251,7 @@ class SCPIInstrument(Instrument):
                 self.interface = PrologixInterface(self.full_resource_name)
 
             else:
-                raise ValueError("That interface type is not yet recognized.")
+                raise InstrumentError("The interface type %s is not yet recognized.", interface_type)
         except:
             logger.error("Could not initialize interface for %s.", self.full_resource_name)
             self.interface = MagicMock()
@@ -264,7 +265,7 @@ class SCPIInstrument(Instrument):
 
     def __setattr__(self, key, value):
         if self.__isfrozen and not hasattr(self, key):
-            raise TypeError( "{} has a frozen class. Cannot access attribute {}".format(self, key) )
+            raise InstrumentError( "{} has a frozen class. Cannot access attribute {}".format(self, key) )
         object.__setattr__(self, key, value)
 
     def _freeze(self):

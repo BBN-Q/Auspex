@@ -1,4 +1,5 @@
 from auspex.data_format import AuspexDataContainer
+from itertools import product
 import datetime
 import os, re
 from os import path

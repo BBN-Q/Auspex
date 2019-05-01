@@ -14,6 +14,7 @@ import numpy as np
 
 from .filter import Filter
 from auspex.log import logger
+from auspex.error import PipelineError
 from auspex.parameter import Parameter
 from auspex.stream import InputConnector, OutputConnector
 
@@ -45,14 +46,14 @@ class Framer(Filter):
 
         # Convert named axes to an index
         if self.axis.value not in names:
-            raise ValueError("Could not find axis {} within the DataStreamDescriptor {}".format(self.axis.value, descriptor_in))
+            raise PipelineError("Could not find axis {} within the DataStreamDescriptor {}".format(self.axis.value, descriptor_in))
         self.axis_num = descriptor_in.axis_num(self.axis.value)
         logger.debug("Framing on axis #%d: %s", self.axis_num, self.axis.value)
 
         # Find how many points we want to spit out at a time
         self.data_dims = descriptor_in.data_dims()
         if self.axis_num == len(descriptor_in.axes) - 1:
-            raise Exception("Framer has refused to frame along single points.")
+            raise PipelineError("Framer has refused to frame along single points.")
         else:
             self.frame_points = descriptor_in.num_points_through_axis(self.axis_num+1)
 

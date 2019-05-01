@@ -18,6 +18,7 @@ import numpy as np
 from .filter import Filter
 from auspex.parameter import Parameter, IntParameter
 from auspex.log import logger
+from auspex.error import PipelineError, PlottingError
 from auspex.stream import InputConnector, OutputConnector
 
 if sys.platform == 'win32' or 'NOFORKING' in os.environ:
@@ -75,7 +76,7 @@ class Plotter(Filter):
 
     def get_final_plot(self, quad_funcs=[np.abs, np.angle]):
         if not self.done.is_set():
-            raise Exception("Cannot get final plot since plotter is not done or was not run.")
+            raise PlottingError("Cannot get final plot since plotter is not done or was not run.")
 
         from bqplot import LinearScale, ColorScale, ColorAxis, Axis, Lines, Figure, Tooltip, HeatMap
         from bqplot.toolbar import Toolbar
@@ -100,7 +101,7 @@ class Plotter(Filter):
         elif len(figs) == 4:
             return VBox([HBox([figs[0], figs[1]]), HBox([figs[2], figs[3]])])
         elif len(figs) == 3 or len(figs) > 4:
-            raise Exception("Please use 1, 2, or 4 quadrature functions.")
+            raise PlottingError("Please use 1, 2, or 4 quadrature functions.")
 
 
     def desc(self):
@@ -377,9 +378,9 @@ class ManualPlotter(object):
 
     def __setitem__(self, trace_name, data_tuple):
         if trace_name not in [t['name'] for t in self.traces]:
-            raise KeyError("Trace {} does not exist in this plotter.".format(trace_name))
+            raise PlottingError("Trace {} does not exist in this plotter.".format(trace_name))
         if len(data_tuple) != 2:
-            raise ValueError("__setitem__ for ManualPlotter accepts a tuple of length 2 for (xdata, ydata)")
+            raise PlottingError("__setitem__ for ManualPlotter accepts a tuple of length 2 for (xdata, ydata)")
         self.set_data(trace_name, data_tuple[0], data_tuple[1])
 
     def set_done(self):

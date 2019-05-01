@@ -26,6 +26,7 @@ from .filter import Filter
 from auspex.parameter import Parameter, FloatParameter, IntParameter, BoolParameter
 from auspex.stream import DataStreamDescriptor, InputConnector, OutputConnector, SweepAxis, DataAxis
 from auspex.log import logger
+from auspex.error import PipelineError
 import auspex.config as config
 import time
 
@@ -68,7 +69,7 @@ class SingleShotMeasurement(Filter):
             self.time_pts = self.descriptor.axes[self.descriptor.axis_num("time")].points
             self.record_length = len(self.time_pts)
         except ValueError:
-            raise ValueError("Single shot filter sink does not appear to have a time axis!")
+            raise PipelineError("Single shot filter sink does not appear to have a time axis!")
         self.num_averages = len(self.sink.descriptor.axes[self.descriptor.axis_num("averages")].points)
         self.num_segments = len(self.sink.descriptor.axes[self.descriptor.axis_num("segment")].points)
         self.ground_data = np.zeros((self.record_length, self.num_averages), dtype=np.complex)
@@ -124,7 +125,7 @@ class SingleShotMeasurement(Filter):
             ground_mean = np.mean(self.ground_data, axis=1)
             excited_mean = np.mean(self.excited_data, axis=1)
         except AttributeError:
-            raise Exception("Single shot filter does not appear to have any data!")
+            raise PipelineError("Single shot filter does not appear to have any data!")
         distance = np.abs(np.mean(ground_mean - excited_mean))
         bias = np.mean(ground_mean + excited_mean) / distance
         logger.debug("Found single-shot measurement distance: {} and bias {}.".format(distance, bias))
@@ -289,4 +290,4 @@ class SingleShotMeasurement(Filter):
             header = "Single shot fidelity filter - {}:\nSource: {}".format(time.strftime("%m/%d/%y -- %H:%M"), self.filter_name)
             np.savetxt(os.path.join(dir, filename), self.kernel, header=header, comments="#")
         except (AttributeError, IOError) as ex:
-            raise AttributeError("Could not save single shot fidelity kernel!") from ex
+            raise PipelineError("Could not save single shot fidelity kernel!") from ex

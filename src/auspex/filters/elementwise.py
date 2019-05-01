@@ -16,6 +16,7 @@ import time
 
 from auspex.stream import InputConnector, OutputConnector
 from auspex.log import logger
+from auspex.error import PipelineError
 import auspex.config as config
 from .filter import Filter
 
@@ -65,7 +66,7 @@ class ElementwiseFilter(Filter):
 
         for s in streams[1:]:
             if not np.all(s.descriptor.expected_tuples() == streams[0].descriptor.expected_tuples()):
-                raise ValueError("Multiple streams connected to correlator must have matching descriptors.")
+                raise PipelineError("Multiple streams connected to correlator must have matching descriptors.")
 
         # Buffers for stream data
         stream_data = {s: np.zeros(0, dtype=self.sink.descriptor.dtype) for s in streams}

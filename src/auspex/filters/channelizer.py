@@ -19,6 +19,7 @@ from .filter import Filter
 from auspex.parameter import Parameter, IntParameter, FloatParameter
 from auspex.stream import  DataStreamDescriptor, InputConnector, OutputConnector
 from auspex.log import logger
+from auspex.error import PipelineError
 
 try:
     # load libchannelizer to access Intel IPP filtering functions
@@ -155,7 +156,7 @@ class Channelizer(Filter):
 
         # final channel selection filter
         if n_bandwidth < 0.1:
-            raise ValueError("Insufficient decimation to achieve stable filter: {}.".format(n_bandwidth))
+            raise PipelineError("Insufficient decimation to achieve stable filter: {}.".format(n_bandwidth))
 
         b,a = scipy.signal.cheby1(4, 3, n_bandwidth/2)
         b = np.float32(b)

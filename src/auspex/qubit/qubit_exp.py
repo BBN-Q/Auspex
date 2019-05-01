@@ -1,4 +1,6 @@
 from auspex.log import logger
+from auspex.error import PipelineError, ChannelLibraryError
+
 from auspex.experiment import Experiment, FloatParameter
 from auspex.stream import DataStream, DataAxis, SweepAxis, DataStreamDescriptor, InputConnector, OutputConnector
 from auspex.instruments import instrument_map
@@ -70,7 +72,7 @@ class QubitExperiment(Experiment):
         super(QubitExperiment, self).__init__(**kwargs)
 
         if not pipeline.pipelineMgr:
-            raise Exception("Could not find pipeline manager, have you declared one using PipelineManager()?")
+            raise PipelineError("Could not find pipeline manager, have you declared one using PipelineManager()?")
 
         self.cw_mode = False
         self.add_date = True # add date to data files?
@@ -93,7 +95,7 @@ class QubitExperiment(Experiment):
             with open(meta_file, 'r') as FID:
                 meta_info = json.load(FID)
         except:
-            raise Exception(f"Could note process meta info from file {meta_file}")
+            raise ChannelLibraryError(f"Could note process meta info from file {meta_file}")
 
         # Load ChannelLibrary and database information
         db_provider      = meta_info['database_info']['db_provider']
@@ -129,7 +131,7 @@ class QubitExperiment(Experiment):
         # Load the relevant stream selectors from the pipeline.
         self.stream_selectors = pipeline.pipelineMgr.get_current_stream_selectors()
         if len(self.stream_selectors) == 0:
-            raise Exception("No filter pipeline has been created. You can try running the create_default_pipeline() method of the Pipeline Manager")
+            raise PipelineError("No filter pipeline has been created. You can try running the create_default_pipeline() method of the Pipeline Manager")
         self.stream_selectors = [s for s in self.stream_selectors if s.qubit_name in self.qubits_by_name.keys()]
 
         # Locate transmitters relying on processors
@@ -147,7 +149,7 @@ class QubitExperiment(Experiment):
 
         # If no pipeline is defined, assumed we want to generate it automatically
         if not pipeline.pipelineMgr.meas_graph:
-            raise Exception("No pipeline has been created, do so automatically using exp_factory.create_default_pipeline()")
+            raise PipelineError("No pipeline has been created, do so automatically using exp_factory.create_default_pipeline()")
             #self.create_default_pipeline(self.measured_qubits)
 
         # Add the waveform file info to the qubits
@@ -450,7 +452,7 @@ class QubitExperiment(Experiment):
             logger.debug(f"Sweeping {qubit} measurement")
             thing = list(filter(lambda m: m.label=="M-"+qubit.label, self.measurements))
             if len(thing) > 1:
-                raise ValueError(f"Found more than one measurement for {qubit}")
+                raise ChannelLibraryError(f"Found more than one measurement for {qubit}")
             thing = thing[0]
         elif measure_or_control == "control":
             logger.debug(f"Sweeping {qubit} control")
@@ -482,7 +484,7 @@ class QubitExperiment(Experiment):
                 param.assign_method(getattr(instr, "set_"+attribute)) # Couple the parameter to the instrument
                 param.add_post_push_hook(lambda: time.sleep(0.05))
             else:
-                raise ValueError("The instrument {} has no method {}".format(name, "set_"+attribute))
+                raise InstrumentError("Cannot create this sweep. The instrument {} has no method {}".format(name, "set_"+attribute))
         # param.instr_tree = [instr.name, attribute] #TODO: extend tree to endpoint
         self.add_sweep(param, values) # Create the requested sweep on this parameter
 

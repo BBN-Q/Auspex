@@ -18,6 +18,7 @@ import queue
 import sys
 
 from auspex.log import logger
+from auspex.error import DigitizerError, FakeDataError
 import auspex.config as config
 from .instrument import Instrument, ReceiverChannel
 from unittest.mock import MagicMock
@@ -129,7 +130,7 @@ class X6(Instrument):
                 self._lib = libx6.X6()
                 self.fake_x6 = False
             except:
-                raise Exception("Could not find libx6. You can run in dummy mode by setting config.auspex_dummy_mode \
+                raise DigitizerError("Could not find libx6. You can run in dummy mode by setting config.auspex_dummy_mode \
                     or setting the gen_fake_data property of this instrument.")
 
         if resource_name is not None:
@@ -217,7 +218,7 @@ class X6(Instrument):
         try:
             rsock, wsock = socket.socketpair()
         except:
-            raise Exception("Could not create read/write socket pair")
+            raise DigitizerError("Could not create read/write socket pair")
         self._lib.register_socket(*channel.channel_tuple, wsock)
         self._chan_to_rsocket[channel] = rsock
         self._chan_to_wsocket[channel] = wsock
@@ -225,10 +226,10 @@ class X6(Instrument):
 
     def add_channel(self, channel):
         if not isinstance(channel, X6Channel):
-            raise TypeError("X6 passed {} rather than an X6Channel object.".format(str(channel)))
+            raise DigitizerError("X6 passed {} rather than an X6Channel object.".format(str(channel)))
 
         if channel.stream_type not in ['raw', 'demodulated', 'integrated']:
-            raise ValueError("Stream type of {} not recognized by X6".format(str(channel.stream_type)))
+            raise DigitizerError("Stream type of {} not recognized by X6".format(str(channel.stream_type)))
 
         # todo: other checking here
         self._channels.append(channel)
@@ -328,7 +329,7 @@ class X6(Instrument):
                     if self.ideal_data is not None:
                         #add ideal data for testing
                         if hasattr(self, 'exp_step') and self.increment_ideal_data:
-                            raise Exception("Cannot use both exp_step and increment_ideal_data")
+                            raise FakeDataError("Cannot use both exp_step and increment_ideal_data")
                         elif hasattr(self, 'exp_step'):
                             total_spewed += self.spew_fake_data(
                                     counter, self.ideal_data[self.exp_step][i])

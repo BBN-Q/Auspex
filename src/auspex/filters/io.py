@@ -37,6 +37,7 @@ from .filter import Filter
 from auspex.parameter import Parameter, FilenameParameter, BoolParameter
 from auspex.stream import InputConnector, OutputConnector
 from auspex.log import logger
+from auspex.error import PipelineError
 import auspex.config as config
 
 class WriteToFile(Filter):

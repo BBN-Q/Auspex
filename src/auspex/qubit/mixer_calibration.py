@@ -17,6 +17,7 @@ import time
 from time import sleep
 
 from auspex.log import logger
+from auspex.error import CalibrationError, InstrumentError
 from auspex.filters import DataBuffer
 from auspex.experiment import FloatParameter, IntParameter, Experiment
 from auspex.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector
@@ -98,7 +99,7 @@ class MixerCalibration(Calibration):
         try:
             I1_offset, xpts, ypts = find_null_offset(offset_pts[1:], I1_amps[1:])
         except:
-            raise ValueError("Could not find null offset")
+            raise CalibrationError("Could not find null offset")
         self.plt1["I-offset"] = (offset_pts, I1_amps)
         self.plt1["Fit I-offset"] = (xpts, ypts)
         logger.info("Found first pass I offset of {}.".format(I1_offset))
@@ -108,7 +109,7 @@ class MixerCalibration(Calibration):
         try:
             Q1_offset, xpts, ypts = find_null_offset(offset_pts[1:], Q1_amps[1:])
         except:
-            raise ValueError("Could not find null offset")
+            raise CalibrationError("Could not find null offset")
         self.plt1["Q-offset"] = (offset_pts, Q1_amps)
         self.plt1["Fit Q-offset"] = (xpts, ypts)
         logger.info("Found first pass Q offset of {}.".format(Q1_offset))
@@ -118,7 +119,7 @@ class MixerCalibration(Calibration):
         try:
             I2_offset, xpts, ypts = find_null_offset(offset_pts[1:], I2_amps[1:])
         except:
-            raise ValueError("Could not find null offset")
+            raise CalibrationError("Could not find null offset")
         self.plt1["I-offset"] = (offset_pts, I2_amps)
         self.plt1["Fit I-offset"] = (xpts, ypts)
         logger.info("Found second pass I offset of {}.".format(I2_offset))
@@ -130,7 +131,7 @@ class MixerCalibration(Calibration):
         correct_plotter = {"phase": self.plt3, "amplitude": self.plt2}
         cal_defaults = {"phase": 0.0, "amplitude": 1.0}
         if first_cal not in cals.keys():
-            raise ValueError("First calibration should be one of ('phase, amplitude'). Instead got {}".format(first_cal))
+            raise CalibrationError("First calibration should be one of ('phase, amplitude'). Instead got {}".format(first_cal))
         second_cal = list(set(cals.keys()).difference({first_cal,}))[0]
 
         config_dict['sideband_modulation'] = True
@@ -139,7 +140,7 @@ class MixerCalibration(Calibration):
         try:
             offset1, xpts, ypts = find_null_offset(cal_pts[first_cal][1:], amps1[1:], default=cal_defaults[first_cal])
         except:
-            raise ValueError("Could not find null offset")
+            raise CalibrationError("Could not find null offset")
         correct_plotter[first_cal][cals[first_cal]] = (cal_pts[first_cal], amps1)
         correct_plotter[first_cal]["Fit "+cals[first_cal]] = (xpts, ypts)
         logger.info("Found {} of {}.".format(str.replace(cals[first_cal], '_', ' '), offset1))
@@ -149,7 +150,7 @@ class MixerCalibration(Calibration):
         try:
             offset2, xpts, ypts = find_null_offset(cal_pts[second_cal][1:], amps2[1:], default=cal_defaults[second_cal])
         except:
-            raise ValueError("Could not find null offset")
+            raise CalibrationError("Could not find null offset")
         correct_plotter[second_cal][cals[second_cal]] = (cal_pts[second_cal], amps2)
         correct_plotter[second_cal]["Fit "+cals[second_cal]] = (xpts, ypts)
         logger.info("Found {} of {}.".format(str.replace(cals[first_cal], '_', ' '), offset2))
@@ -220,7 +221,7 @@ class MixerCalibrationExperiment(Experiment):
             self._phys_chan = channel.phys_chan
             self._source = channel.phys_chan.generator
         else:
-            raise ValueError("Unknown mixer {}: must be either 'measure' or 'control'.".format(mixer))
+            raise CalibrationError("Unknown mixer {}: must be either 'measure' or 'control'.".format(mixer))
 
         self.instrument_proxies = [self._sa, self._LO, self._awg, self._source]
         self.instruments = []
@@ -287,7 +288,7 @@ class MixerCalibrationExperiment(Experiment):
             self.awg.set_offset(0, 0.0)
             self.awg.set_offset(1, 0.0)
         except Exception as ex:
-            raise Exception("Could not reset APS2 mixer calibration. Is the AWG connected?") from ex
+            raise InstrumentError("Could not reset APS2 mixer calibration. Is the AWG connected?") from ex
 
     def _setup_awg_ssb(self):
         #set up ingle sideband modulation IQ playback on the AWG

@@ -32,6 +32,7 @@ import numpy as np
 from auspex.parameter import Parameter
 from auspex.stream import DataStream, InputConnector, OutputConnector
 from auspex.log import logger
+from auspex.error import PipelineError
 import auspex.config
 
 class MetaFilter(type):
@@ -115,7 +116,7 @@ class Filter(Process, metaclass=MetaFilter):
                 if getattr(proxy_obj, name) is not None:
                     param.value = getattr(proxy_obj, name)
             else:
-                raise ValueError(f"{proxy_obj} was expected to have parameter {name}")
+                raise PipelineError(f"{proxy_obj} was expected to have parameter {name}")
 
     def __repr__(self):
         return "<{}(name={})>".format(self.__class__.__name__, self.name)

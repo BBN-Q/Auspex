@@ -22,7 +22,7 @@ import bbndb
 import queue
 
 from auspex.log import logger
-# from .qubit_exp_factory import QubitExpFactory
+from auspex.error import CalibrationError, PipelineError
 from .qubit_exp import QubitExperiment
 from auspex.parameter import FloatParameter
 from auspex.filters.plot import ManualPlotter
@@ -52,7 +52,7 @@ class SingleShotFidelityExperiment(QubitExperiment):
             ds = nx.descendants(graph, self.qubit_proxies[qubit.label])
             outputs = [d for d in ds if isinstance(d, (bbndb.auspex.Write, bbndb.auspex.Buffer))]
             if len(outputs) != 1:
-                raise Exception(f"More than one output node found for {qubit}, please explicitly define output node using output_nodes argument.")
+                raise PipelineError(f"More than one output node found for {qubit}, please explicitly define output node using output_nodes argument.")
             output_nodes.append(outputs[0])
         return output_nodes
 
@@ -104,17 +104,17 @@ class SingleShotFidelityExperiment(QubitExperiment):
         if len(ssf) > 1:
             raise NotImplementedError("Single shot fidelity for more than one qubit is not yet implemented.")
         elif len(ssf) == 0:
-            raise NameError("There do not appear to be any single-shot measurements in your filter pipeline. Please add one!")
+            raise PipelineError("There do not appear to be any single-shot measurements in your filter pipeline. Please add one!")
         return ssf
 
     def get_fidelity(self):
         if self.pdf_data is None:
-            raise Exception("Could not find single shot PDF data in results. Did you run the sweeps?")
+            raise CalibrationError("Could not find single shot PDF data in results. Did you run the sweeps?")
         return [p["Max I Fidelity"] for p in self.pdf_data]
 
     def get_threshold(self):
         if self.pdf_data is None:
-            raise Exception("Could not find single shot PDF data in results. Did you run the sweeps?")
+            raise CalibrationError("Could not find single shot PDF data in results. Did you run the sweeps?")
         return [p["I Threshold"] for p in self.pdf_data]
 
     def get_results(self):
@@ -128,4 +128,4 @@ class SingleShotFidelityExperiment(QubitExperiment):
                 except queue.Empty as e:
                     break
             if len(self.pdf_data) == 0:
-                raise Exception("Could not find single shot PDF data in results. Did you run the sweeps?")
+                raise CalibrationError("Could not find single shot PDF data in results. Did you run the sweeps?")

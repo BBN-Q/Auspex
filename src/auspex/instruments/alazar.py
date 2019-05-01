@@ -18,6 +18,7 @@ import numpy as np
 from multiprocessing import Value
 
 from .instrument import Instrument, ReceiverChannel
+from auspex.error import DigitizerError, FakeDataError
 from auspex.log import logger
 import auspex.config as config
 
@@ -93,7 +94,7 @@ class AlazarATS9870(Instrument):
                 self._lib = ATS9870()
                 self.fake_alazar = False
             except:
-                raise Exception("Could not find libalazar. You can run in dummy mode by setting config.auspex_dummy_mode \
+                raise DigitizerError("Could not find libalazar. You can run in dummy mode by setting config.auspex_dummy_mode \
                     or setting the gen_fake_data property of this instrument.")
         if resource_name:
             self.resource_name = resource_name
@@ -124,7 +125,7 @@ class AlazarATS9870(Instrument):
         try:
             rsock, wsock = socket.socketpair()
         except:
-            raise Exception("Could not create read/write socket pair")
+            raise DigitizerError("Could not create read/write socket pair")
         self._lib.register_socket(channel.phys_channel - 1, wsock)
         # logger.info(f"Passing socket {wsock} to libalazar driver")
         self._chan_to_rsocket[channel] = rsock
@@ -133,7 +134,7 @@ class AlazarATS9870(Instrument):
 
     def add_channel(self, channel):
         if not isinstance(channel, AlazarChannel):
-            raise TypeError("Alazar passed {} rather than an AlazarChannel object.".format(str(channel)))
+            raise DigitizerError("Alazar passed {} rather than an AlazarChannel object.".format(str(channel)))
 
         # We can have either 1 or 2, or both.
         if len(self.channels) < 2 and channel not in self.channels:
@@ -208,7 +209,7 @@ class AlazarATS9870(Instrument):
                     if self.ideal_data is not None:
                         #add ideal data for testing
                         if hasattr(self, 'exp_step') and self.increment_ideal_data:
-                            raise Exception("Cannot use both exp_step and increment_ideal_data")
+                            raise FakeDataError("Cannot use both exp_step and increment_ideal_data")
                         elif hasattr(self, 'exp_step'):
                             total_spewed += self.spew_fake_data(
                                     counter, self.ideal_data[self.exp_step][i])
@@ -246,7 +247,7 @@ class AlazarATS9870(Instrument):
                     self.last_timestamp.value = datetime.datetime.now().timestamp()
                 if (datetime.datetime.now().timestamp() - self.last_timestamp.value) > timeout:
                     logger.error("Digitizer %s timed out.", self.name)
-                    raise Exception("Alazar timed out.")
+                    raise DigitizerError("Alazar timed out.")
                 for oc in ocs:
                     if progressbars:
                         progressbars[oc].value = oc.points_taken.value

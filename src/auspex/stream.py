@@ -27,6 +27,7 @@ import numpy as np
 from functools import reduce
 
 from auspex.log import logger
+from auspex.error import PipelineError
 
 def cartesian(arrays, out=None, dtype='f'):
     """http://stackoverflow.com/questions/28684492/numpy-equivalent-of-itertools-product"""
@@ -75,9 +76,9 @@ class DataAxis(object):
 
         if self.unstructured:
             if unit is not None and len(name) != len(unit):
-                raise ValueError("DataAxis unit length {} and tuples length {} must match.".format(len(unit),len(name)))
+                raise PipelineError("DataAxis unit length {} and tuples length {} must match.".format(len(unit),len(name)))
         if self.unstructured and len(name) != len(points[0]):
-            raise ValueError("DataAxis points length {} and names length {} must match.".format(len(points[0]), len(name)))
+            raise PipelineError("DataAxis points length {} and names length {} must match.".format(len(points[0]), len(name)))
 
     def data_type(self, with_metadata=False):
         dtype = []
@@ -118,7 +119,7 @@ class DataAxis(object):
 
     def add_points(self, points):
         if self.unstructured and len(self.parameter) != len(points[0]):
-            raise ValueError("Parameter value tuples must be the same length as the number of parameters.")
+            raise PipelineError("Parameter value tuples must be the same length as the number of parameters.")
 
         if type(points) in [list, np.ndarray]:
             points = np.array(points)
@@ -175,7 +176,7 @@ class SweepAxis(DataAxis):
         self.experiment  = None # Should be explicitly set by the experiment
 
         if self.unstructured and len(parameter) != len(points[0]):
-            raise ValueError("Parameter value tuples must be the same length as the number of parameters.")
+            raise PipelineError("Parameter value tuples must be the same length as the number of parameters.")
 
         logger.debug("Created {}".format(self.__repr__()))
 
@@ -265,7 +266,7 @@ class DataStreamDescriptor(object):
             logger.debug("Adding DataAxis into DataStreamDescriptor: {}".format(axis))
             self.axes.insert(position, axis)
         else:
-            raise TypeError("Failed adding axis. Object is not DataAxis: {}".format(axis))
+            raise PipelineError("Failed adding axis. Object is not DataAxis: {}".format(axis))
 
     def add_param(self, key, value):
         self.params[key] = value
@@ -279,7 +280,7 @@ class DataStreamDescriptor(object):
         if self.num_dims() == 2:
             return (self.axes[1].points[0], self.axes[1].points[-1], self.axes[0].points[0], self.axes[0].points[-1])
         else:
-            raise Exception("Can't get extent for any number of axes other than two.")
+            raise PipelineError("Can't get extent for any number of axes other than two.")
 
     def data_dims(self):
         # Return dimension (length) of the data axes, exclude sweep axes (return 1 for each)
@@ -491,7 +492,7 @@ class DataStream(object):
             logger.debug("Setting descriptor on stream '%s' to '%s'", self.name, descriptor)
             self.descriptor = descriptor
         else:
-            raise TypeError("Failed setting descriptor. Object is not DataStreamDescriptor: {}".format(descriptor))
+            raise PipelineError("Failed setting descriptor. Object is not DataStreamDescriptor: {}".format(descriptor))
 
     def num_points(self):
         if self.descriptor is not None:
@@ -536,7 +537,7 @@ class DataStream(object):
                         junk = data + 1.0
                         self.points_taken.value += 1
                     except:
-                        raise ValueError("Got data {} that is neither an array nor a float".format(data))
+                        raise PipelineError("Got data {} that is neither an array nor a float".format(data))
 
         message = {"type": "data", "data": data}
         self.queue.put(message)

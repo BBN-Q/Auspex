@@ -14,6 +14,7 @@ import numpy as np
 
 from .filter import Filter
 from auspex.log import logger
+from auspex.error import PipelineError
 from auspex.parameter import Parameter, FloatParameter
 from auspex.stream import InputConnector, OutputConnector, DataStreamDescriptor, DataAxis
 
@@ -86,7 +87,7 @@ class Averager(Filter):
 
         # Convert named axes to an index
         if self.axis.value not in names:
-            raise ValueError("Could not find axis {} within the DataStreamDescriptor {}".format(self.axis.value, descriptor_in))
+            raise PipelineError("Could not find axis {} within the DataStreamDescriptor {}".format(self.axis.value, descriptor_in))
         self.axis_num = descriptor_in.axis_num(self.axis.value)
         logger.debug("Averaging over axis #%d: %s", self.axis_num, self.axis.value)
 
@@ -181,7 +182,7 @@ class Averager(Filter):
 
     def final_init(self):
         if self.points_before_final_average is None:
-            raise Exception("Average has not been initialized. Run 'update_descriptors'")
+            raise PipelineError("Average has not been initialized. Run 'update_descriptors'")
 
         self.completed_averages = 0
         self.idx_frame          = 0

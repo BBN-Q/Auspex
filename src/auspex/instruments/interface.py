@@ -33,7 +33,7 @@ class VisaInterface(Interface):
                 rm = visa.ResourceManager("@py")
             self._resource = rm.open_resource(resource_name)
         except:
-            raise Exception("Unable to create the resource '%s'" % resource_name)
+            raise InstrumentError("Unable to create the resource '%s'" % resource_name)
     def values(self, query_string):
         return self._resource.query_ascii_values(query_string, container=np.array)
     def value(self, query_string):
@@ -87,8 +87,8 @@ class PrologixInterface(VisaInterface):
         Interface.__init__(self)
         try:
             if len(resource_name.split("::")) != 2:
-                    raise Exception("Resource name for Prologix-Ethernet adapter must be of form IPv4_ADDR::GPIB_ADDR")
+                    raise InstrumentError("Resource name for Prologix-Ethernet adapter must be of form IPv4_ADDR::GPIB_ADDR")
             self._resource = PrologixSocketResource(ipaddr=resource_name.split("::")[0], gpib=int(resource_name.split("::")[1]))
             self._resource.connect()
         except:
-            raise Exception("Unable to create the resource '%s'" % resource_name)
+            raise InstrumentError("Unable to create the resource '%s'" % resource_name)
