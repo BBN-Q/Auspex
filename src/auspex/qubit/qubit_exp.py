@@ -533,6 +533,12 @@ class QubitExperiment(Experiment):
         # In order to fetch data more easily later
         self.outputs_by_qubit =  {q.label: [self.proxy_to_filter[dat['node_obj']] for f,dat in self.modified_graph.nodes(data=True) if (isinstance(dat['node_obj'], (bbndb.auspex.Write, bbndb.auspex.Buffer,)) and q.label in dat['node_obj'].qubit_name)] for q in self.measured_qubits}
 
+        # Serialize the pipeline and channel library and store with any data files
+        writers = [self.proxy_to_filter[dat['node_obj']] for f,dat in self.modified_graph.nodes(data=True) if isinstance(dat['node_obj'], bbndb.auspex.Write)]
+
+        for w in writers:
+            w.container.store_db_snapshot(pipeline.pipelineMgr.serialize(), self.chan_db.serialize())
+
     def init_progress_bars(self):
         """ initialize the progress bars."""
 

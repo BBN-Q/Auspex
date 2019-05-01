@@ -19,6 +19,20 @@ class AuspexDataContainer(object):
             assert not os.path.exists(self.base_path), "Existing data container found. Did you want to open instead?"
         os.makedirs(self.base_path, exist_ok=True)
         self.groups = {}
+    def store_db_snapshot(self, pl, cl):
+        if not hasattr(self, '_snapshot_stored'):
+            self._snapshot_stored = True
+            os.makedirs(os.path.join(self.base_path,"__qubit_meta__"))
+            with open(os.path.join(self.base_path,'__qubit_meta__','pipeline.json'), 'w') as f:
+                json.dump(pl, f)
+            with open(os.path.join(self.base_path,'__qubit_meta__','channels.json'), 'w') as f:
+                json.dump(cl, f)
+    def load_db_snapshot(self):
+        with open(os.path.join(self.base_path,'__qubit_meta__','pipeline.json'), 'r') as f:
+             pl = json.load(f)
+        with open(os.path.join(self.base_path,'__qubit_meta__','channels.json'), 'r') as f:
+             cl = json.load(f)
+        return pl, cl
     def new_group(self, groupname):
         assert os.path.exists(self.base_path), "No data container found. This should have happened automatically?"
         if self.mode not in ['a', 'w+']:
@@ -52,6 +66,10 @@ class AuspexDataContainer(object):
         return mm
     def open_all(self):
         ret = {}
+
+        if os.path.exists(os.path.join(self.base_path,'__qubit_meta__','pipeline.json')):
+            ret["pipeline"], ret["channel_library"] = self.load_db_snapshot()
+
         for groupname in os.listdir(self.base_path):
             ret[groupname] = {}
             for datasetname in os.listdir(os.path.join(self.base_path,groupname)):

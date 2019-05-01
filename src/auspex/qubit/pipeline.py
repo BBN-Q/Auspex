@@ -76,6 +76,21 @@ class PipelineManager(object):
 
         pipelineMgr = self
 
+    def serialize(self):
+        d = {}
+        d["edges"]  = nx.to_dict_of_dicts(self.meas_graph)
+        d["nodes"]  = {dat['node_obj'].node_label(): dat['node_obj'].__dict__ for n,dat in self.meas_graph.nodes(data=True)}
+        d["hashes"] = {dat['node_obj'].hash_val: dat['node_obj'].node_label() for n,dat in self.meas_graph.nodes(data=True)}
+        for k in d["nodes"]:
+            d["nodes"][k].pop("_sa_instance_state")
+            d["nodes"][k].pop("pipelineMgr")
+            for kk in list(d["nodes"][k].keys()):
+                try:
+                    json.dumps(d["nodes"][k][kk]) 
+                except:
+                    d["nodes"][k].pop(kk)
+        return d
+
     def add_qubit_pipeline(self, qubit_label, stream_type, auto_create=True, buffers=False):
         # if qubit_label not in self.stream_selectors:
         m = bbndb.qgl.Measurement
