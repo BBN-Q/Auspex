@@ -50,12 +50,13 @@ class DataListener(QtCore.QObject):
     message  = QtCore.pyqtSignal(tuple)
     finished = QtCore.pyqtSignal()
 
-    def __init__(self, host, uuid, port=7772):
+    def __init__(self, host, uuid, num_plots, port=7772):
         QtCore.QObject.__init__(self)
 
         self.uuid = uuid
         self.context = zmq.Context()
         self.socket = self.context.socket(zmq.SUB)
+        self.num_plots = num_plots
         self.socket.connect("tcp://{}:{}".format(host, port))
         self.socket.setsockopt_string(zmq.SUBSCRIBE, uuid)
         self.poller = zmq.Poller()
@@ -64,6 +65,7 @@ class DataListener(QtCore.QObject):
 
     def loop(self):
         while self.running:
+            done_plots = 0
             socks = dict(self.poller.poll(1000))
             if socks.get(self.socket) == zmq.POLLIN:
                 msg = self.socket.recv_multipart()
@@ -71,8 +73,10 @@ class DataListener(QtCore.QObject):
                 uuid     = msg[0].decode()
                 name     = msg[2].decode()
                 if msg_type == "done":
-                    self.finished.emit()
-                    logger.debug(f"Data listener thread for {self.uuid} got done message.")
+                    done_plots += 1
+                    if done_plots == self.num_plots:
+                        self.finished.emit()
+                        logger.debug(f"Data listener thread for {self.uuid} got done message.")
                 elif msg_type == "data":
                     result = [name, uuid]
                     # How many pairs of metadata and data are there?
@@ -350,10 +354,14 @@ class MatplotWindowMixin(object):
         self.uuid = None
         self.data_listener_thread = None
 
-    def listen_for_data(self, uuid, address="localhost", data_port=7772):
+    def toggleAutoClose(self, state):
+        global single_window
+        single_window = state
+
+    def listen_for_data(self, uuid, num_plots, address="localhost", data_port=7772):
         self.uuid = uuid
         self.data_listener_thread = QtCore.QThread()
-        self.Datalistener = DataListener(address, uuid, data_port)
+        self.Datalistener = DataListener(address, uuid, num_plots, port=data_port)
         self.Datalistener.moveToThread(self.data_listener_thread)
         self.data_listener_thread.started.connect(self.Datalistener.loop)
         self.Datalistener.message.connect(self.data_signal_received)
@@ -497,7 +505,7 @@ def new_plotter_window(message):
     pw.setWindowState(pw.windowState() & ~QtCore.Qt.WindowMinimized | QtCore.Qt.WindowActive)
     pw.activateWindow()
     pw.construct_plots(desc)
-    pw.listen_for_data(uuid)
+    pw.listen_for_data(uuid, len(desc))
 
     if single_window and len(plot_windows) > 0:
         for w in plot_windows:
@@ -515,7 +523,7 @@ def new_plotter_window_mdi(message):
   
     pw.setWindowTitle("%s" % progname)
     pw.construct_plots(desc)
-    pw.listen_for_data(uuid)
+    pw.listen_for_data(uuid, len(desc))
 
     if single_window:
         for window in main_app_mdi.subWindowList():
@@ -606,7 +614,7 @@ class WaitAndListenWidget(ListenerMixin,QtWidgets.QWidget):
         layout.addWidget(QtWidgets.QLabel("Waiting for an available Auspex plot..."))
         layout.addWidget(self.progressBar)
         button = QtWidgets.QPushButton("Quit", self)
-        layout.addWidget(button)  
+        layout.addWidget(button)
         button.clicked.connect(self.closeEvent)
 
         self.start_listener(new_plotter_window)
