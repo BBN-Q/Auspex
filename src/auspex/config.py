@@ -20,7 +20,10 @@ profile = False
 # or to avoid loading libraries that may
 # interfere with desired operation. (e.g.
 # when scraping modules in Auspex)
-auspex_dummy_mode = False
+fake_data_mode = False
+
+# Use when we don't want to even bother trying to plot
+plotless_mode = False
 
 # If this is True, then close the last
 # plotter before starting a new one.

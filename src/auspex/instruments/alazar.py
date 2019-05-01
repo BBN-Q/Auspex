@@ -61,7 +61,7 @@ class AlazarATS9870(Instrument):
     """Alazar ATS9870 digitizer"""
     instrument_type = ("Digitizer")
 
-    def __init__(self, resource_name=None, name="Unlabeled Alazar", gen_fake_data=False):
+    def __init__(self, resource_name=None, name="Unlabeled Alazar"):
         self.name = name
 
         # A list of AlazarChannel objects
@@ -78,14 +78,13 @@ class AlazarATS9870(Instrument):
         self.fetch_count    = Value('d', 0)
         self.total_received = Value('d', 0)
 
-        self.gen_fake_data        = gen_fake_data
         self.increment_ideal_data = False
         self.ideal_counter        = 0
         self.ideal_data           = None
         np.random.seed(12345)
 
     def connect(self, resource_name=None):
-        if config.auspex_dummy_mode or self.gen_fake_data:
+        if config.fake_data_mode:
             self.fake_alazar = True
             self._lib = MagicMock()
         else:
@@ -94,8 +93,7 @@ class AlazarATS9870(Instrument):
                 self._lib = ATS9870()
                 self.fake_alazar = False
             except:
-                raise DigitizerError("Could not find libalazar. You can run in dummy mode by setting config.auspex_dummy_mode \
-                    or setting the gen_fake_data property of this instrument.")
+                raise DigitizerError("Could not find libalazar. You can run in dummy mode by setting auspex.config.fake_data_mode.")
         if resource_name:
             self.resource_name = resource_name
 
@@ -198,7 +196,7 @@ class AlazarATS9870(Instrument):
         return getattr(self._lib, 'ch{}Buffer'.format(self._chan_to_buf[channel]))
 
     def wait_for_acquisition(self, dig_run, timeout=5, ocs=None, progressbars=None):
-        if self.gen_fake_data:
+        if config.fake_data_mode:
             total_spewed = 0
 
             counter = {chan: 0 for chan in self._chan_to_wsocket.keys()}

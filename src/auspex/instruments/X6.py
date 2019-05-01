@@ -95,7 +95,7 @@ class X6(Instrument):
     """BBN QDSP running on the II-X6 digitizer"""
     instrument_type = ("Digitizer")
 
-    def __init__(self, resource_name=None, name="Unlabeled X6", gen_fake_data=False):
+    def __init__(self, resource_name=None, name="Unlabeled X6"):
         # X6Channel objects
         self._channels = []
         # socket r/w pairs for each channel
@@ -107,7 +107,6 @@ class X6(Instrument):
 
         self.last_timestamp = Value('d', datetime.datetime.now().timestamp())
 
-        self.gen_fake_data        = gen_fake_data
         self.increment_ideal_data = False
         self.ideal_counter        = 0
         self.ideal_data           = None
@@ -121,7 +120,7 @@ class X6(Instrument):
         self.disconnect()
 
     def connect(self, resource_name=None):
-        if config.auspex_dummy_mode or self.gen_fake_data:
+        if config.fake_data_mode:
             self.fake_x6 = True
             self._lib = MagicMock()
         else:
@@ -130,8 +129,7 @@ class X6(Instrument):
                 self._lib = libx6.X6()
                 self.fake_x6 = False
             except:
-                raise DigitizerError("Could not find libx6. You can run in dummy mode by setting config.auspex_dummy_mode \
-                    or setting the gen_fake_data property of this instrument.")
+                raise DigitizerError("Could not find libx6. You can run in dummy mode by setting config.fake_data_mode.")
 
         if resource_name is not None:
             self.resource_name = resource_name
@@ -139,12 +137,7 @@ class X6(Instrument):
         # pass thru functions
         self.acquire    = self._lib.acquire
         self.stop       = self._lib.stop
-        # self.disconnect = self._lib.disconnect
 
-        # if self.gen_fake_data or fake_x6:
-        #     self._lib = MagicMock()
-        #     logger.warning("Could not load x6 library")
-        #     logger.warning("X6 GENERATING FAKE DATA")
         self._lib.connect(int(self.resource_name))
 
     def disconnect(self):
@@ -319,7 +312,7 @@ class X6(Instrument):
 
     def wait_for_acquisition(self, dig_run, timeout=15, ocs=None, progressbars=None):
 
-        if self.gen_fake_data:
+        if config.fake_data_mode:
             total_spewed = 0
 
             counter = {chan: 0 for chan in self._chan_to_wsocket.keys()}

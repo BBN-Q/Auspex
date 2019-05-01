@@ -22,7 +22,7 @@ if istravis:
     usb = MagicMock()
     logger.warning("PyUSB not loaded for Travis CI build.")
 else:
-    if not config.auspex_dummy_mode:
+    if not config.fake_data_mode:
         try:
             import usb
         except:
@@ -113,7 +113,7 @@ class HolzworthPythonDriver(object):
         if channel not in self.devices[serial].channels:
             ValueError("Holzworth {} does not have channel {}".format(serial, channel))
 
-if config.auspex_dummy_mode:
+if config.fake_data_mode:
     fake_holz = True
     holzworth_driver = MagicMock()
 else:

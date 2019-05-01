@@ -4,6 +4,7 @@ from auspex.error import PipelineError, ChannelLibraryError
 from auspex.experiment import Experiment, FloatParameter
 from auspex.stream import DataStream, DataAxis, SweepAxis, DataStreamDescriptor, InputConnector, OutputConnector
 from auspex.instruments import instrument_map
+import auspex.config
 import auspex.filters
 import bbndb
 import numpy as np
@@ -333,7 +334,8 @@ class QubitExperiment(Experiment):
 
     def set_fake_data(self, digitizer_proxy, ideal_data, increment=False, random_mag=0.1):
         """Enabled and use the fake data interface for digitizers in order that auspex can
-        be run without hardware.
+        be run without hardware. This sets the global fake_data_mode in auspex.config to True,
+        meaning that all instruments must be run in fake data mode simultaneously.
 
         Parameters:
             digitizer_proxy (bbndb `Receiver` instance)
@@ -351,7 +353,7 @@ class QubitExperiment(Experiment):
             Make sure to set auspex dummy mode at import time.
 
             >>> import auspex.config as config
-            >>> config.auspex_dummy_mode = True
+            >>> config.fake_data_mode = True
             >>> # Configure channels and pipelines here
             >>> amps = np.linspace(-1,1,51)
             >>> exp = QubitExperiment(RabiAmp(q1,amps),averages=50)
@@ -362,20 +364,19 @@ class QubitExperiment(Experiment):
         auspex_instr = self.proxy_name_to_instrument[digitizer_proxy.label]
         auspex_instr.ideal_data = ideal_data
         auspex_instr.increment_ideal_data = increment
-        auspex_instr.gen_fake_data = True
         auspex_instr.fake_data_random_mag = random_mag
+        auspex.config.fake_data_mode = True
 
     def clear_fake_data(self, digitizer_proxy):
-        """Disable using fake data interface for a digitizer. Take note that dummy mode may
-        still be active.
+        """Disable using fake data interface for a digitizer, and therefore disable for
+        all digitizers.
 
         Parameters:
             digitizer_proxy (bbndb `Receiver` instance)
                 The digitizer instrument proxy to be used for fake data generation.
         """
         auspex_instr = self.proxy_name_to_instrument[digitizer_proxy.label]
-        auspex_instr.ideal_data = ideal_data
-        auspex_instr.gen_fake_data = False
+        auspex.config.fake_data_mode = False
 
     def add_connector(self, stream_selector):
         name = stream_selector.qubit_name+'-'+stream_selector.stream_type

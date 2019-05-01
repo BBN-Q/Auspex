@@ -15,7 +15,7 @@ import time
 import numpy as np
 
 import auspex.config as config
-config.auspex_dummy_mode = True
+config.fake_data_mode = True
 
 from auspex.instruments.instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand
 from auspex.experiment import Experiment

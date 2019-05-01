@@ -12,7 +12,7 @@ cl = None
 
 import QGL.config
 import auspex.config
-auspex.config.auspex_dummy_mode = True
+auspex.config.fake_data_mode = True
 
 # Set temporary output directories
 awg_dir = tempfile.TemporaryDirectory()

@@ -17,15 +17,15 @@ class AuspexDataContainer(object):
             del mm
     def _create(self):
         if self.mode not in ['a', 'w+']:
-            if not os.path.exists(self.base_path):
+            if os.path.exists(self.base_path):
                 raise DatafileError("Existing data container found. Did you want to open instead?")
         os.makedirs(self.base_path, exist_ok=True)
         self.groups = {}
     def new_group(self, groupname):
-        if os.path.exists(self.base_path):
+        if not os.path.exists(self.base_path):
             raise DatafileError("No data container found. This should have happened automatically?")
         if self.mode not in ['a', 'w+']:
-            if not os.path.exists(self.base_path):
+            if os.path.exists(self.base_path):
                 raise DatafileError("Existing data container found. Did you want to open instead?")
         os.makedirs(os.path.join(self.base_path,groupname), exist_ok=True)
         self.groups[groupname] = []
@@ -35,7 +35,7 @@ class AuspexDataContainer(object):
         return self._create_memmap(groupname, datasetname, (np.product(descriptor.dims()),), descriptor.dtype)
     def _create_meta(self, groupname, datasetname, descriptor):
         filename = os.path.join(self.base_path,groupname,datasetname+'_meta.json')
-        if not os.path.exists(filename):
+        if os.path.exists(filename):
             raise DatafileError("Existing dataset metafile found. Did you want to open instead?")
         meta = {'shape': tuple(descriptor.dims()), 'dtype': np.dtype(descriptor.dtype).str}
         meta['axes'] = {a.name: a.points.tolist() for a in descriptor.axes}
@@ -51,7 +51,7 @@ class AuspexDataContainer(object):
             json.dump(meta, f)
     def _create_memmap(self, groupname, datasetname, shape, dtype, mode='w+'):
         filename = os.path.join(self.base_path,groupname,datasetname+'.dat')
-        if not os.path.exists(filename):
+        if os.path.exists(filename):
             raise DatafileError("Existing dataset found. Did you want to open instead?")
         mm = np.memmap(filename, dtype=dtype, mode=mode, shape=shape)
         self.open_mmaps.append(mm)
@@ -66,13 +66,13 @@ class AuspexDataContainer(object):
         return ret
     def open_dataset(self, groupname, datasetname):
         filename = os.path.join(self.base_path,groupname,datasetname+'_meta.json')
-        if os.path.exists(filename):
+        if not os.path.exists(filename):
             raise DatafileError("Could not find dataset. Is this the correct name?")
         with open(filename, 'r') as f:
             meta = json.load(f)
             
         filename = os.path.join(self.base_path,groupname,datasetname+'.dat')
-        if os.path.exists(filename):
+        if not os.path.exists(filename):
             raise DatafileError("Could not find dataset. Is this the correct name?")
         flat_shape = (np.product(meta['shape']),)
         mm = np.memmap(filename, dtype=meta['dtype'], mode='r', shape=flat_shape)

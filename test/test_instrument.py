@@ -9,8 +9,8 @@
 import unittest
 
 import auspex.config as config
-config.auspex_dummy_mode = True
-
+config.fake_data_mode = True
+from auspex.error import InstrumentError
 from auspex.instruments.instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand
 
 class TestInstrument(SCPIInstrument):
@@ -57,7 +57,7 @@ class InstrumentTestCase(unittest.TestCase):
 	def test_locked_class(self):
 		self.instrument = TestInstrument("DUMMY::RESOURCE")
 		self.instrument.connect()
-		with self.assertRaises(TypeError):
+		with self.assertRaises(InstrumentError):
 			self.instrument.nonexistent_property = 16
 
 if __name__ == '__main__':

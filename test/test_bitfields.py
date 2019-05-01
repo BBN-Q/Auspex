@@ -9,7 +9,7 @@
 import unittest
 
 import auspex.config as config
-config.auspex_dummy_mode = True
+config.fake_data_mode = True
 
 from auspex.instruments.binutils import BitField, BitFieldUnion
 

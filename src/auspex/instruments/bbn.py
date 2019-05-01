@@ -22,7 +22,7 @@ import os.path
 # Dirty trick to avoid loading libraries when scraping
 # This code using quince.
 aps2_missing = False
-if config.auspex_dummy_mode:
+if config.fake_data_mode:
     fake_aps2 = True
     aps2 = MagicMock()
 else:
@@ -35,7 +35,7 @@ else:
         aps2 = MagicMock()
 
 aps1_missing = False
-if config.auspex_dummy_mode:
+if config.fake_data_mode:
     fake_aps1 = True
     aps1 = MagicMock()
 else:
