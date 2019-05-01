@@ -523,7 +523,7 @@ def new_plotter_window_mdi(message):
   
     pw.setWindowTitle("%s" % progname)
     pw.construct_plots(desc)
-    pw.listen_for_data(uuid)
+    pw.listen_for_data(uuid, len(desc))
 
     if single_window:
         for window in main_app_mdi.subWindowList():
