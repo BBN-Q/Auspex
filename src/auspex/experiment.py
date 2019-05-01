@@ -285,7 +285,7 @@ class Experiment(metaclass=MetaExperiment):
             for oc in self.output_connectors.values():
                 for os in oc.output_streams:
                     # TODO: why does any queue interaction prevent adding out of order?
-                    if os.queue.qsize() > 0:
+                    if not os.queue.empty():
                         all_done = False
 
             if not all_done:
