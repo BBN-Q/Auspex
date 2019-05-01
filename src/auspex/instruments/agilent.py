@@ -13,7 +13,7 @@ import time
 import copy
 import re
 import numpy as np
-from .instrument import SCPIInstrument, Command, StringCommand, FloatCommand, IntCommand, is_valid_ipv4
+from .instrument import SCPIInstrument, Command, StringCommand, BoolCommand, FloatCommand, IntCommand, is_valid_ipv4
 from auspex.log import logger
 
 class HP33120A(SCPIInstrument):
@@ -709,7 +709,7 @@ class AgilentE8363C(SCPIInstrument):
     frequency_stop     = FloatCommand(scpi_string=":SENSe:FREQuency:STOP")
     sweep_num_points   = IntCommand(scpi_string=":SENSe:SWEep:POINts")
     averaging_factor   = IntCommand(scpi_string=":SENSe1:AVERage:COUNt")
-    #averaging_enable   = StringCommand(get_string=":SENSe1:AVERage:STATe?", set_string=":SENSe1:AVERage:STATe {:s}", value_map={False: "0", True: "1"})
+    averaging_enable   = BoolCommand(get_string=":SENSe1:AVERage:STATe?", set_string=":SENSe1:AVERage:STATe {:s}", value_map={False: "0", True: "1"})
     averaging_complete = StringCommand(get_string=":STATus:OPERation:AVERaging1:CONDition?", value_map={False:"+0", True:"+2"})
     if_bandwidth       = FloatCommand(scpi_string=":SENSe1:BANDwidth")
     sweep_time         = FloatCommand(get_string=":SENSe:SWEep:TIME?")
@@ -751,18 +751,6 @@ class AgilentE8363C(SCPIInstrument):
             self.interface.write(":SENSe1:AVERage:STATe ON")
         else:
             self.interface.write(":SENSe1:AVERage:STATe OFF")
-
-    @property
-    def output(self):
-        state = self.interface.query(":OUTP:STATE?")
-        return bool(int(state))
-
-    @output.setter
-    def output(self, value):
-        if value:
-            self.interface.write(":OUTP:STAT ON")
-        else:
-            self.interface.write(":OUTP:STAT OFF")
 
     @property
     def measurement(self):
