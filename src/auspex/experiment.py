@@ -285,13 +285,12 @@ class Experiment(metaclass=MetaExperiment):
             for oc in self.output_connectors.values():
                 for os in oc.output_streams:
                     # TODO: why does any queue interaction prevent adding out of order?
-                    if os.queue.qsize() > 0:
+                    if not os.queue.empty():
+                        time.sleep(0.01)
                         all_done = False
-
             if not all_done:
                 time.sleep(1)
             else:
-                print("All Queues Done")
                 break
 
         for oc in self.output_connectors.values():
@@ -580,9 +579,6 @@ class Experiment(metaclass=MetaExperiment):
                 self.exit_perf.set()
                 self.perf_thread.join()
 
-        except Exception as e:
-            logger.warning(f"Encountered error '{e}' in run sweeps after initializing experiments")
-            raise e
         except KeyboardInterrupt as e:
             print("Caught KeyboardInterrupt, terminating.")
             self.shutdown()
