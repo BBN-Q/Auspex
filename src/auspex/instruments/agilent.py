@@ -13,7 +13,7 @@ import time
 import copy
 import re
 import numpy as np
-from .instrument import SCPIInstrument, Command, StringCommand, FloatCommand, IntCommand, is_valid_ipv4
+from .instrument import SCPIInstrument, Command, StringCommand, BoolCommand, FloatCommand, IntCommand, is_valid_ipv4
 from auspex.log import logger
 
 class HP33120A(SCPIInstrument):
@@ -700,7 +700,7 @@ class AgilentE8363C(SCPIInstrument):
     """Agilent E8363C VNA"""
     instrument_type = "Vector Network Analyzer"
 
-    AVERAGE_TIMEOUT = 12. * 60. * 60. * 1000. #milliseconds
+    TIMEOUT = 10. * 1000. #milliseconds
 
     power              = FloatCommand(scpi_string=":SOURce:POWer:LEVel:IMMediate:AMPLitude", value_range=(-27, 20))
     frequency_center   = FloatCommand(scpi_string=":SENSe:FREQuency:CENTer")
@@ -709,7 +709,7 @@ class AgilentE8363C(SCPIInstrument):
     frequency_stop     = FloatCommand(scpi_string=":SENSe:FREQuency:STOP")
     sweep_num_points   = IntCommand(scpi_string=":SENSe:SWEep:POINts")
     averaging_factor   = IntCommand(scpi_string=":SENSe1:AVERage:COUNt")
-    averaging_enable   = StringCommand(get_string=":SENSe1:AVERage:STATe?", set_string=":SENSe1:AVERage:STATe {:s}", value_map={False:"0", True:"1"})
+    averaging_enable   = BoolCommand(get_string=":SENSe1:AVERage:STATe?", set_string=":SENSe1:AVERage:STATe {:s}", value_map={False: "0", True: "1"})
     averaging_complete = StringCommand(get_string=":STATus:OPERation:AVERaging1:CONDition?", value_map={False:"+0", True:"+2"})
     if_bandwidth       = FloatCommand(scpi_string=":SENSe1:BANDwidth")
     sweep_time         = FloatCommand(get_string=":SENSe:SWEep:TIME?")
@@ -730,10 +730,44 @@ class AgilentE8363C(SCPIInstrument):
             interface_type=interface_type)
         self.interface._resource._read_termination = u"\n"
         self.interface._resource.write_termination = u"\n"
+        self.interface._resource.timeout = self.TIMEOUT
+
+        self.interface.OPC() #wait for any previous commands to complete
+        self.interface.write("SENSe1:SWEep:TIME:AUTO ON") #automatic sweep time
+        self.interface.write("FORM REAL,32") #return measurement data as 32-bit float
 
     def averaging_restart(self):
         """ Restart trace averaging """
         self.interface.write(":SENSe1:AVERage:CLEar")
+
+    @property
+    def averaging_enable(self):
+        state = self.interface.query(":SENSe1:AVERage:STATe?")
+        return bool(int(state))
+
+    @averaging_enable.setter
+    def averaging_enable(self, value):
+        if value:
+            self.interface.write(":SENSe1:AVERage:STATe ON")
+        else:
+            self.interface.write(":SENSe1:AVERage:STATe OFF")
+
+    @property
+    def measurement(self):
+        meas = self.interface.query(":CALC:PAR:CAT?")
+        return meas.strip('\"').split(",")[-1]
+
+    @measurement.setter
+    def measurement(self, meas):
+        meas = meas.upper()
+        valid_meas = ('S11', 'S12', 'S21', 'S22')
+        if meas not in valid_meas:
+            raise ValueError(f"Unknown measurement {meas}; must be one of {valid_meas}")
+
+        self.interface.write("CALC:PAR:DEL:ALL")
+        self.interface.write(f":CALC:PAR:DEF:EXT 'R_{meas}',{meas}")
+        self.interface.write(f"DISP:WIND1:TRAC1:FEED 'R_{meas}'")
+
 
     def reaverage(self):
         """ Restart averaging and block until complete """
@@ -741,17 +775,18 @@ class AgilentE8363C(SCPIInstrument):
             self.averaging_restart()
             #trigger after the requested number of points has been averaged
             self.interface.write("SENSe1:SWEep:GROups:COUNt %d"%self.averaging_factor)
-            self.interface.write("ABORT;SENSe1:SWEep:MODE GRO")
+            self.interface.write("ABORT; SENSe1:SWEep:MODE GRO")
         else:
             #restart current sweep and send a trigger
-            self.interface.write("ABORT;SENS:SWE:MODE SING")
-        #wait for the measurement to finish, with a temporary long timeout
-        tmout = self.interface._resource.timeout
-        self.interface._resource.timeout = self.AVERAGE_TIMEOUT
-        self.interface.WAI()
-        while not self.averaging_complete:
-            time.sleep(0.1) #TODO: Asynchronous check of SRQ
-        self.interface._resource.timeout = tmout
+            self.interface.write("ABORT; SENS:SWE:MODE SING")
+
+        meas_done = False
+        self.interface.write('*OPC')
+        while not meas_done:
+            time.sleep(0.1)
+            opc_bit = int(self.interface.ESR()) & 0x1
+            if opc_bit == 1:
+                meas_done = True
 
     def get_trace(self, measurement=None):
         """ Return a tupple of the trace frequencies and corrected complex points """
@@ -763,8 +798,12 @@ class AgilentE8363C(SCPIInstrument):
             measurement = traces.split(",")[0][1:]
         #Select the measurment
         self.interface.write(":CALCulate:PARameter:SELect '{}'".format(measurement))
+        self.reaverage()
         #Take the data as interleaved complex values
-        interleaved_vals = self.interface.values(":CALCulate:DATA? SDATA")
+        interleaved_vals = self.interface.query_binary_values(":CALC:DATA? SDATA", datatype='f', is_big_endian=True)
+        self.interface.write("SENS:SWE:MODE CONT")
+
+
         vals = interleaved_vals[::2] + 1j*interleaved_vals[1::2]
         #Get the associated frequencies
         freqs = np.linspace(self.frequency_start, self.frequency_stop, self.sweep_num_points)

@@ -45,7 +45,7 @@ class Command(object):
         if self.value_range is not None:
             self.value_range = (min(self.value_range), max(self.value_range))
 
-        self.python_to_instr = None # Dict mapping from python values to instrument values
+        self.python_to_instr = None # Dict StringCommandmapping from python values to instrument values
         self.instr_to_python = None # Dict mapping from instrument values to python values
         self.doc = ""
 
@@ -108,6 +108,15 @@ class StringCommand(Command):
         else:
             return str(self.instr_to_python[get_value_instrument])
 
+class BoolCommand(StringCommand):
+    def convert_get(self, get_value_instrument):
+        """Convert the instrument's returned values to something conveniently accessed
+        through python."""
+        if self.python_to_instr is None:
+            return bool(get_value_instrument)
+        else:
+            return bool(self.instr_to_python[get_value_instrument])
+
 class FloatCommand(Command):
     formatter = '{:E}'
     def convert_get(self, get_value_instrument):
@@ -142,6 +151,7 @@ class RampCommand(FloatCommand):
             self.pause = 0.0
 
 class SCPIStringCommand(SCPICommand, StringCommand): pass
+class SCPIBoolCommand(SCPICommand, BoolCommand): pass
 class SCPIFloatCommand(SCPICommand, FloatCommand): pass
 class SCPIIntCommand(SCPICommand, IntCommand): pass
 class SCPIRampCommand(SCPICommand, RampCommand): pass
@@ -241,6 +251,8 @@ class SCPIInstrument(Instrument):
             elif interface_type == "VISA":
                 if "GPIB" in self.full_resource_name:
                     pass
+                if "USB" in self.full_resource_name:
+                    pass
                 elif any(is_valid_ipv4(substr) for substr in self.full_resource_name.split("::")) and "TCPIP" not in self.full_resource_name:
                     # assume single NIC for now
                     self.full_resource_name = "TCPIP0::" + self.full_resource_name
@@ -309,7 +321,7 @@ def add_command_SCPI(instr, name, cmd):
 
         if isinstance(cmd, RampCommand):
             if 'increment' in kwargs:
-                new_cmd.increment = kwargs['increment'] 
+                new_cmd.increment = kwargs['increment']
             if 'pause' in kwargs:
                 new_cmd.pause = kwargs['pause']
             # Ramp from one value to another, making sure we actually take some steps

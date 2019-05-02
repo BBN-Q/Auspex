@@ -1,7 +1,7 @@
 numpy >= 1.11.1
 scipy >= 0.17.1
-PyVISA >= 1.8
-PyVISA-py == 0.2
+PyVISA >= 1.9.1
+PyVISA-py >= 0.3
 python-usbtmc >= 0.8
 sqlalchemy >= 1.2.15
 pandas >= 0.18.1

@@ -65,7 +65,7 @@ class VisaInterface(Interface):
     def ESE(self):
         return self._resource.query("*ESE?") # Standard Event Status Enable Query
     def ESR(self):
-        return self._resource.write("*ESR?") # Standard Event Status Register Query
+        return self._resource.query("*ESR?") # Standard Event Status Register Query
     def IDN(self):
         return self._resource.query("*IDN?") # Identification Query
     def OPC(self):
