@@ -1,7 +1,7 @@
 from auspex.log import logger
 from auspex.experiment import Experiment, FloatParameter
 from auspex.stream import DataStream, DataAxis, SweepAxis, DataStreamDescriptor, InputConnector, OutputConnector
-import auspex.instruments
+from auspex.instruments import instrument_map
 import auspex.filters
 import bbndb
 import numpy as np
@@ -37,39 +37,22 @@ filter_map = {
     bbndb.auspex.Display: auspex.filters.Plotter,
     bbndb.auspex.FidelityKernel: auspex.filters.SingleShotMeasurement
 }
-stream_sel_map = {
-    'X6-1000M': auspex.filters.X6StreamSelector,
-    'AlazarATS9870': auspex.filters.AlazarStreamSelector
-}
-instrument_map = {
-    'DigitalAttenuator': auspex.instruments.DigitalAttenuator,
-    'X6-1000M': auspex.instruments.X6,
-    'AlazarATS9870': auspex.instruments.AlazarATS9870,
-    'APS2': auspex.instruments.APS2,
-    'TDM': auspex.instruments.TDM,
-    'APS': auspex.instruments.APS,
-    'HolzworthHS9000': auspex.instruments.HolzworthHS9000,
-    'Labbrick': auspex.instruments.Labbrick,
-    'AgilentN5183A': auspex.instruments.AgilentN5183A,
-    'BNC845': auspex.instruments.BNC845,
-    'SpectrumAnalyzer': auspex.instruments.SpectrumAnalyzer,
-    'YokogawaGS200': auspex.instruments.YokogawaGS200
-}
+stream_sel_map = auspex.filters.stream_sel_map
 
 class QubitExperiment(Experiment):
     """Create an `Experiment` with specialized config and run methods for qubit experiments.
 
     Parameters:
-        meta_file (string)       
+        meta_file (string)
             The filename of the QGL metainfo (*.json) corresponding to the desired
             experiment.
-        averages (int)  
+        averages (int)
             The number of shots to take. Results are only actually averaged
             if an `Averager` node is present in the processing pipeline.
         exp_name (string)
             Name of experiment. Used by any writers in pipeline to pick a data container name.
 
-        kwargs  
+        kwargs
             Additional keyword arguments passed to the base Auspex `Experiment`
             class.
     Returns:
@@ -77,7 +60,7 @@ class QubitExperiment(Experiment):
             Returns the initialized Auspex `Experiment`.
 
     Examples:
-        Creating a simple experiment. 
+        Creating a simple experiment.
 
         >>> mf = RabiAmp(q1, [-1,0,1])
         >>> exp = QubitExperiment(mf, averages=500)
@@ -98,7 +81,7 @@ class QubitExperiment(Experiment):
 
         self.outputs_by_qubit = {}
         self.progressbars = None
-        
+
         self.create_from_meta(meta_file, averages)
 
     def create_from_meta(self, meta_file, averages):
@@ -139,7 +122,7 @@ class QubitExperiment(Experiment):
         self.phys_chans        = list(set([e.phys_chan for e in self.controlled_qubits + self.measurements]))
         self.transmitters      = list(set([e.phys_chan.transmitter for e in self.controlled_qubits + self.measurements]))
         self.receiver_chans    = list(set([e.receiver_chan for e in self.measurements]))
-        
+        self.trig_chans        = list(set([e.trig_chan.phys_chan for e in self.measurements]))
         self.receivers         = list(set([e.receiver_chan.receiver for e in self.measurements]))
         self.generators        = list(set([q.phys_chan.generator for q in self.measured_qubits + self.controlled_qubits + self.measurements if q.phys_chan.generator]))
         self.qubits_by_name    = {q.label: q for q in self.measured_qubits + self.controlled_qubits}
@@ -169,8 +152,10 @@ class QubitExperiment(Experiment):
             #self.create_default_pipeline(self.measured_qubits)
 
         # Add the waveform file info to the qubits
-        for awg in self.transmitters:
-            awg.sequence_file = meta_info['instruments'][awg.label]
+        output_chans = self.transmitters + self.transceivers + self.phys_chans + self.trig_chans
+        for xmit, fname in meta_info['instruments'].items():
+            awg = [c for c in output_chans if c.label==xmit][0]
+            awg.sequence_file = fname
 
         # Construct the DataAxis from the meta_info
         desc = meta_info["axis_descriptor"]
@@ -248,9 +233,9 @@ class QubitExperiment(Experiment):
 
             # Create the auspex stream selectors
             dig = rcv.receiver # The digitizer instrument in the database
-
+            stream_sel_class = stream_sel_map[dig.stream_sel]
             for mq_stream_sel in mq_stream_sels:
-                auspex_stream_sel = stream_sel_map[dig.model](name=f"{rcv.label}-{mq_stream_sel.stream_type}-stream_sel")
+                auspex_stream_sel = stream_sel_class(name=f"{rcv.label}-{mq_stream_sel.stream_type}-stream_sel")
                 mq_stream_sel.channel = rcv.channel
                 auspex_stream_sel.configure_with_proxy(mq_stream_sel)
                 auspex_stream_sel.receiver = auspex_stream_sel.proxy = mq_stream_sel
@@ -346,18 +331,18 @@ class QubitExperiment(Experiment):
         return graph
 
     def set_fake_data(self, digitizer_proxy, ideal_data, increment=False, random_mag=0.1):
-        """Enabled and use the fake data interface for digitizers in order that auspex can 
+        """Enabled and use the fake data interface for digitizers in order that auspex can
         be run without hardware.
 
         Parameters:
-            digitizer_proxy (bbndb `Receiver` instance)       
-                The digitizer instrument proxy to be used for fake data generation. 
-            ideal_data (numpy array)       
-                The actual data to be used. If `increment` is False, a 1D array with a single value 
-                per segment is used. The digitizer drivers automatical convert to a integrated, demodulated, 
-                or raw signal depending on the stream type being used. If `increment` is True, then this may be a 
+            digitizer_proxy (bbndb `Receiver` instance)
+                The digitizer instrument proxy to be used for fake data generation.
+            ideal_data (numpy array)
+                The actual data to be used. If `increment` is False, a 1D array with a single value
+                per segment is used. The digitizer drivers automatical convert to a integrated, demodulated,
+                or raw signal depending on the stream type being used. If `increment` is True, then this may be a
                 2D array, which is incremented through to emulate sweeps such a qubit measurement frequency sweep.
-            increment (boolean)  
+            increment (boolean)
                 Whether or not to step through a 2D data array after to incorporate extra sweeps. The behavior is
                 defined above.
 
@@ -370,7 +355,7 @@ class QubitExperiment(Experiment):
             >>> amps = np.linspace(-1,1,51)
             >>> exp = QubitExperiment(RabiAmp(q1,amps),averages=50)
             >>> exp.set_fake_data(digitizer_1, np.cos(np.linspace(0, 2*np.pi,51)))
-            >>> exp.run_sweeps() 
+            >>> exp.run_sweeps()
 
         """
         auspex_instr = self.proxy_name_to_instrument[digitizer_proxy.label]
@@ -384,8 +369,8 @@ class QubitExperiment(Experiment):
         still be active.
 
         Parameters:
-            digitizer_proxy (bbndb `Receiver` instance)       
-                The digitizer instrument proxy to be used for fake data generation. 
+            digitizer_proxy (bbndb `Receiver` instance)
+                The digitizer instrument proxy to be used for fake data generation.
         """
         auspex_instr = self.proxy_name_to_instrument[digitizer_proxy.label]
         auspex_instr.ideal_data = ideal_data
@@ -478,11 +463,15 @@ class QubitExperiment(Experiment):
             method = None
         else:
             # Direct synthesis
-            name, chan = thing.phys_chan.label.split("-")
+            name, chan = thing.phys_chan.label.split("-")[0:2]
             instr = self._instruments[name] #list(filter(lambda x: x.name == name, self._instruments.values()))[0]
-            def method(value, channel=chan, instr=instr, prop=attribute):
+            def method(value, channel=chan, instr=instr, prop=attribute,thing=thing):
                 # e.g. keysight.set_amplitude("ch1", 0.5)
-                getattr(instr, "set_"+prop)(chan, value)
+                try:
+                    getattr(instr, "set_"+prop)(chan, value, thing)
+                except:
+                    getattr(instr, "set_"+prop)(chan, value)
+
 
         if method:
             # Custom method
@@ -508,7 +497,7 @@ class QubitExperiment(Experiment):
     def shutdown_instruments(self):
         # remove socket listeners
         logger.debug("Shutting down instruments")
-        
+
         for awg in self.awgs:
             awg.stop()
         for dig in self.digitizers:
@@ -524,7 +513,7 @@ class QubitExperiment(Experiment):
                 logger.info(f"Terminating listener {listener} aggressively")
                 listener.terminate()
             del listener
-        
+
         import gc
         gc.collect()
 

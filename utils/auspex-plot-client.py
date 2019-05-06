@@ -43,17 +43,20 @@ progversion = "0.5"
 
 import zmq
 
+main_app_mdi = None
+
 class DataListener(QtCore.QObject):
 
     message  = QtCore.pyqtSignal(tuple)
     finished = QtCore.pyqtSignal()
 
-    def __init__(self, host, uuid, port=7772):
+    def __init__(self, host, uuid, num_plots, port=7772):
         QtCore.QObject.__init__(self)
 
         self.uuid = uuid
         self.context = zmq.Context()
         self.socket = self.context.socket(zmq.SUB)
+        self.num_plots = num_plots
         self.socket.connect("tcp://{}:{}".format(host, port))
         self.socket.setsockopt_string(zmq.SUBSCRIBE, uuid)
         self.poller = zmq.Poller()
@@ -62,6 +65,7 @@ class DataListener(QtCore.QObject):
 
     def loop(self):
         while self.running:
+            done_plots = 0
             socks = dict(self.poller.poll(1000))
             if socks.get(self.socket) == zmq.POLLIN:
                 msg = self.socket.recv_multipart()
@@ -69,8 +73,10 @@ class DataListener(QtCore.QObject):
                 uuid     = msg[0].decode()
                 name     = msg[2].decode()
                 if msg_type == "done":
-                    self.finished.emit()
-                    logger.debug(f"Data listener thread for {self.uuid} got done message.")
+                    done_plots += 1
+                    if done_plots == self.num_plots:
+                        self.finished.emit()
+                        logger.debug(f"Data listener thread for {self.uuid} got done message.")
                 elif msg_type == "data":
                     result = [name, uuid]
                     # How many pairs of metadata and data are there?
@@ -332,36 +338,18 @@ class CanvasMesh(MplCanvas):
             mesh.points[:,i] = mesh.points[:,i]/scale_factors[i]
         return mesh
 
-class MatplotClientWindow(QtWidgets.QMainWindow):
-    def __init__(self):
-        global single_window
-        QtWidgets.QMainWindow.__init__(self)
-        self.setAttribute(QtCore.Qt.WA_DeleteOnClose)
-        self.setWindowTitle("Auspex Plotting")
-
-        self.file_menu = self.menuBar().addMenu('&File')
-        self.file_menu.addAction('&Quit', self._quit,
-                                 QtCore.Qt.CTRL + QtCore.Qt.Key_Q)
-        self.file_menu.addAction('&Close All', close_all_plotters,
-                                 QtCore.Qt.SHIFT + QtCore.Qt.CTRL + QtCore.Qt.Key_W)
-
-        self.recent = self.file_menu.addMenu("Open Recent")
-
-        self.settings_menu = self.menuBar().addMenu('&Settings')
-        auto_close = QtWidgets.QAction('Auto Close Plots', self, checkable=True)
-        auto_close.setChecked(single_window)
-        self.settings_menu.addAction(auto_close)
-
-        auto_close.triggered.connect(self.toggleAutoClose)
-
+class MatplotWindowMixin(object):
+    def build_main_window(self, setMethod = None):
         self.main_widget = QtWidgets.QWidget(self)
         self.main_widget.setMinimumWidth(800)
         self.main_widget.setMinimumHeight(600)
         self.layout = QtWidgets.QVBoxLayout(self.main_widget)
 
         self.main_widget.setFocus()
-        self.setCentralWidget(self.main_widget)
+        if setMethod:
+            setMethod(self.main_widget)
 
+    def init_comms(self):
         self.context = zmq.Context()
         self.uuid = None
         self.data_listener_thread = None
@@ -370,10 +358,10 @@ class MatplotClientWindow(QtWidgets.QMainWindow):
         global single_window
         single_window = state
 
-    def listen_for_data(self, uuid, address="localhost", data_port=7772):
+    def listen_for_data(self, uuid, num_plots, address="localhost", data_port=7772):
         self.uuid = uuid
         self.data_listener_thread = QtCore.QThread()
-        self.Datalistener = DataListener(address, uuid, data_port)
+        self.Datalistener = DataListener(address, uuid, num_plots, port=data_port)
         self.Datalistener.moveToThread(self.data_listener_thread)
         self.data_listener_thread.started.connect(self.Datalistener.loop)
         self.Datalistener.message.connect(self.data_signal_received)
@@ -439,6 +427,65 @@ class MatplotClientWindow(QtWidgets.QMainWindow):
                 toolbar.setVisible(False)
             self.toolbars[self.tabs.currentIndex()].setVisible(True)
 
+    def stop_listening(self):
+        if self.data_listener_thread and self.Datalistener.running:
+            # update status bar if possible
+            try:
+                self.statusBar().showMessage("Disconnecting from server.", 10000)
+            except:
+                pass
+            self.Datalistener.running = False
+            self.data_listener_thread.quit()
+            self.data_listener_thread.wait()
+
+    def closeEvent(self, event):
+        self._quit()
+
+
+class MatplotClientSubWindow(MatplotWindowMixin,QtWidgets.QMdiSubWindow):
+    def __init__(self):
+        global single_window
+        QtWidgets.QMainWindow.__init__(self)
+        self.setAttribute(QtCore.Qt.WA_DeleteOnClose)
+        self.setWindowTitle("Auspex Plotting")
+
+        self.build_main_window(self.setWidget)
+        self.init_comms()
+
+    def _quit(self):
+        self.stop_listening()
+        self.close()
+
+
+class MatplotClientWindow(MatplotWindowMixin, QtWidgets.QMainWindow):
+    def __init__(self):
+        global single_window
+        QtWidgets.QMainWindow.__init__(self)
+        self.setAttribute(QtCore.Qt.WA_DeleteOnClose)
+        self.setWindowTitle("Auspex Plotting")
+
+        self.file_menu = self.menuBar().addMenu('&File')
+        self.file_menu.addAction('&Quit', self._quit,
+                                 QtCore.Qt.CTRL + QtCore.Qt.Key_Q)
+        self.file_menu.addAction('&Close All', close_all_plotters,
+                                 QtCore.Qt.SHIFT + QtCore.Qt.CTRL + QtCore.Qt.Key_W)
+
+        self.recent = self.file_menu.addMenu("Open Recent")
+
+        self.settings_menu = self.menuBar().addMenu('&Settings')
+        auto_close = QtWidgets.QAction('Auto Close Plots', self, checkable=True)
+        auto_close.setChecked(single_window)
+        self.settings_menu.addAction(auto_close)
+
+        auto_close.triggered.connect(self.toggleAutoClose)
+
+        self.build_main_window(self.setCentralWidget)
+        self.init_comms()
+
+    def toggleAutoClose(self, state):
+        global single_window
+        single_window = state
+
     def _quit(self):
         self.stop_listening()
         plotters = [w for w in QtWidgets.QApplication.topLevelWidgets() if isinstance(w, MatplotClientWindow)]
@@ -447,15 +494,6 @@ class MatplotClientWindow(QtWidgets.QMainWindow):
             wait_window.show()
         self.close()
 
-    def stop_listening(self):
-        if self.data_listener_thread and self.Datalistener.running:
-            self.statusBar().showMessage("Disconnecting from server.", 10000)
-            self.Datalistener.running = False
-            self.data_listener_thread.quit()
-            self.data_listener_thread.wait()
-
-    def closeEvent(self, event):
-        self._quit()
 
 def new_plotter_window(message):
     uuid, desc = message
@@ -467,7 +505,7 @@ def new_plotter_window(message):
     pw.setWindowState(pw.windowState() & ~QtCore.Qt.WindowMinimized | QtCore.Qt.WindowActive)
     pw.activateWindow()
     pw.construct_plots(desc)
-    pw.listen_for_data(uuid)
+    pw.listen_for_data(uuid, len(desc))
 
     if single_window and len(plot_windows) > 0:
         for w in plot_windows:
@@ -476,6 +514,23 @@ def new_plotter_window(message):
 
     logger.info(f"Appending {pw}")
     plot_windows.append(pw)
+
+def new_plotter_window_mdi(message):
+    uuid, desc = message
+    desc = json.loads(desc)
+
+    pw = MatplotClientSubWindow()
+  
+    pw.setWindowTitle("%s" % progname)
+    pw.construct_plots(desc)
+    pw.listen_for_data(uuid, len(desc))
+
+    if single_window:
+        for window in main_app_mdi.subWindowList():
+            window.close()
+
+    main_app_mdi.addSubWindow(pw)
+    pw.show()
 
 def close_all_plotters():
     for w in plot_windows:
@@ -488,7 +543,65 @@ def close_all_plotters():
         time.sleep(0.01)
     wait_window.show()
 
-class WaitAndListenWidget(QtWidgets.QWidget):
+class ListenerMixin:
+    def start_listener(self, new_plot_callback):
+        # Start listener thread
+        self.desc_listener_thread = QtCore.QThread()
+        self.Desclistener = DescListener("localhost", 7771  )
+        self.Desclistener.moveToThread(self.desc_listener_thread)
+        self.desc_listener_thread.started.connect(self.Desclistener.loop)
+        self.Desclistener.new_plot.connect(new_plot_callback)
+        QtCore.QTimer.singleShot(0, self.desc_listener_thread.start)
+
+    def stop_listening(self, _):
+        self.Desclistener.running = False
+        self.desc_listener_thread.quit()
+        self.desc_listener_thread.wait()
+
+    def closeEvent(self, ce):
+        if self.desc_listener_thread:
+            self.stop_listening(True)
+        self.close()
+        
+
+class PlotMDI(ListenerMixin,QtWidgets.QMainWindow):
+    def __init__(self, parent = None):
+        global main_app_mdi
+        super(PlotMDI, self).__init__(parent)
+        self.mdi = QtWidgets.QMdiArea()
+        main_app_mdi = self.mdi
+        self.setCentralWidget(self.mdi)
+        self.setWindowTitle("Auspex Plots")
+
+        self.file_menu = self.menuBar().addMenu('&File')
+        self.file_menu.addAction('&Quit', self.close,
+                                 QtCore.Qt.CTRL + QtCore.Qt.Key_Q)
+        self.file_menu.addAction('&Close All', self.close_all_windows,
+                                 QtCore.Qt.SHIFT + QtCore.Qt.CTRL + QtCore.Qt.Key_W)
+
+        self.settings_menu = self.menuBar().addMenu('&Settings')
+        auto_close = QtWidgets.QAction('Auto Close Plots', self, checkable=True)
+        auto_close.setChecked(single_window)
+        self.settings_menu.addAction(auto_close)
+
+        auto_close.triggered.connect(self.toggleAutoClose)
+
+        self.windows_menu = self.menuBar().addMenu('&Windows')
+        self.windows_menu.addAction("Cascade", self.mdi.cascadeSubWindows)
+        self.windows_menu.addAction("Tiled", self.mdi.tileSubWindows)
+
+        self.start_listener(new_plotter_window_mdi)
+
+    def toggleAutoClose(self, state):
+        global single_window
+        single_window = state
+
+    def close_all_windows(self):
+        for window in self.mdi.subWindowList():
+            window.close()
+
+
+class WaitAndListenWidget(ListenerMixin,QtWidgets.QWidget):
 
     def __init__(self, parent=None):
         super(WaitAndListenWidget, self).__init__(parent)
@@ -501,27 +614,12 @@ class WaitAndListenWidget(QtWidgets.QWidget):
         layout.addWidget(QtWidgets.QLabel("Waiting for an available Auspex plot..."))
         layout.addWidget(self.progressBar)
         button = QtWidgets.QPushButton("Quit", self)
-        layout.addWidget(button)  
+        layout.addWidget(button)
         button.clicked.connect(self.closeEvent)
 
+        self.start_listener(new_plotter_window)
         # Start listener thread
-        self.desc_listener_thread = QtCore.QThread()
-        self.Desclistener = DescListener("localhost", 7771  )
-        self.Desclistener.moveToThread(self.desc_listener_thread)
-        self.desc_listener_thread.started.connect(self.Desclistener.loop)
-        self.Desclistener.new_plot.connect(new_plotter_window)
         self.Desclistener.new_plot.connect(self.done_waiting)
-        QtCore.QTimer.singleShot(0, self.desc_listener_thread.start)
-
-    def stop_listening(self, _):
-        self.Desclistener.running = False
-        self.desc_listener_thread.quit()
-        self.desc_listener_thread.wait()
-
-    def closeEvent(self, ce):
-        if self.desc_listener_thread:
-            self.stop_listening(True)
-        self.close()
 
     def done_waiting(self, thing=None):
         self.hide()
@@ -539,7 +637,9 @@ if __name__ == '__main__':
         myappid = u'BBN.auspex.auspex-plot-client.0001' # arbitrary string
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
 
-    wait_window = WaitAndListenWidget()
+    if '--mdi' in sys.argv:
+        wait_window = PlotMDI()
+    else:
+        wait_window = WaitAndListenWidget()
     wait_window.show()
-
     sys.exit(qApp.exec_())

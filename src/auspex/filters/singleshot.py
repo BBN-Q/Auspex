@@ -56,8 +56,8 @@ class SingleShotMeasurement(Filter):
         self.quince_parameters = [self.save_kernel, self.optimal_integration_time,
             self.zero_mean, self.set_threshold, self.logistic_regression]
 
-        self.pdf_data_queue = Queue() #Output queue 
-        self.fidelity       = self.source 
+        self.pdf_data_queue = Queue() #Output queue
+        self.fidelity       = self.source
 
     def update_descriptors(self):
 
