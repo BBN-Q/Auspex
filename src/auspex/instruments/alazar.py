@@ -184,7 +184,7 @@ class AlazarATS9870(Instrument):
             msg_size = struct.unpack('n', msg)[0]
             buf = sock_recvall(sock, msg_size)
             while len(buf) < msg_size:
-                time.sleep(0.01)
+                # time.sleep(0.01)
                 buf2 = sock_recvall(sock, msg_size-len(buf))
                 buf = buf+buf2
             data = np.frombuffer(buf, dtype=np.float32)
@@ -245,12 +245,12 @@ class AlazarATS9870(Instrument):
                 if not dig_run.is_set():
                     self.last_timestamp.value = datetime.datetime.now().timestamp()
                 if (datetime.datetime.now().timestamp() - self.last_timestamp.value) > timeout:
-                    logger.error("Digitizer %s timed out.", self.name)
+                    logger.error("Digitizer %s timed out. Timeout was %f, time was %f", self.name, timeout, (datetime.datetime.now().timestamp() - self.last_timestamp.value))
                     raise Exception("Alazar timed out.")
-                for oc in ocs:
-                    if progressbars:
+                if progressbars:
+                    for oc in ocs:
                         progressbars[oc].value = oc.points_taken.value
-                time.sleep(0.2)
+                #time.sleep(0.2) Does this need to be here at all?
 
         logger.debug("Digitizer %s finished getting data.", self.name)
 

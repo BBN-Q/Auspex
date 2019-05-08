@@ -30,6 +30,7 @@ stream_hierarchy = [
 filter_map = {
     bbndb.auspex.Demodulate: auspex.filters.Channelizer,
     bbndb.auspex.Average: auspex.filters.Averager,
+    bbndb.auspex.Framer: auspex.filters.Framer,
     bbndb.auspex.Integrate: auspex.filters.KernelIntegrator,
     bbndb.auspex.Write: auspex.filters.WriteToFile,
     bbndb.auspex.Buffer: auspex.filters.DataBuffer,
