@@ -248,8 +248,9 @@ class MixerCalibrationExperiment(Experiment):
         super(MixerCalibrationExperiment, self).connect_instruments()
         self.awg.set_offset(0, 0.0)
         self.awg.set_offset(1, 0.0)
-        self.awg.set_mixer_amplitude_imbalance(0.0)
-        self.awg.set_mixer_phase_skew(0.0)
+        if isinstance(self.awg, auspex.instruments.bbn.APS2): #import?
+            self.awg.set_mixer_amplitude_imbalance(0.0)
+            self.awg.set_mixer_phase_skew(0.0)
 
     def init_instruments(self):
         for k,v in self.config_dict.items():
@@ -282,20 +283,30 @@ class MixerCalibrationExperiment(Experiment):
 
     def reset_calibration(self):
         try:
-            self.awg.set_mixer_amplitude_imbalance(1.0)
-            self.awg.set_mixer_phase_skew(0.0)
+            if isinstance(self.awg, auspex.instruments.bbn.APS2):
+                self.awg.set_mixer_amplitude_imbalance(1.0)
+                self.awg.set_mixer_phase_skew(0.0)
             self.awg.set_offset(0, 0.0)
             self.awg.set_offset(1, 0.0)
         except Exception as ex:
-            raise Exception("Could not reset APS2 mixer calibration. Is the AWG connected?") from ex
+            raise Exception("Could not reset mixer calibration. Is the AWG connected?") from ex
 
     def _setup_awg_ssb(self):
         #set up ingle sideband modulation IQ playback on the AWG
         self.awg.stop()
-        self.awg.load_waveform(1, 0.5*np.ones(1200, dtype=np.float))
-        self.awg.load_waveform(2, np.zeros(1200, dtype=np.float))
-        self.awg.waveform_frequency = -self.SSB_FREQ
-        self.awg.run_mode = "CW_WAVEFORM"
+        if isinstance(self.awg, auspex.instruments.bbn.APS2):
+            self.awg.load_waveform(1, 0.5*np.ones(1200, dtype=np.float))
+            self.awg.load_waveform(2, np.zeros(1200, dtype=np.float))
+            self.awg.waveform_frequency = -self.SSB_FREQ
+            self.awg.run_mode = "CW_WAVEFORM"
+        else:
+            iwf = 0.5 * cos(2*pi*self.SSB_FREQ*np.ones(1200, dtype=np.float))
+            qwf = -0.5 * sin(2*pi*self.SSB_FREQ*np.ones(1200, dtype=np.float));
+            self.awg.set_amplitude(1, awg_amp); #TODO: ampl. to be set by looking at phys. chan
+            self.awg.load_waveform(1, iwf)
+            self.awg.load_waveform(2, qwf)
+            self.awg.run_mode = "RUN_WAVEFORM"
+            self.awg.trigger_source = "internal"
         #start playback
         self.awg.run()
         logger.debug("Playing SSB CW IQ modulation on {} at frequency: {} MHz".format(self.awg, self.SSB_FREQ/1e6))

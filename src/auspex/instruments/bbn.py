@@ -272,6 +272,14 @@ class APS(Instrument, metaclass=MakeSettersGetters):
     def trigger(self):
         raise NotImplementedError("Software trigger not present on APSI/DACII")
 
+    def set_mixer_amplitude_imbalance(self, chs, amp):
+        self.wrapper.set_amplitude(int(chs[0]),amp)
+
+    def set_mixer_phase_skew(self, chs, phase):
+        # need to pass SSB here, maybe set self.set_waveform_frequency
+        qwf = -0.5 * sin(2*pi*self.set_waveform_frequency*np.ones(1200, dtype=np.float) + phase)
+        self.awg.load_waveform(chs[1], qwf)
+
     @property
     def waveform_frequency(self):
         raise NotImplementedError("Hardware NCO not present on APSI/DACII")
