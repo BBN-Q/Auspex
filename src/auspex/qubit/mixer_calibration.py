@@ -248,20 +248,21 @@ class MixerCalibrationExperiment(Experiment):
         super(MixerCalibrationExperiment, self).connect_instruments()
         self.awg.set_offset(0, 0.0)
         self.awg.set_offset(1, 0.0)
-        if isinstance(self.awg, auspex.instruments.bbn.APS2): #import?
-            self.awg.set_mixer_amplitude_imbalance(0.0)
-            self.awg.set_mixer_phase_skew(0.0)
+        self.awg.set_mixer_amplitude_imbalance(0.0)
+        self.awg.set_mixer_phase_skew(0.0)
 
     def init_instruments(self):
         for k,v in self.config_dict.items():
             if k != "sideband_modulation":
                 getattr(self, k).value = v
 
-        self.I_offset.assign_method(lambda x: self.awg.set_offset(0, x))
+        self.I_offset.assign_method(lambda x: self.awg.set_offset(0, x)) # TODO: make variable for APS1
         self.Q_offset.assign_method(lambda x: self.awg.set_offset(1, x))
         self.amplitude_factor.assign_method(self.awg.set_mixer_amplitude_imbalance)
-        self.phase_skew.assign_method(self.awg.set_mixer_phase_skew)
-
+        if isinstance(self.awg, auspex.instruments.bbn.APS2):
+            self.phase_skew.assign_method(self.awg.set_mixer_phase_skew)
+        else:
+            self.phase_skew.assign_method(lambda x: self.awg.set_mixer_phase_skew(x, self.SSB_FREQ))
         self.I_offset.add_post_push_hook(lambda: time.sleep(0.1))
         self.Q_offset.add_post_push_hook(lambda: time.sleep(0.1))
         self.amplitude_factor.add_post_push_hook(lambda: time.sleep(0.1))
@@ -283,16 +284,15 @@ class MixerCalibrationExperiment(Experiment):
 
     def reset_calibration(self):
         try:
-            if isinstance(self.awg, auspex.instruments.bbn.APS2):
-                self.awg.set_mixer_amplitude_imbalance(1.0)
-                self.awg.set_mixer_phase_skew(0.0)
+            self.awg.set_mixer_amplitude_imbalance(1.0)
+            self.awg.set_mixer_phase_skew(0.0)
             self.awg.set_offset(0, 0.0)
             self.awg.set_offset(1, 0.0)
         except Exception as ex:
             raise Exception("Could not reset mixer calibration. Is the AWG connected?") from ex
 
     def _setup_awg_ssb(self):
-        #set up ingle sideband modulation IQ playback on the AWG
+        #set up single sideband modulation IQ playback on the AWG
         self.awg.stop()
         if isinstance(self.awg, auspex.instruments.bbn.APS2):
             self.awg.load_waveform(1, 0.5*np.ones(1200, dtype=np.float))
