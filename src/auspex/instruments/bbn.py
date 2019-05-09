@@ -276,7 +276,7 @@ class APS(Instrument, metaclass=MakeSettersGetters):
     def set_mixer_amplitude_imbalance(self, chs, amp):
         self.wrapper.set_amplitude(int(chs[0]),amp)
 
-    def set_mixer_phase_skew(self, chs, phase, SSB_freq = SSB):
+    def set_mixer_phase_skew(self, chs, phase, SSB = 0):
         qwf = -0.5 * sin(2*pi*SSB*np.ones(1200, dtype=np.float) + phase)
         self.awg.load_waveform(chs[1], qwf)
 
