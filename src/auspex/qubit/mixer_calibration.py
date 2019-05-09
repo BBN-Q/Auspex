@@ -22,7 +22,7 @@ from auspex.experiment import FloatParameter, IntParameter, Experiment
 from auspex.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector
 from auspex.qubit.pulse_calibration import Calibration
 from auspex.filters.plot import ManualPlotter
-from auspex.instruments import instrument_map
+from auspex.instruments import instrument_map, bbn
 
 def find_null_offset(xpts, powers, default=0.0):
     """Finds the offset corresponding to the minimum power using a fit to the measured data"""
@@ -246,23 +246,23 @@ class MixerCalibrationExperiment(Experiment):
         """Extend connect_instruments to reset I,Q offsets and amplitude and phase
         imbalance."""
         super(MixerCalibrationExperiment, self).connect_instruments()
-        self.awg.set_offset(0, 0.0)
         self.awg.set_offset(1, 0.0)
-        self.awg.set_mixer_amplitude_imbalance(0.0)
-        self.awg.set_mixer_phase_skew(0.0)
+        self.awg.set_offset(2, 0.0)
+        self.awg.set_mixer_amplitude_imbalance('12',1.0)
+        self.awg.set_mixer_phase_skew('12',0.0)
 
     def init_instruments(self):
         for k,v in self.config_dict.items():
             if k != "sideband_modulation":
                 getattr(self, k).value = v
 
-        self.I_offset.assign_method(lambda x: self.awg.set_offset(0, x)) # TODO: make variable for APS1
-        self.Q_offset.assign_method(lambda x: self.awg.set_offset(1, x))
-        self.amplitude_factor.assign_method(self.awg.set_mixer_amplitude_imbalance)
-        if isinstance(self.awg, auspex.instruments.bbn.APS2):
+        self.I_offset.assign_method(lambda x: self.awg.set_offset(1, x)) # TODO: make variable for APS1
+        self.Q_offset.assign_method(lambda x: self.awg.set_offset(2, x))
+        self.amplitude_factor.assign_method(lambda x: self.awg.set_mixer_amplitude_imbalance('12', x))
+        if isinstance(self.awg, bbn.APS2):
             self.phase_skew.assign_method(self.awg.set_mixer_phase_skew)
         else:
-            self.phase_skew.assign_method(lambda x: self.awg.set_mixer_phase_skew(x, self.SSB_FREQ))
+            self.phase_skew.assign_method(lambda x: self.awg.set_mixer_phase_skew('12', x, self.SSB_FREQ))
         self.I_offset.add_post_push_hook(lambda: time.sleep(0.1))
         self.Q_offset.add_post_push_hook(lambda: time.sleep(0.1))
         self.amplitude_factor.add_post_push_hook(lambda: time.sleep(0.1))
@@ -294,15 +294,15 @@ class MixerCalibrationExperiment(Experiment):
     def _setup_awg_ssb(self):
         #set up single sideband modulation IQ playback on the AWG
         self.awg.stop()
-        if isinstance(self.awg, auspex.instruments.bbn.APS2):
+        if isinstance(self.awg, bbn.APS2):
             self.awg.load_waveform(1, 0.5*np.ones(1200, dtype=np.float))
             self.awg.load_waveform(2, np.zeros(1200, dtype=np.float))
             self.awg.waveform_frequency = -self.SSB_FREQ
             self.awg.run_mode = "CW_WAVEFORM"
         else:
-            iwf = 0.5 * cos(2*pi*self.SSB_FREQ*np.ones(1200, dtype=np.float))
-            qwf = -0.5 * sin(2*pi*self.SSB_FREQ*np.ones(1200, dtype=np.float));
-            self.awg.set_amplitude(1, awg_amp); #TODO: ampl. to be set by looking at phys. chan
+            iwf = 0.5 * np.cos(2*np.pi*self.SSB_FREQ*np.ones(1200, dtype=np.float64))
+            qwf = -0.5 * np.sin(2*np.pi*self.SSB_FREQ*np.ones(1200, dtype=np.float64));
+            #self.awg.set_amplitude(1, awg_amp); #TODO: ampl. to be set by looking at phys. chan
             self.awg.load_waveform(1, iwf)
             self.awg.load_waveform(2, qwf)
             self.awg.run_mode = "RUN_WAVEFORM"

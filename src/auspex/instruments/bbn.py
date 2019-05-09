@@ -257,7 +257,7 @@ class APS(Instrument, metaclass=MakeSettersGetters):
         if channel not in (1, 2, 3, 4):
             raise ValueError("Cannot load APS waveform {} on {} -- must be 1-4.".format(channel, self.name))
         try:
-            self.wrapper.load_waveform(channel, waveform)
+            self.wrapper.load_waveform(channel, data)
         except AttributeError as ex:
             raise ValueError("Channel waveform data must be a numpy array.") from ex
         except NameError as ex:
@@ -274,11 +274,11 @@ class APS(Instrument, metaclass=MakeSettersGetters):
 
     # utility functions for mixer calibration.
     def set_mixer_amplitude_imbalance(self, chs, amp):
-        self.wrapper.set_amplitude(int(chs[0]),amp)
+        self.wrapper.set_amplitude(int(chs[0]), amp)
 
-    def set_mixer_phase_skew(self, chs, phase, SSB = 0):
-        qwf = -0.5 * sin(2*pi*SSB*np.ones(1200, dtype=np.float) + phase)
-        self.awg.load_waveform(chs[1], qwf)
+    def set_mixer_phase_skew(self, chs, phase, SSB = 0.0):
+        qwf = -0.5 * np.sin(2*np.pi*SSB*np.ones(1200, dtype=np.float64) + phase)
+        self.wrapper.load_waveform(int(chs[1]), qwf)
 
     @property
     def waveform_frequency(self):
