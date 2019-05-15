@@ -257,20 +257,30 @@ class APS(Instrument, metaclass=MakeSettersGetters):
         if channel not in (1, 2, 3, 4):
             raise ValueError("Cannot load APS waveform {} on {} -- must be 1-4.".format(channel, self.name))
         try:
-            self.wrapper.load_waveform(channel, waveform)
+            self.wrapper.load_waveform(channel, data)
         except AttributeError as ex:
             raise ValueError("Channel waveform data must be a numpy array.") from ex
         except NameError as ex:
             raise NameError("Channel data in incompatible type.") from ex
 
-    def load_waveform_from_file(self, channel, data):
+    def load_waveform_from_file(self, channel, filename):
+        #NOT IN USE
         if channel not in (1, 2, 3, 4):
             raise ValueError("Cannot load APS waveform {} on {} -- must be 1-4.".format(channel, self.name))
         self.wrapper.load_waveform_from_file(channel-1, filename)
 
 
     def trigger(self):
+
         raise NotImplementedError("Software trigger not present on APSI/DACII")
+
+    # utility functions for mixer calibration.
+    def set_mixer_amplitude_imbalance(self, chs, amp):
+        self.wrapper.set_amplitude(int(chs[0]), amp)
+
+    def set_mixer_phase_skew(self, chs, phase, SSB = 0.0):
+        qwf = -1 * np.sin(2*np.pi*SSB*np.arange(1200,dtype=np.float64)*1e-6/self.sampling_rate + phase)
+        self.wrapper.load_waveform(int(chs[1]), qwf)
 
     @property
     def waveform_frequency(self):
@@ -326,7 +336,7 @@ class APS(Instrument, metaclass=MakeSettersGetters):
         return self._sequence_filename
     @sequence_file.setter
     def sequence_file(self, filename):
-        assert os.path.exists(filename), f"Sequence file {filename} for APS2 {self} does not exist."
+        assert os.path.exists(filename), f"Sequence file {filename} for APS {self} does not exist."
         self.wrapper.load_config(filename)
         self._sequence_filename = filename
 

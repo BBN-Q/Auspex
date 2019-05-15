@@ -311,7 +311,6 @@ class Experiment(metaclass=MetaExperiment):
         logger.debug("Waiting for filters.")
         last_param_values = None
         logger.debug("Starting experiment sweep.")
-
         while True:
             # Increment the sweeper, which returns a list of the current
             # values of the SweepAxes (no DataAxes).
