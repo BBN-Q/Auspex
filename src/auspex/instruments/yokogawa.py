@@ -34,12 +34,6 @@ class YokogawaGS200(SCPIInstrument):
         if resource_name is not None:
             self.resource_name = resource_name
 
-        super().connect(resource_name=None, interface_type=interface_type)
+        super(YokogawaGS200, self).connect(resource_name=self.resource_name, interface_type=interface_type)
+        self.interface.write(":sense:trigger immediate")
         self.interface._resource.read_termination = "\n"
-        self.interface.RST()
-
-
-        # try:  # connection always fails the first time...
-        #     self.interface.write(":sense:trigger immediate")
-        # except:
-        #     self.interface.write(":sense:trigger immediate")
