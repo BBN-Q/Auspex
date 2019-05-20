@@ -470,8 +470,10 @@ class Agilent34970A(SCPIInstrument):
 # Commands needed to configure MUX for measurement with an external instrument
 
     dmm            = StringCommand(scpi_string="INST:DMM",value_map={'ON': '1', 'OFF': '0'})
-    trigger_source = StringCommand(scpi_string="TRIG:SOUR",allowed_values=TRIGSOUR_VALUES)
     advance_source = StringCommand(scpi_string="ROUT:CHAN:ADV:SOUR",allowed_values=ADVSOUR_VALUES)
+    trigger_source = StringCommand(scpi_string="TRIG:SOUR",allowed_values=TRIGSOUR_VALUES)
+    trigger_timer  = FloatCommand(get_string="TRIG:TIMER?", set_string="TRIG:TIMER {:f}")
+    trigger_count  = IntCommand(get_string="TRIG:COUNT?", set_string="TRIG:COUNT {:e}")
 
 # Generic init and connect methods
 
@@ -556,6 +558,18 @@ class Agilent34970A(SCPIInstrument):
         else:
             fw_char = "ON," if fw == 4 else "OFF,"
             self.interface.write(("ROUT:CHAN:FWIR {}"+self.ch_to_str(self.CONFIG_LIST)).format(fw_char))
+
+# Commands that configure measurement delay for external measurements
+
+    @property
+    def channel_delay(self):
+        query_str = "ROUT:CHAN:DELAY? "+self.ch_to_str(self.CONFIG_LIST)
+        output = self.interface.query_ascii_values(query_str, converter=u'e')
+        return {ch: val for ch, val in zip(self.CONFIG_LIST, output)}
+
+    @channel_delay.setter
+    def channel_delay(self, delay = 0.1):
+        self.interface.write(("ROUT:CHAN:DELAY {:e},"+self.ch_to_str(self.CONFIG_LIST)).format(delay))
 
 # Commands that configure resistance measurements with internal DMM
 
