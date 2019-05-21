@@ -16,4 +16,3 @@ config/config.json
 *.prof
 *.bak
 .DS*
-src/auspex/instruments/yokogawa.py
