@@ -22,6 +22,14 @@ else:
     from multiprocessing import Process
     from threading import Thread as Thread
 
+from IPython.core.getipython import get_ipython
+in_notebook = False
+try:
+    get_ipython()
+    in_notebook = True
+except:
+    pass
+
 import inspect
 import time
 import copy
@@ -122,8 +130,11 @@ class MetaExperiment(type):
         # Beware, passing objects won't work at parse time
         self._output_connectors = {}
 
-        # Parse ourself
-        self._exp_src = inspect.getsource(self)
+        # Parse ourself -- can't do this if class is defined in a notebook (?)
+        if not in_notebook:
+            self._exp_src = inspect.getsource(self)
+        else:
+            self._exp_src = " "
 
         for k,v in dct.items():
             if isinstance(v, Instrument):
