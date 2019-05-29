@@ -203,7 +203,8 @@ class Experiment(metaclass=MetaExperiment):
         # Things we can't metaclass
         self.output_connectors = {}
         for oc in self._output_connectors.keys():
-            a = OutputConnector(name=oc, data_name=oc, unit=self._output_connectors[oc].data_unit, parent=self)
+            a = OutputConnector(name=oc, data_name=oc, unit=self._output_connectors[oc].data_unit,
+                                dtype=self._output_connectors[oc].descriptor.dtype, parent=self)
             a.parent = self
 
             self.output_connectors[oc] = a

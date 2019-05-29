@@ -587,7 +587,7 @@ class InputConnector(object):
         return "<InputConnector(name={})>".format(self.name)
 
 class OutputConnector(object):
-    def __init__(self, name="", data_name=None, unit=None, parent=None, datatype=None):
+    def __init__(self, name="", data_name=None, unit=None, parent=None, dtype=np.float32):
         self.name = name
         self.output_streams = []
         self.parent = parent
@@ -601,7 +601,7 @@ class OutputConnector(object):
 
         # Set up a default descriptor, and add access
         # to its methods for convenience.
-        self.descriptor = DataStreamDescriptor()
+        self.descriptor = DataStreamDescriptor(dtype=dtype)
         if self.data_name:
             self.descriptor.data_name = self.data_name
             self.descriptor.unit = self.unit
