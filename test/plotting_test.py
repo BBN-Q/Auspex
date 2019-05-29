@@ -5,19 +5,18 @@
 # You may obtain a copy of the License at
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
-
-
-import os
-import numpy as np
-import sys
+'''
+Test plotting Ramsey data
+'''
 import time
+import numpy as np
 
 from auspex.instruments.instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand
 from auspex.experiment import Experiment, FloatParameter
-from auspex.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector
+from auspex.stream import DataAxis, DataStreamDescriptor, OutputConnector
 from auspex.filters.plot import Plotter
 from auspex.filters.average import Averager
-from auspex.filters.debug import Print
+#from auspex.filters.debug import Print
 from auspex.filters.channelizer import Channelizer
 from auspex.filters.integrator import KernelIntegrator
 
@@ -25,9 +24,14 @@ from auspex.log import logger, logging
 logger.setLevel(logging.INFO)
 
 class TestInstrument(SCPIInstrument):
-    frequency = FloatCommand(get_string="frequency?", set_string="frequency {:g}", value_range=(0.1, 10))
+    '''
+    Fake instrument class for testing simple plotters in plotting_test.py
+    '''
+    frequency = FloatCommand(get_string="frequency?",
+                             set_string="frequency {:g}", value_range=(0.1, 10))
     serial_number = IntCommand(get_string="serial?")
-    mode = StringCommand(name="enumerated mode", scpi_string=":mode", allowed_values=["A", "B", "C"])
+    mode = StringCommand(name="enumerated mode", scpi_string=":mode",
+                         allowed_values=["A", "B", "C"])
 
 class TestExperiment(Experiment):
     """Here the run loop merely spews data until it fills up the stream. """
@@ -37,17 +41,17 @@ class TestExperiment(Experiment):
 
     # Parameters
     field = FloatParameter(unit="Oe")
-    freq  = FloatParameter(unit="Hz")
+    freq = FloatParameter(unit="Hz")
 
     # DataStreams
     voltage = OutputConnector(unit="V")
 
     # Constants
-    num_samples     = 1024
-    delays          = 1e-9*np.arange(100, 10001,100)
-    round_robins    = 2
+    num_samples = 1024
+    delays = 1e-9*np.arange(100, 10001, 100)
+    round_robins = 2
     sampling_period = 2e-9
-    T2              = 5e-6
+    T2 = 5e-6
 
     def init_instruments(self):
         pass
@@ -72,11 +76,13 @@ class TestExperiment(Experiment):
             for delay in self.delays:
                 if idx == 0:
                     records = np.zeros((5, self.num_samples), dtype=np.float32)
-                time.sleep(0.005)
-                records[idx,pulse_start:pulse_start+pulse_width] = np.exp(-0.5*(self.freq.value/2e6)**2) * \
-                                                              np.exp(-delay/self.T2) * \
-                                                              np.sin(2*np.pi * 10e6 * self.sampling_period*np.arange(pulse_width) \
-                                                              + np.cos(2*np.pi * self.freq.value * delay))
+                time.sleep(0.01)
+                records[idx, pulse_start:pulse_start+pulse_width] = \
+                np.exp(-0.5*(self.freq.value/2e6)**2) * \
+                              np.exp(-delay/self.T2) * \
+                              np.sin(2*np.pi * 10e6 * \
+                              self.sampling_period*np.arange(pulse_width) \
+                                    + np.cos(2*np.pi * self.freq.value * delay))
 
                 #add noise
                 records[idx] += 0.1*np.random.randn(self.num_samples)
@@ -87,31 +93,36 @@ class TestExperiment(Experiment):
                 else:
                     idx += 1
 
-        logger.debug("Stream has filled {} of {} points".format(self.voltage.points_taken, self.voltage.num_points() ))
+        logger.debug("Stream has filled %s of %s points", \
+            self.voltage.points_taken, self.voltage.num_points())
 
 if __name__ == '__main__':
 
-    exp = TestExperiment()
-    channelizer = Channelizer(frequency=10e6, bandwidth=5e6, decimation_factor=8, name="Demod")
-    ki = KernelIntegrator(kernel="", bias=0, simple_kernel=True, box_car_start=0, box_car_stop=64e-9, frequency=0, name="KI")
-    avg1 = Averager("round_robins", name="Average channelizer RRs")
-    avg2 = Averager("round_robins", name="Average KI RRs")
-    pl1 = Plotter(name="2D Scope", plot_dims=2, palette="Spectral11")
-    pl2 = Plotter(name="Demod", plot_dims=2, plot_mode="quad", palette="Spectral11")
-    pl3 = Plotter(name="KI", plot_dims=1, plot_mode='real')
+    EXP = TestExperiment()
+    CHANNELIZER = Channelizer(frequency=10e6, bandwidth=5e6,
+                              decimation_factor=8, name="Demod")
+    KI = KernelIntegrator(kernel="", bias=0, simple_kernel=True,
+                          box_car_start=0, box_car_stop=64e-9, frequency=0,
+                          name="KI")
+    AVG1 = Averager("round_robins", name="Average channelizer RRs")
+    AVG2 = Averager("round_robins", name="Average KI RRs")
+    PL1 = Plotter(name="2D Scope", plot_dims=2, palette="Spectral11")
+    PL2 = Plotter(name="Demod", plot_dims=2, plot_mode="quad",
+                  palette="Spectral11")
+    PL3 = Plotter(name="KI", plot_dims=1, plot_mode='real')
     # pl4 = Plotter(name="KI", plot_dims=2, palette="Spectral11")
 
-    edges = [
-            (exp.voltage, channelizer.sink),
-            (channelizer.source, avg1.sink),
-            (channelizer.source, ki.sink),
-            (ki.source, avg2.sink),
-            (avg1.source, pl2.sink),
-            (avg2.source, pl3.sink)
-            ]
+    EDGES = [
+        (EXP.voltage, CHANNELIZER.sink),
+        (CHANNELIZER.source, AVG1.sink),
+        (CHANNELIZER.source, KI.sink),
+        (KI.source, AVG2.sink),
+        (AVG1.final_average, PL2.sink),
+        (AVG2.final_average, PL3.sink)
+        ]
 
-    exp.set_graph(edges)
+    EXP.set_graph(EDGES)
 
-    exp.init_instruments()
-    exp.add_sweep(exp.freq, 1e6*np.linspace(-0.1,0.1,3))
-    exp.run_sweeps()
+    EXP.init_instruments()
+    EXP.add_sweep(EXP.freq, 1e6*np.linspace(-0.1, 0.1, 3))
+    EXP.run_sweeps()
