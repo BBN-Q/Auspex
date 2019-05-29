@@ -5,23 +5,18 @@
 # You may obtain a copy of the License at
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
-
-
-import os
+'''
+Test mesh plotting with a Delaunay refinement
+'''
 import time
-import datetime
-import sys
 import itertools
 
 import numpy as np
-# import h5py
-import matplotlib.pyplot as plt
 
 from auspex.experiment import Experiment, FloatParameter
-from auspex.stream import OutputConnector, DataStreamDescriptor
-from auspex.filters.plot import Plotter, MeshPlotter
-from auspex.filters.io import WriteToHDF5
-from auspex.log import logger, logging
+from auspex.stream import OutputConnector
+from auspex.filters.plot import MeshPlotter
+from auspex.filters.io import WriteToFile
 from auspex.refine import delaunay_refine_from_file
 # import auspex.analysis.switching as sw
 # from adapt import refine
@@ -31,7 +26,7 @@ class TestExperiment(Experiment):
 
     # Parameters
     amplitude = FloatParameter(unit="V")
-    duration  = FloatParameter(unit="s")
+    duration = FloatParameter(unit="s")
 
     # DataStreams
     voltage = OutputConnector()
@@ -43,28 +38,31 @@ class TestExperiment(Experiment):
         pass
 
     def run(self):
-        r = np.sqrt(np.power(self.amplitude.value,2) + np.power(self.duration.value,2))
-        val = 1.0/(1.0 + np.exp(-10.0*(r-5.0)))
+        r = np.sqrt(np.power(self.amplitude.value, 2) + \
+                                        np.power(self.duration.value, 2))
+        val = 1.0/(1.0 + np.exp(-10.0 * (r - 5.0)))
         self.voltage.push(val)
         time.sleep(0.01)
 
 if __name__ == '__main__':
 
-    exp  = TestExperiment()
-    fig1 = MeshPlotter(name="Plot The Mesh")
-    wr   = WriteToHDF5("test_mesh.h5")
+    EXP = TestExperiment()
+    FIG1 = MeshPlotter(name="Plot The Mesh")
+    WR = WriteToFile("test_mesh.auspex")
 
-    edges = [(exp.voltage, wr.sink)]
-    exp.set_graph(edges)
-    exp.add_direct_plotter(fig1)
+    EDGES = [(EXP.voltage, WR.sink)]
+    EXP.set_graph(EDGES)
+    EXP.add_direct_plotter(FIG1)
 
     # Construct the coarse grid
-    coarse_ts = np.linspace(0.0, 10.0, 7)
-    coarse_vs = np.linspace(0.0, 7.5, 7)
-    points    = [coarse_ts, coarse_vs]
-    points    = list(itertools.product(*points))
+    COURSE_TS = np.linspace(0.0, 10.0, 7)
+    COURSE_VS = np.linspace(0.0, 7.5, 7)
+    POINTS = [COURSE_TS, COURSE_VS]
+    POINTS = list(itertools.product(*POINTS))
 
-    refine_func = delaunay_refine_from_file(wr, 'duration', 'amplitude', 'voltage', max_points=1000, plotter=fig1)
+    REFINE_FUNC = delaunay_refine_from_file(WR, 'duration', 'amplitude', \
+                'voltage', max_points=1000, plotter=FIG1)
 
-    exp.add_sweep([exp.duration, exp.amplitude], points, refine_func=refine_func)
-    exp.run_sweeps()
+    EXP.add_sweep([EXP.duration, EXP.amplitude], POINTS, \
+                    refine_func=REFINE_FUNC)
+    EXP.run_sweeps()
