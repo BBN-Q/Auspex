@@ -15,6 +15,7 @@ import re
 import numpy as np
 from .instrument import SCPIInstrument, Command, StringCommand, BoolCommand, FloatCommand, IntCommand, is_valid_ipv4
 from auspex.log import logger
+import pyvisa.util as util
 
 class HP33120A(SCPIInstrument):
     """HP33120A Arb Waveform Generator"""
@@ -745,6 +746,7 @@ class AgilentE8363C(SCPIInstrument):
         self.interface._resource._read_termination = u"\n"
         self.interface._resource.write_termination = u"\n"
         self.interface._resource.timeout = self.TIMEOUT
+        self.interface._resource.chunk_size = 2 ** 20 # Needed to fix binary transfers (?)
 
         self.interface.OPC() #wait for any previous commands to complete
         self.interface.write("SENSe1:SWEep:TIME:AUTO ON") #automatic sweep time
@@ -797,7 +799,7 @@ class AgilentE8363C(SCPIInstrument):
         meas_done = False
         self.interface.write('*OPC')
         while not meas_done:
-            time.sleep(0.1)
+            time.sleep(0.5)
             opc_bit = int(self.interface.ESR()) & 0x1
             if opc_bit == 1:
                 meas_done = True
@@ -813,10 +815,13 @@ class AgilentE8363C(SCPIInstrument):
         #Select the measurment
         self.interface.write(":CALCulate:PARameter:SELect '{}'".format(measurement))
         self.reaverage()
-        #Take the data as interleaved complex values
-        interleaved_vals = self.interface.query_binary_values(":CALC:DATA? SDATA", datatype='f', is_big_endian=True)
-        self.interface.write("SENS:SWE:MODE CONT")
+        self.interface.write(":CALC:DATA? SDATA")
+        block =  self.interface.read_raw()
+        offset, data_length = util.parse_ieee_block_header(block)
+        interleaved_vals = util.from_ieee_block(block, 'f', True, np.array)
 
+        #Take the data as interleaved complex values
+        self.interface.write("SENS:SWE:MODE CONT")
 
         vals = interleaved_vals[::2] + 1j*interleaved_vals[1::2]
         #Get the associated frequencies
