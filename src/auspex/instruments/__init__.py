@@ -11,11 +11,11 @@ for loader, name, is_pkg in pkgutil.iter_modules(__path__):
 			instrument_map.update({name:getattr(module,name)})
 
 def enumerate_visa_instruments():
-	rm = pyvisa.ResourceManager()
+	rm = pyvisa.ResourceManager("@py")
 	print(rm.list_resources())
 
 def probe_instrument_ids():
-	rm = pyvisa.ResourceManager()
+	rm = pyvisa.ResourceManager("@py")
 	for instr_label in rm.list_resources():
 		instr = rm.open_resource(instr_label)
 		try:
