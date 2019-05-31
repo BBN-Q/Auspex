@@ -816,7 +816,7 @@ class AgilentE8363C(SCPIInstrument):
         self.interface.write(":CALCulate:PARameter:SELect '{}'".format(measurement))
         self.reaverage()
         self.interface.write(":CALC:DATA? SDATA")
-        block =  self.interface.read_raw()
+        block =  self.interface.read_raw(size=256)
         offset, data_length = util.parse_ieee_block_header(block)
         interleaved_vals = util.from_ieee_block(block, 'f', True, np.array)
 
