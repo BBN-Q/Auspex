@@ -15,6 +15,7 @@ import re
 import numpy as np
 from .instrument import SCPIInstrument, Command, StringCommand, BoolCommand, FloatCommand, IntCommand, is_valid_ipv4
 from auspex.log import logger
+import pyvisa.util as util
 
 class HP33120A(SCPIInstrument):
     """HP33120A Arb Waveform Generator"""
@@ -470,8 +471,10 @@ class Agilent34970A(SCPIInstrument):
 # Commands needed to configure MUX for measurement with an external instrument
 
     dmm            = StringCommand(scpi_string="INST:DMM",value_map={'ON': '1', 'OFF': '0'})
-    trigger_source = StringCommand(scpi_string="TRIG:SOUR",allowed_values=TRIGSOUR_VALUES)
     advance_source = StringCommand(scpi_string="ROUT:CHAN:ADV:SOUR",allowed_values=ADVSOUR_VALUES)
+    trigger_source = StringCommand(scpi_string="TRIG:SOUR",allowed_values=TRIGSOUR_VALUES)
+    trigger_timer  = FloatCommand(get_string="TRIG:TIMER?", set_string="TRIG:TIMER {:f}")
+    trigger_count  = IntCommand(get_string="TRIG:COUNT?", set_string="TRIG:COUNT {:e}")
 
 # Generic init and connect methods
 
@@ -556,6 +559,18 @@ class Agilent34970A(SCPIInstrument):
         else:
             fw_char = "ON," if fw == 4 else "OFF,"
             self.interface.write(("ROUT:CHAN:FWIR {}"+self.ch_to_str(self.CONFIG_LIST)).format(fw_char))
+
+# Commands that configure measurement delay for external measurements
+
+    @property
+    def channel_delay(self):
+        query_str = "ROUT:CHAN:DELAY? "+self.ch_to_str(self.CONFIG_LIST)
+        output = self.interface.query_ascii_values(query_str, converter=u'e')
+        return {ch: val for ch, val in zip(self.CONFIG_LIST, output)}
+
+    @channel_delay.setter
+    def channel_delay(self, delay = 0.1):
+        self.interface.write(("ROUT:CHAN:DELAY {:e},"+self.ch_to_str(self.CONFIG_LIST)).format(delay))
 
 # Commands that configure resistance measurements with internal DMM
 
@@ -731,6 +746,7 @@ class AgilentE8363C(SCPIInstrument):
         self.interface._resource._read_termination = u"\n"
         self.interface._resource.write_termination = u"\n"
         self.interface._resource.timeout = self.TIMEOUT
+        self.interface._resource.chunk_size = 2 ** 20 # Needed to fix binary transfers (?)
 
         self.interface.OPC() #wait for any previous commands to complete
         self.interface.write("SENSe1:SWEep:TIME:AUTO ON") #automatic sweep time
@@ -783,7 +799,7 @@ class AgilentE8363C(SCPIInstrument):
         meas_done = False
         self.interface.write('*OPC')
         while not meas_done:
-            time.sleep(0.1)
+            time.sleep(0.5)
             opc_bit = int(self.interface.ESR()) & 0x1
             if opc_bit == 1:
                 meas_done = True
@@ -799,10 +815,13 @@ class AgilentE8363C(SCPIInstrument):
         #Select the measurment
         self.interface.write(":CALCulate:PARameter:SELect '{}'".format(measurement))
         self.reaverage()
-        #Take the data as interleaved complex values
-        interleaved_vals = self.interface.query_binary_values(":CALC:DATA? SDATA", datatype='f', is_big_endian=True)
-        self.interface.write("SENS:SWE:MODE CONT")
+        self.interface.write(":CALC:DATA? SDATA")
+        block =  self.interface.read_raw(size=256)
+        offset, data_length = util.parse_ieee_block_header(block)
+        interleaved_vals = util.from_ieee_block(block, 'f', True, np.array)
 
+        #Take the data as interleaved complex values
+        self.interface.write("SENS:SWE:MODE CONT")
 
         vals = interleaved_vals[::2] + 1j*interleaved_vals[1::2]
         #Get the associated frequencies
