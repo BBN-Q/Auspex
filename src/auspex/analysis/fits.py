@@ -363,27 +363,32 @@ def quadf(x, A, x0, b):
 def fit_photon_number(xdata, ydata, params):
     ''' Fit number of measurement photons before a Ramsey. See McClure et al., Phys. Rev. App. 2016
     input params:
-	1 - cavity decay rate kappa (MHz)
-	2 - detuning Delta (MHz)
-	3 - dispersive shift 2Chi (MHz)
-	4 - Ramsey decay time T2* (us)
-	5 - exp(-t_meas/T1) (us), only if starting from |1> (to include relaxation during the 1st msm't)
-	6 - initial qubit state (0/1)
+    1 - cavity decay rate kappa (MHz)
+    2 - detuning Delta (MHz)
+    3 - dispersive shift 2Chi (MHz)
+    4 - Ramsey decay time T2* (us)
+    5 - exp(-t_meas/T1) (us), only if starting from |1> (to include relaxation during the 1st msm't)
+    6 - initial qubit state (0/1)
     '''
     params = [2*np.pi*p for p in params[:3]] + params[3:] # convert to angular frequencies
     def model_0(t, pa, pb):
         return (-np.imag(np.exp(-(1/params[3]+params[1]*1j)*t + (pa-pb*params[2]*(1-np.exp(-((params[0] + params[2]*1j)*t)))/(params[0]+params[2]*1j))*1j)))
     def model(t, pa, pb):
         return  params[4]*model_0(t, pa, pb) + (1-params[4])*model_0(t, pa+np.pi, pb) if params[5] == 1  else model_0(t, pa, pb)
-    popt, pcov = curve_fit(model, xdata, ydata, p0 = [0, 1])
+    popt, pcov = curve_fit(model, xdata, ydata, p0 = [0, 1], maxfev=5000)
     perr = np.sqrt(np.diag(pcov))
     finer_delays = np.linspace(np.min(xdata), np.max(xdata), 4*len(xdata))
     fit_curve = model(finer_delays, *popt)
     return popt[1], perr[1], (finer_delays, fit_curve)
 
 def fit_quad(xdata, ydata):
-    popt, pcov = curve_fit(quadf, xdata, ydata, p0 = [1, min(ydata), 0])
-    perr = np.sqrt(np.diag(pcov))
+    try:
+        popt, pcov = curve_fit(quadf, xdata, ydata, p0 = [1, xdata[np.argmin(ydata)], 0], maxfev=5000)
+        perr = np.sqrt(np.diag(pcov))
+    except:
+        print("Fit failed. Using minima")
+        popt = [1, xdata[np.argmin(ydata)], 0]
+        perr = None
     return popt, perr
 
 class CR_cal_type(Enum):

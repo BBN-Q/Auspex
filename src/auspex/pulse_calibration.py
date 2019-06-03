@@ -29,6 +29,7 @@ from auspex.analysis.helpers import normalize_data
 from matplotlib import cm
 import numpy as np
 from itertools import product
+from scipy.optimize import minimize
 
 def calibrate(calibrations, update_settings=True, cal_log=True):
     """Takes in a qubit (as a string) and list of calibrations (as instantiated classes).
@@ -578,7 +579,7 @@ class CLEARCalibration(MeasCalibration):
     nsteps: calibration steps/sweep
     cal_steps: choose ranges for calibration steps. 1: +-100%; 0: skip step
     '''
-    def __init__(self, qubit_name, kappa = 2*np.pi*2e6, chi = -2*np.pi*1e6, t_empty = 400e-9, ramsey_delays=np.linspace(0.0, 50.0, 51)*1e-6, ramsey_freq = 100e3, meas_delay = 0, preramsey_delay=0, alpha = 1, T1factor = 1, T2 = 30e-6, nsteps = 11, eps1 = None, eps2 = None, cal_steps = (1,1,1)):
+    def __init__(self, qubit_name, kappa = 2*np.pi*2e6, chi = -2*np.pi*1e6, t_empty = 400e-9, ramsey_delays=np.linspace(0.0, 50.0, 51)*1e-6, ramsey_freq = 100e3, meas_delay = 0, preramsey_delay=0, alpha = 1, T1factor = 1, T2 = 30e-6, nsteps = 11, eps1 = None, eps2 = None, cal_steps = (1,1,1), optimizer=None):
         super(CLEARCalibration, self).__init__(qubit_name)
         self.filename = 'CLEAR/CLEAR'
         self.kappa = kappa
@@ -592,6 +593,7 @@ class CLEARCalibration(MeasCalibration):
         self.T1factor = T1factor
         self.T2 = T2
         self.nsteps = nsteps
+        self.optimizer = optimizer
         if not eps1:
             # theoretical values as default
             self.eps1 = (1 - 2*np.exp(kappa*t_empty/4)*np.cos(chi*t_empty/2))/(1+np.exp(kappa*t_empty/2)-2*np.exp(kappa*t_empty/4)*np.cos(chi*t_empty/2))
@@ -622,46 +624,67 @@ class CLEARCalibration(MeasCalibration):
 
 
     def calibrate(self):
-        cal_step = 0
-        for ct in range(3):
-            if not self.cal_steps[ct]:
-                continue
-            #generate sequence
-            xpoints = np.linspace(1-self.cal_steps[ct], 1+self.cal_steps[ct], self.nsteps)
-            n0vec = np.zeros(self.nsteps)
-            err0vec = np.zeros(self.nsteps)
-            n1vec = np.zeros(self.nsteps)
-            err1vec = np.zeros(self.nsteps)
-            for k in range(self.nsteps):
-                eps1 = self.eps1 if k==1 else xpoints[k]*self.eps1
-                eps2 = self.eps2 if k==2 else xpoints[k]*self.eps2
-                #run for qubit in 0/1
-                for state in [0,1]:
-                    self.set(eps1 = eps1, eps2 = eps2, state = state, exp_step = cal_step)
-                    #analyze
-                    data, _ = self.run()
-                    norm_data = quick_norm_data(data)
-                    eval('n{}vec'.format(state))[k], eval('err{}vec'.format(state))[k], fit_curve = fit_photon_number(self.ramsey_delays, norm_data, [self.kappa, self.ramsey_freq, 2*self.chi, self.T2, self.T1factor, 0])
-                    #plot
-                    self.plot[0]['Data'] = (self.ramsey_delays, norm_data)
-                    self.plot[0]['Fit'] = fit_curve
+        def photon_ramsey_meas(steps, cal_step=0, k=0, n0vec = [0], n1vec = [0], err0vec = [0], err1vec = [0]):
+            for state in [0,1]:
+                self.set(eps1 = steps[0], eps2 = steps[1], state = state, exp_step = cal_step)
+                print('Steps: eps1 = {}; eps2 = {}'.format(steps[0], steps[1]))
+                #analyze
+                data, _ = self.run()
+                norm_data = quick_norm_data(data)
+                eval('n{}vec'.format(state))[k], eval('err{}vec'.format(state))[k], fit_curve = fit_photon_number(self.ramsey_delays, norm_data, [self.kappa, self.ramsey_freq, 2*self.chi, self.T2, self.T1factor, 0])
+                #plot
+                self.plot[0]['Data'] = (self.ramsey_delays, norm_data)
+                self.plot[0]['Fit'] = fit_curve
+                if len(n0vec)>1: #TODO: display progress of optimizer
                     self.plot[1]['sweep {}, state 0'.format(ct)] = (xpoints, n0vec)
                     self.plot[1]['sweep {}, state 1'.format(ct)] = (xpoints, n1vec)
-                    cal_step+=1
+            return (n0vec[k]+n1vec[k])/2
+        if self.optimizer:
+            res = minimize(photon_ramsey_meas, [self.eps1, self.eps2], method=self.optimizer, options={'disp':True})
+            self.eps1, self.eps2 = res.x
+        else:
+            cal_step = 0
+            for ct in range(3):
+                if not self.cal_steps[ct]:
+                    continue
+                #generate sequence
+                xpoints = np.linspace(1-self.cal_steps[ct], 1+self.cal_steps[ct], self.nsteps)
+                n0vec = np.zeros(self.nsteps)
+                err0vec = np.zeros(self.nsteps)
+                n1vec = np.zeros(self.nsteps)
+                err1vec = np.zeros(self.nsteps)
+                for k in range(self.nsteps):
+                    eps1 = self.eps1 if k==1 else xpoints[k]*self.eps1
+                    eps2 = self.eps2 if k==2 else xpoints[k]*self.eps2
+                    #run for qubit in 0/1
+                    for state in [0,1]:
+                        photon_ramsey_meas(xpoints, cal_step, k, n0vec, n1vec, err0vec, err1vec)
+                        cal_step+=1
+                        self.set(eps1 = eps1, eps2 = eps2, state = state, exp_step = cal_step)
+                        #analyze
+                        data, _ = self.run()
+                        norm_data = quick_norm_data(data)
+                        eval('n{}vec'.format(state))[k], eval('err{}vec'.format(state))[k], fit_curve = fit_photon_number(self.ramsey_delays, norm_data, [self.kappa, self.ramsey_freq, 2*self.chi, self.T2, self.T1factor, 0])
+                        #plot
+                        self.plot[0]['Data'] = (self.ramsey_delays, norm_data)
+                        self.plot[0]['Fit'] = fit_curve
+                        self.plot[1]['sweep {}, state 0'.format(ct)] = (xpoints, n0vec)
+                        self.plot[1]['sweep {}, state 1'.format(ct)] = (xpoints, n1vec)
+                        cal_step+=1 #outside the photon_ramsey_meas function
 
-            #fit for minimum photon number
-            popt_0,_ = fit_quad(xpoints, n0vec)
-            popt_1,_ = fit_quad(xpoints, n1vec)
-            finer_xpoints = np.linspace(np.min(xpoints), np.max(xpoints), 4*len(xpoints))
-            opt_scaling = np.mean([popt_0[1], popt_1[1]])
-            logger.info("Optimal scaling factor for step {} = {}".format(ct+1, opt_scaling))
+                #fit for minimum photon number
+                popt_0,_ = fit_quad(xpoints, n0vec)
+                popt_1,_ = fit_quad(xpoints, n1vec)
+                finer_xpoints = np.linspace(np.min(xpoints), np.max(xpoints), 4*len(xpoints))
+                opt_scaling = np.mean([popt_0[1], popt_1[1]])
+                logger.info("Optimal scaling factor for step {} = {}".format(ct+1, opt_scaling))
 
-            if ct<2:
-                self.eps1*=opt_scaling
-            if ct!=1:
-                self.eps2*=opt_scaling
-            self.plot[1]['Fit sweep {}, state 0'.format(ct)] = (finer_xpoints, quadf(finer_xpoints, *popt_0))
-            self.plot[1]['Fit sweep {}, state 1'.format(ct)] = (finer_xpoints, quadf(finer_xpoints, *popt_1))
+                if ct<2:
+                    self.eps1*=opt_scaling
+                if ct!=1:
+                    self.eps2*=opt_scaling
+                self.plot[1]['Fit sweep {}, state 0'.format(ct)] = (finer_xpoints, quadf(finer_xpoints, *popt_0))
+                self.plot[1]['Fit sweep {}, state 1'.format(ct)] = (finer_xpoints, quadf(finer_xpoints, *popt_1))
         return [('eps1', round(float(self.eps1), 5)), ('eps2', round(float(self.eps1), 5))]
 
     def update_settings(self):

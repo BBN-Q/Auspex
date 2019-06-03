@@ -174,7 +174,6 @@ class X6(Instrument):
 
         for a in range(1, 3):
             self._lib.set_state_vld_bitmask(a, int(self.state_vld_bitmask.split(',')[a-1]))
-
         # Set data for testing
         try:
             self.ideal_data = np.load(os.path.abspath(self.ideal_data+'.npy'))

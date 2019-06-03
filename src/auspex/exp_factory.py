@@ -431,12 +431,13 @@ class QubitExpFactory(object):
             if calibration:
                 X6_stream_selectors = []
             else:
-                X6_stream_selectors = [k for k,v in filters.items() if (v["type"] == 'X6StreamSelector' and v["source"] == filters[stream_sel_name]['source'] and v["enabled"] == True and v["channel"] == filters[stream_sel_name]["channel"] and (np.mod(v["dsp_channel"]-1,5)+1 == np.mod(filters[stream_sel_name_orig]["dsp_channel"]-1,5)+1 or v["dsp_channel"]>5))]
+                X6_stream_selectors = [k for k,v in filters.items() if (v["type"] == 'X6StreamSelector' and v["source"] == filters[stream_sel_name]['source'] and v["enabled"] == True and v["channel"] == filters[stream_sel_name]["channel"] and (np.mod(v["dsp_channel"]-1,5)+1 == np.mod(filters[stream_sel_name_orig]["dsp_channel"]-1,5)+1 or v["dsp_channel"]>10))]
             # Enable the tree for single-shot fidelity experiment. Change stream_sel_name to raw (by default)
             writers = []
             plotters = []
             singleshot = []
             buffers = []
+            print(X6_stream_selectors)
 
             def check_endpoint(endpoint_name, endpoint_type):
                 source_type = filters[filters[endpoint_name]['source'].split(' ')[0]]['type']
