@@ -115,12 +115,13 @@ class QubitExperiment(Experiment):
         all_transceivers = self.chan_db.transceivers
         all_qubits       = [c for c in all_channels if isinstance(c, bbndb.qgl.Qubit)]
         all_measurements = [c for c in all_channels if isinstance(c, bbndb.qgl.Measurement)]
+
         # Restrict to current qubits, channels, etc. involved in this actual experiment
         self.controlled_qubits = [c for c in self.chan_db.channels if c.label in meta_info["qubits"]]
         self.measurements      = [c for c in self.chan_db.channels if c.label in meta_info["measurements"]]
         self.measured_qubits   = [c for c in self.chan_db.channels if "M-"+c.label in meta_info["measurements"]]
         self.phys_chans        = list(set([e.phys_chan for e in self.controlled_qubits + self.measurements]))
-        self.transmitters      = list(set([e.phys_chan.transmitter for e in self.controlled_qubits + self.measurements]))
+        self.transmitters      = list(set([t for t in all_transmitters if t.label in meta_info["instruments"]]))
         self.receiver_chans    = list(set([e.receiver_chan for e in self.measurements]))
         self.trig_chans        = list(set([e.trig_chan.phys_chan for e in self.measurements]))
         self.receivers         = list(set([e.receiver_chan.receiver for e in self.measurements]))
