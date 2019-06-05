@@ -626,7 +626,7 @@ class CLEARCalibration(MeasCalibration):
     def calibrate(self):
         def photon_ramsey_meas(steps, cal_step=0, k=0, n0vec = [0], n1vec = [0], err0vec = [0], err1vec = [0]):
             for state in [0,1]:
-                self.set(eps1 = steps[0], eps2 = steps[1], state = state, exp_step = cal_step)
+                self.set(eps1 = steps[0], eps2 = steps[1], state = state, exp_step = cal_step+state)
                 print('Steps: eps1 = {}; eps2 = {}'.format(steps[0], steps[1]))
                 #analyze
                 data, _ = self.run()
@@ -657,20 +657,9 @@ class CLEARCalibration(MeasCalibration):
                     eps1 = self.eps1 if k==1 else xpoints[k]*self.eps1
                     eps2 = self.eps2 if k==2 else xpoints[k]*self.eps2
                     #run for qubit in 0/1
-                    for state in [0,1]:
-                        photon_ramsey_meas(xpoints, cal_step, k, n0vec, n1vec, err0vec, err1vec)
-                        cal_step+=1
-                        self.set(eps1 = eps1, eps2 = eps2, state = state, exp_step = cal_step)
-                        #analyze
-                        data, _ = self.run()
-                        norm_data = quick_norm_data(data)
-                        eval('n{}vec'.format(state))[k], eval('err{}vec'.format(state))[k], fit_curve = fit_photon_number(self.ramsey_delays, norm_data, [self.kappa, self.ramsey_freq, 2*self.chi, self.T2, self.T1factor, 0])
-                        #plot
-                        self.plot[0]['Data'] = (self.ramsey_delays, norm_data)
-                        self.plot[0]['Fit'] = fit_curve
-                        self.plot[1]['sweep {}, state 0'.format(ct)] = (xpoints, n0vec)
-                        self.plot[1]['sweep {}, state 1'.format(ct)] = (xpoints, n1vec)
-                        cal_step+=1 #outside the photon_ramsey_meas function
+                    #for state in [0,1]:
+                    photon_ramsey_meas([eps1, eps2], cal_step, k, n0vec, n1vec, err0vec, err1vec)
+                    cal_step+=2
 
                 #fit for minimum photon number
                 popt_0,_ = fit_quad(xpoints, n0vec)
