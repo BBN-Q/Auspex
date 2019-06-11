@@ -92,7 +92,18 @@ class PipelineManager(object):
 
     def create_default_pipeline(self, qubits=None, buffers=False):
         """Look at the QGL channel library and create our pipeline from the current
-        qubits."""
+        qubits.
+
+        A qubit can have multiple stream selectors for the same receiver channel, i.e. when 
+        one wants to look at both the raw and demodulated streams from the same physical 
+        channel on the digitizer. These streams are named. We use the name "default" when there is
+        only one stream per physical channel.
+
+        Also, a single qubit may have multiple physical channels (even potentially on different 
+        digitizers). These will be treated as separate pipelines. 
+
+        Theoretically (pathologically?) there may multiple stream selectors for each physical channel.
+        """
         cdb = self.session.query(bbndb.qgl.ChannelDatabase).filter_by(label="working").first()
         if not cdb:
             raise ValueError("Could not find working channel library.")
@@ -106,32 +117,28 @@ class PipelineManager(object):
             measurements = [c for c in cdb.channels if c.label in meas_labels]
         self.qubits = qubits
 
-        # A qubit can have multiple stream selectors, which are named. We use the name "default" here.
-        stream_selectors = {q.label: {'default': adb.StreamSelect(pipelineMgr=self, qubit_name=q.label)} for q in qubits}
+        stream_selectors_by_qubit = {q.label: {} for q in qubits} 
+        for q in qubits:
+            logger.debug(f"Creating pipeline for {q}")
+            for rc in q.measure_chan.receiver_chans:
+                logger.debug(f"Creating pipeline for rcv chan {rc}")
+                ss = adb.StreamSelect(pipelineMgr=self, receiver_channel_name=rc.label, qubit_name=q.label)
+                ss.available_streams = [st.strip() for st in rc.receiver.stream_types.split(",")]
+                ss.stream_type = ss.available_streams[-1]
 
-        # Build a mapping of qubits to receivers, construct qubit proxies
-        receiver_chans_by_qubit = {}
-        available_streams_by_qubit = {}
-        for m in measurements:
-            q = [c for c in cdb.channels if c.label==m.label[2:]][0]
-            receiver_chans_by_qubit[q] = m.receiver_chan
-            available_streams_by_qubit[q] = m.receiver_chan.receiver.stream_types
+                if ss.stream_type == "integrated":
+                    ss.kernel = np.ones(rc.receiver.record_length)
 
-        for q, r in receiver_chans_by_qubit.items():
-            sels = stream_selectors[q.label]
-            for sel in sels.values():
-                sel.available_streams = [st.strip() for st in r.receiver.stream_types.split(",")]
-                sel.stream_type = sel.available_streams[-1]
-
-                # Set a default kernel
-                if sel.stream_type == "integrated":
-                    sel.kernel = np.ones(r.receiver.record_length)
+                # Set a label that includes both the receiver channel and the qubit
+                stream_selectors_by_qubit[q.label][f"{rc.label}-{q.label}"] = ss
+                logger.debug(f"Adding {rc.label}-{q.label} to stream_selectors_by_qubit[{q.label}]")
 
         # generate the pipeline automatically
         self.meas_graph = nx.DiGraph()
-        for sels in stream_selectors.values():
-            for sel in sels.values():
-                sel.create_default_pipeline(buffers=buffers)
+        for sels in stream_selectors_by_qubit.values():
+            for i, sel in enumerate(sels.values()):
+                s = f"-{i+1}" if len(sels) > 1 else ""
+                sel.create_default_pipeline(buffers=buffers, output_suffix=s)
             self.session.add(sel)
 
         self._push_meas_graph_to_db(self.meas_graph, "working")

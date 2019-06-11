@@ -122,11 +122,15 @@ class QubitExperiment(Experiment):
         self.measured_qubits   = [c for c in self.chan_db.channels if "M-"+c.label in meta_info["measurements"]]
         self.phys_chans        = list(set([e.phys_chan for e in self.controlled_qubits + self.measurements]))
         self.transmitters      = list(set([t for t in all_transmitters if t.label in meta_info["instruments"]]))
-        self.receiver_chans    = list(set([e.receiver_chan for e in self.measurements]))
+        self.receiver_chans    = list(set([rc for m in self.measurements for rc in m.receiver_chans ]))
         self.trig_chans        = list(set([e.trig_chan.phys_chan for e in self.measurements]))
-        self.receivers         = list(set([e.receiver_chan.receiver for e in self.measurements]))
+        self.receivers         = list(set([rc.receiver for rc in self.receiver_chans]))
         self.generators        = list(set([q.phys_chan.generator for q in self.measured_qubits + self.controlled_qubits + self.measurements if q.phys_chan.generator]))
         self.qubits_by_name    = {q.label: q for q in self.measured_qubits + self.controlled_qubits}
+
+        # for m in self.measurements:
+        #     for rc in m.receiver_chans:
+        #         f.append
 
         # Load the relevant stream selectors from the pipeline.
         self.stream_selectors = pipeline.pipelineMgr.get_current_stream_selectors()
@@ -192,7 +196,7 @@ class QubitExperiment(Experiment):
         receiver_chans_by_qubit_label = {}
         for m in self.measurements:
             q = [c for c in self.chan_db.channels if c.label==m.label[2:]][0]
-            receiver_chans_by_qubit_label[q.label] = m.receiver_chan
+            receiver_chans_by_qubit_label[q.label] = m.receiver_chans
 
         # Now a pipeline exists, so we create Auspex filters from the proxy filters in the db
         self.proxy_to_filter          = {}
@@ -224,50 +228,55 @@ class QubitExperiment(Experiment):
                 setattr(self, instrument.label, instr)
 
         for mq in self.measured_qubits:
-
-            # Stream selectors from the pipeline database:
-            # These contain all information except for the physical channel
-            mq_stream_sels = [s for s in self.stream_selectors if s.qubit_name == mq.label]
-
+           
             # The receiver channel only specifies the physical channel
-            rcv = receiver_chans_by_qubit_label[mq.label]
+            for rcv in mq.measure_chan.receiver_chans:
+            # rcv = receiver_chans_by_qubit_label[mq.label]
 
-            # Create the auspex stream selectors
-            dig = rcv.receiver # The digitizer instrument in the database
-            stream_sel_class = stream_sel_map[dig.stream_sel]
-            for mq_stream_sel in mq_stream_sels:
-                auspex_stream_sel = stream_sel_class(name=f"{rcv.label}-{mq_stream_sel.stream_type}-stream_sel")
-                mq_stream_sel.channel = rcv.channel
-                auspex_stream_sel.configure_with_proxy(mq_stream_sel)
-                auspex_stream_sel.receiver = auspex_stream_sel.proxy = mq_stream_sel
+                # Stream selectors from the pipeline database are named receiverChhannel-qubitName
+                # These contain all information except for the physical channel.
+                mq_stream_sels = [ss for ss in self.stream_selectors if ss.qubit_name == mq.label and ss.receiver_channel_name == rcv.label]
+                print(mq_stream_sels)
 
-                # Construct the channel from the receiver channel
-                channel = auspex_stream_sel.get_channel(mq_stream_sel)
-                # Manually set the physical channel
-                channel.phys_channel = rcv.channel
+                # Create the auspex stream selectors
+                dig = rcv.receiver # The digitizer instrument in the database
+                stream_sel_class = stream_sel_map[dig.stream_sel]
 
-                # Get the base descriptor from the channel
-                descriptor = auspex_stream_sel.get_descriptor(mq_stream_sel, rcv)
+                # for mq_stream_sel in mq_stream_sels:
+                for mq_stream_sel in mq_stream_sels:
 
-                # Update the descriptor based on the number of segments
-                # The segment axis should already be defined if the sequence
-                # is greater than length 1
-                if hasattr(self, "segment_axis"):
-                    descriptor.add_axis(self.segment_axis)
+                    auspex_stream_sel = stream_sel_class(name=f"{rcv.label}-{mq_stream_sel.stream_type}-stream_sel")
+                    mq_stream_sel.channel = rcv.channel
+                    auspex_stream_sel.configure_with_proxy(mq_stream_sel)
+                    auspex_stream_sel.receiver = auspex_stream_sel.proxy = mq_stream_sel
 
-                # Add averaging if necessary
-                if averages > 1:
-                    descriptor.add_axis(DataAxis("averages", range(averages)))
+                    # Construct the channel from the receiver channel
+                    channel = auspex_stream_sel.get_channel(mq_stream_sel)
+                    # Manually set the physical channel
+                    channel.phys_channel = rcv.channel
 
-                # Add the output connectors to the experiment and set their base descriptor
-                self.connector_by_sel[mq_stream_sel] = self.add_connector(mq_stream_sel)
-                self.connector_by_sel[mq_stream_sel].set_descriptor(descriptor)
+                    # Get the base descriptor from the channel
+                    descriptor = auspex_stream_sel.get_descriptor(mq_stream_sel, rcv)
 
-                # Add the channel to the instrument
-                dig.instr.add_channel(channel)
-                self.chan_to_dig[channel] = dig.instr
-                self.chan_to_oc [channel] = self.connector_by_sel[mq_stream_sel]
-                self.qubit_to_dig[mq.id]  = dig
+                    # Update the descriptor based on the number of segments
+                    # The segment axis should already be defined if the sequence
+                    # is greater than length 1
+                    if hasattr(self, "segment_axis"):
+                        descriptor.add_axis(self.segment_axis)
+
+                    # Add averaging if necessary
+                    if averages > 1:
+                        descriptor.add_axis(DataAxis("averages", range(averages)))
+
+                    # Add the output connectors to the experiment and set their base descriptor
+                    self.connector_by_sel[mq_stream_sel] = self.add_connector(mq_stream_sel, rcv)
+                    self.connector_by_sel[mq_stream_sel].set_descriptor(descriptor)
+
+                    # Add the channel to the instrument
+                    dig.instr.add_channel(channel)
+                    self.chan_to_dig[channel] = dig.instr
+                    self.chan_to_oc [channel] = self.connector_by_sel[mq_stream_sel]
+                    self.qubit_to_dig[mq.id]  = dig
 
         # Find the number of self.measurements
         segments_per_dig = {receiver_chan.receiver: meta_info["receivers"][receiver_chan.label] for receiver_chan in self.receiver_chans
@@ -377,9 +386,9 @@ class QubitExperiment(Experiment):
         auspex_instr.ideal_data = ideal_data
         auspex_instr.gen_fake_data = False
 
-    def add_connector(self, stream_selector):
-        name = stream_selector.qubit_name+'-'+stream_selector.stream_type
-        logger.debug(f"Adding {name} output connector to experiment.")
+    def add_connector(self, stream_selector, receiver_channel):
+        name = f"{stream_selector.qubit_name}-{receiver_channel.label}-{stream_selector.stream_type}"
+        logger.info(f"Adding {name} output connector to experiment.")
         oc = OutputConnector(name=name, parent=self)
         self.output_connectors[name] = oc
         setattr(self, name, oc)
