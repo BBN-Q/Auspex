@@ -484,7 +484,7 @@ class Experiment(metaclass=MetaExperiment):
         self.filenames = [w.filename.value for w in self.writers]
 
         # Remove the nodes with 0 dimension
-        self.nodes = [n for n in self.nodes if not(hasattr(n, 'input_connectors') and  n.input_connectors['sink'].descriptor.num_dims()==0)]
+        # self.nodes = [n for n in self.nodes if not(hasattr(n, 'input_connectors') and  n.input_connectors['sink'].descriptor.num_dims()==0)]
 
         # Go and find any plotters
         self.standard_plotters = [n for n in self.nodes if isinstance(n, (Plotter, MeshPlotter))]

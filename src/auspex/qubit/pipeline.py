@@ -153,6 +153,11 @@ class PipelineManager(object):
             sel.create_default_pipeline(buffers=buffers)
         self._push_meas_graph_to_db(self.meas_graph, "working")
 
+    def get_stream_selector_from_chans(self, receiver_name, qubit_name):
+        sss = [ss for ss in self.get_current_stream_selectors() if 
+                ss.qubit_name == qubit_name and ss.receiver_channel_name == receiver_name]
+        return sss[0]
+
     def get_stream_selector(self, pipeline_name):
         sels = self.get_current_stream_selectors() 
         sels.sort(key=lambda x: x.qubit_name)
@@ -160,7 +165,11 @@ class PipelineManager(object):
         qubit_names = [sel.qubit_name for sel in sels]
 
         name_f = lambda s: s.qubit_name if qubit_names.count(s.qubit_name) == 1 else s.qubit_name + " " + s.stream_type
+        names       = [name_f(sel) for sel in sels]
         sel_by_name = {name_f(sel): sel for sel in sels}
+
+        if names.count(pipeline_name) > 1:
+            raise Exception(f"Pipeline {pipeline_name} has multiple redundant receivers. Please use the get_stream_selector_from_chans function.")
 
         if pipeline_name not in sel_by_name:
             raise Exception(f"Name {pipeline_name} does not specify a pipeline. If there are multiple pipelines for a qubit you must specify 'qubit_name pipeline_name'")
@@ -284,8 +293,8 @@ class PipelineManager(object):
             sel_objs.sort(key=lambda x: x.qubit_name)
             selectors = [sel.hash_val for sel in sel_objs]
             qubit_names = [sel.qubit_name for sel in sel_objs]
-            pipeline_names = [sel.qubit_name if qubit_names.count(sel.qubit_name) == 1 else sel.qubit_name + " " + sel.stream_type for sel in sel_objs]
-
+            pipeline_names1 = [sel.qubit_name if qubit_names.count(sel.qubit_name) == 1 else sel.qubit_name + " " + sel.stream_type for sel in sel_objs]
+            pipeline_names2 = [sel.receiver_channel_name for sel in sel_objs]
             loc = {}
             def next_level(nodes, iteration=0, offset=0, accum=[]):
                 if len(accum) == 0:
@@ -312,7 +321,7 @@ class PipelineManager(object):
             x = [loc[n]['x'] for n in graph.nodes()]
             y = [loc[n]['y'] for n in graph.nodes()]
             xs = LinearScale(min=min(x)-0.5, max=max(x)+0.6)
-            ys = LinearScale(min=min(y)-0.5, max=max(y)+0.6)
+            ys = LinearScale(min=min(y)-0.5, max=max(y)+1.0)
             fig_layout = Layout(width='960px', height='500px')
             graph      = Graph(node_data=node_data, link_data=link_data, x=x, y=y, scales={'x': xs, 'y': ys},
                                 link_type='line', colors=['orange'] * len(node_data), directed=True)
@@ -334,10 +343,12 @@ class PipelineManager(object):
                                       fill_opacities = [0.1+0.5*i/len(selectors)],
                                       stroke_width = 0.0
                                      ))
-            labels = Label(x=middles, y=[max(y)+0.65 for m in middles], text=pipeline_names, align='middle', scales= {'x': xs, 'y': ys},
+            labels1 = Label(x=middles, y=[max(y)+0.95 for m in middles], text=pipeline_names1, align='middle', scales= {'x': xs, 'y': ys},
+                default_size=14, font_weight='bolder', colors=['#4f6367'])
+            labels2 = Label(x=middles, y=[max(y)+0.65 for m in middles], text=pipeline_names2, align='middle', scales= {'x': xs, 'y': ys},
                 default_size=14, font_weight='bolder', colors=['#4f6367'])
 
-            fig        = Figure(marks=bgs_lines+[graph, labels], layout=fig_layout)
+            fig        = Figure(marks=bgs_lines+[graph, labels1, labels2], layout=fig_layout)
             graph.tooltip = table
             graph.on_hover(hover_handler)
             return fig

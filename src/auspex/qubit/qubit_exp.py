@@ -202,7 +202,7 @@ class QubitExperiment(Experiment):
         # Now a pipeline exists, so we create Auspex filters from the proxy filters in the db
         self.proxy_to_filter          = {}
         self.filters                  = []
-        self.connector_by_sel          = {}
+        self.connector_by_sel         = {}
         self.chan_to_dig              = {}
         self.chan_to_oc               = {}
         self.qubit_to_dig             = {}
