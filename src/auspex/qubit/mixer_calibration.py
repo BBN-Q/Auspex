@@ -41,6 +41,7 @@ def find_null_offset(xpts, powers, default=0.0):
     xpts_fine = np.linspace(xpts[0],xpts[-1],101)
     fit_pts = np.array([np.real(model(x, *fit[0])) for x in xpts_fine])
     if min(fit_pts)<0: fit_pts-=min(fit_pts)-1e-10 #prevent log of a negative number
+    best_offset = xpts[min_idx]
     return best_offset, xpts_fine, 10*np.log10(fit_pts)
 
 
@@ -246,12 +247,18 @@ class MixerCalibrationExperiment(Experiment):
         """Extend connect_instruments to reset I,Q offsets and amplitude and phase
         imbalance."""
         super(MixerCalibrationExperiment, self).connect_instruments()
-        self.awg.set_offset(int(self._phys_chan.label[-2]), 0.0)
-        self.awg.set_offset(int(self._phys_chan.label[-1]), 0.0)
-        self.awg.set_amplitude(int(self._phys_chan.label[-2]), 1)
-        self.awg.set_amplitude(int(self._phys_chan.label[-1]), 1)
-        self.awg.set_mixer_amplitude_imbalance(self._phys_chan.label[-2:],1.0)
-        self.awg.set_mixer_phase_skew(self._phys_chan.label[-2:],0.0)
+        if isinstance(self.awg, bbn.APS2):
+            self.awg.set_offset(1,0.0)
+            self.awg.set_offset(2,0.0)
+            self.awg.set_mixer_amplitude_imbalance(1.0)
+            self.awg.set_mixer_phase_skew(1.0)
+        else:
+            self.awg.set_offset(int(self._phys_chan.label[-2]), 0.0)
+            self.awg.set_offset(int(self._phys_chan.label[-1]), 0.0)
+            self.awg.set_amplitude(int(self._phys_chan.label[-2]), 1)
+            self.awg.set_amplitude(int(self._phys_chan.label[-1]), 1)
+            self.awg.set_mixer_amplitude_imbalance(self._phys_chan.label[-2:],1.0)
+            self.awg.set_mixer_phase_skew(self._phys_chan.label[-2:],0.0)
         self.reset_calibration()
 
     def init_instruments(self):
@@ -259,12 +266,16 @@ class MixerCalibrationExperiment(Experiment):
             if k != "sideband_modulation":
                 getattr(self, k).value = v
 
-        self.I_offset.assign_method(lambda x: self.awg.set_offset(int(self._phys_chan.label[-2]), x))
-        self.Q_offset.assign_method(lambda x: self.awg.set_offset(int(self._phys_chan.label[-1]), x))
-        self.amplitude_factor.assign_method(lambda x: self.awg.set_mixer_amplitude_imbalance(self._phys_chan.label[-2:], x))
         if isinstance(self.awg, bbn.APS2):
             self.phase_skew.assign_method(self.awg.set_mixer_phase_skew)
+            self.I_offset.assign_method(lambda x: self.awg.set_offset(1, x))
+            self.Q_offset.assign_method(lambda x: self.awg.set_offset(2, x))
+            self.amplitude_factor.assign_method(lambda x: self.awg.set_mixer_amplitude_imbalance(x))
+            self.phase_skew.assign_method(lambda x: self.awg.set_mixer_phase_skew(x, self.SSB_FREQ))
         else:
+            self.amplitude_factor.assign_method(lambda x: self.awg.set_mixer_amplitude_imbalance(self._phys_chan.label[-2:], x))
+            self.I_offset.assign_method(lambda x: self.awg.set_offset(int(self._phys_chan.label[-2]), x))
+            self.Q_offset.assign_method(lambda x: self.awg.set_offset(int(self._phys_chan.label[-1]), x))
             self.phase_skew.assign_method(lambda x: self.awg.set_mixer_phase_skew(self._phys_chan.label[-2:], x, self.SSB_FREQ))
         self.I_offset.add_post_push_hook(lambda: time.sleep(0.1))
         self.Q_offset.add_post_push_hook(lambda: time.sleep(0.1))
@@ -287,10 +298,16 @@ class MixerCalibrationExperiment(Experiment):
 
     def reset_calibration(self):
         try:
-            self.awg.set_mixer_amplitude_imbalance(self._phys_chan.label[-2:],1.0)
-            self.awg.set_mixer_phase_skew(self._phys_chan.label[-2:],0.0)
-            self.awg.set_offset(int(self._phys_chan.label[-2]), 0.0)
-            self.awg.set_offset(int(self._phys_chan.label[-1]), 0.0)
+            if isinstance(self.awg, bbn.APS2):
+                self.awg.set_mixer_amplitude_imbalance(1.0)
+                self.awg.set_mixer_phase_skew(0.0)
+                self.awg.set_offset(1, 0.0)
+                self.awg.set_offset(2, 0.0)
+            else:
+                self.awg.set_mixer_amplitude_imbalance(self._phys_chan.label[-2:],1.0)
+                self.awg.set_mixer_phase_skew(self._phys_chan.label[-2:],0.0)
+                self.awg.set_offset(int(self._phys_chan.label[-2]), 0.0)
+                self.awg.set_offset(int(self._phys_chan.label[-1]), 0.0)
         except Exception as ex:
             raise Exception("Could not reset mixer calibration. Is the AWG connected?") from ex
 
