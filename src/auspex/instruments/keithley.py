@@ -16,13 +16,25 @@ class Keithley2400(SCPIInstrument):
     """Keithley2400 Sourcemeter"""
 
     SOUR_VALS  = ['VOLT','CURR']
-    SENSE_VALS = ['VOLT','CURR','RES']
+    SENSE_VALS = ['VOLT:DC','CURR:DC','RES']
+    MODE_VALS = ['SWE','LIST','FIX']
+    SWEEP_RANG = ['BEST','AUTO','FIX']
+    SWEEP_SPACE = ['LIN','LOG']
+    SWEEP_DIR = ['UP','DOWN']
+    SWEEP_ABOR = ['NEV','EARL','LATE']
 
-    source     = StringCommand(scpi_string=":SOUR:FUNC",allowed_values=SOUR_VALS)
-    sense      = StringCommand(scpi_string=":SENS:FUNC",allowed_values=SENSE_VALS)
-    current    = FloatCommand(get_string=":MEAS:CURR?")
-    voltage    = FloatCommand(get_string=":MEAS:VOLT?")
-    resistance = FloatCommand(get_string=":MEAS:RES?")
+    source          = StringCommand(scpi_string=":SOUR:FUNC",allowed_values=SOUR_VALS)
+    sweep_range     = StringCommand(scpi_string=":SOUR:SWE:RANG",allowed_values=SWEEP_RANG)
+    sweep_space     = StringCommand(scpi_string=":SOUR:SWE:SPAC",allowed_values=SWEEP_SPACE)
+    sweep_direction = StringCommand(scpi_string=":SOUR:SWE:DIRE",allowed_values=SWEEP_DIR)
+    sweep_abort     = StringCommand(scpi_string=":SOUR:SWE:CAB",allowed_values=SWEEP_ABOR)
+    output          = StringCommand(scpi_string=":OUTP",value_map={'ON': '1', 'OFF': '0'})
+
+    sense           = StringCommand(scpi_string=":SENS:FUNC",allowed_values=SENSE_VALS)
+    read            = FloatCommand(get_string=":READ?")
+    current         = FloatCommand(get_string=":MEAS:CURR?")
+    voltage         = FloatCommand(get_string=":MEAS:VOLT?")
+    resistance      = FloatCommand(get_string=":MEAS:RES?")
 
 
     def __init__(self, resource_name, *args, **kwargs):
@@ -60,6 +72,18 @@ class Keithley2400(SCPIInstrument):
     def level(self, level):
         self.interface.write(":SOUR:{}:LEV {:g}".format(self.source,level))
 
+#Mode of Source
+
+    @property
+    def mode(self):
+        return self.interface.query(":SOUR:{}:MODE?".format(self.source))
+
+    @mode.setter
+    def mode(self, mode):
+        if mode not in self.MODE_VALS:
+            raise ValueError(("Mode must be "+'|'.join(['{}']*len(self.MODE_VALS))).format(*self.MODE_VALS))
+        self.interface.write(":SOUR:{}:MODE {:s}".format(self.source,mode))
+
 #Range of Source
 
     @property
@@ -77,6 +101,36 @@ class Keithley2400(SCPIInstrument):
             self.interface.write(":SOUR:{}:RANG:AUTO 0;:SOUR:{}:RANG {:g}".format(source,source,range))
         else:
             self.interface.write(":SOUR:{}:RANG:AUTO 1".format(source))
+
+#Sweep Start
+
+    @property
+    def sweep_start(self):
+        return self.interface.query(":SOUR:{}:STAR?".format(self.source))
+
+    @sweep_start.setter
+    def sweep_start(self, level):
+        self.interface.write(":SOUR:{}:STAR {:g}".format(self.source,level))
+
+#Sweep Stop
+
+    @property
+    def sweep_stop(self):
+        return self.interface.query(":SOUR:{}:STOP?".format(self.source))
+
+    @sweep_stop.setter
+    def sweep_start(self, level):
+        self.interface.write(":SOUR:{}:STOP {:g}".format(self.source,level))
+
+#Sweep Step
+
+    @property
+    def sweep_step(self):
+        return self.interface.query(":SOUR:{}:STEP?".format(self.source))
+
+    @sweep_step.setter
+    def sweep_start(self, level):
+        self.interface.write(":SOUR:{}:STEP {:g}".format(self.source,level))
 
 #Compliance of Sense
 
