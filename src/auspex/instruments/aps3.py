@@ -57,7 +57,7 @@ class AMC599(object):
         data = [x[0] for x in iter_unpack("!I", ans)]
         return data
 
-    def write_memory(self, addr, data):
+    def write_memory(self, addr, data, offset = 0x0):
         self._check_connected()
         max_ct = 0xfffc #max writeable block length (TODO: check if still true)
         cmd = 0x80000000 #write to RAM command
@@ -110,10 +110,57 @@ class AMC599(object):
         for d in data:
             print(hex(d))
 
-#TODO: UPDATE!
-CSR_AXI_ADDR = 0x44b400000
-CSR_CONTROL_OFFSET = 0x00
-GPIO1_OFFSET = 0x01C
-GPIO2_OFFSET = 0x020
-CSR_TRIGGER_INTERVAL_OFFSET = 0x14
-SDRAM_AXI_ADDR = 0x80000000
+#####################################################################
+
+#APS3 AMC599 Control and Status Register offsets
+#Add to CSR_AXI_ADDR_BASE to get to correct memory location
+#Registers are read/write unless otherwise noted
+#Current as of 6/20/19
+
+CSR_AXI_ADDR_BASE           = 0x44b4000
+
+CSR_CACHE_CONTROL           = 0x0010 #Cache control register
+CSR_SEQ_CONTROL             = 0x0024 #Sequencer control register
+
+CSR_WFA_OFFSET              = 0x0014 #Waveform A Offset
+CSR_WFB_OFFSET              = 0x0018 #Waveform B offset
+CSR_SEQ_OFFSET              = 0x001C #Sequence data offset
+
+CSR_TRIG_WORD               = 0x002C #Trigger word register, Read Only
+CSR_TRIG_INTERVAL           = 0x0030 #trigger interval register
+
+CSR_UPTIME_SEC              = 0x0050 #uptime in seconds, read only
+CSR_UPTIME_NS               = 0x0054 #uptime in nanoseconds, read only
+CSR_FPGA_REV                = 0x0058 #FPGA revision, read only
+CSR_GIT_SHA1                = 0x0060 #git SHA1 hash, read only
+CSR_BUILD_TSTAMP            = 0x0064 #build timestamp, read only
+
+CSR_CMAT_R0                 = 0x0068 #correction matrix row 0
+CSR_CMAT_R1                 = 0x006C #correction matrix row 1
+
+#### NOT CONNECTED TO ANY LOGIC -- USE FOR VALUE STORAGE ############
+CSR_A_AMPLITUDE             = 0x0070 #Channel A amplitude
+CSR_B_AMPLITUDE             = 0x0074 #Channel B amplitude
+CSR_MIX_AMP                 = 0x0078 #Mixer amplitude correction
+CSR_MIX_PHASE               = 0x007C #Mixer phase skew correction
+CSR_WFA_LEN                 = 0x0080 #channel A waveform length
+CSR_WFB_LEN                 = 0x0084 #channel B waveform length
+CSR_WF_MOD_FREQ             = 0x0088 #waveform modulation frequency
+######################################################################
+
+CSR_WFA_DELAY               = 0x008C #Channel A delay
+CSR_WFB_DELAY               = 0x0080 #channel B delay
+
+CSR_BD_CONTROL              = 0x00A0 #board control register
+CSR_FPGA_ID                 = 0x00B4 #FPGA ID (read-only)
+
+CSR_DATA1_IO                = 0x00B8 #Data 1 IO register
+CSR_DATA2_IO                = 0x00BC #Data 2 IO register
+
+CSR_MARKER_DELAY            = 0x00C0 #Marker delay
+
+CSR_IPV4                    = 0x00C4 #IPv4 address register
+
+#####################################################################
+
+DRAM_AXI_BASE = 0x80000000
