@@ -15,9 +15,15 @@ from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand
 class Keithley2400(SCPIInstrument):
     """Keithley2400 Sourcemeter"""
 
-    current    = FloatCommand(get_string=":sour:curr?",  set_string="sour:curr:lev {:g};")
-    voltage    = FloatCommand(get_string=":sour:volt?",  set_string="sour:volt:lev {:g};")
-    resistance = FloatCommand(get_string=":read?")
+    SOUR_VALS  = ['VOLT','CURR']
+    SENSE_VALS = ['VOLT','CURR','RES']
+
+    source     = StringCommand(scpi_string=":SOUR:FUNC",allowed_values=SOUR_VALS)
+    sense      = StringCommand(scpi_string=":SENS:FUNC",allowed_values=SENSE_VALS)
+    current    = FloatCommand(get_string=":MEAS:CURR?")
+    voltage    = FloatCommand(get_string=":MEAS:VOLT?")
+    resistance = FloatCommand(get_string=":MEAS:RES?")
+
 
     def __init__(self, resource_name, *args, **kwargs):
         super(Keithley2400, self).__init__(resource_name, *args, **kwargs)
@@ -44,6 +50,62 @@ class Keithley2400(SCPIInstrument):
     def beep(self, freq, dur):
         self.interface.write(":SYST:BEEP {:g}, {:g}".format(freq, dur))
 
+#Level of Source
+
+    @property
+    def level(self):
+        return self.interface.query(":SOUR:{}:LEV?".format(self.source))
+
+    @level.setter
+    def level(self, level):
+        self.interface.write(":SOUR:{}:LEV {:g}".format(self.source,level))
+
+#Range of Source
+
+    @property
+    def source_range(self):
+        auto = self.interface.query(":SOUR:{}:RANG:AUTO?".format(self.source))
+        if auto == 1:
+            return "AUTO"
+        else:
+            return self.interface.query(":SOUR:{}:RANG?".format(self.source))
+
+    @source_range.setter
+    def source_range(self, range):
+        source = self.source
+        if range != "AUTO":
+            self.interface.write(":SOUR:{}:RANG:AUTO 0;:SOUR:{}:RANG {:g}".format(source,source,range))
+        else:
+            self.interface.write(":SOUR:{}:RANG:AUTO 1".format(source))
+
+#Compliance of Sense
+
+    @property
+    def compliance(self):
+        return self.interface.query(":SENS:{}:PROT?".format(self.sense))
+
+    @compliance.setter
+    def compliance(self, comp):
+        self.interface.write(":SENS:{}:PROT {:g}".format(self.sense,comp))
+
+#Range of Sense
+
+    @property
+    def sense_range(self):
+        auto = self.interface.query(":SENS:{}:RANG:AUTO?".format(self.source))
+        if auto == 1:
+            return "AUTO"
+        else:
+            return self.interface.query(":SENS:{}:RANG?".format(self.source))
+
+    @sense_range.setter
+    def sense_range(self, range):
+        source = self.source
+        if range != "AUTO":
+            self.interface.write(":SOUR:{}:RANG:AUTO 0;:SOUR:{}:RANG {:g}".format(source,source,range))
+        else:
+            self.interface.write(":SOUR:{}:RANG:AUTO 1".format(source))
+
     # One must configure the measurement before the source to avoid potential range issues
     def conf_meas_res(self, NPLC=1, res_range=1000.0, auto_range=True):
         self.interface.write(":sens:func \"res\";:sens:res:mode man;:sens:res:nplc {:f};:form:elem res;".format(NPLC))
@@ -51,17 +113,3 @@ class Keithley2400(SCPIInstrument):
             self.interface.write(":sens:res:rang:auto 1;")
         else:
             self.interface.write(":sens:res:rang:auto 0;:sens:res:rang {:g}".format(res_range))
-
-    def conf_src_curr(self, comp_voltage=0.1, curr_range=1.0e-3, auto_range=True):
-        if auto_range:
-            self.interface.write(":sour:func curr;:sour:curr:rang:auto 1;")
-        else:
-            self.interface.write(":sour:func curr;:sour:curr:rang:auto 0;:sour:curr:rang {:g};".format(curr_range))
-        self.interface.write(":sens:volt:prot {:g};".format(comp_voltage))
-
-    def conf_src_volt(self, comp_current=10e-6, volt_range=1.0, auto_range=True):
-        if auto_range:
-            self.interface.write(":sour:func volt;:sour:volt:rang:auto 1;")
-        else:
-            self.interface.write(":sour:func volt;:sour:volt:rang:auto 0;:sour:volt:rang {:g};".format(volt_range))
-        self.interface.write(":sens:curr:prot {:g};".format(comp_current))
