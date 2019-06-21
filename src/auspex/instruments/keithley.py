@@ -16,7 +16,7 @@ class Keithley2400(SCPIInstrument):
     """Keithley2400 Sourcemeter"""
 
     SOUR_VALS  = ['VOLT','CURR']
-    SENSE_VALS = ['VOLT:DC','CURR:DC','RES']
+    SENSE_VALS = ['VOLT','CURR','RES']
     MODE_VALS = ['SWE','LIST','FIX']
     SWEEP_RANG = ['BEST','AUTO','FIX']
     SWEEP_SPACE = ['LIN','LOG']
@@ -30,7 +30,8 @@ class Keithley2400(SCPIInstrument):
     sweep_abort     = StringCommand(scpi_string=":SOUR:SWE:CAB",allowed_values=SWEEP_ABOR)
     output          = StringCommand(scpi_string=":OUTP",value_map={'ON': '1', 'OFF': '0'})
 
-    sense           = StringCommand(scpi_string=":SENS:FUNC",allowed_values=SENSE_VALS)
+    sense           = StringCommand(get_string=":SENS:FUNC?",set_string=":SENS:FUNC '{:s}'",allowed_values=SENSE_VALS)
+    concurrent      = StringCommand(scpi_string=":SENS:FUNC:CONC",value_map={'ON': '1', 'OFF': '0'})
     read            = FloatCommand(get_string=":READ?")
     current         = FloatCommand(get_string=":MEAS:CURR?")
     voltage         = FloatCommand(get_string=":MEAS:VOLT?")
@@ -66,99 +67,99 @@ class Keithley2400(SCPIInstrument):
 
     @property
     def level(self):
-        return self.interface.query(":SOUR:{}:LEV?".format(self.source))
+        return self.interface.query(":SOUR:{:s}:LEV?".format(self.source))
 
     @level.setter
     def level(self, level):
-        self.interface.write(":SOUR:{}:LEV {:g}".format(self.source,level))
+        self.interface.write(":SOUR:{:s}:LEV {:g}".format(self.source,level))
 
 #Mode of Source
 
     @property
     def mode(self):
-        return self.interface.query(":SOUR:{}:MODE?".format(self.source))
+        return self.interface.query(":SOUR:{:s}:MODE?".format(self.source))
 
     @mode.setter
     def mode(self, mode):
         if mode not in self.MODE_VALS:
             raise ValueError(("Mode must be "+'|'.join(['{}']*len(self.MODE_VALS))).format(*self.MODE_VALS))
-        self.interface.write(":SOUR:{}:MODE {:s}".format(self.source,mode))
+        self.interface.write(":SOUR:{:s}:MODE {:s}".format(self.source,mode))
 
 #Range of Source
 
     @property
     def source_range(self):
-        auto = self.interface.query(":SOUR:{}:RANG:AUTO?".format(self.source))
+        auto = int(self.interface.query(":SOUR:{:s}:RANG:AUTO?".format(self.source)))
         if auto == 1:
             return "AUTO"
         else:
-            return self.interface.query(":SOUR:{}:RANG?".format(self.source))
+            return self.interface.query(":SOUR:{:s}:RANG?".format(self.source))
 
     @source_range.setter
     def source_range(self, range):
         source = self.source
         if range != "AUTO":
-            self.interface.write(":SOUR:{}:RANG:AUTO 0;:SOUR:{}:RANG {:g}".format(source,source,range))
+            self.interface.write(":SOUR:{:s}:RANG:AUTO 0;:SOUR:{:s}:RANG {:g}".format(source,source,range))
         else:
-            self.interface.write(":SOUR:{}:RANG:AUTO 1".format(source))
+            self.interface.write(":SOUR:{:s}:RANG:AUTO 1".format(source))
 
 #Sweep Start
 
     @property
     def sweep_start(self):
-        return self.interface.query(":SOUR:{}:STAR?".format(self.source))
+        return self.interface.query(":SOUR:{:s}:STAR?".format(self.source))
 
     @sweep_start.setter
-    def sweep_start(self, level):
-        self.interface.write(":SOUR:{}:STAR {:g}".format(self.source,level))
+    def sweep_start(self, start):
+        self.interface.write(":SOUR:{:s}:STAR {:g}".format(self.source,start))
 
 #Sweep Stop
 
     @property
     def sweep_stop(self):
-        return self.interface.query(":SOUR:{}:STOP?".format(self.source))
+        return self.interface.query(":SOUR:{:s}:STOP?".format(self.source))
 
     @sweep_stop.setter
-    def sweep_start(self, level):
-        self.interface.write(":SOUR:{}:STOP {:g}".format(self.source,level))
+    def sweep_stop(self, stop):
+        self.interface.write(":SOUR:{:s}:STOP {:g}".format(self.source,stop))
 
 #Sweep Step
 
     @property
     def sweep_step(self):
-        return self.interface.query(":SOUR:{}:STEP?".format(self.source))
+        return self.interface.query(":SOUR:{:s}:STEP?".format(self.source))
 
     @sweep_step.setter
-    def sweep_start(self, level):
-        self.interface.write(":SOUR:{}:STEP {:g}".format(self.source,level))
+    def sweep_step(self, step):
+        self.interface.write(":SOUR:{:s}:STEP {:g}".format(self.source,step))
 
 #Compliance of Sense
 
     @property
     def compliance(self):
-        return self.interface.query(":SENS:{}:PROT?".format(self.sense))
+        return self.interface.query(":SENS:{:s}:PROT?".format(self.sense))
 
     @compliance.setter
     def compliance(self, comp):
-        self.interface.write(":SENS:{}:PROT {:g}".format(self.sense,comp))
+        self.interface.write(":SENS:{:s}:PROT {:g}".format(self.sense,comp))
 
 #Range of Sense
 
     @property
     def sense_range(self):
-        auto = self.interface.query(":SENS:{}:RANG:AUTO?".format(self.source))
+        auto = int(self.interface.query(":SENS:{:s}:RANG:AUTO?".format(self.source)))
         if auto == 1:
             return "AUTO"
         else:
-            return self.interface.query(":SENS:{}:RANG?".format(self.source))
+            return self.interface.query(":SENS:{:s}:RANG?".format(self.source))
 
     @sense_range.setter
     def sense_range(self, range):
         source = self.source
         if range != "AUTO":
-            self.interface.write(":SOUR:{}:RANG:AUTO 0;:SOUR:{}:RANG {:g}".format(source,source,range))
+            self.interface.write(":SOUR:{:s}:RANG:AUTO 0;:SOUR:{:s}:RANG {:g}".format(source,source,range))
         else:
-            self.interface.write(":SOUR:{}:RANG:AUTO 1".format(source))
+            self.interface.write(":SOUR:{:s}:RANG:AUTO 1".format(source))
 
     # One must configure the measurement before the source to avoid potential range issues
     def conf_meas_res(self, NPLC=1, res_range=1000.0, auto_range=True):
