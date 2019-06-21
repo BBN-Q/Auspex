@@ -366,4 +366,10 @@ class APS3(Instrument, metaclass=MakeSettersGetters):
         self.write_csr(CSR_CMAT_R0, row0)
         self.write_csr(CSR_CMAT_R1, row1)
 
-    ####### BOARD_CONTROL ##################################################
+    ####### BOARD_CONTROL ######################################################
+    @property
+    def microblaze(self):
+        return bool(check_bits(self.read_csr(CSR_BD_CONTROL), 1))
+    @microbalze.setter(self, value)
+        reg = self.read_csr(CSR_BD_CONTROL)
+        self.write_csr(CSR_BD_CONTROL, set_bits(reg, 1, int(value)))
