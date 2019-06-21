@@ -10,6 +10,7 @@ __all__ = ['Keithley2400']
 
 import time
 from auspex.log import logger
+import numpy as np
 from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand
 
 class Keithley2400(SCPIInstrument):
@@ -28,11 +29,11 @@ class Keithley2400(SCPIInstrument):
     sweep_space     = StringCommand(scpi_string=":SOUR:SWE:SPAC",allowed_values=SWEEP_SPACE)
     sweep_direction = StringCommand(scpi_string=":SOUR:SWE:DIRE",allowed_values=SWEEP_DIR)
     sweep_abort     = StringCommand(scpi_string=":SOUR:SWE:CAB",allowed_values=SWEEP_ABOR)
+    sweep_points    = IntCommand(scpi_string=":SOUR:SWE:POIN")
     output          = StringCommand(scpi_string=":OUTP",value_map={'ON': '1', 'OFF': '0'})
 
     sense           = StringCommand(get_string=":SENS:FUNC?",set_string=":SENS:FUNC '{:s}'",allowed_values=SENSE_VALS)
     concurrent      = StringCommand(scpi_string=":SENS:FUNC:CONC",value_map={'ON': '1', 'OFF': '0'})
-    read            = FloatCommand(get_string=":READ?")
     current         = FloatCommand(get_string=":MEAS:CURR?")
     voltage         = FloatCommand(get_string=":MEAS:VOLT?")
     resistance      = FloatCommand(get_string=":MEAS:RES?")
@@ -62,6 +63,40 @@ class Keithley2400(SCPIInstrument):
 
     def beep(self, freq, dur):
         self.interface.write(":SYST:BEEP {:g}, {:g}".format(freq, dur))
+
+# Run Measurement Sweep
+    def sweep(self):
+
+        #Construct list of variables to report from sense and source lists
+        var_list = self.sense.split(",")
+        var_list = list(map(lambda x: x.replace(':DC','').replace('"',''),var_list))
+        var_list.append(self.source)
+
+        #Format Sweep Output
+        self.interface.write((":FORM:ELEM "+','.join(['{:s}']*len(var_list))).format(*var_list))
+        nvar = len(self.interface.query(":FORM:ELEM?").split(","))
+
+        #Setup Trigger
+        sweep_points = self.sweep_points
+        self.interface.write(":TRIG:COUN {:d}".format(sweep_points))
+
+        #Set long timeout for read
+        tmout = self.interface._resource.timeout
+        self.interface._resource.timeout = 12. * 60. * 60. * 1000. #milliseconds
+
+        #Run Sweep
+        if self.output == 'OFF':
+            self.output = 'ON'
+
+        sweep = np.array(self.interface.query(":READ?").split(","), dtype=np.float32).reshape(sweep_points,nvar)
+        self.output = 'OFF'
+
+        self.interface._resource.timeout = tmout
+        self.beep(261.6,0.25)
+
+        return sweep
+
+
 
 #Level of Source
 
