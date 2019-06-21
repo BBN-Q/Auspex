@@ -172,29 +172,29 @@ class Keithley2400(SCPIInstrument):
 
     @property
     def compliance(self):
-        return self.interface.query(":SENS:{:s}:PROT?".format(self.sense))
+        return self.interface.query(":SENS:{:s}:PROT?".format(self.sense.replace('"','')))
 
     @compliance.setter
     def compliance(self, comp):
-        self.interface.write(":SENS:{:s}:PROT {:g}".format(self.sense,comp))
+        self.interface.write(":SENS:{:s}:PROT {:g}".format(self.sense.replace('"',''),comp))
 
 #Range of Sense
 
     @property
     def sense_range(self):
-        auto = int(self.interface.query(":SENS:{:s}:RANG:AUTO?".format(self.source)))
+        auto = int(self.interface.query(":SENS:{:s}:RANG:AUTO?".format(self.sense.replace('"',''))))
         if auto == 1:
             return "AUTO"
         else:
-            return self.interface.query(":SENS:{:s}:RANG?".format(self.source))
+            return self.interface.query(":SENS:{:s}:RANG?".format(self.sense.replace('"','')))
 
     @sense_range.setter
     def sense_range(self, range):
-        source = self.source
+        sense = self.sense.replace('"','')
         if range != "AUTO":
-            self.interface.write(":SOUR:{:s}:RANG:AUTO 0;:SOUR:{:s}:RANG {:g}".format(source,source,range))
+            self.interface.write(":SENS:{:s}:RANG:AUTO 0;:SENS:{:s}:RANG {:g}".format(sense,sense,range))
         else:
-            self.interface.write(":SOUR:{:s}:RANG:AUTO 1".format(source))
+            self.interface.write(":SENS:{:s}:RANG:AUTO 1".format(sense))
 
     # One must configure the measurement before the source to avoid potential range issues
     def conf_meas_res(self, NPLC=1, res_range=1000.0, auto_range=True):
