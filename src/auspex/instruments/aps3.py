@@ -6,6 +6,8 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
+__all__ = ['AMC599', 'APS3']
+
 from .instrument import Instrument, MetaInstrument, is_valid_ipv4
 from .bbn import MakeSettersGetters
 from auspex.log import logger
@@ -180,13 +182,13 @@ def check_bits(value, shift, mask=0b1):
 def set_bits(value, shift, x, mask=0b1):
     return ((value & U32) & ~(mask << shift)) | ((x & U32) << shift)
 
-class APS3(Instrument, metaclass=MakeSettersGetters):
+class APS3(Instrument):
 
     def __init__(self, resource_name=None, name="Unlabled APS3"):
         self.name = name
         self.resource_name = resource_name
-
         self.board = AMC599()
+        super().__init__()
 
     def connect(self, resource_name=None):
         if resource_name is None and self.resource_name is None:
@@ -264,7 +266,7 @@ class APS3(Instrument, metaclass=MakeSettersGetters):
     def trigger_source(self):
         trig_val = check_bits(self.read_csr(CSR_SEQ_CONTROL), 1, 0b11)
         trigger_map = {0b00: "EXTERNAL", 0b01: "INTERNAL",
-                        0b10: "SOFTWARE", 0b11 "MESSAGE"}
+                        0b10: "SOFTWARE", 0b11: "MESSAGE"}
         return trigger_map[trig_val]
     @trigger_source.setter
     def trigger_source(self, value):
@@ -320,7 +322,7 @@ class APS3(Instrument, metaclass=MakeSettersGetters):
     def trigger_interval(self):
         return self.read_csr(CSR_TRIG_INTERVAL)
     @trigger_interval.setter
-    def trigger_interval(self, value)
+    def trigger_interval(self, value):
         return self.write_csr(CSR_TRIG_INTERVAL, value & U32)
 
     ####### UPTIME REGISTERS ###################################################
@@ -366,10 +368,37 @@ class APS3(Instrument, metaclass=MakeSettersGetters):
         self.write_csr(CSR_CMAT_R0, row0)
         self.write_csr(CSR_CMAT_R1, row1)
 
+    def correction_bypass(self):
+        row0 = 0x20000000
+        row1 = 0x00002000
+        self.write_csr(CSR_CMAT_R0, row0)
+        self.write_csr(CSR_CMAT_R0, row1)
+        self.write_csr(CSR_CORR_OFFSET, 0x0)
+
+
     ####### BOARD_CONTROL ######################################################
     @property
     def microblaze(self):
         return bool(check_bits(self.read_csr(CSR_BD_CONTROL), 1))
-    @microbalze.setter(self, value)
+    @microblaze.setter
+    def microblaze(self, value):
         reg = self.read_csr(CSR_BD_CONTROL)
         self.write_csr(CSR_BD_CONTROL, set_bits(reg, 1, int(value)))
+
+    @property
+    def dac_output_mux(self):
+        return bool(check_bits(self.read_csr(CSR_BD_CONTROL), 4))
+    @dac_output_mux.setter
+    def dac_output_mux(self, value):
+        reg = self.read_csr(CSR_BD_CONTROL)
+        self.write_csr(CSR_BD_CONTROL, set_bits(reg, 4, int(value)))
+
+    ####### MARKER_DELAY #######################################################
+    @property
+    def marker_delay(self):
+        return self.read_csr(CSR_MARKER_DELAY)
+    @marker_delay.setter
+    def marker_delay(self, value):
+        if value > U16:
+            logger.warning(f"Marker delay {value} is greater than maximum allowed value of {U16} {hex(U16)}!")
+        self.write_csr(CSR_MARKER_DELAY, value & U16)
