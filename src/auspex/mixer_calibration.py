@@ -91,7 +91,8 @@ class MixerCalibrationExperiment(Experiment):
 
         self.instruments_to_enable = [self.sa, self.LO, self.AWG, self.source]
         self.instrs_connected = False
-        self.SSB_FREQ = self.channel_settings[mixer]['frequency']
+        freq_key = 'frequency' if mixer == 'control' else 'autodyne_freq'
+        self.SSB_FREQ = self.channel_settings[mixer][freq_key]
         super(MixerCalibrationExperiment, self).__init__()
 
     def write_to_file(self):
