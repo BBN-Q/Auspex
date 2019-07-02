@@ -6,10 +6,12 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-__all__ = ['YokogawaGS200']
+__all__ = ['YokogawaGS200','YokogawaGS210']
 
 from auspex.log import logger
-from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand, RampCommand, BoolCommand
+from .instrument import io, SCPIInstrument, StringCommand, FloatCommand, IntCommand, RampCommand, BoolCommand
+
+
 
 class YokogawaGS200(SCPIInstrument):
     """YokogawaGS200 Current source"""
@@ -37,3 +39,5 @@ class YokogawaGS200(SCPIInstrument):
         super(YokogawaGS200, self).connect(resource_name=self.resource_name, interface_type=interface_type)
         self.interface.write(":sense:trigger immediate")
         self.interface._resource.read_termination = "\n"
+
+YokogawaGS210 = YokogawaGS200

@@ -8,7 +8,7 @@
 
 __all__ = ['LakeShore370', 'LakeShore335']
 
-from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand, Command
+from .instrument import io, SCPIInstrument, StringCommand, FloatCommand, IntCommand, Command
 import numpy as np
 
 def indexed_map(values):

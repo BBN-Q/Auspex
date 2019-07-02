@@ -1,7 +1,7 @@
 __all__ = ['HDO6104']
 
 from auspex.log import logger
-from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand, Command
+from .instrument import io, SCPIInstrument, StringCommand, FloatCommand, IntCommand, Command
 import numpy as np
 import time
 

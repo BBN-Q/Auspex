@@ -8,7 +8,7 @@
 
 __all__ = ['BNC845']
 
-from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand, is_valid_ipv4, BoolCommand
+from .instrument import io, SCPIInstrument, StringCommand, FloatCommand, IntCommand, is_valid_ipv4, BoolCommand
 from auspex.log import logger
 import time
 import numpy as np

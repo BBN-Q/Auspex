@@ -9,7 +9,7 @@
 __all__ = ['BOP2020M']
 
 from auspex.log import logger
-from .instrument import SCPIInstrument, StringCommand, RampCommand
+from .instrument import io, SCPIInstrument, StringCommand, RampCommand
 
 class BOP2020M(SCPIInstrument):
     """For controlling the BOP2020M power supply via GPIB interface card"""

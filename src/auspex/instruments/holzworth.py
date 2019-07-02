@@ -8,7 +8,7 @@
 
 __all__ = ['HolzworthHS9000']
 
-from .instrument import Instrument, MetaInstrument
+from .instrument import io, Instrument, MetaInstrument
 import os
 from auspex.log import logger
 from auspex import config

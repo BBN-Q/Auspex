@@ -19,7 +19,7 @@ import sys
 
 from auspex.log import logger
 import auspex.config as config
-from .instrument import Instrument, ReceiverChannel
+from .instrument import io, Instrument, ReceiverChannel
 from unittest.mock import MagicMock
 
 from multiprocessing import Value

@@ -9,7 +9,7 @@
 __all__ = ['SR830', 'SR865']
 
 from auspex.log import logger
-from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand, Command
+from .instrument import io, SCPIInstrument, StringCommand, FloatCommand, IntCommand, Command
 import numpy as np
 import time
 

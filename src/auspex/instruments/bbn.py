@@ -8,7 +8,7 @@
 
 __all__ = ['APS', 'APS2', 'TDM', 'DigitalAttenuator', 'SpectrumAnalyzer']
 
-from .instrument import Instrument, SCPIInstrument, VisaInterface, MetaInstrument
+from .instrument import io, Instrument, SCPIInstrument, VisaInterface, MetaInstrument
 from auspex.log import logger
 import auspex.config as config
 from types import MethodType
@@ -158,17 +158,17 @@ class SpectrumAnalyzer(SCPIInstrument):
             interp = -100. + (volt - 75.) * (8/45)
             return interp
 
-class MakeSettersGetters(MetaInstrument):
-    def __init__(self, name, bases, dct):
-        super(MakeSettersGetters, self).__init__(name, bases, dct)
+# class MakeSettersGetters(MetaInstrument):
+#     def __init__(self, name, bases, dct):
+#         super(MakeSettersGetters, self).__init__(name, bases, dct)
 
-        for k,v in dct.items():
-            if isinstance(v, property):
-                logger.debug("Adding '%s' command to APS", k)
-                setattr(self, 'set_'+k, v.fset)
-                setattr(self, 'get_'+k, v.fget)
+#         for k,v in dct.items():
+#             if isinstance(v, property):
+#                 logger.debug("Adding '%s' command to APS", k)
+#                 setattr(self, 'set_'+k, v.fset)
+#                 setattr(self, 'get_'+k, v.fget)
 
-class APS(Instrument, metaclass=MakeSettersGetters):
+class APS(Instrument): #, metaclass=MakeSettersGetters):
     """BBN APSI or DACII"""
 
     instrument_type = "AWG"
@@ -348,7 +348,7 @@ class APS(Instrument, metaclass=MakeSettersGetters):
         self.wrapper.sampling_rate = freq
 
 
-class APS2(Instrument, metaclass=MakeSettersGetters):
+class APS2(Instrument): #, metaclass=MakeSettersGetters):
     """BBN APS2"""
     instrument_type = "AWG"
 

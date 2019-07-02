@@ -17,7 +17,7 @@ import numpy as np
 
 from multiprocessing import Value
 
-from .instrument import Instrument, ReceiverChannel
+from .instrument import io, Instrument, ReceiverChannel
 from auspex.log import logger
 import auspex.config as config
 

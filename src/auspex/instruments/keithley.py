@@ -10,7 +10,7 @@ __all__ = ['Keithley2400']
 
 import time
 from auspex.log import logger
-from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand
+from .instrument import io, SCPIInstrument, StringCommand, FloatCommand, IntCommand
 
 class Keithley2400(SCPIInstrument):
     """Keithley2400 Sourcemeter"""

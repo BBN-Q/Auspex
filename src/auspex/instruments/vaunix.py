@@ -8,7 +8,7 @@
 
 __all__ = ['Labbrick']
 
-from .instrument import Instrument, MetaInstrument
+from .instrument import io, Instrument, MetaInstrument
 from auspex.log import logger
 import time
 import os

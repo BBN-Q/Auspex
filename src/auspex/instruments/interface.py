@@ -23,17 +23,20 @@ class Interface(object):
 
 class VisaInterface(Interface):
     """PyVISA interface for communicating with instruments."""
-    def __init__(self, resource_name):
+    def __init__(self, resource_name, resource=None):
         super(VisaInterface, self).__init__()
-        try:
-            if os.name == "nt":
-                visa_loc = 'C:\\windows\\system32\\visa64.dll'
-                rm = visa.ResourceManager(visa_loc)
-            else:
-                rm = visa.ResourceManager("@py")
-            self._resource = rm.open_resource(resource_name)
-        except:
-            raise Exception("Unable to create the resource '%s'" % resource_name)
+        if resource:
+            self._resource = resource
+        else:
+            try:
+                if os.name == "nt":
+                    visa_loc = 'C:\\windows\\system32\\visa64.dll'
+                    rm = visa.ResourceManager(visa_loc)
+                else:
+                    rm = visa.ResourceManager("@py")
+                self._resource = rm.open_resource(resource_name)
+            except:
+                raise Exception("Unable to create the resource '%s'" % resource_name)
     def values(self, query_string):
         return self._resource.query_ascii_values(query_string, container=np.array)
     def value(self, query_string):

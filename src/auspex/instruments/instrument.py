@@ -5,6 +5,7 @@ import os
 import time
 import socket
 from unittest.mock import MagicMock
+from functools import wraps, partial
 
 from auspex.log import logger
 from .interface import Interface, VisaInterface, PrologixInterface
@@ -23,6 +24,20 @@ def is_valid_ipv4(ipv4_address):
         return False
     except:
         raise
+
+def io(method=None, input=False, output=True):
+    if method is None:
+        return partial(io, input=input, output=output)
+    @wraps(method)
+    def wrapper(self, *args, **kwargs):
+        self._io_methods.append(method)
+        return method(self, *args, **kwargs)
+    wrapper._is_io_method = True
+    if input:
+        wrapper._has_input_method = True
+    if output:
+        wrapper._has_output_method = True
+    return wrapper
 
 class Command(object):
     """Store the arguments and keywords, so that we may later dispatch
@@ -227,6 +242,9 @@ class SCPIInstrument(Instrument):
         self.interface       = None
         self._freeze()
 
+    def set_resource(self, resource):
+        self.interface = VisaInterface(None, resource=resource)
+
     def connect(self, resource_name=None, interface_type=None):
         """Either connect to the resource name specified during initialization, or specify
         a new resource name here."""
@@ -342,10 +360,10 @@ def add_command_SCPI(instr, name, cmd):
                 time.sleep(new_cmd.set_delay)
 
     # Add getter and setter methods for passing around
-    if new_cmd.additional_args is None:
-        # We add properties in this case since not additional arguments are required
-        # Using None prevents deletion or setting/getting unsettable/gettable attributes
-        setattr(instr, name, property(fget if new_cmd.get_string else None, fset if new_cmd.set_string else None, None, new_cmd.doc))
+    # if new_cmd.additional_args is None:
+    #     # We add properties in this case since not additional arguments are required
+    #     # Using None prevents deletion or setting/getting unsettable/gettable attributes
+    #     setattr(instr, name, property(fget if new_cmd.get_string else None, fset if new_cmd.set_string else None, None, new_cmd.doc))
 
     # In this case we can't create a property given additional arguments
     if new_cmd.get_string:

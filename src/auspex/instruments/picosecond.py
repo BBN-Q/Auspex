@@ -9,7 +9,7 @@
 __all__ = ['Picosecond10070A']
 
 from auspex.log import logger
-from .instrument import SCPIInstrument, StringCommand, FloatCommand
+from .instrument import io, SCPIInstrument, StringCommand, FloatCommand
 
 class Picosecond10070A(SCPIInstrument):
     """Picosecond 10070A Pulser"""

@@ -8,7 +8,7 @@
 
 __all__ = ['AMI430']
 
-from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand
+from .instrument import io, SCPIInstrument, StringCommand, FloatCommand, IntCommand
 
 import time
 

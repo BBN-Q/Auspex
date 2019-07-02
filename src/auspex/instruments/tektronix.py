@@ -9,7 +9,7 @@
 __all__ = ['DPO72004C']
 
 from auspex.log import logger
-from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand
+from .instrument import io, SCPIInstrument, StringCommand, FloatCommand, IntCommand
 import numpy as np
 
 class DPO72004C(SCPIInstrument):

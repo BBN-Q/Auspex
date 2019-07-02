@@ -9,7 +9,7 @@
 __all__ = ['KeysightM8190A', 'Sequence', 'Scenario']
 
 from auspex.log import logger
-from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand, Command
+from .instrument import io, SCPIInstrument, StringCommand, FloatCommand, IntCommand, Command
 from .binutils import BitField, BitFieldUnion
 
 import logging

@@ -13,7 +13,7 @@ import time
 import copy
 import re
 import numpy as np
-from .instrument import SCPIInstrument, Command, StringCommand, BoolCommand, FloatCommand, IntCommand, is_valid_ipv4
+from .instrument import io, SCPIInstrument, Command, StringCommand, BoolCommand, FloatCommand, IntCommand, is_valid_ipv4
 from auspex.log import logger
 import pyvisa.util as util
 
@@ -38,10 +38,12 @@ class HP33120A(SCPIInstrument):
     # Arbitrary Waveform
              # “SINC”,“NEG_RAMP”, “EXP_RISE”, “EXP_FALL”, “CARDIAC”, “VOLATILE”,
             # or the name of any user-defined waveforms
+    @io
     def arb_function(self,name):
         self.interface.write("FUNCtion:User " + name)
         self.interface.write("FUNCtion:Shape User")
 
+    @io
     def upload_waveform(self,data,name="volatile"):
         #Takes data as float between -1 and +1. The data will scale with amplitude when used
         cmdString="Data:Dac Volatile,"
@@ -52,7 +54,7 @@ class HP33120A(SCPIInstrument):
 
         if name.lower() != 'volatile':
             self.interface.write('DATA:COPY '+name)
-
+    @io
     def delete_waveform(self,name='all'):
         #deletes arbitrary waveform with specified name. by default deletes all
         #can't delete anything when outputting an arb function
@@ -137,6 +139,7 @@ class Agilent33220A(SCPIInstrument):
 
     ramp_symmetry = FloatCommand(scpi_string="FUNCtion:RAMP:SYMMetry")
 
+    @io
     def trigger(self):
         self.interface.write("*TRG")
 
@@ -256,14 +259,17 @@ class Agilent33500B(SCPIInstrument):
     sequence = StringCommand(scpi_string="SOURce{channel:d}:DATA:SEQuence",
                             additional_args=['channel'])
 
+    @io
     def set_infinite_load(self, channel=1):
         self.interface.write("OUTP{channel:d}:LOAD INF".format(channel=channel))
 
+    @io
     def clear_waveform(self,channel=1):
         """ Clear all waveforms loaded in the memory """
         logger.debug("Clear all waveforms loaded in the memory of %s" %self.name)
         self.interface.write("SOURce%d:DATA:VOLatile:CLEar" %channel)
 
+    @io
     def upload_waveform(self,data,channel=1,name="mywaveform",dac=True):
         """ Load string-converted data into a waveform memory
 
@@ -304,6 +310,7 @@ class Agilent33500B(SCPIInstrument):
             logger.error("Failed uploading waveform %s to instrument %s, channel %d" %(name,self.name,channel))
             return False
 
+    @io
     def upload_waveform_binary(self,data,channel=1,name="mywaveform",dac=True):
         """ NOT YET WORKING - DO NOT USE
         Load binary data into a waveform memory
@@ -354,6 +361,7 @@ class Agilent33500B(SCPIInstrument):
             logger.error("Failed uploading waveform %s to instrument %s, channel %d" %(name,self.name,channel))
             return False
 
+    @io
     def upload_sequence(self,sequence,channel=1,binary=False):
         """ Upload a sequence to the instrument """
         # Upload each segment
@@ -368,13 +376,16 @@ class Agilent33500B(SCPIInstrument):
         logger.debug("Upload sequence %s to %s: %s" %(sequence.name,self.name,descriptor))
         self.set_sequence(descriptor,channel=channel)
 
+    @io
     def arb_sync(self):
         """ Restart the sequences and synchronize them """
         self.interface.write("FUNCtion:ARBitrary:SYNChronize")
 
+    @io
     def trigger(self,channel=1):
         self.interface.write("TRIGger%d" %channel)
 
+    @io
     def abort(self):
         self.interface.write("ABORt")
 
@@ -752,6 +763,7 @@ class AgilentE8363C(SCPIInstrument):
         self.interface.write("SENSe1:SWEep:TIME:AUTO ON") #automatic sweep time
         self.interface.write("FORM REAL,32") #return measurement data as 32-bit float
 
+    @io
     def averaging_restart(self):
         """ Restart trace averaging """
         self.interface.write(":SENSe1:AVERage:CLEar")
@@ -784,7 +796,7 @@ class AgilentE8363C(SCPIInstrument):
         self.interface.write(f":CALC:PAR:DEF:EXT 'R_{meas}',{meas}")
         self.interface.write(f"DISP:WIND1:TRAC1:FEED 'R_{meas}'")
 
-
+    @io
     def reaverage(self):
         """ Restart averaging and block until complete """
         if self.averaging_enable:
@@ -804,6 +816,7 @@ class AgilentE8363C(SCPIInstrument):
             if opc_bit == 1:
                 meas_done = True
 
+    @io(input=True)
     def get_trace(self, measurement=None):
         """ Return a tupple of the trace frequencies and corrected complex points """
         #If the measurement is not passed in just take the first one
@@ -865,11 +878,13 @@ class AgilentE9010A(SCPIInstrument):
     def get_axis(self):
         return np.linspace(self.frequency_start, self.frequency_stop, self.num_sweep_points)
 
+    @io(input=True)
     def get_trace(self, num=1):
         self.interface.write(':FORM:DATA REAL,32')
         return self.interface.query_binary_values(":TRACE:DATA? TRACE{:d}".format(num),
             datatype="f", is_big_endian=True)
 
+    @io(input=True)
     def get_pn_trace(self, num=3):
         # num = 3 is raw data
         # num = 4 is smoothed data
@@ -879,6 +894,7 @@ class AgilentE9010A(SCPIInstrument):
         xypts = np.array([float(x) for x in response.split(',')])
         return xypts[::2], xypts[1::2]
 
+    @io
     def restart_sweep(self):
         """ Aborts current sweep and restarts. """
         self.interface.write(":INITiate:RESTart")

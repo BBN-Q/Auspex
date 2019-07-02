@@ -7,7 +7,7 @@
 
 from math import log2
 from auspex.log import logger
-from .instrument import Instrument
+from .instrument import io, Instrument
 import http.client
 
 class HTTPInstrument(Instrument):
