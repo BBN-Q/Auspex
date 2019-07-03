@@ -3,6 +3,7 @@ import datetime
 import os, re
 from os import path
 import numpy as np
+from itertools import product
 
 def get_file_name():
     """Helper function to get a filepath from a dialog box"""
