@@ -114,7 +114,9 @@ def add_command_bitfield(instr, name, cmd):
 
     setattr(instr, name, property(fget, None if new_cmd.readonly else fset, None, new_cmd.doc))
     setattr(instr, "set_"+name, fset)
+    setattr(getattr(instr, "set_"+name), "__doc__", new_cmd.doc)
     setattr(instr, "get_"+name, fget)
+    setattr(getattr(instr, "set_"+name), "__doc__", new_cmd.doc)
 
     return new_cmd
 
