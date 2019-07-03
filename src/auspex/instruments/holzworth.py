@@ -123,7 +123,7 @@ else:
             holzworth_driver = HolzworthPythonDriver()
             logger.debug("Using Holzworth pure-python driver.")
         except Exception as e:
-            logger.debug("Could not connect to Holzworths: {}".format(e))
+            logger.warning("Could not connect to Holzworths: {}".format(e))
             if str(e) == "No backend available":
                 logger.warning("You may not have the libusb backend: please install it!")
             holzworth_driver = MagicMock()
