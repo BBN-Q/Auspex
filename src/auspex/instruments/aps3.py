@@ -47,7 +47,7 @@ class BitFieldCommand(Command):
     def parse(self):
         super().parse()
 
-        for a in ('register', 'shift', 'mask'):
+        for a in ('register', 'shift', 'mask', 'readonly'):
             if a in self.kwargs:
                 setattr(self, a, self.kwargs.pop(a))
             else:
@@ -58,9 +58,12 @@ class BitFieldCommand(Command):
         if self.shift is None:
             raise ValueError("Must specify a bit shift for register command.")
 
+        if self.readonly is None:
+            self.readonly = False
+
         if self.mask is None:
             if self.value_map is not None:
-                max_bits = max((v.bit_length() for v in self.value_map.items()))
+                max_bits = max((v.bit_length() for v in self.value_map.values()))
                 self.mask = 2**max_bits - 1
             else:
                 self.mask = 0b1
@@ -73,7 +76,10 @@ class BitFieldCommand(Command):
 
     def convert_get(self, get_value_instrument):
         if self.python_to_instr is None:
-            return bool(set_value_python)
+            if self.mask == 0b1:
+                return bool(get_value_instrument)
+            else:
+                return get_value_instrument
         else:
             return self.instr_to_python[get_value_instrument]
 
@@ -101,18 +107,20 @@ def add_command_bitfield(instr, name, cmd):
                 raise ValueError(err_msg)
 
         start_val = self.read_register(new_cmd.register)
-        new_val = set_bits(start_val, self.shift, new_cmd.convert_set(val), self.mask)
+        new_val = set_bits(start_val, new_cmd.shift, new_cmd.convert_set(val), new_cmd.mask)
         self.write_register(new_cmd.register, new_val)
         if new_cmd.set_delay is not None:
             sleep(new_cmd.set_delay)
 
-    setattr(instr, name, property(fget, fset, None, new_cmd.doc))
+    setattr(instr, name, property(fget, None if new_cmd.readonly else fset, None, new_cmd.doc))
+    setattr(instr, "set_"+name, fset)
+    setattr(instr, "get_"+name, fget)
 
     return new_cmd
 
 class MakeBitFieldParams(MakeSettersGetters):
     def __init__(self, name, bases, dct):
-        super().__init__(self, name, bases, dct)
+        super().__init__(name, bases, dct)
 
         if 'write_register' not in dct or 'read_register' not in dct:
             raise TypeError("An instrument using BitFieldParams must implement" +
@@ -121,7 +129,7 @@ class MakeBitFieldParams(MakeSettersGetters):
         for k, v in dct.items():
             if isinstance(v, BitFieldCommand):
                 logger.debug("Adding %s command", k)
-                nv = add_command_SCPI(self, k, v)
+                nv = add_command_bitfield(self, k, v)
 
 class AMC599(object):
     """Base class for simple register manipulations of AMC599 board.
@@ -179,9 +187,6 @@ class AMC599(object):
             raise ValueError("Data must be an integer or a list of integers.")
 
         if self.debug:
-            print("Wrote starting at memory address 0x%x:" % addr)
-            for d in data:
-                print(hex(d))
             for off, d in enumerate(data):
                 self.debug_memory[addr + off*0x4] = d
             return
@@ -290,16 +295,14 @@ DRAM_AXI_BASE = 0x80000000
 
 #####################################################################
 
-
-
-class APS3(Instrument):
+class APS3(Instrument, metaclass=MakeBitFieldParams):
 
     instrument_type = "AWG"
 
-    def __init__(self, resource_name=None, name="Unlabled APS3"):
+    def __init__(self, resource_name=None, name="Unlabled APS3", debug=False):
         self.name = name
         self.resource_name = resource_name
-        self.board = AMC599()
+        self.board = AMC599(debug=debug)
         super().__init__()
 
     def connect(self, resource_name=None):
@@ -329,130 +332,54 @@ class APS3(Instrument):
 
     ####### CACHE CONTROL REGSITER #############################################
 
-    @property
-    def cache_controller(self):
-        """Get value of cache controller
-            False: Cache controller in reset.
-            True: Cache controller taken out of reset.
-        """
-        return bool(self.read_csr(CSR_CACHE_CONTROL) & 0x1)
-    @cache_controller.setter
-    def cache_controller(self, value):
-        self.write_csr(CSR_CACHE_CONTROL, int(value))
+    cache_controller = BitFieldCommand(register=CSR_CACHE_CONTROL, shift=0,
+        doc="""Cache controller enable bit.""")
 
-    ####### WAVEFORM OFFSET REGISTER ###########################################
+    ####### WAVEFORM OFFSET REGISTERS ##########################################
 
-    @property
-    def waveform_offsets(self):
-        """Get waveform A and B offset register values. These are used as
-        the DMA source address.
-        """
-        return [self.read_csr(CSR_WFA_OFFSET),
-                self.read_csr(CSR_WFB_OFFSET)]
-    @property
-    def waveform_offsets(self, offsets):
-        """Set waveform A and B offsets, passed as list [A offset, B offset].
-        Set one offset to None to not change its value.
-        """
-        if offsets[0] is not None:
-            self.write_csr(CSR_WFA_OFFSET, offsets[0])
-        if offsets[1] is not None:
-            self.write_csr(CSR_WFB_OFFSET, offsets[1])
+    wf_offset_A = BitFieldCommand(register=CSR_WFA_OFFSET, shift=0, mask=U32)
+    wf_offset_B = BitFieldCommand(register=CSR_WFB_OFFSET, shift=0, mask=U32)
 
     ####### SEQUENCER CONTROL REGISTER #########################################
 
-    @property
-    def sequencer_reset(self):
-        """Sequencer reset:
-            False: Sequencer, trigger input, modulator, SATA, VRAMs, Debug Streams
-                disabled.
-            True: Sequencer logic taken out of reset.
-        """
-        reg = self.read_csr(CSR_SEQ_CONTROL)
-        return bool(check_bits(csr, 0))
-    @sequencer_reset.setter
-    def sequencer_reset(self, reset):
-        reg = self.read_csr(CSR_SEQ_CONTROL)
-        self.write_csr(CSR_SEQ_CONTROL, set_bits(reg, 0, int(reset)))
+    sequencer_enable = BitFieldCommand(register=CSR_SEQ_CONTROL, shift=0,
+        doc="""Sequencer, trigger input, modulator, SATA, VRAM, debug stream enable bit.""")
 
-    @property
-    def trigger_source(self):
-        trig_val = check_bits(self.read_csr(CSR_SEQ_CONTROL), 1, 0b11)
-        trigger_map = {0b00: "EXTERNAL", 0b01: "INTERNAL",
-                        0b10: "SOFTWARE", 0b11: "MESSAGE"}
-        return trigger_map[trig_val]
-    @trigger_source.setter
-    def trigger_source(self, value):
-        trig_map = {"EXTERNAL": 0b00, "INTERNAL": 0b01,
-                    "SOFTWARE": 0b10, "MESSAGE": 0b11}
-        if value.upper() not in trig_map.keys():
-            raise ValueError(f"Unknown trigger mode. Must be one of {trig_map.keys()}")
-        if value.upper == "MESSAGE":
-            raise NotImplementedError("APS3 does not yet support message triggers.")
-        reg = self.read_csr(CSR_SEQ_CONTROL)
-        self.write_csr(CSR_SEQ_CONTROL, set_bits(reg, 1, trig_map[value.upper()], 0b11))
+    trigger_source = BitFieldCommand(register=CSR_SEQ_CONTROL, shift=1,
+        value_map={"EXTERNAL": 0b00, "INTERNAL": 0b01, "SOFTWARE": 0b10, "MESSAGE": 0b11})
 
-    def soft_trigger(self):
-        reg = self.read_csr(CSR_SEQ_CONTROL)
-        self.write_csr(CSR_SEQ_CONTROL, set_bits(reg, 3, 0b1))
-
-    @property
-    def trigger_enable(self):
-        return bool(check_bits(self.read_csr(CSR_SEQ_CONTROL), 4))
-    @trigger_enable.setter
-    def trigger_enable(self, value):
-        reg = self.read_csr(CSR_SEQ_CONTROL)
-        self.write_csr(CSR_SEQ_CONTROL, set_bits(reg, 4, int(value)))
-
-    @property
-    def bypass_modulator(self):
-        return bool(check_bits(self.read_csr(CSR_SEQ_CONTROL), 5))
-    @bypass_modulator.setter
-    def bypass_modulator(self, value):
-        reg = self.read_csr(CSR_SEQ_CONTROL)
-        self.write_csr(CSR_SEQ_CONTROL, set_bits(reg, 5, int(value)))
-
-    @property
-    def bypass_nco(self):
-        return bool(check_bits(self.read_csr(CSR_SEQ_CONTROL), 6))
-    @bypass_nco.setter
-    def bypass_nco(self, value):
-        reg = self.read_csr(CSR_SEQ_CONTROL)
-        self.write_csr(CSR_SEQ_CONTROL, set_bits(reg, 6, int(value)))
+    soft_trigger = BitFieldCommand(register=CSR_SEQ_CONTROL, shift=3)
+    trigger_enable = BitFieldCommand(register=CSR_SEQ_CONTROL, shift=4)
+    bypass_modulator = BitFieldCommand(register=CSR_SEQ_CONTROL, shift=5)
+    bypass_nco = BitFieldCommand(register=CSR_SEQ_CONTROL, shift=6)
 
     ####### CORRECTION CONTROL REGISTER ########################################
     @property
     def correction_control(self):
-        reg = self.read_csr(CSR_CORR_OFFSET)
+        reg = self.read_register(CSR_CORR_OFFSET)
         return ((reg >> 16) & U16, reg & U16) #returns (I, Q)
     @correction_control.setter
     def correction_control(self, value):
         packed_value = ((value[0] & U16) << 16) | (value[1] & U16)
-        self.write_csr(CSR_CORR_OFFSET, packed_value)
+        self.write_register(CSR_CORR_OFFSET, packed_value)
 
     ####### TRIGGER INTERVAL ###################################################
-    @property
-    def trigger_interval(self):
-        return self.read_csr(CSR_TRIG_INTERVAL)
-    @trigger_interval.setter
-    def trigger_interval(self, value):
-        return self.write_csr(CSR_TRIG_INTERVAL, value & U32)
+
+    trigger_interval = BitFieldCommand(register=CSR_TRIG_INTERVAL, shift=0, mask=U32)
 
     ####### UPTIME REGISTERS ###################################################
-    @property
-    def uptime_seconds(self):
-        return self.read_csr(CSR_UPTIME_SEC)
 
-    @property
-    def uptime_nanoseconds(self):
-        return self.read_csr(CSR_UPTIME_NS)
+    uptime_seconds = BitFieldCommand(register=CSR_UPTIME_SEC, shift=0,
+                                        mask=U32, readonly=True)
+    uptime_nanoseconds = BitFieldCommand(register=CSR_UPTIME_NS, shift=0,
+                                        mask=U32, readonly=True)
 
     ####### BUILD INFO REGISTERS ###############################################
     def get_firmware_info(self):
-        fpga_rev = self.read_csr(CSR_FPGA_REV)
-        fpga_id = self.read_csr(CSR_FPGA_ID)
-        git_sha1 = self.read_csr(CSR_GIT_SHA1)
-        build_tstamp = self.read_csr(CSR_BUILD_TSTAMP)
+        fpga_rev = self.read_register(CSR_FPGA_REV)
+        fpga_id = self.read_register(CSR_FPGA_ID)
+        git_sha1 = self.read_register(CSR_GIT_SHA1)
+        build_tstamp = self.read_register(CSR_BUILD_TSTAMP)
 
         fpga_build_minor = check_bits(fpga_rev, 0, 0xFF)
         fpga_build_major = check_bits(fpga_rev, 8, 0xFF)
@@ -466,9 +393,8 @@ class APS3(Instrument):
 
     ####### CORRECTION MATRIX ##################################################
     def get_correction_matrix(self):
-        row0 = self.read_csr(CSR_CMAT_R0)
-        row1 = self.read_csr(CSR_CMAT_R1)
-
+        row0 = self.read_register(CSR_CMAT_R0)
+        row1 = self.read_register(CSR_CMAT_R1)
         r00 = (row0 >> 16) & U16
         r01 = row0 & U16
         r10 = (row1 >> 16) & U16
@@ -478,56 +404,37 @@ class APS3(Instrument):
     def set_correction_matrix(self, matrix):
         row0 = ((matix[0, 0] & U16) << 16) | (matrix[0, 1] & U16)
         row1 = ((matix[1, 0] & U16) << 16) | (matrix[1, 1] & U16)
-        self.write_csr(CSR_CMAT_R0, row0)
-        self.write_csr(CSR_CMAT_R1, row1)
+        self.write_register(CSR_CMAT_R0, row0)
+        self.write_register(CSR_CMAT_R1, row1)
 
     def correction_bypass(self):
         row0 = 0x20000000
         row1 = 0x00002000
-        self.write_csr(CSR_CMAT_R0, row0)
-        self.write_csr(CSR_CMAT_R0, row1)
-        self.write_csr(CSR_CORR_OFFSET, 0x0)
+        self.write_register(CSR_CMAT_R0, row0)
+        self.write_register(CSR_CMAT_R0, row1)
+        self.write_register(CSR_CORR_OFFSET, 0x0)
 
 
     ####### BOARD_CONTROL ######################################################
-    @property
-    def microblaze(self):
-        return bool(check_bits(self.read_csr(CSR_BD_CONTROL), 1))
-    @microblaze.setter
-    def microblaze(self, value):
-        reg = self.read_csr(CSR_BD_CONTROL)
-        self.write_csr(CSR_BD_CONTROL, set_bits(reg, 1, int(value)))
 
-    @property
-    def dac_output_mux(self):
-        return bool(check_bits(self.read_csr(CSR_BD_CONTROL), 4))
-    @dac_output_mux.setter
-    def dac_output_mux(self, value):
-        reg = self.read_csr(CSR_BD_CONTROL)
-        self.write_csr(CSR_BD_CONTROL, set_bits(reg, 4, int(value)))
+    microblaze_enable = BitFieldCommand(register=CSR_BD_CONTROL, shift=1)
+    dac_output_mux = BitFieldCommand(register=CSR_BD_CONTROL, shift=4,
+                                    value_map={"SOF200": 0x0, "APS": 0x1})
 
     ####### MARKER_DELAY #######################################################
-    @property
-    def marker_delay(self):
-        return self.read_csr(CSR_MARKER_DELAY)
-    @marker_delay.setter
-    def marker_delay(self, value):
-        if value > U16:
-            logger.warning(f"Marker delay {value} is greater than maximum allowed value of {U16} {hex(U16)}!")
-        self.write_csr(CSR_MARKER_DELAY, value & U16)
+
+    marker_delay = BitFieldCommand(register=CSR_MARKER_DELAY, shift=0,
+                                    mask=U16, allowed_values=[0,U16])
 
     ###### DRAM OFFSET REGISTERS ###############################################
-    @property
     def SEQ_OFFSET(self):
-        return (self.read_csr(CSR_SEQ_OFFSET) - DRAM_AXI_BASE)
+        return (self.read_register(CSR_SEQ_OFFSET) - DRAM_AXI_BASE)
 
-    @property
     def WFA_OFFSET(self):
-        return (self.read_csr(CSR_WFA_OFFSET) - DRAM_AXI_BASE)
+        return (self.read_register(CSR_WFA_OFFSET) - DRAM_AXI_BASE)
 
-    @property
     def WFB_OFFSET(self):
-        return (self.read_csr(CSR_WFB_OFFSET) - DRAM_AXI_BASE)
+        return (self.read_register(CSR_WFB_OFFSET) - DRAM_AXI_BASE)
 
     ###### UTILITIES ###########################################################
     def run(self):
@@ -535,7 +442,7 @@ class APS3(Instrument):
         self.cache_controller = True
         sleep(0.01)
         logger.info("Taking sequencer out of reset...")
-        self.sequencer_reset = True
+        self.sequencer_enable = True
         sleep(0.01)
         logger.info("Enabling trigger...")
         self.trigger_enable = True
@@ -546,7 +453,7 @@ class APS3(Instrument):
         self.cache_controller = False
         sleep(0.01)
         logger.info("Resetting sequencer...")
-        self.sequencer_reset = False
+        self.sequencer_enable = False
 
     def write_sequence(self, sequence):
         packed_seq = []

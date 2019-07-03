@@ -36,7 +36,7 @@ class Command(object):
     def parse(self):
         for a in ['aliases', 'set_delay', 'get_delay',
                   'value_map', 'value_range',
-                  'allowed_values']:
+                  'allowed_values', 'doc']:
             if a in self.kwargs:
                 setattr(self, a, self.kwargs.pop(a))
             else:
