@@ -167,6 +167,11 @@ class MakeSettersGetters(MetaInstrument):
                 logger.debug("Adding '%s' command to APS", k)
                 setattr(self, 'set_'+k, v.fset)
                 setattr(self, 'get_'+k, v.fget)
+                try:
+                    setattr(getattr(self, 'set_'+k), "__doc__", v.__doc__)
+                    setattr(getattr(self, 'get_'+k), "__doc__", v.__doc__)
+                except:
+                    pass
 
 class APS(Instrument, metaclass=MakeSettersGetters):
     """BBN APSI or DACII"""
