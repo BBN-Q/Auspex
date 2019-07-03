@@ -120,6 +120,7 @@ class AuspexInstrumentHub():
 
 class SimpleInstrument():
     def connect(self, server_address, instrument_address, port=7777):
+        """Connect to the instrument server that is responsible for this instrument."""
         self.context = zmq.Context()
         self.socket = self.context.socket(zmq.REQ)
         self.socket.connect(f"tcp://{server_address}:{port}")
@@ -177,7 +178,8 @@ for name, inst in instrument_map.items():
                 'cmd_name': k,
                 'mode': [],
                 'args': (),
-                'kwargs': {} }
+                'kwargs': {},
+                'expose': True}
         if isinstance(v, Command):
             cmd['args'] = v.args
             if 'get_string' in v.kwargs:
@@ -196,10 +198,13 @@ for name, inst in instrument_map.items():
             cmd['args'] = ('value',)
             cmd['src'] = 'Property'
         elif hasattr(v, "_is_io_method"):
-            if hasattr(v, "_has_input_method"):
+            if v._has_get_method:
                 cmd['mode'].append('get')
-            if hasattr(v, "_has_output_method"):
+            if v._has_set_method:
                 cmd['mode'].append('set')
+            if not v._expose:
+                cmd['expose'] = v._expose
+                cmd['mode']= ['custom']
             cmd['src'] = 'Function'
 
             params = inspect.signature(v).parameters
@@ -212,6 +217,7 @@ for name, inst in instrument_map.items():
         kwargs = cmd.pop('kwargs')
         args = cmd.pop('args')
         mode = cmd.pop('mode')
+        expose = cmd.pop('expose')
 
         arg_code     = ", ".join([f"{c}" for c in args])
         arg_code_get = ", ".join([f"{c}" for c in args if c != 'value'])
@@ -233,7 +239,7 @@ for name, inst in instrument_map.items():
             if k[:4] == 'set_':
                 clsdict[k] = fset
             clsdict['set_'+k] = fset
-            
+
         if 'get' in mode:
             cmd['mode'] = 'get'
             get_args = [a for a in args if a != 'value']
@@ -246,9 +252,19 @@ for name, inst in instrument_map.items():
                 clsdict[k] = fget
             clsdict['get_'+k] = fget
 
-        prop = property(fget if 'get' in mode else None, fset if 'set' in mode else None, None, f"Property for setting/getting {name} {k}")
-        clsdict[k] = prop
-        properties.append({'name':k, 'value': prop})
+        if "custom" in mode:
+            cmd['mode'] = 'custom'
+            arg_vals     = "{" + ", ".join([f"'{n}': {n}" for n in list(args)+list(kwargs.keys())])  + "}"
+            exec(f"""def func(self{arg_code}{kwarg_code}):
+                        cmd = {cmd}
+                        cmd['arg_vals'] = {arg_vals}
+                        return self.send(cmd)""")
+            clsdict[k] = func
+
+        if expose:
+            prop = property(fget if 'get' in mode else None, fset if 'set' in mode else None, None, f"Property for setting/getting {name} {k}")
+            clsdict[k] = prop
+            properties.append({'name':k, 'value': prop})
     
     clsdict['_properties'] = properties
     clsdict['__doc__'] = f"Auspex stub class for {name} dervied by parsing instrument class."

@@ -98,18 +98,46 @@ class AlazarATS9870(Instrument):
         if resource_name:
             self.resource_name = resource_name
 
-        self._lib.connect("{}/{}".format(self.name, int(self.resource_name)))
+        print("az/{}".format(int(self.resource_name[-1])+1))
+        self._lib.connect("az/{}".format(int(self.resource_name[-1])+1))
         for channel in self.channels:
             self.get_socket(channel)
 
+    @io(expose=False)
+    def set_mode(self, acquireMode):
+        self._lib.set_mode(acquireMode)
+    
+    @io(expose=False)
+    def set_sample_rate(self, samplingRate):
+        self._lib.set_sample_rate(samplingRate)
+    
+    @io(expose=False)
+    def configure_vertical(self, verticalScale, verticalOffset, verticalCoupling):
+        self._lib.configure_vertical(verticalScale, verticalOffset, verticalCoupling)
+
+    @io(expose=False)
+    def set_bandwidth(self, bandwidth):
+        self._lib.set_bandwidth(bandwidth)
+    
+    @io(expose=False)
+    def configure_trigger(self, triggerLevel, triggerSource, triggerSlope, triggerCoupling, delay):
+        self._lib.configure_trigger(triggerLevel, triggerSource, triggerSlope, triggerCoupling, delay)
+    
+    @io(expose=False)
+    def configure_acquisition(self, recordLength, nbrSegments, nbrWaveforms, nbrRoundRobins):
+        self._lib.configure_acquisition(recordLength, nbrSegments, nbrWaveforms, nbrRoundRobins)
+
+    @io(expose=False)
     def acquire(self):
         self.fetch_count.value = 0
         self.total_received.value = 0
         self._lib.acquire()
 
+    @io(expose=False)
     def stop(self):
         self._lib.stop()
 
+    @io(expose=False)
     def data_available(self):
         return self._lib.data_available()
 
@@ -140,6 +168,7 @@ class AlazarATS9870(Instrument):
             self.channels.append(channel)
             self._chan_to_buf[channel] = channel.phys_channel
 
+    @io(expose=False)
     def spew_fake_data(self, counter, ideal_datapoint=0, random_mag=0.1, random_seed=12345):
         """
         Generate fake data on the stream. For unittest usage.
@@ -254,38 +283,27 @@ class AlazarATS9870(Instrument):
 
         logger.debug("Digitizer %s finished getting data.", self.name)
 
-    def configure_with_dict(self, settings_dict):
-        config_dict = {
-            'acquireMode': 'digitizer',
-            'bandwidth': "Full" ,
-            'clockType': "ref",
-            'delay': 0.0,
-            'enabled': True,
-            'label': 'Alazar',
-            'recordLength': settings_dict['record_length'],
-            'nbrSegments': self.proxy_obj.number_segments,
-            'nbrWaveforms': self.proxy_obj.number_waveforms,
-            'nbrRoundRobins': self.proxy_obj.number_averages,
-            'samplingRate': self.proxy_obj.sampling_rate,
-            'triggerCoupling': "DC",
-            'triggerLevel': 100,
-            'triggerSlope': "rising",
-            'triggerSource': "Ext",
-            'verticalCoupling': "AC",
-            'verticalOffset': 0.0,
-            'verticalScale': self.proxy_obj.vertical_scale
-        }
+    @io(expose=False)
+    def get_number_acquisitions(self):
+        return self._lib.numberAcquisitions
 
-        self._lib.setAll(config_dict)
+    @io(expose=False)
+    def get_samples_per_acquisition(self):
+        return self._lib.samplesPerAcquisition
+
+    def configure_with_dict(self, settings_dict):
+
+        self.set_mode("digitizer")
+        self.set_sample_rate(self.proxy_obj.sampling_rate)
+        self.configure_vertical(self.proxy_obj.vertical_scale, 0.0, "AC")
+        self.set_bandwidth("Full")
+        self.configure_trigger(100, "Ext", "rising", "DC", 0.0)
+        self.configure_acquisition(settings_dict['record_length'], self.proxy_obj.number_segments,
+                                   self.proxy_obj.number_waveforms, self.proxy_obj.number_averages)
+
         self.record_length           = settings_dict['record_length']
-        self.number_acquisitions     = self._lib.numberAcquisitions
-        self.samples_per_acquisition = self._lib.samplesPerAcquisition
-        self.number_segments         = self.proxy_obj.number_segments
-        self.number_waveforms        = self.proxy_obj.number_waveforms
-        self.number_averages         = self.proxy_obj.number_averages
-        self.ch1_buffer              = self._lib.ch1Buffer
-        self.ch2_buffer              = self._lib.ch2Buffer
-        self.record_length           = settings_dict['record_length']
+        self.number_acquisitions     = self.get_number_acquisitions()
+        self.samples_per_acquisition = self.get_samples_per_acquisition()
         self.number_segments         = self.proxy_obj.number_segments
         self.number_waveforms        = self.proxy_obj.number_waveforms
         self.number_averages         = self.proxy_obj.number_averages

@@ -25,18 +25,17 @@ def is_valid_ipv4(ipv4_address):
     except:
         raise
 
-def io(method=None, input=False, output=True):
+def io(method=None, getter=False, setter=True, expose=True):
     if method is None:
-        return partial(io, input=input, output=output)
+        return partial(io, getter=getter, setter=setter, expose=expose)
     @wraps(method)
     def wrapper(self, *args, **kwargs):
         self._io_methods.append(method)
         return method(self, *args, **kwargs)
-    wrapper._is_io_method = True
-    if input:
-        wrapper._has_input_method = True
-    if output:
-        wrapper._has_output_method = True
+    wrapper._is_io_method   = True
+    wrapper._has_get_method = getter
+    wrapper._has_set_method = setter
+    wrapper._expose         = expose # Shows up in web interface...
     return wrapper
 
 class Command(object):

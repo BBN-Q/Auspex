@@ -816,7 +816,7 @@ class AgilentE8363C(SCPIInstrument):
             if opc_bit == 1:
                 meas_done = True
 
-    @io(input=True)
+    @io(getter=True)
     def get_trace(self, measurement=None):
         """ Return a tupple of the trace frequencies and corrected complex points """
         #If the measurement is not passed in just take the first one
@@ -878,13 +878,13 @@ class AgilentE9010A(SCPIInstrument):
     def get_axis(self):
         return np.linspace(self.frequency_start, self.frequency_stop, self.num_sweep_points)
 
-    @io(input=True)
+    @io(getter=True)
     def get_trace(self, num=1):
         self.interface.write(':FORM:DATA REAL,32')
         return self.interface.query_binary_values(":TRACE:DATA? TRACE{:d}".format(num),
             datatype="f", is_big_endian=True)
 
-    @io(input=True)
+    @io(getter=True)
     def get_pn_trace(self, num=3):
         # num = 3 is raw data
         # num = 4 is smoothed data
