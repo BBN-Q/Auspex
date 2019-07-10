@@ -684,7 +684,8 @@ class RamseyCalibration(QubitCalibration):
             self.fit_freq = round(self.orig_freq + self.added_detuning + 0.5*(fit_freq_A + 0.5*fit_freq_A + fit_freq_B), 10)
         else:
             self.fit_freq = round(self.orig_freq + self.added_detuning - 0.5*(fit_freq_A - 0.5*fit_freq_A + fit_freq_B), 10)
-        logger.info(f"Found qubit Frequency {self.fit_freq}")
+        logger.info(f"Found qubit Frequency {self.fit_freq}") #TODO: print actual qubit frequency, instead of the fit
+        self.succeeded = True #TODO: add bounds
 
     def update_settings(self):
         if self.set_source:
