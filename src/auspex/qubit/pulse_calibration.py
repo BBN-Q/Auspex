@@ -63,21 +63,21 @@ class Calibration(object):
             p.uuid = self.uuid
         try:
             time.sleep(1.0)
-            self.context = zmq.Context()
-            self.socket = self.context.socket(zmq.DEALER)
-            self.socket.setsockopt(zmq.LINGER, 0)
-            self.socket.identity = "Auspex_Experiment".encode()
-            self.socket.connect("tcp://localhost:7761")
-            self.socket.send_multipart([self.uuid.encode(), json.dumps(plot_desc).encode('utf8')])
+            context = zmq.Context()
+            socket = context.socket(zmq.DEALER)
+            socket.setsockopt(zmq.LINGER, 0)
+            socket.identity = "Auspex_Experiment".encode()
+            socket.connect("tcp://localhost:7761")
+            socket.send_multipart([self.uuid.encode(), json.dumps(plot_desc).encode('utf8')])
 
-            self.poller = zmq.Poller()
-            self.poller.register(self.socket, zmq.POLLIN)
+            poller = zmq.Poller()
+            poller.register(socket, zmq.POLLIN)
 
             time.sleep(1)
-            evts = dict(self.poller.poll(5000))
-            if self.socket in evts:
+            evts = dict(poller.poll(5000))
+            if socket in evts:
                 try:
-                    if self.socket.recv_multipart()[0] == b'ACK':
+                    if socket.recv_multipart()[0] == b'ACK':
                         logger.info("Connection established to plot server.")
                         self.do_plotting = True
                     else:
