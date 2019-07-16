@@ -6,7 +6,7 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-#__all__ = ['AMC599', 'APS3']
+__all__ = ['APS3']
 
 from .instrument import Instrument, is_valid_ipv4, Command
 from .bbn import MakeSettersGetters
@@ -367,7 +367,15 @@ class APS3(Instrument, metaclass=MakeBitFieldParams):
 
     ####### TRIGGER INTERVAL ###################################################
 
-    trigger_interval = BitFieldCommand(register=CSR_TRIG_INTERVAL, shift=0, mask=U32)
+    @property
+    def trigger_interval(self):
+        """Gets/sets the trigger interval in seconds, based on a 300 MHz clock."""
+        return int(self.read_register(CSR_TRIG_INTERVAL)) / 300e6
+    @trigger_interval.setter
+    def trigger_interval(self, value):
+        trig_bits = int(value * 300e6)
+        assert (trig_bits >= 0 and trig_bits < U32), "Trigger interval out of range!"
+        self.write_register(CSR_TRIG_INTERVAL, trig_bits)
 
     ####### UPTIME REGISTERS ###################################################
 
@@ -419,14 +427,26 @@ class APS3(Instrument, metaclass=MakeBitFieldParams):
 
     ####### BOARD_CONTROL ######################################################
 
-    microblaze_enable = BitFieldCommand(register=CSR_BD_CONTROL, shift=1)
+    microblaze_reset = BitFieldCommand(register=CSR_BD_CONTROL, shift=1,
+        doc="True resets Microblaze softcore. False takes Microblaze out of reset.")
     dac_output_mux = BitFieldCommand(register=CSR_BD_CONTROL, shift=4,
-                                    value_map={"SOF200": 0x0, "APS": 0x1})
+                                    value_map={"SOF200": 0x0, "APS": 0x1},
+                                    doc="Select SOF200 test output or APS sequencer output from DAC.")
+    trigger_output_select = BitFieldCommand(register=CSR_BD_CONTROL, shift=5,
+                            doc="""True: select trigger to be output on front panel.
+                                    False: select marker to be output on front pane.""")
 
     ####### MARKER_DELAY #######################################################
 
-    marker_delay = BitFieldCommand(register=CSR_MARKER_DELAY, shift=0,
-                                    mask=U16, allowed_values=[0,U16])
+    @property
+    def marker_delay(self):
+        """Gets/sets the marker delay in seconds, based on a 300 MHz clock."""
+        return (1 + int(self.read_register(CSR_TRIG_INTERVAL))) / 300e6
+    @marker_delay.setter
+    def marker_delay(self, value):
+        trig_bits = int(value * 300e6) + 1
+        assert (trig_bits >= 0 and trig_bits < U16), "Marker delay out of range!"
+        self.write_register(CSR_TRIG_INTERVAL, trig_bits)
 
     ###### DRAM OFFSET REGISTERS ###############################################
     def SEQ_OFFSET(self):
@@ -437,6 +457,13 @@ class APS3(Instrument, metaclass=MakeBitFieldParams):
 
     def WFB_OFFSET(self):
         return (self.read_register(CSR_WFB_OFFSET) - DRAM_AXI_BASE)
+
+    ####### GPIO REGISTERS #####################################################
+
+    GPIO0_high = BitFieldCommand(register=CSR_BD_CONTROL, shift=16, mask=U16)
+    GPIO0_low  = BitFieldCommand(register=CSR_BD_CONTROL, shift=8, mask=0xFF)
+    GPIO1 = BitFieldCommand(register=CSR_DATA1_IO, shift=0, mask=U32)
+    GPIO2 = BitFieldCommand(register=CSR_DATA2_IO, shift=0, mask=U32)
 
     ###### UTILITIES ###########################################################
     def run(self):
@@ -457,7 +484,7 @@ class APS3(Instrument, metaclass=MakeBitFieldParams):
         logger.info("Resetting sequencer...")
         self.sequencer_enable = False
 
-    def write_sequence(self, sequence):
+    def load_sequence(self, sequence):
         packed_seq = []
         for instr in sequence:
             packed_seq.append(instr & U32)
@@ -465,7 +492,17 @@ class APS3(Instrument, metaclass=MakeBitFieldParams):
 
         self.cache_controller = False
         sleep(0.01)
-        self.write_dram(self.SEQ_OFFSET, packed_seq)
+        self.write_dram(self.SEQ_OFFSET(), packed_seq)
         logger.info(f"Wrote {len(packed_seq)} words to sequence memory.")
         sleep(0.01)
         self.cache_controller = True
+
+    def load_waveforms(self, wfA, wfB):
+        raise NotImplementedError("Billy implement me too!")
+
+    @property
+    def load_sequence_file(self, seq_file):
+        raise NotImplementedError("Billy please implement me!")
+    @load_sequence_file.setter
+    def load_sequence_file(self, seq_file):
+        raise NotImplementedError("Implement me!")
