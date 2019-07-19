@@ -187,7 +187,7 @@ class QubitCalibration(Calibration):
         exp       = CalibrationExperiment(self.qubits, self.output_nodes, self.stream_selectors, meta_file, **self.kwargs)
         if len(self.fake_data) > 0:
             for fd in self.fake_data:
-                exp.set_fake_data(*fd[0], **fd[1])
+                exp.set_fake_data(*fd[0], **fd[1], random_mag=0.0)
         self.exp_config(exp)
         exp.run_sweeps()
 
@@ -945,14 +945,14 @@ class CRCalibration(QubitCalibration):
         self.plot["Data 1"] = (xaxis,       data_t[len(data_t)//2:])
         self.plot["Fit 1"] =  (finer_xaxis, np.polyval(all_params_1, finer_xaxis) if self.cal_type == CR_cal_type.AMP else sinf(finer_xaxis, **all_params_1))
         
-        if True:
+        # Optimal parameter within range of original data! 
+        if self.opt_par > np.min(xaxis) and self.opt_par < np.max(xaxis):
             self.succeeded = True
-        # return (str.lower(self.cal_type.name), self.opt_par)
 
     def update_settings(self):
         print("updating settings...")
-        # self.saved_settings['edges'][self.edge_name]['pulse_params'][str.lower(self.cal_type.name)] = float(self.opt_par)
-        # super(CRCalibration, self).update_settings()
+        self.edge.pulse_params[str.lower(self.cal_type.name)] = float(self.opt_par)
+        super(CRCalibration, self).update_settings()
 
 class CRLenCalibration(CRCalibration):
     cal_type = CR_cal_type.LENGTH
@@ -977,15 +977,16 @@ class CRLenCalibration(CRCalibration):
 class CRPhaseCalibration(CRCalibration):
     cal_type = CR_cal_type.PHASE
 
-    def __init__(self, edge, phases=np.linspace(0,2*np.pi,21), amp=0.8, rise_fall=40e-9, **kwargs):
-        length = edge.pulse_params['length']
+    def __init__(self, edge, length=None, phases=np.linspace(0,2*np.pi,21), amp=0.8, rise_fall=40e-9, **kwargs):
+        if not length:
+            length = edge.pulse_params['length']
         super().__init__(edge, lengths=[length], phases=phases, amps=[amp], rise_fall=rise_fall, **kwargs)
 
     def sequence(self):
         qc, qt = self.qubits
-        seqs = [[Id(qc)] + echoCR(qc, qt, length=self.lengths, phase=ph, amp=self.amps, riseFall=self.rise_fall).seq + [X90(qt)*Id(qc), MEAS(qt)*MEAS(qc)]
-        for ph in self.phases]+ [[X(qc)] + echoCR(qc, qt, length=self.lengths, phase= ph, amp=self.amps, riseFall=self.rise_fall).seq + [X90(qt)*X(qc), MEAS(qt)*MEAS(qc)]
-        for ph in self.phases] + create_cal_seqs((qt,qc), 2, measChans=(qt,qc))
+        seqs = [[Id(qc)] + echoCR(qc, qt, length=self.lengths[0], phase=ph, amp=self.amps[0], riseFall=self.rise_fall).seq + [X90(qt)*Id(qc), MEAS(qt)*MEAS(qc)] for ph in self.phases]
+        seqs += [[X(qc)] + echoCR(qc, qt, length=self.lengths[0], phase=ph, amp=self.amps[0], riseFall=self.rise_fall).seq + [X90(qt)*X(qc), MEAS(qt)*MEAS(qc)] for ph in self.phases]
+        seqs += create_cal_seqs((qt,qc), 2, measChans=(qt,qc))
         return seqs
 
     def descriptor(self):
@@ -996,9 +997,8 @@ class CRPhaseCalibration(CRCalibration):
                 'points': list(self.phases)+list(self.phases),
                 'partition': 1
             },
-            cal_descriptor(tuple(self.qubit), 2)
+            cal_descriptor(tuple(self.qubits), 2)
         ]
-        
 
 class CRAmpCalibration(CRCalibration):
     cal_type = CR_cal_type.AMP
