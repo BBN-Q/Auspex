@@ -119,8 +119,9 @@ class QubitExperiment(Experiment):
         self.controlled_qubits = [c for c in self.chan_db.channels if c.label in meta_info["qubits"]]
         self.measurements      = [c for c in self.chan_db.channels if c.label in meta_info["measurements"]]
         self.measured_qubits   = [c for c in self.chan_db.channels if "M-"+c.label in meta_info["measurements"]]
-        self.phys_chans        = list(set([e.phys_chan for e in self.controlled_qubits + self.measurements]))
-        self.transmitters      = list(set([e.phys_chan.transmitter for e in self.controlled_qubits + self.measurements]))
+        self.edges             = [c for c in self.chan_db.channels if c.label in meta_info["edges"]]
+        self.phys_chans        = list(set([e.phys_chan for e in self.controlled_qubits + self.measurements + self.edges]))
+        self.transmitters      = list(set([e.phys_chan.transmitter for e in self.controlled_qubits + self.measurements + self.edges]))
         self.receiver_chans    = list(set([e.receiver_chan for e in self.measurements]))
         self.trig_chans        = list(set([e.trig_chan.phys_chan for e in self.measurements]))
         self.receivers         = list(set([e.receiver_chan.receiver for e in self.measurements]))

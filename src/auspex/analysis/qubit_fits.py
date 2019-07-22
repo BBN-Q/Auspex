@@ -398,7 +398,7 @@ def fit_drag(data, DRAG_vec, pulse_vec):
         popt_mat[:,ct] = popt
     return xopt_vec, perr_vec, popt_mat
 
-def sinf(x, f, A, phi, y0):
+def sinf(x, f=0, A=0, phi=0, y0=0):
     return A*np.sin(2*np.pi*f*x + phi) + y0
 
 def quadf(x, A, x0, b):
