@@ -38,7 +38,7 @@ class ResonatorCircleFit(AuspexFit):
 
     def _do_fit(self):
 
-        result = resonator_circle_fit(self.freqs, self.data, makePlots=self.make_plots, a=self.a, alpha=self.alpha, tau=self.tau, Qc=self.Qc)
+        result = resonator_circle_fit(self.data, self.freqs, make_plots=self.make_plots, a=self.a, alpha=self.alpha, tau=self.tau, Qc=self.Qc)
 
         popt = result[:-1]
         self.fit_params = {"tau": popt[0],
@@ -132,14 +132,14 @@ def _circle_residuals(tau, data, freqs):
     [r,xc,yc] = circle_fit(transformed_data, freqs)
     return numpy.sum(r**2 - ((numpy.real(transformed_data)-xc)**2 + (numpy.imag(transformed_data)-yc)**2))
 
-def resonator_circle_fit(data, freqs, makePlots=False, a=None, alpha=None, tau=None, Qc=None):
+def resonator_circle_fit(data, freqs, make_plots=False, a=None, alpha=None, tau=None, Qc=None):
     '''
     Fits a data trace to a resonance circle by finding the corresponding environmental parameters and
     resonator properties.
     Parameters:
     data (numpy array of complex): S21 data
     freqs (numpy array of reals): frequency of each data point index
-    makePlots (boolean, optional): if True, generates line plots of fits. intended for use in Jupyter notebooks; call the following two lines before executing this function with makePlots=True:
+    make_plots (boolean, optional): if True, generates line plots of fits. intended for use in Jupyter notebooks; call the following two lines before executing this function with make_plots=True:
         %matplotlib inline
         import matplotlib.pyplot as pyplot
     a (real, optional): provide manual value of the system amplitude rather than fitting from data
@@ -161,7 +161,7 @@ def resonator_circle_fit(data, freqs, makePlots=False, a=None, alpha=None, tau=N
     '''
     axes = None
 
-    if(makePlots):
+    if(make_plots):
         # Set up the plots
         fig, axes = pyplot.subplots(2,2)
         pyplot.autoscale(tight=True)
@@ -175,6 +175,7 @@ def resonator_circle_fit(data, freqs, makePlots=False, a=None, alpha=None, tau=N
         axes[0,0].set_ylabel('Im[S21]')
         axes[0,0].set_title('Raw S21 Data')
 
+    phases = numpy.unwrap(numpy.angle(data))
 
     if not tau:
         # First, do a least-squares optimization to determine the cable delay
@@ -183,12 +184,10 @@ def resonator_circle_fit(data, freqs, makePlots=False, a=None, alpha=None, tau=N
         # The phase of this is 2 pi f t
         # Hence, taking a linear regression against f and finding the slope can give you
         # an idea of t
-        phases = numpy.unwrap(numpy.angle(data))
         m,b,r,p,err = scipy.stats.linregress(freqs*1e-9,phases)
         bound = 2*numpy.absolute(m)/(2*numpy.pi)
         result = scipy.optimize.minimize_scalar(_circle_residuals, 0, method='Bounded', args=(data,freqs), bounds=(0, bound))
         tau = result.x
-    else tau
 
     '''
     taus = numpy.linspace(0, 1000, 1000)
@@ -198,9 +197,9 @@ def resonator_circle_fit(data, freqs, makePlots=False, a=None, alpha=None, tau=N
     ax.plot(taus,res)
     '''
 
-    #print("Bound: " + str(bound))
-    #print("Tau: " + str(tau))
-    #print("Cost: " + str(result.fun))
+    print("Bound: " + str(bound))
+    print("Tau: " + str(tau))
+    print("Cost: " + str(result.fun))
 
     # Take the data, revert the cable delay, and translate the circle to the origin
     delay_corrected_data = numpy.multiply(data, numpy.exp(2 * numpy.pi * 1j * freqs * 1e-9 * tau))
@@ -209,7 +208,7 @@ def resonator_circle_fit(data, freqs, makePlots=False, a=None, alpha=None, tau=N
     [r,xc,yc] = circle_fit(delay_corrected_data, freqs)
     translated_data = delay_corrected_data - xc - 1j*yc
 
-    if(makePlots):
+    if(make_plots):
         axes[0,1].scatter(delay_corrected_data.real, delay_corrected_data.imag, s=0.5)
         axes[0,1].set_xlabel('Re[S21]')
         axes[0,1].set_ylabel('Im[S21]')
@@ -243,7 +242,7 @@ def resonator_circle_fit(data, freqs, makePlots=False, a=None, alpha=None, tau=N
     Ql = phase_result[1]
     theta0 = phase_result[2]
 
-    if(makePlots):
+    if(make_plots):
         phase_fit = theta0 + 2*slope*numpy.arctan(2*Ql*(1-(freqs/fr)))
         axes[1,0].plot(freqs, phases)
         axes[1,0].plot(freqs, phase_fit)
@@ -257,7 +256,7 @@ def resonator_circle_fit(data, freqs, makePlots=False, a=None, alpha=None, tau=N
     Pr = (xc + 1j*yc) + r*numpy.exp(1j * theta0)
     Pprime = (xc + 1j*yc) + r*numpy.exp(1j * (theta0 + numpy.pi))
 
-    if(makePlots):
+    if(make_plots):
         axes[0,1].scatter(Pr.real, Pr.imag, c='g')
         axes[0,1].scatter(Pprime.real, Pprime.imag, c='m')
         axes[0,1].autoscale_view(tight=True)
@@ -270,7 +269,7 @@ def resonator_circle_fit(data, freqs, makePlots=False, a=None, alpha=None, tau=N
     transformed_data = delay_corrected_data * numpy.exp(-1j * alpha) / a
     [r_corrected, x_corrected, y_corrected] = circle_fit(transformed_data, freqs)
 
-    if(makePlots):
+    if(make_plots):
         transformed_Pr = Pr * numpy.exp(-1j * alpha) / a
         transformed_Pprime = Pprime * numpy.exp(-1j * alpha) / a
         axes[1,1].scatter(transformed_data.real, transformed_data.imag, s=0.5)
@@ -313,7 +312,7 @@ def resonator_circle_fit(data, freqs, makePlots=False, a=None, alpha=None, tau=N
 
     # 1/Qc = (2*r_corrected*numpy.exp(-1j * phi0))/Ql
     # Neglecting error in phi0:
-    sigma_ReOneOverQc = numpy.real(1/Qc)*numpy.sqrt((2*sigma_r/r_corrected)**2 + (sigma_Ql/Ql)**2) if not manual_qc else 0
+    sigma_ReOneOverQc = numpy.real(1/Qc)*numpy.sqrt((2*sigma_r/r_corrected)**2 + (sigma_Ql/Ql)**2)
     sigma_OneOverQl = sigma_Ql
     sigma_Qi = numpy.sqrt((sigma_ReOneOverQc*Qi**2)**2 + (sigma_OneOverQl*(Qi/Ql)**2)**2)
 
