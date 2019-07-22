@@ -1,38 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
-
-_bNO_METACLASS_INTROSPECTION_CONSTRAINTS = True  # Use original dummy flag logic
-#_bNO_METACLASS_INTROSPECTION_CONSTRAINTS = False # Enable instrument and filter introspection constraints
-
-# Hmmm, and actually this module is NOT a unit test
-
-if _bNO_METACLASS_INTROSPECTION_CONSTRAINTS:
-    #
-    # The original unittest quieting logic
-    pass
-    #
-else:
-    # ----- fix/unitTests_1 (ST-15) delta Start...
-    # Added the followiing 05 Nov 2018 to test Instrument and filter metaclass load
-    # introspection minimization (during import)
-    #
-    from auspex import config
-
-    # Filter out Holzworth warning noise noise by citing the specific instrument[s]
-    # used for this test.
-    config.tgtInstrumentClass       = "" # No Instruments
-
-    # Filter out Channerlizer noise by citing the specific filters used for this
-    # test.
-    # ...Actually Print, Channelizer, and KernelIntegrator are NOT used in this test;
-    # hence commented them out, below, as well.
-    config.tgtFilterClass           = "SingleShotMeasurement"
-
-    # Uncomment to the following to show the Instrument MetaClass __init__ arguments
-    # config.bEchoInstrumentMetaInit  = True
-    #
-    # ----- fix/unitTests_1 (ST-15) delta Stop.
-
+import auspex.config as config
+config.auspex_dummy_mode = True
 from auspex.filters import SingleShotMeasurement as SSM
 
 def generate_fake_data(alpha, phi, sigma, N = 5000, plot=False):

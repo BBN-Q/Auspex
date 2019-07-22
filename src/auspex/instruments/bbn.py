@@ -6,7 +6,7 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-__all__ = ['APS', 'APS2', 'DigitalAttenuator', 'SpectrumAnalyzer']
+__all__ = ['APS', 'APS2', 'TDM', 'DigitalAttenuator', 'SpectrumAnalyzer']
 
 from .instrument import Instrument, SCPIInstrument, VisaInterface, MetaInstrument
 from auspex.log import logger
@@ -17,82 +17,37 @@ from time import sleep
 from visa import VisaIOError
 import numpy as np
 from copy import deepcopy
-
-# If we run this static will we have an issue across multiple APS dependent
-# unit test cases if __name__ == '__main__':
-#
-bSkipApsDriverLoad = \
-    config.disjointNameRefz( "APS",
-                             acceptClassRefz=config.tgtInstrumentClass,
-                             bEchoDetails=config.bEchoInstrumentMetaInit,
-                             szLogLabel="APS driver load")
-
-if config.bUseMockOnLoadError:
-    _szLoadExLabel = "-- Continuing process nonetheless with selected MagicMock library..."
-else:
-    _szLoadExLabel = "XX MagicMock simulation NOT selected."
+import os.path
 
 # Dirty trick to avoid loading libraries when scraping
 # This code using quince.
 aps2_missing = False
-
-fake_aps2 = True  # for discovery unit test support IMI
-
 if config.auspex_dummy_mode:
     fake_aps2 = True
     aps2 = MagicMock()
 else:
-    # ----- fix/unitTests_1 / ST-15 delta start...
-    if bSkipApsDriverLoad:
-        logger.debug( "aps2 module load skipped << ST-15 Delta.")
-    else:
-        # ----- fix/unitTests_1 / ST-15 delta stop.
-        # Original block indented to suit bSkipHWDriverLoad use-case:
-        try:
-            import aps2
-            fake_aps2 = False
-        # except:
-        except Exception as e:
-            fake_aps2 = True
-            aps2_missing = True
-            aps2 = MagicMock()
-            #
-            if config.bUseMockOnLoadError:
-                aps2_missing = False # Override it
-            logger.warning( "aps2 Import failed" \
-                "\n\r   << EEE exception: %s" \
-                "\n\r      %s\n\r", e, _szLoadExLabel)
+    try:
+        import aps2
+        fake_aps2 = False
+    except:
+        fake_aps2 = True
+        aps2_missing = True
+        aps2 = MagicMock()
 
 aps1_missing = False
-
-fake_aps2 = True  # for discovery unit test support IMI
-
 if config.auspex_dummy_mode:
     fake_aps1 = True
     aps1 = MagicMock()
 else:
-    # ----- fix/unitTests_1 / ST-15 delta start...
-    if bSkipApsDriverLoad:
-        logger.debug( "aps[1] module load skipped << ST-15 Delta.")
-    else:
-        # ----- fix/unitTests_1 / ST-15 delta stop.
-        # Original block indented to suit bSkipHWDriverLoad use-case:
-        try:
-            import aps as libaps
-            if libaps.APS_PY_WRAPPER_VERSION < 1.4:
-                raise ImportError("Old version of libaps found. Please update.")
-            fake_aps1 = False
-        # except:
-        except Exception as e:
-            fake_aps1 = True
-            aps1_missing = True
-            libaps = MagicMock()
-            #
-            if config.bUseMockOnLoadError:
-                aps1_missing = False # Override it
-            logger.warning( "aps Import failed" \
-                "\n\r   << EEE exception: %s" \
-                "\n\r      %s\n\r", e, _szLoadExLabel)
+    try:
+        import aps as libaps
+        if libaps.APS_PY_WRAPPER_VERSION < 1.4:
+            raise ImportError("Old version of libaps found. Please update.")
+        fake_aps1 = False
+    except:
+        fake_aps1 = True
+        aps1_missing = True
+        libaps = MagicMock()
 
 class DigitalAttenuator(SCPIInstrument):
     """BBN 3 Channel Instrument"""
@@ -120,6 +75,11 @@ class DigitalAttenuator(SCPIInstrument):
             return val
         self.interface.query = MethodType(query, self.interface)
         sleep(2) #!!! Why is the digital attenuator so slow?
+
+    def configure_with_proxy(self, proxy):
+        for i, c in enumerate(proxy.channels):
+            self.set_attenuation(i+1, c.attenuation)
+        super(DigitalAttenuator, self).configure_with_proxy(proxy)
 
     @classmethod
     def channel_check(cls, chan):
@@ -212,51 +172,6 @@ class APS(Instrument, metaclass=MakeSettersGetters):
     """BBN APSI or DACII"""
 
     instrument_type = "AWG"
-    yaml_template = """
-    APS-Name:
-      type: APS               # Used by QGL and Auspex. QGL assumes XXXPattern for the pattern generator
-      enabled: true            # true or false, optional
-      master: true             # true or false
-      slave_trig:              # name of marker below, optional, i.e. 12m4. Used by QGL.
-      address:                 # APS serial number
-      trigger_interval: 0.0    # (s)
-      trigger_source: External # Internal or External
-      seq_file: test.h5        # optional sequence file
-      tx_channels:             # All transmit channels
-        '12':                  # Quadrature channel name (string)
-          phase_skew: 0.0      # (deg) - Used by QGL
-          amp_factor: 1.0      # Used by QGL
-          delay: 0.0           # (s) - Used by QGL
-          '1':
-            enabled: true
-            offset: 0.0
-            amplitude: 1.0
-          '2':
-            enabled: true
-            offset: 0.0
-            amplitude: 1.0
-         '34':                  # Quadrature channel name (string)
-           phase_skew: 0.0      # (deg) - Used by QGL
-           amp_factor: 1.0      # Used by QGL
-           delay: 0.0           # (s) - Used by QGL
-           '1':
-             enabled: true
-             offset: 0.0
-             amplitude: 1.0
-           '2':
-             enabled: true
-             offset: 0.0
-             amplitude: 1.0
-      markers:
-        1m1:
-          delay: 0.0         # (s)
-        2m1:
-          delay: 0.0
-        3m1:
-          delay: 0.0
-        4m1:
-          delay: 0.0
-                    """
 
     def __init__(self, resource_name=None, name="Unlabled APS"):
         self.name = name
@@ -287,13 +202,14 @@ class APS(Instrument, metaclass=MakeSettersGetters):
         self._repeat_mode_dict = {1: "CONTINUOUS", 0: "TRIGGERED"}
         self._repeat_mode_inv_dict = {v: k for k, v in self._repeat_mode_dict.items()}
 
-
     def _initialize(self):
         if self.connected:
-            self.wrapper.init(force=True)
+            self.wrapper.init(force=False)
             self.run_mode = self._run_mode
             self.repeat_mode = self._repeat_mode
             self.sampling_rate = self._sampling_rate
+            for i in range(1,5):
+                self.wrapper.set_enabled(i, True)
         else:
             raise IOError('Cannot initialize an unconnected APS!')
 
@@ -312,72 +228,59 @@ class APS(Instrument, metaclass=MakeSettersGetters):
             self.wrapper.disconnect()
             self.connected = False
 
-    def set_enabled(self, ch, value):
-        self.wrapper.set_enabled(ch, value)
-
     def set_amplitude(self, chs, value):
         if isinstance(chs, int) or len(chs)==1:
             self.wrapper.set_amplitude(int(chs), value)
         else:
             self.wrapper.set_amplitude(int(chs[0]), value)
-            self.wrapper.set_amplitude(int(chs[2]), value)
-            self.wrapper.set_amplitude(int(chs[3]), value)
             self.wrapper.set_amplitude(int(chs[1]), value)
 
     def set_offset(self, chs, value):
         if isinstance(chs, int) or len(chs)==1:
             self.wrapper.set_offset(int(chs), value)
         else:
-            self.wrapper.set.offset(int(chs[0]), value)
-            self.wrapper.set.offset(int(chs[1]), value)
-            self.wrapper.set.offset(int(chs[2]), value)
-            self.wrapper.set.offset(int(chs[3]), value)
+            self.wrapper.set_offset(int(chs[0]), value)
+            self.wrapper.set_offset(int(chs[1]), value)
 
-    def set_all(self, settings_dict, prefix=""):
-        # Pop the channel settings
-        settings = deepcopy(settings_dict)
-        quad_channels = settings.pop('tx_channels')
-        # Call the non-channel commands
-        super(APS, self).set_all(settings)
-
-        # Mandatory arguments
-        for key in ['address', 'seq_file', 'trigger_interval', 'trigger_source', 'master']:
-            if key not in settings.keys():
-                raise ValueError("Instrument {} configuration lacks mandatory key {}".format(self, key))
-
-        # Set the properties of individual hardware channels (offset, amplitude)
-        for chan_group in ('12', '34'):
-            quad_dict = quad_channels.pop(chan_group, None)
-            if not quad_dict:
-                raise ValueError("APS {} expected to receive quad channel '{}'".format(self, chan_group))
-            for chan_name in list(chan_group):
-                chan_dict = quad_dict.pop(chan_name, None)
-                if not chan_dict:
-                    raise ValueError("Could not find channel {} in quadrature channel '{}' in settings for {}".format(chan_name, chan_group, self))
-                for chan_attr, value in chan_dict.items():
-                    try:
-                        getattr(self, 'set_' + chan_attr)(int(chan_name), value)
-                    except AttributeError:
-                        pass
+    def configure_with_proxy(self, proxy_obj):
+        super(APS, self).configure_with_proxy(proxy_obj)
+        self.wrapper.set_offset(1, proxy_obj.ch("12").I_channel_offset)
+        self.wrapper.set_offset(2, proxy_obj.ch("12").Q_channel_offset)
+        self.wrapper.set_offset(3, proxy_obj.ch("34").I_channel_offset)
+        self.wrapper.set_offset(4, proxy_obj.ch("34").Q_channel_offset)
+        self.wrapper.set_amplitude(1, proxy_obj.ch("12").I_channel_amp_factor)
+        self.wrapper.set_amplitude(2, proxy_obj.ch("12").Q_channel_amp_factor)
+        self.wrapper.set_amplitude(3, proxy_obj.ch("34").I_channel_amp_factor)
+        self.wrapper.set_amplitude(4, proxy_obj.ch("34").Q_channel_amp_factor)
 
     def load_waveform(self, channel, data):
         if channel not in (1, 2, 3, 4):
             raise ValueError("Cannot load APS waveform {} on {} -- must be 1-4.".format(channel, self.name))
         try:
-            self.wrapper.load_waveform(channel, waveform)
+            self.wrapper.load_waveform(channel, data)
         except AttributeError as ex:
             raise ValueError("Channel waveform data must be a numpy array.") from ex
         except NameError as ex:
             raise NameError("Channel data in incompatible type.") from ex
 
-    def load_waveform_from_file(self, channel, data):
+    def load_waveform_from_file(self, channel, filename):
+        #NOT IN USE
         if channel not in (1, 2, 3, 4):
             raise ValueError("Cannot load APS waveform {} on {} -- must be 1-4.".format(channel, self.name))
         self.wrapper.load_waveform_from_file(channel-1, filename)
 
 
     def trigger(self):
+
         raise NotImplementedError("Software trigger not present on APSI/DACII")
+
+    # utility functions for mixer calibration.
+    def set_mixer_amplitude_imbalance(self, chs, amp):
+        self.wrapper.set_amplitude(int(chs[0]), amp)
+
+    def set_mixer_phase_skew(self, chs, phase, SSB = 0.0):
+        qwf = -1 * np.sin(2*np.pi*SSB*np.arange(1200,dtype=np.float64)*1e-6/self.sampling_rate + phase)
+        self.wrapper.load_waveform(int(chs[1]), qwf)
 
     @property
     def waveform_frequency(self):
@@ -429,10 +332,11 @@ class APS(Instrument, metaclass=MakeSettersGetters):
         self.wrapper.trigger_interval = value
 
     @property
-    def seq_file(self):
+    def sequence_file(self):
         return self._sequence_filename
-    @seq_file.setter
-    def seq_file(self, filename):
+    @sequence_file.setter
+    def sequence_file(self, filename):
+        assert os.path.exists(filename), f"Sequence file {filename} for APS {self} does not exist."
         self.wrapper.load_config(filename)
         self._sequence_filename = filename
 
@@ -447,40 +351,6 @@ class APS(Instrument, metaclass=MakeSettersGetters):
 class APS2(Instrument, metaclass=MakeSettersGetters):
     """BBN APS2"""
     instrument_type = "AWG"
-
-    yaml_template = """
-        APS2-Name:
-          type: APS2               # Used by QGL and Auspex. QGL assumes XXXPattern for the pattern generator
-          enabled: true            # true or false, optional
-          master: true             # true or false
-          slave_trig:              # name of marker below, optional, i.e. 12m4. Used by QGL.
-          address:                 # IP address or hostname should be fine
-          trigger_interval: 0.0    # (s)
-          trigger_source: External # Internal, External, Software, or System
-          seq_file: test.h5        # optional sequence file
-          tx_channels:             # All transmit channels
-            '12':                  # Quadrature channel name (string)
-              phase_skew: 0.0      # (deg) - directly set in the instrument
-              amp_factor: 1.0      # directly set in the instrument
-              delay: 0.0           # (s) - Used by QGL
-              '1':
-                enabled: true
-                offset: 0.0
-                amplitude: 1.0
-              '2':
-                enabled: true
-                offset: 0.0
-                amplitude: 1.0
-          markers:
-            12m1:
-              delay: 0.0         # (s)
-            12m2:
-              delay: 0.0
-            12m3:
-              delay: 0.0
-            12m4:
-              delay: 0.0
-    """
 
     def __init__(self, resource_name=None, name="Unlabeled APS2"):
         self.name = name
@@ -544,41 +414,12 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
             self.wrapper.set_channel_offset(int(chs[0])-1, value)
             self.wrapper.set_channel_offset(int(chs[1])-1, value)
 
-    def set_all(self, settings_dict, prefix=""):
-        # Pop the channel settings
-        settings = deepcopy(settings_dict)
-        quad_channels = settings.pop('tx_channels')
-        # Call the non-channel commands
-        super(APS2, self).set_all(settings)
-
-        # Mandatory arguments
-        for key in ['address', 'seq_file', 'trigger_interval', 'trigger_source', 'master']:
-            if key not in settings.keys():
-                raise ValueError("Instrument {} configuration lacks mandatory key {}".format(self, key))
-
-        # We expect a dictionary of channel names and their properties
-        main_quad_dict = quad_channels.pop('12', None)
-        if not main_quad_dict:
-            raise ValueError("APS2 {} expected to receive quad channel '12'".format(self))
-        # Set properties of the channel pair
-        if 'delay' in main_quad_dict:  # this is set in QGL
-            main_quad_dict.pop('delay')
-        for attr, value in main_quad_dict.items():
-            try:
-                getattr(self, 'set_' + attr)(value)
-            except AttributeError:
-                pass
-
-        # Set the properties of individual hardware channels (offset, amplitude)
-        for chan_num, chan_name in enumerate(['1', '2']):
-            chan_dict = main_quad_dict.pop(chan_name, None)
-            if not chan_dict:
-                raise ValueError("Could not find channel {} in quadrature channel 12 in settings for {}".format(chan_name, self))
-            for chan_attr, value in chan_dict.items():
-                try:
-                    getattr(self, 'set_' + chan_attr)(chan_num, value)
-                except AttributeError:
-                    pass
+    def configure_with_proxy(self, proxy_obj):
+        super(APS2, self).configure_with_proxy(proxy_obj)
+        self.set_offset(0, proxy_obj[1].I_channel_offset)
+        self.set_offset(1, proxy_obj[1].Q_channel_offset)
+        self.set_amplitude(0, proxy_obj[1].I_channel_amp_factor)
+        self.set_amplitude(1, proxy_obj[1].Q_channel_amp_factor)
 
     def load_waveform(self, channel, data):
         if channel not in (1, 2):
@@ -628,11 +469,12 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
             self._mode = mode
 
     @property
-    def seq_file(self):
+    def sequence_file(self):
         return self._sequence_filename
-    @seq_file.setter
-    def seq_file(self, filename):
-        self.wrapper.load_sequence_file(filename)
+    @sequence_file.setter
+    def sequence_file(self, filename):
+        if filename:
+            self.wrapper.load_sequence_file(filename)
         self._sequence_filename = filename
 
     @property
@@ -640,7 +482,7 @@ class APS2(Instrument, metaclass=MakeSettersGetters):
         return self.wrapper.get_trigger_source()
     @trigger_source.setter
     def trigger_source(self, source):
-        if source in ["Internal", "External", "Software", "System"]:
+        if source.lower() in ["internal", "external", "software", "system"]:
             self.wrapper.set_trigger_source(getattr(aps2,source.upper()))
         else:
             raise ValueError("Invalid trigger source specification.")
@@ -681,15 +523,9 @@ class TDM(APS2):
     """BBN TDM"""
     instrument_type = "AWG"
 
-    yaml_template = """
-        APS2-Name:
-          type: TDM                # Used by Auspex. TDMPattern for QGL not yet available
-          enabled: true            # true or false, optional
-          address:                 # IP address or hostname should be fine
-          trigger_interval: 0.0    # (s)
-          trigger_source: Internal # Internal, Software, or System
-          seq_file: test.h5        # optional sequence file"""
-
-    def set_all(self, settings_dict):
-        super(APS2, self).set_all(settings_dict)
-        self.master = False # only for APS2. To make the TDM the master, set trigger_source: Internal for TDM and System for all the APS2
+    def configure_with_proxy(self, proxy_obj):
+        super(APS2, self).configure_with_proxy(proxy_obj)
+    #
+    # def set_all(self, settings_dict):
+    #     super(APS2, self).set_all(settings_dict)
+    #     self.master = False # only for APS2. To make the TDM the master, set trigger_source: Internal for TDM and System for all the APS2
