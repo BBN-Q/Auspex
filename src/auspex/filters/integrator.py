@@ -6,7 +6,7 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-__all__ = ['KernelIntegrator', 'WindowIntegrator']
+__all__ = ['KernelIntegrator']
 
 import os
 import numpy as np
