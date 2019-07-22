@@ -7,42 +7,14 @@
 #    http://www.apache.org/licenses/LICENSE-2.0
 
 import unittest
-import asyncio
+
 import time
 import numpy as np
 
 from copy import copy, deepcopy
 
-_bNO_METACLASS_INTROSPECTION_CONSTRAINTS = True  # Use original dummy flag logic
-#_bNO_METACLASS_INTROSPECTION_CONSTRAINTS = False # Enable instrument and filter introspection constraints
-
-if _bNO_METACLASS_INTROSPECTION_CONSTRAINTS:
-    #
-    # The original unittest quieting logic
-    import auspex.config as config
-    config.auspex_dummy_mode = True
-    #
-else:
-    # ----- fix/unitTests_1 (ST-15) delta Start...
-    # Added the followiing 05 Nov 2018 to test Instrument and filter metaclass load
-    # introspection minimization (during import)
-    #
-    from auspex import config
-
-    # Filter out Holzworth warning noise noise by citing the specific instrument[s]
-    # used for this test.
-    config.tgtInstrumentClass       = "SCPIInstrument"
-
-    # Filter out Channerlizer noise by citing the specific filters used for this
-    # test.
-    # ...Actually Print, Channelizer, and KernelIntegrator are NOT used in this test;
-    # hence commented them out, below, as well.
-    config.tgtFilterClass           = {"Print", "Passthrough"}
-
-    # Uncomment to the following to show the Instrument MetaClass __init__ arguments
-    # config.bEchoInstrumentMetaInit  = True
-    #
-    # ----- fix/unitTests_1 (ST-15) delta Stop.
+import auspex.config as config
+config.auspex_dummy_mode = True
 
 from auspex.instruments.instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand
 from auspex.experiment import Experiment
@@ -95,15 +67,15 @@ class TestExperiment(Experiment):
         self.chan1.add_axis(DataAxis("samples", list(range(self.samples))))
         self.chan2.add_axis(DataAxis("trials", list(range(self.num_trials))))
 
-    async def run(self):
+    def run(self):
         logger.debug("Data taker running (inner loop)")
         time_step = 0.1
-        await asyncio.sleep(0.002)
+        time.sleep(0.002)
         data_row = np.sin(2*np.pi*self.time_val)*np.ones(self.samples) + 0.1*np.random.random(self.samples)
         self.time_val += time_step
-        await self.chan1.push(data_row)
+        self.chan1.push(data_row)
         data_row = np.sin(2*np.pi*self.time_val)*np.ones(self.num_trials) + 0.1*np.random.random(self.num_trials)
-        await self.chan2.push(data_row)
+        self.chan2.push(data_row)
         logger.debug("Stream pushed points {}.".format(data_row))
         logger.debug("Stream has filled {} of {} points".format(self.chan1.points_taken, self.chan1.num_points() ))
 

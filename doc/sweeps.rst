@@ -18,10 +18,7 @@ A few questions arise at this point:
 
 To tackle (1), there are some clear reasons to measure on a rectilinear grid. First of all, it is extremely convenient. Also, if you expect that regions of interest (ROI) are distributed evenly across your measurement domain then this seems like a reasonable choice. Finally there are simple aesthetic considerations: image plots look much better when they are fill a rectangular domain rather than leaving swaths of NaNs strewn the periphery of your image. 
 
-(2) is really an extension of (1): if you are looking at data that follows ``sin(x)*sin(y)`` then the information density is practically constant across the domain. If you are looking at a crooked phase transition in a binary system, then the vast majority of your points will be wasted on regions with very low information content. Take the following phase diagrams for an MRAM cell's switching probability.
-
-
-By abstracting sweeps away from the main measurement code, we wante
+Point (2) is really an extension of (1): if you are looking at data that follows ``sin(x)*sin(y)`` then the information density is practically constant across the domain. If you are looking at a crooked phase transition in a binary system, then the vast majority of your points will be wasted on regions with very low information content. Take the following phase diagrams for an MRAM cell's switching probability.
 
 Structured Sweeps
 *****************

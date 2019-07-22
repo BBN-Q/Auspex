@@ -15,7 +15,6 @@ from .binutils import BitField, BitFieldUnion
 import logging
 import warnings
 import numpy as np
-import h5py
 
 class SequenceControlWord(BitFieldUnion):
     reserved0             = BitField(12)

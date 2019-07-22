@@ -84,7 +84,9 @@ class SR830(SCPIInstrument):
     def get_buffer(self, channel):
         stored_points = self.buffer_points
         self.interface.write("TRCB?{:d},0,{:d}".format(channel, stored_points))
-        buf = self.interface.read_raw()
+        #buf = self.interface.read_raw(numbytes=4)
+        buf = self.interface.read_bytes(4*stored_points,chunk_size=4)
+        logger.info(f"Raw buffer is {buf} with length {len(buf)} bytes.")
         return np.frombuffer(buf, dtype=np.float32)
 
     def buffer_start(self):
@@ -109,8 +111,8 @@ class SR830(SCPIInstrument):
 
     def measure_delay(self):
         """Return how long we must wait for the values to have settled, based on the filter slope."""
-        fs = self.filter_slope
-        tc = self.time_constant
+        fs = float(self.filter_slope)
+        tc = float(self.time_constant)
         if fs <= 7: # 6dB/oct
             return 5*tc
         elif fs <= 13: # 12dB/oct
@@ -239,8 +241,8 @@ class SR865(SCPIInstrument):
 
     def measure_delay(self):
         """Return how long we must wait for the values to have settled, based on the filter slope."""
-        fs = self.filter_slope
-        tc = self.time_constant
+        fs = float(self.filter_slope)
+        tc = float(self.time_constant)
         if fs <= 7: # 6dB/oct
             return 5*tc
         elif fs <= 13: # 12dB/oct
