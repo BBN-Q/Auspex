@@ -50,6 +50,8 @@ class Calibration(object):
     def __init__(self):
         self.do_plotting = True
         self.uuid = str(uuid.uuid4())
+        self.context = None
+        self.socket = None
 
     def init_plots(self):
         """Return a ManualPlotter object so we can plot calibrations. All
@@ -64,21 +66,21 @@ class Calibration(object):
             p.uuid = self.uuid
         try:
             time.sleep(1.0)
-            context = zmq.Context()
-            socket = context.socket(zmq.DEALER)
-            socket.setsockopt(zmq.LINGER, 0)
-            socket.identity = "Auspex_Experiment".encode()
-            socket.connect("tcp://localhost:7761")
-            socket.send_multipart([self.uuid.encode(), json.dumps(plot_desc).encode('utf8')])
+            self.context = zmq.Context()
+            self.socket = self.context.socket(zmq.DEALER)
+            self.socket.setsockopt(zmq.LINGER, 0)
+            self.socket.identity = "Auspex_Experiment".encode()
+            self.socket.connect("tcp://localhost:7761")
+            self.socket.send_multipart([self.uuid.encode(), json.dumps(plot_desc).encode('utf8')])
 
             poller = zmq.Poller()
-            poller.register(socket, zmq.POLLIN)
+            poller.register(self.socket, zmq.POLLIN)
 
             time.sleep(1)
             evts = dict(poller.poll(5000))
-            if socket in evts:
+            if self.socket in evts:
                 try:
-                    if socket.recv_multipart()[0] == b'ACK':
+                    if self.socket.recv_multipart()[0] == b'ACK':
                         logger.info("Connection established to plot server.")
                         self.do_plotting = True
                     else:
@@ -91,13 +93,16 @@ class Calibration(object):
                 logger.info("Server did not respond.")
                 for p in self.plotters:
                     p.do_plotting = False
-                self.socket.close()
-                self.context.term()
 
         except Exception as e:
             logger.warning(f"Exception {e} occured while contacting the plot server. Is it running?")
             for p in self.plotters:
                 p.do_plotting = False
+        finally:
+            if self.socket:
+                self.socket.close()
+            if self.context:
+                self.context.term()
 
         for p in self.plotters:
             p.start()
