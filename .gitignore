@@ -3,6 +3,9 @@
 *.xml
 *.html
 *.h5
+*.dat
+*.auspex
+*_meta.json
 data/*
 doc/_build/*
 doc/make.bat

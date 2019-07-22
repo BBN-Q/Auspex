@@ -6,15 +6,73 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-__all__ = ['Agilent33220A', 'Agilent33500B', 'Agilent34970A', 'AgilentE8363C', 'AgilentN5183A', 'AgilentE9010A']
+__all__ = ['Agilent33220A', 'Agilent33500B', 'Agilent34970A', 'AgilentE8363C', 'AgilentN5183A', 'AgilentE9010A','HP33120A']
 
 import socket
 import time
 import copy
 import re
 import numpy as np
-from .instrument import SCPIInstrument, Command, StringCommand, FloatCommand, IntCommand, is_valid_ipv4
+from .instrument import SCPIInstrument, Command, StringCommand, BoolCommand, FloatCommand, IntCommand, is_valid_ipv4
 from auspex.log import logger
+import pyvisa.util as util
+
+class HP33120A(SCPIInstrument):
+    """HP33120A Arb Waveform Generator"""
+    def __init__(self, resource_name=None, *args, **kwargs):
+        super(HP33120A, self).__init__(resource_name, *args, **kwargs)
+        self.name = "HP33120A AWG"
+
+    def connect(self, resource_name=None, interface_type=None):
+        if resource_name is not None:
+            self.resource_name = resource_name
+        super(HP33120A, self).connect(resource_name=self.resource_name, interface_type=interface_type)
+        self.interface._resource.read_termination = u"\n"
+        self.interface._resource.write_termination = u"\n"
+
+    # Frequency & Shape
+    frequency = FloatCommand(scpi_string="FREQ") #can use scientific notation (1e4 = 10,000)
+    function = StringCommand(scpi_string="FUNCtion:SHAPe") #don't need a map here
+    duty_cycle= StringCommand(scpi_string="PULSe:DCYCle") #Give duty cycle in %, needs number as a string
+
+    # Arbitrary Waveform
+             # “SINC”,“NEG_RAMP”, “EXP_RISE”, “EXP_FALL”, “CARDIAC”, “VOLATILE”,
+            # or the name of any user-defined waveforms
+    def arb_function(self,name):
+        self.interface.write("FUNCtion:User " + name)
+        self.interface.write("FUNCtion:Shape User")
+
+    def upload_waveform(self,data,name="volatile"):
+        #Takes data as float between -1 and +1. The data will scale with amplitude when used
+        cmdString="Data:Dac Volatile,"
+        # import pdb; pdb.set_trace()
+        dataValues=np.round(np.array(data)*2047).astype(np.int32)
+        # dataValues=list(dataValues)
+        self.interface.write_binary_values(cmdString,dataValues,datatype='h',is_big_endian=True)
+
+        if name.lower() != 'volatile':
+            self.interface.write('DATA:COPY '+name)
+
+    def delete_waveform(self,name='all'):
+        #deletes arbitrary waveform with specified name. by default deletes all
+        #can't delete anything when outputting an arb function
+        if name == 'all':
+            name=':'+name
+        else:
+            name=' '+name
+
+        self.interface.write('data:del'+name)
+    # Voltage
+    amplitude = FloatCommand(scpi_string="VOLT")
+    offset = FloatCommand(scpi_string="VOLTage:offset")
+    voltage_unit= StringCommand(scpi_string='VOLT:UNIT')#{VPP|VRMS|DBM|DEFault}
+
+    load = StringCommand(scpi_string="OUTPut:LOAD") #50, infinit, max ,min
+
+    #Burst
+    burst_state=Command(scpi_string="BM:STATe", value_map={False: '0', True: '1'})# {OFF|ON}
+    burst_cycles=IntCommand(scpi_string="BM:NCYCles")
+    burst_source=StringCommand(scpi_string='BM:SOURce') # {INTernal|EXTernal}
 
 class Agilent33220A(SCPIInstrument):
     """Agilent 33220A Function Generator"""
@@ -413,8 +471,10 @@ class Agilent34970A(SCPIInstrument):
 # Commands needed to configure MUX for measurement with an external instrument
 
     dmm            = StringCommand(scpi_string="INST:DMM",value_map={'ON': '1', 'OFF': '0'})
-    trigger_source = StringCommand(scpi_string="TRIG:SOUR",allowed_values=TRIGSOUR_VALUES)
     advance_source = StringCommand(scpi_string="ROUT:CHAN:ADV:SOUR",allowed_values=ADVSOUR_VALUES)
+    trigger_source = StringCommand(scpi_string="TRIG:SOUR",allowed_values=TRIGSOUR_VALUES)
+    trigger_timer  = FloatCommand(get_string="TRIG:TIMER?", set_string="TRIG:TIMER {:f}")
+    trigger_count  = IntCommand(get_string="TRIG:COUNT?", set_string="TRIG:COUNT {:e}")
 
 # Generic init and connect methods
 
@@ -499,6 +559,18 @@ class Agilent34970A(SCPIInstrument):
         else:
             fw_char = "ON," if fw == 4 else "OFF,"
             self.interface.write(("ROUT:CHAN:FWIR {}"+self.ch_to_str(self.CONFIG_LIST)).format(fw_char))
+
+# Commands that configure measurement delay for external measurements
+
+    @property
+    def channel_delay(self):
+        query_str = "ROUT:CHAN:DELAY? "+self.ch_to_str(self.CONFIG_LIST)
+        output = self.interface.query_ascii_values(query_str, converter=u'e')
+        return {ch: val for ch, val in zip(self.CONFIG_LIST, output)}
+
+    @channel_delay.setter
+    def channel_delay(self, delay = 0.1):
+        self.interface.write(("ROUT:CHAN:DELAY {:e},"+self.ch_to_str(self.CONFIG_LIST)).format(delay))
 
 # Commands that configure resistance measurements with internal DMM
 
@@ -623,7 +695,6 @@ class AgilentN5183A(SCPIInstrument):
         if is_valid_ipv4(self.resource_name):
             if "::5025::SOCKET" not in self.resource_name:
                 self.resource_name += "::5025::SOCKET"
-        print(self.resource_name)
         super(AgilentN5183A, self).connect(resource_name=resource_name, interface_type=interface_type)
         self.interface._resource.read_termination = u"\n"
         self.interface._resource.write_termination = u"\n"
@@ -632,11 +703,19 @@ class AgilentN5183A(SCPIInstrument):
     def set_all(self, settings):
         super(AgilentN5183A, self).set_all(settings)
 
+    @property
+    def reference(self):
+        return None
+
+    @reference.setter
+    def reference(self, ref=None):
+        pass
+
 class AgilentE8363C(SCPIInstrument):
     """Agilent E8363C VNA"""
     instrument_type = "Vector Network Analyzer"
 
-    AVERAGE_TIMEOUT = 12. * 60. * 60. * 1000. #milliseconds
+    TIMEOUT = 10. * 1000. #milliseconds
 
     power              = FloatCommand(scpi_string=":SOURce:POWer:LEVel:IMMediate:AMPLitude", value_range=(-27, 20))
     frequency_center   = FloatCommand(scpi_string=":SENSe:FREQuency:CENTer")
@@ -645,7 +724,7 @@ class AgilentE8363C(SCPIInstrument):
     frequency_stop     = FloatCommand(scpi_string=":SENSe:FREQuency:STOP")
     sweep_num_points   = IntCommand(scpi_string=":SENSe:SWEep:POINts")
     averaging_factor   = IntCommand(scpi_string=":SENSe1:AVERage:COUNt")
-    averaging_enable   = StringCommand(get_string=":SENSe1:AVERage:STATe?", set_string=":SENSe1:AVERage:STATe {:s}", value_map={False:"0", True:"1"})
+    averaging_enable   = BoolCommand(get_string=":SENSe1:AVERage:STATe?", set_string=":SENSe1:AVERage:STATe {:s}", value_map={False: "0", True: "1"})
     averaging_complete = StringCommand(get_string=":STATus:OPERation:AVERaging1:CONDition?", value_map={False:"+0", True:"+2"})
     if_bandwidth       = FloatCommand(scpi_string=":SENSe1:BANDwidth")
     sweep_time         = FloatCommand(get_string=":SENSe:SWEep:TIME?")
@@ -666,10 +745,45 @@ class AgilentE8363C(SCPIInstrument):
             interface_type=interface_type)
         self.interface._resource._read_termination = u"\n"
         self.interface._resource.write_termination = u"\n"
+        self.interface._resource.timeout = self.TIMEOUT
+        self.interface._resource.chunk_size = 2 ** 20 # Needed to fix binary transfers (?)
+
+        self.interface.OPC() #wait for any previous commands to complete
+        self.interface.write("SENSe1:SWEep:TIME:AUTO ON") #automatic sweep time
+        self.interface.write("FORM REAL,32") #return measurement data as 32-bit float
 
     def averaging_restart(self):
         """ Restart trace averaging """
         self.interface.write(":SENSe1:AVERage:CLEar")
+
+    @property
+    def averaging_enable(self):
+        state = self.interface.query(":SENSe1:AVERage:STATe?")
+        return bool(int(state))
+
+    @averaging_enable.setter
+    def averaging_enable(self, value):
+        if value:
+            self.interface.write(":SENSe1:AVERage:STATe ON")
+        else:
+            self.interface.write(":SENSe1:AVERage:STATe OFF")
+
+    @property
+    def measurement(self):
+        meas = self.interface.query(":CALC:PAR:CAT?")
+        return meas.strip('\"').split(",")[-1]
+
+    @measurement.setter
+    def measurement(self, meas):
+        meas = meas.upper()
+        valid_meas = ('S11', 'S12', 'S21', 'S22')
+        if meas not in valid_meas:
+            raise ValueError(f"Unknown measurement {meas}; must be one of {valid_meas}")
+
+        self.interface.write("CALC:PAR:DEL:ALL")
+        self.interface.write(f":CALC:PAR:DEF:EXT 'R_{meas}',{meas}")
+        self.interface.write(f"DISP:WIND1:TRAC1:FEED 'R_{meas}'")
+
 
     def reaverage(self):
         """ Restart averaging and block until complete """
@@ -677,17 +791,18 @@ class AgilentE8363C(SCPIInstrument):
             self.averaging_restart()
             #trigger after the requested number of points has been averaged
             self.interface.write("SENSe1:SWEep:GROups:COUNt %d"%self.averaging_factor)
-            self.interface.write("ABORT;SENSe1:SWEep:MODE GRO")
+            self.interface.write("ABORT; SENSe1:SWEep:MODE GRO")
         else:
             #restart current sweep and send a trigger
-            self.interface.write("ABORT;SENS:SWE:MODE SING")
-        #wait for the measurement to finish, with a temporary long timeout
-        tmout = self.interface._resource.timeout
-        self.interface._resource.timeout = self.AVERAGE_TIMEOUT
-        self.interface.WAI()
-        while not self.averaging_complete:
-            time.sleep(0.1) #TODO: Asynchronous check of SRQ
-        self.interface._resource.timeout = tmout
+            self.interface.write("ABORT; SENS:SWE:MODE SING")
+
+        meas_done = False
+        self.interface.write('*OPC')
+        while not meas_done:
+            time.sleep(0.5)
+            opc_bit = int(self.interface.ESR()) & 0x1
+            if opc_bit == 1:
+                meas_done = True
 
     def get_trace(self, measurement=None):
         """ Return a tupple of the trace frequencies and corrected complex points """
@@ -699,8 +814,15 @@ class AgilentE8363C(SCPIInstrument):
             measurement = traces.split(",")[0][1:]
         #Select the measurment
         self.interface.write(":CALCulate:PARameter:SELect '{}'".format(measurement))
+        self.reaverage()
+        self.interface.write(":CALC:DATA? SDATA")
+        block =  self.interface.read_raw(size=256)
+        offset, data_length = util.parse_ieee_block_header(block)
+        interleaved_vals = util.from_ieee_block(block, 'f', True, np.array)
+
         #Take the data as interleaved complex values
-        interleaved_vals = self.interface.values(":CALCulate:DATA? SDATA")
+        self.interface.write("SENS:SWE:MODE CONT")
+
         vals = interleaved_vals[::2] + 1j*interleaved_vals[1::2]
         #Get the associated frequencies
         freqs = np.linspace(self.frequency_start, self.frequency_stop, self.sweep_num_points)
@@ -760,7 +882,3 @@ class AgilentE9010A(SCPIInstrument):
     def restart_sweep(self):
         """ Aborts current sweep and restarts. """
         self.interface.write(":INITiate:RESTart")
-
-    @property
-    def power(self):
-        return self.interface.query_ascii_values("MEAS:CHP:CHP?",converter='e')[0]

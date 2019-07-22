@@ -6,31 +6,10 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-import asyncio
+
 import os
 import numpy as np
 import sys
-
-# ----- fix/unitTests_1 (ST-15) delta Start...
-# Added the followiing 25 Oct 2018 to test Instrument and filter metaclass load
-# introspection minimization (during import)
-#
-from auspex import config
-
-# Filter out Holzworth warning noise noise by citing the specific instrument[s]
-# used for this test.
-config.tgtInstrumentClass       = "TestInstrument"
-
-# Can't filter out Channerlizer noise as it's actually used in this test;
-# this does serve to limit the number of filter stubs generated to only those
-# used.
-config.tgtFilterClass           = {"Plotter", "Averager", "Print", "Channelizer", "KernelIntegrator"}
-
-# Uncomment to the following to show the Instrument MetaClass __init__ arguments
-# config.bEchoInstrumentMetaInit  = True
-#
-# ----- fix/unitTests_1 (ST-15) delta Stop.
-
 
 from auspex.instruments.instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand
 from auspex.experiment import Experiment, FloatParameter
@@ -82,7 +61,7 @@ class TestExperiment(Experiment):
     def __repr__(self):
         return "<SweptTestExperiment>"
 
-    async def run(self):
+    def run(self):
         pulse_start = 250
         pulse_width = 700
 
@@ -92,7 +71,7 @@ class TestExperiment(Experiment):
             for delay in self.delays:
                 if idx == 0:
                     records = np.zeros((5, self.num_samples), dtype=np.float32)
-                await asyncio.sleep(0.01)
+                time.sleep(0.01)
                 records[idx,pulse_start:pulse_start+pulse_width] = np.exp(-0.5*(self.freq.value/2e6)**2) * \
                                                               np.exp(-delay/self.T2) * \
                                                               np.sin(2*np.pi * 10e6 * self.sampling_period*np.arange(pulse_width) \
@@ -102,7 +81,7 @@ class TestExperiment(Experiment):
                 records[idx] += 0.1*np.random.randn(self.num_samples)
 
                 if idx == 4:
-                    await self.voltage.push(records.flatten())
+                    self.voltage.push(records.flatten())
                     idx = 0
                 else:
                     idx += 1

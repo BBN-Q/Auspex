@@ -7,41 +7,12 @@
 #    http://www.apache.org/licenses/LICENSE-2.0
 
 import unittest
-import asyncio
 import time
 import numpy as np
 
-_bNO_METACLASS_INTROSPECTION_CONSTRAINTS = True  # Use original dummy flag logic
-#_bNO_METACLASS_INTROSPECTION_CONSTRAINTS = False # Enable instrument and filter introspection constraints
-
-if _bNO_METACLASS_INTROSPECTION_CONSTRAINTS:
-    #
-    # The original unittest quieting logic
-    import auspex.config as config
-    config.auspex_dummy_mode = True
-    #
-else:
-    # ----- fix/unitTests_1 (ST-15) delta Start...
-    # Added the followiing 05 Nov 2018 to test Instrument and filter metaclass load
-    # introspection minimization (during import)
-    #
-    from auspex import config
-
-    # Filter out Holzworth warning noise noise by citing the specific instrument[s]
-    # used for this test.
-    config.tgtInstrumentClass       = ""  # No Instruments
-
-    # Filter out Channerlizer noise by citing the specific filters used for this
-    # test.
-    # ...Actually Print, Channelizer, and KernelIntegrator are NOT used in this test;
-    # hence commented them out, below, as well.
-    config.tgtFilterClass           = {"Print", "Passthrough", "DataBuffer", "Averager"}
-
-    # Uncomment to the following to show the Instrument MetaClass __init__ arguments
-    # config.bEchoInstrumentMetaInit  = True
-    #
-    # ----- fix/unitTests_1 (ST-15) delta Stop.
-
+import auspex.config as config
+config.auspex_dummy_mode = True
+config.profile = False
 
 from auspex.experiment import Experiment
 from auspex.parameter import FloatParameter
@@ -76,13 +47,13 @@ class TestExperiment(Experiment):
         self.chan2.add_axis(DataAxis("samples", list(range(self.samples))))
         self.chan2.add_axis(DataAxis("trials", list(range(self.num_trials))))
 
-    async def run(self):
+    def run(self):
         logger.debug("Data taker running (inner loop)")
         time_step = 0.1
-        await asyncio.sleep(0.002)
+        time.sleep(0.002)
         data_row = np.ones(self.samples*self.num_trials) + 0.1*np.random.random(self.samples*self.num_trials)
         self.time_val += time_step
-        await self.chan1.push(data_row)
+        self.chan1.push(data_row)
         logger.debug("Stream pushed points {}.".format(data_row))
         logger.debug("Stream has filled {} of {} points".format(self.chan1.points_taken, self.chan1.num_points() ))
 
@@ -105,12 +76,12 @@ class VarianceExperiment(Experiment):
         self.chan1.add_axis(DataAxis("trials", list(range(self.trials))))
         self.chan1.add_axis(DataAxis("repeats", list(range(self.repeats))))
 
-    async def run(self):
+    def run(self):
         logger.debug("Data taker running (inner loop)")
-        await asyncio.sleep(0.002)
+        time.sleep(0.002)
         data_row = self.vals[self.idx:self.idx+(self.samples*self.trials*self.repeats)]
         self.idx += (self.samples*self.trials*self.repeats)
-        await self.chan1.push(data_row)
+        self.chan1.push(data_row)
         logger.debug("Stream pushed points {}.".format(data_row))
         logger.debug("Stream has filled {} of {} points".format(self.chan1.points_taken, self.chan1.num_points() ))
 
@@ -122,7 +93,7 @@ class AverageTestCase(unittest.TestCase):
         avgr            = Averager('trials', name="TestAverager")
 
         edges = [(exp.chan1, avgr.sink),
-                 (avgr.final_average, printer_final.sink)]
+                 (avgr.source, printer_final.sink)]
 
         exp.set_graph(edges)
         exp.run_sweeps()
@@ -137,15 +108,16 @@ class AverageTestCase(unittest.TestCase):
         edges = [(exp.chan1,           avgr.sink),
                  (avgr.final_variance, printer_final.sink),
                  (avgr.final_variance, var_buff.sink),
-                 (avgr.final_average,  mean_buff.sink)]
+                 (avgr.source,  mean_buff.sink)]
 
         exp.set_graph(edges)
         exp.run_sweeps()
 
-        var_data  = var_buff.get_data()['Variance'].reshape(var_buff.descriptor.data_dims())
-        mean_data = mean_buff.get_data()['chan1'].reshape(mean_buff.descriptor.data_dims())
+        # var_data  = var_buff.get_data()['Variance'].reshape(var_buff.descriptor.data_dims())
+        # mean_data = mean_buff.get_data()['chan1'].reshape(mean_buff.descriptor.data_dims())
+        var_data  = var_buff.output_data.reshape(var_buff.descriptor.data_dims())
+        mean_data = mean_buff.output_data.reshape(mean_buff.descriptor.data_dims())
         orig_data = exp.vals.reshape(exp.chan1.descriptor.data_dims())
-
         self.assertTrue(np.abs(np.sum(mean_data - np.mean(orig_data, axis=0))) <= 1e-3)
         self.assertTrue(np.abs(np.sum(var_data - np.var(orig_data, axis=0, ddof=1))) <= 1e-3)
 
@@ -169,7 +141,7 @@ class AverageTestCase(unittest.TestCase):
 
         edges = [(exp.chan1, avgr.sink),
                  (avgr.partial_average, printer_partial.sink),
-                 (avgr.final_average, printer_final.sink)]
+                 (avgr.source, printer_final.sink)]
         exp.set_graph(edges)
 
         exp.add_sweep(exp.freq_1, np.linspace(0,9,10))
