@@ -571,7 +571,7 @@ class Experiment(metaclass=MetaExperiment):
                 for n in self.other_nodes:
                     if not n.done.is_set():
                         times[n] += 1
-                        logger.info(f"{str(n)} not done. Is the pipeline backed up at IO stage?")
+                        logger.debug(f"{str(n)} not done. Is the pipeline backed up at IO stage?")
                     else:
                         dones[n] = True
 
