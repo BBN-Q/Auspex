@@ -34,7 +34,7 @@ install:
   - export GIT_LFS_SKIP_SMUDGE=1
   - pip install git+https://github.com/BBN-Q/bbndb.git
   - pip install git+https://github.com/BBN-Q/Adapt.git
-  - pip install git+https://github.com/BBN-Q/QGL.git@sqlalchemy
+  - pip install git+https://github.com/BBN-Q/QGL.git@develop
   - pip install git+https://github.com/spatialaudio/nbsphinx.git@master
   - pip install pyvisa coveralls scikit-learn pyusb future python-usbtmc setproctitle
   - export GIT_LFS_SKIP_SMUDGE=0
