@@ -270,11 +270,11 @@ class SingleQubitRBFit(AuspexFit):
     """Fit to an RB decay curve using the model A*(r^n) + B
     """
 
-    xlabel = r"$log_2$ Clifford Number"
+
     ylabel = r"<$\sigma_z$>"
     title = "Single Qubit RB Fit"
 
-    def __init__(self, lengths, data, make_plots=False, log_scale_x=True):
+    def __init__(self, lengths, data, make_plots=False, log_scale_x=True, bounded_fit=True):
 
         repeats = len(data) // len(lengths)
         xpts = np.array(lengths)
@@ -285,6 +285,14 @@ class SingleQubitRBFit(AuspexFit):
         self.data_points = np.reshape(data,(len(lengths),repeats))
         self.errors = np.std(self.data_points, 1)
         self.log_scale_x = log_scale_x
+
+        if log_scale_x:
+            self.xlabel = r"$log_2$ Clifford Number"
+        else:
+            self.xlabel = "Clifford Number"
+
+        if bounded_fit:
+            self.bounds = ((0, -np.inf, 0), (1, np.inf, 1))
 
         super().__init__(xpts, ypts, make_plots=make_plots)
 
@@ -318,7 +326,7 @@ class SingleQubitRBFit(AuspexFit):
         return {"A": p[0], "r": p[1]/2, "B": p[2]}
 
     def annotation(self):
-        return r'avg. error rate r = {:.2e}  {} {:.2e}'.format(self.fit_params["r"]/2, chr(177), self.fit_errors["r"]/2)
+        return r'avg. error rate r = {:.2e}  {} {:.2e}'.format(self.fit_params["r"], chr(177), self.fit_errors["r"])
 
     def make_plots(self):
 
@@ -326,7 +334,7 @@ class SingleQubitRBFit(AuspexFit):
         #plt.plot(self.xpts, self.data,'.',markersize=15, label='data')
         plt.errorbar(self.lengths, self.ypts, yerr=self.errors/np.sqrt(len(self.lengths)),
                         fmt='*', elinewidth=2.0, capsize=4.0, label='mean')
-        plt.plot(range(int(self.lengths[-1])), self.model(range(self.lengths[-1])), label='fit')
+        plt.plot(range(int(self.lengths[-1])), self.model(range(int(self.lengths[-1]))), label='fit')
         if self.log_scale_x:
             plt.xscale('log')
 
