@@ -220,7 +220,7 @@ class MixerCalibrationExperiment(Experiment):
             self._awg = channel.phys_chan.transmitter
             self._phys_chan = channel.phys_chan
             self._source = channel.phys_chan.generator
-            self.SSB_FREQ = channel.phys_chan.frequency
+            self.SSB_FREQ = channel.frequency
         else:
             raise ValueError("Unknown mixer {}: must be either 'measure' or 'control'.".format(mixer))
 
