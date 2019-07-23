@@ -27,7 +27,7 @@ install_requires = [
 
 #Use PyVISA-Py if running on Linux or MacOS
 if os.name == "posix":
-    install_requires.append("PyVISA-Py == 0.2")
+    install_requires.append("PyVISA-Py >= 0.3")
     install_requires.append("pyserial >= 3.4")
 
 # python setup.py sdist
@@ -36,10 +36,12 @@ if os.name == "posix":
 # twine upload --repository-url https://test.pypi.org/legacy/ dist/*
 # For distribution:
 # twine upload dist/*
+# Test with:
+# pip install --extra-index-url https://test.pypi.org/simple/ auspex
 
 setup(
     name='auspex',
-    version='2019.1.1',
+    version='2019.1.2',
     author='Auspex Developers',
     package_dir={'':'src'},
     packages=[

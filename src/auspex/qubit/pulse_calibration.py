@@ -16,7 +16,7 @@ except:
 import auspex.config as config
 from auspex.log import logger
 from copy import copy, deepcopy
-from adapt.refine import refine_1D
+# from adapt.refine import refine_1D
 import os
 import uuid
 import pandas as pd
