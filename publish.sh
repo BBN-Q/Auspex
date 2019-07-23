@@ -3,8 +3,8 @@
 # Usage: dist_pypi [production]
 # Uses pypi test unless "production is supplied"
 
-pkg_name=$(python setup.py --name) #"bbndb"
-version=$(python setup.py --version) # "2019.1.2"
+pkg_name=$(python setup.py --name)
+version=$(python setup.py --version)
 echo "DISTRIBUTING $pkg_name VERSION $version"
 
 [[ $1 == "production" ]] && echo "*** PRODUCTION UPLOAD ***" || echo "*** TEST UPLOAD ***"
