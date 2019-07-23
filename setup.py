@@ -41,7 +41,7 @@ if os.name == "posix":
 
 setup(
     name='auspex',
-    version='2019.1.2',
+    version='2019.1',
     author='Auspex Developers',
     package_dir={'':'src'},
     packages=[

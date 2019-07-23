@@ -1,8 +1,14 @@
 #!/bin/bash
 
+# Usage: dist_pypi [production]
+# Uses pypi test unless "production is supplied"
+
 pkg_name=$(python setup.py --name) #"bbndb"
 version=$(python setup.py --version) # "2019.1.2"
 echo "DISTRIBUTING $pkg_name VERSION $version"
+
+[[ $1 == "production" ]] && echo "*** PRODUCTION UPLOAD ***" || echo "*** TEST UPLOAD ***"
+read -n 1 -s -r -p "Press any key to continue"
 
 echo "** Removing dist directory **"
 rm -rf dist
