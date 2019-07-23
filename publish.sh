@@ -20,23 +20,22 @@ echo "** Creating wheel distribution **"
 python setup.py bdist_wheel
 
 echo "** Uploading to test pypi **"
-twine upload --repository-url https://test.pypi.org/legacy/ dist/*
+if [[ $1 == "production" ]]; then
+    twine upload dist/*
+else
+    twine upload --repository-url https://test.pypi.org/legacy/ dist/*
+fi
 
-# For distribution:
-# twine upload dist/*
-# Test with:
-# pip install --extra-index-url https://test.pypi.org/simple/ bbndb
-
-
-# channels=$(conda config --show channels)
-
-# echo "** Adding conda-forge to channels"
-# conda config --add channels conda-forge
+# Test with: pip install --extra-index-url https://test.pypi.org/simple/ bbndb
 
 echo "** Creating conda skeleton **"
 rm -rf skeleton
 mkdir skeleton && pushd skeleton
-conda skeleton pypi --version=$version --pypi-url https://test.pypi.io/pypi/ $pkg_name
+if [[ $1 == "production" ]]; then
+    conda skeleton pypi --version=$version $pkg_name
+else
+    conda skeleton pypi --version=$version --pypi-url https://test.pypi.io/pypi/ $pkg_name
+fi
 pushd $pkg_name
 
 echo "** Please modify the meta.yaml in skeleton/$pkg_name to include \"noarch: python\" in the build section."
