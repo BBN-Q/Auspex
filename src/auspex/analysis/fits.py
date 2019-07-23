@@ -22,6 +22,7 @@ class AuspexFit(object):
     xlabel = "X points"
     ylabel = "Y points"
     title = "Auspex Fit"
+    bounds = None
 
     def __init__(self, xpts, ypts, make_plots=False):
         """Perform a least squares fit of 1-D data.
@@ -36,7 +37,7 @@ class AuspexFit(object):
         assert len(xpts) == len(ypts), "Length of X and Y points must match!"
         self.xpts = xpts
         self.ypts = ypts
-        self._do_fit()
+        self._do_fit(self.bounds)
         if make_plots:
             self.make_plots()
 
@@ -82,7 +83,7 @@ class AuspexFit(object):
         """
         return str(self)
 
-    def _do_fit(self):
+    def _do_fit(self, bounds=None):
         """Fit the data using `scipy.optimize.curve_fit`. This function will
             also compute the χ^2 and badness of fit of the function.
 
@@ -91,7 +92,11 @@ class AuspexFit(object):
            that is the model function evaluated at the fitted parameters.
          """
         p0 = self._initial_guess()
-        popt, pcov = curve_fit(self._model, self.xpts, self.ypts, p0)
+        if not bounds:
+            bounds = (-np.inf, np.inf)
+        else:
+            assert all((len(b) == len(p0) for b in bounds)), 'Number of bounds must equal number of variables!'
+        popt, pcov = curve_fit(self._model, self.xpts, self.ypts, p0, bounds=bounds)
         perr = np.sqrt(np.diag(pcov))
         fit = np.array([self._model(x, *popt) for x in self.xpts])
         self.sq_error = np.sum((fit - self.ypts)**2)

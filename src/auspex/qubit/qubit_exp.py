@@ -511,7 +511,7 @@ class QubitExperiment(Experiment):
         for listener in self.dig_listeners:
             listener.join(2)
             if listener.is_alive():
-                logger.info(f"Terminating listener {listener} aggressively")
+                logger.debug(f"Terminating listener {listener} aggressively")
                 listener.terminate()
             del listener
 
