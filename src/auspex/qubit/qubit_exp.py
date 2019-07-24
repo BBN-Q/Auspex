@@ -363,7 +363,7 @@ class QubitExperiment(Experiment):
         auspex_instr.ideal_data = ideal_data
         auspex_instr.increment_ideal_data = increment
         auspex_instr.gen_fake_data = True
-        auspex_instr.fake_data_random_mag = random_mag
+        auspex_instr.ideal_data_random_mag = random_mag
 
     def clear_fake_data(self, digitizer_proxy):
         """Disable using fake data interface for a digitizer. Take note that dummy mode may

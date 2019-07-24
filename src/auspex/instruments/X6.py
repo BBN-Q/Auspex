@@ -106,10 +106,11 @@ class X6(Instrument):
 
         self.last_timestamp = Value('d', datetime.datetime.now().timestamp())
 
-        self.gen_fake_data        = gen_fake_data
-        self.increment_ideal_data = False
-        self.ideal_counter        = 0
-        self.ideal_data           = None
+        self.gen_fake_data         = gen_fake_data
+        self.increment_ideal_data  = False
+        self.ideal_counter         = 0
+        self.ideal_data            = None
+        self.ideal_data_random_mag = 0
 
         self.timeout = 10.0
 
@@ -233,7 +234,7 @@ class X6(Instrument):
         # todo: other checking here
         self._channels.append(channel)
 
-    def spew_fake_data(self, counter, ideal_datapoint=0, random_mag=0.1, random_seed=12345):
+    def spew_fake_data(self, counter, ideal_datapoint=0, random_seed=12345):
         """
         Generate fake data on the stream. For unittest usage.
         ideal_datapoint: mean of the expected signal for stream_type =  "Integrated".
@@ -247,18 +248,18 @@ class X6(Instrument):
         for chan, wsock in self._chan_to_wsocket.items():
             if chan.stream_type == "integrated":
                 length = 1
-                data = random_mag*(np.random.random(length).astype(chan.dtype) + 1j*np.random.random(length).astype(chan.dtype)) + ideal_datapoint
+                data = self.ideal_data_random_mag*(np.random.random(length).astype(chan.dtype) + 1j*np.random.random(length).astype(chan.dtype)) + ideal_datapoint
             elif chan.stream_type == "demodulated":
                 length = int(self._lib.record_length/32)
                 data = np.zeros(length, dtype=chan.dtype)
                 data[int(length/4):int(3*length/4)] = 1.0 if ideal_datapoint == 0 else ideal_datapoint
-                data += random_mag*(np.random.random(length) + 1j*np.random.random(length))
+                data += self.ideal_data_random_mag*(np.random.random(length) + 1j*np.random.random(length))
             else: #Raw
                 length = int(self._lib.record_length/4)
                 signal = np.sin(np.linspace(0,10.0*np.pi,int(length/2)))
                 data = np.zeros(length, dtype=chan.dtype)
                 data[int(length/4):int(length/4)+len(signal)] = signal * (1.0 if ideal_datapoint == 0 else ideal_datapoint)
-                data += random_mag*np.random.random(length)
+                data += self.ideal_data_random_mag*np.random.random(length)
 
             total += length
             wsock.send(struct.pack('n', length*data.dtype.itemsize) + data.tostring())
