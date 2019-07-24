@@ -367,11 +367,12 @@ class X6(Instrument):
                     # logger.info('WAITING for acquisition to finish %d < %d', total_taken, total_spewed)
                     time.sleep(0.025)
                 for oc in ocs:
-                    try:
-                        progressbars[oc].next()
-                        progressbars[oc].finish()
-                    except AttributeError:
-                        pass
+                    if progressbars:
+                        try:
+                            progressbars[oc].next()
+                            progressbars[oc].finish()
+                        except AttributeError:
+                            pass
 
         else:
             print('waiting for acquisition')
@@ -389,11 +390,12 @@ class X6(Instrument):
                         progress_updaters[oc](ocs[0].points_taken.value)
                 time.sleep(0.1)
             for oc in ocs:
-                try:
-                    progressbars[oc].next()
-                    progressbars[oc].finish()
-                except AttributeError:
-                    pass
+                if progressbars:
+                    try:
+                        progressbars[oc].next()
+                        progressbars[oc].finish()
+                    except AttributeError:
+                        pass
 
     # pass thru properties
     @property

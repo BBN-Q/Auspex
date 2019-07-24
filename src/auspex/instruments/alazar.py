@@ -198,7 +198,7 @@ class AlazarATS9870(Instrument):
 
     def wait_for_acquisition(self, dig_run, timeout=5, ocs=None, progressbars=None):
         progress_updaters = {}
-        if ocs and progressbar:
+        if ocs and progressbars:
             for oc in ocs:
                 if hasattr(progressbars[oc], 'goto'):
                     progress_updaters[oc] = lambda x: progressbars[oc].goto(x)
@@ -247,11 +247,12 @@ class AlazarATS9870(Instrument):
 
                     # logger.info('WAITING for acquisition to finish %d < %d', total_taken, total_spewed)
                     time.sleep(0.025)
-                try:
-                    progressbars[oc].next()
-                    progressbars[oc].finish()
-                except AttributeError:
-                    pass
+                if progressbars:
+                    try:
+                        progressbars[oc].next()
+                        progressbars[oc].finish()
+                    except AttributeError:
+                        pass
         else:
             while not self.done():
                 if not dig_run.is_set():
@@ -263,11 +264,12 @@ class AlazarATS9870(Instrument):
                     for oc in ocs:
                         progress_updaters[oc](oc.points_taken.value)
                 #time.sleep(0.2) Does this need to be here at all?
-            try:
-                progressbars[oc].next()
-                progressbars[oc].finish()
-            except AttributeError:
-                pass
+            if progressbars:
+                try:
+                    progressbars[oc].next()
+                    progressbars[oc].finish()
+                except AttributeError:
+                    pass
 
         logger.debug("Digitizer %s finished getting data.", self.name)
 
