@@ -15,7 +15,7 @@ if sys.platform == 'win32' or 'NOFORKING' in os.environ:
 else:
     from multiprocessing import Process
     from multiprocessing import Event
-    from multiprocessing import Value
+from multiprocessing import Value
 
 from . import pipeline
 import time
