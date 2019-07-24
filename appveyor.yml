@@ -22,6 +22,6 @@ install:
   - pip install git+https://github.com/BBN-Q/bbndb.git
   - pip install git+https://github.com/BBN-Q/QGL.git@develop
   - pip install pyvisa coveralls scikit-learn pyusb future python-usbtmc setproctitle progress
-
+  - pip install -e C:\projects\auspex
 test_script:
   - coverage run -m unittest discover -v test
