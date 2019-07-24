@@ -339,10 +339,10 @@ class Experiment(metaclass=MetaExperiment):
                             self.progressbars[axis].value = axis.step
                     else:
                         if axis.done:
-                            self.progressbars.next()
+                            self.progressbars[axis].next()
                             self.progressbars[axis].finish()
                         else:
-                            self.progressbars.goto(axis.step)
+                            self.progressbars[axis].goto(axis.step)
 
             if self.sweeper.is_adaptive():
                 # Add the new tuples to the stream descriptors
