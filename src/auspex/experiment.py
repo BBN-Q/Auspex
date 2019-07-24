@@ -467,7 +467,6 @@ class Experiment(metaclass=MetaExperiment):
     def init_progress_bars(self):
         """ initialize the progress bars."""
         self.progressbars = {}
-        print('initializing progress bars!')
         if isnotebook():
             from ipywidgets import IntProgress, VBox
             from IPython.display import display
