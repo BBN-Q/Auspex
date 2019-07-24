@@ -55,6 +55,8 @@ from auspex.stream import DataStream, DataAxis, SweepAxis, DataStreamDescriptor,
 from auspex.filters import Plotter, MeshPlotter, ManualPlotter, WriteToFile, DataBuffer, Filter
 from auspex.log import logger
 import auspex.config
+from auspex.config import isnotebook
+
 
 def auspex_plot_server():
     client_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),"plot_server.py")
@@ -330,10 +332,17 @@ class Experiment(metaclass=MetaExperiment):
 
             if hasattr(self, 'progressbars') and self.progressbars:
                 for axis in self.sweeper.axes:
-                    if axis.done:
-                        self.progressbars[axis].value = axis.num_points()
+                    if isnotebook():
+                        if axis.done:
+                            self.progressbars[axis].value = axis.num_points()
+                        else:
+                            self.progressbars[axis].value = axis.step
                     else:
-                        self.progressbars[axis].value = axis.step
+                        if axis.done:
+                            self.progressbars[axis].next()
+                            self.progressbars[axis].finish()
+                        else:
+                            self.progressbars[axis].goto(axis.step)
 
             if self.sweeper.is_adaptive():
                 # Add the new tuples to the stream descriptors
@@ -457,17 +466,20 @@ class Experiment(metaclass=MetaExperiment):
 
     def init_progress_bars(self):
         """ initialize the progress bars."""
-        from auspex.config import isnotebook
-
+        self.progressbars = {}
         if isnotebook():
             from ipywidgets import IntProgress, VBox
             from IPython.display import display
 
-            self.progressbars = {}
+
             for axis in self.sweeper.axes:
                 self.progressbars[axis] = IntProgress(min=0, max=axis.num_points(),
                                                         description=f'Sweep {axis.name}:', style={'description_width': 'initial'})
             display(VBox(list(self.progressbars.values())))
+        else:
+            from progress.bar import ShadyBar
+            for axis in self.sweeper.axes:
+                self.progressbars[axis] = ShadyBar(f"Sweep {axis.name}", max=axis.num_points())
 
     def run_sweeps(self):
         # Propagate the descriptors through the network
