@@ -375,10 +375,6 @@ class X6(Instrument):
                             pass
 
         else:
-            print('waiting for acquisition')
-            for oc in ocs:
-                print(oc.points_taken)
-                print(oc.descriptor)
             while not self.done():
                 if not dig_run.is_set():
                     self.last_timestamp.value = datetime.datetime.now().timestamp()
