@@ -127,7 +127,7 @@ class SingleShotMeasurement(Filter):
             raise Exception("Single shot filter does not appear to have any data!")
         distance = np.abs(np.mean(ground_mean - excited_mean))
         bias = np.mean(ground_mean + excited_mean) / distance
-        logger.debug("Found single-shot measurement distance: {} and bias {}.".format(distance, bias))
+        logger.info("Found single-shot measurement distance: {} and bias {}.".format(distance, bias))
         #construct matched filter kernel
         old_settings = np.seterr(divide='ignore', invalid='ignore')
         kernel = np.nan_to_num(np.divide(np.conj(ground_mean - excited_mean), np.var(self.ground_data, ddof=1, axis=1)))
@@ -139,7 +139,7 @@ class SingleShotMeasurement(Filter):
         #raw data (not demod)
         if self.zero_mean.value:
             kernel = kernel - np.mean(kernel)
-        logger.debug("Found single shot filter norm: {}.".format(np.sum(np.abs(kernel))))
+        logger.info("Found single shot filter norm: {}.".format(np.sum(np.abs(kernel))))
         #annoyingly numpy's isreal has the opposite behavior to MATLAB's
         if not np.any(np.imag(kernel) > np.finfo(np.complex128).eps):
             #construct analytic signal from Hilbert transform
@@ -147,100 +147,68 @@ class SingleShotMeasurement(Filter):
         #normalize between -1 and 1
         kernel = kernel / np.amax(np.hstack([np.abs(np.real(kernel)), np.abs(np.imag(kernel))]))
         #apply matched filter
-        weighted_ground = self.ground_data * kernel[:, np.newaxis]
+        weighted_ground  = self.ground_data  * kernel[:, np.newaxis]
         weighted_excited = self.excited_data * kernel[:, np.newaxis]
 
-        if self.optimal_integration_time.value:
-            #take cumulative sum up to each time step
-            ground_I = np.real(weighted_ground)
-            ground_Q = np.imag(weighted_ground)
-            excited_I = np.real(weighted_excited)
-            excited_Q = np.imag(weighted_excited)
-            int_ground_I = np.cumsum(ground_I, axis=0)
-            int_ground_Q = np.cumsum(ground_Q, axis=0)
-            int_excited_I = np.cumsum(excited_I, axis=0)
-            int_excited_Q = np.cumsum(excited_Q, axis=0)
-            I_mins = np.amin(np.minimum(int_ground_I, int_excited_I), axis=1)
-            I_maxes = np.amax(np.maximum(int_ground_I, int_excited_I), axis=1)
-            num_times = int_ground_I.shape[0]
-            fidelities = np.zeros((num_times, ))
-            #Loop through each integration point; estimate the CDF and
-            #then calculate best measurement fidelity
-            for pt in range(num_times):
-                bins = np.linspace(I_mins[pt], I_maxes[pt], 100)
-                g_PDF = np.histogram(int_ground_I[pt, :], bins)[0]
-                e_PDF = np.histogram(int_excited_I[pt,:], bins)[0]
-                fidelities[pt] = np.sum(np.abs(g_PDF - e_PDF)) / np.sum(g_PDF + e_PDF)
-            best_idx = fidelities.argmax(axis=0)
-            self.best_integration_time = best_idx
-            logger.info("Found best integration time at {} out of {} decimated points.".format(best_idx, num_times))
-            #redo calculation with KDEs to get a more accurate estimate
-            bins = np.linspace(I_mins[best_idx], I_maxes[best_idx], 100)
-            g_KDE = gaussian_kde(int_ground_I[best_idx, :])
-            e_KDE = gaussian_kde(int_excited_I[best_idx, :])
-            g_PDF = g_KDE(bins)
-            e_PDF = e_KDE(bins)
-        else:
-            ground_I = np.sum(np.real(weighted_ground), axis=0)
-            ground_Q = np.sum(np.imag(weighted_excited), axis=0)
-            excited_I = np.sum(np.real(weighted_excited), axis=0)
-            excited_Q = np.sum(np.imag(weighted_excited), axis=0)
-            I_min = np.amin(np.minimum(ground_I, excited_I))
-            I_max = np.amax(np.maximum(ground_I, excited_I))
-            bins = np.linspace(I_min, I_max, 100)
-            g_KDE = gaussian_kde(ground_I)
-            e_KDE = gaussian_kde(excited_I)
-            g_PDF = g_KDE(bins)
-            e_PDF = e_KDE(bins)
-
         self.kernel = kernel
-        max_F_I = 1 - 0.5 * (1 - 0.5 * (bins[2] - bins[1]) * np.sum(np.abs(g_PDF - e_PDF)))
-        self.pdf_data = {"Max I Fidelity": max_F_I,
-                         "I Bins": bins,
-                         "Ground I PDF": g_PDF,
-                         "Excited I PDF": e_PDF}
+        self.pdf_data = {}
 
-        if self.set_threshold.value:
-            indmax = (np.abs(np.cumsum(g_PDF / np.sum(g_PDF))
-                        - np.cumsum(e_PDF / np.sum(e_PDF)))).argmax(axis=0)
-            self.pdf_data["I Threshold"] = bins[indmax]
-            logger.info("Single shot kernel found I threshold at {}.".format(bins[indmax]))
+        for quad_fun, quad_name in [(np.real, "I"), (np.imag, "Q")]:
+            if self.optimal_integration_time.value:
+                #take cumulative sum up to each time step
+                ground  = quad_fun(weighted_ground)
+                excited = quad_fun(weighted_excited)
+                int_ground  = np.cumsum(ground, axis=0)
+                int_excited = np.cumsum(excited, axis=0)
+                mins  = np.amin(np.minimum(int_ground, int_excited), axis=1)
+                maxes = np.amax(np.maximum(int_ground, int_excited), axis=1)
+                num_times = int_ground.shape[0]
+                fidelities = np.zeros((num_times, ))
+                #Loop through each integration point; estimate the CDF and
+                #then calculate best measurement fidelity
+                for pt in range(num_times):
+                    bins = np.linspace(mins[pt], maxes[pt], 100)
+                    g_PDF = np.histogram(int_ground[pt, :], bins)[0]
+                    e_PDF = np.histogram(int_excited[pt,:], bins)[0]
+                    fidelities[pt] = np.sum(np.abs(g_PDF - e_PDF)) / np.sum(g_PDF + e_PDF)
+                best_idx = fidelities.argmax(axis=0)
+                self.best_integration_time = best_idx
+                logger.info(f"Found best {quad_name} integration time at {best_idx} out of {num_times} decimated points.")
+                #redo calculation with KDEs to get a more accurate estimate
+                bins = np.linspace(mins[best_idx], maxes[best_idx], 100)
+                g_KDE = gaussian_kde(int_ground[best_idx, :])
+                e_KDE = gaussian_kde(int_excited[best_idx, :])
+            else:
+                ground = np.sum(quad_fun(weighted_ground), axis=0)
+                excited = np.sum(quad_fun(weighted_excited), axis=0)
+                minv = np.amin(np.minimum(ground, excited))
+                maxv = np.amax(np.maximum(ground, excited))
+                bins = np.linspace(minv, maxv, 100)
+                g_KDE = gaussian_kde(ground)
+                e_KDE = gaussian_kde(excited)
+            g_PDF = g_KDE(bins)
+            e_PDF = e_KDE(bins)
 
-        if self.optimal_integration_time.value:
-            mu_g, sigma_g = norm.fit(int_ground_I[best_idx, :])
-            mu_e, sigma_e = norm.fit(int_excited_I[best_idx, :])
-        else:
-            mu_g, sigma_g = norm.fit(ground_I)
-            mu_e, sigma_e = norm.fit(excited_I)
-        self.pdf_data["Ground I Gaussian PDF"] = norm.pdf(bins, mu_g, sigma_g)
-        self.pdf_data["Excited I Gaussian PDF"] = norm.pdf(bins, mu_e, sigma_e)
+            max_F = 1 - 0.5 * (1 - 0.5 * (bins[2] - bins[1]) * np.sum(np.abs(g_PDF - e_PDF)))
+            self.pdf_data[f"Max {quad_name} Fidelity"] = max_F
+            self.pdf_data[f"{quad_name} Bins"]         = bins
+            self.pdf_data[f"Ground {quad_name} PDF"]   = g_PDF
+            self.pdf_data[f"Excited {quad_name} PDF"]  = e_PDF
 
-        #calculate kernel density estimates for other quadrature
-        if self.optimal_integration_time.value:
-            Q_min = np.amin([int_ground_Q[best_idx,:], int_excited_Q[best_idx,:]])
-            Q_max = np.argmax([int_ground_Q[best_idx,:], int_excited_Q[best_idx,:]])
-            qbins = np.linspace(Q_min, Q_max, 100)
-            g_KDE = gaussian_kde(int_ground_Q[best_idx, :])
-            e_KDE = gaussian_kde(int_excited_Q[best_idx, :])
-        else:
-            qbins = np.linspace(np.amin([ground_Q, excited_Q]), np.amax([ground_Q, excited_Q]), 100)
-            g_KDE = gaussian_kde(ground_Q)
-            e_KDE = gaussian_kde(excited_Q)
-        self.pdf_data["Q Bins"] = qbins
-        g_PDF_Q = g_KDE(qbins)
-        e_PDF_Q = e_KDE(qbins)
-        self.pdf_data["Ground Q PDF"] =  g_PDF_Q
-        self.pdf_data["Excited Q PDF"] =  e_PDF_Q
-        self.pdf_data["Max Q Fidelity"] = 1 - 0.5 * (1 - 0.5 * (qbins[2] - qbins[1]) * np.sum(np.abs(g_PDF_Q - e_PDF_Q)))
+            if self.set_threshold.value:
+                indmax = (np.abs(np.cumsum(g_PDF / np.sum(g_PDF))
+                            - np.cumsum(e_PDF / np.sum(e_PDF)))).argmax(axis=0)
+                self.pdf_data[f"{quad_name} Threshold"] = bins[indmax]
+                logger.info(f"Single shot kernel found {quad_name} threshold at {bins[indmax]}.")
 
-        if self.optimal_integration_time.value:
-            mu_g, sigma_g = norm.fit(int_ground_Q[best_idx, :])
-            mu_e, sigma_e = norm.fit(int_excited_Q[best_idx, :])
-        else:
-            mu_g, sigma_g = norm.fit(ground_Q)
-            mu_e, sigma_e = norm.fit(excited_Q)
-        self.pdf_data["Ground Q Gaussian PDF"] = norm.pdf(bins, mu_g, sigma_g)
-        self.pdf_data["Excited Q Gaussian PDF"] = norm.pdf(bins, mu_e, sigma_e)
+            if self.optimal_integration_time.value:
+                mu_g, sigma_g = norm.fit(int_ground[best_idx, :])
+                mu_e, sigma_e = norm.fit(int_excited[best_idx, :])
+            else:
+                mu_g, sigma_g = norm.fit(ground)
+                mu_e, sigma_e = norm.fit(excited)
+            self.pdf_data[f"Ground {quad_name} Gaussian PDF"] = norm.pdf(bins, mu_g, sigma_g)
+            self.pdf_data[f"Excited {quad_name} Gaussian PDF"] = norm.pdf(bins, mu_e, sigma_e)
 
         self.fidelity_result = self.pdf_data["Max I Fidelity"] + 1j * self.pdf_data["Max Q Fidelity"]
         logger.info("Single shot fidelity filter found: {}".format(self.fidelity_result))
