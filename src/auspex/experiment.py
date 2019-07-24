@@ -339,9 +339,10 @@ class Experiment(metaclass=MetaExperiment):
                             self.progressbars[axis].value = axis.step
                     else:
                         if axis.done:
+                            self.progressbars.next()
                             self.progressbars[axis].finish()
                         else:
-                            self.progressbars.next()
+                            self.progressbars.goto(axis.step)
 
             if self.sweeper.is_adaptive():
                 # Add the new tuples to the stream descriptors
@@ -466,7 +467,7 @@ class Experiment(metaclass=MetaExperiment):
     def init_progress_bars(self):
         """ initialize the progress bars."""
         self.progressbars = {}
-
+        print('initializing progress bars!')
         if isnotebook():
             from ipywidgets import IntProgress, VBox
             from IPython.display import display
@@ -477,9 +478,9 @@ class Experiment(metaclass=MetaExperiment):
                                                         description=f'Sweep {axis.name}:', style={'description_width': 'initial'})
             display(VBox(list(self.progressbars.values())))
         else:
-            from progress.bar import Bar
+            from progress.bar import ShadyBar
             for axis in self.sweeper.axes:
-                self.progressbars[axis] = Bar(f"Sweep {axis.name}", max=axis.num_points())
+                self.progressbars[axis] = ShadyBar(f"Sweep {axis.name}", max=axis.num_points())
 
     def run_sweeps(self):
         # Propagate the descriptors through the network
