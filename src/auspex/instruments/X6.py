@@ -318,6 +318,14 @@ class X6(Instrument):
 
     def wait_for_acquisition(self, dig_run, timeout=15, ocs=None, progressbars=None):
 
+        progress_updaters = {}
+        if ocs and progressbars:
+            for oc in ocs:
+                if hasattr(progressbars[oc], 'goto'): #it's a command line progress bar
+                    progress_updaters[oc] = lambda x: progressbars[oc].goto(x)
+                else:
+                    progress_updaters[oc] = lambda x: setattr(progressbars[oc], 'value', x)
+
         if self.gen_fake_data:
             total_spewed = 0
 
@@ -352,14 +360,24 @@ class X6(Instrument):
                     for oc in ocs:
                         total_taken += oc.points_taken.value - initial_points[oc]
                         if progressbars:
-                            progressbars[oc].value = ocs[0].points_taken.value
+                                progress_updaters[oc](ocs[0].points_taken.value)
                         # logger.info('TOTAL fake data received %d', oc.points_taken.value - initial_points[oc])
                     if total_taken == total_spewed:
                         break
                     # logger.info('WAITING for acquisition to finish %d < %d', total_taken, total_spewed)
                     time.sleep(0.025)
+                for oc in ocs:
+                    try:
+                        progressbars[oc].next()
+                        progressbars[oc].finish()
+                    except AttributeError:
+                        pass
 
         else:
+            print('waiting for acquisition')
+            for oc in ocs:
+                print(oc.points_taken)
+                print(oc.descriptor)
             while not self.done():
                 if not dig_run.is_set():
                     self.last_timestamp.value = datetime.datetime.now().timestamp()
@@ -368,8 +386,14 @@ class X6(Instrument):
                     break
                 if progressbars:
                     for oc in ocs:
-                        progressbars[oc].value = oc.points_taken.value
+                        progress_updaters[oc](ocs[0].points_taken.value)
                 time.sleep(0.1)
+            for oc in ocs:
+                try:
+                    progressbars[oc].next()
+                    progressbars[oc].finish()
+                except AttributeError:
+                    pass
 
     # pass thru properties
     @property

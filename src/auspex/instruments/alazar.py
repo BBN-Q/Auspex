@@ -150,7 +150,7 @@ class AlazarATS9870(Instrument):
         the test with fake data
         """
         total = 0
-        
+
         for chan, wsock in self._chan_to_wsocket.items():
             length = int(self.record_length)
             signal = np.sin(np.linspace(0,10.0*np.pi,int(length/2)))
@@ -197,6 +197,14 @@ class AlazarATS9870(Instrument):
         return getattr(self._lib, 'ch{}Buffer'.format(self._chan_to_buf[channel]))
 
     def wait_for_acquisition(self, dig_run, timeout=5, ocs=None, progressbars=None):
+        progress_updaters = {}
+        if ocs and progressbar:
+            for oc in ocs:
+                if hasattr(progressbars[oc], 'goto'):
+                    progress_updaters[oc] = lambda x: progressbars[oc].goto(x)
+                else:
+                    progress_updaters[oc] = lambda x: setattr(progressbars[oc], 'value', x)
+
         if self.gen_fake_data:
             total_spewed = 0
 
@@ -232,14 +240,18 @@ class AlazarATS9870(Instrument):
                     for oc in ocs:
                         total_taken += oc.points_taken.value - initial_points[oc]
                         if progressbars:
-                            progressbars[oc].value = oc.points_taken.value
+                            progress_updaters[oc](oc.points_taken.value)
                         # logger.info('TOTAL fake data received %d', oc.points_taken.value - initial_points[oc])
                     if total_taken == total_spewed:
                         break
-                    
+
                     # logger.info('WAITING for acquisition to finish %d < %d', total_taken, total_spewed)
                     time.sleep(0.025)
-
+                try:
+                    progressbars[oc].next()
+                    progressbars[oc].finish()
+                except AttributeError:
+                    pass
         else:
             while not self.done():
                 if not dig_run.is_set():
@@ -249,8 +261,13 @@ class AlazarATS9870(Instrument):
                     raise Exception("Alazar timed out.")
                 if progressbars:
                     for oc in ocs:
-                        progressbars[oc].value = oc.points_taken.value
+                        progress_updaters[oc](oc.points_taken.value)
                 #time.sleep(0.2) Does this need to be here at all?
+            try:
+                progressbars[oc].next()
+                progressbars[oc].finish()
+            except AttributeError:
+                pass
 
         logger.debug("Digitizer %s finished getting data.", self.name)
 
