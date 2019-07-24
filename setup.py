@@ -22,7 +22,8 @@ install_requires = [
     "ipykernel>=5.0.0",
     "ipywidgets>=7.0.0",
     "sqlalchemy >= 1.2.15",
-    "setproctitle"
+    "setproctitle",
+    "progress"
 ]
 
 #Use PyVISA-Py if running on Linux or MacOS
