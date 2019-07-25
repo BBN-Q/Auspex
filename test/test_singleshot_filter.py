@@ -24,7 +24,8 @@ from QGL import *
 from auspex.qubit import *
 import bbndb
 
-def generate_fake_data(alpha, phi, sigma, N = 5000, plot=False):
+def generate_fake_data(alpha, phi, sigma, N = 5000, plots=False, seed=12345):
+    np.random.seed(seed)
 
     N_samples = 256
     data_start = 3
@@ -44,7 +45,7 @@ def generate_fake_data(alpha, phi, sigma, N = 5000, plot=False):
     gnd += sigma/50 * (np.random.randn(N_samples, N) + 1j * np.random.randn(N_samples, N))
     ex += sigma/50 * (np.random.randn(N_samples, N) + 1j * np.random.randn(N_samples, N))
 
-    if plot:
+    if plots:
         plt.figure()
         plt.plot(np.real(gndIQ), np.imag(gndIQ), 'b.')
         plt.plot(np.real(exIQ), np.imag(exIQ), 'r.')
@@ -120,27 +121,31 @@ class FidelityTestCase(unittest.TestCase):
         exp.set_fake_data(cl["X6_1"], [0.4+0.4j, 0.5+0.6j], random_mag=0.5)
         exp.run_sweeps()
 
+    def test_filter(self, plots=False):
+        gnd, ex = generate_fake_data(3, np.pi/5, 1.6, plots=plots)
+        ss = SSM(save_kernel=False, optimal_integration_time=False, zero_mean=False,
+                    set_threshold=True, logistic_regression=True)
+        ss.ground_data = gnd
+        ss.excited_data = ex
+        ss.compute_filter()
+        self.assertAlmostEqual(np.real(ss.fidelity_result), 0.934, places=2)
 
-if __name__ == "__main__":
-    gnd, ex = generate_fake_data(3, np.pi/5, 1.6, plot=True)
-    ss = SSM(save_kernel=False, optimal_integration_time=False, zero_mean=False,
-                set_threshold=True, logistic_regression=True)
-    ss.ground_data = gnd
-    ss.excited_data = ex
-    ss.compute_filter()
+        if plots:
+            plt.figure()
+            plt.subplot(2,1,1)
+            plt.plot(ss.pdf_data["I Bins"], ss.pdf_data["Ground I PDF"], "b-")
+            plt.plot(ss.pdf_data["I Bins"], ss.pdf_data["Excited I PDF"], "r-")
+            plt.plot(ss.pdf_data["I Bins"], ss.pdf_data["Ground I Gaussian PDF"], "b--")
+            plt.plot(ss.pdf_data["I Bins"], ss.pdf_data["Excited I Gaussian PDF"], "r--")
+            plt.ylabel("PDF")
+            plt.subplot(2,1,2)
+            plt.semilogy(ss.pdf_data["Q Bins"], ss.pdf_data["Ground Q PDF"], "b-")
+            plt.semilogy(ss.pdf_data["Q Bins"], ss.pdf_data["Excited Q PDF"], "r-")
+            plt.semilogy(ss.pdf_data["Q Bins"], ss.pdf_data["Ground Q Gaussian PDF"], "b--")
+            plt.semilogy(ss.pdf_data["Q Bins"], ss.pdf_data["Excited Q Gaussian PDF"], "r--")
+            plt.ylabel("PDF")
+            plt.draw()
+            plt.show()
 
-    plt.figure()
-    plt.subplot(2,1,1)
-    plt.plot(ss.pdf_data["I Bins"], ss.pdf_data["Ground I PDF"], "b-")
-    plt.plot(ss.pdf_data["I Bins"], ss.pdf_data["Excited I PDF"], "r-")
-    plt.plot(ss.pdf_data["I Bins"], ss.pdf_data["Ground I Gaussian PDF"], "b--")
-    plt.plot(ss.pdf_data["I Bins"], ss.pdf_data["Excited I Gaussian PDF"], "r--")
-    plt.ylabel("PDF")
-    plt.subplot(2,1,2)
-    plt.semilogy(ss.pdf_data["Q Bins"], ss.pdf_data["Ground Q PDF"], "b-")
-    plt.semilogy(ss.pdf_data["Q Bins"], ss.pdf_data["Excited Q PDF"], "r-")
-    plt.semilogy(ss.pdf_data["Q Bins"], ss.pdf_data["Ground Q Gaussian PDF"], "b--")
-    plt.semilogy(ss.pdf_data["Q Bins"], ss.pdf_data["Excited Q Gaussian PDF"], "r--")
-    plt.ylabel("PDF")
-    plt.draw()
-    plt.show()
+if __name__ == '__main__':
+    unittest.main()
