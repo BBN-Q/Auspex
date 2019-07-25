@@ -27,6 +27,7 @@ import itertools
 import time, datetime
 import queue
 import copy
+import ctypes
 import numpy as np
 
 from auspex.parameter import Parameter
@@ -74,6 +75,12 @@ class Filter(Process, metaclass=MetaFilter):
 
         # Keep track of data throughput
         self.processed = 0
+
+        # Shared memory interface
+        self.w_idx_shared = Value('i', 0)
+        self.r_idx_shared = Value('i', 0)
+        self.buff_shared_re = Array(ctypes.c_double, lock=True)
+        self.buff_shared_im = Array(ctypes.c_double, lock=True)
 
         # For objectively measuring doneness
         self.finished_processing = Event()
