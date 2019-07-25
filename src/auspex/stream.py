@@ -485,6 +485,7 @@ class DataStream(object):
         self.descriptor = None
         self.start_connector = None
         self.end_connector = None
+        self.closed = False
 
     def set_descriptor(self, descriptor):
         if isinstance(descriptor,DataStreamDescriptor):
@@ -525,6 +526,8 @@ class DataStream(object):
             self.name, self.percent_complete(), self.descriptor)
 
     def push(self, data):
+        if self.closed:
+            raise Exception("The queue is closed and should not be receiving any more data")
         with self.points_taken_lock:
             if hasattr(data, 'size'):
                 self.points_taken.value += data.size
@@ -542,12 +545,14 @@ class DataStream(object):
         self.queue.put(message)
 
     def push_event(self, event_type, data=None):
+        if self.closed:
+            raise Exception("The queue is closed and should not be receiving any more data")
         message = {"type": "event", "event_type": event_type, "data": data}
         self.queue.put(message)
-
-    # def push_direct(self, data):
-    #     message = {"type": "data_direct", "compression": "none", "data": data}
-    #     self.queue.put(message)
+        if event_type == "done":
+            logger.info(f"Closing out queue {self}")
+            self.queue.close()
+            self.closed = True
 
 # These connectors are where we attached the DataStreams
 class InputConnector(object):

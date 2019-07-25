@@ -176,6 +176,9 @@ class Filter(Process, metaclass=MetaFilter):
         for oc in self.output_connectors.values():
             for ost in oc.output_streams:
                 ost.queue.put(message)
+                if message['type'] == 'event' and message["event_type"] == "done":
+                    logger.info(f"Closing out queue {ost.queue}")
+                    ost.queue.close()
 
     def push_resource_usage(self):
         if self.perf_queue and (datetime.datetime.now() - self.last_performance_update).seconds > 1.0:
@@ -215,27 +218,23 @@ class Filter(Process, metaclass=MetaFilter):
                         break
 
                 self.push_resource_usage()
-
+                # if len(messages) > 1:
+                #     logger.info('%s "%s" received "%d" messages', self.__class__.__name__, self.filter_name, len(messages))
                 for message in messages:
+
                     message_type = message['type']
                     message_data = message['data']
 
                     if message['type'] == 'event':
-                        logger.debug('%s "%s" received event "%s"', self.__class__.__name__, self.filter_name, message_data)
+                        logger.debug('%s "%s" received event with data "%s"', self.__class__.__name__, self.filter_name, message_data)
 
                         # Propagate along the graph
                         self.push_to_all(message)
 
                         # Check to see if we're done
                         if message['event_type'] == 'done':
-                            logger.debug(f"{self} received done message!")
+                            logger.info(f"{self} received done message!")
                             stream_done = True
-                        elif message['event_type'] == 'refined':
-                            self.refine(message_data)
-                            continue
-                        elif message['event_type'] == 'new_tuples':
-                            self.process_new_tuples(input_stream.descriptor, message_data)
-                            # break
 
                     elif message['type'] == 'data':
                         if not hasattr(message_data, 'size'):
@@ -246,11 +245,8 @@ class Filter(Process, metaclass=MetaFilter):
                         self.process_data(message_data.flatten())
                         self.processed += message_data.nbytes
 
-                    elif message['type'] == 'data_direct':
-                        self.processed += message_data.nbytes
-                        self.process_direct(message_data)
-
                 if stream_done:
+                    logger.info("Dealing with done message!")
                     self.done.set()
                     break
 
@@ -259,48 +255,3 @@ class Filter(Process, metaclass=MetaFilter):
 
         except Exception as e:
             logger.warning(f"Filter {self} raised exception {e}. Bailing.")
-
-
-    def process_data(self, data):
-        """Process data coming through the filter pipeline"""
-        pass
-
-    def process_direct(self, data):
-        """Process direct data, ignore things like the data descriptors."""
-        pass
-
-    def process_new_tuples(self, descriptor, message_data):
-        axis_names, sweep_values = message_data
-        # All the axis names for this connector
-        ic_axis_names = [ax.name for ax in descriptor.axes]
-        # The sweep values from sweep axes that are present (axes may have been dropped)
-        sweep_values = [sv for an, sv in zip(axis_names, sweep_values) if an in ic_axis_names]
-        vals = [a for a in descriptor.data_axis_values()]
-        if sweep_values:
-            vals  = [[v] for v in sweep_values] + vals
-
-        # Create the outer product of axes
-        nested_list    = list(itertools.product(*vals))
-        flattened_list = [tuple((val for sublist in line for val in sublist)) for line in nested_list]
-        descriptor.visited_tuples = descriptor.visited_tuples + flattened_list
-
-        for oc in self.output_connectors.values():
-            oc.push_event("new_tuples", message_data)
-
-        return len(flattened_list)
-
-    def refine(self, refine_data):
-        """Try to deal with a refinement along the given axes."""
-        axis_name, reset_axis, points = refine_data
-
-        for ic in self.input_connectors.values():
-            for desc in [ic.descriptor] + [s.descriptor for s in ic.input_streams]:
-                for ax in desc.axes:
-                    if ax.name == axis_name:
-                        if reset_axis:
-                            ax.points = points
-                        else:
-                            ax.points = np.append(ax.points, points)
-
-        for oc in self.output_connectors.values():
-            oc.push_event("refined", refine_data)

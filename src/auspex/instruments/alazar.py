@@ -114,7 +114,7 @@ class AlazarATS9870(Instrument):
         return self._lib.data_available()
 
     def done(self):
-        #logger.debug(f"Checking alazar doneness: {self.total_received.value} {self.number_segments * self.number_averages * self.record_length}")
+        logger.warning(f"Checking alazar doneness: {self.total_received.value} {self.number_segments * self.number_averages * self.record_length}")
         return self.total_received.value >=  (self.number_segments * self.number_averages * self.record_length)
 
     def get_socket(self, channel):
@@ -168,6 +168,7 @@ class AlazarATS9870(Instrument):
         sock = self._chan_to_rsocket[channel]
         sock.settimeout(2)
         self.last_timestamp.value = datetime.datetime.now().timestamp()
+        last_print = datetime.datetime.now().timestamp()
         ready.value += 1
 
         while not exit.is_set():
@@ -189,6 +190,9 @@ class AlazarATS9870(Instrument):
                 buf = buf+buf2
             data = np.frombuffer(buf, dtype=np.float32)
             self.total_received.value += len(data)
+            if datetime.datetime.now().timestamp() - last_print > 0.25:
+                last_print = datetime.datetime.now().timestamp()
+                logger.info(f"Alz: {self.total_received.value}")
             oc.push(data)
             self.fetch_count.value += 1
 
@@ -232,44 +236,23 @@ class AlazarATS9870(Instrument):
                     time.sleep(0.0001)
 
             self.ideal_counter += 1
-            # logger.info("Counter: %s", str(counter))
-            # logger.info('TOTAL fake data generated %d', total_spewed)
-            if ocs:
-                while True:
-                    total_taken = 0
-                    for oc in ocs:
-                        total_taken += oc.points_taken.value - initial_points[oc]
-                        if progressbars:
-                            progress_updaters[oc](oc.points_taken.value)
-                        # logger.info('TOTAL fake data received %d', oc.points_taken.value - initial_points[oc])
-                    if total_taken == total_spewed:
-                        break
 
-                    # logger.info('WAITING for acquisition to finish %d < %d', total_taken, total_spewed)
-                    time.sleep(0.025)
-                if progressbars:
-                    try:
-                        progressbars[oc].next()
-                        progressbars[oc].finish()
-                    except AttributeError:
-                        pass
-        else:
-            while not self.done():
-                if not dig_run.is_set():
-                    self.last_timestamp.value = datetime.datetime.now().timestamp()
-                if (datetime.datetime.now().timestamp() - self.last_timestamp.value) > timeout:
-                    logger.error("Digitizer %s timed out. Timeout was %f, time was %f", self.name, timeout, (datetime.datetime.now().timestamp() - self.last_timestamp.value))
-                    raise Exception("Alazar timed out.")
-                if progressbars:
-                    for oc in ocs:
-                        progress_updaters[oc](oc.points_taken.value)
-                #time.sleep(0.2) Does this need to be here at all?
+        while not self.done():
+            if not dig_run.is_set():
+                self.last_timestamp.value = datetime.datetime.now().timestamp()
+            if (datetime.datetime.now().timestamp() - self.last_timestamp.value) > timeout:
+                logger.error("Digitizer %s timed out. Timeout was %f, time was %f", self.name, timeout, (datetime.datetime.now().timestamp() - self.last_timestamp.value))
+                raise Exception("Alazar timed out.")
             if progressbars:
-                try:
-                    progressbars[oc].next()
-                    progressbars[oc].finish()
-                except AttributeError:
-                    pass
+                for oc in ocs:
+                    progress_updaters[oc](oc.points_taken.value)
+            #time.sleep(0.2) Does this need to be here at all?
+        if progressbars:
+            try:
+                progressbars[oc].next()
+                progressbars[oc].finish()
+            except AttributeError:
+                pass
 
         logger.debug("Digitizer %s finished getting data.", self.name)
 
