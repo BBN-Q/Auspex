@@ -20,6 +20,7 @@ else:
     from multiprocessing import Process
     from multiprocessing import Event
     from multiprocessing import Queue
+    from multiprocessing import Value, Array
 
 from setproctitle import setproctitle
 import cProfile
@@ -75,12 +76,6 @@ class Filter(Process, metaclass=MetaFilter):
 
         # Keep track of data throughput
         self.processed = 0
-
-        # Shared memory interface
-        self.w_idx_shared = Value('i', 0)
-        self.r_idx_shared = Value('i', 0)
-        self.buff_shared_re = Array(ctypes.c_double, lock=True)
-        self.buff_shared_im = Array(ctypes.c_double, lock=True)
 
         # For objectively measuring doneness
         self.finished_processing = Event()
@@ -197,68 +192,65 @@ class Filter(Process, metaclass=MetaFilter):
         """
         Generic run method which waits on a single stream and calls `process_data` on any new_data
         """
-        try:
+        # try:
 
-            logger.debug('Running "%s" run loop', self.filter_name)
-            setproctitle(f"python auspex filter: {self}")
-            input_stream = getattr(self, self._input_connectors[0]).input_streams[0]
-            desc = input_stream.descriptor
+        logger.debug('Running "%s" run loop', self.filter_name)
+        setproctitle(f"python auspex filter: {self}")
+        input_stream = getattr(self, self._input_connectors[0]).input_streams[0]
+        desc = input_stream.descriptor
 
-            stream_done = False
-            stream_points = 0
+        stream_done = False
+        stream_points = 0
 
-            while not self.exit.is_set():# and not self.finished_processing.is_set():
-                # Try to pull all messages in the queue. queue.empty() is not reliable, so we
-                # ask for forgiveness rather than permission.
-                messages = []
+        while not self.exit.is_set():# and not self.finished_processing.is_set():
+            # Try to pull all messages in the queue. queue.empty() is not reliable, so we
+            # ask for forgiveness rather than permission.
+            messages = []
 
-                # Check to see if the parent process still exists:
-                if not self._parent_process_running():
-                    logger.warning(f"{self} with pid {os.getpid()} could not find parent with pid {os.getppid()}. Assuming something has gone wrong. Exiting.")
+            # Check to see if the parent process still exists:
+            if not self._parent_process_running():
+                logger.warning(f"{self} with pid {os.getpid()} could not find parent with pid {os.getppid()}. Assuming something has gone wrong. Exiting.")
+                break
+
+            while not self.exit.is_set():
+                try:
+                    messages.append(input_stream.queue.get(False))
+                except queue.Empty as e:
+                    time.sleep(0.002)
                     break
 
-                while not self.exit.is_set():
-                    try:
-                        messages.append(input_stream.queue.get(False))
-                    except queue.Empty as e:
-                        time.sleep(0.002)
-                        break
+            self.push_resource_usage()
+            for message in messages:
+                message_type = message['type']
+                if message['type'] == 'event':
+                    logger.debug('%s "%s" received event with type "%s"', self.__class__.__name__, message_type)
 
-                self.push_resource_usage()
-                # if len(messages) > 1:
-                #     logger.info('%s "%s" received "%d" messages', self.__class__.__name__, self.filter_name, len(messages))
-                for message in messages:
+                    # Propagate along the graph
+                    self.push_to_all(message)
 
-                    message_type = message['type']
-                    message_data = message['data']
+                    # Check to see if we're done
+                    if message['event_type'] == 'done':
+                        logger.info(f"{self} received done message!")
+                        stream_done = True
 
-                    if message['type'] == 'event':
-                        logger.debug('%s "%s" received event with data "%s"', self.__class__.__name__, self.filter_name, message_data)
-
-                        # Propagate along the graph
-                        self.push_to_all(message)
-
-                        # Check to see if we're done
-                        if message['event_type'] == 'done':
-                            logger.info(f"{self} received done message!")
-                            stream_done = True
-
-                    elif message['type'] == 'data':
-                        if not hasattr(message_data, 'size'):
-                            message_data = np.array([message_data])
+                elif message['type'] == 'data':
+                    # if not hasattr(message_data, 'size'):
+                    #     message_data = np.array([message_data])
+                    message_data = input_stream.pop()
+                    if message_data is not None:
                         logger.debug('%s "%s" received %d points.', self.__class__.__name__, self.filter_name, message_data.size)
                         logger.debug("Now has %d of %d points.", input_stream.points_taken.value, input_stream.num_points())
                         stream_points += len(message_data.flatten())
                         self.process_data(message_data.flatten())
                         self.processed += message_data.nbytes
 
-                if stream_done:
-                    logger.info("Dealing with done message!")
-                    self.done.set()
-                    break
+            if stream_done:
+                logger.info("Dealing with done message!")
+                self.done.set()
+                break
 
-            # When we've finished, either prematurely or as expected
-            self.on_done()
+        # When we've finished, either prematurely or as expected
+        self.on_done()
 
-        except Exception as e:
-            logger.warning(f"Filter {self} raised exception {e}. Bailing.")
+        # except Exception as e:
+        #     logger.warning(f"Filter {self} raised exception {e}. Bailing.")
