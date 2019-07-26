@@ -114,7 +114,7 @@ class AlazarATS9870(Instrument):
         return self._lib.data_available()
 
     def done(self):
-        logger.warning(f"Checking alazar doneness: {self.total_received.value} {self.number_segments * self.number_averages * self.record_length}")
+        # logger.warning(f"Checking alazar doneness: {self.total_received.value} {self.number_segments * self.number_averages * self.record_length}")
         return self.total_received.value >=  (self.number_segments * self.number_averages * self.record_length)
 
     def get_socket(self, channel):
@@ -191,7 +191,7 @@ class AlazarATS9870(Instrument):
             self.total_received.value += len(data)
             if datetime.datetime.now().timestamp() - last_print > 0.25:
                 last_print = datetime.datetime.now().timestamp()
-                logger.info(f"Alz: {self.total_received.value}")
+                # logger.info(f"Alz: {self.total_received.value}")
             oc.push(data)
             self.fetch_count.value += 1
 

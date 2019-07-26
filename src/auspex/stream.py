@@ -563,16 +563,16 @@ class DataStream(object):
         self.queue.put(message)
 
     def pop(self):
+        result = None
         with self.buffer_lock:
             idx = self.buff_idx.value
-            if idx == 0:
-                return None
-            result = self.re_np[:idx]
-            # logger.info(f"out buff_shared: {idx} {result[0:4]}")
-            if issubclass(self.descriptor.dtype, np.complex):
-                result = result.astype(np.complex128) + 1.0j*self.im_np[:idx]
-                # logger.info(f"out buff_shared now: {idx} {result[0:4]}")
-            self.buff_idx.value = 0
+            if idx != 0:
+                result = self.re_np[:idx]
+                # logger.info(f"out buff_shared: {idx} {result[0:4]}")
+                if issubclass(self.descriptor.dtype, np.complex):
+                    result = result.astype(np.complex128) + 1.0j*self.im_np[:idx]
+                self.buff_idx.value = 0
+                result = result.copy()
         return result
 
     def push_event(self, event_type, data=None):
@@ -581,7 +581,7 @@ class DataStream(object):
         message = {"type": "event", "event_type": event_type, "data": data}
         self.queue.put(message)
         if event_type == "done":
-            logger.info(f"Closing out queue {self}")
+            logger.debug(f"Closing out queue {self}")
             self.queue.close()
             self.closed = True
 

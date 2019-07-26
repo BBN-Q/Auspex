@@ -417,7 +417,7 @@ class QubitExperiment(Experiment):
             listener.start()
 
         while ready.value < len(self.chan_to_dig):
-            time.sleep(0.3)
+            time.sleep(0.1)
 
         if self.cw_mode:
             for awg in self.awgs:

@@ -179,7 +179,7 @@ class Filter(Process, metaclass=MetaFilter):
             for ost in oc.output_streams:
                 ost.queue.put(message)
                 if message['type'] == 'event' and message["event_type"] == "done":
-                    logger.info(f"Closing out queue {ost.queue}")
+                    logger.debug(f"Closing out queue {ost.queue}")
                     ost.queue.close()
 
     def push_resource_usage(self):
@@ -225,13 +225,13 @@ class Filter(Process, metaclass=MetaFilter):
                 if message['type'] == 'event':
                     logger.debug('%s "%s" received event with type "%s"', self.__class__.__name__, message_type)
 
-                    # Propagate along the graph
-                    self.push_to_all(message)
-
                     # Check to see if we're done
                     if message['event_type'] == 'done':
-                        logger.info(f"{self} received done message!")
+                        logger.debug(f"{self} received done message!")
                         stream_done = True
+                    else:
+                        # Propagate along the graph
+                        self.push_to_all(message)
 
                 elif message['type'] == 'data':
                     # if not hasattr(message_data, 'size'):
@@ -240,12 +240,12 @@ class Filter(Process, metaclass=MetaFilter):
                     if message_data is not None:
                         logger.debug('%s "%s" received %d points.', self.__class__.__name__, self.filter_name, message_data.size)
                         logger.debug("Now has %d of %d points.", input_stream.points_taken.value, input_stream.num_points())
-                        stream_points += len(message_data.flatten())
-                        self.process_data(message_data.flatten())
+                        stream_points += len(message_data)
+                        self.process_data(message_data)
                         self.processed += message_data.nbytes
 
             if stream_done:
-                logger.info("Dealing with done message!")
+                self.push_to_all({"type": "event", "event_type": "done", "data": None})
                 self.done.set()
                 break
 

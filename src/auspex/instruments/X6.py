@@ -252,7 +252,7 @@ class X6(Instrument):
                 length = int(self._lib.record_length/32)
             else: #Raw
                 length = int(self._lib.record_length/4)
-            buff = np.zeros((segs, length), dtype=np.float32)
+            buff = np.zeros((segs, length), dtype=chan.dtype)
             # for chan, wsock in self._chan_to_wsocket.items():
             for i in range(segs):
                 if chan.stream_type == "integrated":
@@ -270,6 +270,7 @@ class X6(Instrument):
                 buff = buff.astype(np.complex128) + random_mag*np.random.random((segs, length))+ 1j*random_mag*np.random.random((segs, length))
 
             total += length*segs
+            # logger.info(f"In Spew: {buff.dtype} {chan.dtype} {buff.size}")
             wsock.send(struct.pack('n', segs*length*buff.dtype.itemsize) + buff.flatten().tostring())
             counter[chan] += length*segs
 
@@ -303,6 +304,7 @@ class X6(Instrument):
                     logger.error("Expected %s bytes, received %s bytes" % (msg_size, len(buf)))
                     return
                 data = np.frombuffer(buf, dtype=channel.dtype)
+                # logger.info(f"X6 {msg_size} got {len(data)}")
                 total += len(data)
                 oc.push(data)
 
@@ -353,7 +355,7 @@ class X6(Instrument):
                         total_spewed += self.spew_fake_data(counter, self.ideal_data)
                 else:
                     total_spewed += self.spew_fake_data(counter, [0.0 for i in range(self.number_segments)])
-
+                # logger.info(f"Spewed {total_spewed}")
                 time.sleep(0.0001)
 
             self.ideal_counter += 1

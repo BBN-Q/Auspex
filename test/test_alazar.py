@@ -84,7 +84,7 @@ class AlazarTestCase(unittest.TestCase):
         alz.wait_for_acquisition(run, timeout=5, ocs=[oc])
 
         exit.set()
-        time.sleep(1)
+        time.sleep(0.1)
         proc.join(3.0)
         if proc.is_alive():
             proc.terminate()
@@ -121,7 +121,7 @@ class AlazarTestCase(unittest.TestCase):
         exp.set_fake_data(dig_1, np.cos(np.linspace(-np.pi, np.pi, 51)))
         exp.run_sweeps()
         data, desc = exp.buffers[0].get_data()
-        self.assertAlmostEqual(np.abs(data).sum(),459.2,places=0)
+        self.assertAlmostEqual(np.abs(data).sum(),610.5,places=0)
 
 if __name__ == '__main__':
     unittest.main() 
