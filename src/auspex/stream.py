@@ -489,7 +489,7 @@ class DataStream(object):
 
         # Shared memory interface
         self.buffer_lock    = mp.Lock()
-        self.buffer_size    = 5000000
+        self.buffer_size    = 500000
         self.buff_idx       = Value('i', 0)
         self.buff_shared_re = RawArray(ctypes.c_double, self.buffer_size)
         self.buff_shared_im = RawArray(ctypes.c_double, self.buffer_size)

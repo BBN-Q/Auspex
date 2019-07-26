@@ -140,29 +140,28 @@ class AlazarATS9870(Instrument):
             self.channels.append(channel)
             self._chan_to_buf[channel] = channel.phys_channel
 
-    def spew_fake_data(self, counter, ideal_datapoint=0, random_mag=0.1, random_seed=12345):
+    def spew_fake_data(self, counter, ideal_data, random_mag=0.1, random_seed=12345):
         """
         Generate fake data on the stream. For unittest usage.
-        ideal_datapoint: mean of the expected signal
+        ideal_data: array or list giving means of the expected signal for each segment
 
         Returns the total number of fake data points, so that we can
         keep track of how many we expect to receive, when we're doing
         the test with fake data
         """
-        total = 0
-
         for chan, wsock in self._chan_to_wsocket.items():
             length = int(self.record_length)
-            signal = np.sin(np.linspace(0,10.0*np.pi,int(length/2)))
-            data = np.zeros(length, dtype=np.float32)
-            data[int(length/4):int(length/4)+len(signal)] = signal * (1.0 if ideal_datapoint == 0 else ideal_datapoint)
-            data += random_mag*np.random.random(length)
-            total += length
-            # logger.info(f"Sending {struct.pack('n', length*np.float32().itemsize)}")
-            wsock.send(struct.pack('n', length*np.float32().itemsize) + data.tostring())
-            counter[chan] += length
+            buff = np.zeros((self.number_segments, length), dtype=np.float32)
+            for i in range(self.number_segments):
+                signal = np.sin(np.linspace(0,10.0*np.pi,int(length/2)))
+                buff[i, int(length/4):int(length/4)+len(signal)] = signal * (1.0 if ideal_data[i] == 0 else ideal_data[i])
+            
+            buff += random_mag*np.random.random((self.number_segments, length))
 
-        return total
+            wsock.send(struct.pack('n', self.number_segments*length*np.float32().itemsize) + buff.flatten().tostring())
+            counter[chan] += length*self.number_segments
+
+        return length*self.number_segments*len(self._chan_to_wsocket)
 
     def receive_data(self, channel, oc, exit, ready, run):
         sock = self._chan_to_rsocket[channel]
@@ -216,24 +215,24 @@ class AlazarATS9870(Instrument):
             initial_points = {oc: oc.points_taken.value for oc in ocs}
             # print(self.number_averages, self.number_segments)
             for j in range(self.number_averages):
-                for i in range(self.number_segments):
-                    if self.ideal_data is not None:
-                        #add ideal data for testing
-                        if hasattr(self, 'exp_step') and self.increment_ideal_data:
-                            raise Exception("Cannot use both exp_step and increment_ideal_data")
-                        elif hasattr(self, 'exp_step'):
-                            total_spewed += self.spew_fake_data(
-                                    counter, self.ideal_data[self.exp_step][i])
-                        elif self.increment_ideal_data:
-                            total_spewed += self.spew_fake_data(
-                                   counter, self.ideal_data[self.ideal_counter][i])
-                        else:
-                            total_spewed += self.spew_fake_data(
-                                    counter, self.ideal_data[i])
+                # for i in range(self.number_segments):
+                if self.ideal_data is not None:
+                    #add ideal data for testing
+                    if hasattr(self, 'exp_step') and self.increment_ideal_data:
+                        raise Exception("Cannot use both exp_step and increment_ideal_data")
+                    elif hasattr(self, 'exp_step'):
+                        total_spewed += self.spew_fake_data(
+                                counter, self.ideal_data[self.exp_step])
+                    elif self.increment_ideal_data:
+                        total_spewed += self.spew_fake_data(
+                               counter, self.ideal_data[self.ideal_counter])
                     else:
-                        total_spewed += self.spew_fake_data(counter)
+                        total_spewed += self.spew_fake_data(
+                                counter, self.ideal_data)
+                else:
+                    total_spewed += self.spew_fake_data(counter, [0.0 for i in range(self.number_segments)])
 
-                    time.sleep(0.0001)
+                time.sleep(0.0001)
 
             self.ideal_counter += 1
 
