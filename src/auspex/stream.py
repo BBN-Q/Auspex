@@ -6,12 +6,20 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-import asyncio
+import os
+import sys
+
+if sys.platform == 'win32' or 'NOFORKING' in os.environ:
+    import threading as mp
+    from queue import Queue
+else:
+    import multiprocessing as mp
+    from multiprocessing import Queue
+from multiprocessing import Value
+
 import logging
 import numbers
 import itertools
-import zlib
-import pickle
 import time
 import datetime
 
@@ -54,10 +62,7 @@ class DataAxis(object):
         self.points        = np.array(points)
         self.unit          = unit
         self.refine_func   = None
-        self.metadata      = None
-        self.metadata_enum = None
-        if metadata is not None:
-            self.set_metadata(metadata)
+        self.metadata      = metadata
 
         # By definition data axes will be done after every experiment.run() call
         self.done         = True
@@ -74,10 +79,6 @@ class DataAxis(object):
         if self.unstructured and len(name) != len(points[0]):
             raise ValueError("DataAxis points length {} and names length {} must match.".format(len(points[0]), len(name)))
 
-    def set_metadata(self, metadata):
-        # Convert the metadata to an enum
-        self.metadata_enum, self.metadata = np.unique(metadata, return_inverse=True)
-
     def data_type(self, with_metadata=False):
         dtype = []
         if self.unstructured:
@@ -88,7 +89,7 @@ class DataAxis(object):
             dtype.append((name, 'f'))
 
         if with_metadata and self.metadata is not None:
-            dtype.append((name + "_metadata", 'f'))
+            dtype.append((name + "_metadata", str))
         return dtype
 
     def points_with_metadata(self):
@@ -138,6 +139,9 @@ class DataAxis(object):
         return "<DataAxis(name={}, start={}, stop={}, num={}, unit={})>".format(
             self.name, self.points[0], self.points[-1], len(self.points), self.unit)
 
+    def __str__(self):
+        return "<DataAxis(name={}, start={}, stop={}, num={}, unit={})>".format(
+            self.name, self.points[0], self.points[-1], len(self.points), self.unit)
 
 class SweepAxis(DataAxis):
     """ Structure for sweep axis, separate from DataAxis.
@@ -175,7 +179,7 @@ class SweepAxis(DataAxis):
 
         logger.debug("Created {}".format(self.__repr__()))
 
-    async def update(self):
+    def update(self):
         """ Update value after each run.
         """
         if self.step < self.num_points():
@@ -190,19 +194,30 @@ class SweepAxis(DataAxis):
             self.step += 1
             self.done = False
 
-    async def check_for_refinement(self):
+    def check_for_refinement(self, output_connectors_dict):
+        """Check to see if we need to perform any refinements. If there is a refine_func
+        and it returns a list of points, then we need to extend the axes. Otherwise, if the
+        refine_func returns None or false, then we reset the axis to its original set of points. If
+        there is no refine_func then we don't do anything at all."""
+
         if not self.done and self.step==self.num_points():
-            # Check to see if we need to perform any refinements
-            await asyncio.sleep(0.1)
             logger.debug("Refining on axis {}".format(self.name))
             if self.refine_func:
-                if not await self.refine_func(self, self.experiment):
+                points = self.refine_func(self, self.experiment)
+                if points is None or points is False:
                     # Returns false if no refinements needed, otherwise adds points to list
                     self.step = 0
                     self.done = True
                     self.reset()
                     logger.debug("Sweep Axis '{}' complete.".format(self.name))
+                    # Push to ocs, which should push to processes
+                    for oc in output_connectors_dict.values():
+                        oc.push_event("refined", (self.name, True, self.original_points)) # axis name, reset, points
                     return False
+                self.add_points(points)
+                self.done = False
+                for oc in output_connectors_dict.values():
+                    oc.push_event("refined", (self.name, False, points)) # axis name, reset, points
                 return True
             else:
                 self.step = 0
@@ -258,6 +273,13 @@ class DataStreamDescriptor(object):
     def num_dims(self):
         # Number of axes
         return len(self.axes)
+
+    def extent(self, flip=False):
+        """Convenience function for matplotlib.imshow, which expects extent=(left, right, bottom, top)."""
+        if self.num_dims() == 2:
+            return (self.axes[1].points[0], self.axes[1].points[-1], self.axes[0].points[0], self.axes[0].points[-1])
+        else:
+            raise Exception("Can't get extent for any number of axes other than two.")
 
     def data_dims(self):
         # Return dimension (length) of the data axes, exclude sweep axes (return 1 for each)
@@ -445,19 +467,24 @@ class DataStreamDescriptor(object):
         return "<DataStreamDescriptor(num_dims={}, num_points={})>".format(
             self.num_dims(), self.num_points())
 
+    def __getitem__(self, axis_name):
+        return self.axis(axis_name).points
+
+    def _ipython_key_completions_(self):
+        return [a.name for a in self.axes]
+
 class DataStream(object):
     """A stream of data"""
-    def __init__(self, name=None, unit=None, loop=None, compression="none"):
+    def __init__(self, name=None, unit=None):
         super(DataStream, self).__init__()
-        self.queue = asyncio.Queue(loop=loop)
-        self.loop = loop
+        self.queue = Queue()
         self.name = name
         self.unit = unit
-        self.points_taken = 0
+        self.points_taken_lock = mp.Lock()
+        self.points_taken = Value('i', 0) # Using shared memory since these are used in filter processes
         self.descriptor = None
         self.start_connector = None
         self.end_connector = None
-        self.compression = compression
 
     def set_descriptor(self, descriptor):
         if isinstance(descriptor,DataStreamDescriptor):
@@ -474,58 +501,55 @@ class DataStream(object):
             return 0
 
     def done(self):
-        return self.points_taken >= self.num_points()
+        with self.points_taken_lock:
+            return self.points_taken.value >= self.num_points()
 
     def percent_complete(self):
         if (self.descriptor is not None) and self.num_points()>0:
-            return 100.0*self.points_taken/self.num_points()
+            with self.points_taken_lock:
+                return 100.0*self.points_taken.value/self.num_points()
         else:
             return 0.0
 
     def reset(self):
         self.descriptor.reset()
-        self.points_taken = 0
+        with self.points_taken_lock:
+            self.points_taken.value = 0
         while not self.queue.empty():
             self.queue.get_nowait()
         if self.start_connector is not None:
-            self.start_connector.points_taken = 0
+            self.start_connector.points_taken.value = 0
 
     def __repr__(self):
         return "<DataStream(name={}, completion={}%, descriptor={})>".format(
             self.name, self.percent_complete(), self.descriptor)
 
-    async def push(self, data):
-        if hasattr(data, 'size'):
-            self.points_taken += data.size
-        else:
-            try:
-                self.points_taken += len(data)
-            except:
+    def push(self, data):
+        with self.points_taken_lock:
+            if hasattr(data, 'size'):
+                self.points_taken.value += data.size
+            else:
                 try:
-                    junk = data + 1.0
-                    self.points_taken += 1
+                    self.points_taken.value += len(data)
                 except:
-                    raise ValueError("Got data {} that is neither an array nor a float".format(data))
-        if self.compression == 'zlib':
-            message = {"type": "data", "compression": "zlib", "data": zlib.compress(pickle.dumps(data, -1))}
-        else:
-            message = {"type": "data", "compression": "none", "data": data}
+                    try:
+                        junk = data + 1.0
+                        self.points_taken.value += 1
+                    except:
+                        raise ValueError("Got data {} that is neither an array nor a float".format(data))
 
-        # This can be replaced with some other serialization method
-        # and also should support sending via zmq.
-        await self.queue.put(message)
+        message = {"type": "data", "data": data}
+        self.queue.put(message)
 
-    async def push_event(self, event_type, data=None):
-        message = {"type": "event", "compression": "none", "event_type": event_type, "data": data}
-        await self.queue.put(message)
+    def push_event(self, event_type, data=None):
+        message = {"type": "event", "event_type": event_type, "data": data}
+        self.queue.put(message)
 
-    async def push_direct(self, data):
-        message = {"type": "data_direct", "compression": "none", "data": data}
-        await self.queue.put(message)
-
+    # def push_direct(self, data):
+    #     message = {"type": "data_direct", "compression": "none", "data": data}
+    #     self.queue.put(message)
 
 # These connectors are where we attached the DataStreams
-
 class InputConnector(object):
     def __init__(self, name="", parent=None, datatype=None, max_input_streams=1):
         self.name = name
@@ -563,12 +587,13 @@ class InputConnector(object):
         return "<InputConnector(name={})>".format(self.name)
 
 class OutputConnector(object):
-    def __init__(self, name="", data_name=None, unit=None, parent=None, datatype=None):
+    def __init__(self, name="", data_name=None, unit=None, parent=None, dtype=np.float32):
         self.name = name
         self.output_streams = []
-        self.points_taken = 0
         self.parent = parent
         self.unit = unit
+        self.points_taken_lock = mp.Lock()
+        self.points_taken = Value('i', 0) # Using shared memory since these are used in filter processes
 
         # if data_name is not none, then it is the origin of the whole chain
         self.data_name = data_name
@@ -576,7 +601,7 @@ class OutputConnector(object):
 
         # Set up a default descriptor, and add access
         # to its methods for convenience.
-        self.descriptor = DataStreamDescriptor()
+        self.descriptor = DataStreamDescriptor(dtype=dtype)
         if self.data_name:
             self.descriptor.data_name = self.data_name
             self.descriptor.unit = self.unit
@@ -586,7 +611,8 @@ class OutputConnector(object):
         self.has_adaptive_sweeps = False
 
     def __len__(self):
-        return self.points_taken
+        with self.points_taken_lock:
+            return self.points_taken.value
 
     # We allow the connectors itself to posess
     # a descriptor, that it may pass
@@ -613,19 +639,20 @@ class OutputConnector(object):
     def done(self):
         return all([stream.done() for stream in self.output_streams])
 
-    async def push(self, data):
-        if hasattr(data, 'size'):
-            self.points_taken += data.size
-        elif isinstance(data, numbers.Number):
-            self.points_taken += 1
-        else:
-            self.points_taken += len(data)
+    def push(self, data):
+        with self.points_taken_lock:
+            if hasattr(data, 'size'):
+                self.points_taken.value += data.size
+            elif isinstance(data, numbers.Number):
+                self.points_taken.value += 1
+            else:
+                self.points_taken.value += len(data)
         for stream in self.output_streams:
-            await stream.push(data)
+            stream.push(data)
 
-    async def push_event(self, event_type, data=None):
+    def push_event(self, event_type, data=None):
         for stream in self.output_streams:
-            await stream.push_event(event_type, data)
+            stream.push_event(event_type, data)
 
     def __repr__(self):
         return "<OutputConnector(name={})>".format(self.name)

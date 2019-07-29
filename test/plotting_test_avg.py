@@ -6,43 +6,19 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-import asyncio
+
 import os
 import numpy as np
 import sys
-
-# ----- fix/unitTests_1 (ST-15) delta Start...
-# Added the followiing 26 Oct 2018 to test Instrument and filter metaclass load
-# introspection minimization (during import)
-#
-from auspex import config
-
-# Filter out Holzworth warning noise noise by citing the specific instrument[s]
-# used for this test.
-config.tgtInstrumentClass       = "TestInstrument"
-
-# Filter out Channerlizer noise by citing the specific filters used for this
-# test.
-# ...Actually Print, Channelizer, and KernelIntegrator are NOT used in this test;
-# hence commented them out, below, as well.
-config.tgtFilterClass           = {"Plotter", "Averager"}
-
-# Uncomment to the following to show the Instrument MetaClass __init__ arguments
-# config.bEchoInstrumentMetaInit  = True
-#
-# ----- fix/unitTests_1 (ST-15) delta Stop.
 
 from auspex.instruments.instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand
 from auspex.experiment import Experiment, FloatParameter
 from auspex.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector
 from auspex.filters.plot import Plotter
 from auspex.filters.average import Averager
-
-# The following are not actually cited in the test logic, below
-#
-#from auspex.filters.debug import Print
-#from auspex.filters.channelizer import Channelizer
-#from auspex.filters.integrator import KernelIntegrator
+from auspex.filters.debug import Print
+from auspex.filters.channelizer import Channelizer
+from auspex.filters.integrator import KernelIntegrator
 
 from auspex.log import logger, logging
 logger.setLevel(logging.INFO)
@@ -76,14 +52,14 @@ class TestExperiment(Experiment):
     def __repr__(self):
         return "<SweptTestExperiment>"
 
-    async def run(self):
-
+    def run(self):
+       
         for _ in range(500):
-            await asyncio.sleep(0.01)
+            time.sleep(0.01)
             data = np.zeros((100,100))
-            data[25:75, 25:75] = 1.0
+            data[25:75, 25:75] = 1.0 
             data = data + 25*np.random.random((100,100))
-            await self.voltage.push(data.flatten())
+            self.voltage.push(data.flatten())
 
 if __name__ == '__main__':
 
