@@ -22,7 +22,7 @@ class ResonatorCircleFit(AuspexFit):
         assert len(freqs) == len(data), "Length of X and Y points must match!"
         self.data = data
         self.freqs = freqs
-        self.make_plots
+        self.make_plots = make_plots
         self.a = a
         self.alpha = alpha
         self.tau = tau
@@ -184,10 +184,15 @@ def resonator_circle_fit(data, freqs, make_plots=False, a=None, alpha=None, tau=
         # The phase of this is 2 pi f t
         # Hence, taking a linear regression against f and finding the slope can give you
         # an idea of t
+
         m,b,r,p,err = scipy.stats.linregress(freqs*1e-9,phases)
         bound = 2*numpy.absolute(m)/(2*numpy.pi)
         result = scipy.optimize.minimize_scalar(_circle_residuals, 0, method='Bounded', args=(data,freqs), bounds=(0, bound))
         tau = result.x
+
+        # print("Bound: " + str(bound))
+        # print("Tau: " + str(tau))
+        # print("Cost: " + str(result.fun))
 
     '''
     taus = numpy.linspace(0, 1000, 1000)
@@ -196,10 +201,6 @@ def resonator_circle_fit(data, freqs, make_plots=False, a=None, alpha=None, tau=
     ax = pyplot.subplot(1,1,1)
     ax.plot(taus,res)
     '''
-
-    print("Bound: " + str(bound))
-    print("Tau: " + str(tau))
-    print("Cost: " + str(result.fun))
 
     # Take the data, revert the cable delay, and translate the circle to the origin
     delay_corrected_data = numpy.multiply(data, numpy.exp(2 * numpy.pi * 1j * freqs * 1e-9 * tau))
