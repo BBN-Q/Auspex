@@ -640,15 +640,16 @@ class RamseyCalibration(QubitCalibration):
                 self.qubit_source = exp._instruments[self.source_proxy.label] # auspex instrument
                 self.orig_freq    = self.source_proxy.frequency
                 self.source_proxy.frequency = round(self.orig_freq + self.added_detuning, 10)
+                self.qubit_source.connect()
                 self.qubit_source.frequency = self.source_proxy.frequency
+                self.qubit_source.disconnect()
             else:
                 self.orig_freq = self.qubit.frequency
+                self.qubit.frequency = round(self.orig_freq+self.added_detuning,10)
 
     def _calibrate(self):
         self.first_ramsey = True
 
-        if not self.set_source:
-            self.qubit.frequency += float(self.added_detuning)
         data, _ = self.run_sweeps()
         try:
             ramsey_fit = RamseyFit(self.delays, data, two_freqs=self.two_freqs, AIC=self.AIC)
@@ -665,9 +666,11 @@ class RamseyCalibration(QubitCalibration):
         fit_freq_A = np.mean(fit_freqs) #the fit result can be one or two frequencies
         if self.set_source:
             self.source_proxy.frequency = round(self.orig_freq + self.added_detuning + fit_freq_A/2, 10)
+            self.qubit_source.connect()
             self.qubit_source.frequency = self.source_proxy.frequency
+            self.qubit_source.disconnect()
         else:
-            self.qubit.frequency += float(fit_freq_A/2)
+            self.qubit.frequency = round(self.orig_freq + self.added_detuning + fit_freq_A/2, 10)
 
         self.first_ramsey = False
 
@@ -679,7 +682,13 @@ class RamseyCalibration(QubitCalibration):
         try:
             ramsey_fit = RamseyFit(self.delays, data, two_freqs=self.two_freqs, AIC=self.AIC)
             fit_freqs = ramsey_fit.fit_params["f"]
+            self.succeeded = True
         except Exception as e:
+            if self.set_source:
+                self.source_proxy.frequency = self.orig_freq
+                self.qubit_source.frequency = self.orig_freq
+            else:
+                self.qubit.frequency = self.orig_freq
             raise Exception(f"Exception {e} while fitting in {self}")
 
         # Plot the results
@@ -692,14 +701,13 @@ class RamseyCalibration(QubitCalibration):
         else:
             self.fit_freq = round(self.orig_freq + self.added_detuning - 0.5*(fit_freq_A - 0.5*fit_freq_A + fit_freq_B), 10)
         logger.info(f"Found qubit Frequency {self.fit_freq}") #TODO: print actual qubit frequency, instead of the fit
-        self.succeeded = True #TODO: add bounds
 
     def update_settings(self):
         if self.set_source:
             self.source_proxy.frequency = float(round(self.fit_freq))
             self.qubit_source.frequency = self.source_proxy.frequency
         else:
-            self.qubit.frequency += float(round(self.fit_freq - self.orig_freq))
+            self.qubit.frequency = float(round(self.fit_freq))
         # update edges where this is the target qubit
         for edge in self.qubit.edge_target:
             edge_source = edge.phys_chan.generator
@@ -949,8 +957,8 @@ class CRCalibration(QubitCalibration):
         self.plot["Fit 0"] =  (finer_xaxis, np.polyval(all_params_0, finer_xaxis) if self.cal_type == CR_cal_type.AMP else sinf(finer_xaxis, **all_params_0))
         self.plot["Data 1"] = (xaxis,       data_t[len(data_t)//2:])
         self.plot["Fit 1"] =  (finer_xaxis, np.polyval(all_params_1, finer_xaxis) if self.cal_type == CR_cal_type.AMP else sinf(finer_xaxis, **all_params_1))
-        
-        # Optimal parameter within range of original data! 
+
+        # Optimal parameter within range of original data!
         if self.opt_par > np.min(xaxis) and self.opt_par < np.max(xaxis):
             self.succeeded = True
 
@@ -968,7 +976,7 @@ class CRLenCalibration(CRCalibration):
     def sequence(self):
         qc, qt = self.qubits
         seqs = [[Id(qc)] + echoCR(qc, qt, length=l, phase = self.phases[0], amp=self.amps[0], riseFall=self.rise_fall).seq + [Id(qc), MEAS(qt)*MEAS(qc)] for l in self.lengths]
-        seqs += [[X(qc)] + echoCR(qc, qt, length=l, phase= self.phases[0], amp=self.amps[0], riseFall=self.rise_fall).seq + [X(qc), MEAS(qt)*MEAS(qc)] for l in self.lengths] 
+        seqs += [[X(qc)] + echoCR(qc, qt, length=l, phase= self.phases[0], amp=self.amps[0], riseFall=self.rise_fall).seq + [X(qc), MEAS(qt)*MEAS(qc)] for l in self.lengths]
         seqs += create_cal_seqs((qt,qc), 2, measChans=(qt,qc))
         return seqs
 
@@ -977,7 +985,7 @@ class CRLenCalibration(CRCalibration):
             delay_descriptor(np.concatenate((self.lengths, self.lengths))),
             cal_descriptor(tuple(self.qubits), 2)
         ]
-        
+
 
 class CRPhaseCalibration(CRCalibration):
     cal_type = CR_cal_type.PHASE

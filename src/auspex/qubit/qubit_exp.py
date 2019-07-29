@@ -499,13 +499,15 @@ class QubitExperiment(Experiment):
     def shutdown_instruments(self):
         # remove socket listeners
         logger.debug("Shutting down instruments")
-
-        for awg in self.awgs:
-            awg.stop()
-        for dig in self.digitizers:
-            dig.stop()
-        for gen_proxy in self.generators:
-            gen_proxy.instr.output = False
+        try:
+            for awg in self.awgs:
+                awg.stop()
+            for dig in self.digitizers:
+                dig.stop()
+            for gen_proxy in self.generators:
+                gen_proxy.instr.output = False
+        except:
+            logger.error('Could Not Stop AWGs or Digitizers; Reset Experiment')
         for instr in self.instruments:
             instr.disconnect()
         self.dig_exit.set()
