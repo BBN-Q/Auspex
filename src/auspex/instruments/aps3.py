@@ -140,6 +140,7 @@ class AMC599(object):
 
     PORT = 0xbb4e # TCPIP port (BBN!)
     ser = None
+    ref = ''
 
     def __init__(self, debug=False):
         self.connected = False
@@ -470,6 +471,30 @@ class AMC599(object):
             sleep(0.01)
             
         return ftw * 5e9
+        
+    def serial_set_reference(self, ref):
+        '''
+        Sets the SOF200 PLL reference to either the front panel or the FPGA.
+        Parameters:
+            ref (str): Either "REF IN" or "FPGA" 
+        '''
+        if ref == 'REF IN':
+            self.ref = ref
+            self.ser.reset_output_buffer()
+            self.ser.reset_input_buffer()
+            self.ser.write(bytearray('rs fp\n', 'ascii'))
+            self.ser.readline() # Throw out the echo line from the terminal interface
+        elif ref == 'FPGA':
+            self.ref = ref
+            self.ser.reset_output_buffer()
+            self.ser.reset_input_buffer()
+            self.ser.write(bytearray('rs fpga\n', 'ascii'))
+            self.ser.readline() # Throw out the echo line from the terminal interface
+        else:
+            logger.info('Error: unrecognized reference input "' + ref + '".')
+            
+    def serial_get_reference(self):
+        return self.ref
 
 #####################################################################
 
@@ -822,4 +847,11 @@ class APS3(Instrument, metaclass=MakeBitFieldParams):
     @dac_nco_frequency.setter
     def dac_nco_frequency(self, value):
         self.board.serial_set_nco_frequency(value)
-            
+        
+    @property
+    def dac_pll_reference(self):
+        return self.board.serial_get_reference()
+        
+    @dac_pll_reference.setter
+    def dac_pll_reference(self, value):
+        self.board.serial_set_reference(value)
