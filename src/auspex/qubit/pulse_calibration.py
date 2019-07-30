@@ -16,7 +16,7 @@ except:
 import auspex.config as config
 from auspex.log import logger
 from copy import copy, deepcopy
-from adapt.refine import refine_1D
+# from adapt.refine import refine_1D
 import os
 import uuid
 import pandas as pd
@@ -35,8 +35,9 @@ from . import pipeline
 from auspex.parameter import FloatParameter
 from auspex.filters.plot import ManualPlotter
 from auspex.analysis.fits import *
+from auspex.analysis.CR_fits import *
 from auspex.analysis.qubit_fits import *
-from auspex.analysis.helpers import normalize_data
+from auspex.analysis.helpers import normalize_buffer_data
 from matplotlib import cm
 from scipy.optimize import curve_fit
 import numpy as np
@@ -49,6 +50,8 @@ class Calibration(object):
     def __init__(self):
         self.do_plotting = True
         self.uuid = str(uuid.uuid4())
+        self.context = None
+        self.socket = None
 
     def init_plots(self):
         """Return a ManualPlotter object so we can plot calibrations. All
@@ -63,21 +66,21 @@ class Calibration(object):
             p.uuid = self.uuid
         try:
             time.sleep(1.0)
-            context = zmq.Context()
-            socket = context.socket(zmq.DEALER)
-            socket.setsockopt(zmq.LINGER, 0)
-            socket.identity = "Auspex_Experiment".encode()
-            socket.connect("tcp://localhost:7761")
-            socket.send_multipart([self.uuid.encode(), json.dumps(plot_desc).encode('utf8')])
+            self.context = zmq.Context()
+            self.socket = self.context.socket(zmq.DEALER)
+            self.socket.setsockopt(zmq.LINGER, 0)
+            self.socket.identity = "Auspex_Experiment".encode()
+            self.socket.connect("tcp://localhost:7761")
+            self.socket.send_multipart([self.uuid.encode(), json.dumps(plot_desc).encode('utf8')])
 
             poller = zmq.Poller()
-            poller.register(socket, zmq.POLLIN)
+            poller.register(self.socket, zmq.POLLIN)
 
             time.sleep(1)
             evts = dict(poller.poll(5000))
-            if socket in evts:
+            if self.socket in evts:
                 try:
-                    if socket.recv_multipart()[0] == b'ACK':
+                    if self.socket.recv_multipart()[0] == b'ACK':
                         logger.info("Connection established to plot server.")
                         self.do_plotting = True
                     else:
@@ -90,13 +93,16 @@ class Calibration(object):
                 logger.info("Server did not respond.")
                 for p in self.plotters:
                     p.do_plotting = False
-                self.socket.close()
-                self.context.term()
 
         except Exception as e:
             logger.warning(f"Exception {e} occured while contacting the plot server. Is it running?")
             for p in self.plotters:
                 p.do_plotting = False
+        finally:
+            if self.socket:
+                self.socket.close()
+            if self.context:
+                self.context.term()
 
         for p in self.plotters:
             p.start()
@@ -152,7 +158,7 @@ class QubitCalibration(Calibration):
         self.kwargs           = kwargs
         self.plotters         = []
         self.do_plotting      = do_plotting
-        self.fake_data        = None
+        self.fake_data        = []
         self.sample           = None
         try:
             self.quad_fun = {"real": np.real, "imag": np.imag, "amp": np.abs, "phase": np.angle}[quad]
@@ -179,29 +185,30 @@ class QubitCalibration(Calibration):
         raise NotImplementedError("Must run a specific qubit calibration.")
 
     def set_fake_data(self, *args, **kwargs):
-        self.fake_data = (args, kwargs)
+        self.fake_data.append((args, kwargs))
 
     def run_sweeps(self):
         meta_file = compile_to_hardware(self.sequence(), fileName=self.filename, axis_descriptor=self.descriptor())
         exp       = CalibrationExperiment(self.qubits, self.output_nodes, self.stream_selectors, meta_file, **self.kwargs)
-        if self.fake_data:
-            exp.set_fake_data(*self.fake_data[0], **self.fake_data[1])
+        if len(self.fake_data) > 0:
+            for fd in self.fake_data:
+                exp.set_fake_data(*fd[0], **fd[1], random_mag=0.0)
         self.exp_config(exp)
         exp.run_sweeps()
 
         data = {}
         var = {}
-
-        for qubit, output_buff, var_buff in zip(exp.qubits,
+        for i, (qubit, output_buff, var_buff) in enumerate(zip(exp.qubits,
                                 [exp.proxy_to_filter[on] for on in exp.output_nodes],
-                                [exp.proxy_to_filter[on] for on in exp.var_buffers]):
+                                [exp.proxy_to_filter[on] for on in exp.var_buffers])):
             if not isinstance(output_buff, DataBuffer):
                 raise ValueError("Could not find data buffer for calibration.")
 
             dataset, descriptor = output_buff.get_data()
+
             if self.norm_points:
-                buff_data = normalize_data(dataset, zero_id=self.norm_points[qubit.label][0],
-                                           one_id=self.norm_points[self.qubit.label][1])
+                buff_data = normalize_buffer_data(dataset, descriptor, i, zero_id=self.norm_points[qubit.label][0],
+                                           one_id=self.norm_points[qubit.label][1])
             else:
                 buff_data = dataset
 
@@ -894,228 +901,136 @@ class DRAGCalibration(QubitCalibration):
             bbndb.get_cl_session().add(c)
             bbndb.get_cl_session().commit()
 
-# class MeasCalibration(Calibration):
-#     def __init__(self, qubit_name):
-#         super(MeasCalibration, self).__init__(qubit, **kwargs)
-#         self.meas_name = "M-" + qubit_name
+'''Two-qubit gate calibrations'''
+class CRCalibration(QubitCalibration):
+    def __init__(self,
+                 edge,
+                 lengths = np.linspace(20, 1020, 21)*1e-9,
+                 phases = [0],
+                 amps = [0.8],
+                 rise_fall = 40e-9,
+                 **kwargs):
+        self.lengths   = lengths
+        self.phases    = phases
+        self.amps      = amps
+        self.rise_fall = rise_fall
+        self.filename  = 'CR/CR'
 
-# class CLEARCalibration(MeasCalibration):
-#     '''
-#     Calibration of cavity reset pulse
-#     aux_qubit: auxiliary qubit used for CLEAR pulse
-#     kappa: cavity linewidth (angular frequency: 1/s)
-#     chi: half of the dispershive shift (angular frequency: 1/s)
-#     tau: duration of each of the 2 depletion steps (s)
-#     alpha: scaling factor
-#     T1factor: decay due to T1 between end of msm't and start of Ramsey
-#     T2: measured T2*
-#     nsteps: calibration steps/sweep
-#     cal_steps: choose ranges for calibration steps. 1: +-100%; 0: skip step
-#     '''
-#     def __init__(self, qubit, aux_qubit, kappa = 2e6, chi = 1e6, t_empty = 200e-9, ramsey_delays=np.linspace(0.0, 50.0, 51)*1e-6, ramsey_freq = 100e3, meas_delay = 0, tau = 200e-9, \
-#     alpha = 1, T1factor = 1, T2 = 30e-6, nsteps = 11, eps1 = None, eps2 = None, cal_steps = (1,1,1)):
-#         super(CLEARCalibration, self).__init__(qubit, **kwargs)
-#         self.filename = 'CLEAR/CLEAR'
-#         self.aux_qubit = aux_qubit
-#         self.kappa = kappa
-#         self.chi = chi
-#         self.ramsey_delays = ramsey_delays
-#         self.ramsey_freq = ramsey_freq
-#         self.meas_delay = meas_delay
-#         self.tau = tau
-#         self.alpha = alpha
-#         self.T1factor = T1factor
-#         self.T2 = T2
-#         self.nsteps = nsteps
-#         if not eps1:
-#             # theoretical values as default
-#             self.eps1 = (1 - 2*np.exp(kappa*t_empty/4)*np.cos(chi*t_empty/2))/(1+np.exp(kappa*t_empty/2)-2*np.exp(kappa*t_empty/4)*np.cos(chi*t_empty/2))
-#             self.eps2 = 1/(1+np.exp(kappa*t_empty/2)-2*np.exp(kappa*t_empty/4)*np.cos(chi*t_empty/2))
-#         self.cal_steps = cal_steps
+        self.edge      = edge
+        qubits = [edge.source, edge.target]
+        super().__init__(qubits, **kwargs)
 
-#     def sequence(self, **params):
-#         qM = QubitFactory(self.aux_qubit) #TODO: replace with MEAS(q) devoid of digitizer trigger
-#         prep = X(self.qubit) if params['state'] else Id(self.qubit)
-#         seqs = [[prep, MEAS(qM, amp1 = params['eps1'], amp2 =  params['eps2'], step_length = self.tau), X90(self.qubit), Id(self.qubit,d), U90(self.qubit,phase = self.ramsey_freq*d),
-#         Id(self.qubit, self.meas_delay), MEAS(self.qubit)] for d in self.ramsey_delays]
-#         seqs += create_cal_seqs((self.qubit,), 2, delay = self.meas_delay)
-#         return seqs
+    def init_plots(self):
+        plot = ManualPlotter("CR"+str.lower(self.cal_type.name)+"Fit", x_label=str.lower(self.cal_type.name), y_label='$<Z_{'+self.edge.target.label+'}>$', y_lim=(-1.02,1.02))
+        plot.add_data_trace("Data 0", {'color': 'C1'})
+        plot.add_fit_trace("Fit 0", {'color': 'C1'})
+        plot.add_data_trace("Data 1", {'color': 'C2'})
+        plot.add_fit_trace("Fit 1", {'color': 'C2'})
+        self.plot = plot
+        return [plot]
 
-#     def init_plots(self): #keep in a single plot?
-#         plot_raw = ManualPlotter("CLEAR Ramsey", x_label='Time (us)', y_label='<Z>')
-#         plot_res = ManualPlotter("CLEAR Cal", x_label= ['eps1, eps2', 'eps1', 'eps2'], y_label=['Residual photons n0', '', ''], numplots=3)
+    def _calibrate(self):
+        # run and load normalized data
+        qt = self.edge.target
+        qs = self.edge.source
+        self.qubit = qt
 
-#         plot_raw.add_data_trace('Data')
-#         plot_raw.add_fit_trace('Fit')
-#         for sweep_num, state in product([0,1,2], [0,1]):
-#             plot_res.add_data_trace('sweep {}, state {}'.format(sweep_num, state), {'color': 'C{}'.format(state+1)}, sweep_num) #TODO: error bar
-#             plot_res.add_fit_trace('Fit sweep {}, state {}'.format(sweep_num, state), {'color' : 'C{}'.format(state+1)}, sweep_num) #TODO
-#         return [plot_raw, plot_res]
+        self.norm_points = {qs.label: (0, 1), qt.label: (0, 1)}
+        data, _ =  self.run_sweeps()
 
+        data_t = data[qt.label]
+        # fit
+        self.opt_par, all_params_0, all_params_1 = fit_CR([self.lengths, self.phases, self.amps], data_t, self.cal_type)
+        # plot the result
+        xaxis = self.lengths if self.cal_type==CR_cal_type.LENGTH else self.phases if self.cal_type==CR_cal_type.PHASE else self.amps
+        finer_xaxis = np.linspace(np.min(xaxis), np.max(xaxis), 4*len(xaxis))
 
-#     def calibrate(self):
-#         cal_step = 0
-#         for ct in range(3):
-#             if not self.cal_steps[ct]:
-#                 continue
-#             #generate sequence
-#             xpoints = np.linspace(1-self.cal_steps[ct], 1+self.cal_steps[ct], self.nsteps)
-#             n0vec = np.zeros(self.nsteps)
-#             err0vec = np.zeros(self.nsteps)
-#             n1vec = np.zeros(self.nsteps)
-#             err1vec = np.zeros(self.nsteps)
-#             for k in range(self.nsteps):
-#                 eps1 = self.eps1 if k==1 else xpoints[k]*self.eps1
-#                 eps2 = self.eps2 if k==2 else xpoints[k]*self.eps2
-#                 #run for qubit in 0/1
-#                 for state in [0,1]:
-#                     self.set(eps1 = eps1, eps2 = eps2, state = state, exp_step = cal_step)
-#                     #analyze
-#                     data, _ = self.run()
-#                     norm_data = quick_norm_data(data)
-#                     eval('n{}vec'.format(state))[k], eval('err{}vec'.format(state))[k], fit_curve = fit_photon_number(self.ramsey_delays, norm_data, [self.kappa, self.ramsey_freq, 2*self.chi, self.T2, self.T1factor, 0])
-#                     #plot
-#                     self.plot[0]['Data'] = (self.ramsey_delays, norm_data)
-#                     self.plot[0]['Fit'] = fit_curve
-#                     self.plot[1]['sweep {}, state 0'.format(ct)] = (xpoints, n0vec)
-#                     self.plot[1]['sweep {}, state 1'.format(ct)] = (xpoints, n1vec)
-#                     cal_step+=1
+        self.plot["Data 0"] = (xaxis,       data_t[:len(data_t)//2])
+        self.plot["Fit 0"] =  (finer_xaxis, np.polyval(all_params_0, finer_xaxis) if self.cal_type == CR_cal_type.AMP else sinf(finer_xaxis, **all_params_0))
+        self.plot["Data 1"] = (xaxis,       data_t[len(data_t)//2:])
+        self.plot["Fit 1"] =  (finer_xaxis, np.polyval(all_params_1, finer_xaxis) if self.cal_type == CR_cal_type.AMP else sinf(finer_xaxis, **all_params_1))
+        
+        # Optimal parameter within range of original data! 
+        if self.opt_par > np.min(xaxis) and self.opt_par < np.max(xaxis):
+            self.succeeded = True
 
-#             #fit for minimum photon number
-#             popt_0,_ = fit_quad(xpoints, n0vec)
-#             popt_1,_ = fit_quad(xpoints, n1vec)
-#             finer_xpoints = np.linspace(np.min(xpoints), np.max(xpoints), 4*len(xpoints))
-#             opt_scaling = np.mean(popt_0[0], popt_1[0])
-#             logger.info("Optimal scaling factor for step {} = {}".format(ct+1, opt_scaling))
+    def update_settings(self):
+        print("updating settings...")
+        self.edge.pulse_params[str.lower(self.cal_type.name)] = float(self.opt_par)
+        super(CRCalibration, self).update_settings()
 
-#             if ct<2:
-#                 self.eps1*=opt_scaling
-#             if ct!=1:
-#                 self.eps2*=opt_scaling
-#             self.plot[1]['Fit sweep {}, state 0'.format(ct)] = (finer_xpoints, quadf(finer_xpoints, popt_0))
-#             self.plot[1]['Fit sweep {}, state 1'.format(ct)] = (finer_xpoints, quadf(finer_xpoints, popt_1))
+class CRLenCalibration(CRCalibration):
+    cal_type = CR_cal_type.LENGTH
 
-#         def update_settings(self):
-#             #update library (default amp1, amp2 for MEAS)
-#             self.saved_settings['qubits'][self.qubit.label]['measure']['pulse_params']['amp1'] = round(float(self.eps1), 5)
-#             self.saved_settings['qubits'][self.qubit.label]['measure']['pulse_params']['amp2'] = round(float(self.eps2), 5)
-#             self.saved_settings['qubits'][self.qubit.label]['measure']['pulse_params']['step_length'] = round(float(self.tau), 5)
-#             super(CLEARCalibration, self).update_settings()
+    def __init__(self, edge, lengths=np.linspace(20, 1020, 21)*1e-9, phase=0, amp=0.8, rise_fall=40e-9, **kwargs):
+        super().__init__(edge, lengths=lengths, phases=[phase], amps=[amp], rise_fall=rise_fall, **kwargs)
 
-# '''Two-qubit gate calibrations'''
-# class CRCalibration(Calibration):
-#     def __init__(self, qubit_names, lengths=np.linspace(20, 1020, 21)*1e-9, phase = 0, amp = 0.8, rise_fall = 40e-9):
-#         super(CRCalibration, self).__init__(qubit_names, factory)
-#         self.lengths = lengths
-#         self.phases = phase
-#         self.amps = amp
-#         self.rise_fall = rise_fall
-#         self.filename = 'CR/CR'
-#         self.edge_name = ChannelLibraries.EdgeFactory(*self.qubit).label
+    def sequence(self):
+        qc, qt = self.qubits
+        seqs = [[Id(qc)] + echoCR(qc, qt, length=l, phase = self.phases[0], amp=self.amps[0], riseFall=self.rise_fall).seq + [Id(qc), MEAS(qt)*MEAS(qc)] for l in self.lengths]
+        seqs += [[X(qc)] + echoCR(qc, qt, length=l, phase= self.phases[0], amp=self.amps[0], riseFall=self.rise_fall).seq + [X(qc), MEAS(qt)*MEAS(qc)] for l in self.lengths] 
+        seqs += create_cal_seqs((qt,qc), 2, measChans=(qt,qc))
+        return seqs
 
-#     def init_plots(self):
-#         plot = ManualPlotter("CR"+str.lower(self.cal_type.name)+"Fit", x_label=str.lower(self.cal_type.name), y_label='$<Z_{'+self.qubit_names[1]+'}>$', y_lim=(-1.02,1.02))
-#         plot.add_data_trace("Data 0", {'color': 'C1'})
-#         plot.add_fit_trace("Fit 0", {'color': 'C1'})
-#         plot.add_data_trace("Data 1", {'color': 'C2'})
-#         plot.add_fit_trace("Fit 1", {'color': 'C2'})
-#         return plot
+    def descriptor(self):
+         return [
+            delay_descriptor(np.concatenate((self.lengths, self.lengths))),
+            cal_descriptor(tuple(self.qubits), 2)
+        ]
+        
 
-#     def calibrate(self):
-#         # generate sequence
-#         self.set()
-#         # run and load normalized data
-#         data, _ = self.run(norm_points = {self.qubit_names[0]: (0, 1), self.qubit_names[1]: (0, 2)})
-#         # select target qubit
-#         data_t = data[self.qubit_names[1]]
-#         # fit
-#         self.opt_par, all_params_0, all_params_1 = fit_CR([self.lengths, self.phases, self.amps], data_t, self.cal_type)
-#         # plot the result
-#         xaxis = self.lengths if self.cal_type==CR_cal_type.LENGTH else self.phases if self.cal_type==CR_cal_type.PHASE else self.amps
-#         finer_xaxis = np.linspace(np.min(xaxis), np.max(xaxis), 4*len(xaxis))
-#         self.plot["Data 0"] = (xaxis,       data_t[:len(data_t)//2])
-#         self.plot["Fit 0"] =  (finer_xaxis, np.polyval(all_params_0, finer_xaxis) if self.cal_type == CR_cal_type.AMP else sinf(finer_xaxis, *all_params_0))
-#         self.plot["Data 1"] = (xaxis,       data_t[len(data_t)//2:])
-#         self.plot["Fit 1"] =  (finer_xaxis, np.polyval(all_params_1, finer_xaxis) if self.cal_type == CR_cal_type.AMP else sinf(finer_xaxis, *all_params_1))
-#         return (str.lower(self.cal_type.name), self.opt_par)
+class CRPhaseCalibration(CRCalibration):
+    cal_type = CR_cal_type.PHASE
 
-#     def update_settings(self):
-#         self.saved_settings['edges'][self.edge_name]['pulse_params'][str.lower(self.cal_type.name)] = float(self.opt_par)
-#         super(CRCalibration, self).update_settings()
+    def __init__(self, edge, length=None, phases=np.linspace(0,2*np.pi,21), amp=0.8, rise_fall=40e-9, **kwargs):
+        if not length:
+            length = edge.pulse_params['length']
+        super().__init__(edge, lengths=[length], phases=phases, amps=[amp], rise_fall=rise_fall, **kwargs)
 
-# class CRLenCalibration(CRCalibration):
-#     def __init__(self, qubit_names, factory, lengths=np.linspace(20, 1020, 21)*1e-9, phase = 0, amp = 0.8, rise_fall = 40e-9, cal_type = CR_cal_type.LENGTH):
-#         self.cal_type = cal_type
-#         super(CRLenCalibration, self).__init__(qubit_names, factory, lengths, phase, amp, rise_fall)
+    def sequence(self):
+        qc, qt = self.qubits
+        seqs = [[Id(qc)] + echoCR(qc, qt, length=self.lengths[0], phase=ph, amp=self.amps[0], riseFall=self.rise_fall).seq + [X90(qt)*Id(qc), MEAS(qt)*MEAS(qc)] for ph in self.phases]
+        seqs += [[X(qc)] + echoCR(qc, qt, length=self.lengths[0], phase=ph, amp=self.amps[0], riseFall=self.rise_fall).seq + [X90(qt)*X(qc), MEAS(qt)*MEAS(qc)] for ph in self.phases]
+        seqs += create_cal_seqs((qt,qc), 2, measChans=(qt,qc))
+        return seqs
 
-#     def sequence(self):
-#         qc, qt = self.qubit
-#         seqs = [[Id(qc)] + echoCR(qc, qt, length=l, phase = self.phases, amp=self.amps, riseFall=self.rise_fall).seq + [Id(qc), MEAS(qt)*MEAS(qc)]
-#         for l in self.lengths]+ [[X(qc)] + echoCR(qc, qt, length=l, phase= self.phases, amp=self.amps, riseFall=self.rise_fall).seq + [X(qc), MEAS(qt)*MEAS(qc)]
-#         for l in self.lengths] + create_cal_seqs((qt,qc), 2, measChans=(qt,qc))
+    def descriptor(self):
+        return [
+            {
+                'name': 'phase',
+                'unit': 'radians',
+                'points': list(self.phases)+list(self.phases),
+                'partition': 1
+            },
+            cal_descriptor(tuple(self.qubits), 2)
+        ]
 
-#         self.axis_descriptor=[
-#             delay_descriptor(np.concatenate((self.lengths, self.lengths))),
-#             cal_descriptor(tuple(self.qubit), 2)
-#         ]
+class CRAmpCalibration(CRCalibration):
+    cal_type = CR_cal_type.AMP
 
-#         return seqs
+    def __init__(self, edge, amp_range = 0.4, amp = 0.8, rise_fall = 40e-9, num_CR = 1, **kwargs):
+        self.num_CR = num_CR
+        length = edge.pulse_params['length']
+        phase  = edge.pulse_params['phase']
+        if num_CR % 2 == 0:
+            logger.error('The number of ZX90 must be odd')
+        amps = np.linspace((1-amp_range/2)*amp, (1+amp_range/2)*amp, 21)
+        super().__init__(edge, lengths=[length], phases=[phase], amps=amps, rise_fall=rise_fall, **kwargs)
 
-# class CRPhaseCalibration(CRCalibration):
-#     def __init__(self, qubit_names, factory, phases = np.linspace(0,2*np.pi,21), amp = 0.8, rise_fall = 40e-9, cal_type = CR_cal_type.PHASE):
-#         self.cal_type = cal_type
-#         super(CRPhaseCalibration, self).__init__(qubit_names, factory, 0, phases, amp, rise_fall)
-#         CRchan = ChannelLibraries.EdgeFactory(*self.qubit)
-#         self.lengths = CRchan.pulse_params['length']
+    def sequence(self):
+        qc, qt = self.qubits
+        seqs = [[Id(qc)] + self.num_CR*echoCR(qc, qt, length=self.lengths, phase=self.phases, amp=a, riseFall=self.rise_fall).seq + [Id(qc), MEAS(qt)*MEAS(qc)]
+        for a in self.amps]+ [[X(qc)] + self.num_CR*echoCR(qc, qt, length=self.lengths, phase= self.phases, amp=a, riseFall=self.rise_fall).seq + [X(qc), MEAS(qt)*MEAS(qc)]
+        for a in self.amps] + create_cal_seqs((qt,qc), 2, measChans=(qt,qc))
+        return seqs
 
-
-#     def sequence(self):
-#         qc, qt = self.qubit
-#         seqs = [[Id(qc)] + echoCR(qc, qt, length=self.lengths, phase=ph, amp=self.amps, riseFall=self.rise_fall).seq + [X90(qt)*Id(qc), MEAS(qt)*MEAS(qc)]
-#         for ph in self.phases]+ [[X(qc)] + echoCR(qc, qt, length=self.lengths, phase= ph, amp=self.amps, riseFall=self.rise_fall).seq + [X90(qt)*X(qc), MEAS(qt)*MEAS(qc)]
-#         for ph in self.phases] + create_cal_seqs((qt,qc), 2, measChans=(qt,qc))
-
-#         self.axis_descriptor = [
-#             {
-#                 'name': 'phase',
-#                 'unit': 'radians',
-#                 'points': list(self.phases)+list(self.phases),
-#                 'partition': 1
-#             },
-#             cal_descriptor(tuple(self.qubit), 2)
-#         ]
-
-#         return seqs
-
-# class CRAmpCalibration(CRCalibration):
-#     def __init__(self, qubit_names, factory, amp_range = 0.4, amp = 0.8, rise_fall = 40e-9, num_CR = 1, cal_type = CR_cal_type.AMP):
-#         self.num_CR = num_CR
-#         if num_CR % 2 == 0:
-#             logger.error('The number of ZX90 must be odd')
-#         self.cal_type = cal_type
-#         amps = np.linspace((1-amp_range/2)*amp, (1+amp_range/2)*amp, 21)
-#         super(CRAmpCalibration, self).__init__(qubit_names, factory, 0, 0, amps, rise_fall)
-#         CRchan = ChannelLibraries.EdgeFactory(*self.qubit)
-#         self.lengths = CRchan.pulse_params['length']
-#         self.phases = CRchan.pulse_params['phase']
-
-#     def sequence(self):
-#         qc, qt = self.qubit
-#         seqs = [[Id(qc)] + self.num_CR*echoCR(qc, qt, length=self.lengths, phase=self.phases, amp=a, riseFall=self.rise_fall).seq + [Id(qc), MEAS(qt)*MEAS(qc)]
-#         for a in self.amps]+ [[X(qc)] + self.num_CR*echoCR(qc, qt, length=self.lengths, phase= self.phases, amp=a, riseFall=self.rise_fall).seq + [X(qc), MEAS(qt)*MEAS(qc)]
-#         for a in self.amps] + create_cal_seqs((qt,qc), 2, measChans=(qt,qc))
-
-#         self.axis_descriptor = [
-#             {
-#                 'name': 'amplitude',
-#                 'unit': None,
-#                 'points': list(self.amps)+list(self.amps),
-#                 'partition': 1
-#             },
-#             cal_descriptor(tuple(self.qubit), 2)
-#         ]
-
-#         return seqs
+    def descriptor(self):
+        return [{'name': 'amplitude',
+                 'unit': None,
+                 'points': list(self.amps)+list(self.amps),
+                 'partition': 1
+                },
+                cal_descriptor(tuple(self.qubit), 2)]
 
 def restrict(phase):
     out = np.mod( phase + np.pi, 2*np.pi, ) - np.pi

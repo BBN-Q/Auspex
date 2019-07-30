@@ -1,4 +1,5 @@
 from auspex.log import logger
+from auspex.config import isnotebook
 from auspex.experiment import Experiment, FloatParameter
 from auspex.stream import DataStream, DataAxis, SweepAxis, DataStreamDescriptor, InputConnector, OutputConnector
 from auspex.instruments import instrument_map
@@ -119,8 +120,9 @@ class QubitExperiment(Experiment):
         self.controlled_qubits = [c for c in self.chan_db.channels if c.label in meta_info["qubits"]]
         self.measurements      = [c for c in self.chan_db.channels if c.label in meta_info["measurements"]]
         self.measured_qubits   = [c for c in self.chan_db.channels if "M-"+c.label in meta_info["measurements"]]
-        self.phys_chans        = list(set([e.phys_chan for e in self.controlled_qubits + self.measurements]))
-        self.transmitters      = list(set([e.phys_chan.transmitter for e in self.controlled_qubits + self.measurements]))
+        self.edges             = [c for c in self.chan_db.channels if c.label in meta_info["edges"]]
+        self.phys_chans        = list(set([e.phys_chan for e in self.controlled_qubits + self.measurements + self.edges]))
+        self.transmitters      = list(set([e.phys_chan.transmitter for e in self.controlled_qubits + self.measurements + self.edges]))
         self.receiver_chans    = list(set([e.receiver_chan for e in self.measurements]))
         self.trig_chans        = list(set([e.trig_chan.phys_chan for e in self.measurements]))
         self.receivers         = list(set([e.receiver_chan.receiver for e in self.measurements]))
@@ -510,7 +512,7 @@ class QubitExperiment(Experiment):
         for listener in self.dig_listeners:
             listener.join(2)
             if listener.is_alive():
-                logger.info(f"Terminating listener {listener} aggressively")
+                logger.debug(f"Terminating listener {listener} aggressively")
                 listener.terminate()
             del listener
 
@@ -525,15 +527,11 @@ class QubitExperiment(Experiment):
 
     def init_progress_bars(self):
         """ initialize the progress bars."""
-
-        from auspex.config import isnotebook
-
+        self.progressbars = {}
+        ocs = list(self.output_connectors.values())
         if isnotebook():
             from ipywidgets import IntProgress, VBox
             from IPython.display import display
-
-            ocs = list(self.output_connectors.values())
-            self.progressbars = {}
             if len(ocs)>0:
                 for oc in ocs:
                     self.progressbars[oc] = IntProgress(min=0, max=oc.output_streams[0].descriptor.num_points(), bar_style='success',
@@ -542,6 +540,14 @@ class QubitExperiment(Experiment):
                 self.progressbars[axis] = IntProgress(min=0, max=axis.num_points(),
                                                         description=f'{axis.name}:', style={'description_width': 'initial'})
             display(VBox(list(self.progressbars.values())))
+        else:
+            from progress.bar import ShadyBar
+            if len(ocs)>0:
+                for oc in ocs:
+                    self.progressbars[oc] = ShadyBar(f'Digitizer Data {oc.name}:',
+                                                max=oc.output_streams[0].descriptor.num_points())
+            for axis in self.sweeper.axes:
+                self.progressbars[axis] = ShadyBar(f"Sweep {axis.name}", max=axis.num_points())
 
     def run(self):
         # Begin acquisition before enabling the AWGs
