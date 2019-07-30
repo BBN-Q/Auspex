@@ -555,7 +555,7 @@ class DataStream(object):
             # logger.info(f"in buff_shared_re:{self.buff_idx.value}  {re[0:4]}")
             self.re_np[start:start+re.size] = re
             if issubclass(self.descriptor.dtype, np.complex):
-                im = np.real(data).flatten()
+                im = np.imag(data).flatten()
                 # logger.info(f"in buff_shared_im:{self.buff_idx.value}  {im[0:4]}")
                 self.im_np[start:start+im.size] = im
             message = {"type": "data", "data": None}
