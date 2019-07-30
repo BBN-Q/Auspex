@@ -60,7 +60,10 @@ class HolzworthDevice(object):
 
     def __del__(self):
         if self._device is not None:
-            usb.util.dispose_resources(self._device)
+            try:
+                usb.util.dispose_resources(self._device)
+            except:
+                pass
 
     def write(self, command):
         try:
@@ -123,7 +126,7 @@ else:
             holzworth_driver = HolzworthPythonDriver()
             logger.debug("Using Holzworth pure-python driver.")
         except Exception as e:
-            logger.debug("Could not connect to Holzworths: {}".format(e))
+            logger.warning("Could not connect to Holzworths: {}".format(e))
             if str(e) == "No backend available":
                 logger.warning("You may not have the libusb backend: please install it!")
             holzworth_driver = MagicMock()
