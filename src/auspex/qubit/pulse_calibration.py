@@ -256,7 +256,7 @@ class CalibrationExperiment(QubitExperiment):
             if len(stream_sels) > 1:
                 raise Exception(f"More than one stream selector found for {qubit}, please explicitly define output node using output_nodes argument.")
             ds = nx.descendants(graph, stream_sels[0].hash_val)
-            outputs = [graph.nodes[d]['node_obj'] for d in ds if isinstance(graph.nodes[d]['node_obj'], (bbndb.auspex.Write, bbndb.auspex.Buffer))]
+            outputs = [graph.nodes[d]['node_obj'] for d in ds if isinstance(graph.nodes[d]['node_obj'], (bbndb.auspex.Write, bbndb.auspex.Buffer)) and graph.nodes[d]['node_obj'].qubit_name == qubit.label]
             if len(outputs) > 1:
                 raise Exception(f"More than one output node found for {qubit}, please explicitly define output node using output_nodes argument.")
             output_nodes.append(outputs[0])

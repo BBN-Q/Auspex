@@ -207,7 +207,14 @@ class QubitExperiment(Experiment):
 
         # Create microwave sources and receiver instruments from the database objects.
         # We configure the self.receivers later after adding channels.
-        self.instrument_proxies = self.generators + self.receivers + self.transmitters + self.all_standalone + self.processors
+        self.instrument_proxies = self.generators + self.receivers + self.transmitters + self.transceivers + self.all_standalone + self.processors
+        for t in self.transceivers:
+            if t.initialize_separately:
+                self.instrument_proxies.remove(t)
+            else:
+                for el in t.transmitters + t.receivers:
+                    self.instrument_proxies.remove(el)
+
         self.instruments = []
         for instrument in self.instrument_proxies:
             instr = instrument_map[instrument.model](instrument.address, instrument.label) # Instantiate
@@ -234,8 +241,14 @@ class QubitExperiment(Experiment):
             rcv = receiver_chans_by_qubit_label[mq.label]
 
             # Create the auspex stream selectors
-            dig = rcv.receiver # The digitizer instrument in the database
-            stream_sel_class = stream_sel_map[dig.stream_sel]
+            transcvr = rcv.receiver.transceiver
+            if transcvr is not None and transcvr.initialize_separately == False:
+                dig = rcv.receiver.transceiver
+                stream_sel_class = stream_sel_map[rcv.receiver.stream_sel]
+            else:
+                dig = rcv.receiver
+                stream_sel_class = stream_sel_map[dig.stream_sel]
+
             for mq_stream_sel in mq_stream_sels:
                 auspex_stream_sel = stream_sel_class(name=f"{rcv.label}-{mq_stream_sel.stream_type}-stream_sel")
                 mq_stream_sel.channel = rcv.channel
@@ -277,9 +290,14 @@ class QubitExperiment(Experiment):
         # Configure receiver instruments from the database objects
         # this must be done after adding channels.
         for dig in self.receivers:
-            dig.number_averages  = averages
-            dig.number_waveforms = 1
-            dig.number_segments  = segments_per_dig[dig]
+            if dig.transceiver is not None and transcvr.initialize_separately == False:
+                dig.transceiver.number_averages = num_averages
+                dig.transceiver.number_waveforms = 1
+                dig.transceiver.number_segments = segments_per_dig[dig]
+            else:
+                dig.number_averages  = averages
+                dig.number_waveforms = 1
+                dig.number_segments  = segments_per_dig[dig]
             dig.instr.proxy_obj  = dig
 
         # Restrict the graph to the relevant qubits
