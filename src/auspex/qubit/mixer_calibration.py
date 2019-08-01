@@ -99,7 +99,7 @@ class MixerCalibration(Calibration):
 
         I1_amps = self.run_sweeps("I_offset", offset_pts, config_dict)
         try:
-            I1_offset, xpts, ypts = find_null_offset(offset_pts[1:], I1_amps[1:], use_fit = use_fit)
+            I1_offset, xpts, ypts = find_null_offset(offset_pts[1:], I1_amps[1:], use_fit = self.use_fit)
         except:
             raise ValueError("Could not find null offset")
         self.plt1["I-offset"] = (offset_pts, I1_amps)
@@ -109,7 +109,7 @@ class MixerCalibration(Calibration):
 
         Q1_amps = self.run_sweeps("Q_offset", offset_pts, config_dict)
         try:
-            Q1_offset, xpts, ypts = find_null_offset(offset_pts[1:], Q1_amps[1:], use_fit = use_fit)
+            Q1_offset, xpts, ypts = find_null_offset(offset_pts[1:], Q1_amps[1:], use_fit = self.use_fit)
         except:
             raise ValueError("Could not find null offset")
         self.plt1["Q-offset"] = (offset_pts, Q1_amps)
@@ -119,7 +119,7 @@ class MixerCalibration(Calibration):
 
         I2_amps = self.run_sweeps("I_offset", offset_pts, config_dict)
         try:
-            I2_offset, xpts, ypts = find_null_offset(offset_pts[1:], I2_amps[1:], use_fit = use_fit)
+            I2_offset, xpts, ypts = find_null_offset(offset_pts[1:], I2_amps[1:], use_fit = self.use_fit)
         except:
             raise ValueError("Could not find null offset")
         self.plt1["I-offset"] = (offset_pts, I2_amps)
@@ -140,7 +140,7 @@ class MixerCalibration(Calibration):
 
         amps1 = self.run_sweeps(cals[first_cal], cal_pts[first_cal], config_dict)
         try:
-            offset1, xpts, ypts = find_null_offset(cal_pts[first_cal][1:], amps1[1:], default=cal_defaults[first_cal], use_fit = use_fit)
+            offset1, xpts, ypts = find_null_offset(cal_pts[first_cal][1:], amps1[1:], default=cal_defaults[first_cal], use_fit = self.use_fit)
         except:
             raise ValueError("Could not find null offset")
         correct_plotter[first_cal][cals[first_cal]] = (cal_pts[first_cal], amps1)
@@ -150,7 +150,7 @@ class MixerCalibration(Calibration):
 
         amps2 = self.run_sweeps(cals[second_cal], cal_pts[second_cal], config_dict)
         try:
-            offset2, xpts, ypts = find_null_offset(cal_pts[second_cal][1:], amps2[1:], default=cal_defaults[second_cal], use_fit = use_fit)
+            offset2, xpts, ypts = find_null_offset(cal_pts[second_cal][1:], amps2[1:], default=cal_defaults[second_cal], use_fit = self.use_fit)
         except:
             raise ValueError("Could not find null offset")
         correct_plotter[second_cal][cals[second_cal]] = (cal_pts[second_cal], amps2)
@@ -252,10 +252,10 @@ class MixerCalibrationExperiment(Experiment):
         imbalance."""
         super(MixerCalibrationExperiment, self).connect_instruments()
         if isinstance(self.awg, bbn.APS2):
+            self.awg.set_offset(0,0.0)
             self.awg.set_offset(1,0.0)
-            self.awg.set_offset(2,0.0)
             self.awg.set_mixer_amplitude_imbalance(1.0)
-            self.awg.set_mixer_phase_skew(1.0)
+            self.awg.set_mixer_phase_skew(0.0)
         else:
             self.awg.set_offset(int(self._phys_chan.label[-2]), 0.0)
             self.awg.set_offset(int(self._phys_chan.label[-1]), 0.0)
