@@ -356,9 +356,9 @@ class MixerCalibrationExperiment(Experiment):
                 self.awg.set_mixer_phase_skew(0.0)
                 self.awg.set_offset(0, 0.0)
                 self.awg.set_offset(1, 0.0)
-            else:abel[-1]), 1)
-            self.awg.set_mixer_amplitude_imbalance(self._phys_chan.label[-2:],1.0)
-            self.awg.set_mixer_phase_skew(self._phys_chan.label[-2:],0.0)
+            else:
+                self.awg.set_mixer_amplitude_imbalance(self._phys_chan.label[-2:],1.0)
+                self.awg.set_mixer_phase_skew(self._phys_chan.label[-2:],0.0)
                 self.awg.set_mixer_amplitude_imbalance(self._phys_chan.label[-2:],1.0)
                 self.awg.set_mixer_phase_skew(self._phys_chan.label[-2:],0.0)
                 self.awg.set_offset(int(self._phys_chan.label[-2]), 0.0)
