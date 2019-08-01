@@ -494,7 +494,7 @@ class DataStream(object):
         self.buff_shared_re = RawArray(ctypes.c_double, self.buffer_size)
         self.buff_shared_im = RawArray(ctypes.c_double, self.buffer_size)
         self.re_np = np.frombuffer(self.buff_shared_re, dtype=np.float64)
-        self.im_np = np.frombuffer(self.buff_shared_re, dtype=np.float64)
+        self.im_np = np.frombuffer(self.buff_shared_im, dtype=np.float64)
 
     def set_descriptor(self, descriptor):
         if isinstance(descriptor,DataStreamDescriptor):
@@ -552,11 +552,9 @@ class DataStream(object):
         with self.buffer_lock:
             start = self.buff_idx.value
             re = np.real(data).flatten()
-            # logger.info(f"in buff_shared_re:{self.buff_idx.value}  {re[0:4]}")
             self.re_np[start:start+re.size] = re
-            if issubclass(self.descriptor.dtype, np.complex):
+            if np.issubdtype(self.descriptor.dtype, np.complexfloating):
                 im = np.imag(data).flatten()
-                # logger.info(f"in buff_shared_im:{self.buff_idx.value}  {im[0:4]}")
                 self.im_np[start:start+im.size] = im
             message = {"type": "data", "data": None}
             self.buff_idx.value = start + data.size
@@ -568,8 +566,8 @@ class DataStream(object):
             idx = self.buff_idx.value
             if idx != 0:
                 result = self.re_np[:idx]
-                # logger.info(f"out buff_shared: {idx} {result[0:4]}")
-                if issubclass(self.descriptor.dtype, np.complex):
+
+                if np.issubdtype(self.descriptor.dtype, np.complexfloating):
                     result = result.astype(np.complex128) + 1.0j*self.im_np[:idx]
                 self.buff_idx.value = 0
                 result = result.copy()
