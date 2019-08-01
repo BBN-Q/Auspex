@@ -37,6 +37,9 @@ class SweptTestExperiment(Experiment):
     samples = 5
     time_val = 0
 
+    # Complex Values?
+    complex_data = False
+
     def init_instruments(self):
         self.field.assign_method(lambda x: logger.debug("Field got value " + str(x)))
         self.freq.assign_method(lambda x: logger.debug("Freq got value " + str(x)))
@@ -54,7 +57,10 @@ class SweptTestExperiment(Experiment):
         logger.debug("Data taker running (inner loop)")
         time_step = 0.1
         time.sleep(0.002)
-        data_row = np.sin(2*np.pi*self.time_val)*np.ones(5) + 0.1*np.random.random(5)
+        if self.complex_data:
+            data_row = np.exp(2j*np.pi*self.time_val)*np.ones(5) + 0.1j*np.random.random(5)
+        else:
+            data_row = np.sin(2*np.pi*self.time_val)*np.ones(5) + 0.1*np.random.random(5)
         self.time_val += time_step
         self.voltage.push(data_row)
         self.current.push(data_row*2.0)
@@ -134,6 +140,28 @@ class BufferTestCase(unittest.TestCase):
         self.assertTrue(data.shape == (3, 4, 5))
         self.assertTrue(np.all(desc['field'] == np.linspace(0,100.0,4)))
         self.assertTrue(np.all(desc.axis('samples').metadata == ["data", "data", "data", "0", "1"]))
+
+    def test_buffer_complex(self):
+        exp = SweptTestExperiment()
+
+        db = DataBuffer()
+        exp.voltage.descriptor.dtype = np.complex128
+        exp.current.descriptor.dtype = np.complex128
+        exp.complex_data = True
+        exp.update_descriptors()
+
+
+        edges = [(exp.voltage, db.sink)]
+        exp.set_graph(edges)
+
+        exp.add_sweep(exp.field, np.linspace(0,100.0,4))
+        exp.add_sweep(exp.freq, np.linspace(0,10.0,3))
+        exp.run_sweeps()
+
+        data, desc = db.get_data()
+
+        self.assertAlmostEqual(np.sum(data.real-data.imag), 0.0, places=3)
+        # self.assertTrue(np.all(desc['field'] == np.linspace(0,100.0,4)))
 
 if __name__ == '__main__':
     unittest.main()
