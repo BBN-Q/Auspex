@@ -100,6 +100,7 @@ class SingleShotFidelityExperiment(QubitExperiment):
         else:
             fidelities = [f['Max I Fidelity'] for f in self.pdf_data]
             opt_ind = np.argmax(fidelities)
+            import pdb; pdb.set_trace()
             for k, axis in enumerate(self.sweeper.axes):
                 instr_tree = axis.parameter.instr_tree
                 opt_value = axis.points[opt_ind]
