@@ -3,6 +3,7 @@ import datetime
 import os, re
 from os import path
 import numpy as np
+from itertools import product
 
 def get_file_name():
     """Helper function to get a filepath from a dialog box"""
@@ -86,6 +87,24 @@ def normalize_data(data, zero_id = 0, one_id = 1):
     #remove calibration points
     norm_data = [d for ind, d in enumerate(norm_data) if metadata[ind] == max(metadata)]
     return norm_data
+
+def normalize_buffer_data(data, desc, qubit_index, zero_id = 0, one_id = 1):
+    # Qubit index gives the string offset of the qubit in the metadata
+    metadata = [(i, int(v[qubit_index])) for i,v in enumerate(desc.axes[0].metadata) if v != "data"]
+    
+    #find indeces for calibration points
+    zero_cal_idx = [i for i, x in metadata if x == zero_id]
+    one_cal_idx = [i for i, x in metadata if x == one_id]
+    #find values for calibrated 0 and 1
+    zero_cal = np.mean(data[zero_cal_idx])
+    one_cal = np.mean(data[one_cal_idx])
+
+    #normalize
+    scale_factor = (zero_cal - one_cal)/2
+    norm_data = (data-zero_cal)/scale_factor + 1
+
+    #remove calibration points
+    return norm_data[:metadata[0][0]]
 
 def cal_scale(data, bit=0, nqubits=1, repeats=2):
     """

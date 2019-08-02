@@ -194,7 +194,7 @@ class MixerCalibrationExperiment(Experiment):
     amplitude_factor = FloatParameter(default=1.0)
     phase_skew = FloatParameter(default=0.0, unit="rad")
 
-    sideband_modulation = False
+    sideband_modulation = True
 
     def __init__(self, channel, spectrum_analyzer, config_dict, mixer="control"):
         """Initialize MixerCalibrationExperiment Experiment.
@@ -215,10 +215,12 @@ class MixerCalibrationExperiment(Experiment):
             self._awg = channel.measure_chan.phys_chan.transmitter
             self._phys_chan = channel.measure_chan.phys_chan
             self._source = channel.measure_chan.phys_chan.generator
+            self.SSB_FREQ = channel.measure_chan.frequency
         elif mixer.lower() == "control":
             self._awg = channel.phys_chan.transmitter
             self._phys_chan = channel.phys_chan
             self._source = channel.phys_chan.generator
+            self.SSB_FREQ = channel.frequency
         else:
             raise ValueError("Unknown mixer {}: must be either 'measure' or 'control'.".format(mixer))
 
@@ -246,33 +248,30 @@ class MixerCalibrationExperiment(Experiment):
         """Extend connect_instruments to reset I,Q offsets and amplitude and phase
         imbalance."""
         super(MixerCalibrationExperiment, self).connect_instruments()
-        self.awg.set_offset(int(self._phys_chan.label[-2]), 0.0)
-        self.awg.set_offset(int(self._phys_chan.label[-1]), 0.0)
-        self.awg.set_amplitude(int(self._phys_chan.label[-2]), 1)
-        self.awg.set_amplitude(int(self._phys_chan.label[-1]), 1)
-        self.awg.set_mixer_amplitude_imbalance(self._phys_chan.label[-2:],1.0)
-        self.awg.set_mixer_phase_skew(self._phys_chan.label[-2:],0.0)
-        self.reset_calibration()
+        self.awg.set_offset(0, 0.0)
+        self.awg.set_offset(1, 0.0)
+        self.awg.set_mixer_amplitude_imbalance(1.0)
+        self.awg.set_mixer_phase_skew(0.0)
 
     def init_instruments(self):
         for k,v in self.config_dict.items():
             if k != "sideband_modulation":
                 getattr(self, k).value = v
 
-        self.I_offset.assign_method(lambda x: self.awg.set_offset(int(self._phys_chan.label[-2]), x))
-        self.Q_offset.assign_method(lambda x: self.awg.set_offset(int(self._phys_chan.label[-1]), x))
-        self.amplitude_factor.assign_method(lambda x: self.awg.set_mixer_amplitude_imbalance(self._phys_chan.label[-2:], x))
+        self.I_offset.assign_method(lambda x: self.awg.set_offset(0, x))
+        self.Q_offset.assign_method(lambda x: self.awg.set_offset(1, x))
+        self.amplitude_factor.assign_method(self.awg.set_mixer_amplitude_imbalance)
         if isinstance(self.awg, bbn.APS2):
             self.phase_skew.assign_method(self.awg.set_mixer_phase_skew)
         else:
-            self.phase_skew.assign_method(lambda x: self.awg.set_mixer_phase_skew(self._phys_chan.label[-2:], x, self.SSB_FREQ))
+            self.phase_skew.assign_method(lambda x: self.awg.set_mixer_phase_skew('12', x, self.SSB_FREQ))
         self.I_offset.add_post_push_hook(lambda: time.sleep(0.1))
         self.Q_offset.add_post_push_hook(lambda: time.sleep(0.1))
         self.amplitude_factor.add_post_push_hook(lambda: time.sleep(0.1))
         self.phase_skew.add_post_push_hook(lambda: time.sleep(0.1))
 
         for name, instr in self._instruments.items():
-            # Configure with dictionary from the instrument proxy
+            # Configure with dictionary from the instrument proxyg
             instr.configure_with_proxy(instr.proxy_obj)
 
         #make sure the microwave generators are set up properly
@@ -303,12 +302,13 @@ class MixerCalibrationExperiment(Experiment):
             self.awg.waveform_frequency = -self.SSB_FREQ
             self.awg.run_mode = "CW_WAVEFORM"
         else:
-            iwf =  1 * np.cos(2*np.pi*self.SSB_FREQ*np.arange(1200,dtype=np.float64)*1e-6/self.awg.sampling_rate)
-            qwf = -1 * np.sin(2*np.pi*self.SSB_FREQ*np.arange(1200,dtype=np.float64)*1e-6/self.awg.sampling_rate)
-            self.awg.load_waveform(int(self._phys_chan.label[-2]), iwf)
-            self.awg.load_waveform(int(self._phys_chan.label[-1]), qwf)
+            iwf = 0.5 * np.cos(2*np.pi*self.SSB_FREQ*np.ones(1200, dtype=np.float64))
+            qwf = -0.5 * np.sin(2*np.pi*self.SSB_FREQ*np.ones(1200, dtype=np.float64));
+            self.awg.set_amplitude(1, awg_amp); #TODO: ampl. to be set by looking at phys. chan
+            self.awg.load_waveform(1, iwf)
+            self.awg.load_waveform(2, qwf)
             self.awg.run_mode = "RUN_WAVEFORM"
-            self.awg.repeat_mode = "CONTINUOUS"
+            #self.awg.repeat_mode = "CONTINUOUS"
             self.awg.trigger_source = "internal"
         #start playback
         self.awg.run()
@@ -324,4 +324,5 @@ class MixerCalibrationExperiment(Experiment):
         pass
 
     def run(self):
+        time.sleep(0.05)
         self.amplitude.push(self.sa.peak_amplitude())
