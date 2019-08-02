@@ -97,6 +97,18 @@ class SingleShotFidelityExperiment(QubitExperiment):
         if not self.sweeper.axes:
             self._update_histogram_plots()
             self.stop_manual_plotters()
+        else:
+            fidelities = [f['Max I Fidelity'] for f in self.pdf_data]
+            opt_ind = np.argmax(fidelities)
+            for k, axis in enumerate(self.sweeper.axes):
+                instr_tree = axis.parameter.instr_tree
+                opt_value = axis.points[opt_ind]
+                param_key = self.instruments
+                for key in instr_tree[:-1]:
+                    # go through the tree
+                    param_key = param_key[key]
+                #TODO: update database
+            pass
 
     def find_single_shot_filter(self):
         """Make sure there is one single shot measurement filter in the pipeline."""
