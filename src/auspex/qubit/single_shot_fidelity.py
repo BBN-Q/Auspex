@@ -34,10 +34,11 @@ import auspex.config
 class SingleShotFidelityExperiment(QubitExperiment):
     """Experiment to measure single-shot measurement fidelity of a qubit."""
 
-    def __init__(self, qubit, output_nodes=None, meta_file=None, **kwargs):
+    def __init__(self, qubit, output_nodes=None, meta_file=None, optimize=True, **kwargs):
 
         self.pdf_data = []
         self.qubit = qubit
+        self.optimize = optimize
 
         if meta_file:
             self.meta_file = meta_file
@@ -97,19 +98,22 @@ class SingleShotFidelityExperiment(QubitExperiment):
         if not self.sweeper.axes:
             self._update_histogram_plots()
             self.stop_manual_plotters()
-        else:
+        elif self.optimize:
             fidelities = [f['Max I Fidelity'] for f in self.pdf_data]
             opt_ind = np.argmax(fidelities)
-            import pdb; pdb.set_trace()
             for k, axis in enumerate(self.sweeper.axes):
-                instr_tree = axis.parameter.instr_tree
+                set_pair = axis.parameter.set_pair
                 opt_value = axis.points[opt_ind]
-                param_key = self.instruments
-                for key in instr_tree[:-1]:
-                    # go through the tree
-                    param_key = param_key[key]
-                #TODO: update database
-            pass
+                if set_pair[1] == 'amplitude' or set_pair[1] == "offset":
+                    # special case for APS chans
+                    param = [c for c in self.chan_db.channels if c.label == set_pair[0]][0]
+                    attr = 'amp_factor' if set_pair[1] == 'amplitude' else 'offset'
+                    setattr(param, f'I_channel_{attr}', opt_value)
+                    setattr(param, f'Q_channel_{attr}', opt_value)
+                else:
+                    param = [c for c in self.chan_db.all_instruments() if c.label == set_pair[0]][0]
+                    setattr(param, set_pair[1], opt_value)
+            logger.info(f'Set {set_pair[0]} {set_pair[1]} to optimum value {opt_value}')
 
     def find_single_shot_filter(self):
         """Make sure there is one single shot measurement filter in the pipeline."""
