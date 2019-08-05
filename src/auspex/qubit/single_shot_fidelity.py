@@ -32,8 +32,15 @@ from auspex.analysis.helpers import normalize_data
 import auspex.config
 
 class SingleShotFidelityExperiment(QubitExperiment):
-    """Experiment to measure single-shot measurement fidelity of a qubit."""
+    """Experiment to measure single-shot measurement fidelity of a qubit.
 
+        Args:
+            qubit:                          qubit object
+            output_nodes (optional):        the output node of the filter pipeline to use for single-shot readout. The default is choses, if single output.
+            meta_file (string, optional):   path to the QGL sequence meta_file. Default to standard SingleShot sequence
+            optimize (bool, optional):      if True and a qubit_sweep is added, set the parameter corresponding to the maximum measured fidelity at the end of the sweep
+
+    """
     def __init__(self, qubit, output_nodes=None, meta_file=None, optimize=True, **kwargs):
 
         self.pdf_data = []
