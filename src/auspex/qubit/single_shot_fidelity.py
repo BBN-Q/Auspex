@@ -132,12 +132,12 @@ class SingleShotFidelityExperiment(QubitExperiment):
         return ssf
 
     def get_fidelity(self):
-        if self.pdf_data is None:
+        if not self.pdf_data:
             raise Exception("Could not find single shot PDF data in results. Did you run the sweeps?")
         return [p["Max I Fidelity"] for p in self.pdf_data]
 
     def get_threshold(self):
-        if self.pdf_data is None:
+        if not self.pdf_data:
             raise Exception("Could not find single shot PDF data in results. Did you run the sweeps?")
         return [p["I Threshold"] for p in self.pdf_data]
 
