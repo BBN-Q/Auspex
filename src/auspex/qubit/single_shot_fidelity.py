@@ -32,12 +32,21 @@ from auspex.analysis.helpers import normalize_data
 import auspex.config
 
 class SingleShotFidelityExperiment(QubitExperiment):
-    """Experiment to measure single-shot measurement fidelity of a qubit."""
+    """Experiment to measure single-shot measurement fidelity of a qubit.
 
-    def __init__(self, qubit, output_nodes=None, meta_file=None, **kwargs):
+        Args:
+            qubit:                          qubit object
+            output_nodes (optional):        the output node of the filter pipeline to use for single-shot readout. The default is choses, if single output.
+            meta_file (string, optional):   path to the QGL sequence meta_file. Default to standard SingleShot sequence
+            optimize (bool, optional):      if True and a qubit_sweep is added, set the parameter corresponding to the maximum measured fidelity at the end of the sweep
+
+    """
+    def __init__(self, qubit, output_nodes=None, meta_file=None, optimize=True, set_threshold = True, **kwargs):
 
         self.pdf_data = []
         self.qubit = qubit
+        self.optimize = optimize
+        self.set_threshold = set_threshold
 
         if meta_file:
             self.meta_file = meta_file
@@ -97,6 +106,27 @@ class SingleShotFidelityExperiment(QubitExperiment):
         if not self.sweeper.axes:
             self._update_histogram_plots()
             self.stop_manual_plotters()
+            if self.set_threshold:
+                self.stream_selectors[0].threshold = self.get_threshold()[0]
+        elif self.optimize:
+            fidelities = [f['Max I Fidelity'] for f in self.pdf_data]
+            opt_ind = np.argmax(fidelities)
+            for k, axis in enumerate(self.sweeper.axes):
+                set_pair = axis.parameter.set_pair
+                opt_value = axis.points[opt_ind]
+                if set_pair[1] == 'amplitude' or set_pair[1] == "offset":
+                    # special case for APS chans
+                    param = [c for c in self.chan_db.channels if c.label == set_pair[0]][0]
+                    attr = 'amp_factor' if set_pair[1] == 'amplitude' else 'offset'
+                    setattr(param, f'I_channel_{attr}', opt_value)
+                    setattr(param, f'Q_channel_{attr}', opt_value)
+                else:
+                    param = [c for c in self.chan_db.all_instruments() if c.label == set_pair[0]][0]
+                    setattr(param, set_pair[1], opt_value)
+            logger.info(f'Set {set_pair[0]} {set_pair[1]} to optimum value {opt_value}')
+            if self.set_threshold:
+                self.stream_selectors[0].threshold = self.get_threshold()[opt_ind]
+                logger.info(f'Set threshold to {self.stream_selectors[0].threshold}')
 
     def find_single_shot_filter(self):
         """Make sure there is one single shot measurement filter in the pipeline."""
@@ -108,12 +138,12 @@ class SingleShotFidelityExperiment(QubitExperiment):
         return ssf
 
     def get_fidelity(self):
-        if self.pdf_data is None:
+        if not self.pdf_data:
             raise Exception("Could not find single shot PDF data in results. Did you run the sweeps?")
         return [p["Max I Fidelity"] for p in self.pdf_data]
 
     def get_threshold(self):
-        if self.pdf_data is None:
+        if not self.pdf_data:
             raise Exception("Could not find single shot PDF data in results. Did you run the sweeps?")
         return [p["I Threshold"] for p in self.pdf_data]
 
