@@ -41,11 +41,12 @@ class SingleShotFidelityExperiment(QubitExperiment):
             optimize (bool, optional):      if True and a qubit_sweep is added, set the parameter corresponding to the maximum measured fidelity at the end of the sweep
 
     """
-    def __init__(self, qubit, output_nodes=None, meta_file=None, optimize=True, **kwargs):
+    def __init__(self, qubit, output_nodes=None, meta_file=None, optimize=True, set_threshold = True, **kwargs):
 
         self.pdf_data = []
         self.qubit = qubit
         self.optimize = optimize
+        self.set_threshold = set_threshold
 
         if meta_file:
             self.meta_file = meta_file
@@ -105,6 +106,8 @@ class SingleShotFidelityExperiment(QubitExperiment):
         if not self.sweeper.axes:
             self._update_histogram_plots()
             self.stop_manual_plotters()
+            if self.set_threshold:
+                self.stream_selectors[0].threshold = self.get_threshold()[0]
         elif self.optimize:
             fidelities = [f['Max I Fidelity'] for f in self.pdf_data]
             opt_ind = np.argmax(fidelities)
@@ -121,6 +124,9 @@ class SingleShotFidelityExperiment(QubitExperiment):
                     param = [c for c in self.chan_db.all_instruments() if c.label == set_pair[0]][0]
                     setattr(param, set_pair[1], opt_value)
             logger.info(f'Set {set_pair[0]} {set_pair[1]} to optimum value {opt_value}')
+            if self.set_threshold:
+                self.stream_selectors[0].threshold = self.get_threshold()[opt_ind]
+                logger.info(f'Set threshold to {self.stream_selectors[0].threshold}')
 
     def find_single_shot_filter(self):
         """Make sure there is one single shot measurement filter in the pipeline."""
