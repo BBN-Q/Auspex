@@ -6,109 +6,86 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
+import os
+import sys
+import uuid
+import json
+
+if sys.platform == 'win32' or 'NOFORKING' in os.environ:
+    from queue import Queue as Queue
+    from threading import Event
+    from threading import Thread as Process
+    from threading import Thread as Thread
+else:
+    from multiprocessing import Queue as Queue
+    from multiprocessing import Event
+    from multiprocessing import Process
+    from threading import Thread as Thread
+
+from IPython.core.getipython import get_ipython
+in_notebook = False
+try:
+    get_ipython()
+    in_notebook = True
+except:
+    pass
+
 import inspect
 import time
 import copy
 import itertools
 import logging
-import asyncio
 import signal
-import sys
 import numbers
-import os
 import subprocess
+import queue
+import re
+import cProfile
+from functools import partial
 
+import zmq
 import numpy as np
 import scipy as sp
 import networkx as nx
-import h5py
-from tqdm import tqdm, tqdm_notebook
 
 from auspex.instruments.instrument import Instrument
 from auspex.parameter import ParameterGroup, FloatParameter, IntParameter, Parameter
 from auspex.sweep import Sweeper
 from auspex.stream import DataStream, DataAxis, SweepAxis, DataStreamDescriptor, InputConnector, OutputConnector
-from auspex.filters import Plotter, XYPlotter, MeshPlotter, ManualPlotter, WriteToHDF5, DataBuffer, Filter
+from auspex.filters import Plotter, MeshPlotter, ManualPlotter, WriteToFile, DataBuffer, Filter
 from auspex.log import logger
 import auspex.config
 
-class ExpProgressBar(object):
-    """ Display progress bar(s) on the terminal.
+def auspex_plot_server():
+    client_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),"plot_server.py")
+    subprocess.Popen(['python', client_path], env=os.environ.copy())
 
-    num: number of progress bars to be display, \
-    corresponding to the number of axes (counting from outer most)
+def update_filename(filename, add_date=True):
+    """Update the file number and date."""
+    basename, _ = os.path.splitext(filename)
+    dirname  = os.path.dirname(os.path.abspath(filename))
 
-        For running in Jupyter Notebook:
-    Needs to open '_tqdm_notebook.py',\
-    search for 'n = int(s[:npos])'\
-    then replace it with 'n = int(float(s[:npos]))'
-    """
-    def __init__(self, stream=None, num=0, notebook=False, close=True):
-        super(ExpProgressBar,self).__init__()
-        logger.debug("initialize the progress bars.")
-        self.stream = stream
-        self.num = num
-        self.notebook = notebook
-        self.nb_close = close
-        # self.reset(stream=stream)
+    if add_date:
+        date     = time.strftime("%y%m%d")
+        dirname  = os.path.join(dirname, date)
+        basename = os.path.join(dirname, os.path.basename(basename))
 
-    def reset(self, stream=None):
-        """ Reset the progress bar(s) """
-        logger.debug("Update stream descriptor for progress bars.")
-        if stream is not None:
-            self.stream = stream
-        if self.stream is None:
-            logger.warning("No stream is associated with the progress bars!")
-            self.axes = []
-        else:
-            self.axes = self.stream.descriptor.axes
-        self.num = min(self.num, len(self.axes))
-        self.totals = [self.stream.descriptor.num_points_through_axis(axis) for axis in range(self.num)]
-        self.chunk_sizes = [max(1,self.stream.descriptor.num_points_through_axis(axis+1)) for axis in range(self.num)]
-        logger.debug("Reset the progress bars to initial states.")
-        self.bars   = []
-        for i in range(self.num):
-            if self.notebook:
-                self.bars.append(tqdm_notebook(total=self.totals[i]/self.chunk_sizes[i]))
-            else:
-                self.bars.append(tqdm(total=self.totals[i]/self.chunk_sizes[i]))
+    # Set the file number to the maximum in the current folder + 1
+    filenums = []
+    if os.path.exists(dirname):
+        for f in os.listdir(dirname):
+            if 'auspex' in f and os.path.exists(os.path.join(dirname, f)):
+                nums = re.findall('-(\d{4})\.', f)
+                if len(nums) > 0:
+                    filenums.append(int(nums[0]))
 
-    def close(self):
-        """ Close all progress bar(s) """
-        logger.debug("Close all the progress bars.")
-        for bar in self.bars:
-            if self.notebook:
-                bar.sp(close=True)
-            else:
-                bar.close()
-
-    def update(self):
-        """ Update the status of the progress bar(s) """
-        if self.stream is None:
-            logger.warning("No stream is associated with the progress bars!")
-            num_data = 0
-        else:
-            num_data = self.stream.points_taken
-        logger.debug("Update the progress bars.")
-        for i in range(self.num):
-            if num_data == 0:
-                # Reset the progress bar with a new one
-                if self.notebook:
-                    self.bars[i].sp(close=self.nb_close)
-                    self.bars[i] = tqdm_notebook(total=self.totals[i]/self.chunk_sizes[i])
-                else:
-                    self.bars[i].close()
-                    self.bars[i] = tqdm(total=self.totals[i]/self.chunk_sizes[i])
-            pos = int(10*num_data / self.chunk_sizes[i])/10.0 # One decimal is good enough
-            if pos > self.bars[i].n:
-                self.bars[i].update(pos - self.bars[i].n)
-            num_data = num_data % self.chunk_sizes[i]
+    i = max(filenums) + 1 if filenums else 0
+    return "{}-{:04d}".format(basename,i)
 
 class ExperimentGraph(object):
-    def __init__(self, edges, loop):
+    def __init__(self, edges):
         self.dag = None
         self.edges = []
-        self.loop = loop
         self.create_graph(edges)
 
     def dfs_edges(self):
@@ -131,8 +108,7 @@ class ExperimentGraph(object):
         dag = nx.DiGraph()
         self.edges = []
         for edge in edges:
-            obj = DataStream(name="{}_TO_{}".format(edge[0].name, edge[1].name),
-                             loop=self.loop)
+            obj = DataStream(name="{}_TO_{}".format(edge[0].name, edge[1].name))
             edge[0].add_output_stream(obj)
             edge[1].add_input_stream(obj)
             self.edges.append(obj)
@@ -154,11 +130,11 @@ class MetaExperiment(type):
         # Beware, passing objects won't work at parse time
         self._output_connectors = {}
 
-        # Parse ourself
-        try:
+        # Parse ourself -- can't do this if class is defined in a notebook (?)
+        if not in_notebook:
             self._exp_src = inspect.getsource(self)
-        except:
-            self._exp_src = "Cannot get source codes"
+        else:
+            self._exp_src = " "
 
         for k,v in dct.items():
             if isinstance(v, Instrument):
@@ -189,13 +165,16 @@ class Experiment(metaclass=MetaExperiment):
         # This holds the experiment graph
         self.graph = None
 
-        # This holds a reference to a matplotlib server instance
-        # for plotting, if there is one.
-        self.matplot_server_thread = None
-        # If this is True, don't close the plot server thread so that
-        # we might push additional plots after run_sweeps is complete.
-        self.leave_plot_server_open = False
+        # Should we show the dashboard?
+        self.dashboard = False
 
+        # Create and use plots?
+        self.do_plotting = False
+
+        # Unique ID for this experiment
+        self.uuid = str(uuid.uuid4())
+
+        # Disconnect at the end of experiment?
         self.keep_instruments_connected = False
 
         # Also keep references to all of the plot filters
@@ -205,10 +184,7 @@ class Experiment(metaclass=MetaExperiment):
         self.manual_plotter_callbacks = [] # These are called at the end of run
         self._extra_plots_to_streams = {}
 
-        # Furthermore, keep references to all of the file writers.
-        # If multiple writers request acces to the same filename, they
-        # should share the same file object and write in separate
-        # hdf5 groups.
+        # Furthermore, keep references to all of the file writers and buffers.
         self.writers = []
         self.buffers = []
 
@@ -221,10 +197,14 @@ class Experiment(metaclass=MetaExperiment):
         # indicates whether this is the first (or only) experiment in a series (e.g. for pulse calibrations)
         self.first_exp = True
 
+        # add date to data files?
+        self.add_date = False
+
         # Things we can't metaclass
         self.output_connectors = {}
         for oc in self._output_connectors.keys():
-            a = OutputConnector(name=oc, data_name=oc, unit=self._output_connectors[oc].data_unit, parent=self)
+            a = OutputConnector(name=oc, data_name=oc, unit=self._output_connectors[oc].data_unit,
+                                dtype=self._output_connectors[oc].descriptor.dtype, parent=self)
             a.parent = self
 
             self.output_connectors[oc] = a
@@ -252,12 +232,8 @@ class Experiment(metaclass=MetaExperiment):
             self._parameters_instance[n] = new_inst
         self._parameters = self._parameters_instance
 
-        # Create the asyncio measurement loop
-        self.loop = asyncio.get_event_loop()
-
         # Based on the logging level, infer whether we want asyncio debug
         do_debug = logger.getEffectiveLevel() <= logging.DEBUG
-        self.loop.set_debug(do_debug)
 
         # Run the stream init
         self.init_streams()
@@ -270,7 +246,7 @@ class Experiment(metaclass=MetaExperiment):
             if ee.parent not in unique_nodes:
                 unique_nodes.append(ee.parent)
         self.nodes = unique_nodes
-        self.graph = ExperimentGraph(edges, self.loop)
+        self.graph = ExperimentGraph(edges)
 
     def init_streams(self):
         """Establish the base descriptors for any internal data streams and connectors."""
@@ -282,22 +258,9 @@ class Experiment(metaclass=MetaExperiment):
 
     def shutdown_instruments(self):
         """Gets run after a sweep ends, or when the program is terminated."""
-        for instrument in self._instruments.values():
-            if instrument.instrument_type == "Microwave Source":
-                instrument.output = 0;
-            else:
-                pass
+        pass
 
-    def init_progressbar(self, num=0, notebook=False, close=True):
-        """ initialize the progress bars."""
-        oc = list(self.output_connectors.values())
-        if len(oc)>0:
-            self.progressbar = ExpProgressBar(oc[0].output_streams[0], num=num, notebook=notebook, close=close)
-        else:
-            logger.warning("No stream is found for progress bars. Create a dummy bar.")
-            self.progressbar = ExpProgressBar(None, num=num, notebook=notebook, close=close)
-
-    async def run(self):
+    def run(self):
         """This is the inner measurement loop, which is the smallest unit that
         is repeated across various sweep variables. For more complicated run control
         than can be provided by the automatic sweeping, the full experimental
@@ -325,21 +288,32 @@ class Experiment(metaclass=MetaExperiment):
                 if hasattr(self,k):
                     v = getattr(self,k)
                     oc.descriptor.add_param(k, v)
-            # if not self.sweeper.is_adaptive():
-            #     oc.descriptor.visited_tuples = oc.descriptor.expected_tuples(with_metadata=True, as_structured_array=False)
-            # else:
             oc.descriptor.visited_tuples = []
             oc.update_descriptors()
 
-    async def declare_done(self):
+    def declare_done(self):
+        while True:
+            all_done = True
+            for oc in self.output_connectors.values():
+                for os in oc.output_streams:
+                    # TODO: why does any queue interaction prevent adding out of order?
+                    if not os.queue.empty():
+                        time.sleep(0.01)
+                        all_done = False
+            if not all_done:
+                time.sleep(1)
+            else:
+                break
+
         for oc in self.output_connectors.values():
             for os in oc.output_streams:
-                await os.push_event("done")
+                os.push_event("done")
+
         for p in self.extra_plotters:
             stream = self._extra_plots_to_streams[p]
-            await stream.push_event("done")
+            stream.push_event("done")
 
-    async def sweep(self):
+    def sweep(self):
         # Set any static parameters
         static_params = [p for p in self._parameters.values() if p not in self.sweeper.swept_parameters()]
         for p in static_params:
@@ -347,15 +321,19 @@ class Experiment(metaclass=MetaExperiment):
 
         # Keep track of the previous values
         logger.debug("Waiting for filters.")
-        await asyncio.sleep(0.1)
         last_param_values = None
         logger.debug("Starting experiment sweep.")
-
-        done = True
         while True:
             # Increment the sweeper, which returns a list of the current
             # values of the SweepAxes (no DataAxes).
-            sweep_values = await self.sweeper.update()
+            sweep_values, axis_names = self.sweeper.update()
+
+            if hasattr(self, 'progressbars') and self.progressbars:
+                for axis in self.sweeper.axes:
+                    if axis.done:
+                        self.progressbars[axis].value = axis.num_points()
+                    else:
+                        self.progressbars[axis].value = axis.step
 
             if self.sweeper.is_adaptive():
                 # Add the new tuples to the stream descriptors
@@ -366,48 +344,28 @@ class Experiment(metaclass=MetaExperiment):
                     vals = [a for a in oc.descriptor.data_axis_values()]
                     if sweep_values:
                         vals  = [[v] for v in sweep_values] + vals
-
                     # Find all coordinate tuples and update the list of
                     # tuples that the experiment has probed.
                     nested_list    = list(itertools.product(*vals))
                     flattened_list = [tuple((val for sublist in line for val in sublist)) for line in nested_list]
                     oc.descriptor.visited_tuples = oc.descriptor.visited_tuples + flattened_list
 
+                    # Since the filters are in separate processes, pass them the same
+                    # information so that they may perform the same operations.
+                    oc.push_event("new_tuples", (axis_names, sweep_values,))
+
             # Run the procedure
-            # logger.debug("Starting a new run.")
-            await self.run()
+            self.run()
 
-            # See if the axes want to extend themselves
-            refined_axis = await self.sweeper.check_for_refinement()
-            if refined_axis is not None:
-                for oc in self.output_connectors.values():
-                     await oc.push_event("refined", refined_axis)
-
-            # Update progress bars
-            if self.progressbar is not None:
-                self.progressbar.update()
+            # See if the axes want to extend themselves. They will push updates
+            # directly to the output_connecters as messages that will be passed
+            # through the filter pipeline.
+            self.sweeper.check_for_refinement(self.output_connectors)
 
             # Finish up, checking to see whether we've received all of our data
             if self.sweeper.done():
-                sleep_time = 0
-                while not self.filters_finished():
-                    await asyncio.sleep(1)
-                    sleep_time += 1
-                    # if sleep_time == 5:
-                    #     logger.info("Still waiting for filters to finish. Did the experiment produce the expected amount of data?")
-                    #     for n in self.nodes:
-                    #         if isinstance(n, Filter):
-                    #             logger.info("  {} done: {}".format(n, n.finished_processing))
-                    #     print({n: n.finished_processing for n in self.nodes if isinstance(n, Filter)})
-
-                    # if sleep_time >= 20:
-                    #     logger.warning("Filters not stopped after 20 seconds, bailing.")
-                    #     break
-                await self.declare_done()
+                self.declare_done()
                 break
-
-    def filters_finished(self):
-        return all([n.finished_processing for n in self.nodes if isinstance(n, Filter)])
 
     def connect_instruments(self):
         # Connect the instruments to their resources
@@ -422,46 +380,126 @@ class Experiment(metaclass=MetaExperiment):
             instrument.disconnect()
         self.instrs_connected = False
 
+    def init_dashboard(self):
+        from bqplot import DateScale, LinearScale, DateScale, Axis, Lines, Figure, Tooltip
+        from bqplot.colorschemes import CATEGORY10, CATEGORY20
+        from bqplot.toolbar import Toolbar
+        from ipywidgets import VBox, Tab
+        from IPython.display import display
+        from tornado import gen
+
+        cpu_sx = LinearScale(); cpu_sy = LinearScale()
+        cpu_x = Axis(label='Time (s)', scale=cpu_sx)
+        cpu_y = Axis(label='CPU Usage (%)', scale=cpu_sy, orientation='vertical')
+        mem_sx = LinearScale(); mem_sy = LinearScale()
+        mem_x = Axis(label='Time (s)', scale=mem_sx)
+        mem_y = Axis(label='Memory Usage (MB)', scale=mem_sy, orientation='vertical')
+        thru_sx = LinearScale(); thru_sy = LinearScale()
+        thru_x = Axis(label='Time (s)', scale=thru_sx)
+        thru_y = Axis(label='Data Processed (MB)', scale=thru_sy, orientation='vertical')
+
+        colors            = CATEGORY20
+        tt                = Tooltip(fields=['name'], labels=['Filter Name'])
+        self.cpu_lines    = {str(n): Lines(labels=[str(n)], x=[0.0], y=[0.0], colors=[colors[i]], tooltip=tt,
+                                scales={'x': cpu_sx, 'y': cpu_sy}) for i, n in enumerate(self.other_nodes)}
+        self.mem_lines    = {str(n): Lines(labels=[str(n)], x=[0.0], y=[0.0], colors=[colors[i]], tooltip=tt,
+                                scales={'x': mem_sx, 'y': mem_sy}) for i, n in enumerate(self.other_nodes)}
+        self.thru_lines   = {str(n): Lines(labels=[str(n)], x=[0.0], y=[0.0], colors=[colors[i]], tooltip=tt,
+                                scales={'x': thru_sx, 'y': thru_sy}) for i, n in enumerate(self.other_nodes)}
+
+        self.cpu_fig = Figure(marks=list(self.cpu_lines.values()), axes=[cpu_x, cpu_y], title='CPU Usage', animation_duration=50)
+        self.mem_fig = Figure(marks=list(self.mem_lines.values()), axes=[mem_x, mem_y], title='Memory Usage', animation_duration=50)
+        self.thru_fig = Figure(marks=list(self.thru_lines.values()), axes=[thru_x, thru_y], title='Data Processed', animation_duration=50)
+
+        tab = Tab()
+        tab.children = [self.cpu_fig, self.mem_fig, self.thru_fig]
+        tab.set_title(0, 'CPU'); tab.set_title(1, 'Memory'); tab.set_title(2, 'Throughput');
+        display(tab)
+
+        perf_queue = Queue()
+        self.exit_perf = Event()
+        def wait_for_perf_updates(q, exit, cpu_lines, mem_lines, thru_lines):
+            while not exit.is_set():
+                messages = []
+
+                while not exit.is_set():
+                    try:
+                        messages.append(q.get(False))
+                    except queue.Empty as e:
+                        time.sleep(0.05)
+                        break
+
+                for message in messages:
+                    filter_name, time_val, cpu, mem_info, processed = message
+                    mem = mem_info[0]/2.**20
+                    vmem = mem_info[1]/2.**20
+                    proc = processed/2.**20
+                    cpu_lines[filter_name].x = np.append(cpu_lines[filter_name].x, [time_val.total_seconds()])
+                    cpu_lines[filter_name].y = np.append(cpu_lines[filter_name].y, [cpu])
+                    mem_lines[filter_name].x = np.append(mem_lines[filter_name].x, [time_val.total_seconds()])
+                    mem_lines[filter_name].y = np.append(mem_lines[filter_name].y, [mem])
+                    thru_lines[filter_name].x = np.append(thru_lines[filter_name].x, [time_val.total_seconds()])
+                    thru_lines[filter_name].y = np.append(thru_lines[filter_name].y, [proc])
+
+        for n in self.other_nodes:
+            n.perf_queue = perf_queue
+
+        self.perf_thread = Thread(target=wait_for_perf_updates, args=(perf_queue, self.exit_perf, self.cpu_lines, self.mem_lines, self.thru_lines))
+        self.perf_thread.start()
+
+
+    def final_init(self):
+        # Call any final initialization on the filter pipeline
+        for n in self.nodes + self.extra_plotters:
+            if n != self and hasattr(n, 'final_init'):
+                n.final_init()
+        self.init_progress_bars()
+
+    def init_progress_bars(self):
+        """ initialize the progress bars."""
+        from auspex.config import isnotebook
+
+        if isnotebook():
+            from ipywidgets import IntProgress, VBox
+            from IPython.display import display
+
+            self.progressbars = {}
+            for axis in self.sweeper.axes:
+                self.progressbars[axis] = IntProgress(min=0, max=axis.num_points(),
+                                                        description=f'Sweep {axis.name}:', style={'description_width': 'initial'})
+            display(VBox(list(self.progressbars.values())))
+
     def run_sweeps(self):
         # Propagate the descriptors through the network
         self.update_descriptors()
         # Make sure we are starting from scratch... is this necessary?
         self.reset()
-        # Update the progress bar if need be
-        if self.progressbar is not None:
-            self.progressbar.reset()
 
         #Make sure we have axes.
         if not any([oc.descriptor.axes for oc in self.output_connectors.values()]):
             logger.warning("There do not appear to be any axes defined for this experiment!")
 
         # Go find any writers
-        self.writers = [n for n in self.nodes if isinstance(n, WriteToHDF5)]
+        self.writers = [n for n in self.nodes if isinstance(n, WriteToFile)]
         self.buffers = [n for n in self.nodes if isinstance(n, DataBuffer)]
         if self.name:
             for w in self.writers:
                 w.filename.value = os.path.join(os.path.dirname(w.filename.value), self.name)
         self.filenames = [w.filename.value for w in self.writers]
-        self.files = []
 
-        # Check for redundancy in filenames, and share plot file objects
+        # Auto increment the filenames
         for filename in set(self.filenames):
             wrs = [w for w in self.writers if w.filename.value == filename]
-
-            # Let the first writer with this filename create the file...
-            wrs[0].file = wrs[0].new_file()
-            self.files.append(wrs[0].file)
-
-            # Make the rest of the writers use this same file object
-            for w in wrs[1:]:
-                w.file = wrs[0].file
-                w.filename.value = wrs[0].filename.value
+            inc_filename = update_filename(filename, add_date=self.add_date)
+            for w in wrs:
+                w.filename.value = inc_filename
+        self.filenames = [w.filename.value for w in self.writers]
 
         # Remove the nodes with 0 dimension
-        self.nodes = [n for n in self.nodes if not(hasattr(n, 'input_connectors') and        n.input_connectors['sink'].descriptor.num_dims()==0)]
+        self.nodes = [n for n in self.nodes if not(hasattr(n, 'input_connectors') and  n.input_connectors['sink'].descriptor.num_dims()==0)]
 
         # Go and find any plotters
-        self.standard_plotters = [n for n in self.nodes if isinstance(n, (Plotter, MeshPlotter, XYPlotter))]
+        self.standard_plotters = [n for n in self.nodes if isinstance(n, (Plotter, MeshPlotter))]
         self.plotters = copy.copy(self.standard_plotters)
 
         # We might have some additional plotters that are separate from
@@ -471,73 +509,127 @@ class Experiment(metaclass=MetaExperiment):
         # These use neither streams nor the filter pipeline
         self.plotters.extend(self.manual_plotters)
 
-        # Call any final initialization on the filter pipeline
-        for n in self.nodes + self.extra_plotters:
-            n.experiment = self
-            n.loop       = self.loop
-            # n.executor   = self.executor
-            if hasattr(n, 'final_init'):
-                n.final_init()
+        # Last minute init
+        self.final_init()
 
         # Launch plot servers.
         if len(self.plotters) > 0:
-            self.init_plot_servers()
-        time.sleep(1)
+            self.connect_to_plot_server()
+
+        time.sleep(0.1)
         #connect all instruments
         self.connect_instruments()
-        #initialize instruments
-        self.init_instruments()
 
-        def catch_ctrl_c(signum, frame):
-            logger.info("Caught SIGINT. Shutting down.")
-            self.shutdown()
-            raise NameError("Shutting down.")
-            sys.exit(0)
-
-        signal.signal(signal.SIGINT, catch_ctrl_c)
-
-        # We want to wait for the sweep method above,
-        # not the experiment's run method, so replace this
-        # in the list of tasks.
-        other_nodes = self.nodes[:]
-        other_nodes.extend(self.extra_plotters)
-        other_nodes.remove(self)
-        tasks = [n.run() for n in other_nodes]
-
-        tasks.append(self.sweep())
         try:
-            self.loop.run_until_complete(asyncio.gather(*tasks))
-            self.loop.run_until_complete(asyncio.sleep(1))
-        except Exception as e:
-            logger.exception("message")
+            #initialize instruments
+            self.init_instruments()
 
-        for plot, callback in zip(self.manual_plotters, self.manual_plotter_callbacks):
-            if callback:
-                callback(plot)
+            # def catch_ctrl_c(signum, frame):
+            #     import ipdb; ipdb.set_trace();
+            #     logger.info("Caught SIGINT. Shutting down.")
+            #     self.declare_done() # Ask nicely
 
-        self.shutdown()
+            #     self.shutdown()
+            #     raise NameError("Shutting down.")
+            #     sys.exit(0)
+
+            # signal.signal(signal.SIGINT, catch_ctrl_c)
+
+            # We want to wait for the sweep method above,
+            # not the experiment's run method, so replace this
+            # in the list of tasks.
+            self.other_nodes = self.nodes[:]
+            self.other_nodes.extend(self.extra_plotters)
+            self.other_nodes.remove(self)
+
+            # If we are launching the process dashboard,
+            # setup the bokeh server and establish a queue for
+            # filters to push data back to our thread below for
+            # communication to the bokeh server instance.
+
+            if self.dashboard:
+                self.init_dashboard()
+
+            # Start the filter processes
+            for n in self.other_nodes:
+                n.start()
+
+            # Run the main experiment loop
+            self.sweep()
+
+            # Make sure any last minute plotting needs are met
+            for plot, callback in zip(self.manual_plotters, self.manual_plotter_callbacks):
+                if callback:
+                    callback(plot)
+
+            # Wait for the
+            time.sleep(0.1)
+            times = {n: 0 for n in self.other_nodes}
+            dones = {n: n.done.is_set() for n in self.other_nodes}
+            while False in dones.values():
+                time.sleep(1.0)
+                for n in self.other_nodes:
+                    if not n.done.is_set():
+                        times[n] += 1
+                        logger.debug(f"{str(n)} not done. Is the pipeline backed up at IO stage?")
+                    else:
+                        dones[n] = True
+
+            # Get the final buffers, otherwise we won't be able to join reliably
+            for n in self.plotters + self.buffers:
+                if n not in self.manual_plotters:
+                    n.final_buffer = n._final_buffer.get()
+
+            for n in self.other_nodes:
+                n.join()
+
+            for buff in self.buffers:
+                buff.output_data, buff.descriptor = buff.get_data()
+
+            if self.dashboard:
+                self.exit_perf.set()
+                self.perf_thread.join()
+
+        except KeyboardInterrupt as e:
+            print("Caught KeyboardInterrupt, terminating.")
+            self.shutdown()
+            sys.exit(0)
+        finally:
+            self.shutdown()
+
+    def start_manual_plotters(self):
+        for mp in self.manual_plotters:
+            mp.start()
+
+    def stop_manual_plotters(self):
+        for mp in self.manual_plotters:
+            mp.stop()
 
     def shutdown(self):
-        logger.debug("Shutting Down!")
-        for f in self.files:
-            try:
-                logger.debug("Closing %s", f)
-                f.close()
-                del f
-            except:
-                logger.debug("File probably already closed...")
-
-        if hasattr(self, 'plot_server'):
-            try:
-                if len(self.plotters) > 0: #and not self.leave_plot_server_open:
-                    self.plot_server.stop()
-            except:
-                logger.warning("Could not stop plot server gracefully...")
-
+        logger.debug("Shutting down instruments")
+        # This includes stopping the flow of data, and must be done before terminating nodes
         self.shutdown_instruments()
 
+        try:
+            while True:
+                if any([n.is_alive() for n in self.other_nodes]):
+                    logger.warning("Filter pipeline appears stuck. Use keyboard interrupt to terminate.")
+                    time.sleep(2.0)
+                else:
+                    break
+        except KeyboardInterrupt as e:
+            for n in self.other_nodes:
+                n.terminate()
+
         if not self.keep_instruments_connected:
+            logger.debug("Disconnecting instruments")
             self.disconnect_instruments()
+
+        for n in self.other_nodes:
+            n.done.set()
+
+        import gc
+        gc.collect()
 
     def add_axis(self, axis, position=0):
         for oc in self.output_connectors.values():
@@ -585,55 +677,61 @@ class Experiment(metaclass=MetaExperiment):
         self.manual_plotters.append(plotter)
         self.manual_plotter_callbacks.append(callback)
 
-    async def push_to_plot(self, plotter, data):
+    def push_to_plot(self, plotter, data):
         """Push data to a direct plotter."""
-
         stream = self._extra_plots_to_streams[plotter]
-        await stream.push_direct(data)
+        stream.push_direct(data)
 
-    def init_plot_servers(self):
+    def get_final_plots(self, quad_funcs=[np.abs, np.angle]):
+        from ipywidgets import Tab
+        tab = Tab()
+        plots = []
+        for i, p in enumerate(self.plotters):
+            tab.set_title(i, p.filter_name);
+            plots.append(p.get_final_plot(quad_funcs=quad_funcs))
+        tab.children = plots
+        return tab
+
+    def connect_to_plot_server(self):
         logger.debug("Found %d plotters", len(self.plotters))
 
-        from .plotting import MatplotServerThread
-        plot_desc = {p.name: p.desc() for p in self.standard_plotters}
-        if not hasattr(self, "plot_server"):
-            self.plot_server = MatplotServerThread(plot_desc)
-        if len(self.plotters) > len(self.standard_plotters) and not hasattr(self, "extra_plot_server"):
-            extra_plot_desc = {p.name: p.desc() for p in self.extra_plotters + self.manual_plotters}
-            self.extra_plot_server = MatplotServerThread(extra_plot_desc, status_port = self.plot_server.status_port+2, data_port = self.plot_server.data_port+2)
-        for plotter in self.standard_plotters:
-            plotter.plot_server = self.plot_server
-        for plotter in self.extra_plotters + self.manual_plotters:
-            plotter.plot_server = self.extra_plot_server
-        time.sleep(0.5)
-        # Kill a previous plotter if desired.
-        if auspex.config.single_plotter_mode and auspex.config.last_plotter_process:
-            pros = [auspex.config.last_plotter_process]
-            if (not self.leave_plot_server_open or self.first_exp) and auspex.config.last_extra_plotter_process:
-                pros += [auspex.config.last_extra_plotter_process]
-            for pro in pros:
-                if hasattr(os, 'setsid'): # Doesn't exist on windows
-                    try:
-                        os.kill(pro.pid, 0) # Raises an error if the PID doesn't exist
-                        os.killpg(os.getpgid(pro.pid), signal.SIGTERM) # Proceed to kill process group
-                    except OSError:
-                        logger.debug("No plotter to kill.")
-                else:
-                    try:
-                        pro.kill()
-                    except:
-                        logger.debug("No plotter to kill.")
+        # Create the descriptor and set uuids for each plot process
+        plot_desc = {p.filter_name: p.desc() for p in self.plotters}
+        for p in self.plotters:
+            p.uuid = self.uuid
 
-        client_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),"matplotlib-client.py")
-        #if not auspex.config.last_plotter_process:
-        if hasattr(os, 'setsid'):
-            auspex.config.last_plotter_process = subprocess.Popen(['python', client_path, 'localhost'],
-                                                                env=os.environ.copy(), preexec_fn=os.setsid)
-        else:
-            auspex.config.last_plotter_process = subprocess.Popen(['python', client_path, 'localhost'],
-                                                                env=os.environ.copy())
-        if hasattr(self, 'extra_plot_server') and (not auspex.config.last_extra_plotter_process or not self.leave_plot_server_open or self.first_exp):
-            if hasattr(os, 'setsid'):
-                auspex.config.last_extra_plotter_process = subprocess.Popen(['python', client_path, 'localhost', str(self.extra_plot_server.status_port), str(self.extra_plot_server.data_port)], env=os.environ.copy(), preexec_fn=os.setsid)
+        try:
+            context = zmq.Context()
+            socket = context.socket(zmq.DEALER)
+            socket.setsockopt(zmq.LINGER, 0)
+            socket.identity = "Auspex_Experiment".encode()
+            socket.connect("tcp://localhost:7761")
+            socket.send_multipart([self.uuid.encode(), json.dumps(plot_desc).encode('utf8')])
+
+            poller = zmq.Poller()
+            poller.register(socket, zmq.POLLIN)
+
+            evts = dict(poller.poll(5000))
+            poller.unregister(socket)
+            if socket in evts:
+                try:
+                    if socket.recv_multipart()[0] == b'ACK':
+                        logger.info("Connection established to plot server.")
+                        self.do_plotting = True
+                    else:
+                        raise Exception("Server returned invalid message, expected ACK.")
+                except:
+                    logger.info("Could not connect to server.")
+                    for p in self.plotters:
+                        p.do_plotting = False
             else:
-                auspex.config.last_extra_plotter_process = subprocess.Popen(['python', client_path, 'localhost', str(self.extra_plot_server.status_port), str(self.extra_plot_server.data_port)], env=os.environ.copy())
+                logger.info("Server did not respond.")
+                for p in self.plotters:
+                    p.do_plotting = False
+
+        except:
+            logger.warning("Exception occured while contacting the plot server. Is it running?")
+            for p in self.plotters:
+                p.do_plotting = False
+
+        time.sleep(0.5)

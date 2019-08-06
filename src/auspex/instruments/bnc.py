@@ -8,7 +8,7 @@
 
 __all__ = ['BNC845']
 
-from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand, is_valid_ipv4
+from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand, is_valid_ipv4, BoolCommand
 from auspex.log import logger
 import time
 import numpy as np
@@ -20,7 +20,6 @@ class BNC845(SCPIInstrument):
     Properties:
         frequency: Set the RF generator frequency, in Hz. 0.01-20 GHz.
         power: Set the RF generator output power, in dBm. No effect, BNC845M output is always +16dBm.
-        osc: Toggle 10 MHz reference on/off
         output: Toggle RF signal output on/off.
         pulse: Toggle RF pulsed mode on/off.
         alc: Toggle source Auto Leveling on/off.
@@ -31,17 +30,16 @@ class BNC845(SCPIInstrument):
 
     frequency = FloatCommand(scpi_string="SOURCE:FREQUENCY:FIXED")
     power     = FloatCommand(scpi_string="SOURCE:POWER:LEVEL:IMMEDIATE:AMPLITUDE")
-    osc       = StringCommand(scpi_string="SOURCE:ROSC:OUTPUT:STATE",value_map={True: '1', False: '0'})
-    output    = StringCommand(scpi_string="OUTPUT:STATE",value_map={True: '1', False: '0'})
-    pulse     = StringCommand(scpi_string="PULSE", value_map={True: '1', False: '0'})
-    mod       = StringCommand(scpi_string="MOD", value_map={True: '1', False: '0'})
-    alc       = StringCommand(scpi_string="SOURCE:POWER:ALC ", value_map={True: '1', False: '0'})
+    output    = BoolCommand(scpi_string="OUTPUT:STATE",value_map={True: '1', False: '0'})
+    pulse     = StringCommand(scpi_string="PULSE", value_map={True: '0', False: '1'})
+    mod       = StringCommand(scpi_string="MOD", value_map={True: '0', False: '1'})
+    alc       = StringCommand(scpi_string="SOURCE:POWER:ALC ", value_map={True: '0', False: '1'})
     pulse_source = StringCommand(scpi_string=":PULSE:SOUR",
                           value_map={'INTERNAL': 'INT', 'EXTERNAL': 'EXT'})
     freq_source  = StringCommand(scpi_string=":FREQ:SOUR",
                           value_map={'INTERNAL': 'INT', 'EXTERNAL': 'EXT'})
     instrument_type = "Microwave Source"
-    
+
     def __init__(self, resource_name=None, *args, **kwargs):
         """Berkely Nucleonics BNC845-M RF Signal Generator
 
@@ -72,7 +70,6 @@ class BNC845(SCPIInstrument):
                 resource_name = resource_name + "::inst0::INSTR"
             else:
                 logger.error("Invalid IP address for BNC845: {}.".format(resource_name))
-        
         super(BNC845, self).connect(resource_name, interface_type)
         self.interface._resource.read_termination = '\n'
         self.interface._resource.write_termination = '\n'

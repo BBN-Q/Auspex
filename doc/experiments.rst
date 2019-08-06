@@ -67,12 +67,12 @@ Therefore, we recommend that users package their measurements into *Experiments*
             ax = DataAxis("samples", range(self.samples))
             self.resistance.add_axis(ax)
 
-        async def run(self):
+        def run(self):
             # This is the inner loop, which is run for each set of
             # sweep parameters by run_sweeps. Data is pushed out
             # to the world through the output connectors.
             pspl.trigger()
-            await self.resistance.push(keith.resistance)
+            self.resistance.push(keith.resistance)
 
 Here the control parameters, data flow, and the central measurement "kernel" have crystallized into separate entities. To run the same experiment as was performed above, we add a *sweep* to the experiment,::
 

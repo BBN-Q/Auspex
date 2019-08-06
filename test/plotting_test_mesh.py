@@ -6,7 +6,7 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-import asyncio
+
 import os
 import time
 import datetime
@@ -14,27 +14,8 @@ import sys
 import itertools
 
 import numpy as np
-import h5py
+# import h5py
 import matplotlib.pyplot as plt
-
-# ----- fix/unitTests_1 (ST-15) delta Start...
-# Added the followiing 02 Nov 2018 to test Instrument and filter metaclass load
-# introspection minimization (during import)
-#
-from auspex import config
-
-# Filter out Holzworth warning noise noise by citing the specific instrument[s]
-# used for this test.
-config.tgtInstrumentClass       = "TestInstrument"
-
-# Filter out Channerlizer noise by citing the specific filters used for this
-# test.
-config.tgtFilterClass           = {"Plotter", "MeshPlotter", "WriteToHDF5"}
-
-# Uncomment to the following to show the Instrument MetaClass __init__ arguments
-# config.bEchoInstrumentMetaInit  = True
-#
-# ----- fix/unitTests_1 (ST-15) delta Stop.
 
 from auspex.experiment import Experiment, FloatParameter
 from auspex.stream import OutputConnector, DataStreamDescriptor
@@ -61,11 +42,11 @@ class TestExperiment(Experiment):
     def init_streams(self):
         pass
 
-    async def run(self):
+    def run(self):
         r = np.sqrt(np.power(self.amplitude.value,2) + np.power(self.duration.value,2))
         val = 1.0/(1.0 + np.exp(-10.0*(r-5.0)))
-        await self.voltage.push(val)
-        await asyncio.sleep(0.01)
+        self.voltage.push(val)
+        time.sleep(0.01)
 
 if __name__ == '__main__':
 
