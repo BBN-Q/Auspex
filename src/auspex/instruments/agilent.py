@@ -921,7 +921,10 @@ class AgilentE9010A(SCPIInstrument):
 
     def connect(self, resource_name=None, interface_type=None):
         if resource_name is not None:
+            resource_name = str(resource_name)
             self.resource_name = resource_name
+        else:
+            resource_name = str(self.resource_name)
         #If we only have an IP address then tack on the raw socket port to the VISA resource string
         if is_valid_ipv4(resource_name):
             resource_name += "::5025::SOCKET"
