@@ -796,8 +796,11 @@ class APS3(Instrument, metaclass=MakeBitFieldParams):
         self.cache_controller = True
 
     def load_waveforms(self, wfA, wfB):
-        self.write_dram(self.WFA_OFFSET(), wfA)
-        self.write_dram(self.WFB_OFFSET(), wfB)
+        wfA_32 = [((wfA[2*i+1] << 16) | wfA[2*i]) for i in range(len(wfA) // 2)]
+        wfB_32 = [((wfB[2*i+1] << 16) | wfB[2*i]) for i in range(len(wfB) // 2)]
+
+        self.write_dram(self.WFA_OFFSET(), wfA_32) # I
+        self.write_dram(self.WFB_OFFSET(), wfB_32) # Q
 
     def load_sequence_file(self, seq_file):
         self.sequence_filename = seq_file
@@ -817,6 +820,7 @@ class APS3(Instrument, metaclass=MakeBitFieldParams):
             instructions = [int(x) for x in np.frombuffer(file.read(instructions_size*8), dtype=np.uint64)]
 
             self.load_sequence(instructions)
+            self.load_sequence(instructions)
 
             data = []
             for chan in range(num_channels):
@@ -824,13 +828,10 @@ class APS3(Instrument, metaclass=MakeBitFieldParams):
                 data.append([int(x) for x in np.frombuffer(file.read(data_size*2), dtype=np.uint16)])
 
             self.load_waveforms(data[0], data[1])
+            self.load_waveforms(data[0], data[1])
 
     def serial_check_alive(self):
         return self.board.serial_read_dac0(0x005) == 0x91 and self.board.serial_read_dac0(0x004) == 0x64
-
-    @property
-    def sequence_file(self):
-        return self.sequence_filename
 
     @property
     def sequence_file(self):
