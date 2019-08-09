@@ -377,13 +377,12 @@ class MixerCalibrationExperiment(Experiment):
             self.awg.waveform_frequency = -self.SSB_FREQ
             self.awg.run_mode = "CW_WAVEFORM"
         else:
-            iwf = 0.5 * np.cos(2*np.pi*self.SSB_FREQ*np.ones(1200, dtype=np.float64))
-            qwf = -0.5 * np.sin(2*np.pi*self.SSB_FREQ*np.ones(1200, dtype=np.float64));
-            self.awg.set_amplitude(1, awg_amp); #TODO: ampl. to be set by looking at phys. chan
-            self.awg.load_waveform(1, iwf)
-            self.awg.load_waveform(2, qwf)
+            iwf =  0.5 * np.cos(2*np.pi*self.SSB_FREQ*np.arange(1200,dtype=np.float64)*1e-6/self.awg.sampling_rate)
+            qwf = -0.5 * np.sin(2*np.pi*self.SSB_FREQ*np.arange(1200,dtype=np.float64)*1e-6/self.awg.sampling_rate)
+            self.awg.load_waveform(int(self._phys_chan.label[-2]), iwf)
+            self.awg.load_waveform(int(self._phys_chan.label[-1]), qwf)
             self.awg.run_mode = "RUN_WAVEFORM"
-            #self.awg.repeat_mode = "CONTINUOUS"
+            self.awg.repeat_mode = "CONTINUOUS"
             self.awg.trigger_source = "internal"
         #start playback
         self.awg.run()
