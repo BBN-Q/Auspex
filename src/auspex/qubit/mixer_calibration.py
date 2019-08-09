@@ -67,7 +67,7 @@ class MixerCalibration(Calibration):
     MIN_OFFSET = -0.4
     MAX_OFFSET = 0.4
     MIN_AMPLITUDE = 0.2
-    MAX_AMPLITUDE = 1.2
+    MAX_AMPLITUDE = 1.5
     MIN_PHASE = -0.3
     MAX_PHASE = 0.3
 
@@ -264,7 +264,7 @@ class MixerCalibrationExperiment(Experiment):
             self._awg = channel.measure_chan.phys_chan.transmitter
             self._phys_chan = channel.measure_chan.phys_chan
             self._source = channel.measure_chan.phys_chan.generator
-            self.SSB_FREQ = channel.measure_chan.frequency
+            self.SSB_FREQ = channel.measure_chan.autodyne_freq
         elif mixer.lower() == "control":
             self._awg = channel.phys_chan.transmitter
             self._phys_chan = channel.phys_chan
