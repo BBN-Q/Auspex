@@ -58,7 +58,7 @@ class SweptTestExperiment(Experiment):
         time_step = 0.1
         time.sleep(0.002)
         if self.complex_data:
-            data_row = np.exp(2j*np.pi*self.time_val)*np.ones(5) + 0.1j*np.random.random(5)
+            data_row = np.sin(2*np.pi*self.time_val)*np.ones(5) + 2.0j*np.sin(2*np.pi*self.time_val)*np.ones(5)
         else:
             data_row = np.sin(2*np.pi*self.time_val)*np.ones(5) + 0.1*np.random.random(5)
         self.time_val += time_step
@@ -160,8 +160,7 @@ class BufferTestCase(unittest.TestCase):
 
         data, desc = db.get_data()
 
-        self.assertAlmostEqual(np.sum(data.real-data.imag), 0.0, places=3)
-        # self.assertTrue(np.all(desc['field'] == np.linspace(0,100.0,4)))
+        self.assertAlmostEqual(np.mean(data.imag)/np.mean(data.real), 2.0, places=3)
 
 if __name__ == '__main__':
     unittest.main()
