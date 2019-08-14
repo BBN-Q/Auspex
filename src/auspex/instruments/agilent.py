@@ -717,7 +717,8 @@ class AgilentE8363C(SCPIInstrument):
 
     TIMEOUT = 10. * 1000. #milliseconds
 
-    power              = FloatCommand(scpi_string=":SOURce:POWer:LEVel:IMMediate:AMPLitude", value_range=(-27, 20))
+    power_port1        = FloatCommand(scpi_string=":SOURce:POWer1:LEVel:IMMediate:AMPLitude", value_range=(-27, 20))
+    power_port2        = FloatCommand(scpi_string=":SOURce:POWer2:LEVel:IMMediate:AMPLitude", value_range=(-27, 20))
     frequency_center   = FloatCommand(scpi_string=":SENSe:FREQuency:CENTer")
     frequency_span     = FloatCommand(scpi_string=":SENSe:FREQuency:SPAN")
     frequency_start    = FloatCommand(scpi_string=":SENSe:FREQuency:STARt")
@@ -730,7 +731,7 @@ class AgilentE8363C(SCPIInstrument):
     sweep_time         = FloatCommand(get_string=":SENSe:SWEep:TIME?")
 
     def __init__(self, resource_name=None, *args, **kwargs):
-        #If we only have an IP address then tack on the raw socket port to the VISA resource string
+        #If wenumber only have an IP address then tack on the raw socket port to the VISA resource string
         super(AgilentE8363C, self).__init__(resource_name, *args, **kwargs)
 
     def connect(self, resource_name=None, interface_type="VISA"):
@@ -767,6 +768,17 @@ class AgilentE8363C(SCPIInstrument):
             self.interface.write(":SENSe1:AVERage:STATe ON")
         else:
             self.interface.write(":SENSe1:AVERage:STATe OFF")
+
+    @property
+    def power(self):
+        return self.power_port1 if self.measurement[-1] == '1' else self.power_port2
+
+    @power.setter
+    def power(self, value):
+        if self.measurement[-1] == '1':
+            self.power_port1 = value
+        else:
+            self.power_port2 = value
 
     @property
     def measurement(self):
