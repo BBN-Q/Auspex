@@ -731,7 +731,7 @@ class AgilentE8363C(SCPIInstrument):
     sweep_time         = FloatCommand(get_string=":SENSe:SWEep:TIME?")
 
     def __init__(self, resource_name=None, *args, **kwargs):
-        #If wenumber only have an IP address then tack on the raw socket port to the VISA resource string
+        #If we only have an IP address then tack on the raw socket port to the VISA resource string
         super(AgilentE8363C, self).__init__(resource_name, *args, **kwargs)
 
     def connect(self, resource_name=None, interface_type="VISA"):
