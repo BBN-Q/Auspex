@@ -18,7 +18,7 @@ import random
 import json
 import ctypes
 
-single_window = False
+single_window = True
 plot_windows  = []
 
 import logging
@@ -521,7 +521,7 @@ def new_plotter_window_mdi(message):
     desc = json.loads(desc)
 
     pw = MatplotClientSubWindow()
-  
+
     pw.setWindowTitle("%s" % progname)
     pw.construct_plots(desc)
     pw.listen_for_data(uuid, len(desc))
@@ -563,7 +563,7 @@ class ListenerMixin:
         if self.desc_listener_thread:
             self.stop_listening(True)
         self.close()
-        
+
 
 class PlotMDI(ListenerMixin,QtWidgets.QMainWindow):
     def __init__(self, parent = None):

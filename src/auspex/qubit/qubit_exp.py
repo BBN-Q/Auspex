@@ -210,7 +210,7 @@ class QubitExperiment(Experiment):
         self.instrument_proxies = self.generators + self.receivers + self.transmitters + self.all_standalone + self.processors
         self.instruments = []
         for instrument in self.instrument_proxies:
-            address = (instrument.address, instrument.serial_port) if hasattr(instrument, 'serial_port') else instrument.address
+            address = (instrument.address, instrument.serial_port) if hasattr(instrument, 'serial_port') and instrument.serial_port is not None else instrument.address
             instr = instrument_map[instrument.model](address, instrument.label) # Instantiate
             # For easy lookup
             instr.proxy_obj = instrument

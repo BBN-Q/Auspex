@@ -725,13 +725,16 @@ class APS3(Instrument, metaclass=MakeBitFieldParams):
                                     doc="Select SOF200 test output or APS sequencer output from DAC.")
     trigger_output_select = BitFieldCommand(register=CSR_BD_CONTROL, shift=5,
                             doc="""True: select trigger to be output on front panel.
-                                    False: select marker to be output on front pane.""")
+                                    False: select marker to be output on front panel.""")
+    marker_mode = BitFieldCommand(register=CSR_BD_CONTROL, shift=6,
+                            doc="""True: Marker value is set as specified in 'state' field of instruction.
+                                    False: Marker is set high for one clock cycle, then cleared.""")
 
     ####### MARKER_DELAY #######################################################
 
     @property
     def marker_delay(self):
-        """Gets/sets the marker delay in seconds, based on a 300 MHz clock."""
+        """Gets/sets the marker delay in seconds, based on a 312.5 MHz clock."""
         return (1 + int(self.read_register(CSR_MARKER_DELAY))) / 312.5e6
     @marker_delay.setter
     def marker_delay(self, value):
@@ -759,7 +762,7 @@ class APS3(Instrument, metaclass=MakeBitFieldParams):
     ###### UTILITIES ###########################################################
     def run(self):
         logger.info("Configuring JESD...")
-        self.board.serial_configure_JESD()
+        #self.board.serial_configure_JESD()
         sleep(0.01)
         logger.info("Taking cache controller out of reset...")
         self.cache_controller = True
@@ -788,12 +791,10 @@ class APS3(Instrument, metaclass=MakeBitFieldParams):
             packed_seq.append(instr & U32)
             packed_seq.append(instr >> 32)
 
-        self.cache_controller = False
         sleep(0.01)
         self.write_dram(self.SEQ_OFFSET(), packed_seq)
         logger.info(f"Wrote {len(packed_seq)} words to sequence memory.")
         sleep(0.01)
-        self.cache_controller = True
 
     def load_waveforms(self, wfA, wfB):
         wfA_32 = [((wfA[2*i+1] << 16) | wfA[2*i]) for i in range(len(wfA) // 2)]
@@ -819,16 +820,13 @@ class APS3(Instrument, metaclass=MakeBitFieldParams):
             instructions_size = int(np.frombuffer(file.read(8), dtype=np.uint64)[0])
             instructions = [int(x) for x in np.frombuffer(file.read(instructions_size*8), dtype=np.uint64)]
 
-            self.load_sequence(instructions)
-            self.load_sequence(instructions)
-
             data = []
             for chan in range(num_channels):
                 data_size = int(np.frombuffer(file.read(8), dtype=np.uint64)[0])
                 data.append([int(x) for x in np.frombuffer(file.read(data_size*2), dtype=np.uint16)])
 
             self.load_waveforms(data[0], data[1])
-            self.load_waveforms(data[0], data[1])
+            self.load_sequence(instructions)
 
     def serial_check_alive(self):
         return self.board.serial_read_dac0(0x005) == 0x91 and self.board.serial_read_dac0(0x004) == 0x64
