@@ -474,7 +474,7 @@ class QubitExperiment(Experiment):
                     getattr(instr, "set_"+prop)(chan, value, thing)
                 except:
                     getattr(instr, "set_"+prop)(chan, value)
-
+            param.set_pair = (thing.phys_chan.label, attribute)
 
         if method:
             # Custom method
@@ -487,7 +487,7 @@ class QubitExperiment(Experiment):
                 param.add_post_push_hook(lambda: time.sleep(0.05))
             else:
                 raise ValueError("The instrument {} has no method {}".format(name, "set_"+attribute))
-        # param.instr_tree = [instr.name, attribute] #TODO: extend tree to endpoint
+            param.set_pair = (instr.name, attribute)
         self.add_sweep(param, values) # Create the requested sweep on this parameter
 
     def add_avg_sweep(self, num_averages):
