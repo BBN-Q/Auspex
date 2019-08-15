@@ -498,8 +498,8 @@ class DataStream(object):
         if self.buffer_size > 50e6:
             logger.info("Limiting buffer size of {self} to 50 Million Points")
             self.buffer_size = 50e6
-        self.buff_shared_re = RawArray(ctypes.c_double, self.buffer_size)
-        self.buff_shared_im = RawArray(ctypes.c_double, self.buffer_size)
+        self.buff_shared_re = RawArray(ctypes.c_double, int(self.buffer_size))
+        self.buff_shared_im = RawArray(ctypes.c_double, int(self.buffer_size))
         self.re_np = np.frombuffer(self.buff_shared_re, dtype=np.float64)
         self.im_np = np.frombuffer(self.buff_shared_im, dtype=np.float64)
 
