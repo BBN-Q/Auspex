@@ -489,8 +489,15 @@ class DataStream(object):
 
         # Shared memory interface
         self.buffer_lock    = mp.Lock()
-        self.buffer_size    = 500000
+        # self.buffer_size    = 500000
         self.buff_idx       = Value('i', 0)
+
+    def final_init(self):
+        self.buffer_size = self.descriptor.num_points()
+        # logger.info(f"{self.start_connector} to {self.end_connector} buffer of size {self.buffer_size}")
+        if self.buffer_size > 50e6:
+            logger.info("Limiting buffer size of {self} to 50 Million Points")
+            self.buffer_size = 50e6
         self.buff_shared_re = RawArray(ctypes.c_double, self.buffer_size)
         self.buff_shared_im = RawArray(ctypes.c_double, self.buffer_size)
         self.re_np = np.frombuffer(self.buff_shared_re, dtype=np.float64)

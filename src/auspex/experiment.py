@@ -186,6 +186,9 @@ class Experiment(metaclass=MetaExperiment):
         self.manual_plotter_callbacks = [] # These are called at the end of run
         self._extra_plots_to_streams = {}
 
+        # Keep track of additional DataStreams created for manual plotters, etc.
+        self.extra_streams = []
+
         # Furthermore, keep references to all of the file writers and buffers.
         self.writers = []
         self.buffers = []
@@ -462,6 +465,9 @@ class Experiment(metaclass=MetaExperiment):
         for n in self.nodes + self.extra_plotters:
             if n != self and hasattr(n, 'final_init'):
                 n.final_init()
+        # Call final init on the DataStreams to fix their shared memory buffer sizes
+        for _,_,data in self.graph.dag.edges(data=True):
+            data['object'].final_init()
         self.init_progress_bars()
 
     def init_progress_bars(self):
@@ -681,6 +687,7 @@ class Experiment(metaclass=MetaExperiment):
         """A plotter that lives outside the filter pipeline, intended for advanced
         use cases when plotting data during refinement."""
         plotter_stream = DataStream()
+        self.extra_streams.append(plotter_stream)
         plotter.sink.add_input_stream(plotter_stream)
         self.extra_plotters.append(plotter)
         self._extra_plots_to_streams[plotter] = plotter_stream
