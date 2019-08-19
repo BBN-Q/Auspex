@@ -20,7 +20,7 @@ def get_file_name():
 
     return filepath
 
-def open_data(num=None, folder=None, groupname="main", datasetname="data", date=datetime.date.today().strftime('%y%m%d')):
+def open_data(num=None, folder=None, groupname="main", datasetname="data", date=None):
     """Convenience Load data from an `AuspexDataContainer` given a file number and folder.
         Assumes that files are named with the convention `ExperimentName-NNNNN.auspex`
 
@@ -53,8 +53,9 @@ def open_data(num=None, folder=None, groupname="main", datasetname="data", date=
         data_file = get_file_name()
         folder = ""
     else:
-        if date is not None:
-            folder = path.join(folder, date)
+        if date == None:
+            date = datetime.date.today().strftime('%y%m%d')
+        folder = path.join(folder, date)
         assert path.isdir(folder), f"Could not find data folder: {folder}"
 
         p = re.compile(r".+-(\d+).auspex")
