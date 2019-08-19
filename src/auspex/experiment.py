@@ -55,6 +55,8 @@ from auspex.stream import DataStream, DataAxis, SweepAxis, DataStreamDescriptor,
 from auspex.filters import Plotter, MeshPlotter, ManualPlotter, WriteToFile, DataBuffer, Filter
 from auspex.log import logger
 import auspex.config
+from auspex.config import isnotebook
+
 
 def auspex_plot_server():
     client_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),"plot_server.py")
@@ -183,6 +185,9 @@ class Experiment(metaclass=MetaExperiment):
         self.manual_plotters = [] # Plotters using neither streams nor the pipeline
         self.manual_plotter_callbacks = [] # These are called at the end of run
         self._extra_plots_to_streams = {}
+
+        # Keep track of additional DataStreams created for manual plotters, etc.
+        self.extra_streams = []
 
         # Furthermore, keep references to all of the file writers and buffers.
         self.writers = []
@@ -330,10 +335,17 @@ class Experiment(metaclass=MetaExperiment):
 
             if hasattr(self, 'progressbars') and self.progressbars:
                 for axis in self.sweeper.axes:
-                    if axis.done:
-                        self.progressbars[axis].value = axis.num_points()
+                    if isnotebook():
+                        if axis.done:
+                            self.progressbars[axis].value = axis.num_points()
+                        else:
+                            self.progressbars[axis].value = axis.step
                     else:
-                        self.progressbars[axis].value = axis.step
+                        if axis.done:
+                            self.progressbars[axis].next()
+                            self.progressbars[axis].finish()
+                        else:
+                            self.progressbars[axis].goto(axis.step)
 
             if self.sweeper.is_adaptive():
                 # Add the new tuples to the stream descriptors
@@ -453,21 +465,28 @@ class Experiment(metaclass=MetaExperiment):
         for n in self.nodes + self.extra_plotters:
             if n != self and hasattr(n, 'final_init'):
                 n.final_init()
+        # Call final init on the DataStreams to fix their shared memory buffer sizes
+        for edge in self.graph.edges:
+            edge.final_init()
+
         self.init_progress_bars()
 
     def init_progress_bars(self):
         """ initialize the progress bars."""
-        from auspex.config import isnotebook
-
+        self.progressbars = {}
         if isnotebook():
             from ipywidgets import IntProgress, VBox
             from IPython.display import display
 
-            self.progressbars = {}
+
             for axis in self.sweeper.axes:
                 self.progressbars[axis] = IntProgress(min=0, max=axis.num_points(),
                                                         description=f'Sweep {axis.name}:', style={'description_width': 'initial'})
             display(VBox(list(self.progressbars.values())))
+        else:
+            from progress.bar import ShadyBar
+            for axis in self.sweeper.axes:
+                self.progressbars[axis] = ShadyBar(f"Sweep {axis.name}", max=axis.num_points())
 
     def run_sweeps(self):
         # Propagate the descriptors through the network
@@ -669,6 +688,7 @@ class Experiment(metaclass=MetaExperiment):
         """A plotter that lives outside the filter pipeline, intended for advanced
         use cases when plotting data during refinement."""
         plotter_stream = DataStream()
+        self.extra_streams.append(plotter_stream)
         plotter.sink.add_input_stream(plotter_stream)
         self.extra_plotters.append(plotter)
         self._extra_plots_to_streams[plotter] = plotter_stream

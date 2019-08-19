@@ -109,7 +109,7 @@ class FidelityTestCase(unittest.TestCase):
         pl["q1"]["Demodulate"]["Integrate"].add(Display(label="testint", plot_dims=1))
         pl["q1"]["Demodulate"]["Integrate"]["Average"].add(Display(label="testavg", plot_dims=1))
         exp = SingleShotFidelityExperiment(cl["q1"], averages=1000)
-        exp.set_fake_data(cl["X6_1"], [0.4+0.4j, 0.5+0.6j], random_mag=0.5)
+        exp.set_fake_data(cl["X6_1"], [0.4, 0.5], random_mag=0.5)
         exp.run_sweeps()
 
     def test_ss_demod(self):
