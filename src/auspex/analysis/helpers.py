@@ -14,7 +14,7 @@ def get_file_name():
     root = tk.Tk()
     root.withdraw() # remove edges
 
-    filepath = filedialog.askopenfilename()
+    filepath = [filedialog.askdirectory()]
     root.update() # fixes OSX hanging issue
     #https://stackoverflow.com/questions/21866537/what-could-cause-an-open-file-dialog-window-in-tkinter-python-to-be-really-slow
 
@@ -28,7 +28,7 @@ def open_data(num=None, folder=None, groupname="main", datasetname="data", date=
         num (int)
             File number to be loaded.
         folder (string)
-            Base folder where file is stored. If the `date` parameter is not None, assumes file is a dated folder.
+            Base folder where file is stored. If the `date` parameter is not None, assumes file is a dated folder. If no folder is specified, open a dialogue box. Open the folder with the desired ExperimentName-NNNN.auspex, then press OK
         groupname (string)
             Group name of data to be loaded.
         datasetname (string, optional)
@@ -51,6 +51,7 @@ def open_data(num=None, folder=None, groupname="main", datasetname="data", date=
     if num is None or folder is None:
         # pull up dialog box
         data_file = get_file_name()
+        folder = ""
     else:
         if date is not None:
             folder = path.join(folder, date)
