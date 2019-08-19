@@ -439,6 +439,15 @@ class QubitExperiment(Experiment):
         param.assign_method(method)
         self.add_sweep(param, values) # Create the requested sweep on this parameter
 
+    def add_manual_sweep(self, label, prompt, values, channel=None):
+        param = FloatParameter() # Create the parameter
+        param.name = label
+        def method(value):
+            print(f'Manually set {label} to {value}, then press enter.')
+            input()
+        param.assign_method(method)
+        self.add_sweep(param, values) # Create the requested sweep on this parameter
+
     def add_qubit_sweep(self, qubit, measure_or_control, attribute, values):
         """
         Add a *ParameterSweep* to the experiment. Users specify a qubit property that auspex
