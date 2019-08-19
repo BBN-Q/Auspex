@@ -106,10 +106,11 @@ class X6(Instrument):
 
         self.last_timestamp = Value('d', datetime.datetime.now().timestamp())
 
-        self.gen_fake_data        = gen_fake_data
-        self.increment_ideal_data = False
-        self.ideal_counter        = 0
-        self.ideal_data           = None
+        self.gen_fake_data         = gen_fake_data
+        self.increment_ideal_data  = False
+        self.ideal_counter         = 0
+        self.ideal_data            = None
+        self.ideal_data_random_mag = 0
 
         self.timeout = 10.0
 
@@ -233,7 +234,7 @@ class X6(Instrument):
         # todo: other checking here
         self._channels.append(channel)
 
-    def spew_fake_data(self, counter, ideal_data, random_mag=0.1, random_seed=12345):
+    def spew_fake_data(self, counter, ideal_data, random_seed=12345):
         """
         Generate fake data on the stream. For unittest usage.
         ideal_data: array or list giving means of the expected signal for each segment
@@ -256,7 +257,6 @@ class X6(Instrument):
             # for chan, wsock in self._chan_to_wsocket.items():
             for i in range(segs):
                 if chan.stream_type == "integrated":
-                    # random_mag*(np.random.random(length).astype(chan.dtype) + 1j*np.random.random(length).astype(chan.dtype)) + 
                     buff[i,:] = ideal_data[i]
                 elif chan.stream_type == "demodulated":
                     buff[i, int(length/4):int(3*length/4)] = 1.0 if ideal_data[i] == 0 else ideal_data[i]
@@ -265,9 +265,9 @@ class X6(Instrument):
                     buff[i, int(length/4):int(length/4)+len(signal)] = signal * (1.0 if ideal_data[i] == 0 else ideal_data[i])
             # import ipdb; ipdb.set_trace();
             if chan.stream_type == "raw":
-                buff += random_mag*np.random.random((segs, length))
+                buff += self.ideal_data_random_mag*np.random.random((segs, length))
             else:
-                buff = buff.astype(np.complex128) + random_mag*np.random.random((segs, length))+ 1j*random_mag*np.random.random((segs, length))
+                buff = buff.astype(np.complex128) + self.ideal_data_random_mag*np.random.random((segs, length))+ 1j*self.ideal_data_random_mag*np.random.random((segs, length))
 
             total += length*segs
             # logger.info(f"In Spew: {buff.dtype} {chan.dtype} {buff.size}")

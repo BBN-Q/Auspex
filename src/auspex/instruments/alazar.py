@@ -81,6 +81,7 @@ class AlazarATS9870(Instrument):
         self.increment_ideal_data = False
         self.ideal_counter        = 0
         self.ideal_data           = None
+        self.ideal_data_random_mag = 0
         np.random.seed(12345)
 
     def connect(self, resource_name=None):
@@ -140,7 +141,7 @@ class AlazarATS9870(Instrument):
             self.channels.append(channel)
             self._chan_to_buf[channel] = channel.phys_channel
 
-    def spew_fake_data(self, counter, ideal_data, random_mag=0.1, random_seed=12345):
+    def spew_fake_data(self, counter, ideal_data, random_seed=12345):
         """
         Generate fake data on the stream. For unittest usage.
         ideal_data: array or list giving means of the expected signal for each segment
@@ -156,7 +157,7 @@ class AlazarATS9870(Instrument):
                 signal = np.sin(np.linspace(0,10.0*np.pi,int(length/2)))
                 buff[i, int(length/4):int(length/4)+len(signal)] = signal * (1.0 if ideal_data[i] == 0 else ideal_data[i])
             
-            buff += random_mag*np.random.random((self.number_segments, length))
+            buff += self.ideal_data_random_mag*np.random.random((self.number_segments, length))
 
             wsock.send(struct.pack('n', self.number_segments*length*np.float32().itemsize) + buff.flatten().tostring())
             counter[chan] += length*self.number_segments
