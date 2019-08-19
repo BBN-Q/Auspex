@@ -466,8 +466,9 @@ class Experiment(metaclass=MetaExperiment):
             if n != self and hasattr(n, 'final_init'):
                 n.final_init()
         # Call final init on the DataStreams to fix their shared memory buffer sizes
-        for _,_,data in self.graph.dag.edges(data=True):
-            data['object'].final_init()
+        for edge in self.graph.edges:
+            edge.final_init()
+
         self.init_progress_bars()
 
     def init_progress_bars(self):

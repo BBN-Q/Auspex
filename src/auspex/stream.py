@@ -500,7 +500,7 @@ class DataStream(object):
 
     def final_init(self):
         self.buffer_size = self.descriptor.num_points()*self.descriptor.buffer_mult_factor
-        # logger.info(f"{self.start_connector} to {self.end_connector} buffer of size {self.buffer_size}")
+        # logger.info(f"{self.start_connector.parent}:{self.start_connector} to {self.end_connector.parent}:{self.end_connector} buffer of size {self.buffer_size}")
         if self.buffer_size > 50e6:
             logger.info("Limiting buffer size of {self} to 50 Million Points")
             self.buffer_size = 50e6
