@@ -18,7 +18,7 @@ import random
 import json
 import ctypes
 
-single_window = True
+single_window = False
 plot_windows  = []
 
 import logging
