@@ -30,11 +30,13 @@ class DPO72004C(SCPIInstrument):
     record_length   = IntCommand(get_string="HOR:ACQLENGTH?;")
     record_duration = FloatCommand(get_string="HOR:ACQDURATION?;")
 
+    button_press = StringCommand(set_string="FPAnel:PRESS {:s};",
+        allowed_values=["RUnstop", "SINGleseq"])
+
     def __init__(self, resource_name, *args, **kwargs):
         resource_name += "::4000::SOCKET" #user guide recommends HiSLIP protocol
         super(DPO72004C, self).__init__(resource_name, *args, **kwargs)
         self.name = "Tektronix DPO72004C Oscilloscope"
-        self.interface._resource.read_termination = u"\n"
 
     def clear(self):
         self.interface.write("CLEAR ALL;")

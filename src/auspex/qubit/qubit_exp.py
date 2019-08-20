@@ -213,7 +213,8 @@ class QubitExperiment(Experiment):
         self.instrument_proxies = self.generators + self.receivers + self.transmitters + self.all_standalone + self.processors
         self.instruments = []
         for instrument in self.instrument_proxies:
-            instr = instrument_map[instrument.model](instrument.address, instrument.label) # Instantiate
+            address = (instrument.address, instrument.serial_port) if hasattr(instrument, 'serial_port') and instrument.serial_port is not None else instrument.address
+            instr = instrument_map[instrument.model](address, instrument.label) # Instantiate
             # For easy lookup
             instr.proxy_obj = instrument
             instrument.instr = instr # This shouldn't be relied upon
@@ -435,6 +436,15 @@ class QubitExperiment(Experiment):
                 getattr(instr, "set_"+prop)(channel, value)
             else:
                 getattr(instr, "set_"+prop)(value)
+        param.assign_method(method)
+        self.add_sweep(param, values) # Create the requested sweep on this parameter
+
+    def add_manual_sweep(self, label, prompt, values, channel=None):
+        param = FloatParameter() # Create the parameter
+        param.name = label
+        def method(value):
+            print(f'Manually set {label} to {value}, then press enter.')
+            input()
         param.assign_method(method)
         self.add_sweep(param, values) # Create the requested sweep on this parameter
 

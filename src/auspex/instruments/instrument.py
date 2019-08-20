@@ -42,12 +42,16 @@ class Command(object):
             else:
                 setattr(self, a, None) # Default to None
 
+        if 'doc' in self.kwargs:
+            self.doc = self.kwargs.pop('doc')
+        else:
+            self.doc = ""
+
         if self.value_range is not None:
             self.value_range = (min(self.value_range), max(self.value_range))
 
         self.python_to_instr = None # Dict StringCommandmapping from python values to instrument values
         self.instr_to_python = None # Dict mapping from instrument values to python values
-        self.doc = ""
 
         if self.value_map is not None:
             self.python_to_instr = self.value_map
@@ -350,9 +354,11 @@ def add_command_SCPI(instr, name, cmd):
     # In this case we can't create a property given additional arguments
     if new_cmd.get_string:
         setattr(instr, "get_" + name, fget)
+        setattr(getattr(instr, "get_" + name), "__doc__", new_cmd.doc)
 
     if new_cmd.set_string:
         setattr(instr, "set_" + name, fset)
+        setattr(getattr(instr, "set_" + name), "__doc__", new_cmd.doc)
 
     return new_cmd
 
