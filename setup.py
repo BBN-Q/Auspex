@@ -23,6 +23,7 @@ install_requires = [
     "ipywidgets>=7.0.0",
     "sqlalchemy >= 1.2.15",
     "setproctitle",
+    "serial",
     "progress"
 ]
 
