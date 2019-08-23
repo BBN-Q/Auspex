@@ -253,7 +253,7 @@ class DataStreamDescriptor(object):
         self.dtype = dtype
         self.metadata = {}
 
-        # Buffer size multiplier: use this to inflate the size of the 
+        # Buffer size multiplier: use this to inflate the size of the
         # shared memory buffer. This is needed for partial averages, which
         # may require more space than their descriptors would indicate
         # since they are emitted as often as possible.
@@ -564,7 +564,7 @@ class DataStream(object):
                         raise ValueError("Got data {} that is neither an array nor a float".format(data))
         with self.buffer_lock:
             start = self.buff_idx.value
-            re = np.real(data).flatten()
+            re = np.real(np.array(data)).flatten()
             if start+re.size > self.re_np.size:
                 raise ValueError(f"Stream {self} received more data than fits in the shared memory buffer. \
                     This is probably due to digitizer raw streams producing data too quickly for the pipeline.")
@@ -573,7 +573,7 @@ class DataStream(object):
                 im = np.imag(data).flatten()
                 self.im_np[start:start+im.size] = im
             message = {"type": "data", "data": None}
-            self.buff_idx.value = start + data.size
+            self.buff_idx.value = start + np.array(data).size
         self.queue.put(message)
 
     def pop(self):
