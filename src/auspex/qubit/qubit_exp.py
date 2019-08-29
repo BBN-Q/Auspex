@@ -120,7 +120,10 @@ class QubitExperiment(Experiment):
         self.controlled_qubits = [c for c in self.chan_db.channels if c.label in meta_info["qubits"]]
         self.measurements      = [c for c in self.chan_db.channels if c.label in meta_info["measurements"]]
         self.measured_qubits   = [c for c in self.chan_db.channels if "M-"+c.label in meta_info["measurements"]]
-        self.edges             = [c for c in self.chan_db.channels if c.label in meta_info["edges"]]
+        if 'edges' in meta_info:
+            self.edges             = [c for c in self.chan_db.channels if c.label in meta_info["edges"]]
+        else:
+            self.edges = []
         self.phys_chans        = list(set([e.phys_chan for e in self.controlled_qubits + self.measurements + self.edges]))
         self.transmitters      = list(set([e.phys_chan.transmitter for e in self.controlled_qubits + self.measurements + self.edges]))
         self.receiver_chans    = list(set([e.receiver_chan for e in self.measurements]))
@@ -217,7 +220,8 @@ class QubitExperiment(Experiment):
 
         self.instruments = []
         for instrument in self.instrument_proxies:
-            instr = instrument_map[instrument.model](instrument.address, instrument.label) # Instantiate
+            address = (instrument.address, instrument.serial_port) if hasattr(instrument, 'serial_port') and instrument.serial_port is not None else instrument.address
+            instr = instrument_map[instrument.model](address, instrument.label) # Instantiate
             # For easy lookup
             instr.proxy_obj = instrument
             instrument.instr = instr # This shouldn't be relied upon
@@ -435,7 +439,7 @@ class QubitExperiment(Experiment):
             listener.start()
 
         while ready.value < len(self.chan_to_dig):
-            time.sleep(0.3)
+            time.sleep(0.1)
 
         if self.cw_mode:
             for awg in self.awgs:
@@ -450,6 +454,15 @@ class QubitExperiment(Experiment):
                 getattr(instr, "set_"+prop)(channel, value)
             else:
                 getattr(instr, "set_"+prop)(value)
+        param.assign_method(method)
+        self.add_sweep(param, values) # Create the requested sweep on this parameter
+
+    def add_manual_sweep(self, label, prompt, values, channel=None):
+        param = FloatParameter() # Create the parameter
+        param.name = label
+        def method(value):
+            print(f'Manually set {label} to {value}, then press enter.')
+            input()
         param.assign_method(method)
         self.add_sweep(param, values) # Create the requested sweep on this parameter
 
@@ -491,7 +504,7 @@ class QubitExperiment(Experiment):
                     getattr(instr, "set_"+prop)(chan, value, thing)
                 except:
                     getattr(instr, "set_"+prop)(chan, value)
-
+            param.set_pair = (thing.phys_chan.label, attribute)
 
         if method:
             # Custom method
@@ -504,7 +517,7 @@ class QubitExperiment(Experiment):
                 param.add_post_push_hook(lambda: time.sleep(0.05))
             else:
                 raise ValueError("The instrument {} has no method {}".format(name, "set_"+attribute))
-        # param.instr_tree = [instr.name, attribute] #TODO: extend tree to endpoint
+            param.set_pair = (instr.name, attribute)
         self.add_sweep(param, values) # Create the requested sweep on this parameter
 
     def add_avg_sweep(self, num_averages):

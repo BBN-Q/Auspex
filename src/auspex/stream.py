@@ -15,8 +15,8 @@ if sys.platform == 'win32' or 'NOFORKING' in os.environ:
 else:
     import multiprocessing as mp
     from multiprocessing import Queue
-from multiprocessing import Value
-
+from multiprocessing import Value, RawValue, RawArray
+import ctypes
 import logging
 import numbers
 import itertools
@@ -253,6 +253,12 @@ class DataStreamDescriptor(object):
         self.dtype = dtype
         self.metadata = {}
 
+        # Buffer size multiplier: use this to inflate the size of the
+        # shared memory buffer. This is needed for partial averages, which
+        # may require more space than their descriptors would indicate
+        # since they are emitted as often as possible.
+        self.buffer_mult_factor = 1
+
         # Keep track of the parameter permutations we have actually used...
         self.visited_tuples = []
 
@@ -485,6 +491,23 @@ class DataStream(object):
         self.descriptor = None
         self.start_connector = None
         self.end_connector = None
+        self.closed = False
+
+        # Shared memory interface
+        self.buffer_lock    = mp.Lock()
+        # self.buffer_size    = 500000
+        self.buff_idx       = Value('i', 0)
+
+    def final_init(self):
+        self.buffer_size = self.descriptor.num_points()*self.descriptor.buffer_mult_factor
+        # logger.info(f"{self.start_connector.parent}:{self.start_connector} to {self.end_connector.parent}:{self.end_connector} buffer of size {self.buffer_size}")
+        if self.buffer_size > 50e6:
+            logger.info("Limiting buffer size of {self} to 50 Million Points")
+            self.buffer_size = 50e6
+        self.buff_shared_re = RawArray(ctypes.c_double, int(self.buffer_size))
+        self.buff_shared_im = RawArray(ctypes.c_double, int(self.buffer_size))
+        self.re_np = np.frombuffer(self.buff_shared_re, dtype=np.float64)
+        self.im_np = np.frombuffer(self.buff_shared_im, dtype=np.float64)
 
     def set_descriptor(self, descriptor):
         if isinstance(descriptor,DataStreamDescriptor):
@@ -525,6 +548,8 @@ class DataStream(object):
             self.name, self.percent_complete(), self.descriptor)
 
     def push(self, data):
+        if self.closed:
+            raise Exception("The queue is closed and should not be receiving any more data")
         with self.points_taken_lock:
             if hasattr(data, 'size'):
                 self.points_taken.value += data.size
@@ -537,17 +562,42 @@ class DataStream(object):
                         self.points_taken.value += 1
                     except:
                         raise ValueError("Got data {} that is neither an array nor a float".format(data))
-
-        message = {"type": "data", "data": data}
+        with self.buffer_lock:
+            start = self.buff_idx.value
+            re = np.real(np.array(data)).flatten()
+            if start+re.size > self.re_np.size:
+                raise ValueError(f"Stream {self} received more data than fits in the shared memory buffer. \
+                    This is probably due to digitizer raw streams producing data too quickly for the pipeline.")
+            self.re_np[start:start+re.size] = re
+            if np.issubdtype(self.descriptor.dtype, np.complexfloating):
+                im = np.imag(data).flatten()
+                self.im_np[start:start+im.size] = im
+            message = {"type": "data", "data": None}
+            self.buff_idx.value = start + np.array(data).size
         self.queue.put(message)
+
+    def pop(self):
+        result = None
+        with self.buffer_lock:
+            idx = self.buff_idx.value
+            if idx != 0:
+                result = self.re_np[:idx]
+
+                if np.issubdtype(self.descriptor.dtype, np.complexfloating):
+                    result = result.astype(np.complex128) + 1.0j*self.im_np[:idx]
+                self.buff_idx.value = 0
+                result = result.copy()
+        return result
 
     def push_event(self, event_type, data=None):
+        if self.closed:
+            raise Exception("The queue is closed and should not be receiving any more data")
         message = {"type": "event", "event_type": event_type, "data": data}
         self.queue.put(message)
-
-    # def push_direct(self, data):
-    #     message = {"type": "data_direct", "compression": "none", "data": data}
-    #     self.queue.put(message)
+        if event_type == "done":
+            logger.debug(f"Closing out queue {self}")
+            self.queue.close()
+            self.closed = True
 
 # These connectors are where we attached the DataStreams
 class InputConnector(object):

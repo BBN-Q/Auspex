@@ -53,6 +53,7 @@ class TestExperiment(Experiment):
         time.sleep(0.002)
         data_row = np.ones(self.samples*self.num_trials) + 0.1*np.random.random(self.samples*self.num_trials)
         self.time_val += time_step
+        # logger.info(f"IN RUN METHOD PUSHING: {data_row} {data_row.size} {data_row.shape}")
         self.chan1.push(data_row)
         logger.debug("Stream pushed points {}.".format(data_row))
         logger.debug("Stream has filled {} of {} points".format(self.chan1.points_taken, self.chan1.num_points() ))
