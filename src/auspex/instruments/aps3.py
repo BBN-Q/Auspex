@@ -797,11 +797,28 @@ class APS3(Instrument, metaclass=MakeBitFieldParams):
         sleep(0.01)
 
     def load_waveforms(self, wfA, wfB):
+        print(len(wfA))
+        
         wfA_32 = [((wfA[2*i+1] << 16) | wfA[2*i]) for i in range(len(wfA) // 2)]
         wfB_32 = [((wfB[2*i+1] << 16) | wfB[2*i]) for i in range(len(wfB) // 2)]
 
         self.write_dram(self.WFA_OFFSET(), wfA_32) # I
         self.write_dram(self.WFB_OFFSET(), wfB_32) # Q
+        
+    def read_waveforms(self, wf_len):
+        wfA_32 = self.read_dram(self.WFA_OFFSET(), wf_len // 2)
+        wfB_32 = self.read_dram(self.WFB_OFFSET(), wf_len // 2)
+        
+        wfA = []
+        wfB = []
+        
+        for i in range(wf_len // 2):
+            wfA.append(wfA_32[i] & 0xFFFF)
+            wfA.append((wfA_32[i] >> 16) & 0xFFFF)
+            wfB.append(wfB_32[i] & 0xFFFF)
+            wfB.append((wfB_32[i] >> 16) & 0xFFFF)
+            
+        return wfA, wfB
 
     def load_sequence_file(self, seq_file):
         self.sequence_filename = seq_file
