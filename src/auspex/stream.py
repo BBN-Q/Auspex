@@ -501,9 +501,9 @@ class DataStream(object):
     def final_init(self):
         self.buffer_size = self.descriptor.num_points()*self.descriptor.buffer_mult_factor
         # logger.info(f"{self.start_connector.parent}:{self.start_connector} to {self.end_connector.parent}:{self.end_connector} buffer of size {self.buffer_size}")
-        if self.buffer_size > 50e6:
-            logger.info("Limiting buffer size of {self} to 50 Million Points")
-            self.buffer_size = 50e6
+        if self.buffer_size > 200e6:
+            logger.info(f"Limiting buffer size of {self} to {self.buffer_size/1e6} Million Points")
+            self.buffer_size = 200e6
         self.buff_shared_re = RawArray(ctypes.c_double, int(self.buffer_size))
         self.buff_shared_im = RawArray(ctypes.c_double, int(self.buffer_size))
         self.re_np = np.frombuffer(self.buff_shared_re, dtype=np.float64)
