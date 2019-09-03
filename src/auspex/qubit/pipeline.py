@@ -53,7 +53,7 @@ class PipelineManager(object):
 
         if not bbndb.get_cl_session():
             raise Exception("Auspex expects db to be created already by QGL. Please create a ChannelLibrary.")
-        
+
         self.session = bbndb.get_pl_session()
 
         # Check to see whether there is already a temp database
@@ -82,7 +82,7 @@ class PipelineManager(object):
         mqs = [l[0] for l in self.session.query(m.label).join(m.channel_db, aliased=True).filter_by(label="working").all()]
         if f'M-{qubit_label}' not in mqs:
             raise Exception(f"Could not find qubit {qubit_label} in pipeline...")
-        
+
         select = adb.StreamSelect(pipelineMgr=self, stream_type=stream_type, qubit_name=qubit_label)
         self.session.add(select)
         self.meas_graph.add_node(select.hash_val, node_obj=select)
@@ -111,28 +111,49 @@ class PipelineManager(object):
 
         # Build a mapping of qubits to receivers, construct qubit proxies
         receiver_chans_by_qubit = {}
+        receiver_chans_by_qubit_label = {}
         available_streams_by_qubit = {}
         for m in measurements:
             q = [c for c in cdb.channels if c.label==m.label[2:]][0]
             receiver_chans_by_qubit[q] = m.receiver_chan
+            receiver_chans_by_qubit_label[q.label] = m.receiver_chan
             available_streams_by_qubit[q] = m.receiver_chan.receiver.stream_types
 
-        for q, r in receiver_chans_by_qubit.items():
-            sels = stream_selectors[q.label]
-            for sel in sels.values():
-                sel.available_streams = [st.strip() for st in r.receiver.stream_types.split(",")]
-                sel.stream_type = sel.available_streams[-1]
+        rx_chans = []
+        multiplexed_groups = []
+        for q in qubits:
+            rx_chan = receiver_chans_by_qubit[q]
+            if rx_chan in rx_chans:
+                multiplexed_groups[rx_chans.index(rx_chan)].append(q)
+            else:
+                rx_chans.append(rx_chan)
+                multiplexed_groups.append([q])
 
-                # Set a default kernel
-                if sel.stream_type == "integrated":
-                    sel.kernel = np.ones(r.receiver.record_length)
+        stream_selectors = {}
+        for group in multiplexed_groups:
+            initial_stream_qubit = group[0]
+            labels = [q.label for q in group]
+            group_label = '-'.join(labels)
+            stream_selectors[group_label] = {'default' : adb.StreamSelect(pipelineMgr=self, label = group_label)}
+
+        for sels in stream_selectors.values():
+            sel = sels['default']
+            labels = sel.label.split('-')
+            source_qubit = labels[0]
+            rcvr = receiver_chans_by_qubit_label[source_qubit]
+            sel.available_streams = [st.strip() for st in rcvr.receiver.stream_types.split(",")]
+            sel.stream_type = sel.available_streams[0]
 
         # generate the pipeline automatically
         self.meas_graph = nx.DiGraph()
         for sels in stream_selectors.values():
             for sel in sels.values():
-                sel.create_default_pipeline(buffers=buffers)
-            self.session.add(sel)
+                qbs = sel.label.split('-')
+                for q in qbs:
+                    sel.qubit_name = q
+                    sel.create_default_pipeline(buffers=buffers)
+                sel.qubit_name = qbs[0]
+                self.session.add(sel)
 
         self._push_meas_graph_to_db(self.meas_graph, "working")
         self.session.commit()
@@ -147,15 +168,25 @@ class PipelineManager(object):
         self._push_meas_graph_to_db(self.meas_graph, "working")
 
     def get_stream_selector(self, pipeline_name):
-        sels = self.get_current_stream_selectors() 
+        sels = self.get_current_stream_selectors()
         sels.sort(key=lambda x: x.qubit_name)
         selectors = [sel.hash_val for sel in sels]
         qubit_names = [sel.qubit_name for sel in sels]
+        sel_labels = [sel.label for sel in sels]
 
         name_f = lambda s: s.qubit_name if qubit_names.count(s.qubit_name) == 1 else s.qubit_name + " " + s.stream_type
         sel_by_name = {name_f(sel): sel for sel in sels}
+        sel_by_label = {}
+        for sel in sels:
+            qbs = sel.label.split("-")
+            for q in qbs:
+                sel_by_label[q] = sel
 
-        if pipeline_name not in sel_by_name:
+        if pipeline_name in sel_by_name:
+            return sel_by_name[pipeline_name]
+        elif pipeline_name in sel_by_label:
+            return sel_by_label[pipeline_name]
+        else:
             raise Exception(f"Name {pipeline_name} does not specify a pipeline. If there are multiple pipelines for a qubit you must specify 'qubit_name pipeline_name'")
         return sel_by_name[pipeline_name]
 
@@ -213,7 +244,7 @@ class PipelineManager(object):
         if pipeline_name == "working":
             self.session.query(adb.Connection).filter_by(pipeline_name=pipeline_name).delete()
         now = datetime.datetime.now()
-        for n1, n2 in graph.edges():    
+        for n1, n2 in graph.edges():
             new_node1 = bbndb.copy_sqla_object(graph.nodes[n1]['node_obj'], self.session)
             new_node2 = bbndb.copy_sqla_object(graph.nodes[n2]['node_obj'], self.session)
             c = adb.Connection(pipeline_name=pipeline_name, node1=new_node1, node2=new_node2, time=now,
@@ -317,12 +348,12 @@ class PipelineManager(object):
                     end = widest[0]-0.6
                 elif i == len(selectors):
                     start = sum(widest)-0.4
-                    end = max(x)+0.4 
+                    end = max(x)+0.4
                 else:
                     start = sum(widest[:i])-0.4
                     end = sum(widest[:i+1])-0.6
                 middles.append(0.5*(start+end))
-                bgs_lines.append(Lines(x=[start, end], y=[[min(y)-0.5,min(y)-0.5],[max(y)+0.5,max(y)+0.5]], scales= {'x': xs, 'y': ys}, 
+                bgs_lines.append(Lines(x=[start, end], y=[[min(y)-0.5,min(y)-0.5],[max(y)+0.5,max(y)+0.5]], scales= {'x': xs, 'y': ys},
                                       fill='between',   # opacity does not work with this option
                                       fill_opacities = [0.1+0.5*i/len(selectors)],
                                       stroke_width = 0.0

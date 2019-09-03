@@ -252,7 +252,7 @@ class CalibrationExperiment(QubitExperiment):
         output_nodes = []
         qubit_labels = [q.label for q in self.qubits]
         for qubit in self.qubits:
-            stream_sels = [ss for ss in self.stream_selectors if ss.qubit_name == qubit.label]
+            stream_sels = [ss for ss in self.stream_selectors if qubit.label in ss.label.split("-")]
             if len(stream_sels) > 1:
                 raise Exception(f"More than one stream selector found for {qubit}, please explicitly define output node using output_nodes argument.")
             ds = nx.descendants(graph, stream_sels[0].hash_val)
@@ -273,7 +273,7 @@ class CalibrationExperiment(QubitExperiment):
                 raise ValueError(f"Could not find specified output node {output_node} in graph.")
 
         for qubit in self.qubits:
-            stream_sels = [ss for ss in self.stream_selectors if ss.qubit_name == qubit.label]
+            stream_sels = [ss for ss in self.stream_selectors if qubit.label in ss.label.split("-")]
             if not any([ss.hash_val in graph for ss in stream_sels]):
                 raise ValueError(f"Could not find specified qubit {qubit} in graph.")
 

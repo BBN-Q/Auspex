@@ -136,7 +136,13 @@ class QubitExperiment(Experiment):
         self.stream_selectors = pipeline.pipelineMgr.get_current_stream_selectors()
         if len(self.stream_selectors) == 0:
             raise Exception("No filter pipeline has been created. You can try running the create_default_pipeline() method of the Pipeline Manager")
-        self.stream_selectors = [s for s in self.stream_selectors if s.qubit_name in self.qubits_by_name.keys()]
+        org_stream_selectors = self.org_stream_selectors
+        for ss in org_stream_selectors:
+            labels = ss.label.split('-')
+            for l in labels:
+                if l in self.qubits_by_name.keys() and ss not in self.stream_selectors:
+                    self.stream_selectors.append(ss)
+                    continue
 
         # Locate transmitters relying on processors
         self.transceivers = list(set([t.transceiver for t in self.transmitters + self.receivers if t.transceiver]))
@@ -239,7 +245,7 @@ class QubitExperiment(Experiment):
 
             # Stream selectors from the pipeline database:
             # These contain all information except for the physical channel
-            mq_stream_sels = [s for s in self.stream_selectors if s.qubit_name == mq.label]
+            mq_stream_sels = [ss for ss in self.stream_selectors if mq.label in ss.label.split("-")]
 
             # The receiver channel only specifies the physical channel
             rcv = receiver_chans_by_qubit_label[mq.label]
@@ -314,6 +320,15 @@ class QubitExperiment(Experiment):
         # Compartmentalize the instantiation
         self.instantiate_filters(self.modified_graph)
 
+    def is_in_measured_qubit_names(self,qubit_name):
+        labels = []
+        if qubit_name is not None:
+            labels = qubit_name.split('-')
+        for l in labels:
+            if l in self.measured_qubit_names:
+                return True
+            return False
+
     def instantiate_filters(self, graph):
         # Configure the individual filter nodes
         for _, dat in graph.nodes(data=True):
@@ -333,7 +348,7 @@ class QubitExperiment(Experiment):
         self.pl_session.commit()
         for l1, l2 in graph.edges():
             node1, node2 = graph.nodes[l1]['node_obj'], graph.nodes[l2]['node_obj']
-            if node1.qubit_name in self.measured_qubit_names and node2.qubit_name in self.measured_qubit_names:
+            if (self.is_in_measured_qubit_names(node1.qubit_name) or self.is_in_measured_qubit_names(node1.label)) and self.is_in_measured_qubit_names(node2.qubit_name):
                 if isinstance(node1, bbndb.auspex.FilterProxy):
                     filt1 = self.proxy_to_filter[node1]
                     oc   = filt1.output_connectors[graph[l1][l2]["connector_out"]]
