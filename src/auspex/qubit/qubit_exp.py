@@ -241,11 +241,13 @@ class QubitExperiment(Experiment):
             if not hasattr(self, instrument.label):
                 setattr(self, instrument.label, instr)
 
+        mq_all_stream_sels = []
         for mq in self.measured_qubits:
 
             # Stream selectors from the pipeline database:
             # These contain all information except for the physical channel
-            mq_stream_sels = [ss for ss in self.stream_selectors if mq.label in ss.label.split("-")]
+            mq_stream_sels = [ss for ss in self.stream_selectors if mq.label in ss.label.split("-") and ss not in mq_all_stream_sels]
+            mq_all_stream_sels.append(mq_stream_sels)
 
             # The receiver channel only specifies the physical channel
             rcv = receiver_chans_by_qubit_label[mq.label]
