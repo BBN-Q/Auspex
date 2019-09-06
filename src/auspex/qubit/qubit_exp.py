@@ -136,7 +136,7 @@ class QubitExperiment(Experiment):
         self.stream_selectors = pipeline.pipelineMgr.get_current_stream_selectors()
         if len(self.stream_selectors) == 0:
             raise Exception("No filter pipeline has been created. You can try running the create_default_pipeline() method of the Pipeline Manager")
-        org_stream_selectors = self.org_stream_selectors
+        org_stream_selectors = self.stream_selectors
         for ss in org_stream_selectors:
             labels = ss.label.split('-')
             for l in labels:
@@ -303,14 +303,14 @@ class QubitExperiment(Experiment):
         # this must be done after adding channels.
         for dig in self.receivers:
             if dig.transceiver is not None and transcvr.initialize_separately == False:
-                dig.transceiver.number_averages = num_averages
+                dig.transceiver.number_averages = averages
                 dig.transceiver.number_waveforms = 1
                 dig.transceiver.number_segments = segments_per_dig[dig]
             else:
                 dig.number_averages  = averages
                 dig.number_waveforms = 1
                 dig.number_segments  = segments_per_dig[dig]
-            dig.instr.proxy_obj  = dig
+                dig.instr.proxy_obj  = dig
 
         # Restrict the graph to the relevant qubits
         self.measured_qubit_names = [q.label for q in self.measured_qubits]
