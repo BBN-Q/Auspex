@@ -37,7 +37,7 @@ from auspex.filters.plot import ManualPlotter
 from auspex.analysis.fits import *
 from auspex.analysis.CR_fits import *
 from auspex.analysis.qubit_fits import *
-from auspex.analysis.helpers import normalize_buffer_data
+from auspex.analysis.helpers import normalize_buffer_data, cal_scale
 from matplotlib import cm
 from scipy.optimize import curve_fit
 import numpy as np
@@ -938,7 +938,15 @@ class CRCalibration(QubitCalibration):
         self.norm_points = {qs.label: (0, 1), qt.label: (0, 1)}
         data, _ =  self.run_sweeps()
 
-        data_t = data[qt.label]
+        # load AND scale data
+        # assume a (control, target) ordering and that we're
+        # looking at the target qubit's data
+        try:
+            data_t = cal_scale(data[qt.label], bit=1, nqubits=2)
+        except:
+            print("Error scaling data.  Using unscaled data.")
+            data_t = data[qt.label]
+
         # fit
         self.opt_par, all_params_0, all_params_1 = fit_CR([self.lengths, self.phases, self.amps], data_t, self.cal_type)
         # plot the result
@@ -949,8 +957,8 @@ class CRCalibration(QubitCalibration):
         self.plot["Fit 0"] =  (finer_xaxis, np.polyval(all_params_0, finer_xaxis) if self.cal_type == CR_cal_type.AMP else sinf(finer_xaxis, **all_params_0))
         self.plot["Data 1"] = (xaxis,       data_t[len(data_t)//2:])
         self.plot["Fit 1"] =  (finer_xaxis, np.polyval(all_params_1, finer_xaxis) if self.cal_type == CR_cal_type.AMP else sinf(finer_xaxis, **all_params_1))
-        
-        # Optimal parameter within range of original data! 
+
+        # Optimal parameter within range of original data!
         if self.opt_par > np.min(xaxis) and self.opt_par < np.max(xaxis):
             self.succeeded = True
 
@@ -968,7 +976,7 @@ class CRLenCalibration(CRCalibration):
     def sequence(self):
         qc, qt = self.qubits
         seqs = [[Id(qc)] + echoCR(qc, qt, length=l, phase = self.phases[0], amp=self.amps[0], riseFall=self.rise_fall).seq + [Id(qc), MEAS(qt)*MEAS(qc)] for l in self.lengths]
-        seqs += [[X(qc)] + echoCR(qc, qt, length=l, phase= self.phases[0], amp=self.amps[0], riseFall=self.rise_fall).seq + [X(qc), MEAS(qt)*MEAS(qc)] for l in self.lengths] 
+        seqs += [[X(qc)] + echoCR(qc, qt, length=l, phase= self.phases[0], amp=self.amps[0], riseFall=self.rise_fall).seq + [X(qc), MEAS(qt)*MEAS(qc)] for l in self.lengths]
         seqs += create_cal_seqs((qt,qc), 2, measChans=(qt,qc))
         return seqs
 
@@ -977,7 +985,7 @@ class CRLenCalibration(CRCalibration):
             delay_descriptor(np.concatenate((self.lengths, self.lengths))),
             cal_descriptor(tuple(self.qubits), 2)
         ]
-        
+
 
 class CRPhaseCalibration(CRCalibration):
     cal_type = CR_cal_type.PHASE
