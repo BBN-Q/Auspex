@@ -146,7 +146,7 @@ class QubitExperiment(Experiment):
         self.transmitters = list(set([mq.measure_chan.trig_chan.phys_chan.transmitter for mq in self.measured_qubits] + self.transmitters))
 
         # The exception being any instruments that are declared as standalone
-        self.all_standalone = [i for i in self.chan_db.all_instruments() if i.standalone and i not in self.transmitters + self.receivers + self.generators]
+        self.all_standalone = [i for i in self.chan_db.all_instruments() if i.standalone and i not in self.transmitters + self.receivers]
 
         # In case we need to access more detailed foundational information
         self.factory = self
