@@ -707,9 +707,9 @@ class RamseyCalibration(QubitCalibration):
         else:
             self.qubit.frequency = float(round(self.fit_freq))
         # update edges where this is the target qubit
-        for edge in self.qubit.edge_target:
-            edge_source = edge.phys_chan.generator
-            edge.frequency = self.source_proxy.frequency + self.qubit_source.frequency - edge_source.frequency
+        # for edge in self.qubit.edge_target:
+        #     edge_source = edge.phys_chan.generator
+        #     edge.frequency = self.source_proxy.frequency + self.qubit_source.frequency - edge_source.frequency
         #         # TODO: fix this for db backend
 
         # qubit_set_freq = self.saved_settings['instruments'][qubit_source]['frequency'] + self.saved_settings['qubits'][self.qubit.label]['control']['frequency']
@@ -1025,8 +1025,8 @@ class CRAmpCalibration(CRCalibration):
 
     def sequence(self):
         qc, qt = self.qubits
-        seqs = [[Id(qc)] + self.num_CR*echoCR(qc, qt, length=self.lengths, phase=self.phases, amp=a, riseFall=self.rise_fall).seq + [Id(qc), MEAS(qt)*MEAS(qc)]
-        for a in self.amps]+ [[X(qc)] + self.num_CR*echoCR(qc, qt, length=self.lengths, phase= self.phases, amp=a, riseFall=self.rise_fall).seq + [X(qc), MEAS(qt)*MEAS(qc)]
+        seqs = [[Id(qc)] + self.num_CR*echoCR(qc, qt, length=self.lengths[0], phase=self.phases[0], amp=a, riseFall=self.rise_fall).seq + [Id(qc), MEAS(qt)*MEAS(qc)]
+        for a in self.amps]+ [[X(qc)] + self.num_CR*echoCR(qc, qt, length=self.lengths[0], phase= self.phases[0], amp=a, riseFall=self.rise_fall).seq + [X(qc), MEAS(qt)*MEAS(qc)]
         for a in self.amps] + create_cal_seqs((qt,qc), 2, measChans=(qt,qc))
         return seqs
 
@@ -1036,7 +1036,7 @@ class CRAmpCalibration(CRCalibration):
                  'points': list(self.amps)+list(self.amps),
                  'partition': 1
                 },
-                cal_descriptor(tuple(self.qubit), 2)]
+                cal_descriptor(tuple(self.qubits), 2)]
 
 def restrict(phase):
     out = np.mod( phase + np.pi, 2*np.pi, ) - np.pi
