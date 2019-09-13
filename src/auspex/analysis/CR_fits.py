@@ -42,11 +42,11 @@ class SineFit(AuspexFit):
 
 
 def fit_CR(xpoints, data, cal_type):
-    
+
     data0 = data[:len(data)//2]
     data1 = data[len(data)//2:]
     xpoints = [xp if len(xp)>1 else xp[0] for xp in xpoints]
-    
+
     if cal_type == CR_cal_type.LENGTH:
         return fit_CR_length(xpoints, data0, data1)
     elif cal_type == CR_cal_type.PHASE:
@@ -55,11 +55,11 @@ def fit_CR(xpoints, data, cal_type):
         return fit_CR_amp(xpoints, data0, data1)
 
 def fit_CR_length(xpoints, data0, data1):
-    
+
     xpoints = xpoints[0]
     x_fine = np.linspace(min(xpoints), max(xpoints), 1001)
 
-    fit0 = SineFit(xpoints, data0, np.pi/2.0, 1/(2.0*xpoints[-1])) 
+    fit0 = SineFit(xpoints, data0, np.pi/2.0, 1/(2.0*xpoints[-1]))
     fit1 = SineFit(xpoints, data1, np.pi/2.0, 1/(2.0*xpoints[-1]))
 
     #find the first zero crossing
@@ -85,21 +85,18 @@ def fit_CR_phase(xpoints, data0, data1):
     #find the phase for maximum contrast
     contrast = (fit0.model(x_fine) - fit1.model(x_fine))/2.0
     logger.info(f"CR Contrast = {np.max(contrast)}")
-    xopt = x_fine[np.argmax(contrast)] - np.pi 
+    xopt = x_fine[np.argmax(contrast)] - np.pi
     logger.info(f"CR phase = {xopt}")
 
     return xopt, fit0.fit_params, fit1.fit_params
 
 
-# def fit_CR(xpoints, data0, data1):
-#     xpoints = xpoints[2]
-#     x_fine = np.linspace(min(xpoints), max(xpoints), 1001)
-#     popt0 = np.polyfit(xpoints, data0, 1) # tentatively linearize
-#     popt1 = np.polyfit(xpoints, data1, 1)
-#     #average between optimum amplitudes
-#     xopt = -(popt0[1]/popt0[0] + popt1[1]/popt1[0])/2
-#     logger.info('CR amplitude = {}'.format(xopt))
-#     return xopt, popt0, popt1
-
-
-
+def fit_CR_amp(xpoints, data0, data1):
+    xpoints = xpoints[2]
+    x_fine = np.linspace(min(xpoints), max(xpoints), 1001)
+    popt0 = np.polyfit(xpoints, data0, 1) # tentatively linearize
+    popt1 = np.polyfit(xpoints, data1, 1)
+    #average between optimum amplitudes
+    xopt = -(popt0[1]/popt0[0] + popt1[1]/popt1[0])/2
+    logger.info('CR amplitude = {}'.format(xopt))
+    return xopt, popt0, popt1
