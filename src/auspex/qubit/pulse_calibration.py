@@ -984,7 +984,7 @@ class CRLenCalibration(CRCalibration):
         qc, qt = self.qubits
         seqs = [[Id(qc)] + echoCR(qc, qt, length=l, phase = self.phases[0], amp=self.amps[0], riseFall=self.rise_fall).seq + [Id(qc), MEAS(qt)*MEAS(qc)] for l in self.lengths]
         seqs += [[X(qc)] + echoCR(qc, qt, length=l, phase= self.phases[0], amp=self.amps[0], riseFall=self.rise_fall).seq + [X(qc), MEAS(qt)*MEAS(qc)] for l in self.lengths]
-        seqs += create_cal_seqs((qt,qc), 2, measChans=(qt,qc))
+        seqs += create_cal_seqs((qc,qt), 2, measChans=(qc,qt))
         return seqs
 
     def descriptor(self):
@@ -1006,7 +1006,7 @@ class CRPhaseCalibration(CRCalibration):
         qc, qt = self.qubits
         seqs = [[Id(qc)] + echoCR(qc, qt, length=self.lengths[0], phase=ph, amp=self.amps[0], riseFall=self.rise_fall).seq + [X90(qt)*Id(qc), MEAS(qt)*MEAS(qc)] for ph in self.phases]
         seqs += [[X(qc)] + echoCR(qc, qt, length=self.lengths[0], phase=ph, amp=self.amps[0], riseFall=self.rise_fall).seq + [X90(qt)*X(qc), MEAS(qt)*MEAS(qc)] for ph in self.phases]
-        seqs += create_cal_seqs((qt,qc), 2, measChans=(qt,qc))
+        seqs += create_cal_seqs((qc,qt), 2, measChans=(qc,qt))
         return seqs
 
     def descriptor(self):
@@ -1036,7 +1036,7 @@ class CRAmpCalibration(CRCalibration):
         qc, qt = self.qubits
         seqs = [[Id(qc)] + self.num_CR*echoCR(qc, qt, length=self.lengths[0], phase=self.phases[0], amp=a, riseFall=self.rise_fall).seq + [Id(qc), MEAS(qt)*MEAS(qc)]
         for a in self.amps]+ [[X(qc)] + self.num_CR*echoCR(qc, qt, length=self.lengths[0], phase= self.phases[0], amp=a, riseFall=self.rise_fall).seq + [X(qc), MEAS(qt)*MEAS(qc)]
-        for a in self.amps] + create_cal_seqs((qt,qc), 2, measChans=(qt,qc))
+        for a in self.amps] + create_cal_seqs((qc,qt), 2, measChans=(qc,qt))
         return seqs
 
     def descriptor(self):
