@@ -1,7 +1,6 @@
 import unittest
 import os, sys
 import importlib
-import pygsti
 
 # shamelessly stollen from pyGSTi's notebookstestcase.py
 
@@ -23,10 +22,6 @@ class NotebooksTestCase(unittest.TestCase):
     def setUp(self):
         self.old = os.getcwd()
         os.chdir(os.path.abspath(os.path.dirname(__file__)))
-
-        #Set Model objects to non-"strict" mode, as this would be the
-        # tutorial environment
-        pygsti.objects.ExplicitOpModel._strict = False
 
     def tearDown(self):
         os.chdir(self.old)
