@@ -244,43 +244,47 @@ class AMC599(object):
         resp_header = self.recv_bytes(2 * 4) #4 bytes per word...
         return self.recv_bytes(4 * num_words)
 
-    def serial_read_dac0(self, addr):
+    def serial_read_dac_register(self, dac, addr):
+        if dac not in [0, 1]:
+            raise ValueError('Invalid DAC number ' + str(dac))
         self.ser.reset_output_buffer()
         self.ser.reset_input_buffer()
-        self.ser.write(bytearray('rd d0 {0:#x}\n'.format(addr), 'ascii'))
+        self.ser.write(bytearray('rd d{} {:#x}\n'.format(dac, addr), 'ascii'))
         self.ser.readline() # Throw out the echo line from the terminal interface
         resp = self.ser.readline().decode()
         start_index = len('Read value = ')
         end_index = resp.find('@')
         return int(resp[start_index:end_index], 16)
 
-    def serial_write_dac0(self, addr, val):
+    def serial_write_dac_register(self, dac, addr, val):
+        if dac not in [0, 1]:
+            raise ValueError('Invalid DAC number ' + str(dac))
         self.ser.reset_output_buffer()
         self.ser.reset_input_buffer()
-        self.ser.write(bytearray('wd d0 {0:#x} {1:#x}\n'.format(addr, val), 'ascii'))
+        self.ser.write(bytearray('wd d{} {:#x} {:#x}\n'.format(dac, addr, val), 'ascii'))
         self.ser.readline() # Throw out the echo line from the terminal interface
         return self.ser.readline() # Echo back the "wrote xx to xx" line
 
-    def serial_configure_JESD(self):
+    def serial_configure_JESD(self, dac):
         # Configure the JESD interface properly
-        logger.info(self.serial_write_dac0(0x300, 0x00)) # disable all links
+        logger.debug(self.serial_write_dac_register(dac, 0x300, 0x00)) # disable all links
         sleep(0.01)
-        logger.info(self.serial_write_dac0(0x475, 0x09)) # soft reset DAC0 deframer
+        logger.debug(self.serial_write_dac_register(dac, 0x475, 0x09)) # soft reset DAC0 deframer
         sleep(0.01)
-        logger.info(self.serial_write_dac0(0x110, 0x81)) # set interpolation to 2
+        logger.debug(self.serial_write_dac_register(dac, 0x110, 0x81)) # set interpolation to 2
         sleep(0.01)
-        logger.info(self.serial_write_dac0(0x456, 0x01)) # set M=2
+        logger.debug(self.serial_write_dac_register(dac, 0x456, 0x01)) # set M=2
         sleep(0.01)
-        logger.info(self.serial_write_dac0(0x459, 0x21)) # set S=2
+        logger.debug(self.serial_write_dac_register(dac, 0x459, 0x21)) # set S=2
         sleep(0.01)
-        logger.info(self.serial_write_dac0(0x477, 0x00)) # disable ILS_MODE for DAC0
+        logger.debug(self.serial_write_dac_register(dac, 0x477, 0x00)) # disable ILS_MODE for DAC0
         sleep(0.01)
-        logger.info(self.serial_write_dac0(0x475, 0x01)) # bring DAC0 deframer out of reset
+        logger.debug(self.serial_write_dac_register(dac, 0x475, 0x01)) # bring DAC0 deframer out of reset
         sleep(0.01)
-        logger.info(self.serial_write_dac0(0x300, 0x01)) # enable all links
+        logger.debug(self.serial_write_dac_register(dac, 0x300, 0x01)) # enable all links
         sleep(0.01)
 
-    def serial_set_switch_mode(self, mode):
+    def serial_set_switch_mode(self, dac, mode):
         '''
         Sets DAC output switch mode to one of NRZ, Mix-Mode, or RZ.
         Parameters:
@@ -298,9 +302,9 @@ class AMC599(object):
         if self.ser is None:
             logger.info('Fake wrote {:#x}'.format(code))
         else:
-            logger.info(self.serial_write_dac0(0x152, code))
+            logger.debug(self.serial_write_dac_register(dac, 0x152, code))
 
-    def serial_get_switch_mode(self):
+    def serial_get_switch_mode(self, dac):
         '''
         Reads DAC output switch mode as one of NRZ, Mix-Mode, or RZ.
         Parameters:
@@ -310,7 +314,7 @@ class AMC599(object):
             logger.info('Fake read mix-mode.')
             return 'MIX'
 
-        code = self.serial_read_dac0(0x152) & 0x03
+        code = self.serial_read_dac_register(dac, 0x152) & 0x03
         if code == 0x00:
             return 'NRZ'
         if code == 0x01:
@@ -320,7 +324,7 @@ class AMC599(object):
 
         raise Exception('Unrecognized DAC switch mode ' + code + '.')
 
-    def serial_set_analog_full_scale_current(self, current):
+    def serial_set_analog_full_scale_current(self, dac, current):
         '''
         Sets DAC full-scale current, rounding to nearest LSB of current register.
         Parameters:
@@ -340,14 +344,14 @@ class AMC599(object):
             logger.info('{:#x}'.format(reg_value & 0x3))
             logger.info('{:#x}'.format((reg_value >> 2) & 0xFF))
         else:
-            logger.info(self.serial_write_dac0(0x041, reg_value & 0x3))
+            logger.debug(self.serial_write_dac_register(dac, 0x041, reg_value & 0x3))
             sleep(0.01)
-            logger.info(self.serial_write_dac0(0x042, (reg_value >> 2) & 0xFF))
+            logger.debug(self.serial_write_dac_register(dac, 0x042, (reg_value >> 2) & 0xFF))
             sleep(0.01)
 
         return 32 * (reg_value / 1023) + 8
 
-    def serial_get_analog_full_scale_current(self):
+    def serial_get_analog_full_scale_current(self, dac):
         '''
         Reads programmed full-scale current.
         Returns:
@@ -356,12 +360,12 @@ class AMC599(object):
         if self.ser is None:
             return 0
 
-        LSbits = self.serial_read_dac0(0x041) & 0x03
-        MSbits = self.serial_read_dac0(0x042) & 0xFF
+        LSbits = self.serial_read_dac_register(dac, 0x041) & 0x03
+        MSbits = self.serial_read_dac_register(dac, 0x042) & 0xFF
         reg_value = (MSbits << 2) & LSbits
         return 32 * (reg_value / 1023) + 8
 
-    def serial_set_nco_enable(self, en):
+    def serial_set_nco_enable(self, dac, en):
         '''
         Enables the DAC NCO.
         Parameters:
@@ -374,7 +378,7 @@ class AMC599(object):
             logger.info('Fake read 0x00.')
             code = 0x00
         else:
-            code = self.serial_read_dac0(0x111)
+            code = self.serial_read_dac_register(dac, 0x111)
 
         if en:
             code |= (1 << 6)
@@ -384,11 +388,11 @@ class AMC599(object):
         if self.ser is None:
             logger.info('Fake wrote {:#x}'.format(code))
         else:
-            logger.info(self.serial_write_dac0(0x111, code))
+            logger.debug(self.serial_write_dac_register(dac, 0x111, code))
 
         sleep(0.1)
 
-    def serial_get_nco_enable(self):
+    def serial_get_nco_enable(self, dac):
         '''
         Checks whether the DAC NCO is enabled.
         Returns:
@@ -398,9 +402,9 @@ class AMC599(object):
             logger.info('Fake reported DAC NCO enabled.')
             return True
 
-        return (self.serial_read_dac0(0x111) & (1 << 6)) != 0
+        return (self.serial_read_dac_register(dac, 0x111) & (1 << 6)) != 0
 
-    def serial_set_FIR85_enable(self, FIR85):
+    def serial_set_FIR85_enable(self, dac, FIR85):
         '''
         Enables the DAC NCO FIR85 filter.
         Parameters:
@@ -410,7 +414,7 @@ class AMC599(object):
             logger.info('Fake read 0x00.')
             code = 0x00
         else:
-            code = self.serial_read_dac0(0x111)
+            code = self.serial_read_dac_register(dac, 0x111)
 
         if FIR85:
             code |= (1 << 0)
@@ -420,11 +424,11 @@ class AMC599(object):
         if self.ser is None:
             logger.info('Fake wrote {:#x}'.format(code))
         else:
-            logger.info(self.serial_write_dac0(0x111, code))
+            logger.debug(self.serial_write_dac_register(dac, 0x111, code))
 
         sleep(0.1)
 
-    def serial_get_FIR85_enable(self):
+    def serial_get_FIR85_enable(self, dac):
         '''
         Checks whether the DAC NCO FIR85 filter is enabled.
         Returns:
@@ -434,9 +438,9 @@ class AMC599(object):
             logger.info('Fake reported DAC NCO FIR85 enabled.')
             return True
 
-        return (self.serial_read_dac0(0x111) & (1 << 0)) != 0
+        return (self.serial_read_dac_register(dac, 0x111) & (1 << 0)) != 0
 
-    def serial_set_nco_frequency(self, f):
+    def serial_set_nco_frequency(self, dac, f):
         '''
         Writes the given frequency, assuming not in NCO-only mode.
         Follows procedure in Table 44 of AD9164 datasheet.
@@ -444,33 +448,33 @@ class AMC599(object):
         logger.info('Setting frequency to {}...'.format(f))
 
         # Configure DC_TEST_EN bit: 0b0 = NCO operation with data interface
-        logger.info(self.serial_write_dac0(0x150, 0x00))
+        logger.debug(self.serial_write_dac_register(dac, 0x150, 0x00))
         sleep(0.01)
 
         # Ensure the frequency tuning word write request is low.
-        logger.info(self.serial_write_dac0(0x113, 0x00))
+        logger.debug(self.serial_write_dac_register(dac, 0x113, 0x00))
         sleep(0.01)
 
         # Write FTW.
         ftw = [(int((f/5e9)*(1 << 48)) >> x) & 0xFF for x in range(0, 48, 8)]
         for index, b in enumerate(ftw):
-            logger.info(self.serial_write_dac0(0x114 + index, b))
+            logger.debug(self.serial_write_dac_register(dac, 0x114 + index, b))
             sleep(0.01)
 
         # Load the FTW to the NCO.
-        logger.info(self.serial_write_dac0(0x113, 0x01))
+        logger.debug(self.serial_write_dac_register(dac, 0x113, 0x01))
         sleep(0.1)
 
-    def serial_get_nco_frequency(self):
+    def serial_get_nco_frequency(self, dac):
         '''
         Reads the current NCO frequency, assuming not in NCO-only mode.
         '''
         ftw = 0
         for index, shift in enumerate(range(0, 48, 8)):
-            ftw |= self.serial_read_dac0(0x114 + index) << shift
+            ftw |= self.serial_read_dac_register(dac, 0x114 + index) << shift
             sleep(0.01)
 
-        return ftw * 5e9
+        return (ftw / float(1 << 48)) * 5e9
 
     def serial_set_reference(self, ref):
         '''
@@ -496,7 +500,7 @@ class AMC599(object):
     def serial_get_reference(self):
         return self.ref
 
-    def serial_set_shuffle_mode(self, value):
+    def serial_set_shuffle_mode(self, dac, value):
         '''
         Sets DAC shuffle mode.
         Parameters:
@@ -505,11 +509,11 @@ class AMC599(object):
         if self.ser is None:
             logger.info('Fake wrote {:#x}'.format(value & 0x7))
         else:
-            logger.info(self.serial_write_dac0(0x151, value & 0x7))
+            logger.debug(self.serial_write_dac_register(dac, 0x151, value & 0x7))
 
         sleep(0.1)
 
-    def serial_get_shuffle_mode(self):
+    def serial_get_shuffle_mode(self, dac):
         '''
         Checks whether DAC shuffle mode is enabled.
         Returns:
@@ -519,7 +523,7 @@ class AMC599(object):
             logger.info('Fake reported DAC shuffle mode enabled.')
             return True
 
-        return self.serial_read_dac0(0x151) & 0x7
+        return self.serial_read_dac_register(dac, 0x151) & 0x7
 
 #####################################################################
 
@@ -528,7 +532,8 @@ class AMC599(object):
 #Registers are read/write unless otherwise noted
 #Current as of 6/20/19
 
-CSR_AXI_ADDR_BASE           = 0x44b40000
+CSR_AXI_ADDR_BASE0           = 0x44b40000
+CSR_AXI_ADDR_BASE1           = 0x44b10000
 
 CSR_CACHE_CONTROL           = 0x0010 #Cache control register
 CSR_SEQ_CONTROL             = 0x0024 #Sequencer control register
@@ -550,7 +555,7 @@ CSR_CORR_OFFSET             = 0x0024
 CSR_CMAT_R0                 = 0x0068 #correction matrix row 0
 CSR_CMAT_R1                 = 0x006C #correction matrix row 1
 
-#### NOT CONNECTED TO _enableANY LOGIC -- USE FOR VALUE STORAGE ############
+#### NOT CONNECTED TO ANY LOGIC -- USE FOR VALUE STORAGE ############
 CSR_A_AMPLITUDE             = 0x0070 #Channel A amplitude
 CSR_B_AMPLITUDE             = 0x0074 #Channel B amplitude
 CSR_MIX_AMP                 = 0x0078 #Mixer amplitude correction
@@ -576,19 +581,62 @@ CSR_IPV4                    = 0x00C4 #IPv4 address register
 #####################################################################
 
 DRAM_AXI_BASE = 0x80000000
+DRAM_WFA_0_LOC = 0x80000000
+DRAM_WFB_0_LOC = 0x90000000
+DRAM_SEQ_0_LOC = 0xA0000000
+DRAM_WFA_1_LOC = 0xB0000000
+DRAM_WFB_1_LOC = 0xC0000000
+DRAM_SEQ_1_LOC = 0xD0000000
+
 
 #####################################################################
+
+class APS3CommunicationManager(object):
+    instances = {} # Open instances of AMC599 objects, referenced by (IP, serialport) tuple
+
+    @staticmethod
+    def board(resource):
+        if resource not in APS3CommunicationManager.instances:
+            APS3CommunicationManager.instances[resource] = {'board': AMC599(), 'connected': False, 'running': False}
+        return APS3CommunicationManager.instances[resource]['board']
+
+    @staticmethod
+    def connect(resource):
+        if resource not in APS3CommunicationManager.instances:
+            APS3CommunicationManager.instances[resource] = {'board': AMC599(), 'connected': False, 'running': False}
+        if not APS3CommunicationManager.connected(resource):
+            APS3CommunicationManager.instances[resource]['board'].connect(resource)
+            APS3CommunicationManager.instances[resource]['connected'] = True
+
+    @staticmethod
+    def connected(resource):
+        if resource not in APS3CommunicationManager.instances:
+            return False
+        return APS3CommunicationManager.instances[resource]['connected']
+
+    @staticmethod
+    def disconnect(resource):
+        if APS3CommunicationManager.connected(resource):
+            APS3CommunicationManager.instances[resource]['board'].disconnect()
+            APS3CommunicationManager.instances[resource]['connected'] = False
+
+    @staticmethod
+    def set_run(resource):
+        APS3CommunicationManager.instances[resource]['running'] = True
+
+    @staticmethod
+    def set_stop(resource):
+        APS3CommunicationManager.instances[resource]['running'] = False
 
 class APS3(Instrument, metaclass=MakeBitFieldParams):
 
     instrument_type = "AWG"
-    serial_port = ''
+    dac = -1
+    address = None
 
-    def __init__(self, resource_name=None, name="Unlabeled APS3", debug=False, serial_port=''):
+    def __init__(self, resource_name=None, name="Unlabeled APS3", debug=False):
         self.name = name
         self.resource_name = resource_name
-        self.board = AMC599(debug=debug)
-        self.serial_port = serial_port
         super().__init__()
 
     def connect(self, resource_name=None):
@@ -597,31 +645,46 @@ class APS3(Instrument, metaclass=MakeBitFieldParams):
         elif resource_name is not None:
             self.resource_name = resource_name
 
-        if len(self.resource_name) != 2:
-            raise ValueError("Resource name must have 2 elements!")
+        if len(self.resource_name) != 3:
+            raise ValueError("Resource name must have 3 elements!")
         if self.resource_name[0] == None:
             raise ValueError("Resource name must contain IP address!")
         if self.resource_name[1] == None:
             raise ValueError("Resource name must contain serial port!")
-        if is_valid_ipv4(self.resource_name[0]):
-            self.board.connect(resource = self.resource_name)
+        if self.resource_name[2] == None:
+            raise ValueError("Resource name must contain channel!")
+        if not isinstance(self.resource_name[2], int) or not self.resource_name[2] in [0, 1]:
+            raise ValueError("Channel name must be 0 or 1!")
+
+        if not is_valid_ipv4(self.resource_name[0]):
+            raise ValueError("IP address must be valid!")
+
+        self.address = (self.resource_name[0], self.resource_name[1])
+        self.dac = self.resource_name[2]
+
+        APS3CommunicationManager.connect(self.address)
+
+        # Write the memory locations immediately
+        self.write_register(CSR_WFA_OFFSET, (DRAM_WFA_0_LOC if self.dac == 0 else DRAM_WFA_1_LOC))
+        self.write_register(CSR_WFB_OFFSET, (DRAM_WFB_0_LOC if self.dac == 0 else DRAM_WFB_1_LOC))
+        self.write_register(CSR_SEQ_OFFSET, (DRAM_SEQ_0_LOC if self.dac == 0 else DRAM_SEQ_1_LOC))
 
     def disconnect(self):
-        if self.board.connected:
-            self.board.disconnect()
+        if APS3CommunicationManager.connected(self.address):
+            APS3CommunicationManager.disconnect(self.address)
 
     def write_register(self, offset, data):
-        logger.info(f"Setting CSR: {hex(offset)} to: {hex(data)}")
-        self.board.write_memory(CSR_AXI_ADDR_BASE + offset, data)
+        logger.debug(f"Setting CSR: {hex(offset)} to: {hex(data)}")
+        APS3CommunicationManager.board(self.address).write_memory((CSR_AXI_ADDR_BASE0 if self.dac == 0 else CSR_AXI_ADDR_BASE1) + offset, data)
 
     def read_register(self, offset, num_words = 1):
-        return self.board.read_memory(CSR_AXI_ADDR_BASE + offset, num_words)
+        return APS3CommunicationManager.board(self.address).read_memory((CSR_AXI_ADDR_BASE0 if self.dac == 0 else CSR_AXI_ADDR_BASE1) + offset, num_words)
 
     def write_dram(self, offset, data):
-        self.board.write_memory(DRAM_AXI_BASE + offset, data)
+        APS3CommunicationManager.board(self.address).write_memory(DRAM_AXI_BASE + offset, data)
 
     def read_dram(self, offset, num_words = 1):
-        return self.board.read_memory(DRAM_AXI_BASE + offset, num_words)
+        return APS3CommunicationManager.board(self.address).read_memory(DRAM_AXI_BASE + offset, num_words)
 
     ####### CACHE CONTROL REGSITER #############################################
 
@@ -718,17 +781,34 @@ class APS3(Instrument, metaclass=MakeBitFieldParams):
 
     ####### BOARD_CONTROL ######################################################
 
+    csr0_master = BitFieldCommand(register=CSR_BD_CONTROL, shift=0,
+        doc="""True: CSR0 is the Master CSR; when this bit is set the Cache Reset and Sequencer Resets
+            are controlled by CSR0 for both DAC0 and DAC1; so in effect both DACs circuits are reset at the same time.
+            False: CSR0 only controls DAC0 resets; CSR1 controls the DAC1 resets.""")
+
     microblaze_reset = BitFieldCommand(register=CSR_BD_CONTROL, shift=1,
         doc="True resets Microblaze softcore. False takes Microblaze out of reset.")
+
     dac_output_mux = BitFieldCommand(register=CSR_BD_CONTROL, shift=4,
                                     value_map={"SOF200": 0x0, "APS": 0x1},
                                     doc="Select SOF200 test output or APS sequencer output from DAC.")
-    trigger_output_select = BitFieldCommand(register=CSR_BD_CONTROL, shift=5,
-                            doc="""True: select trigger to be output on front panel.
-                                    False: select marker to be output on front panel.""")
-    marker_mode = BitFieldCommand(register=CSR_BD_CONTROL, shift=6,
-                            doc="""True: Marker value is set as specified in 'state' field of instruction.
-                                    False: Marker is set high for one clock cycle, then cleared.""")
+
+    @property
+    def trigger_output_select(self):
+        """Gets/sets the marker delay in seconds, based on a 312.5 MHz clock."""
+        return (self.read_register(CSR_BD_CONTROL) >> 5) & 0x3
+    @trigger_output_select.setter
+    def trigger_output_select(self, value):
+        reg = self.read_register(CSR_BD_CONTROL)
+        reg &= ~(0x3 << 5)
+        reg |= (value & 0x3) << 5
+        self.write_register(CSR_BD_CONTROL, reg)
+
+    trigger_input_select = BitFieldCommand(register=CSR_BD_CONTROL, shift=7,
+        doc="""True: Use the trigger form the other DAC as the trigger source.  When this bit is set then
+                for CSR0: DAC0 use DAC1 trigger; For CSR1 for DAC1 use DAC0 trigger.
+               False: Use the trigger from the same DAC as the source.
+                for CSR0: DAC0 use DAC0 trigger; For CSR1 for DAC1 use DAC1 trigger.""")
 
     ####### MARKER_DELAY #######################################################
 
@@ -762,7 +842,7 @@ class APS3(Instrument, metaclass=MakeBitFieldParams):
     ###### UTILITIES ###########################################################
     def run(self):
         logger.info("Configuring JESD...")
-        #self.board.serial_configure_JESD()
+        #APS3CommunicationManager.board(self.address).serial_configure_JESD()
         sleep(0.01)
         logger.info("Taking cache controller out of reset...")
         self.cache_controller = True
@@ -798,26 +878,26 @@ class APS3(Instrument, metaclass=MakeBitFieldParams):
 
     def load_waveforms(self, wfA, wfB):
         print(len(wfA))
-        
+
         wfA_32 = [((wfA[2*i+1] << 16) | wfA[2*i]) for i in range(len(wfA) // 2)]
         wfB_32 = [((wfB[2*i+1] << 16) | wfB[2*i]) for i in range(len(wfB) // 2)]
 
         self.write_dram(self.WFA_OFFSET(), wfA_32) # I
         self.write_dram(self.WFB_OFFSET(), wfB_32) # Q
-        
+
     def read_waveforms(self, wf_len):
         wfA_32 = self.read_dram(self.WFA_OFFSET(), wf_len // 2)
         wfB_32 = self.read_dram(self.WFB_OFFSET(), wf_len // 2)
-        
+
         wfA = []
         wfB = []
-        
+
         for i in range(wf_len // 2):
             wfA.append(wfA_32[i] & 0xFFFF)
             wfA.append((wfA_32[i] >> 16) & 0xFFFF)
             wfB.append(wfB_32[i] & 0xFFFF)
             wfB.append((wfB_32[i] >> 16) & 0xFFFF)
-            
+
         return wfA, wfB
 
     def load_sequence_file(self, seq_file):
@@ -846,7 +926,11 @@ class APS3(Instrument, metaclass=MakeBitFieldParams):
             self.load_sequence(instructions)
 
     def serial_check_alive(self):
-        return self.board.serial_read_dac0(0x005) == 0x91 and self.board.serial_read_dac0(0x004) == 0x64
+        return (APS3CommunicationManager.board(self.address).serial_read_dac_register(self.dac, 0x005) == 0x91 and
+        APS3CommunicationManager.board(self.address).serial_read_dac_register(self.dac,0x004) == 0x64)
+
+    def configure_with_proxy(self, proxy_obj):
+        super(APS3, self).configure_with_proxy(proxy_obj)
 
     @property
     def sequence_file(self):
@@ -858,56 +942,56 @@ class APS3(Instrument, metaclass=MakeBitFieldParams):
 
     @property
     def dac_switch_mode(self):
-        return self.board.serial_get_switch_mode()
+        return APS3CommunicationManager.board(self.address).serial_get_switch_mode(self.dac)
 
     @dac_switch_mode.setter
     def dac_switch_mode(self, value):
-        self.board.serial_set_switch_mode(value)
+        APS3CommunicationManager.board(self.address).serial_set_switch_mode(self.dac, value)
 
     @property
     def dac_full_scale_current(self):
-        return self.board.serial_get_analog_full_scale_current()
+        return APS3CommunicationManager.board(self.address).serial_get_analog_full_scale_current(self.dac)
 
     @dac_full_scale_current.setter
     def dac_full_scale_current(self, value):
-        self.board.serial_set_analog_full_scale_current(value)
+        APS3CommunicationManager.board(self.address).serial_set_analog_full_scale_current(self.dac, value)
 
     @property
     def dac_nco_enable(self):
-        return self.board.serial_get_nco_enable()
+        return APS3CommunicationManager.board(self.address).serial_get_nco_enable(self.dac)
 
     @dac_nco_enable.setter
     def dac_nco_enable(self, value):
-        self.board.serial_set_nco_enable(value)
+        APS3CommunicationManager.board(self.address).serial_set_nco_enable(self.dac, value)
 
     @property
     def dac_FIR85_enable(self):
-        return self.board.serial_get_FIR85_enable()
+        return APS3CommunicationManager.board(self.address).serial_get_FIR85_enable(self.dac)
 
     @dac_FIR85_enable.setter
     def dac_FIR85_enable(self, value):
-        self.board.serial_set_FIR85_enable(value)
+        APS3CommunicationManager.board(self.address).serial_set_FIR85_enable(self.dac, value)
 
     @property
     def dac_nco_frequency(self):
-        return self.board.serial_get_nco_frequency()
+        return APS3CommunicationManager.board(self.address).serial_get_nco_frequency(self.dac)
 
     @dac_nco_frequency.setter
     def dac_nco_frequency(self, value):
-        self.board.serial_set_nco_frequency(value)
+        APS3CommunicationManager.board(self.address).serial_set_nco_frequency(self.dac, value)
 
     @property
     def dac_pll_reference(self):
-        return self.board.serial_get_reference()
+        return APS3CommunicationManager.board(self.address).serial_get_reference()
 
     @dac_pll_reference.setter
     def dac_pll_reference(self, value):
-        self.board.serial_set_reference(value)
+        APS3CommunicationManager.board(self.address).serial_set_reference(value)
 
     @property
     def dac_shuffle_mode(self):
-        return self.board.serial_get_shuffle_mode()
+        return APS3CommunicationManager.board(self.address).serial_get_shuffle_mode()
 
     @dac_shuffle_mode.setter
     def dac_shuffle_mode(self, value):
-        self.board.serial_set_shuffle_mode(value)
+        APS3CommunicationManager.board(self.address).serial_set_shuffle_mode(value)
