@@ -4,6 +4,7 @@ class NotebooksMethods(NotebooksTestCase):
     def _setup(self):
         import QGL.config
         import auspex.config
+        import tempfile
         auspex.config.auspex_dummy_mode = True
 
         # Set temporary output directories
@@ -14,9 +15,11 @@ class NotebooksMethods(NotebooksTestCase):
 
 
     def test_01_Essential_Objects(self):
+        self._setup()
         self.runNotebook_jupyter("../doc/examples/","Example-Config.ipynb")
 
     def test_02_Essential_Objects(self):
+        self._setup()
         self.runNotebook_jupyter("../doc/examples/","Example-Channel-Lib.ipynb")
 
     def test_03_Essential_Objects(self):
@@ -24,12 +27,15 @@ class NotebooksMethods(NotebooksTestCase):
         self.runNotebook_jupyter("../doc/examples/","Example-Calibrations.ipynb")
 
     def test_04_Essential_Objects(self):
+        self._setup()
         self.runNotebook_jupyter("../doc/examples/","Example-Filter-Pipeline.ipynb")
 
     def test_05_Essential_Objects(self):
+        self._setup()
         self.runNotebook_jupyter("../doc/examples/","Example-Experiments.ipynb")
 
     def test_06_Essential_Objects(self):
+        self._setup()
         self.runNotebook_jupyter("../doc/examples/","Example-SingleShot-Fid.ipynb")
 
     def test_07_Essential_Objects(self):
