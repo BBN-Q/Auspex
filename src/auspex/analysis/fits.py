@@ -126,12 +126,14 @@ class AuspexFit(object):
         self.fit_params = self._fit_dict(popt)
         self.fit_errors = self._fit_dict(perr)
 
-    def model(self, x):
+    def model(self, x=None):
         """ The fit function evaluated at the parameters found by `curve_fit`.
 
         Args:
             x: A number or `numpy.array` returned by the model function.
         """
+        if x is None:
+            return self.fit_function(self.xpoints)
         if isinstance(x, Iterable):
             return np.array([self.fit_function(_) for _ in x])
         else:
@@ -201,7 +203,7 @@ class GaussianFit(AuspexFit):
         ###     IEEE Signal Processing Magazine. September 2011. DOI: 10.1109/MSP.2011.941846
         N = len(self.xpts)
 
-        #use first and last points to 
+        #use first and last points to
         B = 0.5*(self.ypts[-1] + self.ypts[0])
         y = self.ypts - B
         mask = y>0
@@ -214,7 +216,7 @@ class GaussianFit(AuspexFit):
         v = np.array([np.sum(y**2*np.log(y)),
                       np.sum(x*y**2*np.log(y)),
                       np.sum(x*y**2*np.log(y))])
-        a, b, c = np.linalg.inv(M) @ v.T 
+        a, b, c = np.linalg.inv(M) @ v.T
 
         mu = -b/(2.0*c)
         sigma = np.sqrt(-1/(2.0*c))
@@ -245,7 +247,7 @@ class MultiGaussianFit(AuspexFit):
             n_gaussians: Expected number of Gaussian peaks.
             n_samples: Number of random samples to generate for GMM estimation. (see `MultiGaussianFit._initial_guess`)
         """
-        self.n_gaussians = n_gaussians 
+        self.n_gaussians = n_gaussians
         self.n_samples = n_samples
         super().__init__(x, y, make_plots=make_plots)
 
@@ -266,10 +268,10 @@ class MultiGaussianFit(AuspexFit):
 
     def _initial_guess(self):
         ## Initial guess for the multi-gaussian fit
-        ## The idea is to draw random samples using the data as a PDF, then run a 
-        ## Gaussian mixture model (ie. clustering) to get a good initial guess for the gaussians. 
+        ## The idea is to draw random samples using the data as a PDF, then run a
+        ## Gaussian mixture model (ie. clustering) to get a good initial guess for the gaussians.
         ## Note that this is pretty slow...
-        
+
         B = 0.5*(self.ypts[-1] + self.ypts[0])
         #normalize and center
         y = self.ypts - B
@@ -281,7 +283,7 @@ class MultiGaussianFit(AuspexFit):
         samples = np.random.choice(a=xn, size=self.n_samples, p=yn)
         gmm = GaussianMixture(n_components=self.n_gaussians)
         gmm.fit(samples.reshape(len(samples),1))
-        means = gmm.means_.flatten() + x0 
+        means = gmm.means_.flatten() + x0
         sigmas = np.sqrt(gmm.covariances_.flatten())
         amps = gmm.weights_.flatten() * (2*np.pi)
         output = np.zeros(1+3*self.n_gaussians)
@@ -304,5 +306,40 @@ class MultiGaussianFit(AuspexFit):
     def __str__(self):
         return f"Sum of Gaussians with N={self.n_gaussians}"
 
+class QuadraticFit(AuspexFit):
+    """A fit to a simple quadratic function A*(x-x0)**2 + b
+    """
 
+    xlabel = "X Data"
+    ylabel = "Y Data"
+    title = "Quadratic Fit"
 
+    @staticmethod
+    def _model(x, *p):
+        """Model for a simple qudratic."""
+        return p[0]*(x-p[1])**2 + p[2]
+
+    def _initial_guess(self):
+        """Use quadratic regression to get an initial guess."""
+        n = len(self.xpts)
+        sx = np.sum(self.xpts)
+        sx2 = np.sum(self.xpts**2)
+        sx3 = np.sum(self.xpts**3)
+        sx4 = np.sum(self.xpts**4)
+        M = np.array([[sx4, sx3, sx2],
+                      [sx3, sx2, sx] ,
+                      [sx2, sx,  n] ])
+        Y = np.array([np.sum(self.xpts**2 * self.ypts),
+                      np.sum(self.xpts * self.ypts),
+                      np.sum(self.ypts)])
+        X = np.linalg.inv(M) @ Y
+        A = X[0]
+        x0 = X[1]/(2*A)
+        b = X[2] - x0**2
+        return [A, x0, b]
+
+    def _fit_dict(self, p):
+        return {"A": p[0], "x0": p[1], "b": p[2]}
+
+    def __str__(self):
+        return "A(x - x0)^2 + b"
