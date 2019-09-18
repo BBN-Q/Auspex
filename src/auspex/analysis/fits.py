@@ -114,12 +114,14 @@ class AuspexFit(object):
         self.fit_params = self._fit_dict(popt)
         self.fit_errors = self._fit_dict(perr)
 
-    def model(self, x):
+    def model(self, x=None):
         """ The fit function evaluated at the parameters found by `curve_fit`.
 
         Args:
             x: A number or `numpy.array` returned by the model function.
         """
+        if x is None:
+            return self.fit_function(self.xpoints)
         if isinstance(x, Iterable):
             return np.array([self.fit_function(_) for _ in x])
         else:
@@ -171,3 +173,41 @@ class LorentzFit(AuspexFit):
 
     def __str__(self):
         return "A /((x-b)^2 + (c/2)^2) + d"
+
+class QuadraticFit(AuspexFit):
+    """A fit to a simple quadratic function A*(x-x0)**2 + b
+    """
+
+    xlabel = "X Data"
+    ylabel = "Y Data"
+    title = "Quadratic Fit"
+
+    @staticmethod
+    def _model(x, *p):
+        """Model for a simple qudratic."""
+        return p[0]*(x-p[1])**2 + p[2]
+
+    def _initial_guess(self):
+        """Use quadratic regression to get an initial guess."""
+        n = len(self.xpts)
+        sx = np.sum(self.xpts)
+        sx2 = np.sum(self.xpts**2)
+        sx3 = np.sum(self.xpts**3)
+        sx4 = np.sum(self.xpts**4)
+        M = np.array([[sx4, sx3, sx2],
+                      [sx3, sx2, sx] , 
+                      [sx2, sx,  n] ])
+        Y = np.array([np.sum(self.xpts**2 * self.ypts),
+                      np.sum(self.xpts * self.ypts),
+                      np.sum(self.ypts)])
+        X = np.linalg.inv(M) @ Y
+        A = X[0]
+        x0 = X[1]/(2*A)
+        b = X[2] - x0**2
+        return [A, x0, b]
+
+    def _fit_dict(self, p):
+        return {"A": p[0], "x0": p[1], "b": p[2]}
+
+    def __str__(self):
+        return "A(x - x0)^2 + b"
