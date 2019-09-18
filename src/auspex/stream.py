@@ -253,6 +253,12 @@ class DataStreamDescriptor(object):
         self.dtype = dtype
         self.metadata = {}
 
+        # Buffer size multiplier: use this to inflate the size of the
+        # shared memory buffer. This is needed for partial averages, which
+        # may require more space than their descriptors would indicate
+        # since they are emitted as often as possible.
+        self.buffer_mult_factor = 1
+
         # Keep track of the parameter permutations we have actually used...
         self.visited_tuples = []
 
@@ -489,10 +495,17 @@ class DataStream(object):
 
         # Shared memory interface
         self.buffer_lock    = mp.Lock()
-        self.buffer_size    = 500000
+        # self.buffer_size    = 500000
         self.buff_idx       = Value('i', 0)
-        self.buff_shared_re = RawArray(ctypes.c_double, self.buffer_size)
-        self.buff_shared_im = RawArray(ctypes.c_double, self.buffer_size)
+
+    def final_init(self):
+        self.buffer_size = self.descriptor.num_points()*self.descriptor.buffer_mult_factor
+        # logger.info(f"{self.start_connector.parent}:{self.start_connector} to {self.end_connector.parent}:{self.end_connector} buffer of size {self.buffer_size}")
+        if self.buffer_size > 50e6:
+            logger.info("Limiting buffer size of {self} to 50 Million Points")
+            self.buffer_size = 50e6
+        self.buff_shared_re = RawArray(ctypes.c_double, int(self.buffer_size))
+        self.buff_shared_im = RawArray(ctypes.c_double, int(self.buffer_size))
         self.re_np = np.frombuffer(self.buff_shared_re, dtype=np.float64)
         self.im_np = np.frombuffer(self.buff_shared_im, dtype=np.float64)
 
@@ -551,13 +564,16 @@ class DataStream(object):
                         raise ValueError("Got data {} that is neither an array nor a float".format(data))
         with self.buffer_lock:
             start = self.buff_idx.value
-            re = np.real(data).flatten()
+            re = np.real(np.array(data)).flatten()
+            if start+re.size > self.re_np.size:
+                raise ValueError(f"Stream {self} received more data than fits in the shared memory buffer. \
+                    This is probably due to digitizer raw streams producing data too quickly for the pipeline.")
             self.re_np[start:start+re.size] = re
             if np.issubdtype(self.descriptor.dtype, np.complexfloating):
                 im = np.imag(data).flatten()
                 self.im_np[start:start+im.size] = im
             message = {"type": "data", "data": None}
-            self.buff_idx.value = start + data.size
+            self.buff_idx.value = start + np.array(data).size
         self.queue.put(message)
 
     def pop(self):

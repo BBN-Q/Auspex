@@ -31,7 +31,7 @@ except:
     pass
 
 import inspect
-import time
+import time, datetime
 import copy
 import itertools
 import logging
@@ -185,6 +185,9 @@ class Experiment(metaclass=MetaExperiment):
         self.manual_plotters = [] # Plotters using neither streams nor the pipeline
         self.manual_plotter_callbacks = [] # These are called at the end of run
         self._extra_plots_to_streams = {}
+
+        # Keep track of additional DataStreams created for manual plotters, etc.
+        self.extra_streams = []
 
         # Furthermore, keep references to all of the file writers and buffers.
         self.writers = []
@@ -462,6 +465,10 @@ class Experiment(metaclass=MetaExperiment):
         for n in self.nodes + self.extra_plotters:
             if n != self and hasattr(n, 'final_init'):
                 n.final_init()
+        # Call final init on the DataStreams to fix their shared memory buffer sizes
+        for edge in self.graph.edges:
+            edge.final_init()
+
         self.init_progress_bars()
 
     def init_progress_bars(self):
@@ -506,6 +513,14 @@ class Experiment(metaclass=MetaExperiment):
             for w in wrs:
                 w.filename.value = inc_filename
         self.filenames = [w.filename.value for w in self.writers]
+        # Save ChannelLibrary version
+        if hasattr(self, 'chan_db') and self.filenames:
+            import bbndb
+            exp_chandb = bbndb.deepcopy_sqla_object(self.chan_db, self.cl_session)
+            exp_chandb.label = os.path.basename(self.filenames[0])
+            exp_chandb.time = datetime.datetime.now()
+            exp_chandb.notes = ''
+            self.cl_session.commit()
 
         # Remove the nodes with 0 dimension
         self.nodes = [n for n in self.nodes if not(hasattr(n, 'input_connectors') and  n.input_connectors['sink'].descriptor.num_dims()==0)]
@@ -681,6 +696,7 @@ class Experiment(metaclass=MetaExperiment):
         """A plotter that lives outside the filter pipeline, intended for advanced
         use cases when plotting data during refinement."""
         plotter_stream = DataStream()
+        self.extra_streams.append(plotter_stream)
         plotter.sink.add_input_stream(plotter_stream)
         self.extra_plotters.append(plotter)
         self._extra_plots_to_streams[plotter] = plotter_stream
