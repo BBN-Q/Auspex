@@ -344,7 +344,8 @@ class MixerCalibrationExperiment(Experiment):
         LO_freq = self.source.frequency - self.sa.IF_FREQ
         if self.sideband_modulation:
             LO_freq -= self.SSB_FREQ
-        self.LO.frequency = LO_freq
+        # generator freqs will always be positive
+        self.LO.frequency = np.abs(LO_freq)
         self.LO.output = True
         self._setup_awg_ssb()
         time.sleep(0.1)
