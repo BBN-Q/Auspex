@@ -278,6 +278,7 @@ class CalibrationExperiment(QubitExperiment):
                 raise ValueError(f"Could not find specified qubit {qubit} in graph.")
 
         mapping = {}
+        self.output_connectors = {}
         for i in range(len(self.output_nodes)):
             output_node = self.output_nodes[i]
             if isinstance(output_node, bbndb.auspex.Write):
@@ -287,6 +288,8 @@ class CalibrationExperiment(QubitExperiment):
         # Disable any paths not involving the buffer
         new_graph = nx.DiGraph()
         new_output_nodes = []
+        new_stream_selectors = []
+        connector_by_sel = {}
         for output_node, qubit in zip(self.output_nodes, self.qubits):
             new_output = mapping[output_node]
             new_output_nodes.append(new_output)
@@ -296,6 +299,8 @@ class CalibrationExperiment(QubitExperiment):
             if len(stream_sels) != 1:
                 raise Exception(f"Expected to find one stream selector for {qubit}. Instead found {len(stream_sels)}")
             stream_sel = stream_sels[0]
+            new_stream_selectors.append(stream_sel)
+            connector_by_sel[stream_sel] = self.connector_by_sel[stream_sel]
 
             old_path  = nx.shortest_path(graph, stream_sel.hash_val, output_node.hash_val)
             path      = old_path[:-1] + [new_output.hash_val]
@@ -322,7 +327,17 @@ class CalibrationExperiment(QubitExperiment):
                 plot_path = nx.shortest_path(graph, path[-2], plot_node)
                 new_graph = nx.compose(new_graph, graph.subgraph(plot_path))
 
+        # Update nodes and connectors
         self.output_nodes = new_output_nodes
+        self.stream_selectors = new_stream_selectors
+        self.connector_by_sel = connector_by_sel
+
+        for ss in new_stream_selectors:
+            self.output_connectors[self.connector_by_sel[ss].name] = self.connector_by_sel[ss]
+        for ch in list(self.chan_to_oc):
+            if self.chan_to_oc[ch] not in self.output_connectors.values():
+                self.chan_to_oc.pop(ch)
+                self.chan_to_dig.pop(ch)
         return new_graph
 
     def add_cal_sweep(self, method, values):
