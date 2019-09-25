@@ -719,11 +719,12 @@ class RamseyCalibration(QubitCalibration):
         for edge in self.qubit.edge_target:
             edge_source = edge.phys_chan.generator
             edge.frequency = self.source_proxy.frequency + self.qubit_source.frequency - edge_source.frequency
-        #         # TODO: fix this for db backend
-
-        # qubit_set_freq = self.saved_settings['instruments'][qubit_source]['frequency'] + self.saved_settings['qubits'][self.qubit.label]['control']['frequency']
-        # logger.info("Qubit set frequency = {} GHz".format(round(float(qubit_set_freq/1e9),5)))
-        # return ('frequency', qubit_set_freq)
+        if self.sample:
+            frequency = self.qubit_source.frequency if self.set_source else self.qubit.frequency
+            c = bbndb.calibration.Calibration(value=frequency, sample=self.sample, name="Ramsey")
+            c.date = datetime.datetime.now()
+            bbndb.get_cl_session().add(c)
+            bbndb.get_cl_session().commit()
 
 class PhaseEstimation(QubitCalibration):
 
