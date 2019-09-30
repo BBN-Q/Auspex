@@ -990,8 +990,8 @@ class APS3(Instrument, metaclass=MakeBitFieldParams):
 
     @property
     def dac_shuffle_mode(self):
-        return APS3CommunicationManager.board(self.address).serial_get_shuffle_mode()
+        return APS3CommunicationManager.board(self.address).serial_get_shuffle_mode(self.dac)
 
     @dac_shuffle_mode.setter
     def dac_shuffle_mode(self, value):
-        APS3CommunicationManager.board(self.address).serial_set_shuffle_mode(value)
+        APS3CommunicationManager.board(self.address).serial_set_shuffle_mode(self.dac, value)
