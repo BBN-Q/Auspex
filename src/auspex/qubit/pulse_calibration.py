@@ -974,6 +974,11 @@ class CRCalibration(QubitCalibration):
         print("updating settings...")
         self.edge.pulse_params[str.lower(self.cal_type.name)] = float(self.opt_par)
         super(CRCalibration, self).update_settings()
+        if self.sample:
+            c = bbndb.calibration.Calibration(value=float(self.opt_par), sample=sample, name="CR"+str.lower(self.cal_type.name))
+            c.date = datetime.datetime.now()
+            bbndb.get_cl_session().add(c)
+            bbndb.get_cl_session().commit()
 
 class CRLenCalibration(CRCalibration):
     cal_type = CR_cal_type.LENGTH
