@@ -155,7 +155,7 @@ class AlazarATS9870(Instrument):
             for i in range(self.number_segments):
                 signal = np.sin(np.linspace(0,10.0*np.pi,int(length/2)))
                 buff[i, int(length/4):int(length/4)+len(signal)] = signal * (1.0 if ideal_data[i] == 0 else ideal_data[i])
-            
+
             buff += random_mag*np.random.random((self.number_segments, length))
 
             wsock.send(struct.pack('n', self.number_segments*length*np.float32().itemsize) + buff.flatten().tostring())
@@ -272,7 +272,7 @@ class AlazarATS9870(Instrument):
             'triggerLevel': 100,
             'triggerSlope': "rising",
             'triggerSource': "Ext",
-            'verticalCoupling': "AC",
+            'verticalCoupling': "DC",
             'verticalOffset': 0.0,
             'verticalScale': self.proxy_obj.vertical_scale
         }
