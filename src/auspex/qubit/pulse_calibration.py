@@ -198,6 +198,12 @@ class QubitCalibration(Calibration):
 
         data = {}
         var = {}
+
+        #sort nodes by qubit name to match data with metadata when normalizing
+        qubit_indices = {q.label: idx for idx, q in enumerate(exp.qubits)}
+        exp.output_nodes.sort(key=lambda x: qubit_indices[x.qubit_name])
+        exp.var_buffers.sort(key=lambda x: qubit_indices[x.qubit_name])
+
         for i, (qubit, output_buff, var_buff) in enumerate(zip(exp.qubits,
                                 [exp.proxy_to_filter[on] for on in exp.output_nodes],
                                 [exp.proxy_to_filter[on] for on in exp.var_buffers])):
