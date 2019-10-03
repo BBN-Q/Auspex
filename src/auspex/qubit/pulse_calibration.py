@@ -251,6 +251,10 @@ class CalibrationExperiment(QubitExperiment):
         self.output_nodes = output_nodes
         self.input_selectors = stream_selectors # name collision otherwise
         self.var_buffers = []
+        if 'disable_plotters' in kwargs:
+            self.disable_plotters = kwargs.pop('disable_plotters')
+        else:
+            self.disable_plotters = False
         super(CalibrationExperiment, self).__init__(*args, **kwargs)
 
     def guess_output_nodes(self, graph):
@@ -327,10 +331,11 @@ class CalibrationExperiment(QubitExperiment):
                 new_graph.add_node(vb.hash_val, node_obj=vb)
                 new_graph.add_edge(path[-2], vb.hash_val, node_obj=vb, connector_in="sink", connector_out="final_variance")
             # maintain standard plots
-            plot_nodes = [output_node for output_node in nx.descendants(graph, path[-2]) if isinstance(graph.nodes[output_node]['node_obj'], bbndb.auspex.Display)]
-            for plot_node in plot_nodes:
-                plot_path = nx.shortest_path(graph, path[-2], plot_node)
-                new_graph = nx.compose(new_graph, graph.subgraph(plot_path))
+            if not self.disable_plotters:
+                plot_nodes = [output_node for output_node in nx.descendants(graph, path[-2]) if isinstance(graph.nodes[output_node]['node_obj'], bbndb.auspex.Display)]
+                for plot_node in plot_nodes:
+                    plot_path = nx.shortest_path(graph, path[-2], plot_node)
+                    new_graph = nx.compose(new_graph, graph.subgraph(plot_path))
 
         # Update nodes and connectors
         self.output_nodes = new_output_nodes
@@ -1215,42 +1220,43 @@ class CLEARCalibration(QubitCalibration):
         cal_steps: Steps over which to sweep calibration.
     '''
 
-    def __init__(self, qubit, kappa = 2*np.pi*2e6, chi = -2*np.pi*1e6, t_empty = 400e-9, 
-                ramsey_delays=np.linspace(0.0, 50.0, 51)*1e-6, ramsey_freq = 100e3, meas_delay = 0, 
-                preramsey_delay=0, alpha = 1, T1factor = 1, T2 = 30e-6, nsteps = 11, 
-                eps1 = None, eps2 = None, cal_steps = (1,1,1)):
+    def __init__(self, qubit, kappa = 2*np.pi*2e6, chi = -2*np.pi*1e6, t_empty = 400e-9,
+                ramsey_delays=np.linspace(0.0, 50.0, 51)*1e-6, ramsey_freq = 100e3, meas_delay = 0,
+                preramsey_delay=0, alpha = 1, T1factor = 1, T2 = 30e-6, nsteps = 11,
+                eps1 = None, eps2 = None, cal_steps = (1,1,1), **kwargs):
 
         self.kappa = kappa
         self.chi = chi
-        self.ramsey_delays = ramsey_delays 
-        self.ramsey_freq = ramsey_freq 
+        self.ramsey_delays = ramsey_delays
+        self.ramsey_freq = ramsey_freq
         self.meas_delay = meas_delay
-        self.preramsey_delay = preramsey_delay 
+        self.preramsey_delay = preramsey_delay
         self.tau = t_empty/2.0
-        self.alpha = alpha 
-        self.T1factor = T1factor 
-        self.T2 = T2 
-        self.nsteps = nsteps 
+        self.alpha = alpha
+        self.T1factor = T1factor
+        self.T2 = T2
+        self.nsteps = nsteps
 
-        #use theory values as defaults 
-        if not eps1: 
+        #use theory values as defaults
+        if not eps1:
             self.eps1 = ((1 - 2*np.exp(kappa*t_empty/4)*np.cos(chi*t_empty/2))
                         /(1+np.exp(kappa*t_empty/2)-2*np.exp(kappa*t_empty/4)*np.cos(chi*t_empty/2)))
             self.eps2 = 1/(1+np.exp(kappa*t_empty/2)-2*np.exp(kappa*t_empty/4)*np.cos(chi*t_empty/2))
             logger.info(f' Using theoretical CLEAR amplitudes: {self.eps1} (eps1), {self.eps2} (eps2)')
         else:
-            self.eps1 = eps1 
-            self.eps2 = eps2 
+            self.eps1 = eps1
+            self.eps2 = eps2
 
-        self.cal_steps = 1
+        self.cal_steps = cal_steps
 
         self.seq_params = {}
 
+        kwargs['disable_plotters'] = True
         super().__init__(qubit, **kwargs)
         self.filename = 'CLEAR/CLEAR'
 
     def descriptor(self):
-        return [delay_descriptor(self.delays)]
+        return [delay_descriptor(self.ramsey_delays), cal_descriptor(tuple(self.qubits), 2)]
 
     def sequence(self):
         if self.seq_params['state']:
@@ -1263,8 +1269,8 @@ class CLEARCalibration(QubitCalibration):
 
 
         clear_meas = MEASCLEAR(self.qubit, amp1=amp1, amp2=amp2, step_length=self.seq_params['tau'])
-        seqs = [[prep, clear_meas, Id(self.qubit, self.preramsey_delay), X90(self.qubit), Id(self.qubit,d), 
-                    U90(self.qubit,phase = 2*pi*self.ramsey_freq*d), Id(self.qubit, self.meas_delay), MEAS(self.qubit)] 
+        seqs = [[prep, clear_meas, Id(self.qubit, self.preramsey_delay), X90(self.qubit), Id(self.qubit,d),
+                    U90(self.qubit,phase = 2*pi*self.ramsey_freq*d), Id(self.qubit, self.meas_delay), MEAS(self.qubit)]
                         for d in self.ramsey_delays]
 
         seqs += create_cal_seqs((self.qubit,), 2, delay = self.meas_delay)
@@ -1272,16 +1278,23 @@ class CLEARCalibration(QubitCalibration):
         return seqs
 
     def init_plots(self):
-        self.plot_ramsey = ManualPlotter("CLEAR Ramsey", x_label='Time (us)', y_label='<Z>')
-        self.plot_clear = ManualPlotter("CLEAR Calibration", x_label=['eps1, eps2', 'eps1', 'eps2'], y_label=['Residual Photons'])
+        plot_ramsey = ManualPlotter("CLEAR Ramsey", x_label='Time (us)', y_label='<Z>')
+        plot_clear = ManualPlotter("CLEAR Calibration", x_label='epsilon', y_label='Residual Photons')
 
-        self.plot_ramsey.add_data_trace("Data")
-        self.plot_ramsey.add_fit_trace("Fit")
+        plot_ramsey.add_data_trace("Data - 0 State")
+        plot_ramsey.add_fit_trace("Fit - 0 State")
+        plot_ramsey.add_data_trace("Data - 1 State")
+        plot_ramsey.add_fit_trace("Fit - 1 State")
 
+        color = 1
         for sweep_num, state in product([0,1,2], [0,1]):
-            self.plot_clear.add_data_trace(f"Sweep {sweep_num}, State {state}", {"color": f'C{state+1}'}, sweep_num)
-            self.plot_clear.add_data_trace(f"Fit Sweep {sweep_num}, State {state}", {"color": f'C{state+1}'}, sweep_num)
-        
+            plot_clear.add_data_trace(f"Sweep {sweep_num}, State {state}", {"color": f'C{color}'})
+            plot_clear.add_fit_trace(f"Fit Sweep {sweep_num}, State {state}", {"color": f'C{color}'})
+            color += 1
+
+        self.plot_ramsey = plot_ramsey
+        self.plot_clear = plot_clear
+
         return [plot_ramsey, plot_clear]
 
     def exp_config(self, exp):
@@ -1297,63 +1310,98 @@ class CLEARCalibration(QubitCalibration):
         #     else:
         #         self.orig_freq = self.qubit.frequency
 
+    def _calibrate_one_point(self):
+        n0_0 = 0.0
+        n0_1 = 0.0
+        for state in [0,1]:
+            self.seq_params['state'] = state
+            data, _ = self.run_sweeps()
+            norm_data = quick_norm_data(data)
+
+            if self.fit_ramsey_freq is None:
+                fit = RamseyFit(self.ramsey_delays, norm_data)
+                self.fit_ramsey_freq = fit.fit_params["f"]
+                logger.info(f"Found Ramsey Frequency of :{self.fit_ramsey_freq/1e3:.3f} kHz.")
+
+            state_data = 0.5*(1 - norm_data) #renormalize data to match convention in CLEAR paper from IBM
+
+            fit = PhotonNumberFit(self.ramsey_delays, state_data, self.T2, self.fit_ramsey_freq*2*np.pi, self.kappa,
+                                self.chi, self.T1factor, state)
+
+            self.plot_ramsey[f"Data - {state} State"] = (self.ramsey_delays, state_data)
+            self.plot_ramsey[f"Fit - {state} State"] = (self.ramsey_delays, fit.model(self.ramsey_delays))
+
+            if state == 1:
+                n0_1 = fit.fit_params["n0"]
+            else:
+                n0_0 = fit.fit_params["n0"]
+
+        return n0_0, n0_1
+
     def _calibrate(self):
-        
-        cal_step = 0
-        for ct in range(3):
-            if not self.cal_steps[ct]:
-                continue
-            xpoints = np.linspace(1-self.cal_steps[ct], 1+self.cal_steps[ct], self.nsteps)
-            n0vec   = np.zeros(self.nsteps)
-            err0vec = np.zeros(self.nsteps)
-            n1vec   = np.zeros(self.nsteps)
-            err1vec = np.zeros(self.nsteps)
 
-            self.seq_params = {'tau': self.tau}
+        self.fit_ramsey_freq = None
+        self.seq_params["tau"] = self.tau
 
-            for k in range(self.nsteps):
-                self.seq_params['eps1'] = self.eps1 if k == 1 else xpoints[k]*self.eps1
-                self.seq_params['eps1'] = self.eps2 if k == 2 else xpoints[k]*self.eps2
-                for state in [0,1]:
-                    self.seq_params['state'] = state 
-                    data, _ = self.run_sweeps()
-                    norm_data = quick_norm_data(data)
+        xpoints = np.linspace(0.0, 2*self.eps1, self.nsteps)
+        self.seq_params['eps2'] = self.eps2
+        n0vec = np.zeros(self.nsteps)
+        n1vec = np.zeros(self.nsteps)
+        for k, xp in enumerate(xpoints):
+            self.seq_params['eps1'] = xp
+            n0vec[k], n1vec[k] = self._calibrate_one_point()
+            self.plot_clear['Sweep 0, State 0'] = (xpoints, n0vec)
+            self.plot_clear['Sweep 0, State 1'] = (xpoints, n1vec)
 
-                    fit = PhotonNumberFit(self.ramsey_delays, norm_data, [self.kappa, self.ramsey_freq, 2*self.chi, 
-                                                                          self.T2, self.T1fac, 0.0])
+        fit0 = QuadraticFit(xpoints, n0vec)
+        fit1 = QuadraticFit(xpoints, n1vec)
+        finer_xpoints = np.linspace(np.min(xpoints), np.max(xpoints), 4*len(xpoints))
+        self.plot_clear[f'Fit Sweep 0, State 0'] = (finer_xpoints, fit0.model(finer_xpoints))
+        self.plot_clear[f'Fit Sweep 0, State 1'] = (finer_xpoints, fit1.model(finer_xpoints))
+        best_guess = 0.5*(fit0.fit_params["x0"]+ fit1.fit_params["x0"])
+        logger.info(f"Found best epsilon1 = {best_guess:.6f}")
+        self.seq_params['eps1'] = best_guess
 
-                    if state == 0:
-                        n0vec[k] = fit.fit_params["Pb"]
-                        err0vec[k] = fit.fit_errors["Pb"]
-                    else:
-                        n1vec[k] = fit.fit_params["Pb"]
-                        err1vec[k] = fit.fit_errors["Pb"]
-                    cal_step +=1
+        xpoints = np.linspace(0.0, 2*self.eps2, self.nsteps)
+        n0vec = np.zeros(self.nsteps)
+        n1vec = np.zeros(self.nsteps)
+        for k, xp in enumerate(xpoints):
+            self.seq_params['eps2'] = xp
+            n0vec[k], n1vec[k] = self._calibrate_one_point()
+            self.plot_clear['Sweep 1, State 0'] = (xpoints, n0vec)
+            self.plot_clear['Sweep 1, State 1'] = (xpoints, n1vec)
+        fit0 = QuadraticFit(xpoints, n0vec)
+        fit1 = QuadraticFit(xpoints, n1vec)
+        finer_xpoints = np.linspace(np.min(xpoints), np.max(xpoints), 4*len(xpoints))
+        self.plot_clear[f'Fit Sweep 1, State 0'] = (finer_xpoints, fit0.model(finer_xpoints))
+        self.plot_clear[f'Fit Sweep 1, State 1'] = (finer_xpoints, fit1.model(finer_xpoints))
+        best_guess = 0.5*(fit0.fit_params["x0"]+ fit1.fit_params["x0"])
+        logger.info(f"Found best epsilon2 = {best_guess:.6f}")
+        self.seq_params['eps2'] = best_guess
 
-                    self.plot_ramsey["Data"] = (self.ramsey_delays, norm_data)
-                    self.plot_ramsey["Fit"] = (self.ramsey_delays, fit.model(self.ramsey_delays))
-                    self.plot_clear[f"Sweep {ct}, State 0"] = (xpoints, n0vec)
-                    self.plot_clear[f"Sweep {ct}, State 1"] = (xpoints, n1vec)
-
-            #Fit minimum photon number 
-            fit0 = QuadraticFit(xpoints, n0vec)
-            fit1 = QuadraticFit(xpoints, n1vec)
-            finer_xpoints = np.linspace(np.min(xpoints), np.max(xpoints), 4*len(xpoints))
-            self.plot_clear[f'Fit Sweep {ct}, State 0'] = (finer_xpoints, fit0.model(finer_xpoints))
-            self.plot_clear[f'Fit Sweep {ct}, State 0'] = (finer_xpoints, fit1.model(finer_xpoints))
-
-            opt_scaling = np.mean([fit0.fit_params["x0"], fit1.fit_params["x0"]])
-            logger.info(f"Optimal scaling factor for step {ct}: {opt_scaling}")
-
-            if ct<2:
-                self.eps1 *= opt_scaling
-            if ct != 1:
-                self.eps2 *= opt_scaling 
-
+        xpoints = np.linspace(0.0, 2*self.seq_params["eps1"], self.nsteps)
+        n0vec = np.zeros(self.nsteps)
+        n1vec = np.zeros(self.nsteps)
+        for k, xp in enumerate(xpoints):
+            self.seq_params['eps1'] = xp
+            n0vec[k], n1vec[k] = self._calibrate_one_point()
+            self.plot_clear['Sweep 2, State 0'] = (xpoints, n0vec)
+            self.plot_clear['Sweep 2, State 1'] = (xpoints, n1vec)
+        fit0 = QuadraticFit(xpoints, n0vec)
+        fit1 = QuadraticFit(xpoints, n1vec)
+        finer_xpoints = np.linspace(np.min(xpoints), np.max(xpoints), 4*len(xpoints))
+        self.plot_clear[f'Fit Sweep 2, State 0'] = (finer_xpoints, fit0.model(finer_xpoints))
+        self.plot_clear[f'Fit Sweep 2, State 1'] = (finer_xpoints, fit1.model(finer_xpoints))
+        best_guess = 0.5*(fit0.fit_params["x0"]+ fit1.fit_params["x0"])
+        logger.info(f"Found best epsilon1 = {best_guess:.6f}")
+        self.seq_params['eps1'] = best_guess
 
 
         self.eps1 = round(float(self.eps1), 5)
         self.eps2 = round(float(self.eps2), 5)
+
+        logger.info("Found best CLEAR pulse parameters: eps1 = {self.eps1}, eps2 = {self.eps2}")
+
         self.succeeded = True #TODO: add bounds
 
     def update_settings(self):
