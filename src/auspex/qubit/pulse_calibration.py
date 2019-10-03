@@ -719,11 +719,12 @@ class RamseyCalibration(QubitCalibration):
         for edge in self.qubit.edge_target:
             edge_source = edge.phys_chan.generator
             edge.frequency = self.source_proxy.frequency + self.qubit_source.frequency - edge_source.frequency
-        #         # TODO: fix this for db backend
-
-        # qubit_set_freq = self.saved_settings['instruments'][qubit_source]['frequency'] + self.saved_settings['qubits'][self.qubit.label]['control']['frequency']
-        # logger.info("Qubit set frequency = {} GHz".format(round(float(qubit_set_freq/1e9),5)))
-        # return ('frequency', qubit_set_freq)
+        if self.sample:
+            frequency = self.qubit_source.frequency if self.set_source else self.qubit.frequency
+            c = bbndb.calibration.Calibration(value=frequency, sample=self.sample, name="Ramsey")
+            c.date = datetime.datetime.now()
+            bbndb.get_cl_session().add(c)
+            bbndb.get_cl_session().commit()
 
 class PhaseEstimation(QubitCalibration):
 
@@ -964,8 +965,8 @@ class CRCalibration(QubitCalibration):
         self.plot["Fit 0"] =  (finer_xaxis, np.polyval(all_params_0, finer_xaxis) if self.cal_type == CR_cal_type.AMP else sinf(finer_xaxis, **all_params_0))
         self.plot["Data 1"] = (xaxis,       data_t[len(data_t)//2:])
         self.plot["Fit 1"] =  (finer_xaxis, np.polyval(all_params_1, finer_xaxis) if self.cal_type == CR_cal_type.AMP else sinf(finer_xaxis, **all_params_1))
-        
-        # Optimal parameter within range of original data! 
+
+        # Optimal parameter within range of original data!
         if self.opt_par > np.min(xaxis) and self.opt_par < np.max(xaxis):
             self.succeeded = True
 
@@ -983,7 +984,7 @@ class CRLenCalibration(CRCalibration):
     def sequence(self):
         qc, qt = self.qubits
         seqs = [[Id(qc)] + echoCR(qc, qt, length=l, phase = self.phases[0], amp=self.amps[0], riseFall=self.rise_fall).seq + [Id(qc), MEAS(qt)*MEAS(qc)] for l in self.lengths]
-        seqs += [[X(qc)] + echoCR(qc, qt, length=l, phase= self.phases[0], amp=self.amps[0], riseFall=self.rise_fall).seq + [X(qc), MEAS(qt)*MEAS(qc)] for l in self.lengths] 
+        seqs += [[X(qc)] + echoCR(qc, qt, length=l, phase= self.phases[0], amp=self.amps[0], riseFall=self.rise_fall).seq + [X(qc), MEAS(qt)*MEAS(qc)] for l in self.lengths]
         seqs += create_cal_seqs((qt,qc), 2, measChans=(qt,qc))
         return seqs
 
@@ -992,7 +993,7 @@ class CRLenCalibration(CRCalibration):
             delay_descriptor(np.concatenate((self.lengths, self.lengths))),
             cal_descriptor(tuple(self.qubits), 2)
         ]
-        
+
 
 class CRPhaseCalibration(CRCalibration):
     cal_type = CR_cal_type.PHASE
