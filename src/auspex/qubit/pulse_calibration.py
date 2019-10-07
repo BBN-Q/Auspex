@@ -43,8 +43,6 @@ from scipy.optimize import curve_fit
 import numpy as np
 from itertools import product
 
-import bbndb
-
 class Calibration(object):
 
     def __init__(self):
@@ -736,7 +734,7 @@ class PhaseEstimation(QubitCalibration):
 
     amp2offset = 0.5
 
-    def __init__(self, qubit, num_pulses= 1, amplitude= 0.1, direction = 'X',
+    def __init__(self, channel, num_pulses= 1, amplitude= 0.1, direction = 'X',
                     target=np.pi/2, epsilon=1e-2, max_iter=5, **kwargs):
         #for now, only do one qubit at a time
         self.num_pulses = num_pulses
@@ -747,15 +745,15 @@ class PhaseEstimation(QubitCalibration):
         self.epsilon = epsilon
         self.max_iter = max_iter
 
-        super(PhaseEstimation, self).__init__(qubit, **kwargs)
+        super(PhaseEstimation, self).__init__(channel, **kwargs)
 
         self.filename = 'PhaseCal/PhaseCal'
 
     def sequence(self):
         # Determine whether it is a single- or a two-qubit pulse calibration
-        if isinstance(self.qubit, list):
-            qubit = self.qubit[1]
-            cal_pulse = [ZX90_CR(*self.qubit, amp=self.amplitude)]
+        if isinstance(self.qubit, bbndb.qgl.edge): # slight misnomer...
+            qubit = self.qubit.target
+            cal_pulse = [ZX90_CR(self.qubit.source, self.qubit.target), amp=self.amplitude)]
         else:
             qubit = self.qubit
             cal_pulse = [Xtheta(self.qubit, amp=self.amplitude)]
@@ -844,13 +842,16 @@ class PiCalibration(PhaseEstimation):
             bbndb.get_cl_session().add(c)
             bbndb.get_cl_session().commit()
 
-# class CRAmpCalibration_PhEst(PhaseEstimation):
-#     def __init__(self, qubit_names, num_pulses= 9):
-#         super(CRAmpCalibration_PhEst, self).__init__(qubit_names, num_pulses = num_pulses)
-#         self.CRchan = ChannelLibraries.EdgeFactory(*self.qubit)
-#         self.amplitude = self.CRchan.pulse_params['amp']
-#         self.target    = np.pi/2
-#         self.edge_name = self.CRchan.label
+class CRAmpCalibration_PhEst(PhaseEstimation):
+    def __init__(self, edge, num_pulses= 5):
+        super(CRAmpCalibration_PhEst, self).__init__(edge, num_pulses = num_pulses, amplitude=edge.pulse_params['amp'], direction=direction, target=no.pi/2, epsilon=epsilon, max_iter=max_iter,**kwargs)
+
+
+        if self.sample:
+            c = bbndb.calibration.Calibration(value=self.amplitude, sample=self.sample, name="CRamp", category="PhaseEstimation")
+            c.date = datetime.datetime.now()
+            bbndb.get_cl_session().add(c)
+            bbndb.get_cl_session().commit()
 
 class DRAGCalibration(QubitCalibration):
     def __init__(self, qubit, deltas = np.linspace(-1,1,21), num_pulses = np.arange(8, 48, 4), **kwargs):
@@ -933,7 +934,7 @@ class CRCalibration(QubitCalibration):
         phases (array): CR pulse phase(s). Longer than 1 for CRPhaseCalibration
         amps (array): CR pulse amp(s). Longer than 1 for CRAmpCalibration
         rise_fall (float): length of rise/fall of CR pulses
-        meas_qubits (list): specifies a subset of qubits to be measured (both by default) 
+        meas_qubits (list): specifies a subset of qubits to be measured (both by default)
     """
     def __init__(self,
                  edge,
