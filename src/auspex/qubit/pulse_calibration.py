@@ -753,7 +753,7 @@ class PhaseEstimation(QubitCalibration):
         # Determine whether it is a single- or a two-qubit pulse calibration
         if isinstance(self.qubit, bbndb.qgl.edge): # slight misnomer...
             qubit = self.qubit.target
-            cal_pulse = [ZX90_CR(self.qubit.source, self.qubit.target), amp=self.amplitude)]
+            cal_pulse = [ZX90_CR(self.qubit.source, self.qubit.target, amp=self.amplitude)]
         else:
             qubit = self.qubit
             cal_pulse = [Xtheta(self.qubit, amp=self.amplitude)]
@@ -846,6 +846,8 @@ class CRAmpCalibration_PhEst(PhaseEstimation):
     def __init__(self, edge, num_pulses= 5):
         super(CRAmpCalibration_PhEst, self).__init__(edge, num_pulses = num_pulses, amplitude=edge.pulse_params['amp'], direction=direction, target=no.pi/2, epsilon=epsilon, max_iter=max_iter,**kwargs)
 
+    def update_settings(self):
+        self.qubit.pulse_params['amp'] = round(self.amplitude, 5)
 
         if self.sample:
             c = bbndb.calibration.Calibration(value=self.amplitude, sample=self.sample, name="CRamp", category="PhaseEstimation")
