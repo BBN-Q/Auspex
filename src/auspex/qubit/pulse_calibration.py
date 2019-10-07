@@ -751,7 +751,7 @@ class PhaseEstimation(QubitCalibration):
 
     def sequence(self):
         # Determine whether it is a single- or a two-qubit pulse calibration
-        if isinstance(self.qubit, bbndb.qgl.edge): # slight misnomer...
+        if isinstance(self.qubit, bbndb.qgl.Edge): # slight misnomer...
             qubit = self.qubit.target
             cal_pulse = [ZX90_CR(self.qubit.source, self.qubit.target, amp=self.amplitude)]
         else:
