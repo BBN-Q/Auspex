@@ -925,12 +925,23 @@ class DRAGCalibration(QubitCalibration):
 
 '''Two-qubit gate calibrations'''
 class CRCalibration(QubitCalibration):
+    """Template for CR calibrations. Currently available steps: length, phase, amplitude
+
+    Args:
+        edge: Edge in the channel library defining the connection between control and target qubit
+        lengths (array): CR pulse length(s). Longer than 1 for CRLenCalibration
+        phases (array): CR pulse phase(s). Longer than 1 for CRPhaseCalibration
+        amps (array): CR pulse amp(s). Longer than 1 for CRAmpCalibration
+        rise_fall (float): length of rise/fall of CR pulses
+        meas_qubits (list): specifies a subset of qubits to be measured (both by default) 
+    """
     def __init__(self,
                  edge,
                  lengths = np.linspace(20, 1020, 21)*1e-9,
                  phases = [0],
                  amps = [0.8],
                  rise_fall = 40e-9,
+                 meas_qubits = None,
                  **kwargs):
         self.lengths   = lengths
         self.phases    = phases
@@ -939,7 +950,7 @@ class CRCalibration(QubitCalibration):
         self.filename  = 'CR/CR'
 
         self.edge      = edge
-        qubits = [edge.source, edge.target]
+        qubits = meas_qubits if meas_qubits else [edge.source, edge.target]
         super().__init__(qubits, **kwargs)
 
     def init_plots(self):
@@ -960,7 +971,7 @@ class CRCalibration(QubitCalibration):
         self.norm_points = {qs.label: (0, 1), qt.label: (0, 1)}
         data, _ =  self.run_sweeps()
 
-        data_t = data[qt.label]
+        data_t = data[qt.label] if isinstance(data, dict) else data
         # fit
         self.opt_par, all_params_0, all_params_1 = fit_CR([self.lengths, self.phases, self.amps], data_t, self.cal_type)
         # plot the result
@@ -989,14 +1000,16 @@ class CRCalibration(QubitCalibration):
 class CRLenCalibration(CRCalibration):
     cal_type = CR_cal_type.LENGTH
 
-    def __init__(self, edge, lengths=np.linspace(20, 1020, 21)*1e-9, phase=0, amp=0.8, rise_fall=40e-9, **kwargs):
-        super().__init__(edge, lengths=lengths, phases=[phase], amps=[amp], rise_fall=rise_fall, **kwargs)
+    def __init__(self, edge, lengths=np.linspace(20, 1020, 21)*1e-9, phase=0, amp=0.8, rise_fall=40e-9, meas_qubits=None, **kwargs):
+        super().__init__(edge, lengths=lengths, phases=[phase], amps=[amp], rise_fall=rise_fall, meas_qubits = meas_qubits, **kwargs)
 
     def sequence(self):
-        qc, qt = self.qubits
-        seqs = [[Id(qc)] + echoCR(qc, qt, length=l, phase = self.phases[0], amp=self.amps[0], riseFall=self.rise_fall).seq + [Id(qc), MEAS(qt)*MEAS(qc)] for l in self.lengths]
-        seqs += [[X(qc)] + echoCR(qc, qt, length=l, phase= self.phases[0], amp=self.amps[0], riseFall=self.rise_fall).seq + [X(qc), MEAS(qt)*MEAS(qc)] for l in self.lengths]
-        seqs += create_cal_seqs((qc,qt), 2, measChans=(qc,qt))
+        qc = self.edge.source
+        qt = self.edge.target
+        measBlock = reduce(operator.mul, [MEAS(q) for q in self.qubits])
+        seqs = [[Id(qc)] + echoCR(qc, qt, length=l, phase = self.phases[0], amp=self.amps[0], riseFall=self.rise_fall).seq + [Id(qc), measBlock] for l in self.lengths]
+        seqs += [[X(qc)] + echoCR(qc, qt, length=l, phase= self.phases[0], amp=self.amps[0], riseFall=self.rise_fall).seq + [X(qc), measBlock] for l in self.lengths]
+        seqs += create_cal_seqs(self.qubits, 2)
         return seqs
 
     def descriptor(self):
