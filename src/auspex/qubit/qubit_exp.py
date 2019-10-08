@@ -125,9 +125,10 @@ class QubitExperiment(Experiment):
         else:
             self.edges = []
         self.phys_chans        = list(set([e.phys_chan for e in self.controlled_qubits + self.measurements + self.edges]))
-        self.transmitters      = list(set([e.phys_chan.transmitter for e in self.controlled_qubits + self.measurements + self.edges]))
         self.receiver_chans    = list(set([e.receiver_chan for e in self.measurements]))
-        self.trig_chans        = list(set([e.trig_chan.phys_chan for e in self.measurements]))
+        self.slave_trigs       = [c for c in self.chan_db.channels if c.label == 'slave_trig']
+        self.trig_chans        = list(set([e.trig_chan.phys_chan for e in self.measurements])) + [c.phys_chan for c in self.slave_trigs]
+        self.transmitters      = list(set([e.phys_chan.transmitter for e in self.controlled_qubits + self.measurements + self.edges + self.slave_trigs]))
         self.receivers         = list(set([e.receiver_chan.receiver for e in self.measurements]))
         self.generators        = list(set([q.phys_chan.generator for q in self.measured_qubits + self.controlled_qubits + self.measurements if q.phys_chan.generator]))
         self.qubits_by_name    = {q.label: q for q in self.measured_qubits + self.controlled_qubits}
