@@ -236,6 +236,7 @@ class PipelineManager(object):
             self.session.commit()
             self.meas_graph.clear()
             for new_node in new_by_old.values():
+                new_node.pipelineMgr = self
                 self.meas_graph.add_node(new_node.hash_val, node_obj=new_node)
             self.meas_graph.add_edges_from(edges)
 
