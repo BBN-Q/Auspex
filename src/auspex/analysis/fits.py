@@ -24,14 +24,16 @@ class AuspexFit(object):
     ylabel = "Y points"
     title = "Auspex Fit"
     bounds = None
+    ax = None
 
-    def __init__(self, xpts, ypts, make_plots=False):
+    def __init__(self, xpts, ypts, make_plots=False, ax=None):
         """Perform a least squares fit of 1-D data.
 
         Args:
             xpts (numpy.array): Independent fit variable data.
             ypts (numpy.array): Dependent fit variable data.
             make_plots (bool, optional): Generate a plot of the data and fit.
+            ax (Axes, optional): Axes on which to draw plot. If None, new figure is created
         """
 
 
@@ -40,6 +42,7 @@ class AuspexFit(object):
         self.ypts = ypts
         self._do_fit(self.bounds)
         if make_plots:
+            self.ax = ax
             self.make_plots()
 
     def _initial_guess(self):
@@ -69,15 +72,23 @@ class AuspexFit(object):
         """Create a plot of the input data and the fitted model. By default will
             include any annotation defined in the `annotation()` class method.
         """
-        plt.figure()
-        plt.plot(self.xpts, self.ypts, ".", markersize=15, label="Data")
-        plt.plot(self.xpts, self.model(self.xpts), "-", linewidth=3, label="Fit")
-        plt.xlabel(self.xlabel, fontsize=14)
-        plt.ylabel(self.ylabel, fontsize=14)
-        plt.title(self.title, fontsize=14)
-        plt.annotate(self.annotation(), xy=(0.4, 0.10),
-                     xycoords='axes fraction', size=12)
-
+        if self.ax is None:
+            plt.figure()
+            plt.plot(self.xpts, self.ypts, ".", markersize=15, label="Data")
+            plt.plot(self.xpts, self.model(self.xpts), "-", linewidth=3, label="Fit")
+            plt.xlabel(self.xlabel, fontsize=14)
+            plt.ylabel(self.ylabel, fontsize=14)
+            plt.title(self.title, fontsize=14)
+            plt.annotate(self.annotation(), xy=(0.4, 0.10),
+                         xycoords='axes fraction', size=12)
+        else:
+            self.ax.plot(self.xpts, self.ypts, ".", markersize=15, label="Data")
+            self.ax.plot(self.xpts, self.model(self.xpts), "-", linewidth=3, label="Fit")
+            self.ax.set_xlabel(self.xlabel, fontsize=14)
+            self.ax.set_ylabel(self.ylabel, fontsize=14)
+            self.ax.set_title(self.title, fontsize=14)
+            self.ax.annotate(self.annotation(), xy=(0.4, 0.10),
+                         xycoords='axes fraction', size=12)
     def annotation(self):
         """Annotation for the `make_plot()` method. Should return a string
             that is passed to `matplotlib.pyplot.annotate`.
