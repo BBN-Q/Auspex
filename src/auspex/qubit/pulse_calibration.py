@@ -843,8 +843,9 @@ class PiCalibration(PhaseEstimation):
             bbndb.get_cl_session().commit()
 
 class CRAmpCalibration_PhEst(PhaseEstimation):
-    def __init__(self, edge, num_pulses= 5):
-        super(CRAmpCalibration_PhEst, self).__init__(edge, num_pulses = num_pulses, amplitude=edge.pulse_params['amp'], direction=direction, target=no.pi/2, epsilon=epsilon, max_iter=max_iter,**kwargs)
+    def __init__(self, edge, num_pulses= 5, **kwargs):
+        super(CRAmpCalibration_PhEst, self).__init__(edge, num_pulses = num_pulses, amplitude=edge.pulse_params['amp'], direction='X', target=np.pi/2, epsilon=1e-2, max_iter=5,**kwargs)
+        self.qubits = [edge.target]
 
     def update_settings(self):
         self.qubit.pulse_params['amp'] = round(self.amplitude, 5)
@@ -1172,9 +1173,9 @@ def phase_to_amplitude(phase, sigma, amp, target, epsilon=1e-2):
     phase_error = phase - target
     if np.abs(phase_error) < epsilon or np.abs(phase_error/sigma) < 1:
         if np.abs(phase_error) < epsilon:
-            logger.info('Reached target rotation angle accuracy');
+            logger.info('Reached target rotation angle accuracy. Set amplitude: %.4f\n'%amp)
         elif abs(phase_error/sigma) < 1:
-            logger.info('Reached phase uncertainty limit');
+            logger.info('Reached phase uncertainty limit. Set amplitude: %.4f\n'%amp)
         done_flag = 1
 
     if amp > 1.0 or amp < epsilon:
