@@ -256,7 +256,7 @@ class X6(Instrument):
             # for chan, wsock in self._chan_to_wsocket.items():
             for i in range(segs):
                 if chan.stream_type == "integrated":
-                    # random_mag*(np.random.random(length).astype(chan.dtype) + 1j*np.random.random(length).astype(chan.dtype)) + 
+                    # random_mag*(np.random.random(length).astype(chan.dtype) + 1j*np.random.random(length).astype(chan.dtype)) +
                     buff[i,:] = ideal_data[i]
                 elif chan.stream_type == "demodulated":
                     buff[i, int(length/4):int(3*length/4)] = 1.0 if ideal_data[i] == 0 else ideal_data[i]

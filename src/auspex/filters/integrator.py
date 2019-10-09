@@ -50,7 +50,18 @@ class KernelIntegrator(Filter):
         logger.debug('Updating KernelIntegrator "%s" descriptors based on input descriptor: %s.', self.filter_name, self.sink.descriptor)
 
         record_length = self.sink.descriptor.axes[-1].num_points()
-        if self.simple_kernel.value:
+
+        if self.kernel.value:
+            if os.path.exists(os.path.join(config.KernelDir, self.kernel.value+'.txt')):
+                kernel = np.loadtxt(os.path.join(config.KernelDir, self.kernel.value+'.txt'), dtype=complex, converters={0: lambda s: complex(s.decode().replace('+-', '-'))})
+            if self.simple_kernel.value:
+                logger.warning("Using specified kernel. To use a box car filter instead, clear kernel.value")
+            else:
+                try:
+                    kernel = eval(self.kernel.value.encode('unicode_escape'))
+                except:
+                    raise ValueError('Kernel invalid. Provide a file name or an expression to evaluate')
+        elif self.simple_kernel.value:
             time_pts = self.sink.descriptor.axes[-1].points
             time_step = time_pts[1] - time_pts[0]
             kernel = np.zeros(record_length, dtype=np.complex128)
@@ -59,13 +70,8 @@ class KernelIntegrator(Filter):
             kernel[sample_start:sample_stop] = 1.0
             # add modulation
             kernel *= np.exp(2j * np.pi * self.demod_frequency.value  * time_pts)
-        elif os.path.exists(os.path.join(config.KernelDir, self.kernel.value+'.txt')):
-            kernel = np.loadtxt(os.path.join(config.KernelDir, self.kernel.value+'.txt'), dtype=complex, converters={0: lambda s: complex(s.decode().replace('+-', '-'))})
         else:
-            try:
-                kernel = eval(self.kernel.value.encode('unicode_escape'))
-            except:
-                raise ValueError('Kernel invalid. Provide a file name or an expression to evaluate')
+            raise ValueError('Kernel invalid. Either provide a file name or an expression to evaluate or set simple_kernel.value to true')
         # pad or truncate the kernel to match the record length
         if kernel.size < record_length:
             self.aligned_kernel = np.append(kernel, np.zeros(record_length-kernel.size, dtype=np.complex128))
