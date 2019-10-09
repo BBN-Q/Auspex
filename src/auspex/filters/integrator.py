@@ -54,13 +54,14 @@ class KernelIntegrator(Filter):
         if self.kernel.value:
             if os.path.exists(os.path.join(config.KernelDir, self.kernel.value+'.txt')):
                 kernel = np.loadtxt(os.path.join(config.KernelDir, self.kernel.value+'.txt'), dtype=complex, converters={0: lambda s: complex(s.decode().replace('+-', '-'))})
-            if self.simple_kernel.value:
-                logger.warning("Using specified kernel. To use a box car filter instead, clear kernel.value")
             else:
                 try:
                     kernel = eval(self.kernel.value.encode('unicode_escape'))
                 except:
                     raise ValueError('Kernel invalid. Provide a file name or an expression to evaluate')
+            if self.simple_kernel.value:
+                logger.warning("Using specified kernel. To use a box car filter instead, clear kernel.value")
+
         elif self.simple_kernel.value:
             time_pts = self.sink.descriptor.axes[-1].points
             time_step = time_pts[1] - time_pts[0]
