@@ -20,7 +20,7 @@ from auspex.log import logger
 from auspex.filters import DataBuffer
 from auspex.experiment import FloatParameter, IntParameter, Experiment
 from auspex.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector
-from auspex.qubit.pulse_calibration import Calibration
+from auspex.qubit.calibrations.calibrations import Calibration
 from auspex.filters.plot import ManualPlotter
 from auspex.instruments import instrument_map, bbn
 
