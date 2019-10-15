@@ -115,7 +115,7 @@ class AlazarATS9870(Instrument):
 
     def done(self):
         # logger.warning(f"Checking alazar doneness: {self.total_received.value} {self.number_segments * self.number_averages * self.record_length}")
-        return self.total_received.value >=  (self.number_segments * self.number_averages * self.record_length)
+        return self.total_received.value >=  (self.number_segments * self.number_averages * self.record_length * len(self.channels))
 
     def get_socket(self, channel):
         if channel in self._chan_to_rsocket:
