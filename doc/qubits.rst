@@ -22,14 +22,13 @@ The best way to gain experience is to follow through with these tutorials:
 .. toctree::
    :maxdepth: 1
 
-   Q1 Tutorial: Creating Channel Library <examples/Example-Q1.ipynb>
-   Q2 Tutorial: Saving/Loading Library Versions <examples/Example-Q2.ipynb>
-   Q3 Tutorial: Using the Pipeline Manager <examples/Example-Q3.ipynb>
-   Q4 Tutorial: Running a Basic Qubit Experiment <examples/Example-Q4.ipynb>
-   Q5 Tutorial: Adding Sweeps to Experiments <examples/Example-Q5.ipynb>
-   Q6 Tutorial: Pulse Calibration <examples/Example-Q6.ipynb>
-   Q7 Tutorial: Single Shot Fidelity <examples/Example-Q7.ipynb>
-   Q8 Tutorial: Benchmarking and Tomography <examples/Example-Q8.ipynb>
+   Q1 Tutorial: Creating Channel Library <examples/Example-Config.ipynb>
+   Q2 Tutorial: Saving/Loading Library Versions <examples/Example-Channel-Lib.ipynb>
+   Q3 Tutorial: Using the Pipeline Manager <examples/Example-Filter-Pipeline.ipynb>
+   Q4 Tutorial: Running a Basic Qubit Experiment <examples/Example-Experiments.ipynb>
+   Q5 Tutorial: Adding Sweeps to Experiments <examples/Example-Sweeps.ipynb>
+   Q6 Tutorial: Pulse Calibration <examples/Example-Calibrations.ipynb>
+   Q7 Tutorial: Single Shot Fidelity <examples/Example-SingleShot-Fid.ipynb>
 
 Instrument Drivers
 ******************

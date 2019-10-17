@@ -151,7 +151,7 @@ class RamseyFit(AuspexFit):
     ylabel = r"<$\sigma_z$>"
     title = "Ramsey Fit"
 
-    def __init__(self, xpts, ypts, two_freqs=False, AIC=True, make_plots=False, force=False):
+    def __init__(self, xpts, ypts, two_freqs=False, AIC=True, make_plots=False, force=False, ax=None):
         """One or two frequency Ramsey experiment fit. If a two-frequency fit is selected
             by the user or by comparing AIC scores, fit parameters are returned as tuples instead
             of single numbers.
@@ -163,6 +163,7 @@ class RamseyFit(AuspexFit):
             AIC (Bool): Decide between one and two frequency fits using  the Akaike
                 information criterion.
             make_plots (Bool): Display a plot of data and fit result.
+            ax (Axes, optional): Axes on which to draw plot. If None, new figure is created
             force (Bool): Force the selection of a two-frequency fit regardless of AIC score.
         """
 
@@ -170,6 +171,7 @@ class RamseyFit(AuspexFit):
         self.two_freqs = two_freqs
         self.force = force
         self.plots = make_plots
+        self.ax = ax
 
         assert len(xpts) == len(ypts), "Length of X and Y points must match!"
         self.xpts = xpts
@@ -274,7 +276,7 @@ class SingleQubitRBFit(AuspexFit):
     ylabel = r"<$\sigma_z$>"
     title = "Single Qubit RB Fit"
 
-    def __init__(self, lengths, data, make_plots=False, log_scale_x=True, bounded_fit=True):
+    def __init__(self, lengths, data, make_plots=False, log_scale_x=True, bounded_fit=True, ax=None):
 
         repeats = len(data) // len(lengths)
         xpts = np.array(lengths)
@@ -285,6 +287,7 @@ class SingleQubitRBFit(AuspexFit):
         self.data_points = np.reshape(data,(len(lengths),repeats))
         self.errors = np.std(self.data_points, 1)
         self.log_scale_x = log_scale_x
+        self.ax = ax
 
         if log_scale_x:
             self.xlabel = r"$log_2$ Clifford Number"
@@ -294,7 +297,7 @@ class SingleQubitRBFit(AuspexFit):
         if bounded_fit:
             self.bounds = ((0, -np.inf, 0), (1, np.inf, 1))
 
-        super().__init__(xpts, ypts, make_plots=make_plots)
+        super().__init__(xpts, ypts, make_plots=make_plots, ax=ax)
 
     @staticmethod
     def _model(x, *p):
@@ -329,20 +332,32 @@ class SingleQubitRBFit(AuspexFit):
         return r'avg. error rate r = {:.2e}  {} {:.2e}'.format(self.fit_params["r"], chr(177), self.fit_errors["r"])
 
     def make_plots(self):
+        if self.ax is None:
+            plt.figure()
+            #plt.plot(self.xpts, self.data,'.',markersize=15, label='data')
+            plt.errorbar(self.lengths, self.ypts, yerr=self.errors/np.sqrt(len(self.lengths)),
+                            fmt='*', elinewidth=2.0, capsize=4.0, label='mean')
+            plt.plot(range(int(self.lengths[-1])), self.model(range(int(self.lengths[-1]))), label='fit')
+            if self.log_scale_x:
+                plt.xscale('log')
 
-        plt.figure()
-        #plt.plot(self.xpts, self.data,'.',markersize=15, label='data')
-        plt.errorbar(self.lengths, self.ypts, yerr=self.errors/np.sqrt(len(self.lengths)),
-                        fmt='*', elinewidth=2.0, capsize=4.0, label='mean')
-        plt.plot(range(int(self.lengths[-1])), self.model(range(int(self.lengths[-1]))), label='fit')
-        if self.log_scale_x:
-            plt.xscale('log')
+            plt.xlabel(self.xlabel)
+            plt.ylabel(self.ylabel)
+            plt.legend()
+            plt.annotate(self.annotation(), xy=(0.4, 0.10),
+                         xycoords='axes fraction', size=12)
+        else:
+            self.ax.errorbar(self.lengths, self.ypts, yerr=self.errors/np.sqrt(len(self.lengths)),
+                            fmt='*', elinewidth=2.0, capsize=4.0, label='mean')
+            self.ax.plot(range(int(self.lengths[-1])), self.model(range(int(self.lengths[-1]))), label='fit')
+            if self.log_scale_x:
+                self.ax.set_xscale('log')
 
-        plt.xlabel(self.xlabel)
-        plt.ylabel(self.ylabel)
-        plt.legend()
-        plt.annotate(self.annotation(), xy=(0.4, 0.10),
-                     xycoords='axes fraction', size=12)
+            self.ax.set_xlabel(self.xlabel)
+            self.ax.set_ylabel(self.ylabel)
+            self.ax.legend()
+            self.ax.annotate(self.annotation(), xy=(0.4, 0.10),
+                         xycoords='axes fraction', size=12)
 
 class PhotonNumberFit(AuspexFit):
     """Fit number of measurement photons before a Ramsey. See McClure et al., Phys. Rev. App. 2016
