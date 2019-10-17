@@ -74,6 +74,41 @@ class TestFitMethods(unittest.TestCase, FitAssertion):
         self.assertFitInterval(p0[1], "b", fit)
         self.assertFitInterval(p0[2], "c", fit)
 
+    def test_GaussianFit(self):
+        p0 = [0.23, 3.1, 0.54, 0.89]
+        x = np.linspace(-4, 4, 201)
+        y = fits.GaussianFit._model(x, *p0)
+        noise = np.random.randn(y.size) * 0.2
+        y += noise 
+        fit = fits.GaussianFit(x, y, make_plots=False)
+        self.assertFitInterval(p0[0], "B", fit)
+        self.assertFitInterval(p0[1], "A", fit)
+        self.assertFitInterval(p0[2], "μ", fit)
+        self.assertFitInterval(p0[3], "σ", fit)
+
+    def test_MultiGaussianFit(self):
+        p = [0.35, 2.8, 2.04, 0.88, 1.93, -2.3, 1.19]
+        x = np.linspace(-10, 10)
+        y = fits.MultiGaussianFit._model(x, *p)
+        noise = np.random.randn(y.size) * 0.2
+        y += noise
+        fit = fits.MultiGaussianFit(x, y, make_plots=False, n_gaussians=2)
+
+        #Be careful since no guarantee of order of fits 
+        #also only testing means and std devs since the other parameters are still a 
+        #little flaky...
+        if fit.fit_params["μ0"] < fit.fit_params["μ1"]:
+            self.assertFitInterval(p[5], "μ0", fit)
+            self.assertFitInterval(p[2], "μ1", fit)
+            self.assertFitInterval(p[6], "σ0", fit)
+            self.assertFitInterval(p[3], "σ1", fit)
+        else:
+            self.assertFitInterval(p[2], "μ0", fit)
+            self.assertFitInterval(p[5], "μ1", fit)
+            self.assertFitInterval(p[3], "σ0", fit)
+            self.assertFitInterval(p[6], "σ1", fit)
+
+
     def test_T1Fit(self):
 
         p0 = [2.0, 15, -1]

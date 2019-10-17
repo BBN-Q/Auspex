@@ -31,7 +31,7 @@ except:
     pass
 
 import inspect
-import time
+import time, datetime
 import copy
 import itertools
 import logging
@@ -513,6 +513,14 @@ class Experiment(metaclass=MetaExperiment):
             for w in wrs:
                 w.filename.value = inc_filename
         self.filenames = [w.filename.value for w in self.writers]
+        # Save ChannelLibrary version
+        if hasattr(self, 'chan_db') and self.filenames:
+            import bbndb
+            exp_chandb = bbndb.deepcopy_sqla_object(self.chan_db, self.cl_session)
+            exp_chandb.label = os.path.basename(self.filenames[0])
+            exp_chandb.time = datetime.datetime.now()
+            exp_chandb.notes = ''
+            self.cl_session.commit()
 
         # Remove the nodes with 0 dimension
         self.nodes = [n for n in self.nodes if not(hasattr(n, 'input_connectors') and  n.input_connectors['sink'].descriptor.num_dims()==0)]

@@ -43,8 +43,6 @@ from scipy.optimize import curve_fit
 import numpy as np
 from itertools import product
 
-import bbndb
-
 class Calibration(object):
 
     def __init__(self):
@@ -142,7 +140,7 @@ class Calibration(object):
 
 class QubitCalibration(Calibration):
     calibration_experiment = None
-    def __init__(self, qubits, sample_name=None, output_nodes=None, stream_selectors=None, quad="real", auto_rollback=True, do_plotting=True, **kwargs):
+    def __init__(self, qubits, sample_name='q1', output_nodes=None, stream_selectors=None, quad="real", auto_rollback=True, do_plotting=True, **kwargs):
         self.qubits           = qubits if isinstance(qubits, list) else [qubits]
         self.qubit            = None if isinstance(qubits, list) else qubits
         self.output_nodes     = output_nodes if isinstance(output_nodes, list) else [output_nodes]
@@ -198,6 +196,12 @@ class QubitCalibration(Calibration):
 
         data = {}
         var = {}
+
+        #sort nodes by qubit name to match data with metadata when normalizing
+        qubit_indices = {q.label: idx for idx, q in enumerate(exp.qubits)}
+        exp.output_nodes.sort(key=lambda x: qubit_indices[x.qubit_name])
+        exp.var_buffers.sort(key=lambda x: qubit_indices[x.qubit_name])
+
         for i, (qubit, output_buff, var_buff) in enumerate(zip(exp.qubits,
                                 [exp.proxy_to_filter[on] for on in exp.output_nodes],
                                 [exp.proxy_to_filter[on] for on in exp.var_buffers])):
@@ -278,6 +282,7 @@ class CalibrationExperiment(QubitExperiment):
                 raise ValueError(f"Could not find specified qubit {qubit} in graph.")
 
         mapping = {}
+        self.output_connectors = {}
         for i in range(len(self.output_nodes)):
             output_node = self.output_nodes[i]
             if isinstance(output_node, bbndb.auspex.Write):
@@ -287,6 +292,8 @@ class CalibrationExperiment(QubitExperiment):
         # Disable any paths not involving the buffer
         new_graph = nx.DiGraph()
         new_output_nodes = []
+        new_stream_selectors = []
+        connector_by_sel = {}
         for output_node, qubit in zip(self.output_nodes, self.qubits):
             new_output = mapping[output_node]
             new_output_nodes.append(new_output)
@@ -296,6 +303,8 @@ class CalibrationExperiment(QubitExperiment):
             if len(stream_sels) != 1:
                 raise Exception(f"Expected to find one stream selector for {qubit}. Instead found {len(stream_sels)}")
             stream_sel = stream_sels[0]
+            new_stream_selectors.append(stream_sel)
+            connector_by_sel[stream_sel] = self.connector_by_sel[stream_sel]
 
             old_path  = nx.shortest_path(graph, stream_sel.hash_val, output_node.hash_val)
             path      = old_path[:-1] + [new_output.hash_val]
@@ -322,7 +331,17 @@ class CalibrationExperiment(QubitExperiment):
                 plot_path = nx.shortest_path(graph, path[-2], plot_node)
                 new_graph = nx.compose(new_graph, graph.subgraph(plot_path))
 
+        # Update nodes and connectors
         self.output_nodes = new_output_nodes
+        self.stream_selectors = new_stream_selectors
+        self.connector_by_sel = connector_by_sel
+
+        for ss in new_stream_selectors:
+            self.output_connectors[self.connector_by_sel[ss].name] = self.connector_by_sel[ss]
+        for ch in list(self.chan_to_oc):
+            if self.chan_to_oc[ch] not in self.output_connectors.values():
+                self.chan_to_oc.pop(ch)
+                self.chan_to_dig.pop(ch)
         return new_graph
 
     def add_cal_sweep(self, method, values):
@@ -707,20 +726,24 @@ class RamseyCalibration(QubitCalibration):
         else:
             self.qubit.frequency = float(round(self.fit_freq))
         # update edges where this is the target qubit
-        # for edge in self.qubit.edge_target:
-        #     edge_source = edge.phys_chan.generator
-        #     edge.frequency = self.source_proxy.frequency + self.qubit_source.frequency - edge_source.frequency
-        #         # TODO: fix this for db backend
-
-        # qubit_set_freq = self.saved_settings['instruments'][qubit_source]['frequency'] + self.saved_settings['qubits'][self.qubit.label]['control']['frequency']
-        # logger.info("Qubit set frequency = {} GHz".format(round(float(qubit_set_freq/1e9),5)))
-        # return ('frequency', qubit_set_freq)
+        for edge in self.qubit.edge_target:
+            if self.set_source:
+                edge_source = edge.phys_chan.generator
+                edge.frequency = self.source_proxy.frequency + self.qubit_source.frequency - edge_source.frequency
+            else:
+                edge.frequency = self.qubit.frequency
+        if self.sample:
+            frequency = self.qubit_source.frequency if self.set_source else self.qubit.frequency
+            c = bbndb.calibration.Calibration(value=frequency, sample=self.sample, name="Ramsey")
+            c.date = datetime.datetime.now()
+            bbndb.get_cl_session().add(c)
+            bbndb.get_cl_session().commit()
 
 class PhaseEstimation(QubitCalibration):
 
     amp2offset = 0.5
 
-    def __init__(self, qubit, num_pulses= 1, amplitude= 0.1, direction = 'X',
+    def __init__(self, channel, num_pulses= 1, amplitude= 0.1, direction = 'X',
                     target=np.pi/2, epsilon=1e-2, max_iter=5, **kwargs):
         #for now, only do one qubit at a time
         self.num_pulses = num_pulses
@@ -731,15 +754,15 @@ class PhaseEstimation(QubitCalibration):
         self.epsilon = epsilon
         self.max_iter = max_iter
 
-        super(PhaseEstimation, self).__init__(qubit, **kwargs)
+        super(PhaseEstimation, self).__init__(channel, **kwargs)
 
         self.filename = 'PhaseCal/PhaseCal'
 
     def sequence(self):
         # Determine whether it is a single- or a two-qubit pulse calibration
-        if isinstance(self.qubit, list):
-            qubit = self.qubit[1]
-            cal_pulse = [ZX90_CR(*self.qubit, amp=self.amplitude)]
+        if isinstance(self.qubit, bbndb.qgl.Edge): # slight misnomer...
+            qubit = self.qubit.target
+            cal_pulse = [ZX90_CR(self.qubit.source, self.qubit.target, amp=self.amplitude)]
         else:
             qubit = self.qubit
             cal_pulse = [Xtheta(self.qubit, amp=self.amplitude)]
@@ -828,13 +851,19 @@ class PiCalibration(PhaseEstimation):
             bbndb.get_cl_session().add(c)
             bbndb.get_cl_session().commit()
 
-# class CRAmpCalibration_PhEst(PhaseEstimation):
-#     def __init__(self, qubit_names, num_pulses= 9):
-#         super(CRAmpCalibration_PhEst, self).__init__(qubit_names, num_pulses = num_pulses)
-#         self.CRchan = ChannelLibraries.EdgeFactory(*self.qubit)
-#         self.amplitude = self.CRchan.pulse_params['amp']
-#         self.target    = np.pi/2
-#         self.edge_name = self.CRchan.label
+class CRAmpCalibration_PhEst(PhaseEstimation):
+    def __init__(self, edge, num_pulses= 5, **kwargs):
+        super(CRAmpCalibration_PhEst, self).__init__(edge, num_pulses = num_pulses, amplitude=edge.pulse_params['amp'], direction='X', target=np.pi/2, epsilon=1e-2, max_iter=5,**kwargs)
+        self.qubits = [edge.target]
+
+    def update_settings(self):
+        self.qubit.pulse_params['amp'] = round(self.amplitude, 5)
+
+        if self.sample:
+            c = bbndb.calibration.Calibration(value=self.amplitude, sample=self.sample, name="CRamp", category="PhaseEstimation")
+            c.date = datetime.datetime.now()
+            bbndb.get_cl_session().add(c)
+            bbndb.get_cl_session().commit()
 
 class DRAGCalibration(QubitCalibration):
     def __init__(self, qubit, deltas = np.linspace(-1,1,21), num_pulses = np.arange(8, 48, 4), **kwargs):
@@ -909,12 +938,23 @@ class DRAGCalibration(QubitCalibration):
 
 '''Two-qubit gate calibrations'''
 class CRCalibration(QubitCalibration):
+    """Template for CR calibrations. Currently available steps: length, phase, amplitude
+
+    Args:
+        edge: Edge in the channel library defining the connection between control and target qubit
+        lengths (array): CR pulse length(s). Longer than 1 for CRLenCalibration
+        phases (array): CR pulse phase(s). Longer than 1 for CRPhaseCalibration
+        amps (array): CR pulse amp(s). Longer than 1 for CRAmpCalibration
+        rise_fall (float): length of rise/fall of CR pulses
+        meas_qubits (list): specifies a subset of qubits to be measured (both by default)
+    """
     def __init__(self,
                  edge,
                  lengths = np.linspace(20, 1020, 21)*1e-9,
                  phases = [0],
                  amps = [0.8],
                  rise_fall = 40e-9,
+                 meas_qubits = None,
                  **kwargs):
         self.lengths   = lengths
         self.phases    = phases
@@ -923,7 +963,7 @@ class CRCalibration(QubitCalibration):
         self.filename  = 'CR/CR'
 
         self.edge      = edge
-        qubits = [edge.source, edge.target]
+        qubits = meas_qubits if meas_qubits else [edge.source, edge.target]
         super().__init__(qubits, **kwargs)
 
     def init_plots(self):
@@ -944,7 +984,7 @@ class CRCalibration(QubitCalibration):
         self.norm_points = {qs.label: (0, 1), qt.label: (0, 1)}
         data, _ =  self.run_sweeps()
 
-        data_t = data[qt.label]
+        data_t = data[qt.label] if isinstance(data, dict) else data
         # fit
         self.opt_par, all_params_0, all_params_1 = fit_CR([self.lengths, self.phases, self.amps], data_t, self.cal_type)
         # plot the result
@@ -964,18 +1004,25 @@ class CRCalibration(QubitCalibration):
         print("updating settings...")
         self.edge.pulse_params[str.lower(self.cal_type.name)] = float(self.opt_par)
         super(CRCalibration, self).update_settings()
+        if self.sample:
+            c = bbndb.calibration.Calibration(value=float(self.opt_par), sample=self.sample, name="CR"+str.lower(self.cal_type.name))
+            c.date = datetime.datetime.now()
+            bbndb.get_cl_session().add(c)
+            bbndb.get_cl_session().commit()
 
 class CRLenCalibration(CRCalibration):
     cal_type = CR_cal_type.LENGTH
 
-    def __init__(self, edge, lengths=np.linspace(20, 1020, 21)*1e-9, phase=0, amp=0.8, rise_fall=40e-9, **kwargs):
-        super().__init__(edge, lengths=lengths, phases=[phase], amps=[amp], rise_fall=rise_fall, **kwargs)
+    def __init__(self, edge, lengths=np.linspace(20, 1020, 21)*1e-9, phase=0, amp=0.8, rise_fall=40e-9, meas_qubits=None, **kwargs):
+        super().__init__(edge, lengths=lengths, phases=[phase], amps=[amp], rise_fall=rise_fall, meas_qubits = meas_qubits, **kwargs)
 
     def sequence(self):
-        qc, qt = self.qubits
-        seqs = [[Id(qc)] + echoCR(qc, qt, length=l, phase = self.phases[0], amp=self.amps[0], riseFall=self.rise_fall).seq + [Id(qc), MEAS(qt)*MEAS(qc)] for l in self.lengths]
-        seqs += [[X(qc)] + echoCR(qc, qt, length=l, phase= self.phases[0], amp=self.amps[0], riseFall=self.rise_fall).seq + [X(qc), MEAS(qt)*MEAS(qc)] for l in self.lengths]
-        seqs += create_cal_seqs((qc,qt), 2, measChans=(qc,qt))
+        qc = self.edge.source
+        qt = self.edge.target
+        measBlock = reduce(operator.mul, [MEAS(q) for q in self.qubits])
+        seqs = [[Id(qc)] + echoCR(qc, qt, length=l, phase = self.phases[0], amp=self.amps[0], riseFall=self.rise_fall).seq + [Id(qc), measBlock] for l in self.lengths]
+        seqs += [[X(qc)] + echoCR(qc, qt, length=l, phase= self.phases[0], amp=self.amps[0], riseFall=self.rise_fall).seq + [X(qc), measBlock] for l in self.lengths]
+        seqs += create_cal_seqs(self.qubits, 2)
         return seqs
 
     def descriptor(self):
@@ -994,10 +1041,12 @@ class CRPhaseCalibration(CRCalibration):
         super().__init__(edge, lengths=[length], phases=phases, amps=[amp], rise_fall=rise_fall, **kwargs)
 
     def sequence(self):
-        qc, qt = self.qubits
-        seqs = [[Id(qc)] + echoCR(qc, qt, length=self.lengths[0], phase=ph, amp=self.amps[0], riseFall=self.rise_fall).seq + [X90(qt)*Id(qc), MEAS(qt)*MEAS(qc)] for ph in self.phases]
-        seqs += [[X(qc)] + echoCR(qc, qt, length=self.lengths[0], phase=ph, amp=self.amps[0], riseFall=self.rise_fall).seq + [X90(qt)*X(qc), MEAS(qt)*MEAS(qc)] for ph in self.phases]
-        seqs += create_cal_seqs((qc,qt), 2, measChans=(qc,qt))
+        qc = self.edge.source
+        qt = self.edge.target
+        measBlock = reduce(operator.mul, [MEAS(q) for q in self.qubits])
+        seqs = [[Id(qc)] + echoCR(qc, qt, length=self.lengths[0], phase=ph, amp=self.amps[0], riseFall=self.rise_fall).seq + [X90(qt)*Id(qc), measBlock] for ph in self.phases]
+        seqs += [[X(qc)] + echoCR(qc, qt, length=self.lengths[0], phase=ph, amp=self.amps[0], riseFall=self.rise_fall).seq + [X90(qt)*X(qc), measBlock] for ph in self.phases]
+        seqs += create_cal_seqs(self.qubits, 2)
         return seqs
 
     def descriptor(self):
@@ -1024,10 +1073,12 @@ class CRAmpCalibration(CRCalibration):
         super().__init__(edge, lengths=[length], phases=[phase], amps=amps, rise_fall=rise_fall, **kwargs)
 
     def sequence(self):
-        qc, qt = self.qubits
-        seqs = [[Id(qc)] + self.num_CR*echoCR(qc, qt, length=self.lengths[0], phase=self.phases[0], amp=a, riseFall=self.rise_fall).seq + [Id(qc), MEAS(qt)*MEAS(qc)]
-        for a in self.amps]+ [[X(qc)] + self.num_CR*echoCR(qc, qt, length=self.lengths[0], phase= self.phases[0], amp=a, riseFall=self.rise_fall).seq + [X(qc), MEAS(qt)*MEAS(qc)]
-        for a in self.amps] + create_cal_seqs((qc,qt), 2, measChans=(qc,qt))
+        qc = self.edge.source
+        qt = self.edge.target
+        measBlock = reduce(operator.mul, [MEAS(q) for q in self.qubits])
+        seqs = [[Id(qc)] + self.num_CR*echoCR(qc, qt, length=self.lengths[0], phase=self.phases[0], amp=a, riseFall=self.rise_fall).seq + [Id(qc), measBlock]
+        for a in self.amps]+ [[X(qc)] + self.num_CR*echoCR(qc, qt, length=self.lengths[0], phase= self.phases[0], amp=a, riseFall=self.rise_fall).seq + [X(qc), measBlock]
+        for a in self.amps] + create_cal_seqs(self.qubits, 2)
         return seqs
 
     def descriptor(self):
@@ -1135,9 +1186,9 @@ def phase_to_amplitude(phase, sigma, amp, target, epsilon=1e-2):
     phase_error = phase - target
     if np.abs(phase_error) < epsilon or np.abs(phase_error/sigma) < 1:
         if np.abs(phase_error) < epsilon:
-            logger.info('Reached target rotation angle accuracy');
+            logger.info('Reached target rotation angle accuracy. Set amplitude: %.4f\n'%amp)
         elif abs(phase_error/sigma) < 1:
-            logger.info('Reached phase uncertainty limit');
+            logger.info('Reached phase uncertainty limit. Set amplitude: %.4f\n'%amp)
         done_flag = 1
 
     if amp > 1.0 or amp < epsilon:

@@ -3,6 +3,7 @@ import numpy as np
 from auspex.log import logger
 from collections.abc import Iterable
 import matplotlib.pyplot as plt
+from sklearn.mixture import GaussianMixture
 
 from .signal_analysis import *
 
@@ -23,14 +24,16 @@ class AuspexFit(object):
     ylabel = "Y points"
     title = "Auspex Fit"
     bounds = None
+    ax = None
 
-    def __init__(self, xpts, ypts, make_plots=False):
+    def __init__(self, xpts, ypts, make_plots=False, ax=None):
         """Perform a least squares fit of 1-D data.
 
         Args:
             xpts (numpy.array): Independent fit variable data.
             ypts (numpy.array): Dependent fit variable data.
             make_plots (bool, optional): Generate a plot of the data and fit.
+            ax (Axes, optional): Axes on which to draw plot. If None, new figure is created
         """
 
 
@@ -39,6 +42,7 @@ class AuspexFit(object):
         self.ypts = ypts
         self._do_fit(self.bounds)
         if make_plots:
+            self.ax = ax
             self.make_plots()
 
     def _initial_guess(self):
@@ -68,15 +72,23 @@ class AuspexFit(object):
         """Create a plot of the input data and the fitted model. By default will
             include any annotation defined in the `annotation()` class method.
         """
-        plt.figure()
-        plt.plot(self.xpts, self.ypts, ".", markersize=15, label="Data")
-        plt.plot(self.xpts, self.model(self.xpts), "-", linewidth=3, label="Fit")
-        plt.xlabel(self.xlabel, fontsize=14)
-        plt.ylabel(self.ylabel, fontsize=14)
-        plt.title(self.title, fontsize=14)
-        plt.annotate(self.annotation(), xy=(0.4, 0.10),
-                     xycoords='axes fraction', size=12)
-
+        if self.ax is None:
+            plt.figure()
+            plt.plot(self.xpts, self.ypts, ".", markersize=15, label="Data")
+            plt.plot(self.xpts, self.model(self.xpts), "-", linewidth=3, label="Fit")
+            plt.xlabel(self.xlabel, fontsize=14)
+            plt.ylabel(self.ylabel, fontsize=14)
+            plt.title(self.title, fontsize=14)
+            plt.annotate(self.annotation(), xy=(0.4, 0.10),
+                         xycoords='axes fraction', size=12)
+        else:
+            self.ax.plot(self.xpts, self.ypts, ".", markersize=15, label="Data")
+            self.ax.plot(self.xpts, self.model(self.xpts), "-", linewidth=3, label="Fit")
+            self.ax.set_xlabel(self.xlabel, fontsize=14)
+            self.ax.set_ylabel(self.ylabel, fontsize=14)
+            self.ax.set_title(self.title, fontsize=14)
+            self.ax.annotate(self.annotation(), xy=(0.4, 0.10),
+                         xycoords='axes fraction', size=12)
     def annotation(self):
         """Annotation for the `make_plot()` method. Should return a string
             that is passed to `matplotlib.pyplot.annotate`.
@@ -171,3 +183,126 @@ class LorentzFit(AuspexFit):
 
     def __str__(self):
         return "A /((x-b)^2 + (c/2)^2) + d"
+
+class GaussianFit(AuspexFit):
+    """A fit to a gaussian function"""
+
+    xlabel = "X Data"
+    ylabel = "Y Data"
+    title  = "Gaussian Fit"
+
+    @staticmethod
+    def _model(x, *p):
+        return p[0] + p[1]*np.exp(-0.5*((x-p[2])/p[3])**2)
+
+    def _initial_guess(self):
+        ## Initial guess using modified Caruana's algorithm
+        ## See: H. Guo. "A Simple Algorithm for Fitting a Gaussian Function [DSP Tips and Tricks]"
+        ###     IEEE Signal Processing Magazine. September 2011. DOI: 10.1109/MSP.2011.941846
+        N = len(self.xpts)
+
+        #use first and last points to 
+        B = 0.5*(self.ypts[-1] + self.ypts[0])
+        y = self.ypts - B
+        mask = y>0
+        y = y[mask]
+        x = self.xpts[mask]
+
+        M = np.array([[np.sum(y**2),      np.sum(x*y**2),    np.sum(x**2*y**2)],
+                      [np.sum(x*y**2),    np.sum(x**2*y**2), np.sum(x**3*y**2)],
+                      [np.sum(x**2*y**2), np.sum(x**3*y**2), np.sum(x**4*y**2)]])
+        v = np.array([np.sum(y**2*np.log(y)),
+                      np.sum(x*y**2*np.log(y)),
+                      np.sum(x*y**2*np.log(y))])
+        a, b, c = np.linalg.inv(M) @ v.T 
+
+        mu = -b/(2.0*c)
+        sigma = np.sqrt(-1/(2.0*c))
+        A = np.exp(a - b**2/(4.0*c))
+
+        return (B, A, mu, sigma)
+
+    def _fit_dict(self, p):
+        return {"B": p[0],
+                "A": p[1],
+                "μ": p[2],
+                "σ": p[3]}
+
+    def __str__(self):
+        return "A exp(-(x-μ)^2/2σ^2) + B"
+
+class MultiGaussianFit(AuspexFit):
+    """A fit to a sum of gaussian function. Use with care!"""
+
+    xlabel = "X Data"
+    ylabel = "Y Data"
+    title  = "Sum of Gaussians Fit"
+
+    def __init__(self, x, y, make_plots=False, n_gaussians=2, n_samples=int(1e5)):
+        """Fit data to a sum of Gaussians.
+
+        Args:
+            n_gaussians: Expected number of Gaussian peaks.
+            n_samples: Number of random samples to generate for GMM estimation. (see `MultiGaussianFit._initial_guess`)
+        """
+        self.n_gaussians = n_gaussians 
+        self.n_samples = n_samples
+        super().__init__(x, y, make_plots=make_plots)
+
+    @staticmethod
+    def _model(x, *p):
+
+        ngauss = int((len(p)-1)/3)
+
+        assert ngauss > 1, "For a single Gaussian fit, use the `GaussianFit` class!"
+
+        def one_gaussian(x, *p):
+            return p[0]*np.exp(-0.5*((x-p[1])/p[2])**2)
+
+        out = p[0]
+        for j in range(ngauss):
+            out += one_gaussian(x, *p[3*j+1:3*j+4])
+        return out
+
+    def _initial_guess(self):
+        ## Initial guess for the multi-gaussian fit
+        ## The idea is to draw random samples using the data as a PDF, then run a 
+        ## Gaussian mixture model (ie. clustering) to get a good initial guess for the gaussians. 
+        ## Note that this is pretty slow...
+        
+        B = 0.5*(self.ypts[-1] + self.ypts[0])
+        #normalize and center
+        y = self.ypts - B
+        mask = y>0
+        x0 = self.xpts[np.argmax(y)]
+        xn = self.xpts[mask] - x0
+        yn = y[mask] / np.sum(y[mask])
+        #Generate random samples
+        samples = np.random.choice(a=xn, size=self.n_samples, p=yn)
+        gmm = GaussianMixture(n_components=self.n_gaussians)
+        gmm.fit(samples.reshape(len(samples),1))
+        means = gmm.means_.flatten() + x0 
+        sigmas = np.sqrt(gmm.covariances_.flatten())
+        amps = gmm.weights_.flatten() * (2*np.pi)
+        output = np.zeros(1+3*self.n_gaussians)
+        output[0] = B
+        for j in range(self.n_gaussians):
+            output[3*j+1] = amps[j]
+            output[3*j+2] = means[j]
+            output[3*j+3] = sigmas[j]
+
+        return output
+
+    def _fit_dict(self, p):
+        fdict = {"B": p[0]}
+        for j in range(self.n_gaussians):
+            fdict[f"A{j}"] = p[3*j+1]
+            fdict[f"μ{j}"] = p[3*j+2]
+            fdict[f"σ{j}"] = p[3*j+3]
+        return fdict
+
+    def __str__(self):
+        return f"Sum of Gaussians with N={self.n_gaussians}"
+
+
+
