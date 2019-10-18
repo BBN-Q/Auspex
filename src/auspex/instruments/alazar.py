@@ -114,8 +114,10 @@ class AlazarATS9870(Instrument):
         return self._lib.data_available()
 
     def done(self):
-        # logger.warning(f"Checking alazar doneness: {self.total_received.value} {self.number_segments * self.number_averages * self.record_length}")
-        return self.total_received.value >=  (self.number_segments * self.number_averages * self.record_length * len(self.channels))
+        received = self.total_received.value
+        expected = self.number_segments * self.number_averages * self.record_length * len(self.channels)
+        #logger.debug(f"Checking alazar doneness: {received} {expected}")
+        return received >= expected
 
     def get_socket(self, channel):
         if channel in self._chan_to_rsocket:
@@ -174,12 +176,14 @@ class AlazarATS9870(Instrument):
             # push data from a socket into an OutputConnector (oc)
             # wire format is just: [size, buffer...]
             # TODO receive 4 or 8 bytes depending on sizeof(size_t)
-            run.wait() # Block until we are running again
+            if not run.is_set():
+                continue # Block until we are running again
+            #logger.info(f'Run set when recv={self.total_received.value}, exp={self.number_segments*self.record_length*self.number_averages*len(self.channels)}')
             try:
                 msg = sock.recv(8)
                 self.last_timestamp.value = datetime.datetime.now().timestamp()
             except:
-                logger.debug("Didn't find any data on socket within 2 seconds (this is normal during experiment shutdown).")
+                logger.info("Didn't find any data on socket within 2 seconds (this is normal during experiment shutdown).")
                 continue
             msg_size = struct.unpack('n', msg)[0]
             buf = sock_recvall(sock, msg_size)
@@ -194,6 +198,8 @@ class AlazarATS9870(Instrument):
                 # logger.info(f"Alz: {self.total_received.value}")
             oc.push(data)
             self.fetch_count.value += 1
+
+        #logger.info(f'Exit set when recv={self.total_received.value}, exp={self.number_segments*self.record_length*self.number_averages*len(self.channels)}')
 
     def get_buffer_for_channel(self, channel):
         self.fetch_count.value += 1
@@ -240,6 +246,7 @@ class AlazarATS9870(Instrument):
             if not dig_run.is_set():
                 self.last_timestamp.value = datetime.datetime.now().timestamp()
             if (datetime.datetime.now().timestamp() - self.last_timestamp.value) > timeout:
+                logger.info(f"timeout when recv={self.total_received.value}, exp={self.number_segments*self.record_length*self.number_averages*len(self.channels)}")
                 logger.error("Digitizer %s timed out. Timeout was %f, time was %f", self.name, timeout, (datetime.datetime.now().timestamp() - self.last_timestamp.value))
                 raise Exception("Alazar timed out.")
             if progressbars:
@@ -253,7 +260,7 @@ class AlazarATS9870(Instrument):
             except AttributeError:
                 pass
 
-        logger.debug("Digitizer %s finished getting data.", self.name)
+        logger.info(f"Digitizer %s finished getting data when recv={self.total_received.value}, exp={self.number_segments*self.record_length*self.number_averages*len(self.channels)}.", self.name)
 
     def configure_with_dict(self, settings_dict):
         config_dict = {
