@@ -119,6 +119,8 @@ class Calibration(object):
 
         if self.succeeded:
             self.update_settings()
+        else:
+            raise Exception('Calibration failed!')
 
         if self.do_plotting:
             self.stop_plots()
@@ -141,12 +143,7 @@ class Calibration(object):
 
 class QubitCalibration(Calibration):
     calibration_experiment = None
-<<<<<<< HEAD
-    def __init__(self, qubits, sample_name=None, output_nodes=None, stream_selectors=None, quad="real",
-                    auto_rollback=True, do_plotting=True, **kwargs):
-=======
     def __init__(self, qubits, sample_name='q1', output_nodes=None, stream_selectors=None, quad="real", auto_rollback=True, do_plotting=True, **kwargs):
->>>>>>> develop
         self.qubits           = qubits if isinstance(qubits, list) else [qubits]
         self.qubit            = None if isinstance(qubits, list) else qubits
         self.output_nodes     = output_nodes if isinstance(output_nodes, list) else [output_nodes]
@@ -1019,19 +1016,12 @@ class CRLenCalibration(CRCalibration):
         super().__init__(edge, lengths=lengths, phases=[phase], amps=[amp], rise_fall=rise_fall, meas_qubits = meas_qubits, **kwargs)
 
     def sequence(self):
-<<<<<<< HEAD
-        qc, qt = self.qubits
-        seqs = [[Id(qc)] + echoCR(qc, qt, length=l, phase = self.phases[0], amp=self.amps[0], riseFall=self.rise_fall).seq + [Id(qc), MEAS(qt)*MEAS(qc)] for l in self.lengths]
-        seqs += [[X(qc)] + echoCR(qc, qt, length=l, phase= self.phases[0], amp=self.amps[0], riseFall=self.rise_fall).seq + [X(qc), MEAS(qt)*MEAS(qc)] for l in self.lengths]
-        seqs += create_cal_seqs((qt,qc), 2, measChans=(qt,qc))
-=======
         qc = self.edge.source
         qt = self.edge.target
         measBlock = reduce(operator.mul, [MEAS(q) for q in self.qubits])
         seqs = [[Id(qc)] + echoCR(qc, qt, length=l, phase = self.phases[0], amp=self.amps[0], riseFall=self.rise_fall).seq + [Id(qc), measBlock] for l in self.lengths]
         seqs += [[X(qc)] + echoCR(qc, qt, length=l, phase= self.phases[0], amp=self.amps[0], riseFall=self.rise_fall).seq + [X(qc), measBlock] for l in self.lengths]
         seqs += create_cal_seqs(self.qubits, 2)
->>>>>>> develop
         return seqs
 
     def descriptor(self):
@@ -1229,7 +1219,7 @@ class CLEARCalibration(QubitCalibration):
         preramsey_delay: Delay before start of Ramsey sequence.
         eps1: 1st CLEAR parameter. if set to `None` will use theory values as default for eps1 and eps2.
         eps2: 2nd CLEAR parameter.
-        cal_steps: Steps over which to sweep calibration.
+        cal_steps: Steps over which to sweep calibration. # currently disabled
     '''
 
     def __init__(self, qubit, kappa = 2*np.pi*2e6, chi = -2*np.pi*1e6, t_empty = 400e-9,
@@ -1330,14 +1320,14 @@ class CLEARCalibration(QubitCalibration):
             data, _ = self.run_sweeps()
             norm_data = quick_norm_data(data)
 
-            if self.fit_ramsey_freq is None:
-                fit = RamseyFit(self.ramsey_delays, norm_data)
-                self.fit_ramsey_freq = fit.fit_params["f"]
-                logger.info(f"Found Ramsey Frequency of :{self.fit_ramsey_freq/1e3:.3f} kHz.")
+            # if self.fit_ramsey_freq is None:
+            #     fit = RamseyFit(self.ramsey_delays, norm_data)
+            #     self.fit_ramsey_freq = fit.fit_params["f"]
+            #     logger.info(f"Found Ramsey Frequency of :{self.fit_ramsey_freq/1e3:.3f} kHz.")
 
             state_data = 0.5*(1 - norm_data) #renormalize data to match convention in CLEAR paper from IBM
 
-            fit = PhotonNumberFit(self.ramsey_delays, state_data, self.T2, self.fit_ramsey_freq*2*np.pi, self.kappa,
+            fit = PhotonNumberFit(self.ramsey_delays, state_data, self.T2, self.ramsey_freq*2*np.pi, self.kappa,
                                 self.chi, self.T1factor, state)
 
             self.plot_ramsey[f"Data - {state} State"] = (self.ramsey_delays, state_data)
@@ -1352,7 +1342,7 @@ class CLEARCalibration(QubitCalibration):
 
     def _calibrate(self):
 
-        self.fit_ramsey_freq = None
+        #self.fit_ramsey_freq = None
         self.seq_params["tau"] = self.tau
 
         xpoints = np.linspace(0.0, 2*self.eps1, self.nsteps)
