@@ -1245,7 +1245,7 @@ class CLEARCalibration(QubitCalibration):
         self.nsteps = nsteps
 
         #use theory values as defaults
-        if not eps1:
+        if eps1 == None or eps2 == None:
             self.eps1 = ((1 - 2*np.exp(kappa*t_empty/4)*np.cos(chi*t_empty/2))
                         /(1+np.exp(kappa*t_empty/2)-2*np.exp(kappa*t_empty/4)*np.cos(chi*t_empty/2)))
             self.eps2 = 1/(1+np.exp(kappa*t_empty/2)-2*np.exp(kappa*t_empty/4)*np.cos(chi*t_empty/2))
