@@ -1219,12 +1219,13 @@ class CLEARCalibration(QubitCalibration):
         preramsey_delay: Delay before start of Ramsey sequence.
         eps1: 1st CLEAR parameter. if set to `None` will use theory values as default for eps1 and eps2.
         eps2: 2nd CLEAR parameter.
-        cal_steps: Steps over which to sweep calibration. # currently disabled
+        cal_steps (bool, bool, bool): Calibration steps to execute. Currently, the first step sweeps eps1,
+        the second eps2, and the third eps1 again in a smaller range.
     '''
 
     def __init__(self, qubit, kappa = 2*np.pi*2e6, chi = -2*np.pi*1e6, t_empty = 400e-9,
-                ramsey_delays=np.linspace(0.0, 50.0, 51)*1e-6, ramsey_freq = 100e3, meas_delay = 0,
-                preramsey_delay=0, alpha = 1, T1factor = 1, T2 = 30e-6, nsteps = 11,
+                ramsey_delays=np.linspace(0.0, 2.0, 51)*1e-6, ramsey_freq = 2e6, meas_delay = 0,
+                preramsey_delay=0, alpha = 1, T1factor = 1, T2 = 30e-6, nsteps = 5,
                 eps1 = None, eps2 = None, cal_steps = (1,1,1), **kwargs):
 
         self.kappa = kappa
@@ -1250,7 +1251,6 @@ class CLEARCalibration(QubitCalibration):
             self.eps2 = eps2
 
         self.cal_steps = cal_steps
-
         self.seq_params = {}
 
         kwargs['disable_plotters'] = True
@@ -1289,7 +1289,7 @@ class CLEARCalibration(QubitCalibration):
         plot_ramsey.add_fit_trace("Fit - 1 State")
 
         color = 1
-        for sweep_num, state in product([0,1,2], [0,1]):
+        for sweep_num, state in product(range(sum(self.cal_steps)), [0,1]):
             plot_clear.add_data_trace(f"Sweep {sweep_num}, State {state}", {"color": f'C{color}'})
             plot_clear.add_fit_trace(f"Fit Sweep {sweep_num}, State {state}", {"color": f'C{color}'})
             color += 1
@@ -1344,65 +1344,42 @@ class CLEARCalibration(QubitCalibration):
 
         #self.fit_ramsey_freq = None
         self.seq_params["tau"] = self.tau
+        min_amps = [0, 0, 0.5*self.eps1]
+        max_amps = [2*self.eps1, 2*self.eps2, 1.5*self.eps1]
+        for ind,step in enumerate(self.cal_steps):
+            if step:
+                if ind==1:
+                    self.seq_params['eps1'] = self.eps1
+                else:
+                    self.seq_params['eps2'] = self.eps2
+                xpoints = np.linspace(min_amps[ind], max_amps[ind], self.nsteps)
+                n0vec = np.zeros(self.nsteps)
+                n1vec = np.zeros(self.nsteps)
+                for k, xp in enumerate(xpoints):
+                    if ind == 1:
+                        self.seq_params['eps2'] = xp
+                    else:
+                        self.seq_params['eps1'] = xp
+                    n0vec[k], n1vec[k] = self._calibrate_one_point()
+                    self.plot_clear['Sweep 0, State 0'] = (xpoints, n0vec)
+                    self.plot_clear['Sweep 0, State 1'] = (xpoints, n1vec)
 
-        xpoints = np.linspace(0.0, 2*self.eps1, self.nsteps)
-        self.seq_params['eps2'] = self.eps2
-        n0vec = np.zeros(self.nsteps)
-        n1vec = np.zeros(self.nsteps)
-        for k, xp in enumerate(xpoints):
-            self.seq_params['eps1'] = xp
-            n0vec[k], n1vec[k] = self._calibrate_one_point()
-            self.plot_clear['Sweep 0, State 0'] = (xpoints, n0vec)
-            self.plot_clear['Sweep 0, State 1'] = (xpoints, n1vec)
-
-        fit0 = QuadraticFit(xpoints, n0vec)
-        fit1 = QuadraticFit(xpoints, n1vec)
-        finer_xpoints = np.linspace(np.min(xpoints), np.max(xpoints), 4*len(xpoints))
-        self.plot_clear[f'Fit Sweep 0, State 0'] = (finer_xpoints, fit0.model(finer_xpoints))
-        self.plot_clear[f'Fit Sweep 0, State 1'] = (finer_xpoints, fit1.model(finer_xpoints))
-        best_guess = 0.5*(fit0.fit_params["x0"]+ fit1.fit_params["x0"])
-        logger.info(f"Found best epsilon1 = {best_guess:.6f}")
-        self.seq_params['eps1'] = best_guess
-
-        xpoints = np.linspace(0.0, 2*self.eps2, self.nsteps)
-        n0vec = np.zeros(self.nsteps)
-        n1vec = np.zeros(self.nsteps)
-        for k, xp in enumerate(xpoints):
-            self.seq_params['eps2'] = xp
-            n0vec[k], n1vec[k] = self._calibrate_one_point()
-            self.plot_clear['Sweep 1, State 0'] = (xpoints, n0vec)
-            self.plot_clear['Sweep 1, State 1'] = (xpoints, n1vec)
-        fit0 = QuadraticFit(xpoints, n0vec)
-        fit1 = QuadraticFit(xpoints, n1vec)
-        finer_xpoints = np.linspace(np.min(xpoints), np.max(xpoints), 4*len(xpoints))
-        self.plot_clear[f'Fit Sweep 1, State 0'] = (finer_xpoints, fit0.model(finer_xpoints))
-        self.plot_clear[f'Fit Sweep 1, State 1'] = (finer_xpoints, fit1.model(finer_xpoints))
-        best_guess = 0.5*(fit0.fit_params["x0"]+ fit1.fit_params["x0"])
-        logger.info(f"Found best epsilon2 = {best_guess:.6f}")
-        self.seq_params['eps2'] = best_guess
-
-        xpoints = np.linspace(0.0, 2*self.seq_params["eps1"], self.nsteps)
-        n0vec = np.zeros(self.nsteps)
-        n1vec = np.zeros(self.nsteps)
-        for k, xp in enumerate(xpoints):
-            self.seq_params['eps1'] = xp
-            n0vec[k], n1vec[k] = self._calibrate_one_point()
-            self.plot_clear['Sweep 2, State 0'] = (xpoints, n0vec)
-            self.plot_clear['Sweep 2, State 1'] = (xpoints, n1vec)
-        fit0 = QuadraticFit(xpoints, n0vec)
-        fit1 = QuadraticFit(xpoints, n1vec)
-        finer_xpoints = np.linspace(np.min(xpoints), np.max(xpoints), 4*len(xpoints))
-        self.plot_clear[f'Fit Sweep 2, State 0'] = (finer_xpoints, fit0.model(finer_xpoints))
-        self.plot_clear[f'Fit Sweep 2, State 1'] = (finer_xpoints, fit1.model(finer_xpoints))
-        best_guess = 0.5*(fit0.fit_params["x0"]+ fit1.fit_params["x0"])
-        logger.info(f"Found best epsilon1 = {best_guess:.6f}")
-        self.seq_params['eps1'] = best_guess
-
+                fit0 = QuadraticFit(xpoints, n0vec)
+                fit1 = QuadraticFit(xpoints, n1vec)
+                finer_xpoints = np.linspace(np.min(xpoints), np.max(xpoints), 4*len(xpoints))
+                self.plot_clear[f'Fit Sweep 0, State 0'] = (finer_xpoints, fit0.model(finer_xpoints))
+                self.plot_clear[f'Fit Sweep 0, State 1'] = (finer_xpoints, fit1.model(finer_xpoints))
+                best_guess = 0.5*(fit0.fit_params["x0"]+ fit1.fit_params["x0"])
+                logger.info(f"Found best epsilon1 = {best_guess:.6f}")
+                if ind == 1:
+                    self.eps2 = best_guess
+                else:
+                    self.eps1 = best_guess
 
         self.eps1 = round(float(self.eps1), 5)
         self.eps2 = round(float(self.eps2), 5)
 
-        logger.info("Found best CLEAR pulse parameters: eps1 = {self.eps1}, eps2 = {self.eps2}")
+        logger.info(f"Found best CLEAR pulse parameters: eps1 = {self.eps1}, eps2 = {self.eps2}")
 
         self.succeeded = True #TODO: add bounds
 
