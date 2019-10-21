@@ -1222,9 +1222,6 @@ class CLEARCalibration(QubitCalibration):
         eps2: 2nd CLEAR parameter.
         cal_steps (bool, bool, bool): Calibration steps to execute. Currently, the first step sweeps eps1,
         the second eps2, and the third eps1 again in a smaller range.
-=======
-        cal_steps: Steps over which to sweep calibration. # currently disabled
->>>>>>> 74be438... Fixed CR phase calibration and APS3 waveform loading
     '''
 
     def __init__(self, qubit, kappa = 2*np.pi*2e6, chi = -2*np.pi*1e6, t_empty = 400e-9,
