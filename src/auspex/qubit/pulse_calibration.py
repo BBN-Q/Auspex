@@ -971,6 +971,7 @@ class CRCalibration(QubitCalibration):
         plot.add_fit_trace("Fit 0", {'color': 'C1'})
         plot.add_data_trace("Data 1", {'color': 'C2'})
         plot.add_fit_trace("Fit 1", {'color': 'C2'})
+
         self.plot = plot
         return [plot]
 
@@ -1280,13 +1281,13 @@ class CLEARCalibration(QubitCalibration):
         return seqs
 
     def init_plots(self):
-        plot_ramsey = ManualPlotter("CLEAR Ramsey", x_label='Time (us)', y_label='<Z>')
+        plot_ramsey = ManualPlotter("CLEAR Ramsey", x_label='Time (us)', y_label='<P(1)>', y_lim=(-0.02,1.02))
         plot_clear = ManualPlotter("CLEAR Calibration", x_label='epsilon', y_label='Residual Photons')
 
-        plot_ramsey.add_data_trace("Data - 0 State")
-        plot_ramsey.add_fit_trace("Fit - 0 State")
-        plot_ramsey.add_data_trace("Data - 1 State")
-        plot_ramsey.add_fit_trace("Fit - 1 State")
+        plot_ramsey.add_data_trace("Data - 0 State", {'color':'C1'})
+        plot_ramsey.add_fit_trace("Fit - 0 State", {'color':'C1'})
+        plot_ramsey.add_data_trace("Data - 1 State", {'color':'C2'})
+        plot_ramsey.add_fit_trace("Fit - 1 State", {'color':'C2'})
 
         color = 1
         for sweep_num, state in product(range(sum(self.cal_steps)), [0,1]):
@@ -1298,19 +1299,6 @@ class CLEARCalibration(QubitCalibration):
         self.plot_clear = plot_clear
 
         return [plot_ramsey, plot_clear]
-
-    def exp_config(self, exp):
-        pass #??
-        # rcvr = self.qubit.measure_chan.receiver_chan.receiver
-        # if self.first_ramsey:
-        #     if self.set_source:
-        #         self.source_proxy = self.qubit.phys_chan.generator # DB object
-        #         self.qubit_source = exp._instruments[self.source_proxy.label] # auspex instrument
-        #         self.orig_freq    = self.source_proxy.frequency
-        #         self.source_proxy.frequency = round(self.orig_freq + self.added_detuning, 10)
-        #         self.qubit_source.frequency = self.source_proxy.frequency
-        #     else:
-        #         self.orig_freq = self.qubit.frequency
 
     def _calibrate_one_point(self):
         n0_0 = 0.0
@@ -1346,6 +1334,7 @@ class CLEARCalibration(QubitCalibration):
         self.seq_params["tau"] = self.tau
         min_amps = [0, 0, 0.5*self.eps1]
         max_amps = [2*self.eps1, 2*self.eps2, 1.5*self.eps1]
+        ind_eff = 0
         for ind,step in enumerate(self.cal_steps):
             if step:
                 if ind==1:
@@ -1361,20 +1350,21 @@ class CLEARCalibration(QubitCalibration):
                     else:
                         self.seq_params['eps1'] = xp
                     n0vec[k], n1vec[k] = self._calibrate_one_point()
-                    self.plot_clear['Sweep 0, State 0'] = (xpoints, n0vec)
-                    self.plot_clear['Sweep 0, State 1'] = (xpoints, n1vec)
+                    self.plot_clear[f'Sweep {ind_eff}, State 0'] = (xpoints, n0vec)
+                    self.plot_clear[f'Sweep {ind_eff}, State 1'] = (xpoints, n1vec)
 
                 fit0 = QuadraticFit(xpoints, n0vec)
                 fit1 = QuadraticFit(xpoints, n1vec)
                 finer_xpoints = np.linspace(np.min(xpoints), np.max(xpoints), 4*len(xpoints))
-                self.plot_clear[f'Fit Sweep 0, State 0'] = (finer_xpoints, fit0.model(finer_xpoints))
-                self.plot_clear[f'Fit Sweep 0, State 1'] = (finer_xpoints, fit1.model(finer_xpoints))
+                self.plot_clear[f'Fit Sweep {ind_eff}, State 0'] = (finer_xpoints, fit0.model(finer_xpoints))
+                self.plot_clear[f'Fit Sweep {ind_eff}, State 1'] = (finer_xpoints, fit1.model(finer_xpoints))
                 best_guess = 0.5*(fit0.fit_params["x0"]+ fit1.fit_params["x0"])
                 logger.info(f"Found best epsilon1 = {best_guess:.6f}")
                 if ind == 1:
                     self.eps2 = best_guess
                 else:
                     self.eps1 = best_guess
+                ind_eff+=1
 
         self.eps1 = round(float(self.eps1), 5)
         self.eps2 = round(float(self.eps2), 5)
