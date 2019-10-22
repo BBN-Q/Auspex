@@ -718,9 +718,10 @@ class _AgilentNetworkAnalyzer(SCPIInstrument):
     TIMEOUT = 10 * 1000.
 
     ports = ()
+    _port_powers = {}
 
-    _format_dict     = {"MLIN": "LINEAR", "MLOG": "LOGARITHMIC", "PHAS": "PHASE", "UPH": "UNWRAP PHASE", 
-                        "REAL": "REAL", "IMAG": "IMAG", "POL": "POLAR", "SMIT": "SMITH", 
+    _format_dict     = {"MLIN": "LINEAR", "MLOG": "LOGARITHMIC", "PHAS": "PHASE", "UPH": "UNWRAP PHASE",
+                        "REAL": "REAL", "IMAG": "IMAG", "POL": "POLAR", "SMIT": "SMITH",
                         "SADM": "SMITH ADMITTANCE", "SWR": "SWR", "GDEL": "GROUP DELAY"}
     _format_dict_inv = {v: k for k, v in _format_dict.items()}
 
@@ -729,6 +730,7 @@ class _AgilentNetworkAnalyzer(SCPIInstrument):
     frequency_stop      = FloatCommand(scpi_string=":SENSe:FREQuency:STOP")
     frequency_span      = FloatCommand(scpi_string=":SENSe:FREQuency:SPAN")
     if_bandwidth        = FloatCommand(scpi_string=":SENSe1:BANDwidth")
+    num_points          = IntCommand(scpi_string=":SENSe:SWEep:POINTS")
 
     averaging_enable    = BoolCommand(get_string=":SENSe1:AVERage:STATe?", set_string=":SENSe1:AVERage:STATe {:s}", value_map={False: "0", True: "1"})
     averaging_factor    = IntCommand(scpi_string=":SENSe1:AVERage:COUNt")
@@ -748,8 +750,7 @@ class _AgilentNetworkAnalyzer(SCPIInstrument):
             logger.error("The resource name for the {}: {} is " +
                 "not a valid IPv4 address.".format(self.__class__.__name__, self.resource_name))
         super().connect(resource_name=None, interface_type=interface_type)
-        self.interface._resource._read_termination = u"\n"
-        self.interface._resource._write_termination = u"\n"
+        self.interface._resource.read_termination = u"\n"
         self.interface._resource.timeout = self.TIMEOUT
         self.interface._resource.chunk_size = 2 ** 20 # Needed to fix binary transfers (?)
 
@@ -758,23 +759,22 @@ class _AgilentNetworkAnalyzer(SCPIInstrument):
         self.interface.write("FORM REAL,32") #return measurement data as 32-bit float
 
         self.measurements = ["S21"]
-        self._port_powers = {}
         for p in self.ports:
-            self.interface.write(f'SOURce:POWer{p}:MODE AUTO')
-            self._port_powers[p] = (self.interface.query(f"SOUR:POW{p}:PORT:STAR MIN"),
-                                    self.interface.query(f"SOUR:POW{p}:PORT:STAR MAX"))
+            self.interface.write(f'SOUR:POW{p}:MODE AUTO')
+            self._port_powers[p] = (float(self.interface.query(f"SOUR:POW{p}? MIN")),
+                                    float(self.interface.query(f"SOUR:POW{p}? MAX")))
 
     @property
     def output_enable(self):
         outp = {}
         for p in self.ports:
             if self.interface.query(f'SOUR:POW{p}:MODE?') == "OFF":
-                outp[p] = False 
+                outp[p] = False
             else:
-                outp[p] = True 
-        return outp 
+                outp[p] = True
+        return outp
 
-    @output_enable.setter 
+    @output_enable.setter
     def output_enable(self, outp):
         if isinstance(outp, dict):
             for k, v in self.outp.items():
@@ -786,7 +786,7 @@ class _AgilentNetworkAnalyzer(SCPIInstrument):
                 self.interface.write(f"SOUR:POW{p}:MODE {val}")
 
     def set_port_power(self, port, power):
-        assert port in self.ports, f"This VNA does not have port {port}!" 
+        assert port in self.ports, f"This VNA does not have port {port}!"
         minp = self._port_powers[port][0]
         maxp = self._port_powers[port][1]
         if power < minp or power > maxp:
@@ -794,13 +794,13 @@ class _AgilentNetworkAnalyzer(SCPIInstrument):
         self.interface.write(f"SOUR:POW{port} {power}")
 
     def get_port_power(self, port):
-        assert port in self.ports, f"This VNA does not have port {port}!" 
+        assert port in self.ports, f"This VNA does not have port {port}!"
         return self.interface.query(f"SOUR:POW{port}?")
 
     def _get_active_ports(self):
-        return [int(m[-1] for m in self.measurements.keys())]
+        return [int(m[-1]) for m in self.measurements.keys()]
 
-    @property 
+    @property
     def power(self):
         ports = self._get_active_ports()
         if len(ports) == 1:
@@ -808,7 +808,7 @@ class _AgilentNetworkAnalyzer(SCPIInstrument):
         else:
             return [self.get_port_power(p) for p in ports]
 
-    @power.setter 
+    @power.setter
     def power(self, level):
         for p in self._get_active_ports():
             self.set_port_power(p, level)
@@ -825,30 +825,40 @@ class _AgilentNetworkAnalyzer(SCPIInstrument):
         else:
             self.interface.write(":SENSe1:AVERage:STATe OFF")
 
-    @property 
+    @property
     def format(self):
-        meas = self.measurements.values()
+        meas = list(self.measurements.values())
         self.interface.write(f"CALC:PAR:SEL {meas[0]}")
         return self._format_dict_inv[self.interface.query("CALC:FORM?")]
 
-    @format.setter 
+    @format.setter
     def format(self, fmt):
-        if fmt not in self._format_dict.items() and fmt not in self._format_dict.keys():
+        if fmt in self._format_dict.keys():
+            pass
+        elif fmt in self._format_dict.values():
+            fmt = self._format_dict_inv["fmt"]
+        else:
             raise ValueError(f"Unrecognized VNA measurement format specifier: {fmt}")
-        for meas in self.measurements.values():
-            self.interface.write(f"CALC:PAR:SEL {meas[0]}")
-            self.interface.query("CALC:FORM? {fmt}")
 
-    @property 
+        for meas in self.measurements.values():
+            self.interface.write(f"CALC:PAR:SEL {meas}")
+            self.interface.query(f"CALC:FORM? {fmt}")
+
+    def autoscale(self):
+        nm = len(list(self.measurements.values()))
+        for j in range(nm):
+            self.interface.write(f'DISP:WIND1:TRAC{j+1}:Y:AUTO')
+
+    @property
     def measurements(self):
         active_meas = self.interface.query("CALC:PAR:CAT?")
         meas = active_meas.strip('\"').split(",")[::2]
         spars = active_meas.strip('\"').split(",")[1::2]
         return {s: m for m, s in zip(meas,spars)}
 
-    @measurements.setter 
+    @measurements.setter
     def measurements(self, S):
-        sp = [s.upper() for s in S]        
+        sp = [s.upper() for s in S]
         for s in sp:
             if s not in self.valid_meas:
                 raise ValueError(f"Invalid S-parameter measurement request: {s} is not in available measurements: {self.valid_meas}.")
@@ -861,9 +871,10 @@ class _AgilentNetworkAnalyzer(SCPIInstrument):
         self.interface.write("DISP:WIND1:STATE ON")
 
         for j, s in enumerate(sp):
-            self.interface.write(f'CALC:PAR:DEF:EXT "M_{s}",{s}')
-            self.interface.write(f'DISP:WIND1:TRAC{j} "M_{s}"')
-            self.interface.write(f'DISP:WIND1:TRAC{j}:Y:AUTO')
+            self.interface.write(f'CALC:PAR:DEF "M_{s}",{s}')
+            self.interface.write(f'DISP:WIND1:TRAC{j+1}:FEED "M_{s}"')
+            time.sleep(0.1)
+            self.interface.write(f'DISP:WIND1:TRAC{j+1}:Y:AUTO')
 
         self.interface.write('SENS1:SWE:TIME:AUTO ON')
 
@@ -890,7 +901,7 @@ class _AgilentNetworkAnalyzer(SCPIInstrument):
         """ Return a tupple of the trace frequencies and corrected complex points """
         #If the measurement is not passed in just take the first one
         if measurement is None:
-            mchan = self.measurements.values()[0]
+            mchan = list(self.measurements.values())[0]
         else:
             if measurement not in self.measurements.values():
                 raise ValueError(f"Unknown measurement: {measurement}. Available: {self.measurements.keys()}.")
@@ -899,7 +910,7 @@ class _AgilentNetworkAnalyzer(SCPIInstrument):
         self.interface.write(":CALCulate:PARameter:SELect '{}'".format(mchan))
         self.reaverage()
         self.interface.write(":CALC:DATA? SDATA")
-        block =  self.interface.read_raw(size=256)
+        block =  self.interface.read_raw(size=16)
         offset, data_length = util.parse_ieee_block_header(block)
         interleaved_vals = util.from_ieee_block(block, 'f', True, np.array)
 
@@ -1105,14 +1116,12 @@ class AgilentE9010A(SCPIInstrument):
     def restart_sweep(self):
         """ Aborts current sweep and restarts. """
         self.interface.write(":INITiate:RESTart")
-        
+
     def peak_search(self, marker=1):
         self.interface.write(':CALC:MARK{:d}:MAX'.format(marker))
-        
+
     def marker_to_center(self, marker=1):
         self.interface.write(':CALC:MARK{:d}:CENT'.format(marker))
-        
+
     def clear_averaging(self):
         self.interface.write(':AVER:CLE')
-
-
