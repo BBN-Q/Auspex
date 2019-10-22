@@ -659,7 +659,7 @@ class RamseyCalibration(QubitCalibration):
                 self.qubit_source = exp._instruments[self.source_proxy.label] # auspex instrument
                 self.orig_freq    = self.source_proxy.frequency
                 self.source_proxy.frequency = round(self.orig_freq + self.added_detuning, 10)
-                self.qubit_source.frequency = self.source_proxy.frequency
+                #self.qubit_source.frequency = self.source_proxy.frequency
             else:
                 self.orig_freq = self.qubit.frequency
 
