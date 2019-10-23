@@ -1032,10 +1032,12 @@ class CRPhaseCalibration(CRCalibration):
         super().__init__(edge, lengths=[length], phases=phases, amps=[amp], rise_fall=rise_fall, **kwargs)
 
     def sequence(self):
-        qc, qt = self.qubits
-        seqs = [[Id(qc)] + echoCR(qc, qt, length=self.lengths[0], phase=ph, amp=self.amps[0], riseFall=self.rise_fall).seq + [X90(qt)*Id(qc), MEAS(qt)*MEAS(qc)] for ph in self.phases]
-        seqs += [[X(qc)] + echoCR(qc, qt, length=self.lengths[0], phase=ph, amp=self.amps[0], riseFall=self.rise_fall).seq + [X90(qt)*X(qc), MEAS(qt)*MEAS(qc)] for ph in self.phases]
-        seqs += create_cal_seqs((qc,qt), 2, measChans=(qc,qt))
+        qc = self.edge.source
+        qt = self.edge.target
+        measBlock = reduce(operator.mul, [MEAS(q) for q in self.qubits])
+        seqs = [[Id(qc)] + echoCR(qc, qt, length=self.lengths[0], phase=ph, amp=self.amps[0], riseFall=self.rise_fall).seq + [X90(qt)*Id(qc), measBlock] for ph in self.phases]
+        seqs += [[X(qc)] + echoCR(qc, qt, length=self.lengths[0], phase=ph, amp=self.amps[0], riseFall=self.rise_fall).seq + [X90(qt)*X(qc), measBlock] for ph in self.phases]
+        seqs += create_cal_seqs(self.qubits, 2)
         return seqs
 
     def descriptor(self):
@@ -1062,10 +1064,12 @@ class CRAmpCalibration(CRCalibration):
         super().__init__(edge, lengths=[length], phases=[phase], amps=amps, rise_fall=rise_fall, **kwargs)
 
     def sequence(self):
-        qc, qt = self.qubits
-        seqs = [[Id(qc)] + self.num_CR*echoCR(qc, qt, length=self.lengths[0], phase=self.phases[0], amp=a, riseFall=self.rise_fall).seq + [Id(qc), MEAS(qt)*MEAS(qc)]
-        for a in self.amps]+ [[X(qc)] + self.num_CR*echoCR(qc, qt, length=self.lengths[0], phase= self.phases[0], amp=a, riseFall=self.rise_fall).seq + [X(qc), MEAS(qt)*MEAS(qc)]
-        for a in self.amps] + create_cal_seqs((qc,qt), 2, measChans=(qc,qt))
+        qc = self.edge.source
+        qt = self.edge.target
+        measBlock = reduce(operator.mul, [MEAS(q) for q in self.qubits])
+        seqs = [[Id(qc)] + self.num_CR*echoCR(qc, qt, length=self.lengths[0], phase=self.phases[0], amp=a, riseFall=self.rise_fall).seq + [Id(qc), measBlock]
+        for a in self.amps]+ [[X(qc)] + self.num_CR*echoCR(qc, qt, length=self.lengths[0], phase= self.phases[0], amp=a, riseFall=self.rise_fall).seq + [X(qc), measBlock]
+        for a in self.amps] + create_cal_seqs(self.qubits, 2)
         return seqs
 
     def descriptor(self):
