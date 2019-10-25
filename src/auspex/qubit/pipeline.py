@@ -143,13 +143,13 @@ class PipelineManager(object):
         # generate the pipeline automatically
         self.meas_graph = nx.DiGraph()
         for sels in stream_selectors.values():
-            for sel in sels.values():
-                qbs = sel.label.split('-')
-                for q in qbs:
-                    sel.qubit_name = q
-                    sel.create_default_pipeline(buffers=buffers)
-                sel.qubit_name = qbs[0]
-                self.session.add(sel)
+            sel = sels['default']
+            qbs = sel.label.split('-')
+            for q in qbs:
+                sel.qubit_name = q
+                sel.create_default_pipeline(buffers=buffers)
+            sel.qubit_name = qbs[0]
+            self.session.add(sel)
 
         self._push_meas_graph_to_db(self.meas_graph, "working")
         self.session.commit()
