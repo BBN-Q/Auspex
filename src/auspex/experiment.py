@@ -205,6 +205,9 @@ class Experiment(metaclass=MetaExperiment):
         # add date to data files?
         self.add_date = False
 
+        # save channel library
+        self.save_chanddb = False
+
         # Things we can't metaclass
         self.output_connectors = {}
         for oc in self._output_connectors.keys():
@@ -514,7 +517,7 @@ class Experiment(metaclass=MetaExperiment):
                 w.filename.value = inc_filename
         self.filenames = [w.filename.value for w in self.writers]
         # Save ChannelLibrary version
-        if hasattr(self, 'chan_db') and self.filenames:
+        if hasattr(self, 'chan_db') and self.filenames and self.save_chandb:
             import bbndb
             exp_chandb = bbndb.deepcopy_sqla_object(self.chan_db, self.cl_session)
             exp_chandb.label = os.path.basename(self.filenames[0])
