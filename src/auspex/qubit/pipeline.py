@@ -83,7 +83,8 @@ class PipelineManager(object):
         if f'M-{qubit_label}' not in mqs:
             raise Exception(f"Could not find qubit {qubit_label} in pipeline...")
 
-        select = adb.StreamSelect(pipelineMgr=self, stream_type=stream_type, qubit_name=qubit_label)
+        ss_label = qubit_label+"-"+stream_type
+        select = adb.StreamSelect(pipelineMgr=self, stream_type=stream_type, qubit_name=qubit_label, label=ss_label)
         self.session.add(select)
         self.meas_graph.add_node(select.hash_val, node_obj=select)
 
@@ -106,19 +107,14 @@ class PipelineManager(object):
             measurements = [c for c in cdb.channels if c.label in meas_labels]
         self.qubits = qubits
 
-        # A qubit can have multiple stream selectors, which are named. We use the name "default" here.
-        stream_selectors = {q.label: {'default': adb.StreamSelect(pipelineMgr=self, qubit_name=q.label)} for q in qubits}
-
         # Build a mapping of qubits to receivers, construct qubit proxies
         receiver_chans_by_qubit = {}
         receiver_chans_by_qubit_label = {}
-        available_streams_by_qubit = {}
         for m in measurements:
             q = [c for c in cdb.channels if c.label==m.label[2:]][0]
             receiver_chans_by_qubit[q] = m.receiver_chan
             receiver_chans_by_qubit_label[q.label] = m.receiver_chan
-            available_streams_by_qubit[q] = m.receiver_chan.receiver.stream_types
-
+            
         rx_chans = []
         multiplexed_groups = []
         for q in qubits:
@@ -172,20 +168,14 @@ class PipelineManager(object):
         sels.sort(key=lambda x: x.qubit_name)
         selectors = [sel.hash_val for sel in sels]
         qubit_names = [sel.qubit_name for sel in sels]
-        sel_labels = [sel.label for sel in sels]
-
+        sel_labels = [sel for sel in sels if pipeline_name in sel.label]
         name_f = lambda s: s.qubit_name if qubit_names.count(s.qubit_name) == 1 else s.qubit_name + " " + s.stream_type
         sel_by_name = {name_f(sel): sel for sel in sels}
-        sel_by_label = {}
-        for sel in sels:
-            qbs = sel.label.split("-")
-            for q in qbs:
-                sel_by_label[q] = sel
-
+        
         if pipeline_name in sel_by_name:
             return sel_by_name[pipeline_name]
-        elif pipeline_name in sel_by_label:
-            return sel_by_label[pipeline_name]
+        elif len(sel_labels)== 1:
+            return sel_labels[0]
         else:
             raise Exception(f"Name {pipeline_name} does not specify a pipeline. If there are multiple pipelines for a qubit you must specify 'qubit_name pipeline_name'")
         return sel_by_name[pipeline_name]
