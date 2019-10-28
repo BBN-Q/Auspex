@@ -717,6 +717,8 @@ class _AgilentNetworkAnalyzer(SCPIInstrument):
 
     TIMEOUT = 10 * 1000.
 
+    data_query_raw = False
+
     ports = ()
     _port_powers = {}
 
@@ -825,6 +827,10 @@ class _AgilentNetworkAnalyzer(SCPIInstrument):
         else:
             self.interface.write(":SENSe1:AVERage:STATe OFF")
 
+    def averaging_restart(self):
+        """ Restart trace averaging """
+        self.interface.write(":SENSe1:AVERage:CLEar")
+
     @property
     def format(self):
         meas = list(self.measurements.values())
@@ -877,6 +883,7 @@ class _AgilentNetworkAnalyzer(SCPIInstrument):
             self.interface.write(f'DISP:WIND1:TRAC{j+1}:Y:AUTO')
 
         self.interface.write('SENS1:SWE:TIME:AUTO ON')
+        self.interface.write("SENS:SWE:MODE CONT")
 
     def reaverage(self):
         """ Restart averaging and block until complete """
@@ -897,29 +904,35 @@ class _AgilentNetworkAnalyzer(SCPIInstrument):
             if opc_bit == 1:
                 meas_done = True
 
+    def _raw_query(self, string):
+        self.interface.write(string)
+        block =  self.interface.read_raw(size=16)
+        offset, data_length = util.parse_ieee_block_header(block)
+        return util.from_ieee_block(block, 'f', True, np.array)
+
+
     def get_trace(self, measurement=None):
         """ Return a tupple of the trace frequencies and corrected complex points """
         #If the measurement is not passed in just take the first one
         if measurement is None:
             mchan = list(self.measurements.values())[0]
         else:
-            if measurement not in self.measurements.values():
+            if measurement not in self.measurements.keys():
                 raise ValueError(f"Unknown measurement: {measurement}. Available: {self.measurements.keys()}.")
             mchan = self.measurements[measurement]
         #Select the measurment
         self.interface.write(":CALCulate:PARameter:SELect '{}'".format(mchan))
         self.reaverage()
-        self.interface.write(":CALC:DATA? SDATA")
-        block =  self.interface.read_raw(size=16)
-        offset, data_length = util.parse_ieee_block_header(block)
-        interleaved_vals = util.from_ieee_block(block, 'f', True, np.array)
-
         #Take the data as interleaved complex values
-        self.interface.write("SENS:SWE:MODE CONT")
+        if self.data_query_raw:
+            interleaved_vals = self._raw_query(":CALC:DATA? SDATA")
+        else:
+            interleaved_vals = self.interface.query_binary_values(':CALC:DATA? SDATA', datatype="f", is_big_endian=True)
 
+        self.interface.write("SENS:SWE:MODE CONT")
         vals = interleaved_vals[::2] + 1j*interleaved_vals[1::2]
         #Get the associated frequencies
-        freqs = np.linspace(self.frequency_start, self.frequency_stop, self.sweep_num_points)
+        freqs = np.linspace(self.frequency_start, self.frequency_stop, self.num_points)
         return (freqs, vals)
 
 
