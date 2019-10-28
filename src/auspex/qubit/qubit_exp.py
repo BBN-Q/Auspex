@@ -1,4 +1,5 @@
 from auspex.log import logger
+from auspex.config import isnotebook
 from auspex.experiment import Experiment, FloatParameter
 from auspex.stream import DataStream, DataAxis, SweepAxis, DataStreamDescriptor, InputConnector, OutputConnector
 from auspex.instruments import instrument_map
@@ -67,7 +68,7 @@ class QubitExperiment(Experiment):
 
     """
 
-    def __init__(self, meta_file, averages=100, exp_name=None, **kwargs):
+    def __init__(self, meta_file, averages=100, exp_name=None, save_chandb=True, **kwargs):
         super(QubitExperiment, self).__init__(**kwargs)
 
         if not pipeline.pipelineMgr:
@@ -81,6 +82,7 @@ class QubitExperiment(Experiment):
 
         self.outputs_by_qubit = {}
         self.progressbars = None
+        self.save_chandb = save_chandb
 
         self.create_from_meta(meta_file, averages)
 
@@ -119,11 +121,15 @@ class QubitExperiment(Experiment):
         self.controlled_qubits = [c for c in self.chan_db.channels if c.label in meta_info["qubits"]]
         self.measurements      = [c for c in self.chan_db.channels if c.label in meta_info["measurements"]]
         self.measured_qubits   = [c for c in self.chan_db.channels if "M-"+c.label in meta_info["measurements"]]
-        self.edges             = [c for c in self.chan_db.channels if c.label in meta_info["edges"]]
+        if 'edges' in meta_info:
+            self.edges             = [c for c in self.chan_db.channels if c.label in meta_info["edges"]]
+        else:
+            self.edges = []
         self.phys_chans        = list(set([e.phys_chan for e in self.controlled_qubits + self.measurements + self.edges]))
-        self.transmitters      = list(set([e.phys_chan.transmitter for e in self.controlled_qubits + self.measurements + self.edges]))
         self.receiver_chans    = list(set([e.receiver_chan for e in self.measurements]))
-        self.trig_chans        = list(set([e.trig_chan.phys_chan for e in self.measurements]))
+        self.slave_trigs       = [c for c in self.chan_db.channels if c.label == 'slave_trig']
+        self.trig_chans        = list(set([e.trig_chan.phys_chan for e in self.measurements])) + [c.phys_chan for c in self.slave_trigs]
+        self.transmitters      = list(set([e.phys_chan.transmitter for e in self.controlled_qubits + self.measurements + self.edges + self.slave_trigs]))
         self.receivers         = list(set([e.receiver_chan.receiver for e in self.measurements]))
         self.generators        = list(set([q.phys_chan.generator for q in self.measured_qubits + self.controlled_qubits + self.measurements if q.phys_chan.generator]))
         self.qubits_by_name    = {q.label: q for q in self.measured_qubits + self.controlled_qubits}
@@ -209,7 +215,14 @@ class QubitExperiment(Experiment):
         self.instrument_proxies = self.generators + self.receivers + self.transmitters + self.all_standalone + self.processors
         self.instruments = []
         for instrument in self.instrument_proxies:
-            instr = instrument_map[instrument.model](instrument.address, instrument.label) # Instantiate
+            if (hasattr(instrument, 'serial_port') and
+                instrument.serial_port is not None and
+                hasattr(instrument, 'dac') and
+                instrument.dac is not None):
+                address = (instrument.address, instrument.serial_port, instrument.dac)
+            else:
+                address = instrument.address
+            instr = instrument_map[instrument.model](address, instrument.label) # Instantiate
             # For easy lookup
             instr.proxy_obj = instrument
             instrument.instr = instr # This shouldn't be relied upon
@@ -416,7 +429,7 @@ class QubitExperiment(Experiment):
             listener.start()
 
         while ready.value < len(self.chan_to_dig):
-            time.sleep(0.3)
+            time.sleep(0.1)
 
         if self.cw_mode:
             for awg in self.awgs:
@@ -431,6 +444,15 @@ class QubitExperiment(Experiment):
                 getattr(instr, "set_"+prop)(channel, value)
             else:
                 getattr(instr, "set_"+prop)(value)
+        param.assign_method(method)
+        self.add_sweep(param, values) # Create the requested sweep on this parameter
+
+    def add_manual_sweep(self, label, prompt, values, channel=None):
+        param = FloatParameter() # Create the parameter
+        param.name = label
+        def method(value):
+            print(f'Manually set {label} to {value}, then press enter.')
+            input()
         param.assign_method(method)
         self.add_sweep(param, values) # Create the requested sweep on this parameter
 
@@ -472,7 +494,7 @@ class QubitExperiment(Experiment):
                     getattr(instr, "set_"+prop)(chan, value, thing)
                 except:
                     getattr(instr, "set_"+prop)(chan, value)
-
+            param.set_pair = (thing.phys_chan.label, attribute)
 
         if method:
             # Custom method
@@ -485,7 +507,7 @@ class QubitExperiment(Experiment):
                 param.add_post_push_hook(lambda: time.sleep(0.05))
             else:
                 raise ValueError("The instrument {} has no method {}".format(name, "set_"+attribute))
-        # param.instr_tree = [instr.name, attribute] #TODO: extend tree to endpoint
+            param.set_pair = (instr.name, attribute)
         self.add_sweep(param, values) # Create the requested sweep on this parameter
 
     def add_avg_sweep(self, num_averages):
@@ -526,15 +548,11 @@ class QubitExperiment(Experiment):
 
     def init_progress_bars(self):
         """ initialize the progress bars."""
-
-        from auspex.config import isnotebook
-
+        self.progressbars = {}
+        ocs = list(self.output_connectors.values())
         if isnotebook():
             from ipywidgets import IntProgress, VBox
             from IPython.display import display
-
-            ocs = list(self.output_connectors.values())
-            self.progressbars = {}
             if len(ocs)>0:
                 for oc in ocs:
                     self.progressbars[oc] = IntProgress(min=0, max=oc.output_streams[0].descriptor.num_points(), bar_style='success',
@@ -543,6 +561,14 @@ class QubitExperiment(Experiment):
                 self.progressbars[axis] = IntProgress(min=0, max=axis.num_points(),
                                                         description=f'{axis.name}:', style={'description_width': 'initial'})
             display(VBox(list(self.progressbars.values())))
+        else:
+            from progress.bar import ShadyBar
+            if len(ocs)>0:
+                for oc in ocs:
+                    self.progressbars[oc] = ShadyBar(f'Digitizer Data {oc.name}:',
+                                                max=oc.output_streams[0].descriptor.num_points())
+            for axis in self.sweeper.axes:
+                self.progressbars[axis] = ShadyBar(f"Sweep {axis.name}", max=axis.num_points())
 
     def run(self):
         # Begin acquisition before enabling the AWGs

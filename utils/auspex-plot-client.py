@@ -18,7 +18,7 @@ import random
 import json
 import ctypes
 
-single_window = False
+single_window = True
 plot_windows  = []
 
 import logging
@@ -187,7 +187,7 @@ class MplCanvas(FigureCanvas):
 class Canvas1D(MplCanvas):
     def compute_initial_figure(self):
         for ax in self.axes:
-            plt, = ax.plot([0,0,0])
+            plt, = ax.plot([0,0,0], marker="o", markersize=4)
             ax.ticklabel_format(style='sci', axis='x', scilimits=(-3,3))
             ax.ticklabel_format(style='sci', axis='y', scilimits=(-3,3))
             self.plots.append(plt)
@@ -521,7 +521,7 @@ def new_plotter_window_mdi(message):
     desc = json.loads(desc)
 
     pw = MatplotClientSubWindow()
-  
+
     pw.setWindowTitle("%s" % progname)
     pw.construct_plots(desc)
     pw.listen_for_data(uuid, len(desc))
@@ -563,7 +563,7 @@ class ListenerMixin:
         if self.desc_listener_thread:
             self.stop_listening(True)
         self.close()
-        
+
 
 class PlotMDI(ListenerMixin,QtWidgets.QMainWindow):
     def __init__(self, parent = None):

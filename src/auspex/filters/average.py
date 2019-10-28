@@ -142,7 +142,12 @@ class Averager(Filter):
         else:
             descriptor.visited_tuples = np.empty((0), dtype=desc_out_dtype)
 
-        for stream in self.partial_average.output_streams + self.source.output_streams:
+        for stream in self.partial_average.output_streams:
+            stream.set_descriptor(descriptor)
+            stream.descriptor.buffer_mult_factor = 20
+            stream.end_connector.update_descriptors()
+
+        for stream in self.source.output_streams:
             stream.set_descriptor(descriptor)
             stream.end_connector.update_descriptors()
 

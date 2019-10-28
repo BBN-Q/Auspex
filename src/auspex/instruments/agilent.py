@@ -717,7 +717,8 @@ class AgilentE8363C(SCPIInstrument):
 
     TIMEOUT = 10. * 1000. #milliseconds
 
-    power              = FloatCommand(scpi_string=":SOURce:POWer:LEVel:IMMediate:AMPLitude", value_range=(-27, 20))
+    power_port1        = FloatCommand(scpi_string=":SOURce:POWer1:LEVel:IMMediate:AMPLitude", value_range=(-27, 20))
+    power_port2        = FloatCommand(scpi_string=":SOURce:POWer2:LEVel:IMMediate:AMPLitude", value_range=(-27, 20))
     frequency_center   = FloatCommand(scpi_string=":SENSe:FREQuency:CENTer")
     frequency_span     = FloatCommand(scpi_string=":SENSe:FREQuency:SPAN")
     frequency_start    = FloatCommand(scpi_string=":SENSe:FREQuency:STARt")
@@ -767,6 +768,17 @@ class AgilentE8363C(SCPIInstrument):
             self.interface.write(":SENSe1:AVERage:STATe ON")
         else:
             self.interface.write(":SENSe1:AVERage:STATe OFF")
+
+    @property
+    def power(self):
+        return self.power_port1 if self.measurement[-1] == '1' else self.power_port2
+
+    @power.setter
+    def power(self, value):
+        if self.measurement[-1] == '1':
+            self.power_port1 = value
+        else:
+            self.power_port2 = value
 
     @property
     def measurement(self):
@@ -840,6 +852,10 @@ class AgilentE9010A(SCPIInstrument):
     num_sweep_points = FloatCommand(scpi_string=":SWEep:POINTs")
     resolution_bandwidth = FloatCommand(scpi_string=":BANDwidth")
     sweep_time = FloatCommand(scpi_string=":SWEep:TIME")
+    averaging_count = IntCommand(scpi_string=':AVER:COUN')
+
+    marker1_amplitude = FloatCommand(scpi_string=':CALC:MARK1:Y')
+    marker1_position = FloatCommand(scpi_string=':CALC:MARK1:X')
 
     mode = StringCommand(scpi_string=":INSTrument", allowed_values=["SA", "BASIC", "PULSE", "PNOISE"])
 
@@ -855,9 +871,9 @@ class AgilentE9010A(SCPIInstrument):
         if resource_name is not None:
             self.resource_name = resource_name
         #If we only have an IP address then tack on the raw socket port to the VISA resource string
-        if is_valid_ipv4(resource_name):
-            resource_name += "::5025::SOCKET"
-        super(AgilentE9010A, self).connect(resource_name=resource_name, interface_type=interface_type)
+        if is_valid_ipv4(self.resource_name):
+            self.resource_name += "::5025::SOCKET"
+        super(AgilentE9010A, self).connect(resource_name=self.resource_name, interface_type=interface_type)
         self.interface._resource.read_termination = u"\n"
         self.interface._resource.write_termination = u"\n"
         self.interface._resource.timeout = 3000 #seem to have trouble timing out on first query sometimes
@@ -882,3 +898,14 @@ class AgilentE9010A(SCPIInstrument):
     def restart_sweep(self):
         """ Aborts current sweep and restarts. """
         self.interface.write(":INITiate:RESTart")
+        
+    def peak_search(self, marker=1):
+        self.interface.write(':CALC:MARK{:d}:MAX'.format(marker))
+        
+    def marker_to_center(self, marker=1):
+        self.interface.write(':CALC:MARK{:d}:CENT'.format(marker))
+        
+    def clear_averaging(self):
+        self.interface.write(':AVER:CLE')
+
+

@@ -24,6 +24,7 @@ install:
   # - echo "Database file at $BBN_DB"
   - hash -r
   - conda config --set always_yes yes --set changeps1 no
+  - conda install -c anaconda setuptools
   - conda update -q conda
   # Useful for debugging any issues with conda
   - conda info -a
@@ -35,7 +36,7 @@ install:
   - pip install git+https://github.com/BBN-Q/bbndb.git
   - pip install git+https://github.com/BBN-Q/QGL.git@develop
   - pip install git+https://github.com/spatialaudio/nbsphinx.git@master
-  - pip install pyvisa coveralls scikit-learn pyusb future python-usbtmc setproctitle
+  - pip install pyvisa coveralls scikit-learn pyusb future python-usbtmc setproctitle progress serial
   - export GIT_LFS_SKIP_SMUDGE=0
   - export PYTHONPATH=$PYTHONPATH:$PWD/src
 
