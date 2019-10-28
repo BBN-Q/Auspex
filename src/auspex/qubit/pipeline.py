@@ -86,6 +86,8 @@ class PipelineManager(object):
         ss_label = qubit_label+"-"+stream_type
         select = adb.StreamSelect(pipelineMgr=self, stream_type=stream_type, qubit_name=qubit_label, label=ss_label)
         self.session.add(select)
+        if not self.meas_graph:
+            self.meas_graph = nx.DiGraph()
         self.meas_graph.add_node(select.hash_val, node_obj=select)
 
         if auto_create:
