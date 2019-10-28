@@ -201,7 +201,7 @@ class Instrument(metaclass=MetaInstrument):
         self.configure_with_dict(dict((col, getattr(proxy, col)) for col in proxy.__table__.columns.keys()))
 
     def configure_with_dict(self, settings_dict):
-        """Accept a sdettings dictionary and attempt to set all of the instrument
+        """Accept a settings dictionary and attempt to set all of the instrument
         parameters using the key/value pairs."""
         for name, value in settings_dict.items():
             if name not in ["id", "label", "model", "address", "channel_db_id", "standalone"]:
@@ -210,6 +210,9 @@ class Instrument(metaclass=MetaInstrument):
                 # Python is insane, and attempts to run a property's getter
                 # when queried by hasattr. Avoid this behavior with the
                 # "ask for forgiveness" paradigm.
+                if isinstance(value, dict):
+                    self.configure_with_dict(value)
+                    continue
                 try:
                     setattr(self, name, value)
                 except (AttributeError, TypeError) as e:
