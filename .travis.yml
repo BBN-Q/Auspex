@@ -24,10 +24,7 @@ install:
   # - echo "Database file at $BBN_DB"
   - hash -r
   - conda config --set always_yes yes --set changeps1 no
-
-  - if [ $UPDATE_CONDA ]; then conda install -c anaconda; fi
   - if [ $UPDATE_CONDA ]; then conda update -q conda; fi
-  - conda install setuptools
   # Useful for debugging any issues with conda
   - conda info -a
 
