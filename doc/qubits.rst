@@ -29,6 +29,7 @@ The best way to gain experience is to follow through with these tutorials:
    Q5 Tutorial: Adding Sweeps to Experiments <examples/Example-Sweeps.ipynb>
    Q6 Tutorial: Pulse Calibration <examples/Example-Calibrations.ipynb>
    Q7 Tutorial: Single Shot Fidelity <examples/Example-SingleShot-Fid.ipynb>
+   Q8 Tutorial: Realistic Two Qubit Tuneup and Experiments <examples/Example-APS2-2Qubit.ipynb>
 
 Instrument Drivers
 ******************
