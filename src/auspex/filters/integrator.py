@@ -8,9 +8,8 @@
 
 __all__ = ['KernelIntegrator']
 
-import os
 import numpy as np
-from scipy.signal import chebwin, blackman, slepian, convolve
+import os
 
 from .filter import Filter
 from auspex.parameter import Parameter, FloatParameter, IntParameter, BoolParameter
