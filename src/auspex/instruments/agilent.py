@@ -6,7 +6,7 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-__all__ = ['Agilent33220A', 'Agilent33500B', 'Agilent34970A', 'AgilentE8363C', 'AgilentN5183A', 'AgilentE9010A','HP33120A']
+__all__ = ['Agilent33220A', 'Agilent33500B', 'Agilent34970A', 'AgilentE8363C','AgilentN5230A', 'AgilentN5183A', 'AgilentE9010A','HP33120A']
 
 import socket
 import time
