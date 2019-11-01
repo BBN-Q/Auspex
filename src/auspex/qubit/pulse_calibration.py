@@ -140,7 +140,7 @@ class Calibration(object):
 
 class QubitCalibration(Calibration):
     calibration_experiment = None
-    def __init__(self, qubits, sample_name='q1', output_nodes=None, stream_selectors=None, quad="real", auto_rollback=True, do_plotting=True, **kwargs):
+    def __init__(self, qubits, sample_name=None, output_nodes=None, stream_selectors=None, quad="real", auto_rollback=True, do_plotting=True, **kwargs):
         self.qubits           = qubits if isinstance(qubits, list) else [qubits]
         self.qubit            = None if isinstance(qubits, list) else qubits
         self.output_nodes     = output_nodes if isinstance(output_nodes, list) else [output_nodes]
@@ -164,19 +164,20 @@ class QubitCalibration(Calibration):
             raise ValueError('Quadrature to calibrate must be one of ("real", "imag", "amp", "phase").')
         super(QubitCalibration, self).__init__()
 
-        if sample_name:
-            if not bbndb.get_cl_session():
-                raise Exception("Attempting to load Calibrations database, \
-                    but no database session is open! Have the ChannelLibrary and PipelineManager been created?")
-            existing_samples = list(bbndb.get_cl_session().query(bbndb.calibration.Sample).filter_by(name=sample_name).all())
-            if len(existing_samples) == 0:
-                logger.info("Creating a new sample in the calibration database.")
-                self.sample = bbndb.calibration.Sample(name=sample_name)
-                bbndb.get_cl_session().add(self.sample)
-            elif len(existing_samples) == 1:
-                self.sample = existing_samples[0]
-            else:
-                raise Exception("Multiple samples found in calibration database with the same name! How?")
+        if not sample_name:
+            sample_name = self.qubits[0].label
+        if not bbndb.get_cl_session():
+            raise Exception("Attempting to load Calibrations database, \
+                but no database session is open! Have the ChannelLibrary and PipelineManager been created?")
+        existing_samples = list(bbndb.get_cl_session().query(bbndb.calibration.Sample).filter_by(name=sample_name).all())
+        if len(existing_samples) == 0:
+            logger.info("Creating a new sample in the calibration database.")
+            self.sample = bbndb.calibration.Sample(name=sample_name)
+            bbndb.get_cl_session().add(self.sample)
+        elif len(existing_samples) == 1:
+            self.sample = existing_samples[0]
+        else:
+            raise Exception("Multiple samples found in calibration database with the same name! How?")
 
     def sequence(self):
         """Returns the sequence for the given calibration, must be overridden"""
@@ -186,6 +187,7 @@ class QubitCalibration(Calibration):
         self.fake_data.append((args, kwargs))
 
     def run_sweeps(self):
+        print(self.qubit.frequency)
         meta_file = compile_to_hardware(self.sequence(), fileName=self.filename, axis_descriptor=self.descriptor())
         exp       = CalibrationExperiment(self.qubits, self.output_nodes, self.stream_selectors, meta_file, **self.kwargs)
         if len(self.fake_data) > 0:
@@ -652,21 +654,20 @@ class RamseyCalibration(QubitCalibration):
         return [plot]
 
     def exp_config(self, exp):
-        rcvr = self.qubit.measure_chan.receiver_chan.receiver
         if self.first_ramsey:
+            rcvr = self.qubit.measure_chan.receiver_chan.receiver
+            self.source_proxy = self.qubit.phys_chan.generator # DB object
+            self.qubit_source = exp._instruments[self.source_proxy.label] # auspex instrument
             if self.set_source:
-                self.source_proxy = self.qubit.phys_chan.generator # DB object
-                self.qubit_source = exp._instruments[self.source_proxy.label] # auspex instrument
-                self.orig_freq    = self.source_proxy.frequency
-                self.source_proxy.frequency = round(self.orig_freq + self.added_detuning, 10)
-                self.qubit_source.frequency = self.source_proxy.frequency
+                self.orig_freq = self.source_proxy.frequency + self.qubit.frequency # real qubit freq. 
+                self.source_proxy.frequency += self.added_detuning
             else:
-                self.orig_freq = self.qubit.frequency
+                self.orig_freq+=self.source_proxy.frequency # update to real qubit freq. 
 
     def _calibrate(self):
         self.first_ramsey = True
-
         if not self.set_source:
+            self.orig_freq = self.qubit.frequency #set to initial qubit SSB
             self.qubit.frequency += float(self.added_detuning)
         data, _ = self.run_sweeps()
         try:
@@ -683,16 +684,13 @@ class RamseyCalibration(QubitCalibration):
         #TODO: set conditions for success
         fit_freq_A = np.mean(fit_freqs) #the fit result can be one or two frequencies
         if self.set_source:
-            self.source_proxy.frequency = round(self.orig_freq + self.added_detuning + fit_freq_A/2, 10)
-            self.qubit_source.frequency = self.source_proxy.frequency
+            self.source_proxy.frequency = round(self.orig_freq - self.qubit.frequency + self.added_detuning + fit_freq_A/2, 10)
+            #self.qubit_source.frequency = self.source_proxy.frequency
         else:
             self.qubit.frequency += float(fit_freq_A/2)
 
         self.first_ramsey = False
 
-        # if self.plot:
-        #     [self.add_manual_plotter(p) for p in self.plot] if isinstance(self.plot, list) else self.add_manual_plotter(self.plot)
-        # self.start_manual_plotters()
         data, _ = self.run_sweeps()
 
         try:
@@ -710,21 +708,23 @@ class RamseyCalibration(QubitCalibration):
             self.fit_freq = round(self.orig_freq + self.added_detuning + 0.5*(fit_freq_A + 0.5*fit_freq_A + fit_freq_B), 10)
         else:
             self.fit_freq = round(self.orig_freq + self.added_detuning - 0.5*(fit_freq_A - 0.5*fit_freq_A + fit_freq_B), 10)
-        logger.info(f"Found qubit Frequency {self.fit_freq}") #TODO: print actual qubit frequency, instead of the fit
+        logger.info(f"Found qubit frequency {round(self.fit_freq/1e9,9)} GHz") 
         self.succeeded = True #TODO: add bounds
 
     def update_settings(self):
         if self.set_source:
-            self.source_proxy.frequency = float(round(self.fit_freq))
-            self.qubit_source.frequency = self.source_proxy.frequency
+            self.source_proxy.frequency = float(round(self.fit_freq - self.qubit.frequency))
         else:
-            self.qubit.frequency += float(round(self.fit_freq - self.orig_freq))
+            self.qubit.frequency = float(round(self.fit_freq - self.source_proxy.frequency))
         # update edges where this is the target qubit
         for edge in self.qubit.edge_target:
             edge_source = edge.phys_chan.generator
-            edge.frequency = self.source_proxy.frequency + self.qubit_source.frequency - edge_source.frequency
+            if self.set_source:
+                edge_source.frequency = self.source_proxy.frequency + self.qubit.frequency - edge.frequency
+            else:
+                edge.frequency = self.qubit_source.frequency + self.qubit.frequency - edge_source.frequency 
         if self.sample:
-            frequency = self.qubit_source.frequency if self.set_source else self.qubit.frequency
+            frequency = round(self.fit_freq,9)
             c = bbndb.calibration.Calibration(value=frequency, sample=self.sample, name="Ramsey")
             c.date = datetime.datetime.now()
             bbndb.get_cl_session().add(c)
