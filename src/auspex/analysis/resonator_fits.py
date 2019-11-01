@@ -321,4 +321,4 @@ def resonator_circle_fit(data, freqs, make_plots=False, a=None, alpha=None, tau=
 
     errors = {"fr": sigma_f, "Ql": sigma_Ql, "R": sigma_r, "Qc": sigma_ReOneOverQc, "Qi": sigma_Qi}
 
-    return [tau, a, alpha, fr, phi0, Ql, Qc, Qi, errors]
+    return [tau*1e-9, a, alpha, fr, phi0, Ql, Qc, Qi, errors]
