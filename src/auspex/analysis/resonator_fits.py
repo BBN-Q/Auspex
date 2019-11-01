@@ -32,7 +32,7 @@ class ResonatorCircleFit(AuspexFit):
     @staticmethod
     def _model(x, *p):
         scaling = p[1] * np.exp(1j*p[2]) * np.exp(-2j*np.pi * x * p[0])
-        A = (p[5]/np.abs(p[6])) * np.exp(-1j * p[4])
+        A = (p[5]/np.abs(p[6])) * np.exp(1j * p[4])
         B = 1 + 2j*p[5]*(x / p[3] - 1)
         return scaling*(1.0-A/B)
 
@@ -107,7 +107,6 @@ def circle_fit(data, freqs):
     minor = lambda mat,i,j: det(numpy.asarray([numpy.concatenate([mat[row][:j],mat[row][j+1:]]) for row in range(mat.shape[0]) if row != i]))
     cofactor = lambda mat: numpy.asarray([[(-1)**(i+j)*minor(mat,i,j) for j in range(len(mat[i]))] for i in range(mat.shape[0])])
     characteristic_poly_prime = lambda n: numpy.trace(-numpy.matmul(numpy.transpose(cofactor(M - n*bmat)), bmat))
-
     # Now, use Newton's method starting at 0 to find n such that det(M-nB) = 0
     #nmin = newton(characteristic_poly, 0, fprime=characteristic_poly_prime, tol=1e-15, maxiter=200000)
     nmin = newton(characteristic_poly, 0, fprime=characteristic_poly_prime, maxiter=20000)
@@ -140,7 +139,7 @@ def resonator_circle_fit(data, freqs, make_plots=False, a=None, alpha=None, tau=
     data (numpy array of complex): S21 data
     freqs (numpy array of reals): frequency of each data point index
     make_plots (boolean, optional): if True, generates line plots of fits. intended for use in Jupyter notebooks; call the following two lines before executing this function with make_plots=True:
-        %matplotlib inline
+        matplotlib inline
         import matplotlib.pyplot as pyplot
     a (real, optional): provide manual value of the system amplitude rather than fitting from data
     alpha (real, optional): provide manual value of the system phase offset rather than fitting from data
@@ -169,7 +168,8 @@ def resonator_circle_fit(data, freqs, make_plots=False, a=None, alpha=None, tau=
 
         # First plot the original data
         axes[0,0].scatter(data.real, data.imag, s=0.5)
-        axes[0,0].autoscale_view(tight=True)
+        axes[0,0].set_xlim(np.min(data.real),np.max(data.real))
+        axes[0,0].set_ylim(np.min(data.imag),np.max(data.imag))
         axes[0,0].figure.set_size_inches(10,10)
         axes[0,0].set_xlabel('Re[S21]')
         axes[0,0].set_ylabel('Im[S21]')
@@ -190,9 +190,9 @@ def resonator_circle_fit(data, freqs, make_plots=False, a=None, alpha=None, tau=
         result = scipy.optimize.minimize_scalar(_circle_residuals, 0, method='Bounded', args=(data,freqs), bounds=(0, bound))
         tau = result.x
 
-        # print("Bound: " + str(bound))
-        # print("Tau: " + str(tau))
-        # print("Cost: " + str(result.fun))
+        #print("Bound: " + str(bound))
+        #print("Tau: " + str(tau))
+        #print("Cost: " + str(result.fun))
 
     '''
     taus = numpy.linspace(0, 1000, 1000)
@@ -211,11 +211,13 @@ def resonator_circle_fit(data, freqs, make_plots=False, a=None, alpha=None, tau=
 
     if(make_plots):
         axes[0,1].scatter(delay_corrected_data.real, delay_corrected_data.imag, s=0.5)
+        axes[0,1].set_xlim(np.min(delay_corrected_data.real),np.max(delay_corrected_data.real))
+        axes[0,1].set_ylim(np.min(delay_corrected_data.imag),np.max(delay_corrected_data.imag))
         axes[0,1].set_xlabel('Re[S21]')
         axes[0,1].set_ylabel('Im[S21]')
         axes[0,1].set_title('Phase-Corrected S21 Data')
         axes[0,1].add_patch(pyplot.Circle((xc,yc), r, fill=False,color='r'))
-        axes[0,1].autoscale_view(tight=True)
+
 
     # Fit a phase-vs-frequency curve
     phases = numpy.unwrap(numpy.angle(translated_data))
