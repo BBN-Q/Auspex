@@ -187,7 +187,6 @@ class QubitCalibration(Calibration):
         self.fake_data.append((args, kwargs))
 
     def run_sweeps(self):
-        print(self.qubit.frequency)
         meta_file = compile_to_hardware(self.sequence(), fileName=self.filename, axis_descriptor=self.descriptor())
         exp       = CalibrationExperiment(self.qubits, self.output_nodes, self.stream_selectors, meta_file, **self.kwargs)
         if len(self.fake_data) > 0:
@@ -659,10 +658,10 @@ class RamseyCalibration(QubitCalibration):
             self.source_proxy = self.qubit.phys_chan.generator # DB object
             self.qubit_source = exp._instruments[self.source_proxy.label] # auspex instrument
             if self.set_source:
-                self.orig_freq = self.source_proxy.frequency + self.qubit.frequency # real qubit freq. 
+                self.orig_freq = self.source_proxy.frequency + self.qubit.frequency # real qubit freq.
                 self.source_proxy.frequency += self.added_detuning
             else:
-                self.orig_freq+=self.source_proxy.frequency # update to real qubit freq. 
+                self.orig_freq += self.source_proxy.frequency # update to real qubit freq.
 
     def _calibrate(self):
         self.first_ramsey = True
@@ -708,7 +707,7 @@ class RamseyCalibration(QubitCalibration):
             self.fit_freq = round(self.orig_freq + self.added_detuning + 0.5*(fit_freq_A + 0.5*fit_freq_A + fit_freq_B), 10)
         else:
             self.fit_freq = round(self.orig_freq + self.added_detuning - 0.5*(fit_freq_A - 0.5*fit_freq_A + fit_freq_B), 10)
-        logger.info(f"Found qubit frequency {round(self.fit_freq/1e9,9)} GHz") 
+        logger.info(f"Found qubit frequency {round(self.fit_freq/1e9,9)} GHz")
         self.succeeded = True #TODO: add bounds
 
     def update_settings(self):
@@ -722,7 +721,7 @@ class RamseyCalibration(QubitCalibration):
             if self.set_source:
                 edge_source.frequency = self.source_proxy.frequency + self.qubit.frequency - edge.frequency
             else:
-                edge.frequency = self.qubit_source.frequency + self.qubit.frequency - edge_source.frequency 
+                edge.frequency = self.qubit_source.frequency + self.qubit.frequency - edge_source.frequency
         if self.sample:
             frequency = round(self.fit_freq,9)
             c = bbndb.calibration.Calibration(value=frequency, sample=self.sample, name="Ramsey")
