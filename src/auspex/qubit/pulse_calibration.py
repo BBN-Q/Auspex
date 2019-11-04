@@ -46,7 +46,6 @@ from itertools import product
 class Calibration(object):
 
     def __init__(self):
-        self.do_plotting = True
         self.uuid = str(uuid.uuid4())
         self.context = None
         self.socket = None
@@ -163,7 +162,6 @@ class QubitCalibration(Calibration):
         except:
             raise ValueError('Quadrature to calibrate must be one of ("real", "imag", "amp", "phase").')
         super(QubitCalibration, self).__init__()
-
         if not sample_name:
             sample_name = self.qubits[0].label
         if not bbndb.get_cl_session():
@@ -187,7 +185,10 @@ class QubitCalibration(Calibration):
         self.fake_data.append((args, kwargs))
 
     def run_sweeps(self):
-        meta_file = compile_to_hardware(self.sequence(), fileName=self.filename, axis_descriptor=self.descriptor())
+        if self.metafile:
+            meta_file = self.metafile
+        else:
+            meta_file = compile_to_hardware(self.sequence(), fileName=self.filename, axis_descriptor=self.descriptor())
         exp       = CalibrationExperiment(self.qubits, self.output_nodes, self.stream_selectors, meta_file, **self.kwargs)
         if len(self.fake_data) > 0:
             for fd in self.fake_data:
@@ -922,6 +923,36 @@ class DRAGCalibration(QubitCalibration):
 
         if self.sample:
             c = bbndb.calibration.Calibration(value=self.opt_drag, sample=self.sample, name="drag_scaling")
+            c.date = datetime.datetime.now()
+            bbndb.get_cl_session().add(c)
+            bbndb.get_cl_session().commit()
+
+class CustomCalibration(QubitCalibration):
+    def __init__(self, qubits, metafile = None, fit_name = None, fit_param = None, **kwargs):
+        if not metafile or not fit_name or not fit_param:
+            raise Exception("Please specify experiment metafile, fit function, and desired fit paramter.") #currently save single param.
+        try:
+            with open(metafile, 'r') as FID:
+                self.meta_info = json.load(FID)
+        except:
+            raise Exception(f"Could note process meta info from file {meta_file}")
+        self.metafile = metafile
+        self.fit_name = fit_name
+        self.fit_param = fit_param
+        super().__init__(qubits, **kwargs)
+        self.norm_points = {self.qubits[0].label: (0, 1)} #TODO: generalize
+
+    def _calibrate(self):
+        data, _ = self.run_sweeps()  # need to get descriptor
+        try:
+            self.fit_result = eval(self.fit_name)(self.meta_info["axis_descriptor"][0]['points'], data)
+            self.succeeded = True
+        except:
+            logger.warning(f"{self.fit_name} fit failed.")
+
+    def update_settings(self):
+        if self.sample:
+            c = bbndb.calibration.Calibration(value=self.fit_result.fit_params[fit_param], sample=self.sample, name=self.fit_param, category=self.fit_name)
             c.date = datetime.datetime.now()
             bbndb.get_cl_session().add(c)
             bbndb.get_cl_session().commit()
