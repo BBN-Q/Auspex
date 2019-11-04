@@ -945,14 +945,15 @@ class CustomCalibration(QubitCalibration):
     def _calibrate(self):
         data, _ = self.run_sweeps()  # need to get descriptor
         try:
-            self.fit_result = eval(self.fit_name)(self.meta_info["axis_descriptor"][0]['points'], data)
+            self.fit_result = eval(self.fit_name)(np.array(self.meta_info["axis_descriptor"][0]['points']), data)
             self.succeeded = True
+            #TODO: add optional set parameter
         except:
             logger.warning(f"{self.fit_name} fit failed.")
 
     def update_settings(self):
         if self.sample:
-            c = bbndb.calibration.Calibration(value=self.fit_result.fit_params[fit_param], sample=self.sample, name=self.fit_param, category=self.fit_name)
+            c = bbndb.calibration.Calibration(value=self.fit_result.fit_params[self.fit_param], sample=self.sample, name=self.fit_param, category=self.fit_name)
             c.date = datetime.datetime.now()
             bbndb.get_cl_session().add(c)
             bbndb.get_cl_session().commit()
