@@ -242,7 +242,7 @@ def get_cals(qubit, params, make_plots=True, depth=0):
     values_list = []
     errors_list = []
     for param in params:
-        c = bbndb.get_cl_session().query(caldb.value, caldb.uncertainty, caldb.date).filter_by(name=param,sample_id=sample_id).order_by(-caldb.id).all()
+        c = bbndb.get_cl_session().query(caldb.value, caldb.uncertainty, caldb.date).order_by(-caldb.id).filter_by(name = param, sample_id = sample_id).all()
         dates = [cc[2] for cc in c][-depth:]
         values = [cc[0] for cc in c][-depth:]
         errors = [cc[1] if cc[1] else 0 for cc in c][-depth:]
