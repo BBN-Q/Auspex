@@ -673,6 +673,7 @@ class RamseyCalibration(QubitCalibration):
         try:
             ramsey_fit = RamseyFit(self.delays, data, two_freqs=self.two_freqs, AIC=self.AIC)
             fit_freqs = ramsey_fit.fit_params["f"]
+            fit_err = ramsey_fit.fit_errors["f"]
         except Exception as e:
             raise Exception(f"Exception {e} while fitting in {self}")
 
@@ -683,6 +684,7 @@ class RamseyCalibration(QubitCalibration):
 
         #TODO: set conditions for success
         fit_freq_A = np.mean(fit_freqs) #the fit result can be one or two frequencies
+        fit_err_A = np.sum(fit_err)
         if self.set_source:
             self.source_proxy.frequency = round(self.orig_freq - self.qubit.frequency + self.added_detuning + fit_freq_A/2, 10)
             #self.qubit_source.frequency = self.source_proxy.frequency
@@ -696,6 +698,7 @@ class RamseyCalibration(QubitCalibration):
         try:
             ramsey_fit = RamseyFit(self.delays, data, two_freqs=self.two_freqs, AIC=self.AIC)
             fit_freqs = ramsey_fit.fit_params["f"]
+            fit_err = ramsey_fit.fit_errors["f"]
         except Exception as e:
             raise Exception(f"Exception {e} while fitting in {self}")
 
@@ -704,10 +707,12 @@ class RamseyCalibration(QubitCalibration):
         self.plot["Fit 2"]  = (finer_delays, ramsey_fit.model(finer_delays))
 
         fit_freq_B = np.mean(fit_freqs)
+        fit_err_A = np.sum(fit_err)
         if fit_freq_B < fit_freq_A:
             self.fit_freq = round(self.orig_freq + self.added_detuning + 0.5*(fit_freq_A + 0.5*fit_freq_A + fit_freq_B), 10)
         else:
             self.fit_freq = round(self.orig_freq + self.added_detuning - 0.5*(fit_freq_A - 0.5*fit_freq_A + fit_freq_B), 10)
+        self.fit_err = fit_err_A + fit_err_B
         logger.info(f"Found qubit frequency {round(self.fit_freq/1e9,9)} GHz")
         self.succeeded = True #TODO: add bounds
 
@@ -725,7 +730,8 @@ class RamseyCalibration(QubitCalibration):
                 edge.frequency = self.qubit_source.frequency + self.qubit.frequency - edge_source.frequency
         if self.sample:
             frequency = round(self.fit_freq,9)
-            c = bbndb.calibration.Calibration(value=frequency, sample=self.sample, name="Ramsey")
+            frequency_error = round(self.fit_err,9)
+            c = bbndb.calibration.Calibration(value=frequency, uncertainty=frequency_error, sample=self.sample, name="Ramsey")
             c.date = datetime.datetime.now()
             bbndb.get_cl_session().add(c)
             bbndb.get_cl_session().commit()
@@ -928,7 +934,7 @@ class DRAGCalibration(QubitCalibration):
             bbndb.get_cl_session().commit()
 
 class CustomCalibration(QubitCalibration):
-    def __init__(self, qubits, metafile = None, fit_name = None, fit_param = None, **kwargs):
+    def __init__(self, qubits, metafile = None, fit_name = None, fit_param = [], set_param = None, **kwargs):
         if not metafile or not fit_name or not fit_param:
             raise Exception("Please specify experiment metafile, fit function, and desired fit paramter.") #currently save single param.
         try:
@@ -938,7 +944,10 @@ class CustomCalibration(QubitCalibration):
             raise Exception(f"Could note process meta info from file {meta_file}")
         self.metafile = metafile
         self.fit_name = fit_name
+        if not isinstance(fit_param, list):
+            fit_param = [fit_param]
         self.fit_param = fit_param
+        self.set_param = set_param
         super().__init__(qubits, **kwargs)
         self.norm_points = {self.qubits[0].label: (0, 1)} #TODO: generalize
 
@@ -947,15 +956,19 @@ class CustomCalibration(QubitCalibration):
         try:
             self.fit_result = eval(self.fit_name)(np.array(self.meta_info["axis_descriptor"][0]['points']), data)
             self.succeeded = True
-            #TODO: add optional set parameter
+            if self.set_param:  # optional set parameter
+                self.set_param = self.fit_result.fit_params[self.fit_param]
         except:
             logger.warning(f"{self.fit_name} fit failed.")
 
     def update_settings(self):
-        if self.sample:
-            c = bbndb.calibration.Calibration(value=self.fit_result.fit_params[self.fit_param], sample=self.sample, name=self.fit_param, category=self.fit_name)
-            c.date = datetime.datetime.now()
-            bbndb.get_cl_session().add(c)
+        if self.sample: # make a separate Calibration entry for each fit paramter
+            curr_time = datetime.datetime.now()
+            for fit_param in self.fit_param:
+                c = bbndb.calibration.Calibration(value=self.fit_result.fit_params[fit_param], uncertainty=self.fit_result.fit_errors[fit_param],
+                sample=self.sample, name=fit_param, category=self.fit_name)
+                c.date = curr_time
+                bbndb.get_cl_session().add(c)
             bbndb.get_cl_session().commit()
 
 '''Two-qubit gate calibrations'''
