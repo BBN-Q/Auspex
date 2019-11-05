@@ -711,7 +711,7 @@ class RamseyCalibration(QubitCalibration):
             self.plot["Fit 2"]  = (finer_delays, ramsey_fit.model(finer_delays))
 
         fit_freq_B = np.mean(fit_freqs)
-        fit_err_A = np.sum(fit_err)
+        fit_err_B = np.sum(fit_err)
         if fit_freq_B < fit_freq_A:
             self.fit_freq = round(self.orig_freq + self.added_detuning + 0.5*(fit_freq_A + 0.5*fit_freq_A + fit_freq_B), 10)
         else:
