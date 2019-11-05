@@ -157,6 +157,7 @@ class QubitCalibration(Calibration):
         self.do_plotting      = do_plotting
         self.fake_data        = []
         self.sample           = None
+        self.metafile         = None
         try:
             self.quad_fun = {"real": np.real, "imag": np.imag, "amp": np.abs, "phase": np.angle}[quad]
         except:
@@ -942,13 +943,13 @@ class CustomCalibration(QubitCalibration):
                 self.meta_info = json.load(FID)
         except:
             raise Exception(f"Could note process meta info from file {meta_file}")
-        self.metafile = metafile
         self.fit_name = fit_name
         if not isinstance(fit_param, list):
             fit_param = [fit_param]
         self.fit_param = fit_param
         self.set_param = set_param
         super().__init__(qubits, **kwargs)
+        self.metafile = metafile
         self.norm_points = {self.qubits[0].label: (0, 1)} #TODO: generalize
 
     def _calibrate(self):
