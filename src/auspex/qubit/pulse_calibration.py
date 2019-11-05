@@ -594,10 +594,11 @@ class RabiAmpCalibration(QubitCalibration):
         logger.info("Shifting I offset by: {}".format(self.i_offset))
         logger.info("Shifting Q offset by: {}".format(self.q_offset))
         finer_amps = np.linspace(np.min(self.amps), np.max(self.amps), 4*len(self.amps))
-        self.plot["I Data"] = (self.amps, data[:N//2])
-        self.plot["Q Data"] = (self.amps, data[N//2:])
-        self.plot["I Fit"] = (finer_amps, I_fit.model(finer_amps))
-        self.plot["Q Fit"] = (finer_amps, Q_fit.model(finer_amps))
+        if self.do_plotting:
+            self.plot["I Data"] = (self.amps, data[:N//2])
+            self.plot["Q Data"] = (self.amps, data[N//2:])
+            self.plot["I Fit"] = (finer_amps, I_fit.model(finer_amps))
+            self.plot["Q Fit"] = (finer_amps, Q_fit.model(finer_amps))
 
         if self.pi_amp <= 1.0 and self.pi2_amp <= 1.0:
             self.succeeded = True
@@ -679,9 +680,10 @@ class RamseyCalibration(QubitCalibration):
             raise Exception(f"Exception {e} while fitting in {self}")
 
         # Plot the results
-        self.plot["Data 1"] = (self.delays, data)
-        finer_delays = np.linspace(np.min(self.delays), np.max(self.delays), 4*len(self.delays))
-        self.plot["Fit 1"] = (finer_delays, ramsey_fit.model(finer_delays))
+        if self.do_plotting:
+            self.plot["Data 1"] = (self.delays, data)
+            finer_delays = np.linspace(np.min(self.delays), np.max(self.delays), 4*len(self.delays))
+            self.plot["Fit 1"] = (finer_delays, ramsey_fit.model(finer_delays))
 
         #TODO: set conditions for success
         fit_freq_A = np.mean(fit_freqs) #the fit result can be one or two frequencies
@@ -704,8 +706,9 @@ class RamseyCalibration(QubitCalibration):
             raise Exception(f"Exception {e} while fitting in {self}")
 
         # Plot the results
-        self.plot["Data 2"] = (self.delays, data)
-        self.plot["Fit 2"]  = (finer_delays, ramsey_fit.model(finer_delays))
+        if self.do_plotting:
+            self.plot["Data 2"] = (self.delays, data)
+            self.plot["Fit 2"]  = (finer_delays, ramsey_fit.model(finer_delays))
 
         fit_freq_B = np.mean(fit_freqs)
         fit_err_A = np.sum(fit_err)
@@ -792,8 +795,9 @@ class PhaseEstimation(QubitCalibration):
                                                 self.target, epsilon=self.epsilon)
             phase_error.append(error)
 
-            self.data_plot['data'] = (np.array(range(1, len(data)+1)), data)
-            self.plot["angle_estimate"] = (np.array(range(1, len(phase_error)+1)), np.array(phase_error))
+            if self.do_plotting:
+                self.data_plot['data'] = (np.array(range(1, len(data)+1)), data)
+                self.plot["angle_estimate"] = (np.array(range(1, len(phase_error)+1)), np.array(phase_error))
 
         if done == -1:
             self.succeeded = False
@@ -907,11 +911,12 @@ class DRAGCalibration(QubitCalibration):
                 raise Exception(f"Exception {e} while fitting in {self}")
 
             norm_data = data.reshape((len(self.num_pulses), len(self.deltas)))
-            for n in range(len(self.num_pulses)):
-                self.plot['Data_{}'.format(n)] = (self.deltas, norm_data[n, :])
-                finer_deltas = np.linspace(np.min(self.deltas), np.max(self.deltas), 4*len(self.deltas))
-                self.plot['Fit_{}'.format(n)] = (finer_deltas, quadf(finer_deltas, *popt_mat[:, n]))
-            self.plot["Data_opt"] = (self.num_pulses, opt_drag) #TODO: add error bars
+            if self.do_plotting:
+                for n in range(len(self.num_pulses)):
+                    self.plot['Data_{}'.format(n)] = (self.deltas, norm_data[n, :])
+                    finer_deltas = np.linspace(np.min(self.deltas), np.max(self.deltas), 4*len(self.deltas))
+                    self.plot['Fit_{}'.format(n)] = (finer_deltas, quadf(finer_deltas, *popt_mat[:, n]))
+                self.plot["Data_opt"] = (self.num_pulses, opt_drag) #TODO: add error bars
 
             if k==0:
                 #generate sequence with new pulses and drag parameters
@@ -1027,10 +1032,11 @@ class CRCalibration(QubitCalibration):
         xaxis = self.lengths if self.cal_type==CR_cal_type.LENGTH else self.phases if self.cal_type==CR_cal_type.PHASE else self.amps
         finer_xaxis = np.linspace(np.min(xaxis), np.max(xaxis), 4*len(xaxis))
 
-        self.plot["Data 0"] = (xaxis,       data_t[:len(data_t)//2])
-        self.plot["Fit 0"] =  (finer_xaxis, np.polyval(all_params_0, finer_xaxis) if self.cal_type == CR_cal_type.AMP else sinf(finer_xaxis, **all_params_0))
-        self.plot["Data 1"] = (xaxis,       data_t[len(data_t)//2:])
-        self.plot["Fit 1"] =  (finer_xaxis, np.polyval(all_params_1, finer_xaxis) if self.cal_type == CR_cal_type.AMP else sinf(finer_xaxis, **all_params_1))
+        if self.do_plotting:
+            self.plot["Data 0"] = (xaxis,       data_t[:len(data_t)//2])
+            self.plot["Fit 0"] =  (finer_xaxis, np.polyval(all_params_0, finer_xaxis) if self.cal_type == CR_cal_type.AMP else sinf(finer_xaxis, **all_params_0))
+            self.plot["Data 1"] = (xaxis,       data_t[len(data_t)//2:])
+            self.plot["Fit 1"] =  (finer_xaxis, np.polyval(all_params_1, finer_xaxis) if self.cal_type == CR_cal_type.AMP else sinf(finer_xaxis, **all_params_1))
 
         # Optimal parameter within range of original data!
         if self.opt_par > np.min(xaxis) and self.opt_par < np.max(xaxis):
