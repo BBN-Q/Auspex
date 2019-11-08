@@ -488,6 +488,11 @@ class QubitExperiment(Experiment):
             # Direct synthesis
             name, chan = thing.phys_chan.label.split("-")[0:2]
             instr = self._instruments[name] #list(filter(lambda x: x.name == name, self._instruments.values()))[0]
+
+            #special casing for APS2 channel amplitude sweeps... is there a better way to do this?
+            if isinstance(instr, auspex.instruments.APS2) and attribute=="amplitude":
+                chan = [1, 2]
+
             def method(value, channel=chan, instr=instr, prop=attribute,thing=thing):
                 # e.g. keysight.set_amplitude("ch1", 0.5)
                 try:
