@@ -68,7 +68,7 @@ class QubitExperiment(Experiment):
 
     """
 
-    def __init__(self, meta_file, averages=100, exp_name=None, **kwargs):
+    def __init__(self, meta_file, averages=100, exp_name=None, save_chandb=True, **kwargs):
         super(QubitExperiment, self).__init__(**kwargs)
 
         if not pipeline.pipelineMgr:
@@ -82,6 +82,7 @@ class QubitExperiment(Experiment):
 
         self.outputs_by_qubit = {}
         self.progressbars = None
+        self.save_chandb = save_chandb
 
         self.create_from_meta(meta_file, averages)
 
