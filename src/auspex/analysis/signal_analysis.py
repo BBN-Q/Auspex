@@ -7,6 +7,7 @@
 #    http://www.apache.org/licenses/LICENSE-2.0
 
 import numpy as np
+from auspex.log import logger
 from numpy.fft import fft
 from scipy.linalg import svd, eig, inv, pinv
 
@@ -42,7 +43,7 @@ def hankel(signal,M):
     return H
 
 def cleandata(signal,M,K):
-    """ Clean data iteratively using minimum variance (MV) estimation described in: 
+    """ Clean data iteratively using minimum variance (MV) estimation described in:
         Van Huffel, S. (1993). Enhanced resolution based on minimum variance estimation and exponential data modeling Signal Processing, 33(3), 333-355. doi:10.1016/0165-1684(93)90130-3
     """
 
@@ -70,7 +71,10 @@ def cleandata(signal,M,K):
         cleanedData[ct] = np.mean(np.diag(tmpMat,idx))
         idx += 1
 
-
+    #Iterate until variance of noise is less than signal eigenvalues, which should be the case for high SNR data
+    if L*varEst > min(np.diagonal(S_k))**2:
+        logger.warning("Noise variance greater than signal amplitudes. Consider taking more averages. Iterating cleanup ...")
+        cleanedData = cleandata(hilbert(cleanedData),M,K)
 
     return cleanedData
 
@@ -79,30 +83,29 @@ def cleandata(signal,M,K):
 def KT_estimation(data, times, order):
     """KT estimation of periodic signal components."""
 
-    # Find the hilbert transform
-    analytic_signal = hilbert(data)
-
-    time_step = times[1]-times[0]
-
-    cleanedData = cleandata(analytic_signal,order+1,order)
-
-    #Create a cleaned Hankel matrix
-    cleanedAnalyticSig = hilbert(cleanedData)
-    cleanedH = hankel(cleanedAnalyticSig,(len(data)//2) - 1)
     K = order
     N = len(data)
+    time_step = times[1]-times[0]
 
-    #Compute Q with total least squares
-    #U_K1*Q = U_K2
+    #clean data with M = K+1 so that L>>M is guaranteed as per MV estimation
+    cleanedData = cleandata(hilbert(data),order+1,order)
+
+    #Create a cleaned Hankel matrix, here the matrix is constructed so that L~M
+    cleanedAnalyticSig = hilbert(cleanedData)
+    cleanedH = hankel(cleanedAnalyticSig,(N//2) - 1)
+
+    #Compute Q with total least squares (TLS)
+    #Bjõrck, Ake (1996) Numerical Methods for Least Squares Problems
+
+    #UK1*Q = UK2
     U = svd(cleanedH, False)[0]
-    U_K = U[:,0:K]
+    UK = U[:,0:K]
 
-    tmpMat = np.hstack((U_K[:-1,:],U_K[1:,:]))
+    tmpMat = np.hstack((UK[:-1,:],UK[1:,:]))
     V = svd(tmpMat, False)[2].T.conj()
-    n = np.size(U_K,1)
+    n = np.size(UK,1)
     V_AB = V[:n,n:]
     V_BB = V[n:,n:]
-
     Q = -1*np.matmul(V_AB,inv(V_BB))
 
     #Now poles are eigenvalues of Q

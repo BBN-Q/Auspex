@@ -151,7 +151,7 @@ class RamseyFit(AuspexFit):
     ylabel = r"<$\sigma_z$>"
     title = "Ramsey Fit"
 
-    def __init__(self, xpts, ypts, two_freqs=False, AIC=True, make_plots=False, force=False, ax=None):
+    def __init__(self, xpts, ypts, two_freqs=True, AIC=True, make_plots=False, force=False, ax=None):
         """One or two frequency Ramsey experiment fit. If a two-frequency fit is selected
             by the user or by comparing AIC scores, fit parameters are returned as tuples instead
             of single numbers.
@@ -168,6 +168,7 @@ class RamseyFit(AuspexFit):
         """
 
         self.AIC = AIC
+        self.dict_option = two_freqs
         self.two_freqs = two_freqs
         self.force = force
         self.plots = make_plots
@@ -181,12 +182,10 @@ class RamseyFit(AuspexFit):
 
     def _initial_guess_1f(self):
         freqs, Tcs, amps = KT_estimation(self.ypts-np.mean(self.ypts), self.xpts, 1)
-        print(f"Single Freq={freqs}, Amps={abs(amps)}, Taus={Tcs}")
         return [freqs[0], abs(amps[0]), Tcs[0], np.angle(amps[0]), np.mean(self.ypts)]
 
     def _initial_guess_2f(self):
         freqs, Tcs, amps = KT_estimation(self.ypts-np.mean(self.ypts), self.xpts, 2)
-        print(f"Two Freqs={freqs}, Amps={abs(amps)}, Taus={Tcs}")
         return [*freqs, *abs(amps), *Tcs, *np.angle(amps), np.mean(self.ypts)]
 
     @staticmethod
@@ -196,7 +195,7 @@ class RamseyFit(AuspexFit):
     @staticmethod
     def _model_2f(x, *p):
             return (RamseyFit._ramsey_1f(x, p[0], p[2], p[4], p[6], p[8]) +
-                    RamseyFit._ramsey_1f(x, p[1], p[3], p[5], p[7], p[9]))
+                    RamseyFit._ramsey_1f(x, p[1], p[3], p[5], p[7], p[8]))
 
     @staticmethod
     def _model_1f(x, *p):
@@ -207,8 +206,10 @@ class RamseyFit(AuspexFit):
 
     def _do_fit(self):
         if self.two_freqs:
+            self.dict_option = True
             self._initial_guess = self._initial_guess_2f
             self._model = self._model_2f
+
             try:
                 super()._do_fit()
                 if not self.AIC:
@@ -219,24 +220,23 @@ class RamseyFit(AuspexFit):
             except:
                 logger.info("Two-frequency fit failed. Trying single-frequency fit.")
 
+        self.dict_option = False
         self._initial_guess = self._initial_guess_1f
         self._model = self._model_1f
-        self.two_freqs = False
         super()._do_fit()
         one_freq_chi2 = self.sq_error
-
 
         if self.two_freqs and self.AIC:
             #Compare the one and two frequency fits
             aic = self._aicc(two_freq_chi2, 9, len(self.xpts)) - self._aicc(one_freq_chi2, 5, len(self.xpts))
 
             if aic > 0 and not self.force:
-                self.two_freqs = False
+                self.dict_option = False
                 logger.info(f"Selecting one-frequency fit with AIC = {aic}")
                 if self.plots:
                     self.make_plots()
             else:
-                self.two_freqs = True
+                self.dict_option = True
                 self._initial_guess = self._initial_guess_2f
                 self._model = self._model_2f
                 super()._do_fit()
@@ -257,12 +257,12 @@ class RamseyFit(AuspexFit):
         return self.fit_params["f"]
 
     def _fit_dict(self, p):
-        if self.two_freqs:
+        if self.dict_option:
             return {"f": (p[0], p[1]),
                     "A": (p[2], p[3]),
                     "tau": (p[4], p[5]),
                     "phi": (p[6], p[7]),
-                    "y0": (p[8], p[9])}
+                    "y0": p[8]}
         else:
             return {"f": p[0],
                     "A": p[1],
