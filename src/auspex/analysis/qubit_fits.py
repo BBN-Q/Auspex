@@ -181,11 +181,13 @@ class RamseyFit(AuspexFit):
 
     def _initial_guess_1f(self):
         freqs, Tcs, amps = KT_estimation(self.ypts-np.mean(self.ypts), self.xpts, 1)
+        print(f"Single Freq={freqs}, Amps={abs(amps)}, Taus={Tcs}")
         return [freqs[0], abs(amps[0]), Tcs[0], np.angle(amps[0]), np.mean(self.ypts)]
 
     def _initial_guess_2f(self):
         freqs, Tcs, amps = KT_estimation(self.ypts-np.mean(self.ypts), self.xpts, 2)
-        p0 = [*freqs, *abs(amps), *Tcs, *np.angle(amps), np.mean(self.ypts)]
+        print(f"Two Freqs={freqs}, Amps={abs(amps)}, Taus={Tcs}")
+        return [*freqs, *abs(amps), *Tcs, *np.angle(amps), np.mean(self.ypts)]
 
     @staticmethod
     def _ramsey_1f(x, f, A, tau, phi, y0):
