@@ -79,7 +79,7 @@ class TestFitMethods(unittest.TestCase, FitAssertion):
         x = np.linspace(-4, 4, 201)
         y = fits.GaussianFit._model(x, *p0)
         noise = np.random.randn(y.size) * 0.2
-        y += noise 
+        y += noise
         fit = fits.GaussianFit(x, y, make_plots=False)
         self.assertFitInterval(p0[0], "B", fit)
         self.assertFitInterval(p0[1], "A", fit)
@@ -94,8 +94,8 @@ class TestFitMethods(unittest.TestCase, FitAssertion):
         y += noise
         fit = fits.MultiGaussianFit(x, y, make_plots=False, n_gaussians=2)
 
-        #Be careful since no guarantee of order of fits 
-        #also only testing means and std devs since the other parameters are still a 
+        #Be careful since no guarantee of order of fits
+        #also only testing means and std devs since the other parameters are still a
         #little flaky...
         if fit.fit_params["μ0"] < fit.fit_params["μ1"]:
             self.assertFitInterval(p[5], "μ0", fit)
@@ -154,7 +154,6 @@ class TestFitMethods(unittest.TestCase, FitAssertion):
         self.assertFitInterval(p0[0], "f", fit)
         self.assertFitInterval(p0[2], "tau", fit)
 
-    @unittest.skip("Need better test case for 2-frequency Ramsey fit.")
     def test_RamseyFit_2f(self):
         #x, f, A, tau, phi, y0
 
