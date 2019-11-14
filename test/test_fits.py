@@ -163,7 +163,11 @@ class TestFitMethods(unittest.TestCase, FitAssertion):
         noise = np.random.randn(y.size) * np.max(y)/10
         y += noise
 
-        fit = qubit_fits.RamseyFit(x, y, two_freqs=True, AIC=True, make_plots=False)
+        fit = qubit_fits.RamseyFit(x, y, two_freqs=True, AIC=True, make_plots=False, force=True)
+        self.assertFitInterval(p0[0], "f1", fit)
+        self.assertFitInterval(p0[1], "f2", fit)
+        self.assertFitInterval(p0[4], "tau1", fit)
+        self.assertFitInterval(p0[5], "tau2", fit)
 
     @unittest.skip("Fit not particularly stable?")
     def test_SingleQubitRB(self):

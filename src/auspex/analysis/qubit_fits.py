@@ -194,55 +194,60 @@ class RamseyFit(AuspexFit):
 
     @staticmethod
     def _model_2f(x, *p):
-            return (RamseyFit._ramsey_1f(x, p[0], p[2], p[4], p[6], p[8]) +
-                    RamseyFit._ramsey_1f(x, p[1], p[3], p[5], p[7], p[8]))
+        return (RamseyFit._ramsey_1f(x, p[0], p[2], p[4], p[6], p[8]) + RamseyFit._ramsey_1f(x, p[1], p[3], p[5], p[7], p[8]))
 
     @staticmethod
     def _model_1f(x, *p):
-            return RamseyFit._ramsey_1f(x, p[0], p[1], p[2], p[3], p[4])
+        return RamseyFit._ramsey_1f(x, p[0], p[1], p[2], p[3], p[4])
 
     def _aicc(self, e, k, n):
-        return 2*k+e+(k+1)*(k+1)/(n-k-2)
+        return 2*k+e+(2*k*(k+1))/(n-k-1)
 
     def _do_fit(self):
         if self.two_freqs:
+
             self.dict_option = True
             self._initial_guess = self._initial_guess_2f
             self._model = self._model_2f
 
             try:
                 super()._do_fit()
-                if not self.AIC:
-                    if self.plots:
-                        self.make_plots()
-                    return
                 two_freq_chi2 = self.sq_error
             except:
+                self.two_freqs = False
                 logger.info("Two-frequency fit failed. Trying single-frequency fit.")
 
-        self.dict_option = False
-        self._initial_guess = self._initial_guess_1f
-        self._model = self._model_1f
-        super()._do_fit()
-        one_freq_chi2 = self.sq_error
-
-        if self.two_freqs and self.AIC:
-            #Compare the one and two frequency fits
-            aic = self._aicc(two_freq_chi2, 9, len(self.xpts)) - self._aicc(one_freq_chi2, 5, len(self.xpts))
-
-            if aic > 0 and not self.force:
+            if self.two_freqs and self.AIC:
+                #Compare the one and two frequency fits
                 self.dict_option = False
-                logger.info(f"Selecting one-frequency fit with AIC = {aic}")
-                if self.plots:
-                    self.make_plots()
-            else:
-                self.dict_option = True
-                self._initial_guess = self._initial_guess_2f
-                self._model = self._model_2f
+                self._initial_guess = self._initial_guess_1f
+                self._model = self._model_1f
                 super()._do_fit()
-        else:
-            if self.plots:
-                self.make_plots()
+                one_freq_chi2 = self.sq_error
+
+                aic = self._aicc(two_freq_chi2, 9, len(self.xpts)) - self._aicc(one_freq_chi2, 5, len(self.xpts))
+
+                if aic > 0 and not self.force:
+                    self.two_freqs = False
+                    rl = 100*np.exp(-aic/2)
+                    logger.info(f"Selecting one-frequency fit with relative likelihood = {rl:.2f}%")
+                    if rl>33:
+                        logger.info("Relative likelihood of 2nd frequency high, take more averages or set force = True.")
+
+                else:
+                    self.dict_option = True
+                    self._initial_guess = self._initial_guess_2f
+                    self._model = self._model_2f
+                    super()._do_fit()
+
+        if not self.two_freqs:
+            self.dict_option = False
+            self._initial_guess = self._initial_guess_1f
+            self._model = self._model_1f
+            super()._do_fit()
+
+        if self.plots:
+            self.make_plots()
 
     def annotation(self):
         #TODO: fixme
@@ -250,18 +255,28 @@ class RamseyFit(AuspexFit):
 
     @property
     def T2(self):
-        return self.fit_params["tau"]
+        if self.two_freqs:
+            return self.fit_params["tau1"], self.fit_params["tau2"]
+        else:
+            return self.fit_params["tau"]
 
     @property
     def ramsey_freq(self):
-        return self.fit_params["f"]
+        if self.two_freqs:
+            return self.fit_params["f1"], self.fit_params["f2"]
+        else:
+            return self.fit_params["f"]
 
     def _fit_dict(self, p):
         if self.dict_option:
-            return {"f": (p[0], p[1]),
-                    "A": (p[2], p[3]),
-                    "tau": (p[4], p[5]),
-                    "phi": (p[6], p[7]),
+            return {"f1": p[0],
+                    "A1": p[2],
+                    "tau1": p[4],
+                    "phi1": p[6],
+                    "f2": p[1],
+                    "A2": p[3],
+                    "tau2": p[5],
+                    "phi2": p[7],
                     "y0": p[8]}
         else:
             return {"f": p[0],
