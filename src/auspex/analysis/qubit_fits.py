@@ -116,8 +116,7 @@ class T1Fit(AuspexFit):
                                     (self.xpts[j] - self.xpts[j-1]))
         xs = self.xpts - self.xpts[0]
         ys = self.ypts - self.ypts[0]
-        M = np.array([[np.sum(xs**2), np.sum(xs * S)],
-                      [np.sum(xs * S), np.sum(S**2)]])
+        M = np.array([[np.sum(xs**2), np.sum(xs * S)], [np.sum(xs * S), np.sum(S**2)]])
         B1 = (np.linalg.inv(M) @ np.array([np.sum(ys * xs), np.sum(ys * S)]).T)[1]
         theta = np.exp(B1 * self.xpts)
         M2 = np.array([[N, np.sum(theta)], [np.sum(theta), np.sum(theta**2)]])
@@ -137,6 +136,25 @@ class T1Fit(AuspexFit):
         """Return the measured T1 (i.e. decay constant of exponential).
         """
         return self.fit_params["T1"]
+
+
+    def make_plots(self):
+        """Create plot on both linear and semilog scale
+        """
+        logger.info("Semilog plot of |1> state probability requires calibrated data.")
+        plt.figure(figsize=(2*6.4, 4.8))
+        plt.subplot(121)
+        plt.plot(self.xpts, self.ypts, ".", markersize=15, label="Data")
+        plt.plot(self.xpts, self.model(self.xpts), "-", linewidth=3, label="Fit")
+        plt.xlabel(self.xlabel, fontsize=14)
+        plt.ylabel(self.ylabel, fontsize=14)
+        plt.annotate(self.annotation(), xy=(0.4, 0.10), xycoords='axes fraction', size=12)
+        plt.subplot(122)
+        plt.semilogy(self.xpts, -1/2*(self.ypts - self.fit_params["A0"]), ".", markersize=15, label="Data")
+        plt.semilogy(self.xpts, -1/2*(self.model(self.xpts) - self.fit_params["A0"]), "-", linewidth=3, label="Fit")
+        plt.xlabel(self.xlabel, fontsize=14)
+        plt.ylabel('|1> probability', fontsize=14)
+        plt.suptitle(self.title, fontsize=14)
 
     def annotation(self):
         return r"$T_1$ = {0:.2e} {1} {2:.2e}".format(self.fit_params["T1"], chr(177), self.fit_errors["T1"])
@@ -250,8 +268,10 @@ class RamseyFit(AuspexFit):
             self.make_plots()
 
     def annotation(self):
-        #TODO: fixme
-        return "RamseyFit"
+        if self.two_freqs:
+            return r"$T_2$ = {0:.2e} {1} {2:.2e} "'\n'"$T_2$ = {3:.2e} {4} {5:.2e}".format(self.fit_params["tau1"], chr(177), self.fit_errors["tau1"], self.fit_params["tau2"], chr(177), self.fit_errors["tau2"])
+        else:
+            return r"$T_2$ = {0:.2e} {1} {2:.2e}".format(self.fit_params["tau"], chr(177), self.fit_errors["tau"])
 
     @property
     def T2(self):
