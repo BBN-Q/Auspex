@@ -46,7 +46,6 @@ from itertools import product
 class Calibration(object):
 
     def __init__(self):
-        self.do_plotting = True
         self.uuid = str(uuid.uuid4())
         self.context = None
         self.socket = None
@@ -140,7 +139,7 @@ class Calibration(object):
 
 class QubitCalibration(Calibration):
     calibration_experiment = None
-    def __init__(self, qubits, sample_name='q1', output_nodes=None, stream_selectors=None, quad="real", auto_rollback=True, do_plotting=True, **kwargs):
+    def __init__(self, qubits, sample_name=None, output_nodes=None, stream_selectors=None, quad="real", auto_rollback=True, do_plotting=True, **kwargs):
         self.qubits           = qubits if isinstance(qubits, list) else [qubits]
         self.qubit            = None if isinstance(qubits, list) else qubits
         self.output_nodes     = output_nodes if isinstance(output_nodes, list) else [output_nodes]
@@ -158,25 +157,26 @@ class QubitCalibration(Calibration):
         self.do_plotting      = do_plotting
         self.fake_data        = []
         self.sample           = None
+        self.metafile         = None
         try:
             self.quad_fun = {"real": np.real, "imag": np.imag, "amp": np.abs, "phase": np.angle}[quad]
         except:
             raise ValueError('Quadrature to calibrate must be one of ("real", "imag", "amp", "phase").')
         super(QubitCalibration, self).__init__()
-
-        if sample_name:
-            if not bbndb.get_cl_session():
-                raise Exception("Attempting to load Calibrations database, \
-                    but no database session is open! Have the ChannelLibrary and PipelineManager been created?")
-            existing_samples = list(bbndb.get_cl_session().query(bbndb.calibration.Sample).filter_by(name=sample_name).all())
-            if len(existing_samples) == 0:
-                logger.info("Creating a new sample in the calibration database.")
-                self.sample = bbndb.calibration.Sample(name=sample_name)
-                bbndb.get_cl_session().add(self.sample)
-            elif len(existing_samples) == 1:
-                self.sample = existing_samples[0]
-            else:
-                raise Exception("Multiple samples found in calibration database with the same name! How?")
+        if not sample_name:
+            sample_name = self.qubits[0].label
+        if not bbndb.get_cl_session():
+            raise Exception("Attempting to load Calibrations database, \
+                but no database session is open! Have the ChannelLibrary and PipelineManager been created?")
+        existing_samples = list(bbndb.get_cl_session().query(bbndb.calibration.Sample).filter_by(name=sample_name).all())
+        if len(existing_samples) == 0:
+            logger.info("Creating a new sample in the calibration database.")
+            self.sample = bbndb.calibration.Sample(name=sample_name)
+            bbndb.get_cl_session().add(self.sample)
+        elif len(existing_samples) == 1:
+            self.sample = existing_samples[0]
+        else:
+            raise Exception("Multiple samples found in calibration database with the same name! How?")
 
     def sequence(self):
         """Returns the sequence for the given calibration, must be overridden"""
@@ -186,7 +186,10 @@ class QubitCalibration(Calibration):
         self.fake_data.append((args, kwargs))
 
     def run_sweeps(self):
-        meta_file = compile_to_hardware(self.sequence(), fileName=self.filename, axis_descriptor=self.descriptor())
+        if self.metafile:
+            meta_file = self.metafile
+        else:
+            meta_file = compile_to_hardware(self.sequence(), fileName=self.filename, axis_descriptor=self.descriptor())
         exp       = CalibrationExperiment(self.qubits, self.output_nodes, self.stream_selectors, meta_file, **self.kwargs)
         if len(self.fake_data) > 0:
             for fd in self.fake_data:
@@ -591,10 +594,11 @@ class RabiAmpCalibration(QubitCalibration):
         logger.info("Shifting I offset by: {}".format(self.i_offset))
         logger.info("Shifting Q offset by: {}".format(self.q_offset))
         finer_amps = np.linspace(np.min(self.amps), np.max(self.amps), 4*len(self.amps))
-        self.plot["I Data"] = (self.amps, data[:N//2])
-        self.plot["Q Data"] = (self.amps, data[N//2:])
-        self.plot["I Fit"] = (finer_amps, I_fit.model(finer_amps))
-        self.plot["Q Fit"] = (finer_amps, Q_fit.model(finer_amps))
+        if self.do_plotting:
+            self.plot["I Data"] = (self.amps, data[:N//2])
+            self.plot["Q Data"] = (self.amps, data[N//2:])
+            self.plot["I Fit"] = (finer_amps, I_fit.model(finer_amps))
+            self.plot["Q Fit"] = (finer_amps, Q_fit.model(finer_amps))
 
         if self.pi_amp <= 1.0 and self.pi2_amp <= 1.0:
             self.succeeded = True
@@ -652,14 +656,13 @@ class RamseyCalibration(QubitCalibration):
         return [plot]
 
     def exp_config(self, exp):
-        rcvr = self.qubit.measure_chan.receiver_chan.receiver
         if self.first_ramsey:
+            rcvr = self.qubit.measure_chan.receiver_chan.receiver
+            self.source_proxy = self.qubit.phys_chan.generator # DB object
+            self.qubit_source = exp._instruments[self.source_proxy.label] # auspex instrument
             if self.set_source:
-                self.source_proxy = self.qubit.phys_chan.generator # DB object
-                self.qubit_source = exp._instruments[self.source_proxy.label] # auspex instrument
-                self.orig_freq    = self.source_proxy.frequency
-                self.source_proxy.frequency = round(self.orig_freq + self.added_detuning, 10)
-                self.qubit_source.frequency = self.source_proxy.frequency
+                self.orig_freq = self.source_proxy.frequency + self.qubit.frequency # real qubit freq.
+                self.source_proxy.frequency += self.added_detuning
             else:
                 self.orig_freq = self.qubit.frequency
                 self.qubit.frequency = round(self.orig_freq+self.added_detuning,10)
@@ -671,35 +674,33 @@ class RamseyCalibration(QubitCalibration):
         try:
             ramsey_fit = RamseyFit(self.delays, data, two_freqs=self.two_freqs, AIC=self.AIC)
             fit_freqs = ramsey_fit.fit_params["f"]
+            fit_err = ramsey_fit.fit_errors["f"]
         except Exception as e:
             raise Exception(f"Exception {e} while fitting in {self}")
 
         # Plot the results
-        self.plot["Data 1"] = (self.delays, data)
-        finer_delays = np.linspace(np.min(self.delays), np.max(self.delays), 4*len(self.delays))
-        self.plot["Fit 1"] = (finer_delays, ramsey_fit.model(finer_delays))
+        if self.do_plotting:
+            self.plot["Data 1"] = (self.delays, data)
+            finer_delays = np.linspace(np.min(self.delays), np.max(self.delays), 4*len(self.delays))
+            self.plot["Fit 1"] = (finer_delays, ramsey_fit.model(finer_delays))
 
         #TODO: set conditions for success
         fit_freq_A = np.mean(fit_freqs) #the fit result can be one or two frequencies
+        fit_err_A = np.sum(fit_err)
         if self.set_source:
-            self.source_proxy.frequency = round(self.orig_freq + self.added_detuning + fit_freq_A/2, 10)
-            self.qubit_source.connect()
-            self.qubit_source.frequency = self.source_proxy.frequency
-            self.qubit_source.disconnect()
+            self.source_proxy.frequency = round(self.orig_freq - self.qubit.frequency + self.added_detuning + fit_freq_A/2, 10)
+            #self.qubit_source.frequency = self.source_proxy.frequency
         else:
             self.qubit.frequency = round(self.orig_freq + self.added_detuning + fit_freq_A/2, 10)
 
         self.first_ramsey = False
 
-        # if self.plot:
-        #     [self.add_manual_plotter(p) for p in self.plot] if isinstance(self.plot, list) else self.add_manual_plotter(self.plot)
-        # self.start_manual_plotters()
         data, _ = self.run_sweeps()
 
         try:
             ramsey_fit = RamseyFit(self.delays, data, two_freqs=self.two_freqs, AIC=self.AIC)
             fit_freqs = ramsey_fit.fit_params["f"]
-            self.succeeded = True
+            fit_err = ramsey_fit.fit_errors["f"]
         except Exception as e:
             if self.set_source:
                 self.source_proxy.frequency = self.orig_freq
@@ -709,32 +710,42 @@ class RamseyCalibration(QubitCalibration):
             raise Exception(f"Exception {e} while fitting in {self}")
 
         # Plot the results
-        self.plot["Data 2"] = (self.delays, data)
-        self.plot["Fit 2"]  = (finer_delays, ramsey_fit.model(finer_delays))
+        if self.do_plotting:
+            self.plot["Data 2"] = (self.delays, data)
+            self.plot["Fit 2"]  = (finer_delays, ramsey_fit.model(finer_delays))
 
         fit_freq_B = np.mean(fit_freqs)
+        fit_err_B = np.sum(fit_err)
         if fit_freq_B < fit_freq_A:
             self.fit_freq = round(self.orig_freq + self.added_detuning + 0.5*(fit_freq_A + 0.5*fit_freq_A + fit_freq_B), 10)
         else:
             self.fit_freq = round(self.orig_freq + self.added_detuning - 0.5*(fit_freq_A - 0.5*fit_freq_A + fit_freq_B), 10)
-        logger.info(f"Found qubit Frequency {self.fit_freq}") #TODO: print actual qubit frequency, instead of the fit
+        self.fit_err = fit_err_A + fit_err_B
+        logger.info(f"Found qubit frequency {round(self.fit_freq/1e9,9)} GHz")
+        self.succeeded = True #TODO: add bounds
 
     def update_settings(self):
         if self.set_source:
-            self.source_proxy.frequency = float(round(self.fit_freq))
-            self.qubit_source.frequency = self.source_proxy.frequency
+            self.source_proxy.frequency = float(round(self.fit_freq - self.qubit.frequency))
+        elif self.source_proxy is not None:
+            self.qubit.frequency = float(round(self.fit_freq - self.source_proxy.frequency))
         else:
             self.qubit.frequency = float(round(self.fit_freq))
-        # update edges where this is the target qubit
+
         for edge in self.qubit.edge_target:
-            if self.set_source:
+            if edge.phys_chan.generator is not None:
                 edge_source = edge.phys_chan.generator
-                edge.frequency = self.source_proxy.frequency + self.qubit_source.frequency - edge_source.frequency
+                if self.set_source:
+                    edge_source.frequency = self.source_proxy.frequency + self.qubit.frequency - edge.frequency
+                else:
+                    edge.frequency = self.source_proxy.frequency + self.qubit.frequency - edge_source.frequency
             else:
                 edge.frequency = self.qubit.frequency
+
         if self.sample:
-            frequency = self.qubit_source.frequency if self.set_source else self.qubit.frequency
-            c = bbndb.calibration.Calibration(value=frequency, sample=self.sample, name="Ramsey")
+            frequency = round(self.fit_freq,9)
+            frequency_error = round(self.fit_err,9)
+            c = bbndb.calibration.Calibration(value=frequency, uncertainty=frequency_error, sample=self.sample, name="Ramsey")
             c.date = datetime.datetime.now()
             bbndb.get_cl_session().add(c)
             bbndb.get_cl_session().commit()
@@ -794,8 +805,9 @@ class PhaseEstimation(QubitCalibration):
                                                 self.target, epsilon=self.epsilon)
             phase_error.append(error)
 
-            self.data_plot['data'] = (np.array(range(1, len(data)+1)), data)
-            self.plot["angle_estimate"] = (np.array(range(1, len(phase_error)+1)), np.array(phase_error))
+            if self.do_plotting:
+                self.data_plot['data'] = (np.array(range(1, len(data)+1)), data)
+                self.plot["angle_estimate"] = (np.array(range(1, len(phase_error)+1)), np.array(phase_error))
 
         if done == -1:
             self.succeeded = False
@@ -912,11 +924,12 @@ class DRAGCalibration(QubitCalibration):
                 raise Exception(f"Exception {e} while fitting in {self}")
 
             norm_data = data.reshape((len(self.num_pulses), len(self.deltas)))
-            for n in range(len(self.num_pulses)):
-                self.plot['Data_{}'.format(n)] = (self.deltas, norm_data[n, :])
-                finer_deltas = np.linspace(np.min(self.deltas), np.max(self.deltas), 4*len(self.deltas))
-                self.plot['Fit_{}'.format(n)] = (finer_deltas, quadf(finer_deltas, *popt_mat[:, n]))
-            self.plot["Data_opt"] = (self.num_pulses, opt_drag) #TODO: add error bars
+            if self.do_plotting:
+                for n in range(len(self.num_pulses)):
+                    self.plot['Data_{}'.format(n)] = (self.deltas, norm_data[n, :])
+                    finer_deltas = np.linspace(np.min(self.deltas), np.max(self.deltas), 4*len(self.deltas))
+                    self.plot['Fit_{}'.format(n)] = (finer_deltas, quadf(finer_deltas, *popt_mat[:, n]))
+                self.plot["Data_opt"] = (self.num_pulses, opt_drag) #TODO: add error bars
 
             if k==0:
                 #generate sequence with new pulses and drag parameters
@@ -937,6 +950,44 @@ class DRAGCalibration(QubitCalibration):
             c = bbndb.calibration.Calibration(value=self.opt_drag, sample=self.sample, name="drag_scaling")
             c.date = datetime.datetime.now()
             bbndb.get_cl_session().add(c)
+            bbndb.get_cl_session().commit()
+
+class CustomCalibration(QubitCalibration):
+    def __init__(self, qubits, metafile = None, fit_name = None, fit_param = [], set_param = None, **kwargs):
+        if not metafile or not fit_name or not fit_param:
+            raise Exception("Please specify experiment metafile, fit function, and desired fit paramter.") #currently save single param.
+        try:
+            with open(metafile, 'r') as FID:
+                self.meta_info = json.load(FID)
+        except:
+            raise Exception(f"Could note process meta info from file {meta_file}")
+        self.fit_name = fit_name
+        if not isinstance(fit_param, list):
+            fit_param = [fit_param]
+        self.fit_param = fit_param
+        self.set_param = set_param
+        super().__init__(qubits, **kwargs)
+        self.metafile = metafile
+        self.norm_points = {self.qubits[0].label: (0, 1)} #TODO: generalize
+
+    def _calibrate(self):
+        data, _ = self.run_sweeps()  # need to get descriptor
+        try:
+            self.fit_result = eval(self.fit_name)(np.array(self.meta_info["axis_descriptor"][0]['points']), data)
+            self.succeeded = True
+            if self.set_param:  # optional set parameter
+                self.set_param = self.fit_result.fit_params[self.fit_param]
+        except:
+            logger.warning(f"{self.fit_name} fit failed.")
+
+    def update_settings(self):
+        if self.sample: # make a separate Calibration entry for each fit paramter
+            curr_time = datetime.datetime.now()
+            for fit_param in self.fit_param:
+                c = bbndb.calibration.Calibration(value=self.fit_result.fit_params[fit_param], uncertainty=self.fit_result.fit_errors[fit_param],
+                sample=self.sample, name=fit_param, category=self.fit_name)
+                c.date = curr_time
+                bbndb.get_cl_session().add(c)
             bbndb.get_cl_session().commit()
 
 '''Two-qubit gate calibrations'''
@@ -994,10 +1045,11 @@ class CRCalibration(QubitCalibration):
         xaxis = self.lengths if self.cal_type==CR_cal_type.LENGTH else self.phases if self.cal_type==CR_cal_type.PHASE else self.amps
         finer_xaxis = np.linspace(np.min(xaxis), np.max(xaxis), 4*len(xaxis))
 
-        self.plot["Data 0"] = (xaxis,       data_t[:len(data_t)//2])
-        self.plot["Fit 0"] =  (finer_xaxis, np.polyval(all_params_0, finer_xaxis) if self.cal_type == CR_cal_type.AMP else sinf(finer_xaxis, **all_params_0))
-        self.plot["Data 1"] = (xaxis,       data_t[len(data_t)//2:])
-        self.plot["Fit 1"] =  (finer_xaxis, np.polyval(all_params_1, finer_xaxis) if self.cal_type == CR_cal_type.AMP else sinf(finer_xaxis, **all_params_1))
+        if self.do_plotting:
+            self.plot["Data 0"] = (xaxis,       data_t[:len(data_t)//2])
+            self.plot["Fit 0"] =  (finer_xaxis, np.polyval(all_params_0, finer_xaxis) if self.cal_type == CR_cal_type.AMP else sinf(finer_xaxis, **all_params_0))
+            self.plot["Data 1"] = (xaxis,       data_t[len(data_t)//2:])
+            self.plot["Fit 1"] =  (finer_xaxis, np.polyval(all_params_1, finer_xaxis) if self.cal_type == CR_cal_type.AMP else sinf(finer_xaxis, **all_params_1))
 
         # Optimal parameter within range of original data!
         if self.opt_par > np.min(xaxis) and self.opt_par < np.max(xaxis):
