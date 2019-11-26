@@ -891,7 +891,10 @@ class DRAGCalibration(QubitCalibration):
 
     def exp_config(self, exp):
         rcvr = self.qubit.measure_chan.receiver_chan.receiver
-        exp._instruments[rcvr.label].exp_step = self.step #where from?
+        label = rcvr.label
+        if rcvr.transceiver is not None:
+            label = rcvr.transceiver.label
+        exp._instruments[label].exp_step = self.step #where from?
 
     def _calibrate(self):
         # run twice for different DRAG parameter ranges

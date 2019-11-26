@@ -173,7 +173,7 @@ class QubitExperiment(Experiment):
         # Construct the DataAxis from the meta_info
         desc = meta_info["axis_descriptor"]
         data_axis = desc[0] # Data will always be the first axis
-
+        
         # ovverride data axis with repeated number of segments
         if hasattr(self, "repeats") and self.repeats is not None:
             data_axis['points'] = np.tile(data_axis['points'], self.repeats)
