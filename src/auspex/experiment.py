@@ -756,7 +756,7 @@ class Experiment(metaclass=MetaExperiment):
                     for p in self.plotters:
                         p.do_plotting = False
             else:
-                logger.info("Server did not respond.")
+                logger.info("Plot Server did not respond.")
                 for p in self.plotters:
                     p.do_plotting = False
 

@@ -136,8 +136,8 @@ class PipelineTestCase(unittest.TestCase):
 
         exp = QubitExperiment(PulsedSpec(q1), averages=5)
         exp.add_qubit_sweep(q1, "measure", "frequency", np.linspace(6e9, 6.5e9, 500))
-        self.assertTrue(len(exp.output_connectors["q1-integrated"].descriptor.axes[0].points) == 500)
-        self.assertTrue(exp.output_connectors["q1-integrated"].descriptor.axes[0].points[-1] == 6.5e9)
+        self.assertTrue(len(exp.output_connectors["q1-raw"].descriptor.axes[0].points) == 500)
+        self.assertTrue(exp.output_connectors["q1-raw"].descriptor.axes[0].points[-1] == 6.5e9)
 
     def test_multiple_streamselectors_per_qubit(self):
         cl.clear()
@@ -154,7 +154,7 @@ class PipelineTestCase(unittest.TestCase):
         pl.add_qubit_pipeline("q1", "demodulated", buffers=True)
         cl.commit()
 
-        self.assertTrue(pl["q1 integrated"])
+        self.assertTrue(pl["q1 raw"])
         self.assertTrue(pl["q1 demodulated"])
 
         exp = QubitExperiment(RabiAmp(q1, np.linspace(-1,1,21)), averages=5)
@@ -162,7 +162,7 @@ class PipelineTestCase(unittest.TestCase):
         exp.run_sweeps()
 
         self.assertTrue(len(exp.buffers)==2)
- 
+
     def test_run_pipeline(self):
         cl.clear()
         q1    = cl.new_qubit("q1")
@@ -183,7 +183,7 @@ class PipelineTestCase(unittest.TestCase):
         exp = QubitExperiment(RabiAmp(q1, np.linspace(-1,1,21)), averages=5)
         exp.set_fake_data(x6_1, np.random.random(21))
         exp.run_sweeps()
-        
+
         buf = list(exp.qubits_by_output.keys())[0]
         ax  = buf.input_connectors["sink"].descriptor.axes[0]
 

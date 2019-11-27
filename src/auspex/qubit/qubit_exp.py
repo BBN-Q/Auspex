@@ -138,7 +138,13 @@ class QubitExperiment(Experiment):
         self.stream_selectors = pipeline.pipelineMgr.get_current_stream_selectors()
         if len(self.stream_selectors) == 0:
             raise Exception("No filter pipeline has been created. You can try running the create_default_pipeline() method of the Pipeline Manager")
-        self.stream_selectors = [s for s in self.stream_selectors if s.qubit_name in self.qubits_by_name.keys()]
+        org_stream_selectors = self.stream_selectors
+        for ss in org_stream_selectors:
+            labels = ss.label.split('-')
+            for l in labels:
+                if l in self.qubits_by_name.keys() and ss not in self.stream_selectors:
+                    self.stream_selectors.append(ss)
+                    continue
 
         # Locate transmitters relying on processors
         self.transceivers = list(set([t.transceiver for t in self.transmitters + self.receivers if t.transceiver]))
@@ -167,7 +173,7 @@ class QubitExperiment(Experiment):
         # Construct the DataAxis from the meta_info
         desc = meta_info["axis_descriptor"]
         data_axis = desc[0] # Data will always be the first axis
-
+        
         # ovverride data axis with repeated number of segments
         if hasattr(self, "repeats") and self.repeats is not None:
             data_axis['points'] = np.tile(data_axis['points'], self.repeats)
@@ -212,7 +218,14 @@ class QubitExperiment(Experiment):
 
         # Create microwave sources and receiver instruments from the database objects.
         # We configure the self.receivers later after adding channels.
-        self.instrument_proxies = self.generators + self.receivers + self.transmitters + self.all_standalone + self.processors
+        self.instrument_proxies = self.generators + self.receivers + self.transmitters + self.transceivers + self.all_standalone + self.processors
+        for t in self.transceivers:
+            if t.initialize_separately:
+                self.instrument_proxies.remove(t)
+            else:
+                for el in t.transmitters + t.receivers:
+                    self.instrument_proxies.remove(el)
+
         self.instruments = []
         for instrument in self.instrument_proxies:
             if (hasattr(instrument, 'serial_port') and
@@ -236,18 +249,26 @@ class QubitExperiment(Experiment):
             if not hasattr(self, instrument.label):
                 setattr(self, instrument.label, instr)
 
+        mq_all_stream_sels = []
         for mq in self.measured_qubits:
 
             # Stream selectors from the pipeline database:
             # These contain all information except for the physical channel
-            mq_stream_sels = [s for s in self.stream_selectors if s.qubit_name == mq.label]
+            mq_stream_sels = [ss for ss in self.stream_selectors if mq.label in ss.label.split("-") and ss not in mq_all_stream_sels]
+            mq_all_stream_sels.append(mq_stream_sels)
 
             # The receiver channel only specifies the physical channel
             rcv = receiver_chans_by_qubit_label[mq.label]
 
             # Create the auspex stream selectors
-            dig = rcv.receiver # The digitizer instrument in the database
-            stream_sel_class = stream_sel_map[dig.stream_sel]
+            transcvr = rcv.receiver.transceiver
+            if transcvr is not None and transcvr.initialize_separately == False:
+                dig = rcv.receiver.transceiver
+                stream_sel_class = stream_sel_map[rcv.receiver.stream_sel]
+            else:
+                dig = rcv.receiver
+                stream_sel_class = stream_sel_map[dig.stream_sel]
+
             for mq_stream_sel in mq_stream_sels:
                 auspex_stream_sel = stream_sel_class(name=f"{rcv.label}-{mq_stream_sel.stream_type}-stream_sel")
                 mq_stream_sel.channel = rcv.channel
@@ -289,10 +310,15 @@ class QubitExperiment(Experiment):
         # Configure receiver instruments from the database objects
         # this must be done after adding channels.
         for dig in self.receivers:
-            dig.number_averages  = averages
-            dig.number_waveforms = 1
-            dig.number_segments  = segments_per_dig[dig]
-            dig.instr.proxy_obj  = dig
+            if dig.transceiver is not None and transcvr.initialize_separately == False:
+                dig.transceiver.number_averages = averages
+                dig.transceiver.number_waveforms = 1
+                dig.transceiver.number_segments = segments_per_dig[dig]
+            else:
+                dig.number_averages  = averages
+                dig.number_waveforms = 1
+                dig.number_segments  = segments_per_dig[dig]
+                dig.instr.proxy_obj  = dig
 
         # Restrict the graph to the relevant qubits
         self.measured_qubit_names = [q.label for q in self.measured_qubits]
@@ -303,6 +329,15 @@ class QubitExperiment(Experiment):
 
         # Compartmentalize the instantiation
         self.instantiate_filters(self.modified_graph)
+
+    def is_in_measured_qubit_names(self,qubit_name):
+        labels = []
+        if qubit_name is not None:
+            labels = qubit_name.split('-')
+        for l in labels:
+            if l in self.measured_qubit_names:
+                return True
+            return False
 
     def instantiate_filters(self, graph):
         # Configure the individual filter nodes
@@ -323,7 +358,7 @@ class QubitExperiment(Experiment):
         self.pl_session.commit()
         for l1, l2 in graph.edges():
             node1, node2 = graph.nodes[l1]['node_obj'], graph.nodes[l2]['node_obj']
-            if node1.qubit_name in self.measured_qubit_names and node2.qubit_name in self.measured_qubit_names:
+            if (self.is_in_measured_qubit_names(node1.qubit_name) or self.is_in_measured_qubit_names(node1.label)) and self.is_in_measured_qubit_names(node2.qubit_name):
                 if isinstance(node1, bbndb.auspex.FilterProxy):
                     filt1 = self.proxy_to_filter[node1]
                     oc   = filt1.output_connectors[graph[l1][l2]["connector_out"]]
@@ -520,13 +555,15 @@ class QubitExperiment(Experiment):
     def shutdown_instruments(self):
         # remove socket listeners
         logger.debug("Shutting down instruments")
-
-        for awg in self.awgs:
-            awg.stop()
-        for dig in self.digitizers:
-            dig.stop()
-        for gen_proxy in self.generators:
-            gen_proxy.instr.output = False
+        try:
+            for awg in self.awgs:
+                awg.stop()
+            for dig in self.digitizers:
+                dig.stop()
+            for gen_proxy in self.generators:
+                gen_proxy.instr.output = False
+        except:
+            logger.error('Could Not Stop AWGs or Digitizers; Reset Experiment')
         for instr in self.instruments:
             instr.disconnect()
         self.dig_exit.set()
