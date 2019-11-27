@@ -182,8 +182,12 @@ class PipelineManager(object):
         self.session.commit()
 
     @check_session_dirty
-    def load(self, pipeline_name):
-        cs = self.session.query(adb.Connection).filter_by(pipeline_name=pipeline_name).all()
+    def load(self, pipeline_name, index=1):
+        """Load the latest instance for a particular name. Specifying index = 2 will select the second most recent instance """
+        cs = self.session.query(adb.Connection).filter_by(pipeline_name=pipeline_name).order_by(adb.Connection.time.desc()).all()
+        timestamps = [c.time for c in cs]
+        timestamps = sorted(set(timestamps), key=timestamps.index) #not a very efficient way to keep the order
+        cs = [c for c in cs if c.time == timestamps[index-1]]
         if len(cs) == 0:
             raise Exception(f"Could not find pipeline named {pipeline_name}")
         else:
