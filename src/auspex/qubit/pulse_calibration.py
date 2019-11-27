@@ -259,11 +259,11 @@ class CalibrationExperiment(QubitExperiment):
         output_nodes = []
         qubit_labels = [q.label for q in self.qubits]
         for qubit in self.qubits:
-            stream_sels = [ss for ss in self.stream_selectors if ss.qubit_name == qubit.label]
+            stream_sels = [ss for ss in self.stream_selectors if qubit.label in ss.label.split("-")]
             if len(stream_sels) > 1:
                 raise Exception(f"More than one stream selector found for {qubit}, please explicitly define output node using output_nodes argument.")
             ds = nx.descendants(graph, stream_sels[0].hash_val)
-            outputs = [graph.nodes[d]['node_obj'] for d in ds if isinstance(graph.nodes[d]['node_obj'], (bbndb.auspex.Write, bbndb.auspex.Buffer))]
+            outputs = [graph.nodes[d]['node_obj'] for d in ds if isinstance(graph.nodes[d]['node_obj'], (bbndb.auspex.Write, bbndb.auspex.Buffer)) and graph.nodes[d]['node_obj'].qubit_name == qubit.label]
             if len(outputs) > 1:
                 raise Exception(f"More than one output node found for {qubit}, please explicitly define output node using output_nodes argument.")
             output_nodes.append(outputs[0])
@@ -280,7 +280,7 @@ class CalibrationExperiment(QubitExperiment):
                 raise ValueError(f"Could not find specified output node {output_node} in graph.")
 
         for qubit in self.qubits:
-            stream_sels = [ss for ss in self.stream_selectors if ss.qubit_name == qubit.label]
+            stream_sels = [ss for ss in self.stream_selectors if qubit.label in ss.label.split("-")]
             if not any([ss.hash_val in graph for ss in stream_sels]):
                 raise ValueError(f"Could not find specified qubit {qubit} in graph.")
 
@@ -664,13 +664,12 @@ class RamseyCalibration(QubitCalibration):
                 self.orig_freq = self.source_proxy.frequency + self.qubit.frequency # real qubit freq.
                 self.source_proxy.frequency += self.added_detuning
             else:
-                self.orig_freq += self.source_proxy.frequency # update to real qubit freq.
+                self.orig_freq = self.qubit.frequency
+                self.qubit.frequency = round(self.orig_freq+self.added_detuning,10)
 
     def _calibrate(self):
         self.first_ramsey = True
-        if not self.set_source:
-            self.orig_freq = self.qubit.frequency #set to initial qubit SSB
-            self.qubit.frequency += float(self.added_detuning)
+
         data, _ = self.run_sweeps()
         try:
             ramsey_fit = RamseyFit(self.delays, data, two_freqs=self.two_freqs, AIC=self.AIC)
@@ -692,7 +691,7 @@ class RamseyCalibration(QubitCalibration):
             self.source_proxy.frequency = round(self.orig_freq - self.qubit.frequency + self.added_detuning + fit_freq_A/2, 10)
             #self.qubit_source.frequency = self.source_proxy.frequency
         else:
-            self.qubit.frequency += float(fit_freq_A/2)
+            self.qubit.frequency = round(self.orig_freq + self.added_detuning + fit_freq_A/2, 10)
 
         self.first_ramsey = False
 
@@ -703,6 +702,11 @@ class RamseyCalibration(QubitCalibration):
             fit_freqs = ramsey_fit.fit_params["f"]
             fit_err = ramsey_fit.fit_errors["f"]
         except Exception as e:
+            if self.set_source:
+                self.source_proxy.frequency = self.orig_freq
+                self.qubit_source.frequency = self.orig_freq
+            else:
+                self.qubit.frequency = self.orig_freq
             raise Exception(f"Exception {e} while fitting in {self}")
 
         # Plot the results
@@ -723,15 +727,21 @@ class RamseyCalibration(QubitCalibration):
     def update_settings(self):
         if self.set_source:
             self.source_proxy.frequency = float(round(self.fit_freq - self.qubit.frequency))
-        else:
+        elif self.source_proxy is not None:
             self.qubit.frequency = float(round(self.fit_freq - self.source_proxy.frequency))
-        # update edges where this is the target qubit
+        else:
+            self.qubit.frequency = float(round(self.fit_freq))
+
         for edge in self.qubit.edge_target:
-            edge_source = edge.phys_chan.generator
-            if self.set_source:
-                edge_source.frequency = self.source_proxy.frequency + self.qubit.frequency - edge.frequency
+            if edge.phys_chan.generator is not None:
+                edge_source = edge.phys_chan.generator
+                if self.set_source:
+                    edge_source.frequency = self.source_proxy.frequency + self.qubit.frequency - edge.frequency
+                else:
+                    edge.frequency = self.source_proxy.frequency + self.qubit.frequency - edge_source.frequency
             else:
-                edge.frequency = self.qubit_source.frequency + self.qubit.frequency - edge_source.frequency
+                edge.frequency = self.qubit.frequency
+
         if self.sample:
             frequency = round(self.fit_freq,9)
             frequency_error = round(self.fit_err,9)
@@ -893,7 +903,10 @@ class DRAGCalibration(QubitCalibration):
 
     def exp_config(self, exp):
         rcvr = self.qubit.measure_chan.receiver_chan.receiver
-        exp._instruments[rcvr.label].exp_step = self.step #where from?
+        label = rcvr.label
+        if rcvr.transceiver is not None:
+            label = rcvr.transceiver.label
+        exp._instruments[label].exp_step = self.step #where from?
 
     def _calibrate(self):
         # run twice for different DRAG parameter ranges
