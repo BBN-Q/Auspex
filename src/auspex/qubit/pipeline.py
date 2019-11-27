@@ -59,7 +59,7 @@ class PipelineManager(object):
         # Check to see whether there is already a temp database
         available_pipelines = list(set([pn[0] for pn in list(self.session.query(adb.Connection.pipeline_name).all())]))
         if "working" in available_pipelines:
-            connections = list(self.session.query(adb.Connection).filter_by(pipeline_name="working").all())
+            connections = self.get_connections_by_name('working')
             edges = [(c.node1.hash_val, c.node2.hash_val, {'connector_in':c.node2_name,  'connector_out':c.node1_name}) for c in connections]
             nodes = []
             nodes.extend(list(set([c.node1 for c in connections])))
@@ -184,10 +184,7 @@ class PipelineManager(object):
     @check_session_dirty
     def load(self, pipeline_name, index=1):
         """Load the latest instance for a particular name. Specifying index = 2 will select the second most recent instance """
-        cs = self.session.query(adb.Connection).filter_by(pipeline_name=pipeline_name).order_by(adb.Connection.time.desc()).all()
-        timestamps = [c.time for c in cs]
-        timestamps = sorted(set(timestamps), key=timestamps.index) #not a very efficient way to keep the order
-        cs = [c for c in cs if c.time == timestamps[index-1]]
+        cs = self.get_connections_by_name(pipeline_name, index)
         if len(cs) == 0:
             raise Exception(f"Could not find pipeline named {pipeline_name}")
         else:
@@ -211,6 +208,13 @@ class PipelineManager(object):
             for new_node in new_by_old.values():
                 self.meas_graph.add_node(new_node.hash_val, node_obj=new_node)
             self.meas_graph.add_edges_from(edges)
+
+    def get_connections_by_name(self, pipeline_name, index=1):
+        cs = self.session.query(adb.Connection).filter_by(pipeline_name=pipeline_name).order_by(adb.Connection.time.desc()).all()
+        timestamps = [c.time for c in cs]
+        timestamps = sorted(set(timestamps), key=timestamps.index)
+        cs = [c for c in cs if c.time == timestamps[index-1]]
+        return cs
 
     def _push_meas_graph_to_db(self, graph, pipeline_name):
         # Clear out existing connections if on working:
