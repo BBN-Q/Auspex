@@ -10,6 +10,7 @@
 import os
 import numpy as np
 import sys
+import time
 
 from auspex.instruments.instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand
 from auspex.experiment import Experiment, FloatParameter
@@ -71,7 +72,7 @@ if __name__ == '__main__':
     edges = [
             (exp.voltage, avg.sink),
             (avg.partial_average, pl1.sink),
-            (avg.final_average, pl2.sink)
+            (avg.source, pl2.sink)
             ]
 
     avg.update_interval = 0.2
