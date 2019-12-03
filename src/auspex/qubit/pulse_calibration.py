@@ -212,6 +212,7 @@ class QubitCalibration(Calibration):
                 raise ValueError("Could not find data buffer for calibration.")
 
             dataset, descriptor = output_buff.get_data()
+            dataset = self.quad_fun(dataset)
 
             if self.norm_points:
                 buff_data = normalize_buffer_data(dataset, descriptor, i, zero_id=self.norm_points[qubit.label][0],
@@ -219,7 +220,7 @@ class QubitCalibration(Calibration):
             else:
                 buff_data = dataset
 
-            data[qubit.label] = self.quad_fun(buff_data)
+            data[qubit.label] = buff_data
 
             var_dataset, var_descriptor = var_buff.get_data()
             # if 'Variance' in dataset.dtype.names:
@@ -1253,6 +1254,8 @@ def phase_to_amplitude(phase, sigma, amp, target, epsilon=1e-2):
     return amp, done_flag, phase_error
 
 def quick_norm_data(data): #TODO: generalize as in Qlab.jl
+    if np.any(np.iscomplex(data)):
+        logger.warning("quick_norm_data does not support complex data!")
     """Rescale data assuming 2 calibrations / single qubit state at the end of the sequence"""
     data = 2*(data-np.mean(data[-4:-2]))/(np.mean(data[-4:-2])-np.mean(data[-2:])) + 1
     data = data[:-4]
