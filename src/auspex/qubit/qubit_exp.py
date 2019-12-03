@@ -627,7 +627,7 @@ class QubitExperiment(Experiment):
                 awg.run()
 
         # Wait for all of the acquisitions to complete
-        timeout = 2
+        timeout = 10
         for dig in self.digitizers:
             dig.wait_for_acquisition(self.dig_run, timeout=timeout, ocs=list(self.chan_to_oc.values()), progressbars=self.progressbars)
 

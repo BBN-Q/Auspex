@@ -369,25 +369,37 @@ class PhotonNumberFit(AuspexFit):
     5 - exp(-t_meas/T1) (us), only if starting from |1> (to include relaxation during the 1st msm't)
     6 - initial qubit state (0/1)
     """
-    def __init__(self, xpts, ypts, params, make_plots=False):
-        self.params = params
+    def __init__(self, xpts, ypts, T2, delta, kappa, chi, T1factor, init_state, make_plots=False):
+        self.gamma2 = 1.0/T2
+        self.delta = delta
+        self.chi = chi
+        self.kappa = kappa
+        self.T1factor = T1factor
+        self.init_state = init_state
+        super().__init__(xpts, ypts, make_plots=make_plots)
+
 
     def _initial_guess(self):
         return [0, 1]
 
-    @staticmethod
-    def _model(x, *p):
-        pa = p[0]
-        pb = p[1]
-        params = self.params
+    def _model(self, x, *p):
+        phi0 = p[0]
+        n0 = p[1]
 
-        if params[5] == 1:
-            return params[4]*model_0(t, pa, pb) + (1-params[4])*model_0(t, pa+np.pi, pb)
+        q = self.kappa + 1j*self.chi
+        tau = (1.0 - np.exp(-q*x))/q
+        A0 = np.exp(-(self.gamma2 + self.delta*1j)*x + (phi0 - n0*self.chi*tau)*1j)
+        B0 = np.exp(-(self.gamma2 + self.delta*1j)*x + (phi0 + np.pi - n0*self.chi*tau)*1j)
+        A  = 0.5*(1 - np.imag(A0))
+        B = 0.5*(1 - np.imag(B0))
+
+        if self.init_state == 1:
+            return 1 - (self.T1factor*A + (1-self.T1factor)*B)
         else:
-            return (-np.imag(np.exp(-(1/params[3]+params[1]*1j)*t + (pa-pb*params[2]*(1-np.exp(-((params[0] + params[2]*1j)*t)))/(params[0]+params[2]*1j))*1j)))
+            return A
 
     def _fit_dict(self, p):
-        return {"Pa": p[0], "Pb": p[1]}
+        return {"phi0": p[0], "n0": p[1]}
 
 #### OLD STYLE FITS THAT NEED TO BE CONVERTED
 

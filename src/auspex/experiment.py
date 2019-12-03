@@ -641,12 +641,16 @@ class Experiment(metaclass=MetaExperiment):
         self.shutdown_instruments()
 
         try:
-            while True:
+            ct_max = 5 #arbitrary waiting 10 s before giving up
+            for ct in range(ct_max):
                 if any([n.is_alive() for n in self.other_nodes]):
                     logger.warning("Filter pipeline appears stuck. Use keyboard interrupt to terminate.")
                     time.sleep(2.0)
                 else:
                     break
+                for n in self.other_nodes:
+                    n.terminate()
+                raise Exception('Filter pipeline stuck!')
         except KeyboardInterrupt as e:
             for n in self.other_nodes:
                 n.terminate()

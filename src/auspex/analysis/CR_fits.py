@@ -84,8 +84,9 @@ def fit_CR_phase(xpoints, data0, data1):
     fit1 = SineFit(xpoints, data1, np.pi, 1.0/xpoints[-1])
     #find the phase for maximum contrast
     contrast = (fit0.model(x_fine) - fit1.model(x_fine))/2.0
-    logger.info(f"CR Contrast = {np.max(contrast)}")
-    xopt = x_fine[np.argmax(contrast)] - np.pi
+    logger.info(f"CR Contrast = {np.min(contrast)}")
+    xopt = x_fine[np.argmin(contrast)] % (2*np.pi)
+
     logger.info(f"CR phase = {xopt}")
 
     return xopt, fit0.fit_params, fit1.fit_params
