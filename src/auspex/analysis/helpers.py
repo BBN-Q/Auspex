@@ -1,4 +1,5 @@
 from auspex.data_format import AuspexDataContainer
+from auspex.log import logger
 import datetime
 import os, re
 from os import path
@@ -75,6 +76,9 @@ def open_data(num=None, folder=None, groupname="main", datasetname="data", date=
 
 
 def normalize_data(data, zero_id = 0, one_id = 1):
+    if np.any(np.iscomplex(data['Data'])):
+        logger.warning("normalize_data should not be used with complex data.")
+
     metadata_str = [f for f in data.dtype.fields.keys() if 'metadata' in f]
     if len(metadata_str)!=1:
         raise ValueError('Data format not valid')
@@ -94,6 +98,9 @@ def normalize_data(data, zero_id = 0, one_id = 1):
     return norm_data
 
 def normalize_buffer_data(data, desc, qubit_index, zero_id = 0, one_id = 1):
+    if np.any(np.iscomplex(data)):
+        logger.warning("normalize_buffer_data should not be used with complex data.")
+
     # Qubit index gives the string offset of the qubit in the metadata
     metadata = [(i, int(v[qubit_index])) for i,v in enumerate(desc.axes[0].metadata) if v != "data"]
 
