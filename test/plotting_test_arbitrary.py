@@ -18,7 +18,7 @@ import matplotlib.pyplot as plt
 from auspex.experiment import Experiment, FloatParameter
 from auspex.stream import OutputConnector, DataStreamDescriptor
 from auspex.filters.plot import Plotter, ManualPlotter
-from auspex.filters.io import WriteToHDF5, DataBuffer
+from auspex.filters.io import DataBuffer
 from auspex.log import logger, logging
 # import auspex.analysis.switching as sw
 # from adapt import refine
@@ -60,15 +60,19 @@ if __name__ == '__main__':
 
     # Create a plotter callback
     def plot_me(plot):
-        ys = buff.output_data['voltage']
-        xs = buff.descriptor.axes[0].points
+        data, desc = buff.get_data()
+        ys = data
+        xs = desc.axes[0].points
         plot["Example Data"] = (xs, ys)
         plot["Example Fit"]  = (xs, ys+0.1)
 
     exp.add_manual_plotter(plt, callback=plot_me)
 
     exp.add_sweep(exp.amplitude, np.linspace(-5.0, 5.0, 100))
+
+    plt.start()
     exp.run_sweeps()
+    plt.stop()
 
     # ys = buff.get_data()['voltage']
     ys, desc = buff.get_data()
@@ -77,4 +81,4 @@ if __name__ == '__main__':
     plt["Example Data"] = (xs, ys)
     plt["Example Fit"]  = (xs, ys+0.1)
 
-    exp.plot_server.stop()
+    # exp.plot_server.stop()
