@@ -120,7 +120,7 @@ class PipelineManager(object):
         rx_chans = []
         multiplexed_groups = []
         for q in qubits:
-            rx_chan = receiver_chans_by_qubit[q]
+            rx_chan = receiver_chans_by_qubit_label[q.label]
             if rx_chan in rx_chans:
                 multiplexed_groups[rx_chans.index(rx_chan)].append(q)
             else:
