@@ -173,7 +173,7 @@ class MplCanvas(FigureCanvas):
         self.dpi = dpi
 
         if plot_mode == "quad":
-            self.fig, _axes = subplots(2, 2, figsize=(width, height), sharex=True, sharey=True, constrained_layout=True)
+            self.fig, _axes = subplots(2, 2, figsize=(width, height), sharex=True, sharey=False, constrained_layout=True)
             self.real_axis  = _axes[0,0]
             self.imag_axis  = _axes[0,1]
             self.abs_axis   = _axes[1,0]
@@ -182,29 +182,29 @@ class MplCanvas(FigureCanvas):
             self.func_names = ["Real", "Imag", "Abs", "Phase"]
             self.plot_funcs = [np.real, np.imag, np.abs, np.angle]
         elif plot_mode == "real":
-            self.fig, self.real_axis = subplots(1, 1, figsize=(width, height), sharex=True, sharey=True, constrained_layout=True)
+            self.fig, self.real_axis = subplots(1, 1, figsize=(width, height), sharex=True, sharey=False, constrained_layout=True)
             self.axes = [self.real_axis]
             self.func_names = ["Real"]
             self.plot_funcs = [np.real]
         elif plot_mode == "imag":
-            self.fig, self.imag_axis = subplots(1, 1, figsize=(width, height), sharex=True, sharey=True, constrained_layout=True)
+            self.fig, self.imag_axis = subplots(1, 1, figsize=(width, height), sharex=True, sharey=False, constrained_layout=True)
             self.axes = [self.imag_axis]
             self.func_names = ["Imag"]
             self.plot_funcs = [np.imag]
         elif plot_mode == "amp":
-            self.fig, self.abs_axis = subplots(1, 1, figsize=(width, height), sharex=True, sharey=True, constrained_layout=True)
+            self.fig, self.abs_axis = subplots(1, 1, figsize=(width, height), sharex=True, sharey=False, constrained_layout=True)
             self.axes = [self.abs_axis]
             self.func_names = ["Amp"]
             self.plot_funcs = [np.abs]
         elif plot_mode == "real/imag":
-            self.fig, _axes = subplots(1, 2, figsize=(width, height), sharex=True, sharey=True, constrained_layout=True)
+            self.fig, _axes = subplots(1, 2, figsize=(width, height), sharex=True, sharey=False, constrained_layout=True)
             self.real_axis  = _axes[0]
             self.imag_axis  = _axes[1]
             self.axes = [self.real_axis, self.imag_axis]
             self.func_names = ["Real", "Imag"]
             self.plot_funcs = [np.real, np.imag]
         elif plot_mode == "amp/phase":
-            self.fig, _axes = subplots(1, 2, figsize=(width, height), sharex=True, sharey=True, constrained_layout=True)
+            self.fig, _axes = subplots(1, 2, figsize=(width, height), sharex=True, sharey=False, constrained_layout=True)
             self.abs_axis  = _axes[0]
             self.phase_axis  = _axes[1]
             self.axes = [self.abs_axis, self.phase_axis]
