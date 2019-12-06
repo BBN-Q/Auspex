@@ -225,6 +225,7 @@ class MplCanvas(FigureCanvas):
                                    QtWidgets.QSizePolicy.Expanding,
                                    QtWidgets.QSizePolicy.Expanding)
         FigureCanvas.updateGeometry(self)
+
         # for ax in self.axes:
         #     print("canvac init", ax.xaxis.get_offset_text(), ax.yaxis.get_offset_text())
 
@@ -465,6 +466,9 @@ class MatplotWindowMixin(object):
         self.switch_toolbar()
         self.tabs.currentChanged.connect(self.switch_toolbar)
 
+        self.statusBar = QtWidgets.QStatusBar(self.main_widget)
+        self.layout.addWidget(self.statusBar)
+
     def data_signal_received(self, message):
         plot_name = message[0]
         uuid      = message[1]
@@ -481,7 +485,7 @@ class MatplotWindowMixin(object):
                     else:
                         self.canvas_by_name[plot_name].update_figure(data)
             except Exception as e:
-                self.statusBar().showMessage("Exception while plotting {}. Length of data: {}".format(e, len(data)), 1000)
+                self.statusBar.showMessage("Exception while plotting {}. Length of data: {}".format(e, len(data)), 1000)
 
     def switch_toolbar(self):
         if len(self.toolbars) > 0:
@@ -493,7 +497,7 @@ class MatplotWindowMixin(object):
         if self.data_listener_thread and self.Datalistener.running:
             # update status bar if possible
             try:
-                self.statusBar().showMessage("Disconnecting from server.", 10000)
+                self.statusBar.showMessage("Disconnecting from server.", 10000)
             except:
                 pass
             self.Datalistener.running = False
