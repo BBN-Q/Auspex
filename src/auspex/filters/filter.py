@@ -188,6 +188,14 @@ class Filter(Process, metaclass=MetaFilter):
             self.perf_queue.put(perf_info)
             self.last_performance_update = datetime.datetime.now()
 
+    def process_message(self, msg):
+        """To be overridden for interesting default behavior"""
+        pass
+
+    def checkin(self):
+        """For any filter-specific loop needs"""
+        pass
+
     def main(self):
         """
         Generic run method which waits on a single stream and calls `process_data` on any new_data
@@ -206,6 +214,9 @@ class Filter(Process, metaclass=MetaFilter):
             # Try to pull all messages in the queue. queue.empty() is not reliable, so we
             # ask for forgiveness rather than permission.
             messages = []
+
+            # For any filter-specific loop needs
+            self.checkin()
 
             # Check to see if the parent process still exists:
             if not self._parent_process_running():
@@ -232,6 +243,7 @@ class Filter(Process, metaclass=MetaFilter):
                     else:
                         # Propagate along the graph
                         self.push_to_all(message)
+                        self.process_message(message)
 
                 elif message['type'] == 'data':
                     # if not hasattr(message_data, 'size'):

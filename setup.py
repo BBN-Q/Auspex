@@ -22,8 +22,8 @@ install_requires = [
     "ipykernel>=5.0.0",
     "ipywidgets>=7.0.0",
     "sqlalchemy >= 1.2.15",
+    "pyserial >= 3.4",
     "setproctitle",
-    "serial",
     "progress"
 ]
 
@@ -43,7 +43,7 @@ if os.name == "posix":
 
 setup(
     name='auspex',
-    version='2019.1',
+    version='2019.2',
     author='Auspex Developers',
     package_dir={'':'src'},
     packages=[

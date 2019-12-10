@@ -16,7 +16,7 @@ import auspex.config as config
 from copy import deepcopy
 import os, sys
 import json
-import time
+import time, datetime
 import networkx as nx
 import bbndb
 import queue
@@ -41,7 +41,7 @@ class SingleShotFidelityExperiment(QubitExperiment):
             optimize (bool, optional):      if True and a qubit_sweep is added, set the parameter corresponding to the maximum measured fidelity at the end of the sweep
 
     """
-    def __init__(self, qubit, output_nodes=None, meta_file=None, optimize=True, set_threshold = True, **kwargs):
+    def __init__(self, qubit, sample_name=None, output_nodes=None, meta_file=None, optimize=True, set_threshold = True, **kwargs):
 
         self.pdf_data = []
         self.qubit = qubit
@@ -54,6 +54,21 @@ class SingleShotFidelityExperiment(QubitExperiment):
             self.meta_file = self._single_shot_sequence(self.qubit)
 
         super(SingleShotFidelityExperiment, self).__init__(self.meta_file, **kwargs)
+
+        if not sample_name:
+            sample_name = self.qubit.label
+        if not bbndb.get_cl_session():
+            raise Exception("Attempting to load Calibrations database, \
+                but no database session is open! Have the ChannelLibrary and PipelineManager been created?")
+        existing_samples = list(bbndb.get_cl_session().query(bbndb.calibration.Sample).filter_by(name=sample_name).all())
+        if len(existing_samples) == 0:
+            logger.info("Creating a new sample in the calibration database.")
+            self.sample = bbndb.calibration.Sample(name=sample_name)
+            bbndb.get_cl_session().add(self.sample)
+        elif len(existing_samples) == 1:
+            self.sample = existing_samples[0]
+        else:
+            raise Exception("Multiple samples found in calibration database with the same name! How?")
 
     def guess_output_nodes(self, graph):
         output_nodes = []
@@ -108,6 +123,11 @@ class SingleShotFidelityExperiment(QubitExperiment):
             self.stop_manual_plotters()
             if self.set_threshold:
                 self.stream_selectors[0].threshold = self.get_threshold()[0]
+            if self.sample:
+                c = bbndb.calibration.Calibration(value=self.get_fidelity()[0], sample=self.sample, name="Readout fid.", category="Readout")
+                c.date = datetime.datetime.now()
+                bbndb.get_cl_session().add(c)
+                bbndb.get_cl_session().commit()
         elif self.optimize:
             fidelities = [f['Max I Fidelity'] for f in self.pdf_data]
             opt_ind = np.argmax(fidelities)

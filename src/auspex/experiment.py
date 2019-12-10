@@ -205,6 +205,9 @@ class Experiment(metaclass=MetaExperiment):
         # add date to data files?
         self.add_date = False
 
+        # save channel library
+        self.save_chanddb = False
+
         # Things we can't metaclass
         self.output_connectors = {}
         for oc in self._output_connectors.keys():
@@ -514,7 +517,7 @@ class Experiment(metaclass=MetaExperiment):
                 w.filename.value = inc_filename
         self.filenames = [w.filename.value for w in self.writers]
         # Save ChannelLibrary version
-        if hasattr(self, 'chan_db') and self.filenames:
+        if hasattr(self, 'chan_db') and self.filenames and self.save_chandb:
             import bbndb
             exp_chandb = bbndb.deepcopy_sqla_object(self.chan_db, self.cl_session)
             exp_chandb.label = os.path.basename(self.filenames[0])
@@ -638,12 +641,16 @@ class Experiment(metaclass=MetaExperiment):
         self.shutdown_instruments()
 
         try:
-            while True:
+            ct_max = 5 #arbitrary waiting 10 s before giving up
+            for ct in range(ct_max):
                 if any([n.is_alive() for n in self.other_nodes]):
                     logger.warning("Filter pipeline appears stuck. Use keyboard interrupt to terminate.")
                     time.sleep(2.0)
                 else:
                     break
+                for n in self.other_nodes:
+                    n.terminate()
+                raise Exception('Filter pipeline stuck!')
         except KeyboardInterrupt as e:
             for n in self.other_nodes:
                 n.terminate()
@@ -753,7 +760,7 @@ class Experiment(metaclass=MetaExperiment):
                     for p in self.plotters:
                         p.do_plotting = False
             else:
-                logger.info("Server did not respond.")
+                logger.info("Plot Server did not respond.")
                 for p in self.plotters:
                     p.do_plotting = False
 
