@@ -226,9 +226,6 @@ class MplCanvas(FigureCanvas):
                                    QtWidgets.QSizePolicy.Expanding)
         FigureCanvas.updateGeometry(self)
 
-        # for ax in self.axes:
-        #     print("canvac init", ax.xaxis.get_offset_text(), ax.yaxis.get_offset_text())
-
     def compute_initial_figure(self):
         pass
 
@@ -245,10 +242,17 @@ class Canvas1D(MplCanvas):
         for plt, ax, f in zip(self.plots, self.axes, self.plot_funcs):
             plt.set_xdata(x_data)
             plt.set_ydata(f(y_data))
+
+            # Turn this off unless we are resizing since it is resource intensive
+            self.fig._constrained = False
+
             ax.relim()
             ax.autoscale_view()
             self.draw()
             self.flush_events()
+
+            self.fig._constrained = True
+
 
     def set_desc(self, desc):
         for ax, name in zip(self.axes, self.func_names):
@@ -317,11 +321,17 @@ class Canvas2D(MplCanvas):
     def update_figure(self, data):
         x_data, y_data, im_data = data
         im_data = im_data.reshape((len(y_data), len(x_data)), order='c')
+
+        # Turn this off unless we are resizing since it is resource intensive
+        self.fig._constrained = False
+
         for plt, f in zip(self.plots, self.plot_funcs):
             plt.set_data(f(im_data))
             plt.autoscale()
         self.draw()
         self.flush_events()
+
+        self.fig._constrained = True
 
     def set_desc(self, desc):
         self.aspect = "auto"# (desc['x_max']-desc['x_min'])/(desc['y_max']-desc['y_min'])
@@ -370,12 +380,18 @@ class CanvasMesh(MplCanvas):
         mesh = self.scaled_Delaunay(points)
         xs   = mesh.points[:,0]
         ys   = mesh.points[:,1]
+
+        # Turn this off unless we are resizing since it is resource intensive
+        self.fig._constrained = False
+
         for ax, f in zip(self.axes, self.plot_funcs):
             ax.clear()
             ax.tripcolor(xs, ys, mesh.simplices, f(data[:,2]), cmap="RdGy", shading="flat")
             ax.autoscale()
         self.draw()
         self.flush_events()
+
+        self.fig._constrained = True
 
     def set_desc(self, desc):
 
