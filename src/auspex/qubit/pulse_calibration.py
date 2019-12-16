@@ -136,7 +136,11 @@ class Calibration(object):
         This function is responsible for calling self.update_plot()"""
         pass
 
-    def exp_config(self, exp):
+    def exp_config(self):
+        """Any initial configuration before the experiment is compiled."""
+        pass
+
+    def exp_add_sweeps(self, exp):
         """Any final experiment configuration before it gets run."""
         pass
 
@@ -189,6 +193,7 @@ class QubitCalibration(Calibration):
         self.fake_data.append((args, kwargs))
 
     def run_sweeps(self):
+        self.exp_config()
         if self.metafile:
             meta_file = self.metafile
         else:
@@ -197,7 +202,7 @@ class QubitCalibration(Calibration):
         if len(self.fake_data) > 0:
             for fd in self.fake_data:
                 exp.set_fake_data(*fd[0], **fd[1], random_mag=0.0)
-        self.exp_config(exp)
+        self.exp_add_sweeps(exp)
         exp.run_sweeps()
 
         data = {}
@@ -372,7 +377,7 @@ class CavityTuneup(QubitCalibration):
     def sequence(self):
         return [[Id(self.qubit), MEAS(self.qubit)]]
 
-    def exp_config(self, exp):
+    def exp_add_sweeps(self, exp):
         exp.add_qubit_sweep(self.qubit, "measure", "frequency", self.new_frequencies)
         self.quad_fun = lambda x: x
 
@@ -555,7 +560,7 @@ class QubitTuneup(QubitCalibration):
     def sequence(self):
         return [[X(self.qubit, frequency=f, amp=self.amp), MEAS(self.qubit)] for f in self.fine_frequencies]
 
-    def exp_config(self, exp):
+    def exp_add_sweeps(self, exp):
         exp.add_qubit_sweep(self.qubit, "control", "frequency", self.coarse_frequencies)
         self.quad_fun = lambda x: x
 
@@ -664,17 +669,23 @@ class RamseyCalibration(QubitCalibration):
         self.plot = plot
         return [plot]
 
-    def exp_config(self, exp):
+    def exp_config(self):
         if self.first_ramsey:
-            rcvr = self.qubit.measure_chan.receiver_chan.receiver
-            self.source_proxy = self.qubit.phys_chan.generator # DB object
-            self.qubit_source = exp._instruments[self.source_proxy.label] # auspex instrument
-            if self.set_source:
+            if self.qubit.phys_chan.generator is not None:
+                self.source_proxy = self.qubit.phys_chan.generator # DB object
                 self.orig_freq = self.source_proxy.frequency + self.qubit.frequency # real qubit freq.
-                self.source_proxy.frequency += self.added_detuning
-            else:
+                if not self.set_source:
+                    self.qubit.frequency += self.added_detuning
+            else: 
+                self.source_proxy = None
                 self.orig_freq = self.qubit.frequency
                 self.qubit.frequency = round(self.orig_freq+self.added_detuning,10)
+
+    def exp_add_sweeps(self,exp):
+        if self.first_ramsey and self.set_source:
+            self.qubit_source = exp._instruments[self.source_proxy.label] # auspex instrument
+            self.source_proxy.frequency += self.added_detuning
+            self.qubit_source.frequency = self.source_proxy.frequency     
 
     def _calibrate(self):
         self.first_ramsey = True
@@ -698,7 +709,9 @@ class RamseyCalibration(QubitCalibration):
         fit_err_A = np.sum(fit_err)
         if self.set_source:
             self.source_proxy.frequency = round(self.orig_freq - self.qubit.frequency + self.added_detuning + fit_freq_A/2, 10)
-            #self.qubit_source.frequency = self.source_proxy.frequency
+            self.qubit_source.frequency = self.source_proxy.frequency
+        elif self.source_proxy is not None:
+            self.qubit.frequency = round(self.orig_freq - self.source_proxy.frequency + self.added_detuning + fit_freq_A/2, 10)
         else:
             self.qubit.frequency = round(self.orig_freq + self.added_detuning + fit_freq_A/2, 10)
 
@@ -712,8 +725,9 @@ class RamseyCalibration(QubitCalibration):
             fit_err = ramsey_fit.fit_errors["f"]
         except Exception as e:
             if self.set_source:
-                self.source_proxy.frequency = self.orig_freq
-                self.qubit_source.frequency = self.orig_freq
+                self.source_proxy.frequency = self.orig_freq - self.qubit.frequency
+            elif self.source_proxy is not None:
+                self.qubit.frequency = self.orig_freq - self.source_proxy.frequency
             else:
                 self.qubit.frequency = self.orig_freq
             raise Exception(f"Exception {e} while fitting in {self}")
@@ -910,7 +924,7 @@ class DRAGCalibration(QubitCalibration):
         self.plot = plot
         return [plot]
 
-    def exp_config(self, exp):
+    def exp_add_sweeps(self, exp):
         rcvr = self.qubit.measure_chan.receiver_chan.receiver
         label = rcvr.label
         if rcvr.transceiver is not None:
