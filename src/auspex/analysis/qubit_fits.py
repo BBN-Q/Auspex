@@ -276,18 +276,20 @@ class SingleQubitRBFit(AuspexFit):
     ylabel = r"<$\sigma_z$>"
     title = "Single Qubit RB Fit"
 
-    def __init__(self, lengths, data, make_plots=False, log_scale_x=True, bounded_fit=True, ax=None):
+    def __init__(self, lengths, data, make_plots=False, log_scale_x=True, smart_guess=True, bounded_fit=True, ax=None):
 
-        repeats = len(data) // len(lengths)
-        xpts = np.array(lengths)
-        ypts = np.mean(np.reshape(data,(len(lengths),repeats)),1)
+        self.lengths = sorted(list(set(lengths)))
+
+        repeats = len(data) // len(self.lengths)
+        xpts = np.array(self.lengths)
+        ypts = np.mean(np.reshape(data,(len(self.lengths),repeats)),1)
 
         self.data = data
-        self.lengths = lengths
-        self.data_points = np.reshape(data,(len(lengths),repeats))
+        self.data_points = np.reshape(data,(len(self.lengths),repeats))
         self.errors = np.std(self.data_points, 1)
         self.log_scale_x = log_scale_x
         self.ax = ax
+        self.smart_guess = smart_guess
 
         if log_scale_x:
             self.xlabel = r"$log_2$ Clifford Number"
@@ -304,23 +306,26 @@ class SingleQubitRBFit(AuspexFit):
         return p[0] * (1-p[1])**x + p[2]
 
     def _initial_guess(self):
-        ## Initial guess using method of linear regression via integral equations
-        ## https://www.scribd.com/doc/14674814/Regressions-et-equations-integrales
-        N = len(self.xpts)
-        S = np.zeros(N)
-        for j in range(2, N):
-            S[j] = S[j-1] + 0.5*((self.ypts[j] + self.ypts[j-1]) *
-                                    (self.xpts[j] - self.xpts[j-1]))
-        xs = self.xpts - self.xpts[0]
-        ys = self.ypts - self.ypts[0]
-        M = np.array([[np.sum(xs**2), np.sum(xs * S)],
-                      [np.sum(xs * S), np.sum(S**2)]])
-        B1 = (np.linalg.inv(M) @ np.array([np.sum(ys * xs), np.sum(ys * S)]).T)[1]
-        theta = np.exp(B1 * self.xpts)
-        M2 = np.array([[N, np.sum(theta)], [np.sum(theta), np.sum(theta**2)]])
-        A = np.linalg.inv(M2) @ np.array([np.sum(self.ypts), np.sum(self.ypts * theta)]).T
+        if self.smart_guess:
+            ## Initial guess using method of linear regression via integral equations
+            ## https://www.scribd.com/doc/14674814/Regressions-et-equations-integrales
+            N = len(self.xpts)
+            S = np.zeros(N)
+            for j in range(2, N):
+                S[j] = S[j-1] + 0.5*((self.ypts[j] + self.ypts[j-1]) *
+                                        (self.xpts[j] - self.xpts[j-1]))
+            xs = self.xpts - self.xpts[0]
+            ys = self.ypts - self.ypts[0]
+            M = np.array([[np.sum(xs**2), np.sum(xs * S)],
+                          [np.sum(xs * S), np.sum(S**2)]])
+            B1 = (np.linalg.inv(M) @ np.array([np.sum(ys * xs), np.sum(ys * S)]).T)[1]
+            theta = np.exp(B1 * self.xpts)
+            M2 = np.array([[N, np.sum(theta)], [np.sum(theta), np.sum(theta**2)]])
+            A = np.linalg.inv(M2) @ np.array([np.sum(self.ypts), np.sum(self.ypts * theta)]).T
 
-        return [A[1], 1-np.exp(B1), A[0]]
+            return [A[1], 1-np.exp(B1), A[0]]
+
+        return [1, 0, 0.5]
 
     def __str__(self):
         return "A*(1 - r)^N + B"
@@ -358,6 +363,47 @@ class SingleQubitRBFit(AuspexFit):
             self.ax.legend()
             self.ax.annotate(self.annotation(), xy=(0.4, 0.10),
                          xycoords='axes fraction', size=12)
+
+class SingleQubitLeakageRBFit(SingleQubitRBFit):
+
+    def __init__(self, lengths, data, make_plots=False, log_scale_x=True, bounded_fit=True, ax=None, leakage=True):
+
+        # Compute populations from the tomography data
+            a = data[-3]
+            b = data[-2]
+            c = data[-1]
+
+            pop_mat = np.linalg.inv([[a,b,c],[b,a,c],[1,1,1]])
+
+            points = []
+
+            for i in range(len(data[:-3]) // 2):
+                v = data[2*i]
+                vp = data[2*i+1]
+                points.append(np.matmul(pop_mat, np.array([v, vp, 1])))
+
+            self.pop0, self.pop1, self.pop2 = zip(*points)
+
+            pop_comp = [(self.pop0[i] + self.pop1[i]) if leakage else self.pop0[i] for i in range(len(self.pop0))]
+
+            super().__init__(lengths[:-3][::2], pop_comp, make_plots, log_scale_x, bounded_fit, ax)
+
+    def leakage(self):
+        leak = (1 - self.fit_params['B'])*self.fit_params['r']
+        err = leak*np.sqrt((self.fit_errors['B']/self.fit_params['B'])**2 + ((self.fit_errors['r']/self.fit_params['r'])**2))
+        return leak, err
+
+    def get_pops(self):
+        repeats = len(self.pop0) // len(set(self.lengths))
+        pop0 = np.mean(np.reshape(self.pop0,(len(self.lengths),repeats)),1)
+        pop0_err = np.std(np.reshape(self.pop0,(len(self.lengths),repeats)),1)
+        pop1 = np.mean(np.reshape(self.pop1,(len(self.lengths),repeats)),1)
+        pop1_err = np.std(np.reshape(self.pop1,(len(self.lengths),repeats)),1)
+        pop2 = np.mean(np.reshape(self.pop2,(len(self.lengths),repeats)),1)
+        pop2_err = np.std(np.reshape(self.pop2,(len(self.lengths),repeats)),1)
+        return pop0, pop0_err, pop1, pop1_err, pop2, pop2_err
+
+
 
 class PhotonNumberFit(AuspexFit):
     """Fit number of measurement photons before a Ramsey. See McClure et al., Phys. Rev. App. 2016
