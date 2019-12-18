@@ -223,9 +223,9 @@ class AMC599(object):
                 words_written = len(data) - ((datagrams_written-1) * max_ct)
             else:
                 words_written = max_ct
-            logger.debug("Wrote {} words in {} datagrams: {}", words_written,
-                                datagrams_written,
-                                [hex(x) for x in resp])
+            # logger.debug("Wrote {} words in {} datagrams: {}", words_written,
+            #                     datagrams_written,
+            #                     [hex(x) for x in resp])
             assert (resp[2*ct] == 0x80800000 + words_written)
             assert (resp[2*ct+1] == addr)
             addr += 4 * words_written
@@ -877,13 +877,14 @@ class APS3(Instrument, metaclass=MakeBitFieldParams):
         sleep(0.01)
 
     def load_waveforms(self, wfA, wfB):
-        print(len(wfA))
-
         wfA_32 = [((wfA[2*i+1] << 16) | wfA[2*i]) for i in range(len(wfA) // 2)]
         wfB_32 = [((wfB[2*i+1] << 16) | wfB[2*i]) for i in range(len(wfB) // 2)]
 
-        self.write_dram(self.WFA_OFFSET(), wfA_32) # I
-        self.write_dram(self.WFB_OFFSET(), wfB_32) # Q
+        if len(wfA_32) > 0 and len(wfB_32) > 0:
+            self.write_dram(self.WFA_OFFSET(), wfA_32) # I
+            self.write_dram(self.WFB_OFFSET(), wfB_32) # Q
+        else:
+            logger.warning('Ignoring zero-length waveforms.')
 
     def read_waveforms(self, wf_len):
         wfA_32 = self.read_dram(self.WFA_OFFSET(), wf_len // 2)
