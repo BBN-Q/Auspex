@@ -674,7 +674,9 @@ class RamseyCalibration(QubitCalibration):
             if self.qubit.phys_chan.generator is not None:
                 self.source_proxy = self.qubit.phys_chan.generator # DB object
                 self.orig_freq = self.source_proxy.frequency + self.qubit.frequency # real qubit freq.
-                if not self.set_source:
+                if self.set_source:
+                    self.source_proxy.frequency += self.added_detuning
+                else:
                     self.qubit.frequency += self.added_detuning
             else: 
                 self.source_proxy = None
@@ -682,10 +684,14 @@ class RamseyCalibration(QubitCalibration):
                 self.qubit.frequency = round(self.orig_freq+self.added_detuning,10)
 
     def exp_add_sweeps(self,exp):
-        if self.first_ramsey and self.set_source:
-            self.qubit_source = exp._instruments[self.source_proxy.label] # auspex instrument
-            self.source_proxy.frequency += self.added_detuning
-            self.qubit_source.frequency = self.source_proxy.frequency     
+        rcvr = self.qubit.measure_chan.receiver_chan.receiver
+        label = rcvr.label
+        if rcvr.transceiver is not None:
+            label = rcvr.transceiver.label
+
+        exp._instruments[label].exp_step = 0
+        if not self.first_ramsey:
+            exp._instruments[label].exp_step = 1    
 
     def _calibrate(self):
         self.first_ramsey = True
@@ -709,7 +715,6 @@ class RamseyCalibration(QubitCalibration):
         fit_err_A = np.sum(fit_err)
         if self.set_source:
             self.source_proxy.frequency = round(self.orig_freq - self.qubit.frequency + self.added_detuning + fit_freq_A/2, 10)
-            self.qubit_source.frequency = self.source_proxy.frequency
         elif self.source_proxy is not None:
             self.qubit.frequency = round(self.orig_freq - self.source_proxy.frequency + self.added_detuning + fit_freq_A/2, 10)
         else:
@@ -718,7 +723,7 @@ class RamseyCalibration(QubitCalibration):
         self.first_ramsey = False
 
         data, _ = self.run_sweeps()
-
+        
         try:
             ramsey_fit = RamseyFit(self.delays, data, two_freqs=self.two_freqs, AIC=self.AIC)
             fit_freqs = ramsey_fit.fit_params["f"]
