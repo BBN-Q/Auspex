@@ -42,7 +42,18 @@ class DSInstrumentsSG1200(SCPIInstrument):
         return float(self.interface.query("POWER?").replace('dBm',''))
     @power.setter
     def power(self, value):
+        if value % 0.5:
+            value = round(value*2)/2
+            logger.info(f'Set power rounded to {value} dBm')
         self.interface.write(f'POWER {value}dBm') # query times out
+
+    @property
+    #TODO: calibrate
+    def vernier(self):
+        return float(self.interface.query("VERNIER?"))
+    @vernier.setter
+    def vernier(self, value):
+        self.interface.write(f'VERNIER {value}')
 
     @property
     def internal_ref(self):
