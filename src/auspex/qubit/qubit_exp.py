@@ -337,7 +337,7 @@ class QubitExperiment(Experiment):
         for l in labels:
             if l in self.measured_qubit_names:
                 return True
-            return False
+        return False
 
     def instantiate_filters(self, graph):
         # Configure the individual filter nodes
