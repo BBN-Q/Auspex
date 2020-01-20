@@ -255,7 +255,7 @@ class SCPIInstrument(Instrument):
             elif interface_type == "VISA":
                 if "GPIB" in self.full_resource_name:
                     pass
-                if "USB" in self.full_resource_name:
+                elif "USB" in self.full_resource_name:
                     pass
                 elif any(is_valid_ipv4(substr) for substr in self.full_resource_name.split("::")) and "TCPIP" not in self.full_resource_name:
                     # assume single NIC for now

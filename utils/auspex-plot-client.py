@@ -524,8 +524,11 @@ class MatplotClientSubWindow(MatplotWindowMixin,QtWidgets.QMdiSubWindow):
 
 
 class MatplotClientWindow(MatplotWindowMixin, QtWidgets.QMainWindow):
-    def __init__(self):
+    def __init__(self, close_window=None):
         global single_window
+        if close_window == None:
+            close_window = single_window
+        self.close_window = close_window
         QtWidgets.QMainWindow.__init__(self)
         self.setAttribute(QtCore.Qt.WA_DeleteOnClose)
         self.setWindowTitle("Auspex Plotting")
@@ -540,7 +543,7 @@ class MatplotClientWindow(MatplotWindowMixin, QtWidgets.QMainWindow):
 
         self.settings_menu = self.menuBar().addMenu('&Settings')
         auto_close = QtWidgets.QAction('Auto Close Plots', self, checkable=True)
-        auto_close.setChecked(single_window)
+        auto_close.setChecked(close_window)
         self.settings_menu.addAction(auto_close)
 
         self.debug_menu = self.menuBar().addMenu('&Debug')
@@ -567,10 +570,17 @@ class MatplotClientWindow(MatplotWindowMixin, QtWidgets.QMainWindow):
         self.close()
 
 def new_plotter_window(message):
+    global single_window
+    reset_windows = False
+    close_window = single_window
     uuid, desc = message
     desc = json.loads(desc)
-
-    pw = MatplotClientWindow()
+    for plot in desc.values():
+        if single_window and plot['plot_type'] == 'manual':
+            close_window = False
+            reset_windows = True
+            break
+    pw = MatplotClientWindow(close_window = close_window)
     pw.setWindowTitle("%s" % progname)
     pw.show()
     pw.setWindowState(pw.windowState() & ~QtCore.Qt.WindowMinimized | QtCore.Qt.WindowActive)
@@ -578,8 +588,8 @@ def new_plotter_window(message):
     pw.construct_plots(desc)
     pw.listen_for_data(uuid, len(desc))
 
-    if single_window and len(plot_windows) > 0:
-        for w in plot_windows:
+    for w in plot_windows:
+        if w.close_window or reset_windows:
             w.closeEvent(0)
             plot_windows.remove(w)
     plot_windows.append(pw)
