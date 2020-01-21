@@ -279,7 +279,9 @@ class MixerCalibrationExperiment(Experiment):
             instr = instrument_map[instrument.model](instrument.address, instrument.label) # Instantiate
             # For easy lookup
             instr.proxy_obj = instrument
+            instrument._locked = False
             instrument.instr = instr
+            instrument._locked = True
             # Add to the experiment's instrument list
             self._instruments[instrument.label] = instr
             self.instruments.append(instr)
