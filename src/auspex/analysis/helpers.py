@@ -1,9 +1,13 @@
 from auspex.data_format import AuspexDataContainer
+from auspex.log import logger
 import datetime
 import os, re
 from os import path
 import numpy as np
 from itertools import product
+import bbndb
+from IPython.display import HTML, display
+import matplotlib.pyplot as plt
 
 def get_file_name():
     """Helper function to get a filepath from a dialog box"""
@@ -72,6 +76,9 @@ def open_data(num=None, folder=None, groupname="main", datasetname="data", date=
 
 
 def normalize_data(data, zero_id = 0, one_id = 1):
+    if np.any(np.iscomplex(data['Data'])):
+        logger.warning("normalize_data should not be used with complex data.")
+
     metadata_str = [f for f in data.dtype.fields.keys() if 'metadata' in f]
     if len(metadata_str)!=1:
         raise ValueError('Data format not valid')
@@ -91,9 +98,12 @@ def normalize_data(data, zero_id = 0, one_id = 1):
     return norm_data
 
 def normalize_buffer_data(data, desc, qubit_index, zero_id = 0, one_id = 1):
+    if np.any(np.iscomplex(data)):
+        logger.warning("normalize_buffer_data should not be used with complex data.")
+
     # Qubit index gives the string offset of the qubit in the metadata
     metadata = [(i, int(v[qubit_index])) for i,v in enumerate(desc.axes[0].metadata) if v != "data"]
-    
+
     #find indeces for calibration points
     zero_cal_idx = [i for i, x in metadata if x == zero_id]
     one_cal_idx = [i for i, x in metadata if x == one_id]
@@ -203,3 +213,58 @@ def cal_data(data, quad=np.real, qubit_name="q1", group_name="main", \
     x_dat = data[key][ind_axis][:-(len(ind0) + len(ind1))]
     y_dat = (y_dat - zero_cal)/scale_factor + 1
     return y_dat.astype(return_type), x_dat
+
+def cal_ls():
+    ''' List of auspex.pulse_calibration results '''
+    caldb = bbndb.calibration.Calibration
+    c = bbndb.get_cl_session().query(caldb.id, caldb.sample_id, caldb.name, caldb.value, caldb.uncertainty, caldb.date).order_by(-caldb.id).all()
+    table_code = ""
+    for i, (id, sample_id, name, value, uncertainty, time) in enumerate(c):
+        if not uncertainty:
+            uncertainty = 0
+        d,t  = str(time).split()
+        sample = bbndb.get_cl_session().query(bbndb.calibration.Sample).filter_by(id=sample_id).first()
+        table_code += f"<tr><td>{id}</td><td>{d}</td><td>{t.split('.')[0]}</td><td>{sample.name}</td><td>{name}</td><td>{round(value,3)}</td><td>{round(uncertainty,3)}</td></tr>"
+    display(HTML(f"<table><tr><th>id</th><th>Date</th><th>Time</th><th>Sample</th><th>Name</th><th>Value</th><th>Uncertainty</th></tr><tr>{table_code}</tr></table>"))
+
+def get_cals(qubit, params, make_plots=True, depth=0):
+    """
+    Return and optionally plot the result of the most recent calibrations/characterizations
+    Parameters
+    -------------
+    qubit : qubit name (string)
+    params: parameter(s) to plot (string or list of strings)
+    make_plots: optional bool (default = True)
+    depth: optional integer, number of most recent calibrations to load (default = 0 for all cals)
+    -------------
+    Returns
+    List of: dates, values, errors
+    """
+
+    if isinstance(params, str):
+        params = [params]
+    caldb = bbndb.calibration.Calibration
+    sample_id = bbndb.get_cl_session().query(bbndb.calibration.Sample).filter_by(name=qubit).first().id
+    dates_list = []
+    values_list = []
+    errors_list = []
+    for param in params:
+        c = bbndb.get_cl_session().query(caldb.value, caldb.uncertainty, caldb.date).order_by(-caldb.id).filter_by(name = param, sample_id = sample_id).all()
+        dates = [cc[2] for cc in c][-depth:]
+        values = [cc[0] for cc in c][-depth:]
+        errors = [cc[1] if cc[1] else 0 for cc in c][-depth:]
+        if make_plots:
+            plt.errorbar(dates, values, yerr=errors, fmt='-o', elinewidth=2.0, capsize=4.0, label=param)
+            plt.title(qubit)
+            plt.xlabel("Time")
+            units = {'T1':'s', 'T2':'s', 'f':'Hz'} #TODO: add more
+            unit = f'({units[param]})' if param in units else ''
+            plt.ylabel(f'{param} {unit}')
+        dates_list.append(dates)
+        values_list.append(values)
+        errors_list.append(errors)
+    if make_plots:
+        plt.legend()
+        ylabels = [f'{param} ({units[param]})' if param in units else '' for param in params]
+        plt.ylabel(", ".join(ylabels))
+        return dates, values, errors

@@ -14,10 +14,11 @@ import sys
 if sys.platform == 'win32' or 'NOFORKING' in os.environ:
     import threading as mp
     from threading import Thread as Process
+    from threading import Event
     from queue import Queue
 else:
     import multiprocessing as mp
-    from multiprocessing import Process
+    from multiprocessing import Process, Event
     from multiprocessing import Queue
 
 from auspex.data_format import AuspexDataContainer
@@ -96,6 +97,8 @@ class DataBuffer(Filter):
     def __init__(self, **kwargs):
         super(DataBuffer, self).__init__(**kwargs)
         self._final_buffer = Queue()
+        self._temp_buffer = Queue()
+        self._get_buffer = Event()
         self.final_buffer  = None
 
     def final_init(self):
@@ -103,6 +106,11 @@ class DataBuffer(Filter):
         self.points_taken = 0
         self.descriptor   = self.sink.input_streams[0].descriptor
         self.buff         = np.empty(self.descriptor.expected_num_points(), dtype=self.descriptor.dtype)
+
+    def checkin(self):
+        if self._get_buffer.is_set():
+            self._temp_buffer.put(self.buff)
+        self._get_buffer.clear()
 
     def process_data(self, data):
         # Write the data
@@ -115,7 +123,14 @@ class DataBuffer(Filter):
         self._final_buffer.put(self.buff)
 
     def get_data(self):
-        if self.final_buffer is None:
-            self.final_buffer = self._final_buffer.get()
-        time.sleep(0.05)
-        return np.reshape(self.final_buffer, self.descriptor.dims()), self.descriptor
+        if self.done.is_set():
+            if self.final_buffer is None:
+                self.final_buffer = self._final_buffer.get()
+            time.sleep(0.05)
+            return np.reshape(self.final_buffer, self.descriptor.dims()), self.descriptor
+        else:
+            self._get_buffer.set()
+            temp_buffer = self._temp_buffer.get()
+            time.sleep(0.05)
+            return np.reshape(temp_buffer, self.descriptor.dims()), self.descriptor
+        

@@ -10,6 +10,7 @@
 import os
 import numpy as np
 import sys
+import time
 
 from auspex.instruments.instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand
 from auspex.experiment import Experiment, FloatParameter
@@ -71,7 +72,7 @@ class TestExperiment(Experiment):
             for delay in self.delays:
                 if idx == 0:
                     records = np.zeros((5, self.num_samples), dtype=np.float32)
-                time.sleep(0.01)
+                time.sleep(0.005)
                 records[idx,pulse_start:pulse_start+pulse_width] = np.exp(-0.5*(self.freq.value/2e6)**2) * \
                                                               np.exp(-delay/self.T2) * \
                                                               np.sin(2*np.pi * 10e6 * self.sampling_period*np.arange(pulse_width) \
@@ -105,13 +106,12 @@ if __name__ == '__main__':
             (channelizer.source, avg1.sink),
             (channelizer.source, ki.sink),
             (ki.source, avg2.sink),
-            (avg1.final_average, pl2.sink),
-            (avg2.final_average, pl3.sink)
+            (avg1.source, pl2.sink),
+            (avg2.source, pl3.sink)
             ]
 
     exp.set_graph(edges)
 
     exp.init_instruments()
     exp.add_sweep(exp.freq, 1e6*np.linspace(-0.1,0.1,3))
-    exp.init_progressbar(num=1)
     exp.run_sweeps()

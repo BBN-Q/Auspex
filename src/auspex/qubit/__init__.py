@@ -12,7 +12,8 @@ from .pulse_calibration import (
     PiCalibration,
     CRLenCalibration,
     CRAmpCalibration,
-    CRPhaseCalibration
+    CRPhaseCalibration,
+    CustomCalibration
  )
 from .single_shot_fidelity import SingleShotFidelityExperiment
 from .mixer_calibration import MixerCalibrationExperiment, MixerCalibration

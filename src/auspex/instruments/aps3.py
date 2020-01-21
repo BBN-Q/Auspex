@@ -223,9 +223,9 @@ class AMC599(object):
                 words_written = len(data) - ((datagrams_written-1) * max_ct)
             else:
                 words_written = max_ct
-            logger.debug("Wrote {} words in {} datagrams: {}", words_written,
-                                datagrams_written,
-                                [hex(x) for x in resp])
+            # logger.debug("Wrote {} words in {} datagrams: {}", words_written,
+            #                     datagrams_written,
+            #                     [hex(x) for x in resp])
             assert (resp[2*ct] == 0x80800000 + words_written)
             assert (resp[2*ct+1] == addr)
             addr += 4 * words_written
@@ -300,7 +300,7 @@ class AMC599(object):
             raise Exception('DAC switch mode "' + mode + '" not recognized.')
 
         if self.ser is None:
-            logger.info('Fake wrote {:#x}'.format(code))
+            logger.debug('Fake wrote {:#x}'.format(code))
         else:
             logger.debug(self.serial_write_dac_register(dac, 0x152, code))
 
@@ -311,7 +311,7 @@ class AMC599(object):
             mode (string): Switch mode, one of "NRZ", "MIX", or "RZ"
         '''
         if self.ser is None:
-            logger.info('Fake read mix-mode.')
+            logger.debug('Fake read mix-mode.')
             return 'MIX'
 
         code = self.serial_read_dac_register(dac, 0x152) & 0x03
@@ -341,8 +341,8 @@ class AMC599(object):
         reg_value = int(1023 * (current - 8) / 32)
 
         if self.ser is None:
-            logger.info('{:#x}'.format(reg_value & 0x3))
-            logger.info('{:#x}'.format((reg_value >> 2) & 0xFF))
+            logger.debug('{:#x}'.format(reg_value & 0x3))
+            logger.debug('{:#x}'.format((reg_value >> 2) & 0xFF))
         else:
             logger.debug(self.serial_write_dac_register(dac, 0x041, reg_value & 0x3))
             sleep(0.01)
@@ -375,7 +375,7 @@ class AMC599(object):
         # Configure NCO_EN (Bit 6) = 0b1
         # Set the reserved bits (Bit 5 and Bit 3) to 0b0
         if self.ser is None:
-            logger.info('Fake read 0x00.')
+            logger.debug('Fake read 0x00.')
             code = 0x00
         else:
             code = self.serial_read_dac_register(dac, 0x111)
@@ -386,7 +386,7 @@ class AMC599(object):
             code &= ~(1 << 6)
 
         if self.ser is None:
-            logger.info('Fake wrote {:#x}'.format(code))
+            logger.debug('Fake wrote {:#x}'.format(code))
         else:
             logger.debug(self.serial_write_dac_register(dac, 0x111, code))
 
@@ -399,7 +399,7 @@ class AMC599(object):
             True if DAC NCO is enabled, otherwise False
         '''
         if self.ser is None:
-            logger.info('Fake reported DAC NCO enabled.')
+            logger.debug('Fake reported DAC NCO enabled.')
             return True
 
         return (self.serial_read_dac_register(dac, 0x111) & (1 << 6)) != 0
@@ -411,7 +411,7 @@ class AMC599(object):
             FIR85 (bool): Enables the FIR85 NCO filter if True, disables it if False
         '''
         if self.ser is None:
-            logger.info('Fake read 0x00.')
+            logger.debug('Fake read 0x00.')
             code = 0x00
         else:
             code = self.serial_read_dac_register(dac, 0x111)
@@ -422,7 +422,7 @@ class AMC599(object):
             code &= ~(1 << 0)
 
         if self.ser is None:
-            logger.info('Fake wrote {:#x}'.format(code))
+            logger.debug('Fake wrote {:#x}'.format(code))
         else:
             logger.debug(self.serial_write_dac_register(dac, 0x111, code))
 
@@ -435,7 +435,7 @@ class AMC599(object):
             True if DAC NCO FIR85 filter is enabled, otherwise False
         '''
         if self.ser is None:
-            logger.info('Fake reported DAC NCO FIR85 enabled.')
+            logger.debug('Fake reported DAC NCO FIR85 enabled.')
             return True
 
         return (self.serial_read_dac_register(dac, 0x111) & (1 << 0)) != 0
@@ -445,7 +445,7 @@ class AMC599(object):
         Writes the given frequency, assuming not in NCO-only mode.
         Follows procedure in Table 44 of AD9164 datasheet.
         '''
-        logger.info('Setting frequency to {}...'.format(f))
+        logger.debug('Setting frequency to {}...'.format(f))
 
         # Configure DC_TEST_EN bit: 0b0 = NCO operation with data interface
         logger.debug(self.serial_write_dac_register(dac, 0x150, 0x00))
@@ -495,7 +495,7 @@ class AMC599(object):
             self.ser.write(bytearray('rs fpga\n', 'ascii'))
             self.ser.readline() # Throw out the echo line from the terminal interface
         else:
-            logger.info('Error: unrecognized reference input "' + ref + '".')
+            logger.debug('Error: unrecognized reference input "' + ref + '".')
 
     def serial_get_reference(self):
         return self.ref
@@ -507,7 +507,7 @@ class AMC599(object):
             value (int): Sets the shuffle register bits
         '''
         if self.ser is None:
-            logger.info('Fake wrote {:#x}'.format(value & 0x7))
+            logger.debug('Fake wrote {:#x}'.format(value & 0x7))
         else:
             logger.debug(self.serial_write_dac_register(dac, 0x151, value & 0x7))
 
@@ -520,7 +520,7 @@ class AMC599(object):
             True if DAC shuffle is enabled, otherwise False
         '''
         if self.ser is None:
-            logger.info('Fake reported DAC shuffle mode enabled.')
+            logger.debug('Fake reported DAC shuffle mode enabled.')
             return True
 
         return self.serial_read_dac_register(dac, 0x151) & 0x7
@@ -841,24 +841,24 @@ class APS3(Instrument, metaclass=MakeBitFieldParams):
 
     ###### UTILITIES ###########################################################
     def run(self):
-        logger.info("Configuring JESD...")
+        logger.debug("Configuring JESD...")
         #APS3CommunicationManager.board(self.address).serial_configure_JESD()
         sleep(0.01)
-        logger.info("Taking cache controller out of reset...")
+        logger.debug("Taking cache controller out of reset...")
         self.cache_controller = True
         sleep(0.01)
-        logger.info("Taking sequencer out of reset...")
+        logger.debug("Taking sequencer out of reset...")
         self.sequencer_enable = True
         sleep(0.01)
-        logger.info("Enabling trigger...")
+        logger.debug("Enabling trigger...")
         self.trigger_enable = True
         sleep(0.01)
 
     def stop(self):
-        logger.info("Resetting cache controller...")
+        logger.debug("Resetting cache controller...")
         self.cache_controller = False
         sleep(0.01)
-        logger.info("Resetting sequencer...")
+        logger.debug("Resetting sequencer...")
         self.sequencer_enable = False
 
     ###### SEQUENCE LOADING ####################################################
@@ -873,17 +873,18 @@ class APS3(Instrument, metaclass=MakeBitFieldParams):
 
         sleep(0.01)
         self.write_dram(self.SEQ_OFFSET(), packed_seq)
-        logger.info(f"Wrote {len(packed_seq)} words to sequence memory.")
+        logger.debug(f"Wrote {len(packed_seq)} words to sequence memory.")
         sleep(0.01)
 
     def load_waveforms(self, wfA, wfB):
-        print(len(wfA))
-
         wfA_32 = [((wfA[2*i+1] << 16) | wfA[2*i]) for i in range(len(wfA) // 2)]
         wfB_32 = [((wfB[2*i+1] << 16) | wfB[2*i]) for i in range(len(wfB) // 2)]
 
-        self.write_dram(self.WFA_OFFSET(), wfA_32) # I
-        self.write_dram(self.WFB_OFFSET(), wfB_32) # Q
+        if len(wfA_32) > 0 and len(wfB_32) > 0:
+            self.write_dram(self.WFA_OFFSET(), wfA_32) # I
+            self.write_dram(self.WFB_OFFSET(), wfB_32) # Q
+        else:
+            logger.warning('Discarding zero-length waveform.')
 
     def read_waveforms(self, wf_len):
         wfA_32 = self.read_dram(self.WFA_OFFSET(), wf_len // 2)

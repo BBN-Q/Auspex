@@ -116,8 +116,7 @@ class T1Fit(AuspexFit):
                                     (self.xpts[j] - self.xpts[j-1]))
         xs = self.xpts - self.xpts[0]
         ys = self.ypts - self.ypts[0]
-        M = np.array([[np.sum(xs**2), np.sum(xs * S)],
-                      [np.sum(xs * S), np.sum(S**2)]])
+        M = np.array([[np.sum(xs**2), np.sum(xs * S)], [np.sum(xs * S), np.sum(S**2)]])
         B1 = (np.linalg.inv(M) @ np.array([np.sum(ys * xs), np.sum(ys * S)]).T)[1]
         theta = np.exp(B1 * self.xpts)
         M2 = np.array([[N, np.sum(theta)], [np.sum(theta), np.sum(theta**2)]])
@@ -138,6 +137,25 @@ class T1Fit(AuspexFit):
         """
         return self.fit_params["T1"]
 
+
+    def make_plots(self):
+        """Create plot on both linear and semilog scale
+        """
+        logger.info("Semilog plot of |1> state probability requires calibrated data.")
+        plt.figure(figsize=(2*6.4, 4.8))
+        plt.subplot(121)
+        plt.plot(self.xpts, self.ypts, ".", markersize=15, label="Data")
+        plt.plot(self.xpts, self.model(self.xpts), "-", linewidth=3, label="Fit")
+        plt.xlabel(self.xlabel, fontsize=14)
+        plt.ylabel(self.ylabel, fontsize=14)
+        plt.annotate(self.annotation(), xy=(0.4, 0.10), xycoords='axes fraction', size=12)
+        plt.subplot(122)
+        plt.semilogy(self.xpts, -1/2*(self.ypts - self.fit_params["A0"]), ".", markersize=15, label="Data")
+        plt.semilogy(self.xpts, -1/2*(self.model(self.xpts) - self.fit_params["A0"]), "-", linewidth=3, label="Fit")
+        plt.xlabel(self.xlabel, fontsize=14)
+        plt.ylabel('|1> probability', fontsize=14)
+        plt.suptitle(self.title, fontsize=14)
+
     def annotation(self):
         return r"$T_1$ = {0:.2e} {1} {2:.2e}".format(self.fit_params["T1"], chr(177), self.fit_errors["T1"])
 
@@ -151,7 +169,7 @@ class RamseyFit(AuspexFit):
     ylabel = r"<$\sigma_z$>"
     title = "Ramsey Fit"
 
-    def __init__(self, xpts, ypts, two_freqs=False, AIC=True, make_plots=False, force=False, ax=None):
+    def __init__(self, xpts, ypts, two_freqs=True, AIC=True, make_plots=False, force=False, ax=None):
         """One or two frequency Ramsey experiment fit. If a two-frequency fit is selected
             by the user or by comparing AIC scores, fit parameters are returned as tuples instead
             of single numbers.
@@ -168,6 +186,7 @@ class RamseyFit(AuspexFit):
         """
 
         self.AIC = AIC
+        self.dict_option = two_freqs
         self.two_freqs = two_freqs
         self.force = force
         self.plots = make_plots
@@ -185,7 +204,7 @@ class RamseyFit(AuspexFit):
 
     def _initial_guess_2f(self):
         freqs, Tcs, amps = KT_estimation(self.ypts-np.mean(self.ypts), self.xpts, 2)
-        p0 = [*freqs, *abs(amps), *Tcs, *np.angle(amps), np.mean(self.ypts)]
+        return [*freqs, *abs(amps), *Tcs, *np.angle(amps), np.mean(self.ypts)]
 
     @staticmethod
     def _ramsey_1f(x, f, A, tau, phi, y0):
@@ -193,74 +212,92 @@ class RamseyFit(AuspexFit):
 
     @staticmethod
     def _model_2f(x, *p):
-            return (RamseyFit._ramsey_1f(x, p[0], p[2], p[4], p[6], p[8]) +
-                    RamseyFit._ramsey_1f(x, p[1], p[3], p[5], p[7], p[9]))
+        return (RamseyFit._ramsey_1f(x, p[0], p[2], p[4], p[6], p[8]) + RamseyFit._ramsey_1f(x, p[1], p[3], p[5], p[7], p[8]))
 
     @staticmethod
     def _model_1f(x, *p):
-            return RamseyFit._ramsey_1f(x, p[0], p[1], p[2], p[3], p[4])
+        return RamseyFit._ramsey_1f(x, p[0], p[1], p[2], p[3], p[4])
 
     def _aicc(self, e, k, n):
-        return 2*k+e+(k+1)*(k+1)/(n-k-2)
+        return 2*k+e+(2*k*(k+1))/(n-k-1)
 
     def _do_fit(self):
         if self.two_freqs:
+
+            self.dict_option = True
             self._initial_guess = self._initial_guess_2f
             self._model = self._model_2f
+
             try:
                 super()._do_fit()
-                if not self.AIC:
-                    if self.plots:
-                        self.make_plots()
-                    return
                 two_freq_chi2 = self.sq_error
             except:
+                self.two_freqs = False
                 logger.info("Two-frequency fit failed. Trying single-frequency fit.")
 
-        self._initial_guess = self._initial_guess_1f
-        self._model = self._model_1f
-        self.two_freqs = False
-        super()._do_fit()
-        one_freq_chi2 = self.sq_error
-
-
-        if self.two_freqs and self.AIC:
-            #Compare the one and two frequency fits
-            aic = self._aicc(two_freq_chi2, 9, len(self.xpts)) - self._aicc(one_freq_chi2, 5, len(self.xpts))
-
-            if aic > 0 and not self.force:
-                self.two_freqs = False
-                logger.info(f"Selecting one-frequency fit with AIC = {aic}")
-                if self.plots:
-                    self.make_plots()
-            else:
-                self.two_freqs = True
-                self._initial_guess = self._initial_guess_2f
-                self._model = self._model_2f
+            if self.two_freqs and self.AIC:
+                #Compare the one and two frequency fits
+                self.dict_option = False
+                self._initial_guess = self._initial_guess_1f
+                self._model = self._model_1f
                 super()._do_fit()
-        else:
-            if self.plots:
-                self.make_plots()
+                one_freq_chi2 = self.sq_error
+
+                aic = self._aicc(two_freq_chi2, 9, len(self.xpts)) - self._aicc(one_freq_chi2, 5, len(self.xpts))
+
+                if aic > 0 and not self.force:
+                    self.two_freqs = False
+                    rl = 100*np.exp(-aic/2)
+                    logger.info(f"Selecting one-frequency fit with relative likelihood = {rl:.2f}%")
+                    if rl>33:
+                        logger.info("Relative likelihood of 2nd frequency high, take more averages or set force = True.")
+
+                else:
+                    self.dict_option = True
+                    self._initial_guess = self._initial_guess_2f
+                    self._model = self._model_2f
+                    super()._do_fit()
+
+        if not self.two_freqs:
+            self.dict_option = False
+            self._initial_guess = self._initial_guess_1f
+            self._model = self._model_1f
+            super()._do_fit()
+
+        if self.plots:
+            self.make_plots()
 
     def annotation(self):
-        #TODO: fixme
-        return "RamseyFit"
+        if self.two_freqs:
+            return r"$T_2$ = {0:.2e} {1} {2:.2e} "'\n'"$T_2$ = {3:.2e} {4} {5:.2e}".format(self.fit_params["tau1"], chr(177), self.fit_errors["tau1"], self.fit_params["tau2"], chr(177), self.fit_errors["tau2"])
+        else:
+            return r"$T_2$ = {0:.2e} {1} {2:.2e}".format(self.fit_params["tau"], chr(177), self.fit_errors["tau"])
 
     @property
     def T2(self):
-        return self.fit_params["tau"]
+        if self.two_freqs:
+            return self.fit_params["tau1"], self.fit_params["tau2"]
+        else:
+            return self.fit_params["tau"]
 
     @property
     def ramsey_freq(self):
-        return self.fit_params["f"]
+        if self.two_freqs:
+            return self.fit_params["f1"], self.fit_params["f2"]
+        else:
+            return self.fit_params["f"]
 
     def _fit_dict(self, p):
-        if self.two_freqs:
-            return {"f": (p[0], p[1]),
-                    "A": (p[2], p[3]),
-                    "tau": (p[4], p[5]),
-                    "phi": (p[6], p[7]),
-                    "y0": (p[8], p[9])}
+        if self.dict_option:
+            return {"f1": p[0],
+                    "A1": p[2],
+                    "tau1": p[4],
+                    "phi1": p[6],
+                    "f2": p[1],
+                    "A2": p[3],
+                    "tau2": p[5],
+                    "phi2": p[7],
+                    "y0": p[8]}
         else:
             return {"f": p[0],
                     "A": p[1],
@@ -276,18 +313,20 @@ class SingleQubitRBFit(AuspexFit):
     ylabel = r"<$\sigma_z$>"
     title = "Single Qubit RB Fit"
 
-    def __init__(self, lengths, data, make_plots=False, log_scale_x=True, bounded_fit=True, ax=None):
+    def __init__(self, lengths, data, make_plots=False, log_scale_x=True, smart_guess=True, bounded_fit=True, ax=None):
 
-        repeats = len(data) // len(lengths)
-        xpts = np.array(lengths)
-        ypts = np.mean(np.reshape(data,(len(lengths),repeats)),1)
+        self.lengths = sorted(list(set(lengths)))
+
+        repeats = len(data) // len(self.lengths)
+        xpts = np.array(self.lengths)
+        ypts = np.mean(np.reshape(data,(len(self.lengths),repeats)),1)
 
         self.data = data
-        self.lengths = lengths
-        self.data_points = np.reshape(data,(len(lengths),repeats))
+        self.data_points = np.reshape(data,(len(self.lengths),repeats))
         self.errors = np.std(self.data_points, 1)
         self.log_scale_x = log_scale_x
         self.ax = ax
+        self.smart_guess = smart_guess
 
         if log_scale_x:
             self.xlabel = r"$log_2$ Clifford Number"
@@ -304,23 +343,26 @@ class SingleQubitRBFit(AuspexFit):
         return p[0] * (1-p[1])**x + p[2]
 
     def _initial_guess(self):
-        ## Initial guess using method of linear regression via integral equations
-        ## https://www.scribd.com/doc/14674814/Regressions-et-equations-integrales
-        N = len(self.xpts)
-        S = np.zeros(N)
-        for j in range(2, N):
-            S[j] = S[j-1] + 0.5*((self.ypts[j] + self.ypts[j-1]) *
-                                    (self.xpts[j] - self.xpts[j-1]))
-        xs = self.xpts - self.xpts[0]
-        ys = self.ypts - self.ypts[0]
-        M = np.array([[np.sum(xs**2), np.sum(xs * S)],
-                      [np.sum(xs * S), np.sum(S**2)]])
-        B1 = (np.linalg.inv(M) @ np.array([np.sum(ys * xs), np.sum(ys * S)]).T)[1]
-        theta = np.exp(B1 * self.xpts)
-        M2 = np.array([[N, np.sum(theta)], [np.sum(theta), np.sum(theta**2)]])
-        A = np.linalg.inv(M2) @ np.array([np.sum(self.ypts), np.sum(self.ypts * theta)]).T
+        if self.smart_guess:
+            ## Initial guess using method of linear regression via integral equations
+            ## https://www.scribd.com/doc/14674814/Regressions-et-equations-integrales
+            N = len(self.xpts)
+            S = np.zeros(N)
+            for j in range(2, N):
+                S[j] = S[j-1] + 0.5*((self.ypts[j] + self.ypts[j-1]) *
+                                        (self.xpts[j] - self.xpts[j-1]))
+            xs = self.xpts - self.xpts[0]
+            ys = self.ypts - self.ypts[0]
+            M = np.array([[np.sum(xs**2), np.sum(xs * S)],
+                          [np.sum(xs * S), np.sum(S**2)]])
+            B1 = (np.linalg.inv(M) @ np.array([np.sum(ys * xs), np.sum(ys * S)]).T)[1]
+            theta = np.exp(B1 * self.xpts)
+            M2 = np.array([[N, np.sum(theta)], [np.sum(theta), np.sum(theta**2)]])
+            A = np.linalg.inv(M2) @ np.array([np.sum(self.ypts), np.sum(self.ypts * theta)]).T
 
-        return [A[1], 1-np.exp(B1), A[0]]
+            return [A[1], 1-np.exp(B1), A[0]]
+
+        return [1, 0, 0.5]
 
     def __str__(self):
         return "A*(1 - r)^N + B"
@@ -359,6 +401,47 @@ class SingleQubitRBFit(AuspexFit):
             self.ax.annotate(self.annotation(), xy=(0.4, 0.10),
                          xycoords='axes fraction', size=12)
 
+class SingleQubitLeakageRBFit(SingleQubitRBFit):
+
+    def __init__(self, lengths, data, make_plots=False, log_scale_x=True, bounded_fit=True, ax=None, leakage=True):
+
+        # Compute populations from the tomography data
+            a = data[-3]
+            b = data[-2]
+            c = data[-1]
+
+            pop_mat = np.linalg.inv([[a,b,c],[b,a,c],[1,1,1]])
+
+            points = []
+
+            for i in range(len(data[:-3]) // 2):
+                v = data[2*i]
+                vp = data[2*i+1]
+                points.append(np.matmul(pop_mat, np.array([v, vp, 1])))
+
+            self.pop0, self.pop1, self.pop2 = zip(*points)
+
+            pop_comp = [(self.pop0[i] + self.pop1[i]) if leakage else self.pop0[i] for i in range(len(self.pop0))]
+
+            super().__init__(lengths[:-3][::2], pop_comp, make_plots, log_scale_x, bounded_fit, ax)
+
+    def leakage(self):
+        leak = (1 - self.fit_params['B'])*self.fit_params['r']
+        err = leak*np.sqrt((self.fit_errors['B']/self.fit_params['B'])**2 + ((self.fit_errors['r']/self.fit_params['r'])**2))
+        return leak, err
+
+    def get_pops(self):
+        repeats = len(self.pop0) // len(set(self.lengths))
+        pop0 = np.mean(np.reshape(self.pop0,(len(self.lengths),repeats)),1)
+        pop0_err = np.std(np.reshape(self.pop0,(len(self.lengths),repeats)),1)
+        pop1 = np.mean(np.reshape(self.pop1,(len(self.lengths),repeats)),1)
+        pop1_err = np.std(np.reshape(self.pop1,(len(self.lengths),repeats)),1)
+        pop2 = np.mean(np.reshape(self.pop2,(len(self.lengths),repeats)),1)
+        pop2_err = np.std(np.reshape(self.pop2,(len(self.lengths),repeats)),1)
+        return pop0, pop0_err, pop1, pop1_err, pop2, pop2_err
+
+
+
 class PhotonNumberFit(AuspexFit):
     """Fit number of measurement photons before a Ramsey. See McClure et al., Phys. Rev. App. 2016
     input params:
@@ -369,25 +452,37 @@ class PhotonNumberFit(AuspexFit):
     5 - exp(-t_meas/T1) (us), only if starting from |1> (to include relaxation during the 1st msm't)
     6 - initial qubit state (0/1)
     """
-    def __init__(self, xpts, ypts, params, make_plots=False):
-        self.params = params
+    def __init__(self, xpts, ypts, T2, delta, kappa, chi, T1factor, init_state, make_plots=False):
+        self.gamma2 = 1.0/T2
+        self.delta = delta
+        self.chi = chi
+        self.kappa = kappa
+        self.T1factor = T1factor
+        self.init_state = init_state
+        super().__init__(xpts, ypts, make_plots=make_plots)
+
 
     def _initial_guess(self):
         return [0, 1]
 
-    @staticmethod
-    def _model(x, *p):
-        pa = p[0]
-        pb = p[1]
-        params = self.params
+    def _model(self, x, *p):
+        phi0 = p[0]
+        n0 = p[1]
 
-        if params[5] == 1:
-            return params[4]*model_0(t, pa, pb) + (1-params[4])*model_0(t, pa+np.pi, pb)
+        q = self.kappa + 1j*self.chi
+        tau = (1.0 - np.exp(-q*x))/q
+        A0 = np.exp(-(self.gamma2 + self.delta*1j)*x + (phi0 - n0*self.chi*tau)*1j)
+        B0 = np.exp(-(self.gamma2 + self.delta*1j)*x + (phi0 + np.pi - n0*self.chi*tau)*1j)
+        A  = 0.5*(1 - np.imag(A0))
+        B = 0.5*(1 - np.imag(B0))
+
+        if self.init_state == 1:
+            return 1 - (self.T1factor*A + (1-self.T1factor)*B)
         else:
-            return (-np.imag(np.exp(-(1/params[3]+params[1]*1j)*t + (pa-pb*params[2]*(1-np.exp(-((params[0] + params[2]*1j)*t)))/(params[0]+params[2]*1j))*1j)))
+            return A
 
     def _fit_dict(self, p):
-        return {"Pa": p[0], "Pb": p[1]}
+        return {"phi0": p[0], "n0": p[1]}
 
 #### OLD STYLE FITS THAT NEED TO BE CONVERTED
 
