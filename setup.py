@@ -26,6 +26,9 @@ install_requires = [
     "pyserial >= 3.4",
     "setproctitle",
     "progress"
+    "zeromq",
+    "pyqt",
+    "qtpy"
 ]
 
 #Use PyVISA-Py if running on Linux or MacOS
