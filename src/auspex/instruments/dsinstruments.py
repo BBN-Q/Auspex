@@ -12,19 +12,19 @@ from auspex.log import logger
 from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand, RampCommand, BoolCommand
 
 class DSInstrumentsSG12000(SCPIInstrument): #The Pro version has different commands
-    """DSInstruments SG1200 Signal Geneator"""
+    """DSInstruments SG12000 Signal Geneator"""
     instrument_type = "Microwave Source"
     bool_map = {'ON':1, 'OFF':0}
     bool_map_inv = {1:'ON', 0:'OFF'}
     output  = BoolCommand(scpi_string="OUTP:STAT", value_map={True: "ON", False: "OFF"})
 
     def __init__(self, resource_name=None, *args, **kwargs):
-        super(DSInstrumentsSG12000Pro, self).__init__(resource_name, *args, **kwargs)
+        super(DSInstrumentsSG12000, self).__init__(resource_name, *args, **kwargs)
 
     def connect(self, resource_name=None, interface_type="VISA"):
         if resource_name is not None:
             self.resource_name = resource_name
-        super(DSInstrumentsSG12000Pro, self).connect(resource_name=self.resource_name, interface_type=interface_type)
+        super(DSInstrumentsSG12000, self).connect(resource_name=self.resource_name, interface_type=interface_type)
         self.interface._resource.read_termination = u"\r\n"
         self.interface._resource.write_termination = u"\r\n"
         self.interface._resource.timeout = 100
