@@ -25,7 +25,7 @@ install_requires = [
     "sqlalchemy >= 1.2.15",
     "pyserial >= 3.4",
     "setproctitle",
-    "progress"
+    "progress",
     "zeromq",
     "pyqt",
     "qtpy"
