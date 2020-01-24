@@ -26,7 +26,6 @@ install_requires = [
     "pyserial >= 3.4",
     "setproctitle",
     "progress",
-    "zeromq",
     "pyqt",
     "qtpy"
 ]
