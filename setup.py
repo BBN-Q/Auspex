@@ -25,9 +25,7 @@ install_requires = [
     "sqlalchemy >= 1.2.15",
     "pyserial >= 3.4",
     "setproctitle",
-    "progress",
-    "pyqt",
-    "qtpy"
+    "progress"
 ]
 
 #Use PyVISA-Py if running on Linux or MacOS

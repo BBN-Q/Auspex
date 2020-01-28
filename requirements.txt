@@ -18,5 +18,3 @@ ipywidgets >= 7.0.0
 setproctitle
 pyserial >= 3.4
 git+https://github.com/spatialaudio/nbsphinx.git@master
-pyqt
-qtpy
