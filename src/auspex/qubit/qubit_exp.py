@@ -209,7 +209,7 @@ class QubitExperiment(Experiment):
         # Now a pipeline exists, so we create Auspex filters from the proxy filters in the db
         self.proxy_to_filter          = {}
         self.filters                  = []
-        self.connector_by_sel          = {}
+        self.connector_by_sel         = {}
         self.chan_to_dig              = {}
         self.chan_to_oc               = {}
         self.qubit_to_dig             = {}
@@ -238,7 +238,10 @@ class QubitExperiment(Experiment):
             instr = instrument_map[instrument.model](address, instrument.label) # Instantiate
             # For easy lookup
             instr.proxy_obj = instrument
+            
+            instrument._locked = False
             instrument.instr = instr # This shouldn't be relied upon
+            instrument._locked = True
 
             self.proxy_name_to_instrument[instrument.label] = instr
 

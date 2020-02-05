@@ -7,6 +7,7 @@ if sys.version_info < (3,6):
     sys.exit("Sorry, Python < 3.6 is not supported by Auspex.")
 
 install_requires = [
+    "bbndb >= 2020.1",
     "numpy >= 1.11.1",
     "scipy >= 0.17.1",
     "PyVISA >= 1.8",
@@ -19,8 +20,8 @@ install_requires = [
     "pyzmq >= 16.0.0",
     "pyusb >= 1.0.2",
     "python-usbtmc >= 0.8",
-    "ipykernel>=5.0.0",
-    "ipywidgets>=7.0.0",
+    "ipykernel >= 5.0.0",
+    "ipywidgets >= 7.0.0",
     "sqlalchemy >= 1.2.15",
     "pyserial >= 3.4",
     "setproctitle",
@@ -43,7 +44,7 @@ if os.name == "posix":
 
 setup(
     name='auspex',
-    version='2019.2',
+    version='2020.1',
     author='Auspex Developers',
     package_dir={'':'src'},
     packages=[
