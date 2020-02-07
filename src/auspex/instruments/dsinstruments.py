@@ -107,6 +107,9 @@ class DSInstrumentsSG12000(DSInstruments):
             raise
         self.interface.write(f'*INTERNALREF {value}')
 
+    def set_low_power_mode(self, value): # reduces RF output by 4-7 dB
+        return self.interface.write(f'*LPMODE {self.bool_map_inv[value]}')
+
 class DSInstrumentsSG12000Pro(DSInstruments):
     def __init__(self, resource_name=None, *args, **kwargs):
         super(DSInstrumentsSG12000Pro, self).__init__(resource_name, *args, **kwargs)
