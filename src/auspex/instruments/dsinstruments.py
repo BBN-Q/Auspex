@@ -73,9 +73,6 @@ class DSInstruments(SCPIInstrument):
     def usbvoltage(self):
         return self.interface.query("*SYSVOLTS?")
 
-    def temp(self): #Is this working?
-        return self.interface.query("*TEMPC?")
-
     @property
     def device_name(self):
         return self.interface.query("*UNITNAME?")
@@ -131,3 +128,6 @@ class DSInstrumentsSG12000Pro(DSInstruments):
 
     def detect_ext_ref(self):
         return self.interface.query('SYSREF STATUS?')
+
+    def temp(self): #Is this working?
+        return self.interface.query("*TEMPC?")
