@@ -762,6 +762,7 @@ class _AgilentNetworkAnalyzer(SCPIInstrument):
         self.interface._resource.read_termination = u"\n"
         self.interface._resource.timeout = self.TIMEOUT
         self.interface._resource.chunk_size = 2 ** 20 # Needed to fix binary transfers (?)
+        self.interface.raw_query = False
 
         self.interface.OPC() #wait for any previous commands to complete
         self.interface.write("SENSe1:SWEep:TIME:AUTO ON") #automatic sweep time
@@ -876,7 +877,9 @@ class _AgilentNetworkAnalyzer(SCPIInstrument):
     @property
     def measurements(self):
         """Get currently active measurements and their trace names."""
+        self.interface.raw_query = True
         active_meas = self.interface.query("CALC:PAR:CAT?")
+        self.interface.raw_query = False
         meas = active_meas.strip('\"').split(",")[::2]
         spars = active_meas.strip('\"').split(",")[1::2]
         return {s: m for m, s in zip(meas,spars)}
@@ -919,10 +922,16 @@ class _AgilentNetworkAnalyzer(SCPIInstrument):
 
         meas_done = False
         self.interface.write('*OPC')
+       
         while not meas_done:
             time.sleep(0.5)
-            opc_bit = int(self.interface.ESR()) & 0x1
-            if opc_bit == 1:
+           
+            try:
+                opc_bit = int(self.interface.ESR()) & 0x1
+            except:
+                opc_bit = 0x1
+            
+            if opc_bit == 0:
                 meas_done = True
 
     def _raw_query(self, string, size=16):
@@ -949,6 +958,7 @@ class _AgilentNetworkAnalyzer(SCPIInstrument):
         self.interface.write(":CALCulate:PARameter:SELect '{}'".format(mchan))
         self.reaverage()
         #Take the data as interleaved complex values
+        
         if self.data_query_raw:
             interleaved_vals = self._raw_query(":CALC:DATA? SDATA")
         else:
@@ -958,6 +968,7 @@ class _AgilentNetworkAnalyzer(SCPIInstrument):
         vals = interleaved_vals[::2] + 1j*interleaved_vals[1::2]
         #Get the associated frequencies
         freqs = np.linspace(self.frequency_start, self.frequency_stop, self.num_points)
+
         return (freqs, vals)
 
 class AgilentN5230A(_AgilentNetworkAnalyzer):

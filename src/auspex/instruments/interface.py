@@ -34,6 +34,9 @@ class VisaInterface(Interface):
             self._resource = rm.open_resource(resource_name)
         except:
             raise Exception("Unable to create the resource '%s'" % resource_name)
+
+        self.raw_query=False
+
     def values(self, query_string):
         return self._resource.query_ascii_values(query_string, container=np.array)
     def value(self, query_string):
@@ -48,8 +51,31 @@ class VisaInterface(Interface):
         return self._resource.read_raw(size=size)
     def read_bytes(self, count, chunk_size=None, break_on_termchar=False):
         return self._resource.read_bytes(count, chunk_size=chunk_size, break_on_termchar=break_on_termchar)
+    
     def query(self, query_string):
+        if self.raw_query:
+            return self._raw_query(query_string)
+        else:
+            return self._query(query_string)
+
+    def _raw_query(self, query_string):
+        self._resource.write(query_string)
+        answer = []
+        #import pdb;pdb.set_trace()
+        while True:
+            got = self._resource.read_raw(size=16)
+            if b'\n' in got:
+                break
+            print(got)
+            answer.append(got.decode())
+        return "".join(answer)
+
+    def _query(self, query_string):
         return self._resource.query(query_string)
+
+
+
+
     def write_binary_values(self, query_string, values, **kwargs):
         return self._resource.write_binary_values(query_string, values, **kwargs)
     def query_ascii_values(self, query_string, **kwargs):
