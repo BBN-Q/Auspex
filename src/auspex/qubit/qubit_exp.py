@@ -174,7 +174,7 @@ class QubitExperiment(Experiment):
         # Construct the DataAxis from the meta_info
         desc = meta_info["axis_descriptor"]
         data_axis = desc[0] # Data will always be the first axis
-        
+
         # ovverride data axis with repeated number of segments
         if hasattr(self, "repeats") and self.repeats is not None:
             data_axis['points'] = np.tile(data_axis['points'], self.repeats)
@@ -239,7 +239,7 @@ class QubitExperiment(Experiment):
             instr = instrument_map[instrument.model](address, instrument.label) # Instantiate
             # For easy lookup
             instr.proxy_obj = instrument
-            
+
             instrument._locked = False
             instrument.instr = instr # This shouldn't be relied upon
             instrument._locked = True
@@ -348,7 +348,8 @@ class QubitExperiment(Experiment):
         for _, dat in graph.nodes(data=True):
             node = dat['node_obj']
             if isinstance(node, bbndb.auspex.FilterProxy):
-                if node.qubit_name in self.measured_qubit_names:
+                if all(name in self.measured_qubit_names for name in node.qubit_name.split('-')):
+                    #include correlators only if all participating qubits are measured
                     new_filt = filter_map[type(node)]()
                     new_filt.configure_with_proxy(node)
                     new_filt.proxy = node

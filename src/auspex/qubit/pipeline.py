@@ -97,8 +97,7 @@ class PipelineManager(object):
         # introduce correlator between streams
         q1_label = input_stream1.qubit_name
         q2_label = input_stream2.qubit_name
-        ss_label = qubit_label+"-"+stream_type
-        select = adb.Correlate(pipelineMgr=self, qubit_name=f'{q1_label}-{q2_label}', label=f'Correlate {q1_label}{q2_label}')
+        select = adb.Correlate(qubit_name=f'{q1_label}-{q2_label}', label=f'Correlate {q1_label}{q2_label}')
         self.session.add(select)
         self.meas_graph.add_node(select.hash_val, node_obj=select)
         self.meas_graph.add_edge(input_stream1.hash_val, select.hash_val, connector_in = 'sink', connector_out='source')
@@ -127,7 +126,7 @@ class PipelineManager(object):
             q = [c for c in cdb.channels if c.label==m.label[2:]][0]
             receiver_chans_by_qubit[q] = m.receiver_chan
             receiver_chans_by_qubit_label[q.label] = m.receiver_chan
-            
+
         rx_chans = []
         multiplexed_groups = []
         for q in qubits:
@@ -184,7 +183,7 @@ class PipelineManager(object):
         sel_labels = [sel for sel in sels if pipeline_name in sel.label]
         name_f = lambda s: s.qubit_name if qubit_names.count(s.qubit_name) == 1 else s.qubit_name + " " + s.stream_type
         sel_by_name = {name_f(sel): sel for sel in sels}
-        
+
         if pipeline_name in sel_by_name:
             return sel_by_name[pipeline_name]
         elif len(sel_labels)== 1:
