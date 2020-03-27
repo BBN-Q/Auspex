@@ -93,6 +93,17 @@ class PipelineManager(object):
         if auto_create:
             select.create_default_pipeline(buffers=buffers)
 
+    def add_correlator(self, input_stream1, input_stream2):
+        # introduce correlator between streams
+        q1_label = input_stream1.qubit_name
+        q2_label = input_stream2.qubit_name
+        ss_label = qubit_label+"-"+stream_type
+        select = adb.Correlate(pipelineMgr=self, qubit_name=f'{q1_label}-{q2_label}', label=f'Correlate {q1_label}{q2_label}')
+        self.session.add(select)
+        self.meas_graph.add_node(select.hash_val, node_obj=select)
+        self.meas_graph.add_edge(input_stream1.hash_val, select.hash_val, connector_in = 'sink', connector_out='source')
+        self.meas_graph.add_edge(input_stream2.hash_val, select.hash_val, connector_in = 'sink', connector_out='source')
+
     def create_default_pipeline(self, qubits=None, buffers=False):
         """Look at the QGL channel library and create our pipeline from the current
         qubits."""

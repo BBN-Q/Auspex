@@ -36,6 +36,7 @@ filter_map = {
     bbndb.auspex.Write: auspex.filters.WriteToFile,
     bbndb.auspex.Buffer: auspex.filters.DataBuffer,
     bbndb.auspex.Display: auspex.filters.Plotter,
+    bbndb.auspex.Correlate: auspex.filters.Correlator,
     bbndb.auspex.FidelityKernel: auspex.filters.SingleShotMeasurement
 }
 stream_sel_map = auspex.filters.stream_sel_map
