@@ -82,7 +82,7 @@ class WriteToFile(Filter):
     def get_data(self):
         assert self.done.is_set(), Exception("Experiment is still running. Please use get_data_while_running")
         container = AuspexDataContainer(self.filename.value)
-        return container.open_dataset(self.groupname.value, self.datasetname)
+        return container.open_dataset(self.groupname.value, self.datasetname.value)
 
     def process_data(self, data):
         # Write the data
