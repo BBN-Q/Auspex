@@ -1,6 +1,8 @@
 # .travis.yml file based on:
 # https://gist.github.com/dan-blanchard/7045057
 
+os: linux
+dist: xenial
 language: python
 python:
   - "3.6"
@@ -44,9 +46,6 @@ script:
 
 after_script:
   - coveralls
-
-# necessary to run on new container-based infrastructure
-sudo: false
 
 cache:
   directories:
