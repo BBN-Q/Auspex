@@ -204,6 +204,9 @@ class Instrument(metaclass=MetaInstrument):
         """Accept a sdettings dictionary and attempt to set all of the instrument
         parameters using the key/value pairs."""
         for name, value in settings_dict.items():
+            if name == 'params':
+                # Recursively configure parameters using the settings in params
+                self.configure_with_dict(settings_dict['params'])
             if name not in ["id", "label", "model", "address", "channel_db_id", "standalone"]:
                 if "_id" in name:
                     continue
