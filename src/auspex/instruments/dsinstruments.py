@@ -98,8 +98,7 @@ class DSInstrumentsSG12000(DSInstruments):
         return self.bool_map[self.interface.query('*INTREF?')]
     @reference.setter
     def reference(self, value):
-        value = int(value)
-        if value not in [0,1,A]:
+        if value not in ["0","1","A"]:
             print("Only valid values are 0, 1, A")
             raise
         self.interface.write(f'*INTERNALREF {value}')
@@ -116,7 +115,6 @@ class DSInstrumentsSG12000Pro(DSInstruments):
         return self.interface.query('SYSREF?')
     @reference.setter
     def reference(self, value):
-        value = int(value)
         if value not in ["INT","EXT","AUTO","FREE", "OFF"]:
             print("Only valid values are INT, EXT, AUTO, FREE", "OFF") #OFF disables the internal 100MHz vcxo, has lower noise, requires external source
             print("Setting default to ext")
