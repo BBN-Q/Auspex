@@ -107,20 +107,62 @@ class PipelineTestCase(unittest.TestCase):
         cl.commit()
 
         pl.create_default_pipeline()
-        pl.add_correlator(pl["q1"]["Demodulate"]["Integrate"], pl["q2"]["Demodulate"]["Integrate"])
+
         for ql in ['q1', 'q2']:
             qb = cl[ql]
             pl[ql].clear_pipeline()
-            pl[ql].stream_type = "integrated"
             pl[ql].create_default_pipeline(buffers=False)
 
             pl[ql]["Demodulate"]["Integrate"]["Average"].add(Write(label='var'), connector_out='final_variance')
             pl[ql]["Demodulate"]["Integrate"]["Average"]["var"].groupname = ql + '-main'
             pl[ql]["Demodulate"]["Integrate"]["Average"]["var"].datasetname = 'variance'
 
+        pl.add_correlator(pl["q1"]["Demodulate"]["Integrate"], pl["q2"]["Demodulate"]["Integrate"])
         pl["q1"]["Demodulate"]["Integrate"]["Correlate"].add(Average(label='corr_avg')).add(Display(label='test_corr_avg',plot_dims=0))
         pl["q1"]["Demodulate"]["Integrate"]["Correlate"]["Average"].add(Write(label='corr_write'))
         pl["q1"]["Demodulate"]["Integrate"]["Correlate"]["Average"].add(Write(label='corr_var'), connector_out='final_variance')
+        pl.reset_pipelines()
+
+        exp = QubitExperiment(PulsedSpec(q1), averages=5)
+
+    def test_create_integrated_correlator(self):
+        """Create a mildly non-trivial pipeline"""
+        cl.clear()
+        q1    = cl.new_qubit("q1")
+        q2    = cl.new_qubit("q2")
+        aps1  = cl.new_APS2("BBNAPS1", address="192.168.5.102")
+        aps2  = cl.new_APS2("BBNAPS2", address="192.168.5.103")
+        aps3  = cl.new_APS2("BBNAPS3", address="192.168.5.104")
+        aps4  = cl.new_APS2("BBNAPS4", address="192.168.5.105")
+        x6_1  = cl.new_X6("X6_1", address="1", record_length=512)
+        x6_2  = cl.new_X6("X6_2", address="1", record_length=512)
+        holz1 = cl.new_source("Holz_1", "HolzworthHS9000", "HS9004A-009-1", power=-30)
+        holz2 = cl.new_source("Holz_2", "HolzworthHS9000", "HS9004A-009-2", power=-30)
+        holz3 = cl.new_source("Holz_3", "HolzworthHS9000", "HS9004A-009-3", power=-30)
+        holz4 = cl.new_source("Holz_4", "HolzworthHS9000", "HS9004A-009-4", power=-30)
+
+        cl.set_control(q1, aps1, generator=holz1)
+        cl.set_measure(q1, aps2, x6_1[1], generator=holz2)
+        cl.set_control(q2, aps3, generator=holz3)
+        cl.set_measure(q2, aps4, x6_2[1], generator=holz4)
+        cl.set_master(aps1, aps1.ch("m2"))
+        cl.commit()
+
+        pl.create_default_pipeline()
+
+        for ql in ['q1', 'q2']:
+            pl[ql].clear_pipeline()
+            pl[ql].stream_type = "integrated"
+            pl[ql].create_default_pipeline(buffers=False)
+
+            pl[ql]["Average"].add(Write(label='var'), connector_out='final_variance')
+            pl[ql]["Average"]["var"].groupname = ql + '-main'
+            pl[ql]["Average"]["var"].datasetname = 'variance'
+
+        pl.add_correlator(pl["q1"], pl["q2"])
+        pl["q1"]["Correlate"].add(Average(label='corr_avg')).add(Display(label='test_corr_avg',plot_dims=0))
+        pl["q1"]["Correlate"]["Average"].add(Write(label='corr_write'))
+        pl["q1"]["Correlate"]["Average"].add(Write(label='corr_var'), connector_out='final_variance')
         pl.reset_pipelines()
 
         exp = QubitExperiment(PulsedSpec(q1), averages=5)
