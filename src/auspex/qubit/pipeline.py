@@ -98,7 +98,6 @@ class PipelineManager(object):
         q1_label = input_stream1.qubit_name
         q2_label = input_stream2.qubit_name
         select = adb.Correlate(qubit_name=f'{q1_label}-{q2_label}', label=f'Correlate {q1_label}{q2_label}')
-        # select.pipelineMgr = self
         self.session.add(select)
         self.meas_graph.add_node(select.hash_val, node_obj=select)
         self.meas_graph.add_edge(input_stream1.hash_val, select.hash_val, connector_in = 'sink', connector_out='source')
