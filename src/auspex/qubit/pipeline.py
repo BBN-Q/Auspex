@@ -70,10 +70,10 @@ class PipelineManager(object):
                 node.pipelineMgr = self
                 self.meas_graph.add_node(node.hash_val, node_obj=node)
             self.meas_graph.add_edges_from(edges)
-            adb.__current_pipeline__ = self
         else:
-            logger.info("Could not find an existing pipeline. Please create one.")
+            logger.info("Could not find an existing pipeline. Creating a blank pipeline.")
 
+        adb.__current_pipeline__ = self
         pipelineMgr = self
 
     def add_qubit_pipeline(self, qubit_label, stream_type, auto_create=True, buffers=False):
@@ -84,7 +84,7 @@ class PipelineManager(object):
             raise Exception(f"Could not find qubit {qubit_label} in pipeline...")
 
         ss_label = qubit_label+"-"+stream_type
-        select = adb.StreamSelect(pipelineMgr=self, stream_type=stream_type, qubit_name=qubit_label, label=ss_label)
+        select = adb.StreamSelect(stream_type=stream_type, qubit_name=qubit_label, label=ss_label)
         self.session.add(select)
         if not self.meas_graph:
             self.meas_graph = nx.DiGraph()
@@ -142,7 +142,7 @@ class PipelineManager(object):
             initial_stream_qubit = group[0]
             labels = [q.label for q in group]
             group_label = '-'.join(labels)
-            stream_selectors[group_label] = {'default' : adb.StreamSelect(pipelineMgr=self, label = group_label)}
+            stream_selectors[group_label] = {'default' : adb.StreamSelect(label = group_label)}
 
         for sels in stream_selectors.values():
             sel = sels['default']
