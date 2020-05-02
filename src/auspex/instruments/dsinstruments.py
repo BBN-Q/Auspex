@@ -9,9 +9,19 @@
 __all__ = ['DSInstrumentsSG12000', 'DSInstrumentsSG12000Pro']
 
 from auspex.log import logger
-from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand, RampCommand, BoolCommand
+from .instrument import SCPIInstrument, MetaInstrument, StringCommand, FloatCommand, IntCommand, RampCommand, BoolCommand
 
-class DSInstruments(SCPIInstrument):
+class MakeSettersGetters(MetaInstrument):
+    def __init__(self, name, bases, dct):
+        super(MakeSettersGetters, self).__init__(name, bases, dct)
+
+        for k,v in dct.items():
+            if isinstance(v, property):
+                logger.debug("Adding '%s' command to Labbrick", k)
+                setattr(self, 'set_'+k, v.fset)
+                setattr(self, 'get_'+k, v.fget)
+
+class DSInstruments(SCPIInstrument,metaclass=MakeSettersGetters):
     """Base class for DSInstruments Signal Generators"""
     instrument_type = "Microwave Source"
     bool_map = {'ON':1, 'OFF':0}
@@ -89,7 +99,7 @@ class DSInstruments(SCPIInstrument):
     def debug(self):
         self.interface.query("SYST:DBG?")
 
-class DSInstrumentsSG12000(DSInstruments):
+class DSInstrumentsSG12000(DSInstruments,metaclass=MakeSettersGetters):
     def __init__(self, resource_name=None, *args, **kwargs):
         super(DSInstrumentsSG12000, self).__init__(resource_name, *args, **kwargs)
 
@@ -106,7 +116,7 @@ class DSInstrumentsSG12000(DSInstruments):
     def set_low_power_mode(self, value): # reduces RF output by 4-7 dB
         return self.interface.write(f'*LPMODE {self.bool_map_inv[value]}')
 
-class DSInstrumentsSG12000Pro(DSInstruments):
+class DSInstrumentsSG12000Pro(DSInstruments,metaclass=MakeSettersGetters):
     def __init__(self, resource_name=None, *args, **kwargs):
         super(DSInstrumentsSG12000Pro, self).__init__(resource_name, *args, **kwargs)
 
