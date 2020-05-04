@@ -6,6 +6,8 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
+# Drivers for controling the DS Instruments puresine rf signal generators
+
 __all__ = ['DSInstrumentsSG12000', 'DSInstrumentsSG12000Pro']
 
 from auspex.log import logger
