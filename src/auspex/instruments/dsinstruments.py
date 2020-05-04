@@ -17,7 +17,7 @@ class MakeSettersGetters(MetaInstrument):
 
         for k,v in dct.items():
             if isinstance(v, property):
-                logger.debug("Adding '%s' command to Labbrick", k)
+                logger.debug("Adding '%s' command to DS source", k)
                 setattr(self, 'set_'+k, v.fset)
                 setattr(self, 'get_'+k, v.fget)
 
