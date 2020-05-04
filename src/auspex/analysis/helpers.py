@@ -51,7 +51,7 @@ def load_data(dirpath=None):
     Examples:
         Loading a data container
 
-        >>> data = open_data('/path/to/my/data.auspex')
+        >>> data = load_data('/path/to/my/data.auspex')
         >>> data
         {'q2-main': {'data': {'data': array([[ 0.16928101-0.05661011j,  0.3225708 +0.08914185j,
             0.2114563 +0.10314941j, ..., -0.32357788+0.16964722j,
@@ -140,7 +140,7 @@ def open_data(num=None, folder=None, groupname="main", datasetname="data", date=
 
     """
     if num is None or folder is None or date is None:
-        return open_data()
+        return load_data()
     else:
         if date == None:
             date = datetime.date.today().strftime('%y%m%d')
