@@ -24,6 +24,93 @@ def get_file_name():
 
     return filepath
 
+def _is_auspex(path):
+    """
+    Test if a given file path is an Auspex data file
+    """
+    path = path.rstrip('/')
+    filename = path.split('/')[-1]
+    if re.findall(r".+.auspex", filename):
+        return True
+    else:
+        return False
+
+def load_data(dirpath=None):
+    """
+    Open data in the .auspex file at dirpath/
+
+    Parameters:
+        dirpath (string)
+            Path to the .auspex file. If no folder is specified, a dialogue box will ask for a path.
+
+    Returns:
+        data_set (Dict{data group}{data name}{data,descriptor})
+            Data as a dictionary structure with data groups, types of data and
+            the data packed sequentially
+
+    Examples:
+        Loading a data container
+
+        >>> data = load_data('/path/to/my/data.auspex')
+        >>> data
+        {'q2-main': {'data': {'data': array([[ 0.16928101-0.05661011j,  0.3225708 +0.08914185j,
+            0.2114563 +0.10314941j, ..., -0.32357788+0.16964722j,
+        >>> data["q3-main"]["variance"]["descriptor"]
+        <DataStreamDescriptor(num_dims=1, num_points=52)>
+        >>> data["q3-main"]["variance"]["data"]
+        array([0.00094496+0.00014886j, 0.00089747+0.00015082j,
+        0.00090634+0.00015106j, 0.00090128+0.00014451j,...
+    """
+    if dirpath:
+        if not _is_auspex(dirpath):
+            raise Exception('\x1b[6;30;91m' +
+                            "File is not an Auspex file!" +
+                            '\x1b[0m')
+
+    if dirpath == None:
+        dp = get_file_name()[0]
+        dp = dp.rstrip('/')
+        filename = dp.split('/')[-1]
+        dirpath = dp
+        if not _is_auspex(dirpath):
+            raise Exception('\x1b[6;30;91m' +
+                            "File is not an Auspex file!" +
+                            '\x1b[0m')
+
+    # If path is still none do  nothing
+    if dirpath == None:
+        return []
+
+    try:
+        data_container = AuspexDataContainer(dirpath)
+        data_sets = {}
+        # get a list of data groups
+        groups = [x.name for x in os.scandir(dirpath)]
+
+        for group in groups:
+            # parse the data structure and pack the dict with data
+            data_sets[group] = {}
+            datafiles = [x.name for x in os.scandir(dirpath + '/' + group)]
+            datasets = list(set(list(filter(lambda x: x.split('.')[1] == 'dat', datafiles))))
+            datanames = [re.match(r"(.+).dat", ds).groups()[0] for ds in datasets]
+            for data in datanames:
+                data_sets[group][data] = {}
+                ds_data, ds_desc = data_container.open_dataset(group,data)
+                data_sets[group][data]["data"] = ds_data
+                data_sets[group][data]["descriptor"] = ds_desc
+    except FileNotFoundError:
+        print("File note found.  Please check your path")
+        data_sets = []
+    except PermissionError:
+        print("Permission error!  Do you have access to this file?")
+        data_sets = []
+    except:
+        print("Error!")
+        data_sets = []
+        raise
+
+    return data_sets
+
 def open_data(num=None, folder=None, groupname="main", datasetname="data", date=None):
     """Convenience Load data from an `AuspexDataContainer` given a file number and folder.
         Assumes that files are named with the convention `ExperimentName-NNNNN.auspex`
@@ -52,10 +139,8 @@ def open_data(num=None, folder=None, groupname="main", datasetname="data", date=
         >>> data, desc = open_data(42, '/path/to/my/data', "q1-main", date="190301")
 
     """
-    if num is None or folder is None:
-        # pull up dialog box
-        data_file = get_file_name()
-        folder = ""
+    if num is None or folder is None or date is None:
+        return load_data()
     else:
         if date == None:
             date = datetime.date.today().strftime('%y%m%d')
