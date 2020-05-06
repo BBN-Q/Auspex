@@ -625,7 +625,7 @@ class QubitExperiment(Experiment):
 
         # Set flag to enable acquisition process
         self.dig_run.set()
-
+        time.sleep(1)
         # Start the AWGs
         if not self.cw_mode:
             for awg in self.awgs:
