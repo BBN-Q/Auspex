@@ -499,10 +499,14 @@ class RabiChevronFit(Auspex2DFit):
         #seed Rabi frequency from largest FFT component in the center
         M = len(self.xpts)
         N = len(self.xpts[0])
-        zpts_mid = self.zpts[M//2]
-        zfft = np.fft.fft(zpts_mid)
-        f_max_ind = np.argmax(np.abs(zfft[1:N//2]))
-        fr_0 = max([1, f_max_ind]) / self.xpts[0][-1]
+        f_max_ind = np.zeros(M)
+        for k in range(M):
+            zpts = self.zpts[k]
+            zfft = np.fft.fft(zpts)
+            f_max_ind[k] = np.argmax(np.abs(zfft[1:N//2]))
+        lowest_f_max_ind = np.argmin(f_max_ind)
+        zpts_mid = self.zpts[lowest_f_max_ind]
+        fr_0 = max([1, f_max_ind.any()]) / self.xpts[0][-1]
         amp_0 = 0.5*(zpts_mid.max() - zpts_mid.min())
         offset_0 = np.mean(zpts_mid)
         phase_0 = 0
