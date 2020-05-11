@@ -503,10 +503,6 @@ class RabiChevronFit(Auspex2DFit):
         zfft = np.fft.fft(zpts_mid)
         f_max_ind = np.argmax(np.abs(zfft[1:N//2]))
         fr_0 = max([1, f_max_ind]) / self.xpts[0][-1]
-        self.zpts_mid = zpts_mid
-        self.zfft = zfft
-        self.fr_0 = fr_0
-        self.f_max_ind = f_max_ind
         amp_0 = 0.5*(zpts_mid.max() - zpts_mid.min())
         offset_0 = np.mean(zpts_mid)
         phase_0 = 0
