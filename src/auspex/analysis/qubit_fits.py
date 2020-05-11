@@ -11,7 +11,7 @@ from scipy.optimize import curve_fit
 from auspex.log import logger
 from copy import copy
 import matplotlib.pyplot as plt
-from .fits import AuspexFit
+from .fits import AuspexFit, Auspex2DFit
 from .signal_analysis import KT_estimation
 
 class RabiAmpFit(AuspexFit):
