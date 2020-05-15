@@ -63,9 +63,9 @@ def load_data(dirpath=None):
     """
     if dirpath:
         if not _is_auspex(dirpath):
-            raise Exception('\x1b[6;30;91m' +
-                            "File is not an Auspex file!" +
-                            '\x1b[0m')
+            # first attempt to load it as an auspex file
+            if os.path.isdir(dirpath + '.auspex'):
+                dirpath += '.auspex'
 
     if dirpath == None:
         dp = get_file_name()[0]
@@ -82,7 +82,7 @@ def load_data(dirpath=None):
         return []
 
     try:
-        data_container = AuspexDataContainer(dirpath)
+        data_container = AuspexDataContainer(dirpath, mode='r')
         data_sets = {}
         # get a list of data groups
         groups = [x.name for x in os.scandir(dirpath)]
@@ -99,7 +99,7 @@ def load_data(dirpath=None):
                 data_sets[group][data]["data"] = ds_data
                 data_sets[group][data]["descriptor"] = ds_desc
     except FileNotFoundError:
-        print("File note found.  Please check your path")
+        print("File not found.  Please check your path")
         data_sets = []
     except PermissionError:
         print("Permission error!  Do you have access to this file?")
@@ -107,7 +107,12 @@ def load_data(dirpath=None):
     except:
         print("Error!")
         data_sets = []
-        raise
+        if not _is_auspex(dirpath):
+            raise Exception('\x1b[6;30;91m' +
+                            "File is not an Auspex file!" +
+                            '\x1b[0m')
+        else:
+            raise
 
     return data_sets
 

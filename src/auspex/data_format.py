@@ -10,7 +10,10 @@ class AuspexDataContainer(object):
         self.base_path = os.path.abspath(base_path) + '.auspex'
         self.open_mmaps = []
         self.mode = mode
-        self._create()
+        if self.mode == 'r':
+            self.open_all()
+        else:
+            self._create()
     def close(self):
         for mm in self.open_mmaps:
             del mm
@@ -63,14 +66,14 @@ class AuspexDataContainer(object):
         assert os.path.exists(filename), "Could not find dataset. Is this the correct name?"
         with open(filename, 'r') as f:
             meta = json.load(f)
-            
+
         filename = os.path.join(self.base_path,groupname,datasetname+'.dat')
         assert os.path.exists(filename), "Could not find dataset. Is this the correct name?"
         flat_shape = (np.product(meta['shape']),)
         mm = np.memmap(filename, dtype=meta['dtype'], mode='r', shape=flat_shape)
         data = np.array(mm).reshape(tuple(meta['shape']))
         del mm
-        
+
         desc = DataStreamDescriptor(meta['dtype'])
         for name, points in meta['axes'].items():
             ax = DataAxis(name, points, unit=meta['units'][name])
