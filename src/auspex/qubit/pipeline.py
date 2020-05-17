@@ -45,7 +45,7 @@ def check_session_dirty(f):
 
 class PipelineManager(object):
     """Create and run Qubit Experiments."""
-    def __init__(self):
+    def __init__(self, force_new=False):
         global pipelineMgr
 
         self.pipeline      = None
@@ -58,7 +58,7 @@ class PipelineManager(object):
 
         # Check to see whether there is already a temp database
         available_pipelines = list(set([pn[0] for pn in list(self.session.query(adb.Connection.pipeline_name).all())]))
-        if "working" in available_pipelines:
+        if "working" in available_pipelines and not force_new:
             connections = self.get_connections_by_name('working')
             edges = [(c.node1.hash_val, c.node2.hash_val, {'connector_in':c.node2_name,  'connector_out':c.node1_name}) for c in connections]
             nodes = []
