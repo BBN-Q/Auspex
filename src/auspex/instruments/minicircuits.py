@@ -10,6 +10,8 @@ from auspex.log import logger
 from .instrument import Instrument
 import http.client
 
+__all__ = ['MUX_2SP4T']
+
 class HTTPInstrument(Instrument):
     def __init__(self,resource_name=None,name="HTTP Instrument",instrument_type="HTTP"):
         """ Control for HTTP Instruments
