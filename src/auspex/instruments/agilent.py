@@ -759,7 +759,7 @@ class _AgilentNetworkAnalyzer(SCPIInstrument):
             logger.error("The resource name for the {}: {} is " +
                 "not a valid IPv4 address.".format(self.__class__.__name__, self.resource_name))
         super().connect(resource_name=None, interface_type=interface_type)
-        self.interface._resource.read_termination = u"\n"
+        self.interface._resource._read_termination = u"\n"
         self.interface._resource.write_termination = u"\n"
         self.interface._resource.timeout = self.TIMEOUT
         self.interface._resource.chunk_size = 2 ** 20 # Needed to fix binary transfers (?)
