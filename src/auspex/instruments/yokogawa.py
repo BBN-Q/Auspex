@@ -36,4 +36,4 @@ class YokogawaGS200(SCPIInstrument):
 
         super(YokogawaGS200, self).connect(resource_name=self.resource_name, interface_type=interface_type)
         self.interface.write(":sense:trigger immediate")
-        self.interface._resource.read_termination = "\n"
+        self.interface._resource._read_termination = u"\n"
