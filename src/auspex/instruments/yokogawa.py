@@ -13,7 +13,7 @@ from .instrument import SCPIInstrument, StringCommand, FloatCommand, IntCommand,
 
 class YokogawaGS200(SCPIInstrument):
     """YokogawaGS200 Current source"""
-    instrument_type = "Current source"
+    instrument_type = "Current source"  
 
     mode               = StringCommand(scpi_string=":source:function",
                           value_map={"current": "CURR", "voltage": "VOLT"})
@@ -36,4 +36,5 @@ class YokogawaGS200(SCPIInstrument):
 
         super(YokogawaGS200, self).connect(resource_name=self.resource_name, interface_type=interface_type)
         self.interface.write(":sense:trigger immediate")
-        self.interface._resource._read_termination = u"\n"
+        self.interface._resource._read_termination = "\n"
+        self.interface._resource.write_termination = "\n"
