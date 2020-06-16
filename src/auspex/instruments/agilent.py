@@ -969,7 +969,7 @@ class AgilentN5230A(_AgilentNetworkAnalyzer):
 class AgilentE8363C(_AgilentNetworkAnalyzer):
     """Agilent E8363C 2-port 40GHz VNA."""
     ports = (1, 2)
-    data_query_raw = True
+    data_query_raw = False
 
 class AgilentE9010A(SCPIInstrument):
     """Agilent E9010A SA"""
