@@ -39,7 +39,7 @@ class DSInstruments(SCPIInstrument,metaclass=MakeSettersGetters):
         super(DSInstruments, self).connect(resource_name=self.resource_name, interface_type=interface_type)
         self.interface._resource.read_termination = u"\r\n"
         self.interface._resource.write_termination = u"\r\n"
-        self.interface._resource.timeout = 100
+        self.interface._resource.timeout = 1000
         self.interface._resource.baud_rate = 115200
 
     @property
