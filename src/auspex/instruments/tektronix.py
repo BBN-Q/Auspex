@@ -6,14 +6,14 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-__all__ = ['DPO72004C']
+__all__ = ['DPO72004C','DPO2024','DPO2014','RSA3308A']
 
 from auspex.log import logger
 from .instrument import SCPIInstrument, Command, StringCommand, BoolCommand, FloatCommand, IntCommand, is_valid_ipv4
 import numpy as np
 
-class DPO72004C(SCPIInstrument):
-    """Tektronix DPO72004C Oscilloscope"""
+class _TekDPscope(SCPIInstrument):
+    """Tektronix DP Oscilloscope Base Class"""
     encoding   = StringCommand(get_string="DAT:ENC;", set_string="DAT:ENC {:s};",
                         allowed_values=["ASCI","RIB","RPB","FPB","SRI","SRP","SFP"])
     byte_depth = IntCommand(get_string="WFMOutpre:BYT_Nr?;",
@@ -32,11 +32,6 @@ class DPO72004C(SCPIInstrument):
 
     button_press = StringCommand(set_string="FPAnel:PRESS {:s};",
         allowed_values=["RUnstop", "SINGleseq"])
-
-    def __init__(self, resource_name, *args, **kwargs):
-        resource_name += "::4000::SOCKET" #user guide recommends HiSLIP protocol
-        super(DPO72004C, self).__init__(resource_name, *args, **kwargs)
-        self.name = "Tektronix DPO72004C Oscilloscope"
 
     def clear(self):
         self.interface.write("CLEAR ALL;")
@@ -83,6 +78,23 @@ class DPO72004C(SCPIInstrument):
 
     def get_math_curve(self, channel=1):
         pass
+
+class DPO72004C(_TekDPscope):
+    def __init__(self, resource_name, *args, **kwargs):
+        resource_name += "::4000::SOCKET" #user guide recommends HiSLIP protocol
+        super(DPO72004C, self).__init__(resource_name, *args, **kwargs)
+        self.name = "Tektronix DPO72004C Oscilloscope"
+
+class DPO2024(_TekDPscope):
+    def __init__(self, resource_name, *args, **kwargs):
+        super(DPO2024, self).__init__(resource_name, *args, **kwargs)
+        self.name = "Tektronix DPO2024 Oscilloscope"
+
+class DPO2014(_TekDPscope):
+    def __init__(self, resource_name, *args, **kwargs):
+        super(DPO2014, self).__init__(resource_name, *args, **kwargs)
+        self.name = "Tektronix DPO2014 Oscilloscope"
+
 
 class RSA3308A(SCPIInstrument):
     """Tektronix RSA3308A SA"""
