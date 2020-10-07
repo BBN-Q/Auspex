@@ -45,7 +45,7 @@ def check_session_dirty(f):
 
 class PipelineManager(object):
     """Create and run Qubit Experiments."""
-    def __init__(self):
+    def __init__(self, force_new=False):
         global pipelineMgr
 
         self.pipeline      = None
@@ -58,7 +58,7 @@ class PipelineManager(object):
 
         # Check to see whether there is already a temp database
         available_pipelines = list(set([pn[0] for pn in list(self.session.query(adb.Connection.pipeline_name).all())]))
-        if "working" in available_pipelines:
+        if "working" in available_pipelines and not force_new:
             connections = self.get_connections_by_name('working')
             edges = [(c.node1.hash_val, c.node2.hash_val, {'connector_in':c.node2_name,  'connector_out':c.node1_name}) for c in connections]
             nodes = []
@@ -70,10 +70,10 @@ class PipelineManager(object):
                 node.pipelineMgr = self
                 self.meas_graph.add_node(node.hash_val, node_obj=node)
             self.meas_graph.add_edges_from(edges)
-            adb.__current_pipeline__ = self
         else:
-            logger.info("Could not find an existing pipeline. Please create one.")
+            logger.info("Could not find an existing pipeline. Creating a blank pipeline.")
 
+        adb.__current_pipeline__ = self
         pipelineMgr = self
 
     def add_qubit_pipeline(self, qubit_label, stream_type, auto_create=True, buffers=False):
@@ -84,7 +84,7 @@ class PipelineManager(object):
             raise Exception(f"Could not find qubit {qubit_label} in pipeline...")
 
         ss_label = qubit_label+"-"+stream_type
-        select = adb.StreamSelect(pipelineMgr=self, stream_type=stream_type, qubit_name=qubit_label, label=ss_label)
+        select = adb.StreamSelect(stream_type=stream_type, qubit_name=qubit_label, label=ss_label)
         self.session.add(select)
         if not self.meas_graph:
             self.meas_graph = nx.DiGraph()
@@ -142,7 +142,7 @@ class PipelineManager(object):
             initial_stream_qubit = group[0]
             labels = [q.label for q in group]
             group_label = '-'.join(labels)
-            stream_selectors[group_label] = {'default' : adb.StreamSelect(pipelineMgr=self, label = group_label)}
+            stream_selectors[group_label] = {'default' : adb.StreamSelect(label = group_label)}
 
         for sels in stream_selectors.values():
             sel = sels['default']
