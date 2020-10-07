@@ -1062,7 +1062,7 @@ class CRCalibration(QubitCalibration):
             self.plot["Fit 1"] =  (finer_xaxis, np.polyval(all_params_1, finer_xaxis) if self.cal_type == CR_cal_type.AMP else sinf(finer_xaxis, **all_params_1))
 
         # Optimal parameter within range of original data!
-        if self.opt_par > np.min(xaxis) and self.opt_par < np.max(xaxis):
+        if self.opt_par >= np.min(xaxis) and self.opt_par <= np.max(xaxis):
             self.succeeded = True
 
     def update_settings(self):
