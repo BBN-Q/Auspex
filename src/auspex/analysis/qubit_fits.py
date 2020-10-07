@@ -403,27 +403,28 @@ class SingleQubitRBFit(AuspexFit):
 
 class SingleQubitLeakageRBFit(SingleQubitRBFit):
 
-    def __init__(self, lengths, data, make_plots=False, log_scale_x=True, bounded_fit=True, ax=None, leakage=True):
+    def __init__(self, lengths, data, make_plots=False, log_scale_x=True, smart_guess=True, bounded_fit=True, ax=None, leakage=True, fit=True, cal_repeats=1):
 
         # Compute populations from the tomography data
-            a = data[-3]
-            b = data[-2]
-            c = data[-1]
+        a = np.mean(data[-3*cal_repeats:-2*cal_repeats])
+        b = np.mean(data[-2*cal_repeats:-1*cal_repeats])
+        c = np.mean(data[-1*cal_repeats:-1])
 
-            pop_mat = np.linalg.inv([[a,b,c],[b,a,c],[1,1,1]])
+        pop_mat = np.linalg.inv([[a,b,c],[b,a,c],[1,1,1]])
 
-            points = []
+        points = []
 
-            for i in range(len(data[:-3]) // 2):
-                v = data[2*i]
-                vp = data[2*i+1]
-                points.append(np.matmul(pop_mat, np.array([v, vp, 1])))
+        for i in range(len(data[:-3*cal_repeats]) // 2):
+            v = data[2*i]
+            vp = data[2*i+1]
+            points.append(np.matmul(pop_mat, np.array([v, vp, 1])))
 
-            self.pop0, self.pop1, self.pop2 = zip(*points)
+        self.pop0, self.pop1, self.pop2 = zip(*points)
 
-            pop_comp = [(self.pop0[i] + self.pop1[i]) if leakage else self.pop0[i] for i in range(len(self.pop0))]
-
-            super().__init__(lengths[:-3][::2], pop_comp, make_plots, log_scale_x, bounded_fit, ax)
+        pop_comp = [(self.pop0[i] + self.pop1[i]) if leakage else self.pop0[i] for i in range(len(self.pop0))]
+        
+        if fit:
+            super().__init__(np.array(lengths[:-3*cal_repeats][::2]), np.array(pop_comp), make_plots, log_scale_x, smart_guess, bounded_fit, ax)
 
     def leakage(self):
         leak = (1 - self.fit_params['B'])*self.fit_params['r']
