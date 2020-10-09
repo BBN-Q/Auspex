@@ -11,7 +11,7 @@ from scipy.optimize import curve_fit
 from auspex.log import logger
 from copy import copy
 import matplotlib.pyplot as plt
-from .fits import AuspexFit
+from .fits import AuspexFit, Auspex2DFit
 from .signal_analysis import KT_estimation
 
 class RabiAmpFit(AuspexFit):
@@ -484,6 +484,54 @@ class PhotonNumberFit(AuspexFit):
 
     def _fit_dict(self, p):
         return {"phi0": p[0], "n0": p[1]}
+
+class RabiChevronFit(Auspex2DFit):
+    """A fit to a Rabi amplitude curve, assuming a cosine model.
+    """
+    xlabel = "Time"
+    ylabel = "Frequency"
+    title = "Rabi Amp Fit"
+
+    @staticmethod
+    def _model(x, *p):
+        return p[3]*(p[0]**2)/((x[1]-p[1])**2+p[0]**2)*np.sin(2*np.pi*x[0]*np.sqrt(p[0]**2+(x[1]-p[1])**2)+p[4])+p[2]
+
+    def _initial_guess(self):
+        #seed Rabi frequency from largest FFT component in the center
+        M = len(self.xpts)
+        N = len(self.xpts[0])
+        f_max_ind = np.zeros(M)
+        for k in range(M):
+            zpts = self.zpts[k]
+            zfft = np.fft.fft(zpts)
+            f_max_ind[k] = np.argmax(np.abs(zfft[1:N//2]))
+        lowest_f_max_ind = np.argmin(f_max_ind)
+        zpts_mid = self.zpts[lowest_f_max_ind]
+        fr_0 = max([1, f_max_ind[lowest_f_max_ind]]) / self.xpts[0][-1]
+        amp_0 = 0.5*(zpts_mid.max() - zpts_mid.min())
+        offset_0 = np.mean(zpts_mid)
+        phase_0 = 0
+        if zpts_mid[N//2 - 1] > offset_0:
+            amp_0 = -amp_0
+        return [fr_0, self.ypts[M//2][0], offset_0, amp_0, phase_0]
+
+    def _fit_dict(self, p):
+
+        return { "fr": p[0],
+                 "f0": p[1],
+                 "y0": p[2],
+                 "A":  p[3],
+                 "phi": p[4]
+              }
+
+    def __str__(self):
+        return "A*fr^2 / ((f - f0)^2 + fr^2) * A*sin(2*pi*t*sqrt(fr^2 + (f-f0)^2) + phi) + c)"
+
+    @property
+    def f_center(self):
+        """Returns the resonance frequency from the fit
+        """
+        return self.fit_params["f0"]
 
 #### OLD STYLE FITS THAT NEED TO BE CONVERTED
 

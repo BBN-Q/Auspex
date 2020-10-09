@@ -343,3 +343,131 @@ class QuadraticFit(AuspexFit):
 
     def __str__(self):
         return "A(x - x0)^2 + b"
+
+class Auspex2DFit(object):
+    """A generic fit class wrapping scipy.optimize.curve_fit for convenience.
+        Specific fits should inherit this class.
+
+    Attributes:
+        xlabel (str): Plot x-axis label.
+        ylabel (str): Plot y-axis label.
+        title (str): Plot title.
+    """
+
+
+    xlabel = "X points"
+    ylabel = "Y points"
+    title = "Auspex Fit"
+
+    def __init__(self, xpts, ypts, zpts, make_plots=False):
+        """Perform a least squares fit of 2-D data.
+
+        Args:
+            xpts (numpy.array): Independent fit variable data.
+            ypts (numpy.array): Independent fit variable data.
+            zpts (numpy.array): Dependent fit variable data.
+            make_plots (bool, optional): Generate a plot of the data and fit.
+            ax (Axes, optional): Axes on which to draw plot. If None, new figure is created
+        """
+
+        self.xpts, self.ypts = np.meshgrid(xpts, ypts)
+        self.zpts = zpts
+
+        self._do_fit()
+        if make_plots:
+            self.make_plots()
+
+    def _initial_guess(self):
+        """Return an initial guess for the fit parameters.
+            Should be implemented in child class.
+        """
+        raise NotImplementedError("Not implemented!")
+
+    @staticmethod
+    def _model(x, *p):
+        """Fit model function. Implemented as a static method for convenience.
+            Should be implemented in child class.
+
+        Args:
+            x (numpy.array): Dependent variable for fit.
+            *p (list): Fit parameters.
+        """
+        raise NotImplementedError("Not implemented!")
+
+    def _fit_dict(self, p):
+        """Return a dictionary of fit parameters.
+            Should be implemented in child class.
+        """
+        raise NotImplementedError("Not implemented!")
+
+    def make_plots(self):
+        """Create a plot of the input data and the fitted model. By default will
+            include any annotation defined in the `annotation()` class method.
+        """
+
+        X1f, X2f = np.meshgrid(np.linspace(self.xpts[0][0],self.xpts[0][-1],1000), np.linspace(self.ypts[0][0], self.ypts[-1][0], 1000))
+        size = X1f.shape
+        x1f_1d = X1f.reshape((1, np.prod(size)))
+        x2f_1d = X2f.reshape((1, np.prod(size)))
+        xdataf = np.vstack((x1f_1d, x2f_1d))
+        plt.figure(figsize=(7,8))
+        plt.subplot(2, 1, 1)
+
+        plt.title("Data")
+        plt.pcolormesh(self.xpts, self.ypts, self.zpts)
+        plt.colorbar()
+        plt.subplot(2, 1, 2)
+
+        plt.title("Fit")
+        z_fit = self.model(xdataf)
+        Z_fit = z_fit.reshape(size)
+        plt.pcolormesh(X1f, X2f, Z_fit)
+        plt.colorbar()
+
+    def annotation(self):
+        """Annotation for the `make_plot()` method. Should return a string
+            that is passed to `matplotlib.pyplot.annotate`.
+        """
+        return str(self)
+
+    def _do_fit(self, bounds=None):
+        """Fit the data using `scipy.optimize.curve_fit`. This function will
+            also compute the χ^2 and badness of fit of the function.
+
+           Fit parameters and errors on those parameters are placed in dictionaries
+           defined by the `_fit_dict` method. Also creates a `fit_function` method
+           that is the model function evaluated at the fitted parameters.
+         """
+        p0 = self._initial_guess()
+        #TODO
+        #if not bounds:
+        #    bounds = (-np.inf, np.inf)
+        #else:
+        #    assert all((len(b) == len(p0) for b in bounds)), 'Number of bounds must equal number of variables!'
+        size = self.xpts.shape
+        x1_1d = self.xpts.reshape((1, np.prod(size)))
+        x2_1d = self.ypts.reshape((1, np.prod(size)))
+        xdata = np.vstack((x1_1d, x2_1d))
+        zdata = self.zpts.reshape(self.xpts.size)
+        popt, pcov = curve_fit(self._model, xdata, zdata, p0=p0)
+        perr = np.sqrt(np.diag(pcov))
+        fit = self._model(xdata, *popt)
+        #TODO
+        #self.sq_error = np.sum((fit - self.zpts)**2)
+        #dof = len(self.xpts) - len(p0)
+        #self.Nsigma = self.sq_error/np.sqrt(2*dof) - dof/np.sqrt(2*dof)
+        self.fit_function = lambda x: self._model(x, *popt)
+
+        self.fit_params = self._fit_dict(popt)
+        self.fit_errors = self._fit_dict(perr)
+
+    def model(self, x=None):
+        """ The fit function evaluated at the parameters found by `curve_fit`.
+
+        Args:
+            x: A number or `numpy.array` returned by the model function.
+        """
+        if x is None:
+            return self.fit_function(self.xpoints)
+        else:
+            return self.fit_function(x)
