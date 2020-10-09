@@ -23,8 +23,6 @@ class CorrelatorExperiment(Experiment):
 
     # Constants
     samples = 100
-    idx_1   = 0
-    idx_2   = 0
 
     # For correlator verification
     vals = 2.0 + np.linspace(0, 10*np.pi, samples)
@@ -35,16 +33,19 @@ class CorrelatorExperiment(Experiment):
 
     def run(self):
         logger.debug("Data taker running (inner loop)")
-
+        np.random.seed(12345)
+        self.idx_1   = 0
+        self.idx_2   = 0
         while self.idx_1 < self.samples or self.idx_2 < self.samples:
-
+            # print(self.idx_1, self.idx_2)
             # Generate random number of samples:
-            new_1 = np.random.randint(1,5)
-            new_2 = np.random.randint(1,5)
+            new_1 = np.random.randint(2,5)
+            new_2 = np.random.randint(2,5)
 
             if self.chan1.points_taken.value < self.chan1.num_points():
                 if self.chan1.points_taken.value + new_1 > self.chan1.num_points():
                     new_1 = self.chan1.num_points() - self.chan1.points_taken.value
+                # logger.info(f"C1 push {self.vals[self.idx_1:self.idx_1+new_1]}")
                 self.chan1.push(self.vals[self.idx_1:self.idx_1+new_1])
                 self.idx_1 += new_1
             if self.chan2.points_taken.value < self.chan2.num_points():
@@ -52,6 +53,7 @@ class CorrelatorExperiment(Experiment):
                     new_2 = self.chan2.num_points() - self.chan2.points_taken.value
                 self.chan2.push(self.vals[self.idx_2:self.idx_2+new_2])
                 self.idx_2 += new_2
+                # logger.info(f"C2 push {self.vals[self.idx_2:self.idx_2+new_2]}")
 
             time.sleep(0.002)
             logger.debug("Idx_1: %d, Idx_2: %d", self.idx_1, self.idx_2)
@@ -69,10 +71,10 @@ class CorrelatorTestCase(unittest.TestCase):
 
         exp.set_graph(edges)
         exp.run_sweeps()
-        time.sleep(0.1)
+        time.sleep(0.01)
         corr_data     = buff.output_data
         expected_data = exp.vals*exp.vals
-        self.assertAlmostEqual(np.sum(corr_data), np.sum(expected_data), places=1)
+        self.assertAlmostEqual(np.sum(corr_data), np.sum(expected_data), places=0)
 
 
 if __name__ == '__main__':

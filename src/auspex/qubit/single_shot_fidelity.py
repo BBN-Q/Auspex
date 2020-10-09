@@ -16,7 +16,7 @@ import auspex.config as config
 from copy import deepcopy
 import os, sys
 import json
-import time
+import time, datetime
 import networkx as nx
 import bbndb
 import queue
@@ -32,12 +32,21 @@ from auspex.analysis.helpers import normalize_data
 import auspex.config
 
 class SingleShotFidelityExperiment(QubitExperiment):
-    """Experiment to measure single-shot measurement fidelity of a qubit."""
+    """Experiment to measure single-shot measurement fidelity of a qubit.
 
-    def __init__(self, qubit, output_nodes=None, meta_file=None, **kwargs):
+        Args:
+            qubit:                          qubit object
+            output_nodes (optional):        the output node of the filter pipeline to use for single-shot readout. The default is choses, if single output.
+            meta_file (string, optional):   path to the QGL sequence meta_file. Default to standard SingleShot sequence
+            optimize (bool, optional):      if True and a qubit_sweep is added, set the parameter corresponding to the maximum measured fidelity at the end of the sweep
+
+    """
+    def __init__(self, qubit, sample_name=None, output_nodes=None, meta_file=None, optimize=True, set_threshold = True, **kwargs):
 
         self.pdf_data = []
         self.qubit = qubit
+        self.optimize = optimize
+        self.set_threshold = set_threshold
 
         if meta_file:
             self.meta_file = meta_file
@@ -45,6 +54,21 @@ class SingleShotFidelityExperiment(QubitExperiment):
             self.meta_file = self._single_shot_sequence(self.qubit)
 
         super(SingleShotFidelityExperiment, self).__init__(self.meta_file, **kwargs)
+
+        if not sample_name:
+            sample_name = self.qubit.label
+        if not bbndb.get_cl_session():
+            raise Exception("Attempting to load Calibrations database, \
+                but no database session is open! Have the ChannelLibrary and PipelineManager been created?")
+        existing_samples = list(bbndb.get_cl_session().query(bbndb.calibration.Sample).filter_by(name=sample_name).all())
+        if len(existing_samples) == 0:
+            logger.info("Creating a new sample in the calibration database.")
+            self.sample = bbndb.calibration.Sample(name=sample_name)
+            bbndb.get_cl_session().add(self.sample)
+        elif len(existing_samples) == 1:
+            self.sample = existing_samples[0]
+        else:
+            raise Exception("Multiple samples found in calibration database with the same name! How?")
 
     def guess_output_nodes(self, graph):
         output_nodes = []
@@ -97,6 +121,33 @@ class SingleShotFidelityExperiment(QubitExperiment):
         if not self.sweeper.axes:
             self._update_histogram_plots()
             self.stop_manual_plotters()
+            if self.set_threshold:
+                stream_sel = [s for s in self.stream_selectors if s.qubit_name == self.measured_qubits[0].label][0]
+                stream_sel.threshold = self.get_threshold()[0]
+            if self.sample:
+                c = bbndb.calibration.Calibration(value=self.get_fidelity()[0], sample=self.sample, name="Readout fid.", category="Readout")
+                c.date = datetime.datetime.now()
+                bbndb.get_cl_session().add(c)
+                bbndb.get_cl_session().commit()
+        elif self.optimize:
+            fidelities = [f['Max I Fidelity'] for f in self.pdf_data]
+            opt_ind = np.argmax(fidelities)
+            for k, axis in enumerate(self.sweeper.axes):
+                set_pair = axis.parameter.set_pair
+                opt_value = axis.points[opt_ind]
+                if set_pair[1] == 'amplitude' or set_pair[1] == "offset":
+                    # special case for APS chans
+                    param = [c for c in self.chan_db.channels if c.label == set_pair[0]][0]
+                    attr = 'amp_factor' if set_pair[1] == 'amplitude' else 'offset'
+                    setattr(param, f'I_channel_{attr}', opt_value)
+                    setattr(param, f'Q_channel_{attr}', opt_value)
+                else:
+                    param = [c for c in self.chan_db.all_instruments() if c.label == set_pair[0]][0]
+                    setattr(param, set_pair[1], opt_value)
+            logger.info(f'Set {set_pair[0]} {set_pair[1]} to optimum value {opt_value}')
+            if self.set_threshold:
+                self.stream_selectors[0].threshold = self.get_threshold()[opt_ind]
+                logger.info(f'Set threshold to {self.stream_selectors[0].threshold}')
 
     def find_single_shot_filter(self):
         """Make sure there is one single shot measurement filter in the pipeline."""
@@ -108,12 +159,12 @@ class SingleShotFidelityExperiment(QubitExperiment):
         return ssf
 
     def get_fidelity(self):
-        if self.pdf_data is None:
+        if not self.pdf_data:
             raise CalibrationError("Could not find single shot PDF data in results. Did you run the sweeps?")
         return [p["Max I Fidelity"] for p in self.pdf_data]
 
     def get_threshold(self):
-        if self.pdf_data is None:
+        if not self.pdf_data:
             raise CalibrationError("Could not find single shot PDF data in results. Did you run the sweeps?")
         return [p["I Threshold"] for p in self.pdf_data]
 

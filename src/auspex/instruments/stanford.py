@@ -84,7 +84,9 @@ class SR830(SCPIInstrument):
     def get_buffer(self, channel):
         stored_points = self.buffer_points
         self.interface.write("TRCB?{:d},0,{:d}".format(channel, stored_points))
-        buf = self.interface.read_raw()
+        #buf = self.interface.read_raw(numbytes=4)
+        buf = self.interface.read_bytes(4*stored_points,chunk_size=4)
+        logger.info(f"Raw buffer is {buf} with length {len(buf)} bytes.")
         return np.frombuffer(buf, dtype=np.float32)
 
     def buffer_start(self):
@@ -99,18 +101,18 @@ class SR830(SCPIInstrument):
     def trigger(self):
         self.interface.write("TRIG;")
 
-    def __init__(self, resource_name, mode='current', **kwargs):
-        super(SR830, self).__init__(resource_name, **kwargs)
+    def __init__(self, resource_name=None, *args, **kwargs):
+        super(SR830, self).__init__(resource_name, *args, **kwargs)
         self.name = "SR830 Lockin Amplifier"
 
     def connect(self, resource_name=None, interface_type=None):
-        super(SR830, self).connect(resource_name=resource_name, interface_type=interface_type)
+        super(SR830, self).connect(resource_name=resource_name, interface_type="VISA")
         self.interface._resource.read_termination = u"\n"
 
     def measure_delay(self):
         """Return how long we must wait for the values to have settled, based on the filter slope."""
-        fs = self.filter_slope
-        tc = self.time_constant
+        fs = float(self.filter_slope)
+        tc = float(self.time_constant)
         if fs <= 7: # 6dB/oct
             return 5*tc
         elif fs <= 13: # 12dB/oct
@@ -182,8 +184,8 @@ class SR865(SCPIInstrument):
     ai3 = FloatCommand(get_string="OAUX? 2;")
     ai4 = FloatCommand(get_string="OAUX? 3;")
 
-    def __init__(self, resource_name, mode='current', **kwargs):
-        super(SR865, self).__init__(resource_name, **kwargs)
+    def __init__(self, resource_name=None, *args, **kwargs):
+        super(SR865, self).__init__(resource_name, *args, **kwargs)
         self.name = "SR865 Lockin Amplifier"
 
     def connect(self, resource_name=None, interface_type=None):
@@ -239,8 +241,8 @@ class SR865(SCPIInstrument):
 
     def measure_delay(self):
         """Return how long we must wait for the values to have settled, based on the filter slope."""
-        fs = self.filter_slope
-        tc = self.time_constant
+        fs = float(self.filter_slope)
+        tc = float(self.time_constant)
         if fs <= 7: # 6dB/oct
             return 5*tc
         elif fs <= 13: # 12dB/oct

@@ -83,6 +83,90 @@ class PipelineTestCase(unittest.TestCase):
         self.assertTrue(len(exp.output_connectors["q1-raw"].descriptor.axes) == 2)
         self.assertTrue(len(exp.output_connectors["q1-raw"].descriptor.axes[0].points) == 5)
 
+    def test_create_correlator(self):
+        """Create a mildly non-trivial pipeline"""
+        cl.clear()
+        q1    = cl.new_qubit("q1")
+        q2    = cl.new_qubit("q2")
+        aps1  = cl.new_APS2("BBNAPS1", address="192.168.5.102")
+        aps2  = cl.new_APS2("BBNAPS2", address="192.168.5.103")
+        aps3  = cl.new_APS2("BBNAPS3", address="192.168.5.104")
+        aps4  = cl.new_APS2("BBNAPS4", address="192.168.5.105")
+        x6_1  = cl.new_X6("X6_1", address="1", record_length=512)
+        x6_2  = cl.new_X6("X6_2", address="1", record_length=512)
+        holz1 = cl.new_source("Holz_1", "HolzworthHS9000", "HS9004A-009-1", power=-30)
+        holz2 = cl.new_source("Holz_2", "HolzworthHS9000", "HS9004A-009-2", power=-30)
+        holz3 = cl.new_source("Holz_3", "HolzworthHS9000", "HS9004A-009-3", power=-30)
+        holz4 = cl.new_source("Holz_4", "HolzworthHS9000", "HS9004A-009-4", power=-30)
+
+        cl.set_control(q1, aps1, generator=holz1)
+        cl.set_measure(q1, aps2, x6_1[1], generator=holz2)
+        cl.set_control(q2, aps3, generator=holz3)
+        cl.set_measure(q2, aps4, x6_2[1], generator=holz4)
+        cl.set_master(aps1, aps1.ch("m2"))
+        cl.commit()
+
+        pl.create_default_pipeline()
+
+        for ql in ['q1', 'q2']:
+            qb = cl[ql]
+            pl[ql].clear_pipeline()
+            pl[ql].create_default_pipeline(buffers=False)
+
+            pl[ql]["Demodulate"]["Integrate"]["Average"].add(Write(label='var'), connector_out='final_variance')
+            pl[ql]["Demodulate"]["Integrate"]["Average"]["var"].groupname = ql + '-main'
+            pl[ql]["Demodulate"]["Integrate"]["Average"]["var"].datasetname = 'variance'
+
+        pl.add_correlator(pl["q1"]["Demodulate"]["Integrate"], pl["q2"]["Demodulate"]["Integrate"])
+        pl["q1"]["Demodulate"]["Integrate"]["Correlate"].add(Average(label='corr_avg')).add(Display(label='test_corr_avg',plot_dims=0))
+        pl["q1"]["Demodulate"]["Integrate"]["Correlate"]["Average"].add(Write(label='corr_write'))
+        pl["q1"]["Demodulate"]["Integrate"]["Correlate"]["Average"].add(Write(label='corr_var'), connector_out='final_variance')
+        pl.reset_pipelines()
+
+        exp = QubitExperiment(PulsedSpec(q1), averages=5)
+
+    def test_create_integrated_correlator(self):
+        """Create a mildly non-trivial pipeline"""
+        cl.clear()
+        q1    = cl.new_qubit("q1")
+        q2    = cl.new_qubit("q2")
+        aps1  = cl.new_APS2("BBNAPS1", address="192.168.5.102")
+        aps2  = cl.new_APS2("BBNAPS2", address="192.168.5.103")
+        aps3  = cl.new_APS2("BBNAPS3", address="192.168.5.104")
+        aps4  = cl.new_APS2("BBNAPS4", address="192.168.5.105")
+        x6_1  = cl.new_X6("X6_1", address="1", record_length=512)
+        x6_2  = cl.new_X6("X6_2", address="1", record_length=512)
+        holz1 = cl.new_source("Holz_1", "HolzworthHS9000", "HS9004A-009-1", power=-30)
+        holz2 = cl.new_source("Holz_2", "HolzworthHS9000", "HS9004A-009-2", power=-30)
+        holz3 = cl.new_source("Holz_3", "HolzworthHS9000", "HS9004A-009-3", power=-30)
+        holz4 = cl.new_source("Holz_4", "HolzworthHS9000", "HS9004A-009-4", power=-30)
+
+        cl.set_control(q1, aps1, generator=holz1)
+        cl.set_measure(q1, aps2, x6_1[1], generator=holz2)
+        cl.set_control(q2, aps3, generator=holz3)
+        cl.set_measure(q2, aps4, x6_2[1], generator=holz4)
+        cl.set_master(aps1, aps1.ch("m2"))
+        cl.commit()
+
+        pl.create_default_pipeline()
+
+        for ql in ['q1', 'q2']:
+            pl[ql].clear_pipeline()
+            pl[ql].stream_type = "integrated"
+            pl[ql].create_default_pipeline(buffers=False)
+
+            pl[ql]["Average"].add(Write(label='var'), connector_out='final_variance')
+            pl[ql]["Average"]["var"].groupname = ql + '-main'
+            pl[ql]["Average"]["var"].datasetname = 'variance'
+
+        pl.add_correlator(pl["q1"], pl["q2"])
+        pl["q1"]["Correlate"].add(Average(label='corr_avg')).add(Display(label='test_corr_avg',plot_dims=0))
+        pl["q1"]["Correlate"]["Average"].add(Write(label='corr_write'))
+        pl["q1"]["Correlate"]["Average"].add(Write(label='corr_var'), connector_out='final_variance')
+        pl.reset_pipelines()
+
+        exp = QubitExperiment(PulsedSpec(q1), averages=5)
+
     def test_create_transceiver(self):
         cl.clear()
         q1    = cl.new_qubit("q1")
@@ -136,8 +220,8 @@ class PipelineTestCase(unittest.TestCase):
 
         exp = QubitExperiment(PulsedSpec(q1), averages=5)
         exp.add_qubit_sweep(q1, "measure", "frequency", np.linspace(6e9, 6.5e9, 500))
-        self.assertTrue(len(exp.output_connectors["q1-integrated"].descriptor.axes[0].points) == 500)
-        self.assertTrue(exp.output_connectors["q1-integrated"].descriptor.axes[0].points[-1] == 6.5e9)
+        self.assertTrue(len(exp.output_connectors["q1-raw"].descriptor.axes[0].points) == 500)
+        self.assertTrue(exp.output_connectors["q1-raw"].descriptor.axes[0].points[-1] == 6.5e9)
 
     def test_multiple_streamselectors_per_qubit(self):
         cl.clear()
@@ -154,7 +238,7 @@ class PipelineTestCase(unittest.TestCase):
         pl.add_qubit_pipeline("q1", "demodulated", buffers=True)
         cl.commit()
 
-        self.assertTrue(pl["q1 integrated"])
+        self.assertTrue(pl["q1 raw"])
         self.assertTrue(pl["q1 demodulated"])
 
         exp = QubitExperiment(RabiAmp(q1, np.linspace(-1,1,21)), averages=5)
@@ -162,8 +246,8 @@ class PipelineTestCase(unittest.TestCase):
         exp.run_sweeps()
 
         self.assertTrue(len(exp.buffers)==2)
- 
-    def test_run_direct(self):
+
+    def test_run_pipeline(self):
         cl.clear()
         q1    = cl.new_qubit("q1")
         aps1  = cl.new_APS2("BBNAPS1", address="192.168.5.102")
@@ -183,7 +267,7 @@ class PipelineTestCase(unittest.TestCase):
         exp = QubitExperiment(RabiAmp(q1, np.linspace(-1,1,21)), averages=5)
         exp.set_fake_data(x6_1, np.random.random(21))
         exp.run_sweeps()
-        
+
         buf = list(exp.qubits_by_output.keys())[0]
         ax  = buf.input_connectors["sink"].descriptor.axes[0]
 

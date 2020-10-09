@@ -1,6 +1,6 @@
 from auspex.log import logger
-from auspex.error import PipelineError, ChannelLibraryError
-
+from auspex.error import PipelineError, ChannelLibraryError, InstrumentError
+from auspex.config import isnotebook
 from auspex.experiment import Experiment, FloatParameter
 from auspex.stream import DataStream, DataAxis, SweepAxis, DataStreamDescriptor, InputConnector, OutputConnector
 from auspex.instruments import instrument_map
@@ -33,10 +33,12 @@ stream_hierarchy = [
 filter_map = {
     bbndb.auspex.Demodulate: auspex.filters.Channelizer,
     bbndb.auspex.Average: auspex.filters.Averager,
+    bbndb.auspex.Framer: auspex.filters.Framer,
     bbndb.auspex.Integrate: auspex.filters.KernelIntegrator,
     bbndb.auspex.Write: auspex.filters.WriteToFile,
     bbndb.auspex.Buffer: auspex.filters.DataBuffer,
     bbndb.auspex.Display: auspex.filters.Plotter,
+    bbndb.auspex.Correlate: auspex.filters.Correlator,
     bbndb.auspex.FidelityKernel: auspex.filters.SingleShotMeasurement
 }
 stream_sel_map = auspex.filters.stream_sel_map
@@ -69,7 +71,7 @@ class QubitExperiment(Experiment):
 
     """
 
-    def __init__(self, meta_file, averages=100, exp_name=None, **kwargs):
+    def __init__(self, meta_file, averages=100, exp_name=None, save_chandb=True, **kwargs):
         super(QubitExperiment, self).__init__(**kwargs)
 
         if not pipeline.pipelineMgr:
@@ -83,6 +85,7 @@ class QubitExperiment(Experiment):
 
         self.outputs_by_qubit = {}
         self.progressbars = None
+        self.save_chandb = save_chandb
 
         self.create_from_meta(meta_file, averages)
 
@@ -121,10 +124,15 @@ class QubitExperiment(Experiment):
         self.controlled_qubits = [c for c in self.chan_db.channels if c.label in meta_info["qubits"]]
         self.measurements      = [c for c in self.chan_db.channels if c.label in meta_info["measurements"]]
         self.measured_qubits   = [c for c in self.chan_db.channels if "M-"+c.label in meta_info["measurements"]]
-        self.phys_chans        = list(set([e.phys_chan for e in self.controlled_qubits + self.measurements]))
-        self.transmitters      = list(set([e.phys_chan.transmitter for e in self.controlled_qubits + self.measurements]))
+        if 'edges' in meta_info:
+            self.edges             = [c for c in self.chan_db.channels if c.label in meta_info["edges"]]
+        else:
+            self.edges = []
+        self.phys_chans        = list(set([e.phys_chan for e in self.controlled_qubits + self.measurements + self.edges]))
         self.receiver_chans    = list(set([e.receiver_chan for e in self.measurements]))
-        self.trig_chans        = list(set([e.trig_chan.phys_chan for e in self.measurements]))
+        self.slave_trigs       = [c for c in self.chan_db.channels if c.label == 'slave_trig']
+        self.trig_chans        = list(set([e.trig_chan.phys_chan for e in self.measurements])) + [c.phys_chan for c in self.slave_trigs]
+        self.transmitters      = list(set([e.phys_chan.transmitter for e in self.controlled_qubits + self.measurements + self.edges + self.slave_trigs]))
         self.receivers         = list(set([e.receiver_chan.receiver for e in self.measurements]))
         self.generators        = list(set([q.phys_chan.generator for q in self.measured_qubits + self.controlled_qubits + self.measurements if q.phys_chan.generator]))
         self.qubits_by_name    = {q.label: q for q in self.measured_qubits + self.controlled_qubits}
@@ -133,7 +141,13 @@ class QubitExperiment(Experiment):
         self.stream_selectors = pipeline.pipelineMgr.get_current_stream_selectors()
         if len(self.stream_selectors) == 0:
             raise PipelineError("No filter pipeline has been created. You can try running the create_default_pipeline() method of the Pipeline Manager")
-        self.stream_selectors = [s for s in self.stream_selectors if s.qubit_name in self.qubits_by_name.keys()]
+        org_stream_selectors = self.stream_selectors
+        for ss in org_stream_selectors:
+            labels = ss.label.split('-')
+            for l in labels:
+                if l in self.qubits_by_name.keys() and ss not in self.stream_selectors:
+                    self.stream_selectors.append(ss)
+                    continue
 
         # Locate transmitters relying on processors
         self.transceivers = list(set([t.transceiver for t in self.transmitters + self.receivers if t.transceiver]))
@@ -198,7 +212,7 @@ class QubitExperiment(Experiment):
         # Now a pipeline exists, so we create Auspex filters from the proxy filters in the db
         self.proxy_to_filter          = {}
         self.filters                  = []
-        self.connector_by_sel          = {}
+        self.connector_by_sel         = {}
         self.chan_to_dig              = {}
         self.chan_to_oc               = {}
         self.qubit_to_dig             = {}
@@ -207,13 +221,30 @@ class QubitExperiment(Experiment):
 
         # Create microwave sources and receiver instruments from the database objects.
         # We configure the self.receivers later after adding channels.
-        self.instrument_proxies = self.generators + self.receivers + self.transmitters + self.all_standalone + self.processors
+        self.instrument_proxies = self.generators + self.receivers + self.transmitters + self.transceivers + self.all_standalone + self.processors
+        for t in self.transceivers:
+            if t.initialize_separately:
+                self.instrument_proxies.remove(t)
+            else:
+                for el in t.transmitters + t.receivers:
+                    self.instrument_proxies.remove(el)
+
         self.instruments = []
         for instrument in self.instrument_proxies:
-            instr = instrument_map[instrument.model](instrument.address, instrument.label) # Instantiate
+            if (hasattr(instrument, 'serial_port') and
+                instrument.serial_port is not None and
+                hasattr(instrument, 'dac') and
+                instrument.dac is not None):
+                address = (instrument.address, instrument.serial_port, instrument.dac)
+            else:
+                address = instrument.address
+            instr = instrument_map[instrument.model](address, instrument.label) # Instantiate
             # For easy lookup
             instr.proxy_obj = instrument
+
+            instrument._locked = False
             instrument.instr = instr # This shouldn't be relied upon
+            instrument._locked = True
 
             self.proxy_name_to_instrument[instrument.label] = instr
 
@@ -224,18 +255,26 @@ class QubitExperiment(Experiment):
             if not hasattr(self, instrument.label):
                 setattr(self, instrument.label, instr)
 
+        mq_all_stream_sels = []
         for mq in self.measured_qubits:
 
             # Stream selectors from the pipeline database:
             # These contain all information except for the physical channel
-            mq_stream_sels = [s for s in self.stream_selectors if s.qubit_name == mq.label]
+            mq_stream_sels = [ss for ss in self.stream_selectors if mq.label in ss.label.split("-") and ss not in mq_all_stream_sels]
+            mq_all_stream_sels.append(mq_stream_sels)
 
             # The receiver channel only specifies the physical channel
             rcv = receiver_chans_by_qubit_label[mq.label]
 
             # Create the auspex stream selectors
-            dig = rcv.receiver # The digitizer instrument in the database
-            stream_sel_class = stream_sel_map[dig.stream_sel]
+            transcvr = rcv.receiver.transceiver
+            if transcvr is not None and transcvr.initialize_separately == False:
+                dig = rcv.receiver.transceiver
+                stream_sel_class = stream_sel_map[rcv.receiver.stream_sel]
+            else:
+                dig = rcv.receiver
+                stream_sel_class = stream_sel_map[dig.stream_sel]
+
             for mq_stream_sel in mq_stream_sels:
                 auspex_stream_sel = stream_sel_class(name=f"{rcv.label}-{mq_stream_sel.stream_type}-stream_sel")
                 mq_stream_sel.channel = rcv.channel
@@ -277,10 +316,15 @@ class QubitExperiment(Experiment):
         # Configure receiver instruments from the database objects
         # this must be done after adding channels.
         for dig in self.receivers:
-            dig.number_averages  = averages
-            dig.number_waveforms = 1
-            dig.number_segments  = segments_per_dig[dig]
-            dig.instr.proxy_obj  = dig
+            if dig.transceiver is not None and transcvr.initialize_separately == False:
+                dig.transceiver.number_averages = averages
+                dig.transceiver.number_waveforms = 1
+                dig.transceiver.number_segments = segments_per_dig[dig]
+            else:
+                dig.number_averages  = averages
+                dig.number_waveforms = 1
+                dig.number_segments  = segments_per_dig[dig]
+                dig.instr.proxy_obj  = dig
 
         # Restrict the graph to the relevant qubits
         self.measured_qubit_names = [q.label for q in self.measured_qubits]
@@ -292,12 +336,22 @@ class QubitExperiment(Experiment):
         # Compartmentalize the instantiation
         self.instantiate_filters(self.modified_graph)
 
+    def is_in_measured_qubit_names(self,qubit_name):
+        labels = []
+        if qubit_name is not None:
+            labels = qubit_name.split('-')
+        for l in labels:
+            if l in self.measured_qubit_names:
+                return True
+        return False
+
     def instantiate_filters(self, graph):
         # Configure the individual filter nodes
         for _, dat in graph.nodes(data=True):
             node = dat['node_obj']
             if isinstance(node, bbndb.auspex.FilterProxy):
-                if node.qubit_name in self.measured_qubit_names:
+                if all(name in self.measured_qubit_names for name in node.qubit_name.split('-')):
+                    #include correlators only if all participating qubits are measured
                     new_filt = filter_map[type(node)]()
                     new_filt.configure_with_proxy(node)
                     new_filt.proxy = node
@@ -311,7 +365,7 @@ class QubitExperiment(Experiment):
         self.pl_session.commit()
         for l1, l2 in graph.edges():
             node1, node2 = graph.nodes[l1]['node_obj'], graph.nodes[l2]['node_obj']
-            if node1.qubit_name in self.measured_qubit_names and node2.qubit_name in self.measured_qubit_names:
+            if (self.is_in_measured_qubit_names(node1.qubit_name) or self.is_in_measured_qubit_names(node1.label)) and self.is_in_measured_qubit_names(node2.qubit_name):
                 if isinstance(node1, bbndb.auspex.FilterProxy):
                     filt1 = self.proxy_to_filter[node1]
                     oc   = filt1.output_connectors[graph[l1][l2]["connector_out"]]
@@ -417,7 +471,7 @@ class QubitExperiment(Experiment):
             listener.start()
 
         while ready.value < len(self.chan_to_dig):
-            time.sleep(0.3)
+            time.sleep(0.1)
 
         if self.cw_mode:
             for awg in self.awgs:
@@ -432,6 +486,15 @@ class QubitExperiment(Experiment):
                 getattr(instr, "set_"+prop)(channel, value)
             else:
                 getattr(instr, "set_"+prop)(value)
+        param.assign_method(method)
+        self.add_sweep(param, values) # Create the requested sweep on this parameter
+
+    def add_manual_sweep(self, label, prompt, values, channel=None):
+        param = FloatParameter() # Create the parameter
+        param.name = label
+        def method(value):
+            print(f'Manually set {label} to {value}, then press enter.')
+            input()
         param.assign_method(method)
         self.add_sweep(param, values) # Create the requested sweep on this parameter
 
@@ -467,13 +530,18 @@ class QubitExperiment(Experiment):
             # Direct synthesis
             name, chan = thing.phys_chan.label.split("-")[0:2]
             instr = self._instruments[name] #list(filter(lambda x: x.name == name, self._instruments.values()))[0]
+
+            #special casing for APS2 channel amplitude sweeps... is there a better way to do this?
+            if isinstance(instr, auspex.instruments.APS2) and attribute=="amplitude":
+                chan = [1, 2]
+
             def method(value, channel=chan, instr=instr, prop=attribute,thing=thing):
                 # e.g. keysight.set_amplitude("ch1", 0.5)
                 try:
                     getattr(instr, "set_"+prop)(chan, value, thing)
                 except:
                     getattr(instr, "set_"+prop)(chan, value)
-
+            param.set_pair = (thing.phys_chan.label, attribute)
 
         if method:
             # Custom method
@@ -485,8 +553,8 @@ class QubitExperiment(Experiment):
                 param.assign_method(getattr(instr, "set_"+attribute)) # Couple the parameter to the instrument
                 param.add_post_push_hook(lambda: time.sleep(0.05))
             else:
-                raise InstrumentError("Cannot create this sweep. The instrument {} has no method {}".format(name, "set_"+attribute))
-        # param.instr_tree = [instr.name, attribute] #TODO: extend tree to endpoint
+                raise InstrumentError("The instrument {} has no method {}".format(name, "set_"+attribute))
+            param.set_pair = (instr.name, attribute)
         self.add_sweep(param, values) # Create the requested sweep on this parameter
 
     def add_avg_sweep(self, num_averages):
@@ -499,20 +567,22 @@ class QubitExperiment(Experiment):
     def shutdown_instruments(self):
         # remove socket listeners
         logger.debug("Shutting down instruments")
-
-        for awg in self.awgs:
-            awg.stop()
-        for dig in self.digitizers:
-            dig.stop()
-        for gen_proxy in self.generators:
-            gen_proxy.instr.output = False
+        try:
+            for awg in self.awgs:
+                awg.stop()
+            for dig in self.digitizers:
+                dig.stop()
+            for gen_proxy in self.generators:
+                gen_proxy.instr.output = False
+        except:
+            logger.error('Could Not Stop AWGs or Digitizers; Reset Experiment')
         for instr in self.instruments:
             instr.disconnect()
         self.dig_exit.set()
         for listener in self.dig_listeners:
             listener.join(2)
             if listener.is_alive():
-                logger.info(f"Terminating listener {listener} aggressively")
+                logger.debug(f"Terminating listener {listener} aggressively")
                 listener.terminate()
             del listener
 
@@ -523,19 +593,15 @@ class QubitExperiment(Experiment):
         super(QubitExperiment, self).final_init()
 
         # In order to fetch data more easily later
-        self.outputs_by_qubit =  {q.label: [self.proxy_to_filter[dat['node_obj']] for f,dat in self.modified_graph.nodes(data=True) if (isinstance(dat['node_obj'], (bbndb.auspex.Write, bbndb.auspex.Buffer,)) and q.label in dat['node_obj'].qubit_name)] for q in self.measured_qubits}
+        self.outputs_by_qubit =  {q.label: [self.proxy_to_filter[dat['node_obj']] for f,dat in self.modified_graph.nodes(data=True) if (isinstance(dat['node_obj'], (bbndb.auspex.Write, bbndb.auspex.Buffer,)) and q.label == dat['node_obj'].qubit_name)] for q in self.measured_qubits}
 
     def init_progress_bars(self):
         """ initialize the progress bars."""
-
-        from auspex.config import isnotebook
-
+        self.progressbars = {}
+        ocs = list(self.output_connectors.values())
         if isnotebook():
             from ipywidgets import IntProgress, VBox
             from IPython.display import display
-
-            ocs = list(self.output_connectors.values())
-            self.progressbars = {}
             if len(ocs)>0:
                 for oc in ocs:
                     self.progressbars[oc] = IntProgress(min=0, max=oc.output_streams[0].descriptor.num_points(), bar_style='success',
@@ -544,6 +610,14 @@ class QubitExperiment(Experiment):
                 self.progressbars[axis] = IntProgress(min=0, max=axis.num_points(),
                                                         description=f'{axis.name}:', style={'description_width': 'initial'})
             display(VBox(list(self.progressbars.values())))
+        else:
+            from progress.bar import ShadyBar
+            if len(ocs)>0:
+                for oc in ocs:
+                    self.progressbars[oc] = ShadyBar(f'Digitizer Data {oc.name}:',
+                                                max=oc.output_streams[0].descriptor.num_points())
+            for axis in self.sweeper.axes:
+                self.progressbars[axis] = ShadyBar(f"Sweep {axis.name}", max=axis.num_points())
 
     def run(self):
         # Begin acquisition before enabling the AWGs
@@ -553,14 +627,14 @@ class QubitExperiment(Experiment):
 
         # Set flag to enable acquisition process
         self.dig_run.set()
-
+        time.sleep(1)
         # Start the AWGs
         if not self.cw_mode:
             for awg in self.awgs:
                 awg.run()
 
         # Wait for all of the acquisitions to complete
-        timeout = 2
+        timeout = 10
         for dig in self.digitizers:
             dig.wait_for_acquisition(self.dig_run, timeout=timeout, ocs=list(self.chan_to_oc.values()), progressbars=self.progressbars)
 

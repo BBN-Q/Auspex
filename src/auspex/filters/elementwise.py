@@ -93,19 +93,20 @@ class ElementwiseFilter(Filter):
             for stream, messages in msgs_by_stream.items():
                 for message in messages:
                     message_type = message['type']
-                    message_data = message['data']
-                    message_data = message_data if hasattr(message_data, 'size') else np.array([message_data])
+                    # message_data = message['data']
+                    # message_data = message_data if hasattr(message_data, 'size') else np.array([message_data])
                     if message_type == 'event':
                         if message['event_type'] == 'done':
                             streams_done[stream] = True
                         elif message['event_type'] == 'refine':
                             logger.warning("ElementwiseFilter doesn't handle refinement yet!")
-                        self.push_to_all(message)
                     elif message_type == 'data':
                         # Add any old data...
-                        points_per_stream[stream] += len(message_data.flatten())
-                        stream_data[stream] = np.concatenate((stream_data[stream], message_data.flatten()))
-
+                        message_data = stream.pop()
+                        if message_data is not None:
+                            points_per_stream[stream] += len(message_data)
+                            stream_data[stream] = np.concatenate((stream_data[stream], message_data))
+                            # logger.info(f"{stream.name}: {message_data} now {stream_data[stream]}")
             # Now process the data with the elementwise operation
             smallest_length = min([d.size for d in stream_data.values()])
             new_data = [d[:smallest_length] for d in stream_data.values()]
@@ -124,5 +125,6 @@ class ElementwiseFilter(Filter):
 
             # If the amount of data processed is equal to the num points in the stream, we are done
             if np.all([streams_done[stream] for stream in streams]):
+                self.push_to_all({"type": "event", "event_type": "done", "data": None})
                 self.done.set()
                 break

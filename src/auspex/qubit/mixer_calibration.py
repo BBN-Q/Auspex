@@ -23,10 +23,21 @@ from auspex.experiment import FloatParameter, IntParameter, Experiment
 from auspex.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector
 from auspex.qubit.pulse_calibration import Calibration
 from auspex.filters.plot import ManualPlotter
-from auspex.instruments import instrument_map
+from auspex.instruments import instrument_map, bbn
 
-def find_null_offset(xpts, powers, default=0.0):
-    """Finds the offset corresponding to the minimum power using a fit to the measured data"""
+def find_null_offset(xpts, powers, default=0.0, use_fit=True):
+    """Finds the offset corresponding to minimum power in a mixer calibration. Optionally will fit a quadratic to the
+    linearized power and use the minimum of the fit to set the offset.
+
+    Args:
+        xpts (numpy.ndarray):       Swept axis.
+        powers (numpy.ndarray):     Measured powers, in logarithmic scale.
+        default (float, optional):  Value to return if fit fails. Defaults to 0.0.
+        use_fit (bool, optional):   If true, use a fit to data. If false, return minimum value of data. Defaults to True.
+
+    Returns:
+        A tuple containing the offset with minumum power, a finer x points array, and the fit points.
+    """
     def model(x, a, b, c):
         return a*(x - b)**2 + c
     powers = np.power(10, powers/10.)
@@ -35,10 +46,13 @@ def find_null_offset(xpts, powers, default=0.0):
         fit = curve_fit(model, xpts, powers, p0=[1, xpts[min_idx], powers[min_idx]])
     except RuntimeError:
         logger.warning("Mixer null offset fit failed.")
-        return default, np.zeros(len(powers))
-    best_offset = np.real(fit[0][1])
-    best_offset = np.minimum(best_offset, xpts[-1])
-    best_offset = np.maximum(best_offset, xpts[0])
+        return default, np.zeros(len(powers)), np.zeros(len(powers))
+    if use_fit:
+        best_offset = np.real(fit[0][1])
+        best_offset = np.minimum(best_offset, xpts[-1])
+        best_offset = np.maximum(best_offset, xpts[0])
+    else:
+        best_offset = xpts[min_idx]
     xpts_fine = np.linspace(xpts[0],xpts[-1],101)
     fit_pts = np.array([np.real(model(x, *fit[0])) for x in xpts_fine])
     if min(fit_pts)<0: fit_pts-=min(fit_pts)-1e-10 #prevent log of a negative number
@@ -46,16 +60,39 @@ def find_null_offset(xpts, powers, default=0.0):
 
 
 class MixerCalibration(Calibration):
+    """A calibration experiment that determines the optimal I and Q offsets, amplitude imbalance and phase imbalance
+    for single-sideband modulation of  a mixer. Please see Analog Devices Application Note AN-1039 for an explanation
+    of the optimization of a mixer for maximum sideband supression.
+    """
 
     MIN_OFFSET = -0.4
     MAX_OFFSET = 0.4
     MIN_AMPLITUDE = 0.2
-    MAX_AMPLITUDE = 1.2
+    MAX_AMPLITUDE = 1.5
     MIN_PHASE = -0.3
     MAX_PHASE = 0.3
 
     def __init__(self, channel, spectrum_analyzer, mixer="control", first_cal="phase",
-                offset_range = (-0.2,0.2), amp_range = (0.6,1.4), phase_range = (-np.pi/6,np.pi/6), nsteps = 51, plot=True):
+                offset_range = (-0.2,0.2), amp_range = (0.4,0.8), phase_range = (-np.pi/2,np.pi/2),
+                nsteps = 101, use_fit=True, plot=True):
+        """A mixer calibration for a specific LogicalChannel and mixer.
+
+        Args:
+            channel:                    The Auspex LogicalChannel for which to calibrate the mixer.
+            spectrum_analyzer:          The spectrum analyzer instrument to use for calibration.
+            mixer (optional):           'control' or 'measure', the corresponding mixer to calibrate.
+                                        Defaults to 'control'.
+            first_cal (optional):       'phase' or 'amplitude'. Calibrate the phase skew or amplitude imbalance first.
+                                        Defaults to 'phase'.
+            offset_range (optional):    I and Q offset range to sweep over. Defaults to (-0.2, 0.2).
+            amp_range (optional):       Amplitude imbalance range to sweep over. Defaults to (0.4, 0.8).
+            phase_range (optional):     Phase range to sweep over. Defaults to (-pi/2, pi/2).
+            nsteps (optional):          Number of points to sweep over for each calibraton.
+            use_fit (optional):         If true, find power minumum using a fit; otherwise use minimum value from data.
+                                        Defaults to True.
+            plot (optional):            Plot the calibration as it happens.
+        """
+
         self.channel = channel
         self.spectrum_analyzer = spectrum_analyzer
         self.mixer = mixer
@@ -65,9 +102,13 @@ class MixerCalibration(Calibration):
         self.amp_range = amp_range
         self.phase_range = phase_range
         self.nsteps = nsteps
+        self.use_fit = use_fit
         super(MixerCalibration, self).__init__()
 
     def init_plots(self):
+        """Initialize manual plotters for the mixer calibration. Three plot tabs open, one for I,Q offset, one for
+        phase skew, one for amplitude imbalance.
+        """
         self.plt1 = ManualPlotter(name="Mixer offset calibration", x_label='{} {} offset (V)'.format(self.channel, self.mixer), y_label='Power (dBm)')
         self.plt1.add_data_trace("I-offset", {'color': 'C1'})
         self.plt1.add_data_trace("Q-offset", {'color': 'C2'})
@@ -86,7 +127,8 @@ class MixerCalibration(Calibration):
         return self.plotters
 
     def _calibrate(self):
-
+        """Run the actual calibration routine.
+        """
         offset_pts = np.linspace(self.offset_range[0], self.offset_range[1], self.nsteps)
         amp_pts    = np.linspace(self.amp_range[0], self.amp_range[1], self.nsteps)
         phase_pts  = np.linspace(self.phase_range[0], self.phase_range[1], self.nsteps)
@@ -97,7 +139,7 @@ class MixerCalibration(Calibration):
 
         I1_amps = self.run_sweeps("I_offset", offset_pts, config_dict)
         try:
-            I1_offset, xpts, ypts = find_null_offset(offset_pts[1:], I1_amps[1:])
+            I1_offset, xpts, ypts = find_null_offset(offset_pts[1:], I1_amps[1:], use_fit = self.use_fit)
         except:
             raise CalibrationError("Could not find null offset")
         self.plt1["I-offset"] = (offset_pts, I1_amps)
@@ -107,7 +149,7 @@ class MixerCalibration(Calibration):
 
         Q1_amps = self.run_sweeps("Q_offset", offset_pts, config_dict)
         try:
-            Q1_offset, xpts, ypts = find_null_offset(offset_pts[1:], Q1_amps[1:])
+            Q1_offset, xpts, ypts = find_null_offset(offset_pts[1:], Q1_amps[1:], use_fit = self.use_fit)
         except:
             raise CalibrationError("Could not find null offset")
         self.plt1["Q-offset"] = (offset_pts, Q1_amps)
@@ -117,7 +159,7 @@ class MixerCalibration(Calibration):
 
         I2_amps = self.run_sweeps("I_offset", offset_pts, config_dict)
         try:
-            I2_offset, xpts, ypts = find_null_offset(offset_pts[1:], I2_amps[1:])
+            I2_offset, xpts, ypts = find_null_offset(offset_pts[1:], I2_amps[1:], use_fit = self.use_fit)
         except:
             raise CalibrationError("Could not find null offset")
         self.plt1["I-offset"] = (offset_pts, I2_amps)
@@ -138,7 +180,7 @@ class MixerCalibration(Calibration):
 
         amps1 = self.run_sweeps(cals[first_cal], cal_pts[first_cal], config_dict)
         try:
-            offset1, xpts, ypts = find_null_offset(cal_pts[first_cal][1:], amps1[1:], default=cal_defaults[first_cal])
+            offset1, xpts, ypts = find_null_offset(cal_pts[first_cal][1:], amps1[1:], default=cal_defaults[first_cal], use_fit = self.use_fit)
         except:
             raise CalibrationError("Could not find null offset")
         correct_plotter[first_cal][cals[first_cal]] = (cal_pts[first_cal], amps1)
@@ -148,7 +190,7 @@ class MixerCalibration(Calibration):
 
         amps2 = self.run_sweeps(cals[second_cal], cal_pts[second_cal], config_dict)
         try:
-            offset2, xpts, ypts = find_null_offset(cal_pts[second_cal][1:], amps2[1:], default=cal_defaults[second_cal])
+            offset2, xpts, ypts = find_null_offset(cal_pts[second_cal][1:], amps2[1:], default=cal_defaults[second_cal], use_fit = self.use_fit)
         except:
             raise CalibrationError("Could not find null offset")
         correct_plotter[second_cal][cals[second_cal]] = (cal_pts[second_cal], amps2)
@@ -173,19 +215,25 @@ class MixerCalibration(Calibration):
         self.config_dict = config_dict
 
     def update_settings(self):
+        """Update the channel library settings to those found by calibration routine.
+        """
         self.exp._phys_chan.amp_factor = self.config_dict["amplitude_factor"]
         self.exp._phys_chan.phase_skew = self.config_dict["phase_skew"]
         self.exp._phys_chan.I_channel_offset = self.config_dict["I_offset"]
         self.exp._phys_chan.Q_channel_offset = self.config_dict["Q_offset"]
 
     def run_sweeps(self, sweep_parameter, pts, config_dict):
+        """Run the calibration sweeps.
+        """
         self.exp = MixerCalibrationExperiment(self.channel, self.spectrum_analyzer, config_dict, mixer=self.mixer)
         self.exp.add_sweep(getattr(self.exp, sweep_parameter), pts)
         self.exp.run_sweeps()
         return self.exp.buff.get_data()[0]
 
 class MixerCalibrationExperiment(Experiment):
-
+    """A mixer calibration experiment, using an APS1 or APS2 unit to calibrate the mixer offsets. Pulls sideband
+    modulation frequency (IF) and LO frequency from the channel library.
+    """
     SSB_FREQ = 10e6
 
     amplitude = OutputConnector(unit='dBc')
@@ -195,14 +243,15 @@ class MixerCalibrationExperiment(Experiment):
     amplitude_factor = FloatParameter(default=1.0)
     phase_skew = FloatParameter(default=0.0, unit="rad")
 
-    sideband_modulation = False
+    sideband_modulation = True
 
     def __init__(self, channel, spectrum_analyzer, config_dict, mixer="control"):
         """Initialize MixerCalibrationExperiment Experiment.
             Args:
-                channel: channel identifier (qubit or edge)
-                spectrum_analyzer: which spectrum analyzer should be used.
-                mixer: One of 'control', 'measure' to select which mixer to cal.
+                channel:                LogicalChannel to perform calibration.
+                spectrum_analyzer:      Which spectrum analyzer should be used.
+                config_dict:            Dictionary of values to store calibration results.
+                mixer:                  One of 'control', 'measure' to select which mixer to cal.
         """
         super(MixerCalibrationExperiment, self).__init__()
 
@@ -216,10 +265,12 @@ class MixerCalibrationExperiment(Experiment):
             self._awg = channel.measure_chan.phys_chan.transmitter
             self._phys_chan = channel.measure_chan.phys_chan
             self._source = channel.measure_chan.phys_chan.generator
+            self.SSB_FREQ = channel.measure_chan.autodyne_freq
         elif mixer.lower() == "control":
             self._awg = channel.phys_chan.transmitter
             self._phys_chan = channel.phys_chan
             self._source = channel.phys_chan.generator
+            self.SSB_FREQ = channel.frequency
         else:
             raise CalibrationError("Unknown mixer {}: must be either 'measure' or 'control'.".format(mixer))
 
@@ -229,7 +280,9 @@ class MixerCalibrationExperiment(Experiment):
             instr = instrument_map[instrument.model](instrument.address, instrument.label) # Instantiate
             # For easy lookup
             instr.proxy_obj = instrument
+            instrument._locked = False
             instrument.instr = instr
+            instrument._locked = True
             # Add to the experiment's instrument list
             self._instruments[instrument.label] = instr
             self.instruments.append(instr)
@@ -244,31 +297,47 @@ class MixerCalibrationExperiment(Experiment):
         self.set_graph(edges)
 
     def connect_instruments(self):
-        """Extend connect_instruments to reset I,Q offsets and amplitude and phase
-        imbalance."""
+        """Connect instruments, resetting all mixer offsets to default values.
+        """
         super(MixerCalibrationExperiment, self).connect_instruments()
-        self.awg.set_offset(0, 0.0)
-        self.awg.set_offset(1, 0.0)
-        self.awg.set_mixer_amplitude_imbalance(0.0)
-        self.awg.set_mixer_phase_skew(0.0)
+        if isinstance(self.awg, bbn.APS2):
+            self.awg.set_offset(0,0.0)
+            self.awg.set_offset(1,0.0)
+            self.awg.set_mixer_amplitude_imbalance(1.0)
+            self.awg.set_mixer_phase_skew(0.0)
+        else:
+            self.awg.set_offset(int(self._phys_chan.label[-2]), 0.0)
+            self.awg.set_offset(int(self._phys_chan.label[-1]), 0.0)
+            self.awg.set_amplitude(int(self._phys_chan.label[-2]), 1)
+            self.awg.set_amplitude(int(self._phys_chan.label[-1]), 1)
+            self.awg.set_mixer_amplitude_imbalance(self._phys_chan.label[-2:],1.0)
+            self.awg.set_mixer_phase_skew(self._phys_chan.label[-2:],0.0)
+        self.reset_calibration()
 
     def init_instruments(self):
+        """Initialize instruments for mixer calibration.
+        """
         for k,v in self.config_dict.items():
             if k != "sideband_modulation":
                 getattr(self, k).value = v
 
-        self.I_offset.assign_method(lambda x: self.awg.set_offset(0, x))
-        self.Q_offset.assign_method(lambda x: self.awg.set_offset(1, x))
-        self.amplitude_factor.assign_method(self.awg.set_mixer_amplitude_imbalance)
-        self.phase_skew.assign_method(self.awg.set_mixer_phase_skew)
-
+        if isinstance(self.awg, bbn.APS2):
+            self.phase_skew.assign_method(self.awg.set_mixer_phase_skew)
+            self.I_offset.assign_method(lambda x: self.awg.set_offset(0, x))
+            self.Q_offset.assign_method(lambda x: self.awg.set_offset(1, x))
+            self.amplitude_factor.assign_method(self.awg.set_mixer_amplitude_imbalance)
+        else:
+            self.amplitude_factor.assign_method(lambda x: self.awg.set_mixer_amplitude_imbalance(self._phys_chan.label[-2:], x))
+            self.I_offset.assign_method(lambda x: self.awg.set_offset(int(self._phys_chan.label[-2]), x))
+            self.Q_offset.assign_method(lambda x: self.awg.set_offset(int(self._phys_chan.label[-1]), x))
+            self.phase_skew.assign_method(lambda x: self.awg.set_mixer_phase_skew(self._phys_chan.label[-2:], x, self.SSB_FREQ))
         self.I_offset.add_post_push_hook(lambda: time.sleep(0.1))
         self.Q_offset.add_post_push_hook(lambda: time.sleep(0.1))
         self.amplitude_factor.add_post_push_hook(lambda: time.sleep(0.1))
         self.phase_skew.add_post_push_hook(lambda: time.sleep(0.1))
 
         for name, instr in self._instruments.items():
-            # Configure with dictionary from the instrument proxy
+            # Configure with dictionary from the instrument proxyg
             instr.configure_with_proxy(instr.proxy_obj)
 
         #make sure the microwave generators are set up properly
@@ -282,21 +351,42 @@ class MixerCalibrationExperiment(Experiment):
         time.sleep(0.1)
 
     def reset_calibration(self):
+        """Set calibration back to default values.
+        """
         try:
-            self.awg.set_mixer_amplitude_imbalance(1.0)
-            self.awg.set_mixer_phase_skew(0.0)
-            self.awg.set_offset(0, 0.0)
-            self.awg.set_offset(1, 0.0)
+            if isinstance(self.awg, bbn.APS2):
+                self.awg.set_mixer_amplitude_imbalance(1.0)
+                self.awg.set_mixer_phase_skew(0.0)
+                self.awg.set_offset(0, 0.0)
+                self.awg.set_offset(1, 0.0)
+            else:
+                self.awg.set_mixer_amplitude_imbalance(self._phys_chan.label[-2:],1.0)
+                self.awg.set_mixer_phase_skew(self._phys_chan.label[-2:],0.0)
+                self.awg.set_mixer_amplitude_imbalance(self._phys_chan.label[-2:],1.0)
+                self.awg.set_mixer_phase_skew(self._phys_chan.label[-2:],0.0)
+                self.awg.set_offset(int(self._phys_chan.label[-2]), 0.0)
+                self.awg.set_offset(int(self._phys_chan.label[-1]), 0.0)
         except Exception as ex:
-            raise InstrumentError("Could not reset APS2 mixer calibration. Is the AWG connected?") from ex
+            raise InstrumentError("Could not reset mixer calibration. Is the AWG connected?") from ex
 
     def _setup_awg_ssb(self):
-        #set up ingle sideband modulation IQ playback on the AWG
+        """Set up AWGS for single sideband modulation, playing back a continuous tone.
+        """
+        #set up single sideband modulation IQ playback on the AWG
         self.awg.stop()
-        self.awg.load_waveform(1, 0.5*np.ones(1200, dtype=np.float))
-        self.awg.load_waveform(2, np.zeros(1200, dtype=np.float))
-        self.awg.waveform_frequency = -self.SSB_FREQ
-        self.awg.run_mode = "CW_WAVEFORM"
+        if isinstance(self.awg, bbn.APS2):
+            self.awg.load_waveform(1, 0.5*np.ones(1200, dtype=np.float))
+            self.awg.load_waveform(2, np.zeros(1200, dtype=np.float))
+            self.awg.waveform_frequency = -self.SSB_FREQ
+            self.awg.run_mode = "CW_WAVEFORM"
+        else:
+            iwf =  0.5 * np.cos(2*np.pi*self.SSB_FREQ*np.arange(1200,dtype=np.float64)*1e-6/self.awg.sampling_rate)
+            qwf = -0.5 * np.sin(2*np.pi*self.SSB_FREQ*np.arange(1200,dtype=np.float64)*1e-6/self.awg.sampling_rate)
+            self.awg.load_waveform(int(self._phys_chan.label[-2]), iwf)
+            self.awg.load_waveform(int(self._phys_chan.label[-1]), qwf)
+            self.awg.run_mode = "RUN_WAVEFORM"
+            self.awg.repeat_mode = "CONTINUOUS"
+            self.awg.trigger_source = "internal"
         #start playback
         self.awg.run()
         logger.debug("Playing SSB CW IQ modulation on {} at frequency: {} MHz".format(self.awg, self.SSB_FREQ/1e6))
@@ -311,4 +401,5 @@ class MixerCalibrationExperiment(Experiment):
         pass
 
     def run(self):
+        time.sleep(0.05)
         self.amplitude.push(self.sa.peak_amplitude())

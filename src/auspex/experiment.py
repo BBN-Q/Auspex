@@ -22,8 +22,16 @@ else:
     from multiprocessing import Process
     from threading import Thread as Thread
 
+from IPython.core.getipython import get_ipython
+in_notebook = False
+try:
+    get_ipython()
+    in_notebook = True
+except:
+    pass
+
 import inspect
-import time
+import time, datetime
 import copy
 import itertools
 import logging
@@ -47,6 +55,8 @@ from auspex.stream import DataStream, DataAxis, SweepAxis, DataStreamDescriptor,
 from auspex.filters import Plotter, MeshPlotter, ManualPlotter, WriteToFile, DataBuffer, Filter
 from auspex.log import logger
 import auspex.config
+from auspex.config import isnotebook
+
 
 def auspex_plot_server():
     client_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),"plot_server.py")
@@ -122,8 +132,11 @@ class MetaExperiment(type):
         # Beware, passing objects won't work at parse time
         self._output_connectors = {}
 
-        # Parse ourself
-        self._exp_src = inspect.getsource(self)
+        # Parse ourself -- can't do this if class is defined in a notebook (?)
+        if not in_notebook:
+            self._exp_src = inspect.getsource(self)
+        else:
+            self._exp_src = " "
 
         for k,v in dct.items():
             if isinstance(v, Instrument):
@@ -173,6 +186,9 @@ class Experiment(metaclass=MetaExperiment):
         self.manual_plotter_callbacks = [] # These are called at the end of run
         self._extra_plots_to_streams = {}
 
+        # Keep track of additional DataStreams created for manual plotters, etc.
+        self.extra_streams = []
+
         # Furthermore, keep references to all of the file writers and buffers.
         self.writers = []
         self.buffers = []
@@ -189,10 +205,14 @@ class Experiment(metaclass=MetaExperiment):
         # add date to data files?
         self.add_date = False
 
+        # save channel library
+        self.save_chanddb = False
+
         # Things we can't metaclass
         self.output_connectors = {}
         for oc in self._output_connectors.keys():
-            a = OutputConnector(name=oc, data_name=oc, unit=self._output_connectors[oc].data_unit, parent=self)
+            a = OutputConnector(name=oc, data_name=oc, unit=self._output_connectors[oc].data_unit,
+                                dtype=self._output_connectors[oc].descriptor.dtype, parent=self)
             a.parent = self
 
             self.output_connectors[oc] = a
@@ -311,7 +331,6 @@ class Experiment(metaclass=MetaExperiment):
         logger.debug("Waiting for filters.")
         last_param_values = None
         logger.debug("Starting experiment sweep.")
-
         while True:
             # Increment the sweeper, which returns a list of the current
             # values of the SweepAxes (no DataAxes).
@@ -319,10 +338,17 @@ class Experiment(metaclass=MetaExperiment):
 
             if hasattr(self, 'progressbars') and self.progressbars:
                 for axis in self.sweeper.axes:
-                    if axis.done:
-                        self.progressbars[axis].value = axis.num_points()
+                    if isnotebook():
+                        if axis.done:
+                            self.progressbars[axis].value = axis.num_points()
+                        else:
+                            self.progressbars[axis].value = axis.step
                     else:
-                        self.progressbars[axis].value = axis.step
+                        if axis.done:
+                            self.progressbars[axis].next()
+                            self.progressbars[axis].finish()
+                        else:
+                            self.progressbars[axis].goto(axis.step)
 
             if self.sweeper.is_adaptive():
                 # Add the new tuples to the stream descriptors
@@ -442,21 +468,28 @@ class Experiment(metaclass=MetaExperiment):
         for n in self.nodes + self.extra_plotters:
             if n != self and hasattr(n, 'final_init'):
                 n.final_init()
+        # Call final init on the DataStreams to fix their shared memory buffer sizes
+        for edge in self.graph.edges:
+            edge.final_init()
+
         self.init_progress_bars()
 
     def init_progress_bars(self):
         """ initialize the progress bars."""
-        from auspex.config import isnotebook
-
+        self.progressbars = {}
         if isnotebook():
             from ipywidgets import IntProgress, VBox
             from IPython.display import display
 
-            self.progressbars = {}
+
             for axis in self.sweeper.axes:
                 self.progressbars[axis] = IntProgress(min=0, max=axis.num_points(),
                                                         description=f'Sweep {axis.name}:', style={'description_width': 'initial'})
             display(VBox(list(self.progressbars.values())))
+        else:
+            from progress.bar import ShadyBar
+            for axis in self.sweeper.axes:
+                self.progressbars[axis] = ShadyBar(f"Sweep {axis.name}", max=axis.num_points())
 
     def run_sweeps(self):
         # Propagate the descriptors through the network
@@ -483,6 +516,14 @@ class Experiment(metaclass=MetaExperiment):
             for w in wrs:
                 w.filename.value = inc_filename
         self.filenames = [w.filename.value for w in self.writers]
+        # Save ChannelLibrary version
+        if hasattr(self, 'chan_db') and self.filenames and self.save_chandb:
+            import bbndb
+            exp_chandb = bbndb.deepcopy_sqla_object(self.chan_db, self.cl_session)
+            exp_chandb.label = os.path.basename(self.filenames[0])
+            exp_chandb.time = datetime.datetime.now()
+            exp_chandb.notes = ''
+            self.cl_session.commit()
 
         # Remove the nodes with 0 dimension
         self.nodes = [n for n in self.nodes if not(hasattr(n, 'input_connectors') and  n.input_connectors['sink'].descriptor.num_dims()==0)]
@@ -549,7 +590,7 @@ class Experiment(metaclass=MetaExperiment):
                 for n in self.other_nodes:
                     if not n.done.is_set():
                         times[n] += 1
-                        logger.info(f"{str(n)} not done. Is the pipeline backed up at IO stage?")
+                        logger.debug(f"{str(n)} not done. Is the pipeline backed up at IO stage?")
                     else:
                         dones[n] = True
 
@@ -589,12 +630,16 @@ class Experiment(metaclass=MetaExperiment):
         self.shutdown_instruments()
 
         try:
-            while True:
+            ct_max = 5 #arbitrary waiting 10 s before giving up
+            for ct in range(ct_max):
                 if any([n.is_alive() for n in self.other_nodes]):
                     logger.warning("Filter pipeline appears stuck. Use keyboard interrupt to terminate.")
                     time.sleep(2.0)
                 else:
                     break
+                for n in self.other_nodes:
+                    n.terminate()
+                raise Exception('Filter pipeline stuck!')
         except KeyboardInterrupt as e:
             for n in self.other_nodes:
                 n.terminate()
@@ -647,6 +692,7 @@ class Experiment(metaclass=MetaExperiment):
         """A plotter that lives outside the filter pipeline, intended for advanced
         use cases when plotting data during refinement."""
         plotter_stream = DataStream()
+        self.extra_streams.append(plotter_stream)
         plotter.sink.add_input_stream(plotter_stream)
         self.extra_plotters.append(plotter)
         self._extra_plots_to_streams[plotter] = plotter_stream
@@ -703,7 +749,7 @@ class Experiment(metaclass=MetaExperiment):
                     for p in self.plotters:
                         p.do_plotting = False
             else:
-                logger.info("Plot server did not respond.")
+                logger.info("Plot Server did not respond.")
                 for p in self.plotters:
                     p.do_plotting = False
 

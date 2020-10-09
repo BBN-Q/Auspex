@@ -44,8 +44,10 @@ class VisaInterface(Interface):
         self._resource.write_raw(raw_string)
     def read(self):
         return self._resource.read()
-    def read_raw(self):
-        return self._resource.read_raw()
+    def read_raw(self, size=None):
+        return self._resource.read_raw(size=size)
+    def read_bytes(self, count, chunk_size=None, break_on_termchar=False):
+        return self._resource.read_bytes(count, chunk_size=chunk_size, break_on_termchar=break_on_termchar)
     def query(self, query_string):
         return self._resource.query(query_string)
     def write_binary_values(self, query_string, values, **kwargs):
@@ -65,7 +67,7 @@ class VisaInterface(Interface):
     def ESE(self):
         return self._resource.query("*ESE?") # Standard Event Status Enable Query
     def ESR(self):
-        return self._resource.write("*ESR?") # Standard Event Status Register Query
+        return self._resource.query("*ESR?") # Standard Event Status Register Query
     def IDN(self):
         return self._resource.query("*IDN?") # Identification Query
     def OPC(self):

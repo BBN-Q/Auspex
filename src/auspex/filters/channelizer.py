@@ -86,7 +86,7 @@ class Channelizer(Filter):
         self.idx = 0
 
         # For storing carryover if getting uneven buffers
-        self.carry = np.zeros(0, dtype=self.output_descriptor.dtype)
+        self.carry = np.zeros(0, dtype=self.source.descriptor.dtype)
 
 
     def update_references(self, frequency):
@@ -186,11 +186,8 @@ class Channelizer(Filter):
         decimated_descriptor.axes[-1].original_points = decimated_descriptor.axes[-1].points
         decimated_descriptor._exp_src = self.sink.descriptor._exp_src
         decimated_descriptor.dtype = np.complex64
-        self.output_descriptor = decimated_descriptor
-        for os in self.source.output_streams:
-            os.set_descriptor(decimated_descriptor)
-            if os.end_connector is not None:
-                os.end_connector.update_descriptors()
+        self.source.descriptor = decimated_descriptor
+        self.source.update_descriptors()
 
     def process_data(self, data):
 
@@ -211,7 +208,7 @@ class Channelizer(Filter):
             else:
                 self.carry = data
         else:
-            self.carry = np.zeros(0, dtype=self.output_descriptor.dtype)
+            self.carry = np.zeros(0, dtype=self.source.descriptor.dtype)
 
         if num_records > 0:
             # The records are processed in parallel after being reshaped here

@@ -85,7 +85,7 @@ class Plotter(Filter):
         if self.final_buffer is None:
             self.final_buffer = self._final_buffer.get()
         if self.plot_dims.value == 2:
-            pass
+            raise NotImplementedError("2 dimensional get_final_plot not yet implemented.")
         elif self.plot_dims.value == 1:
             figs = []
             for quad_func in quad_funcs:

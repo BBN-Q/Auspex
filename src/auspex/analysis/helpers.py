@@ -1,9 +1,14 @@
 from auspex.data_format import AuspexDataContainer
 from itertools import product
+from auspex.log import logger
 import datetime
 import os, re
 from os import path
 import numpy as np
+from itertools import product
+import bbndb
+from IPython.display import HTML, display
+import matplotlib.pyplot as plt
 
 def get_file_name():
     """Helper function to get a filepath from a dialog box"""
@@ -14,13 +19,100 @@ def get_file_name():
     root = tk.Tk()
     root.withdraw() # remove edges
 
-    filepath = filedialog.askopenfilename()
+    filepath = [filedialog.askdirectory()]
     root.update() # fixes OSX hanging issue
     #https://stackoverflow.com/questions/21866537/what-could-cause-an-open-file-dialog-window-in-tkinter-python-to-be-really-slow
 
     return filepath
 
-def open_data(num=None, folder=None, groupname="main", datasetname="data", date=datetime.date.today().strftime('%y%m%d')):
+def _is_auspex(path):
+    """
+    Test if a given file path is an Auspex data file
+    """
+    path = path.rstrip('/')
+    filename = path.split('/')[-1]
+    if re.findall(r".+.auspex", filename):
+        return True
+    else:
+        return False
+
+def load_data(dirpath=None):
+    """
+    Open data in the .auspex file at dirpath/
+
+    Parameters:
+        dirpath (string)
+            Path to the .auspex file. If no folder is specified, a dialogue box will ask for a path.
+
+    Returns:
+        data_set (Dict{data group}{data name}{data,descriptor})
+            Data as a dictionary structure with data groups, types of data and
+            the data packed sequentially
+
+    Examples:
+        Loading a data container
+
+        >>> data = load_data('/path/to/my/data.auspex')
+        >>> data
+        {'q2-main': {'data': {'data': array([[ 0.16928101-0.05661011j,  0.3225708 +0.08914185j,
+            0.2114563 +0.10314941j, ..., -0.32357788+0.16964722j,
+        >>> data["q3-main"]["variance"]["descriptor"]
+        <DataStreamDescriptor(num_dims=1, num_points=52)>
+        >>> data["q3-main"]["variance"]["data"]
+        array([0.00094496+0.00014886j, 0.00089747+0.00015082j,
+        0.00090634+0.00015106j, 0.00090128+0.00014451j,...
+    """
+    if dirpath:
+        if not _is_auspex(dirpath):
+            raise Exception('\x1b[6;30;91m' +
+                            "File is not an Auspex file!" +
+                            '\x1b[0m')
+
+    if dirpath == None:
+        dp = get_file_name()[0]
+        dp = dp.rstrip('/')
+        filename = dp.split('/')[-1]
+        dirpath = dp
+        if not _is_auspex(dirpath):
+            raise Exception('\x1b[6;30;91m' +
+                            "File is not an Auspex file!" +
+                            '\x1b[0m')
+
+    # If path is still none do  nothing
+    if dirpath == None:
+        return []
+
+    try:
+        data_container = AuspexDataContainer(dirpath)
+        data_sets = {}
+        # get a list of data groups
+        groups = [x.name for x in os.scandir(dirpath)]
+
+        for group in groups:
+            # parse the data structure and pack the dict with data
+            data_sets[group] = {}
+            datafiles = [x.name for x in os.scandir(dirpath + '/' + group)]
+            datasets = list(set(list(filter(lambda x: x.split('.')[1] == 'dat', datafiles))))
+            datanames = [re.match(r"(.+).dat", ds).groups()[0] for ds in datasets]
+            for data in datanames:
+                data_sets[group][data] = {}
+                ds_data, ds_desc = data_container.open_dataset(group,data)
+                data_sets[group][data]["data"] = ds_data
+                data_sets[group][data]["descriptor"] = ds_desc
+    except FileNotFoundError:
+        print("File note found.  Please check your path")
+        data_sets = []
+    except PermissionError:
+        print("Permission error!  Do you have access to this file?")
+        data_sets = []
+    except:
+        print("Error!")
+        data_sets = []
+        raise
+
+    return data_sets
+
+def open_data(num=None, folder=None, groupname="main", datasetname="data", date=None):
     """Convenience Load data from an `AuspexDataContainer` given a file number and folder.
         Assumes that files are named with the convention `ExperimentName-NNNNN.auspex`
 
@@ -28,7 +120,7 @@ def open_data(num=None, folder=None, groupname="main", datasetname="data", date=
         num (int)
             File number to be loaded.
         folder (string)
-            Base folder where file is stored. If the `date` parameter is not None, assumes file is a dated folder.
+            Base folder where file is stored. If the `date` parameter is not None, assumes file is a dated folder. If no folder is specified, open a dialogue box. Open the folder with the desired ExperimentName-NNNN.auspex, then press OK
         groupname (string)
             Group name of data to be loaded.
         datasetname (string, optional)
@@ -48,12 +140,12 @@ def open_data(num=None, folder=None, groupname="main", datasetname="data", date=
         >>> data, desc = open_data(42, '/path/to/my/data', "q1-main", date="190301")
 
     """
-    if num is None or folder is None:
-        # pull up dialog box
-        data_file = get_file_name()
+    if num is None or folder is None or date is None:
+        return load_data()
     else:
-        if date is not None:
-            folder = path.join(folder, date)
+        if date == None:
+            date = datetime.date.today().strftime('%y%m%d')
+        folder = path.join(folder, date)
         assert path.isdir(folder), f"Could not find data folder: {folder}"
 
         p = re.compile(r".+-(\d+).auspex")
@@ -70,6 +162,9 @@ def open_data(num=None, folder=None, groupname="main", datasetname="data", date=
 
 
 def normalize_data(data, zero_id = 0, one_id = 1):
+    if np.any(np.iscomplex(data['Data'])):
+        logger.warning("normalize_data should not be used with complex data.")
+
     metadata_str = [f for f in data.dtype.fields.keys() if 'metadata' in f]
     if len(metadata_str)!=1:
         raise ValueError('Data format not valid')
@@ -87,6 +182,27 @@ def normalize_data(data, zero_id = 0, one_id = 1):
     #remove calibration points
     norm_data = [d for ind, d in enumerate(norm_data) if metadata[ind] == max(metadata)]
     return norm_data
+
+def normalize_buffer_data(data, desc, qubit_index, zero_id = 0, one_id = 1):
+    if np.any(np.iscomplex(data)):
+        logger.warning("normalize_buffer_data should not be used with complex data.")
+
+    # Qubit index gives the string offset of the qubit in the metadata
+    metadata = [(i, int(v[qubit_index])) for i,v in enumerate(desc.axes[0].metadata) if v != "data"]
+
+    #find indeces for calibration points
+    zero_cal_idx = [i for i, x in metadata if x == zero_id]
+    one_cal_idx = [i for i, x in metadata if x == one_id]
+    #find values for calibrated 0 and 1
+    zero_cal = np.mean(data[zero_cal_idx])
+    one_cal = np.mean(data[one_cal_idx])
+
+    #normalize
+    scale_factor = (zero_cal - one_cal)/2
+    norm_data = (data-zero_cal)/scale_factor + 1
+
+    #remove calibration points
+    return norm_data[:metadata[0][0]]
 
 def cal_scale(data, bit=0, nqubits=1, repeats=2):
     """
@@ -183,3 +299,58 @@ def cal_data(data, quad=np.real, qubit_name="q1", group_name="main", \
     x_dat = data[key][ind_axis][:-(len(ind0) + len(ind1))]
     y_dat = (y_dat - zero_cal)/scale_factor + 1
     return y_dat.astype(return_type), x_dat
+
+def cal_ls():
+    ''' List of auspex.pulse_calibration results '''
+    caldb = bbndb.calibration.Calibration
+    c = bbndb.get_cl_session().query(caldb.id, caldb.sample_id, caldb.name, caldb.value, caldb.uncertainty, caldb.date).order_by(-caldb.id).all()
+    table_code = ""
+    for i, (id, sample_id, name, value, uncertainty, time) in enumerate(c):
+        if not uncertainty:
+            uncertainty = 0
+        d,t  = str(time).split()
+        sample = bbndb.get_cl_session().query(bbndb.calibration.Sample).filter_by(id=sample_id).first()
+        table_code += f"<tr><td>{id}</td><td>{d}</td><td>{t.split('.')[0]}</td><td>{sample.name}</td><td>{name}</td><td>{round(value,3)}</td><td>{round(uncertainty,3)}</td></tr>"
+    display(HTML(f"<table><tr><th>id</th><th>Date</th><th>Time</th><th>Sample</th><th>Name</th><th>Value</th><th>Uncertainty</th></tr><tr>{table_code}</tr></table>"))
+
+def get_cals(qubit, params, make_plots=True, depth=0):
+    """
+    Return and optionally plot the result of the most recent calibrations/characterizations
+    Parameters
+    -------------
+    qubit : qubit name (string)
+    params: parameter(s) to plot (string or list of strings)
+    make_plots: optional bool (default = True)
+    depth: optional integer, number of most recent calibrations to load (default = 0 for all cals)
+    -------------
+    Returns
+    List of: dates, values, errors
+    """
+
+    if isinstance(params, str):
+        params = [params]
+    caldb = bbndb.calibration.Calibration
+    sample_id = bbndb.get_cl_session().query(bbndb.calibration.Sample).filter_by(name=qubit).first().id
+    dates_list = []
+    values_list = []
+    errors_list = []
+    for param in params:
+        c = bbndb.get_cl_session().query(caldb.value, caldb.uncertainty, caldb.date).order_by(-caldb.id).filter_by(name = param, sample_id = sample_id).all()
+        dates = [cc[2] for cc in c][-depth:]
+        values = [cc[0] for cc in c][-depth:]
+        errors = [cc[1] if cc[1] else 0 for cc in c][-depth:]
+        if make_plots:
+            plt.errorbar(dates, values, yerr=errors, fmt='-o', elinewidth=2.0, capsize=4.0, label=param)
+            plt.title(qubit)
+            plt.xlabel("Time")
+            units = {'T1':'s', 'T2':'s', 'f':'Hz'} #TODO: add more
+            unit = f'({units[param]})' if param in units else ''
+            plt.ylabel(f'{param} {unit}')
+        dates_list.append(dates)
+        values_list.append(values)
+        errors_list.append(errors)
+    if make_plots:
+        plt.legend()
+        ylabels = [f'{param} ({units[param]})' if param in units else '' for param in params]
+        plt.ylabel(", ".join(ylabels))
+        return dates, values, errors

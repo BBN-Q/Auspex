@@ -46,7 +46,7 @@ def check_session_dirty(f):
 
 class PipelineManager(object):
     """Create and run Qubit Experiments."""
-    def __init__(self):
+    def __init__(self, force_new=False):
         global pipelineMgr
 
         self.pipeline      = None
@@ -54,13 +54,13 @@ class PipelineManager(object):
 
         if not bbndb.get_cl_session():
             raise DatabaseError("Auspex expects db to be created already by QGL. Please create a ChannelLibrary.")
-        
+
         self.session = bbndb.get_pl_session()
 
         # Check to see whether there is already a temp database
         available_pipelines = list(set([pn[0] for pn in list(self.session.query(adb.Connection.pipeline_name).all())]))
-        if "working" in available_pipelines:
-            connections = list(self.session.query(adb.Connection).filter_by(pipeline_name="working").all())
+        if "working" in available_pipelines and not force_new:
+            connections = self.get_connections_by_name('working')
             edges = [(c.node1.hash_val, c.node2.hash_val, {'connector_in':c.node2_name,  'connector_out':c.node1_name}) for c in connections]
             nodes = []
             nodes.extend(list(set([c.node1 for c in connections])))
@@ -71,10 +71,10 @@ class PipelineManager(object):
                 node.pipelineMgr = self
                 self.meas_graph.add_node(node.hash_val, node_obj=node)
             self.meas_graph.add_edges_from(edges)
-            adb.__current_pipeline__ = self
         else:
-            logger.info("Could not find an existing pipeline. Please create one.")
+            logger.info("Could not find an existing pipeline. Creating a blank pipeline.")
 
+        adb.__current_pipeline__ = self
         pipelineMgr = self
 
     def add_qubit_pipeline(self, qubit_label, stream_type, auto_create=True, buffers=False):
@@ -83,13 +83,26 @@ class PipelineManager(object):
         mqs = [l[0] for l in self.session.query(m.label).join(m.channel_db, aliased=True).filter_by(label="working").all()]
         if f'M-{qubit_label}' not in mqs:
             raise PipelineError(f"Could not find qubit {qubit_label} in pipeline...")
-        
-        select = adb.StreamSelect(pipelineMgr=self, stream_type=stream_type, qubit_name=qubit_label)
+
+        ss_label = qubit_label+"-"+stream_type
+        select = adb.StreamSelect(stream_type=stream_type, qubit_name=qubit_label, label=ss_label)
         self.session.add(select)
+        if not self.meas_graph:
+            self.meas_graph = nx.DiGraph()
         self.meas_graph.add_node(select.hash_val, node_obj=select)
 
         if auto_create:
             select.create_default_pipeline(buffers=buffers)
+
+    def add_correlator(self, input_stream1, input_stream2):
+        # introduce correlator between streams
+        q1_label = input_stream1.qubit_name
+        q2_label = input_stream2.qubit_name
+        select = adb.Correlate(qubit_name=f'{q1_label}-{q2_label}', label=f'Correlate {q1_label}{q2_label}')
+        self.session.add(select)
+        self.meas_graph.add_node(select.hash_val, node_obj=select)
+        self.meas_graph.add_edge(input_stream1.hash_val, select.hash_val, connector_in = 'sink', connector_out='source')
+        self.meas_graph.add_edge(input_stream2.hash_val, select.hash_val, connector_in = 'sink', connector_out='source')
 
     def create_default_pipeline(self, qubits=None, buffers=False):
         """Look at the QGL channel library and create our pipeline from the current
@@ -107,32 +120,48 @@ class PipelineManager(object):
             measurements = [c for c in cdb.channels if c.label in meas_labels]
         self.qubits = qubits
 
-        # A qubit can have multiple stream selectors, which are named. We use the name "default" here.
-        stream_selectors = {q.label: {'default': adb.StreamSelect(pipelineMgr=self, qubit_name=q.label)} for q in qubits}
-
         # Build a mapping of qubits to receivers, construct qubit proxies
         receiver_chans_by_qubit = {}
-        available_streams_by_qubit = {}
+        receiver_chans_by_qubit_label = {}
         for m in measurements:
             q = [c for c in cdb.channels if c.label==m.label[2:]][0]
             receiver_chans_by_qubit[q] = m.receiver_chan
-            available_streams_by_qubit[q] = m.receiver_chan.receiver.stream_types
+            receiver_chans_by_qubit_label[q.label] = m.receiver_chan
 
-        for q, r in receiver_chans_by_qubit.items():
-            sels = stream_selectors[q.label]
-            for sel in sels.values():
-                sel.available_streams = [st.strip() for st in r.receiver.stream_types.split(",")]
-                sel.stream_type = sel.available_streams[-1]
+        rx_chans = []
+        multiplexed_groups = []
+        for q in qubits:
+            rx_chan = receiver_chans_by_qubit_label[q.label]
+            if rx_chan in rx_chans:
+                multiplexed_groups[rx_chans.index(rx_chan)].append(q)
+            else:
+                rx_chans.append(rx_chan)
+                multiplexed_groups.append([q])
 
-                # Set a default kernel
-                if sel.stream_type == "integrated":
-                    sel.kernel = np.ones(r.receiver.record_length)
+        stream_selectors = {}
+        for group in multiplexed_groups:
+            initial_stream_qubit = group[0]
+            labels = [q.label for q in group]
+            group_label = '-'.join(labels)
+            stream_selectors[group_label] = {'default' : adb.StreamSelect(label = group_label)}
+
+        for sels in stream_selectors.values():
+            sel = sels['default']
+            labels = sel.label.split('-')
+            source_qubit = labels[0]
+            rcvr = receiver_chans_by_qubit_label[source_qubit]
+            sel.available_streams = [st.strip() for st in rcvr.receiver.stream_types.split(",")]
+            sel.stream_type = sel.available_streams[0]
 
         # generate the pipeline automatically
         self.meas_graph = nx.DiGraph()
         for sels in stream_selectors.values():
-            for sel in sels.values():
+            sel = sels['default']
+            qbs = sel.label.split('-')
+            for q in qbs:
+                sel.qubit_name = q
                 sel.create_default_pipeline(buffers=buffers)
+            sel.qubit_name = qbs[0]
             self.session.add(sel)
 
         self._push_meas_graph_to_db(self.meas_graph, "working")
@@ -148,15 +177,19 @@ class PipelineManager(object):
         self._push_meas_graph_to_db(self.meas_graph, "working")
 
     def get_stream_selector(self, pipeline_name):
-        sels = self.get_current_stream_selectors() 
+        sels = self.get_current_stream_selectors()
         sels.sort(key=lambda x: x.qubit_name)
         selectors = [sel.hash_val for sel in sels]
         qubit_names = [sel.qubit_name for sel in sels]
-
+        sel_labels = [sel for sel in sels if pipeline_name in sel.label]
         name_f = lambda s: s.qubit_name if qubit_names.count(s.qubit_name) == 1 else s.qubit_name + " " + s.stream_type
         sel_by_name = {name_f(sel): sel for sel in sels}
 
-        if pipeline_name not in sel_by_name:
+        if pipeline_name in sel_by_name:
+            return sel_by_name[pipeline_name]
+        elif len(sel_labels)== 1:
+            return sel_labels[0]
+        else:
             raise PipelineError(f"Name {pipeline_name} does not specify a pipeline. If there are multiple pipelines for a qubit you must specify 'qubit_name pipeline_name'")
         return sel_by_name[pipeline_name]
 
@@ -183,8 +216,9 @@ class PipelineManager(object):
         self.session.commit()
 
     @check_session_dirty
-    def load(self, pipeline_name):
-        cs = self.session.query(adb.Connection).filter_by(pipeline_name=pipeline_name).all()
+    def load(self, pipeline_name, index=1):
+        """Load the latest instance for a particular name. Specifying index = 2 will select the second most recent instance """
+        cs = self.get_connections_by_name(pipeline_name, index)
         if len(cs) == 0:
             raise PipelineError(f"Could not find pipeline named {pipeline_name}")
         else:
@@ -206,15 +240,23 @@ class PipelineManager(object):
             self.session.commit()
             self.meas_graph.clear()
             for new_node in new_by_old.values():
+                new_node.pipelineMgr = self
                 self.meas_graph.add_node(new_node.hash_val, node_obj=new_node)
             self.meas_graph.add_edges_from(edges)
+
+    def get_connections_by_name(self, pipeline_name, index=1):
+        cs = self.session.query(adb.Connection).filter_by(pipeline_name=pipeline_name).order_by(adb.Connection.time.desc()).all()
+        timestamps = [c.time for c in cs]
+        timestamps = sorted(set(timestamps), key=timestamps.index)
+        cs = [c for c in cs if c.time == timestamps[index-1]]
+        return cs
 
     def _push_meas_graph_to_db(self, graph, pipeline_name):
         # Clear out existing connections if on working:
         if pipeline_name == "working":
             self.session.query(adb.Connection).filter_by(pipeline_name=pipeline_name).delete()
         now = datetime.datetime.now()
-        for n1, n2 in graph.edges():    
+        for n1, n2 in graph.edges():
             new_node1 = bbndb.copy_sqla_object(graph.nodes[n1]['node_obj'], self.session)
             new_node2 = bbndb.copy_sqla_object(graph.nodes[n2]['node_obj'], self.session)
             c = adb.Connection(pipeline_name=pipeline_name, node1=new_node1, node2=new_node2, time=now,
@@ -318,12 +360,12 @@ class PipelineManager(object):
                     end = widest[0]-0.6
                 elif i == len(selectors):
                     start = sum(widest)-0.4
-                    end = max(x)+0.4 
+                    end = max(x)+0.4
                 else:
                     start = sum(widest[:i])-0.4
                     end = sum(widest[:i+1])-0.6
                 middles.append(0.5*(start+end))
-                bgs_lines.append(Lines(x=[start, end], y=[[min(y)-0.5,min(y)-0.5],[max(y)+0.5,max(y)+0.5]], scales= {'x': xs, 'y': ys}, 
+                bgs_lines.append(Lines(x=[start, end], y=[[min(y)-0.5,min(y)-0.5],[max(y)+0.5,max(y)+0.5]], scales= {'x': xs, 'y': ys},
                                       fill='between',   # opacity does not work with this option
                                       fill_opacities = [0.1+0.5*i/len(selectors)],
                                       stroke_width = 0.0

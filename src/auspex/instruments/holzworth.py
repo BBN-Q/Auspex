@@ -60,7 +60,10 @@ class HolzworthDevice(object):
 
     def __del__(self):
         if self._device is not None:
-            usb.util.dispose_resources(self._device)
+            try:
+                usb.util.dispose_resources(self._device)
+            except:
+                pass
 
     def write(self, command):
         try:

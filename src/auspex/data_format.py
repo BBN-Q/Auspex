@@ -84,4 +84,4 @@ class AuspexDataContainer(object):
             ax = DataAxis(name, points, unit=meta['units'][name])
             ax.metadata = meta['meta_data'][name]
             desc.add_axis(ax)
-        return data, desc
+        return data, desc, self.base_path.replace('.auspex', '')

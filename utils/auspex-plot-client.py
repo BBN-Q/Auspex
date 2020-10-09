@@ -1,4 +1,8 @@
+#!/usr/bin/env python
+# auspex-specific implementation by Graham Rowlands
+# (C) 2019 Raytheon BBN Technologies
 
+# Original File:
 # embedding_in_qt5.py --- Simple Qt5 application embedding matplotlib canvases
 #
 # Copyright (C) 2005 Florent Rougon
@@ -17,7 +21,7 @@ import random
 import json
 import ctypes
 
-single_window = False
+single_window = True
 plot_windows  = []
 
 import logging
@@ -37,6 +41,7 @@ import numpy as np
 from matplotlib.backends.backend_qt4agg import NavigationToolbar2QT as NavigationToolbar
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
+from matplotlib.pyplot import subplots
 
 progname = os.path.basename(sys.argv[0])
 progversion = "0.5"
@@ -129,49 +134,90 @@ class DescListener(QtCore.QObject):
         self.socket.close()
         self.context.term()
 
+def label_offset(ax): #, axis="y"):
+    ax.xaxis.offsetText.set_visible(False)
+    ax.yaxis.offsetText.set_visible(False)
+    
+    def update_label(event_axes):
+        if event_axes:
+            old_xlabel = event_axes.get_xlabel()
+            old_ylabel = event_axes.get_ylabel()
+            if " (10" in old_xlabel:
+                old_xlabel =  old_xlabel.split(" (10")[0]
+            if " (10" in old_ylabel:
+                old_ylabel =  old_ylabel.split(" (10")[0]
+            offset_x = event_axes.xaxis.get_major_formatter().orderOfMagnitude
+            offset_y = event_axes.yaxis.get_major_formatter().orderOfMagnitude
+            if offset_x != 0:
+                offset_x = r" (10$^{"+ str(offset_x) + r"}$)"
+            else:
+                offset_x = ''
+            if offset_y != 0:
+                offset_y = r" (10$^{"+ str(offset_y) + r"}$)" 
+            else:
+                offset_y = ''
+            ax.set_xlabel(old_xlabel + offset_x)
+            ax.set_ylabel(old_ylabel + offset_y)
+
+    ax.callbacks.connect("ylim_changed", update_label)
+    ax.callbacks.connect("xlim_changed", update_label)
+    ax.figure.canvas.draw()
+    return
+
 class MplCanvas(FigureCanvas):
     """Ultimately, this is a QWidget (as well as a FigureCanvasAgg, etc.)."""
 
     def __init__(self, parent=None, width=5, height=4, dpi=100, plot_mode="quad"):
-        self.fig = Figure(figsize=(width, height), dpi=dpi)
+        # self.fig = Figure(figsize=(width, height), dpi=dpi)
         self.plots = []
+        self.dpi = dpi
 
         if plot_mode == "quad":
-            self.real_axis  = self.fig.add_subplot(221)
-            self.imag_axis  = self.fig.add_subplot(222)
-            self.abs_axis   = self.fig.add_subplot(223)
-            self.phase_axis = self.fig.add_subplot(224)
+            self.fig, _axes = subplots(2, 2, figsize=(width, height), sharex=True, sharey=False, constrained_layout=False)
+            self.real_axis  = _axes[0,0]
+            self.imag_axis  = _axes[0,1]
+            self.abs_axis   = _axes[1,0]
+            self.phase_axis = _axes[1,1]
             self.axes = [self.real_axis, self.imag_axis, self.abs_axis, self.phase_axis]
             self.func_names = ["Real", "Imag", "Abs", "Phase"]
             self.plot_funcs = [np.real, np.imag, np.abs, np.angle]
         elif plot_mode == "real":
-            self.real_axis  = self.fig.add_subplot(111)
+            self.fig, self.real_axis = subplots(1, 1, figsize=(width, height), sharex=True, sharey=False, constrained_layout=False)
             self.axes = [self.real_axis]
             self.func_names = ["Real"]
             self.plot_funcs = [np.real]
         elif plot_mode == "imag":
-            self.imag_axis  = self.fig.add_subplot(111)
+            self.fig, self.imag_axis = subplots(1, 1, figsize=(width, height), sharex=True, sharey=False, constrained_layout=False)
             self.axes = [self.imag_axis]
             self.func_names = ["Imag"]
             self.plot_funcs = [np.imag]
         elif plot_mode == "amp":
-            self.abs_axis  = self.fig.add_subplot(111)
+            self.fig, self.abs_axis = subplots(1, 1, figsize=(width, height), sharex=True, sharey=False, constrained_layout=False)
             self.axes = [self.abs_axis]
             self.func_names = ["Amp"]
             self.plot_funcs = [np.abs]
         elif plot_mode == "real/imag":
-            self.real_axis  = self.fig.add_subplot(121)
-            self.imag_axis  = self.fig.add_subplot(122)
+            self.fig, _axes = subplots(1, 2, figsize=(width, height), sharex=True, sharey=False, constrained_layout=False)
+            self.real_axis  = _axes[0]
+            self.imag_axis  = _axes[1]
             self.axes = [self.real_axis, self.imag_axis]
             self.func_names = ["Real", "Imag"]
             self.plot_funcs = [np.real, np.imag]
         elif plot_mode == "amp/phase":
-            self.abs_axis  = self.fig.add_subplot(121)
-            self.phase_axis  = self.fig.add_subplot(122)
+            self.fig, _axes = subplots(1, 2, figsize=(width, height), sharex=True, sharey=False, constrained_layout=False)
+            self.abs_axis  = _axes[0]
+            self.phase_axis  = _axes[1]
             self.axes = [self.abs_axis, self.phase_axis]
             self.func_names = ["Amp", "Phase"]
             self.plot_funcs = [np.abs, np.angle]
 
+        for ax in self.axes:
+            # ax.ticklabel_format(useOffset=False)
+            ax._orig_xlabel = ""
+            ax._orig_ylabel = ""
+            label_offset(ax)
+
+        self.fig.set_dpi(dpi)
         self.compute_initial_figure()
         FigureCanvas.__init__(self, self.fig)
         self.setParent(parent)
@@ -180,13 +226,16 @@ class MplCanvas(FigureCanvas):
                                    QtWidgets.QSizePolicy.Expanding)
         FigureCanvas.updateGeometry(self)
 
+        # for ax in self.axes:
+        #     print("canvac init", ax.xaxis.get_offset_text(), ax.yaxis.get_offset_text())
+
     def compute_initial_figure(self):
         pass
 
 class Canvas1D(MplCanvas):
     def compute_initial_figure(self):
         for ax in self.axes:
-            plt, = ax.plot([0,0,0])
+            plt, = ax.plot([0,0,0], marker="o", markersize=4)
             ax.ticklabel_format(style='sci', axis='x', scilimits=(-3,3))
             ax.ticklabel_format(style='sci', axis='y', scilimits=(-3,3))
             self.plots.append(plt)
@@ -210,7 +259,6 @@ class Canvas1D(MplCanvas):
         for plt in self.plots:
             plt.set_xdata(np.linspace(desc['x_min'], desc['x_max'], desc['x_len']))
             plt.set_ydata(np.nan*np.linspace(desc['x_min'], desc['x_max'], desc['x_len']))
-        self.fig.tight_layout()
 
 class CanvasManual(MplCanvas):
     def __init__(self, parent=None, width=5, height=4, dpi=100, numplots=1):
@@ -247,21 +295,23 @@ class CanvasManual(MplCanvas):
     def set_desc(self, desc):
         for k, ax in enumerate(self.axes):
             if 'x_label' in desc.keys():
+                ax._orig_xlabel = desc['x_label'][k]
                 ax.set_xlabel(desc['x_label'][k])
             if 'y_label' in desc.keys():
+                ax._orig_ylabel = desc['y_label'][k]
                 ax.set_ylabel(desc['y_label'][k])
             if 'y_lim' in desc.keys() and desc['y_lim']:
                 ax.set_ylim(*desc['y_lim'])
+
         for trace in desc['traces']:  # relink traces and axes
             self.traces[trace['name']] = {'plot': self.axes[trace['axis_num']].plot([], label=trace['name'], **trace['matplotlib_kwargs'])[0], 'axis_num': trace['axis_num']}
-        self.fig.tight_layout()
 
 class Canvas2D(MplCanvas):
     def compute_initial_figure(self):
         for ax in self.axes:
             plt = ax.imshow(np.zeros((10,10)))
-            ax.ticklabel_format(style='sci', axis='x', scilimits=(-3,3))
-            ax.ticklabel_format(style='sci', axis='y', scilimits=(-3,3))
+            ax.ticklabel_format(style='sci', axis='x', scilimits=(-3,3), useOffset=False)
+            ax.ticklabel_format(style='sci', axis='y', scilimits=(-3,3), useOffset=False)
             self.plots.append(plt)
 
     def update_figure(self, data):
@@ -274,24 +324,37 @@ class Canvas2D(MplCanvas):
         self.flush_events()
 
     def set_desc(self, desc):
-        self.aspect = (desc['x_max']-desc['x_min'])/(desc['y_max']-desc['y_min'])
+        self.aspect = "auto"# (desc['x_max']-desc['x_min'])/(desc['y_max']-desc['y_min'])
         self.extent = (desc['x_min'], desc['x_max'], desc['y_min'], desc['y_max'])
         self.xlen = desc['x_len']
         self.ylen = desc['y_len']
         self.plots = []
         for ax in self.axes:
             ax.clear()
-            ax.ticklabel_format(style='sci', axis='x', scilimits=(-3,3))
-            ax.ticklabel_format(style='sci', axis='y', scilimits=(-3,3))
+            ax.ticklabel_format(style='sci', axis='x', scilimits=(-3,3), useOffset=False)
+            ax.ticklabel_format(style='sci', axis='y', scilimits=(-3,3), useOffset=False)
             plt = ax.imshow(np.zeros((self.xlen, self.ylen)),
                 animated=True, aspect=self.aspect, extent=self.extent, origin="lower")
             self.plots.append(plt)
+        self.draw() # For offsets to update
         for ax, name in zip(self.axes, self.func_names):
+            offset_x = ax.xaxis.get_major_formatter().orderOfMagnitude
+            offset_y = ax.yaxis.get_major_formatter().orderOfMagnitude
+            if offset_x != 0:
+                offset_x = r" (10$^{"+ str(offset_x) + r"}$)"
+            else:
+                offset_x = ''
+            if offset_y != 0:
+                offset_y = r" (10$^{"+ str(offset_y) + r"}$)" 
+            else:
+                offset_y = ''
             if 'x_label' in desc.keys():
-                ax.set_xlabel(desc['x_label'])
+                ax._orig_xlabel = desc['x_label']
+                ax.set_xlabel(desc['x_label'] + offset_x)
             if 'y_label' in desc.keys():
-                ax.set_ylabel(name + " " + desc['y_label'])
-        self.fig.tight_layout()
+                ax._orig_ylabel = name + " " + desc['y_label']
+                ax.set_ylabel(name + " " + desc['y_label'] + offset_y)
+
 
 class CanvasMesh(MplCanvas):
     def compute_initial_figure(self):
@@ -324,7 +387,6 @@ class CanvasMesh(MplCanvas):
                 ax.set_ylabel(name + " " + desc['y_label'])
             ax.ticklabel_format(style='sci', axis='x', scilimits=(-3,3))
             ax.ticklabel_format(style='sci', axis='y', scilimits=(-3,3))
-        self.fig.tight_layout()
 
     def scaled_Delaunay(self, points):
         """ Return a scaled Delaunay mesh and scale factors """
@@ -351,6 +413,7 @@ class MatplotWindowMixin(object):
 
     def init_comms(self):
         self.context = zmq.Context()
+        
         self.uuid = None
         self.data_listener_thread = None
 
@@ -403,6 +466,9 @@ class MatplotWindowMixin(object):
         self.switch_toolbar()
         self.tabs.currentChanged.connect(self.switch_toolbar)
 
+        self.statusBar = QtWidgets.QStatusBar(self.main_widget)
+        self.layout.addWidget(self.statusBar)
+
     def data_signal_received(self, message):
         plot_name = message[0]
         uuid      = message[1]
@@ -419,7 +485,7 @@ class MatplotWindowMixin(object):
                     else:
                         self.canvas_by_name[plot_name].update_figure(data)
             except Exception as e:
-                self.statusBar().showMessage("Exception while plotting {}. Length of data: {}".format(e, len(data)), 1000)
+                self.statusBar.showMessage("Exception while plotting {}. Length of data: {}".format(e, len(data)), 1000)
 
     def switch_toolbar(self):
         if len(self.toolbars) > 0:
@@ -431,7 +497,7 @@ class MatplotWindowMixin(object):
         if self.data_listener_thread and self.Datalistener.running:
             # update status bar if possible
             try:
-                self.statusBar().showMessage("Disconnecting from server.", 10000)
+                self.statusBar.showMessage("Disconnecting from server.", 10000)
             except:
                 pass
             self.Datalistener.running = False
@@ -458,8 +524,11 @@ class MatplotClientSubWindow(MatplotWindowMixin,QtWidgets.QMdiSubWindow):
 
 
 class MatplotClientWindow(MatplotWindowMixin, QtWidgets.QMainWindow):
-    def __init__(self):
+    def __init__(self, close_window=None):
         global single_window
+        if close_window == None:
+            close_window = single_window
+        self.close_window = close_window
         QtWidgets.QMainWindow.__init__(self)
         self.setAttribute(QtCore.Qt.WA_DeleteOnClose)
         self.setWindowTitle("Auspex Plotting")
@@ -474,8 +543,11 @@ class MatplotClientWindow(MatplotWindowMixin, QtWidgets.QMainWindow):
 
         self.settings_menu = self.menuBar().addMenu('&Settings')
         auto_close = QtWidgets.QAction('Auto Close Plots', self, checkable=True)
-        auto_close.setChecked(single_window)
+        auto_close.setChecked(close_window)
         self.settings_menu.addAction(auto_close)
+
+        self.debug_menu = self.menuBar().addMenu('&Debug')
+        self.debug_menu.addAction('&Debug', self._debug)
 
         auto_close.triggered.connect(self.toggleAutoClose)
 
@@ -486,6 +558,9 @@ class MatplotClientWindow(MatplotWindowMixin, QtWidgets.QMainWindow):
         global single_window
         single_window = state
 
+    def _debug(self):
+        import ipdb; ipdb.set_trace();
+
     def _quit(self):
         self.stop_listening()
         plotters = [w for w in QtWidgets.QApplication.topLevelWidgets() if isinstance(w, MatplotClientWindow)]
@@ -494,12 +569,18 @@ class MatplotClientWindow(MatplotWindowMixin, QtWidgets.QMainWindow):
             wait_window.show()
         self.close()
 
-
 def new_plotter_window(message):
+    global single_window
+    reset_windows = False
+    close_window = single_window
     uuid, desc = message
     desc = json.loads(desc)
-
-    pw = MatplotClientWindow()
+    for plot in desc.values():
+        if single_window and plot['plot_type'] == 'manual':
+            close_window = False
+            reset_windows = True
+            break
+    pw = MatplotClientWindow(close_window = close_window)
     pw.setWindowTitle("%s" % progname)
     pw.show()
     pw.setWindowState(pw.windowState() & ~QtCore.Qt.WindowMinimized | QtCore.Qt.WindowActive)
@@ -507,12 +588,10 @@ def new_plotter_window(message):
     pw.construct_plots(desc)
     pw.listen_for_data(uuid, len(desc))
 
-    if single_window and len(plot_windows) > 0:
-        for w in plot_windows:
+    for w in plot_windows:
+        if w.close_window or reset_windows:
             w.closeEvent(0)
             plot_windows.remove(w)
-
-    logger.info(f"Appending {pw}")
     plot_windows.append(pw)
 
 def new_plotter_window_mdi(message):
@@ -520,7 +599,7 @@ def new_plotter_window_mdi(message):
     desc = json.loads(desc)
 
     pw = MatplotClientSubWindow()
-  
+
     pw.setWindowTitle("%s" % progname)
     pw.construct_plots(desc)
     pw.listen_for_data(uuid, len(desc))
@@ -562,7 +641,7 @@ class ListenerMixin:
         if self.desc_listener_thread:
             self.stop_listening(True)
         self.close()
-        
+
 
 class PlotMDI(ListenerMixin,QtWidgets.QMainWindow):
     def __init__(self, parent = None):

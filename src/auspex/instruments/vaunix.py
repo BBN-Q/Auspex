@@ -73,7 +73,7 @@ class Labbrick(Instrument, metaclass=MakeSettersGetters):
             self.previous_num_devices = num_devices
             return dev_from_serial_nums
         else:
-            return {self._lib.fnLMS_GetSerialNumber(d): d for d in dev_ids}
+            return {self._lib.fnLMS_GetSerialNumber(d): d for d in self.dev_ids}
 
     def connect(self, resource_name=None):
         if resource_name is not None:

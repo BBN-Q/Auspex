@@ -14,10 +14,11 @@ import sys
 if sys.platform == 'win32' or 'NOFORKING' in os.environ:
     import threading as mp
     from threading import Thread as Process
+    from threading import Event
     from queue import Queue
 else:
     import multiprocessing as mp
-    from multiprocessing import Process
+    from multiprocessing import Process, Event
     from multiprocessing import Queue
 
 from auspex.data_format import AuspexDataContainer
@@ -48,27 +49,28 @@ class WriteToFile(Filter):
     sink        = InputConnector()
     filename    = FilenameParameter()
     groupname   = Parameter(default='main')
+    datasetname = Parameter(default='data')
 
-    def __init__(self, filename=None, groupname=None, datasetname='data', **kwargs):
+    def __init__(self, filename=None, groupname=None, datasetname=None, **kwargs):
         super(WriteToFile, self).__init__(**kwargs)
         if filename: 
             self.filename.value = filename
         if groupname:
             self.groupname.value = groupname
         if datasetname:
-            self.datasetname = datasetname
+            self.datasetname.value = datasetname
 
         self.ret_queue = None # MP queue For returning data
 
     def final_init(self):
         assert self.filename.value, "Filename never supplied to writer."
         assert self.groupname.value, "Groupname never supplied to writer."
-        assert self.datasetname, "Dataset name never supplied to writer."
+        assert self.datasetname.value, "Dataset name never supplied to writer."
 
         self.descriptor = self.sink.input_streams[0].descriptor
         self.container  = AuspexDataContainer(self.filename.value)
         self.group      = self.container.new_group(self.groupname.value)
-        self.mmap       = self.container.new_dataset(self.groupname.value, self.datasetname, self.descriptor)
+        self.mmap       = self.container.new_dataset(self.groupname.value, self.datasetname.value, self.descriptor)
 
         self.w_idx = 0
         self.points_taken = 0
@@ -81,7 +83,7 @@ class WriteToFile(Filter):
     def get_data(self):
         assert self.done.is_set(), Exception("Experiment is still running. Please use get_data_while_running")
         container = AuspexDataContainer(self.filename.value)
-        return container.open_dataset(self.groupname.value, self.datasetname)
+        return container.open_dataset(self.groupname.value, self.datasetname.value)
 
     def process_data(self, data):
         # Write the data
@@ -97,6 +99,8 @@ class DataBuffer(Filter):
     def __init__(self, **kwargs):
         super(DataBuffer, self).__init__(**kwargs)
         self._final_buffer = Queue()
+        self._temp_buffer = Queue()
+        self._get_buffer = Event()
         self.final_buffer  = None
 
     def final_init(self):
@@ -104,6 +108,11 @@ class DataBuffer(Filter):
         self.points_taken = 0
         self.descriptor   = self.sink.input_streams[0].descriptor
         self.buff         = np.empty(self.descriptor.expected_num_points(), dtype=self.descriptor.dtype)
+
+    def checkin(self):
+        if self._get_buffer.is_set():
+            self._temp_buffer.put(self.buff)
+        self._get_buffer.clear()
 
     def process_data(self, data):
         # Write the data
@@ -116,7 +125,14 @@ class DataBuffer(Filter):
         self._final_buffer.put(self.buff)
 
     def get_data(self):
-        if self.final_buffer is None:
-            self.final_buffer = self._final_buffer.get()
-        time.sleep(0.05)
-        return np.reshape(self.final_buffer, self.descriptor.dims()), self.descriptor
+        if self.done.is_set():
+            if self.final_buffer is None:
+                self.final_buffer = self._final_buffer.get()
+            time.sleep(0.05)
+            return np.reshape(self.final_buffer, self.descriptor.dims()), self.descriptor
+        else:
+            self._get_buffer.set()
+            temp_buffer = self._temp_buffer.get()
+            time.sleep(0.05)
+            return np.reshape(temp_buffer, self.descriptor.dims()), self.descriptor
+        

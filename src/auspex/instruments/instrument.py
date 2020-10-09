@@ -43,12 +43,16 @@ class Command(object):
             else:
                 setattr(self, a, None) # Default to None
 
+        if 'doc' in self.kwargs:
+            self.doc = self.kwargs.pop('doc')
+        else:
+            self.doc = ""
+
         if self.value_range is not None:
             self.value_range = (min(self.value_range), max(self.value_range))
 
-        self.python_to_instr = None # Dict mapping from python values to instrument values
+        self.python_to_instr = None # Dict StringCommandmapping from python values to instrument values
         self.instr_to_python = None # Dict mapping from instrument values to python values
-        self.doc = ""
 
         if self.value_map is not None:
             self.python_to_instr = self.value_map
@@ -109,6 +113,15 @@ class StringCommand(Command):
         else:
             return str(self.instr_to_python[get_value_instrument])
 
+class BoolCommand(StringCommand):
+    def convert_get(self, get_value_instrument):
+        """Convert the instrument's returned values to something conveniently accessed
+        through python."""
+        if self.python_to_instr is None:
+            return bool(get_value_instrument)
+        else:
+            return bool(self.instr_to_python[get_value_instrument])
+
 class FloatCommand(Command):
     formatter = '{:E}'
     def convert_get(self, get_value_instrument):
@@ -143,6 +156,7 @@ class RampCommand(FloatCommand):
             self.pause = 0.0
 
 class SCPIStringCommand(SCPICommand, StringCommand): pass
+class SCPIBoolCommand(SCPICommand, BoolCommand): pass
 class SCPIFloatCommand(SCPICommand, FloatCommand): pass
 class SCPIIntCommand(SCPICommand, IntCommand): pass
 class SCPIRampCommand(SCPICommand, RampCommand): pass
@@ -185,7 +199,10 @@ class Instrument(metaclass=MetaInstrument):
         pass
 
     def configure_with_proxy(self, proxy):
-        self.configure_with_dict(dict((col, getattr(proxy, col)) for col in proxy.__table__.columns.keys()))
+        if hasattr(proxy, 'params'):
+            self.configure_with_dict(proxy.params)
+            
+        self.configure_with_dict(dict((col, getattr(proxy, col)) for col in proxy.__table__.columns.keys() if col != 'params'))
 
     def configure_with_dict(self, settings_dict):
         """Accept a sdettings dictionary and attempt to set all of the instrument
@@ -241,6 +258,8 @@ class SCPIInstrument(Instrument):
                 self.interface = Interface()
             elif interface_type == "VISA":
                 if "GPIB" in self.full_resource_name:
+                    pass
+                elif "USB" in self.full_resource_name:
                     pass
                 elif any(is_valid_ipv4(substr) for substr in self.full_resource_name.split("::")) and "TCPIP" not in self.full_resource_name:
                     # assume single NIC for now
@@ -310,7 +329,7 @@ def add_command_SCPI(instr, name, cmd):
 
         if isinstance(cmd, RampCommand):
             if 'increment' in kwargs:
-                new_cmd.increment = kwargs['increment'] 
+                new_cmd.increment = kwargs['increment']
             if 'pause' in kwargs:
                 new_cmd.pause = kwargs['pause']
             # Ramp from one value to another, making sure we actually take some steps
@@ -339,9 +358,11 @@ def add_command_SCPI(instr, name, cmd):
     # In this case we can't create a property given additional arguments
     if new_cmd.get_string:
         setattr(instr, "get_" + name, fget)
+        setattr(getattr(instr, "get_" + name), "__doc__", new_cmd.doc)
 
     if new_cmd.set_string:
         setattr(instr, "set_" + name, fset)
+        setattr(getattr(instr, "set_" + name), "__doc__", new_cmd.doc)
 
     return new_cmd
 

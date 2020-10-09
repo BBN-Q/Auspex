@@ -113,8 +113,10 @@ class AlazarATS9870(Instrument):
         return self._lib.data_available()
 
     def done(self):
-        #logger.debug(f"Checking alazar doneness: {self.total_received.value} {self.number_segments * self.number_averages * self.record_length}")
-        return self.total_received.value >=  (self.number_segments * self.number_averages * self.record_length)
+        received = self.total_received.value
+        expected = self.number_segments * self.number_averages * self.record_length * len(self.channels)
+        #logger.debug(f"Checking alazar doneness: {received} {expected}")
+        return received >= expected
 
     def get_socket(self, channel):
         if channel in self._chan_to_rsocket:
@@ -139,63 +141,78 @@ class AlazarATS9870(Instrument):
             self.channels.append(channel)
             self._chan_to_buf[channel] = channel.phys_channel
 
-    def spew_fake_data(self, counter, ideal_datapoint=0, random_mag=0.1, random_seed=12345):
+    def spew_fake_data(self, counter, ideal_data, random_mag=0.1, random_seed=12345):
         """
         Generate fake data on the stream. For unittest usage.
-        ideal_datapoint: mean of the expected signal
+        ideal_data: array or list giving means of the expected signal for each segment
 
         Returns the total number of fake data points, so that we can
         keep track of how many we expect to receive, when we're doing
         the test with fake data
         """
-        total = 0
-        
         for chan, wsock in self._chan_to_wsocket.items():
             length = int(self.record_length)
-            signal = np.sin(np.linspace(0,10.0*np.pi,int(length/2)))
-            data = np.zeros(length, dtype=np.float32)
-            data[int(length/4):int(length/4)+len(signal)] = signal * (1.0 if ideal_datapoint == 0 else ideal_datapoint)
-            data += random_mag*np.random.random(length)
-            total += length
-            # logger.info(f"Sending {struct.pack('n', length*np.float32().itemsize)}")
-            wsock.send(struct.pack('n', length*np.float32().itemsize) + data.tostring())
-            counter[chan] += length
+            buff = np.zeros((self.number_segments, length), dtype=np.float32)
+            for i in range(self.number_segments):
+                signal = np.sin(np.linspace(0,10.0*np.pi,int(length/2)))
+                buff[i, int(length/4):int(length/4)+len(signal)] = signal * (1.0 if ideal_data[i] == 0 else ideal_data[i])
 
-        return total
+            buff += random_mag*np.random.random((self.number_segments, length))
+
+            wsock.send(struct.pack('n', self.number_segments*length*np.float32().itemsize) + buff.flatten().tostring())
+            counter[chan] += length*self.number_segments
+
+        return length*self.number_segments*len(self._chan_to_wsocket)
 
     def receive_data(self, channel, oc, exit, ready, run):
         sock = self._chan_to_rsocket[channel]
         sock.settimeout(2)
         self.last_timestamp.value = datetime.datetime.now().timestamp()
+        last_print = datetime.datetime.now().timestamp()
         ready.value += 1
 
         while not exit.is_set():
             # push data from a socket into an OutputConnector (oc)
             # wire format is just: [size, buffer...]
             # TODO receive 4 or 8 bytes depending on sizeof(size_t)
-            run.wait() # Block until we are running again
+            if not run.is_set():
+                continue # Block until we are running again
+            #logger.info(f'Run set when recv={self.total_received.value}, exp={self.number_segments*self.record_length*self.number_averages*len(self.channels)}')
             try:
                 msg = sock.recv(8)
                 self.last_timestamp.value = datetime.datetime.now().timestamp()
             except:
-                logger.debug("Didn't find any data on socket within 2 seconds (this is normal during experiment shutdown).")
+                logger.info("Didn't find any data on socket within 2 seconds (this is normal during experiment shutdown).")
                 continue
             msg_size = struct.unpack('n', msg)[0]
             buf = sock_recvall(sock, msg_size)
             while len(buf) < msg_size:
-                time.sleep(0.01)
+                # time.sleep(0.01)
                 buf2 = sock_recvall(sock, msg_size-len(buf))
                 buf = buf+buf2
             data = np.frombuffer(buf, dtype=np.float32)
             self.total_received.value += len(data)
+            if datetime.datetime.now().timestamp() - last_print > 0.25:
+                last_print = datetime.datetime.now().timestamp()
+                # logger.info(f"Alz: {self.total_received.value}")
             oc.push(data)
             self.fetch_count.value += 1
+
+        #logger.info(f'Exit set when recv={self.total_received.value}, exp={self.number_segments*self.record_length*self.number_averages*len(self.channels)}')
 
     def get_buffer_for_channel(self, channel):
         self.fetch_count.value += 1
         return getattr(self._lib, 'ch{}Buffer'.format(self._chan_to_buf[channel]))
 
     def wait_for_acquisition(self, dig_run, timeout=5, ocs=None, progressbars=None):
+        progress_updaters = {}
+        if ocs and progressbars:
+            for oc in ocs:
+                if hasattr(progressbars[oc], 'goto'):
+                    progress_updaters[oc] = lambda x: progressbars[oc].goto(x)
+                else:
+                    progress_updaters[oc] = lambda x: setattr(progressbars[oc], 'value', x)
+
         if config.fake_data_mode:
             total_spewed = 0
 
@@ -203,55 +220,46 @@ class AlazarATS9870(Instrument):
             initial_points = {oc: oc.points_taken.value for oc in ocs}
             # print(self.number_averages, self.number_segments)
             for j in range(self.number_averages):
-                for i in range(self.number_segments):
-                    if self.ideal_data is not None:
-                        #add ideal data for testing
-                        if hasattr(self, 'exp_step') and self.increment_ideal_data:
-                            raise FakeDataError("Cannot use both exp_step and increment_ideal_data")
-                        elif hasattr(self, 'exp_step'):
-                            total_spewed += self.spew_fake_data(
-                                    counter, self.ideal_data[self.exp_step][i])
-                        elif self.increment_ideal_data:
-                            total_spewed += self.spew_fake_data(
-                                   counter, self.ideal_data[self.ideal_counter][i])
-                        else:
-                            total_spewed += self.spew_fake_data(
-                                    counter, self.ideal_data[i])
+                # for i in range(self.number_segments):
+                if self.ideal_data is not None:
+                    #add ideal data for testing
+                    if hasattr(self, 'exp_step') and self.increment_ideal_data:
+                        raise FakeDataError("Cannot use both exp_step and increment_ideal_data")
+                    elif hasattr(self, 'exp_step'):
+                        total_spewed += self.spew_fake_data(
+                                counter, self.ideal_data[self.exp_step])
+                    elif self.increment_ideal_data:
+                        total_spewed += self.spew_fake_data(
+                               counter, self.ideal_data[self.ideal_counter])
                     else:
-                        total_spewed += self.spew_fake_data(counter)
+                        total_spewed += self.spew_fake_data(
+                                counter, self.ideal_data)
+                else:
+                    total_spewed += self.spew_fake_data(counter, [0.0 for i in range(self.number_segments)])
 
-                    time.sleep(0.0001)
+                time.sleep(0.0001)
 
             self.ideal_counter += 1
-            # logger.info("Counter: %s", str(counter))
-            # logger.info('TOTAL fake data generated %d', total_spewed)
-            if ocs:
-                while True:
-                    total_taken = 0
-                    for oc in ocs:
-                        total_taken += oc.points_taken.value - initial_points[oc]
-                        if progressbars:
-                            progressbars[oc].value = oc.points_taken.value
-                        # logger.info('TOTAL fake data received %d', oc.points_taken.value - initial_points[oc])
-                    if total_taken == total_spewed:
-                        break
-                    
-                    # logger.info('WAITING for acquisition to finish %d < %d', total_taken, total_spewed)
-                    time.sleep(0.025)
 
-        else:
-            while not self.done():
-                if not dig_run.is_set():
-                    self.last_timestamp.value = datetime.datetime.now().timestamp()
-                if (datetime.datetime.now().timestamp() - self.last_timestamp.value) > timeout:
-                    logger.error("Digitizer %s timed out.", self.name)
-                    raise DigitizerError("Alazar timed out.")
+        while not self.done():
+            if not dig_run.is_set():
+                self.last_timestamp.value = datetime.datetime.now().timestamp()
+            if (datetime.datetime.now().timestamp() - self.last_timestamp.value) > timeout:
+                logger.info(f"timeout when recv={self.total_received.value}, exp={self.number_segments*self.record_length*self.number_averages*len(self.channels)}")
+                logger.error("Digitizer %s timed out. Timeout was %f, time was %f", self.name, timeout, (datetime.datetime.now().timestamp() - self.last_timestamp.value))
+                raise DigitizerError("Alazar timed out.")
+            if progressbars:
                 for oc in ocs:
-                    if progressbars:
-                        progressbars[oc].value = oc.points_taken.value
-                time.sleep(0.2)
+                    progress_updaters[oc](oc.points_taken.value)
+            #time.sleep(0.2) Does this need to be here at all?
+        if progressbars:
+            try:
+                progressbars[oc].next()
+                progressbars[oc].finish()
+            except AttributeError:
+                pass
 
-        logger.debug("Digitizer %s finished getting data.", self.name)
+        logger.info(f"Digitizer %s finished getting data when recv={self.total_received.value}, exp={self.number_segments*self.record_length*self.number_averages*len(self.channels)}.", self.name)
 
     def configure_with_dict(self, settings_dict):
         config_dict = {
@@ -270,7 +278,7 @@ class AlazarATS9870(Instrument):
             'triggerLevel': 100,
             'triggerSlope': "rising",
             'triggerSource': "Ext",
-            'verticalCoupling': "AC",
+            'verticalCoupling': "DC",
             'verticalOffset': 0.0,
             'verticalScale': self.proxy_obj.vertical_scale
         }

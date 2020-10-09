@@ -25,10 +25,6 @@ fake_data_mode = False
 # Use when we don't want to even bother trying to plot
 plotless_mode = False
 
-# If this is True, then close the last
-# plotter before starting a new one.
-single_plotter_mode = False
-
 # Set generator from qubit sidebanding
 # This sets the generator frequency based on 
 # the requested qubit frequency and sidebanding.

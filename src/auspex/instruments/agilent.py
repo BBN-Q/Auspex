@@ -6,15 +6,19 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-__all__ = ['Agilent33220A', 'Agilent33500B', 'Agilent34970A', 'AgilentE8363C', 'AgilentN5183A', 'AgilentE9010A','HP33120A']
+__all__ = ['Agilent33220A', 'Agilent33500B', 'Agilent34970A',
+           'AgilentE8363C', 'AgilentN5183A', 'AgilentE9010A',
+           'HP33120A', 'AgilentN5230A']
 
 import socket
 import time
 import copy
 import re
 import numpy as np
-from .instrument import SCPIInstrument, Command, StringCommand, FloatCommand, IntCommand, is_valid_ipv4
+from itertools import product
+from .instrument import SCPIInstrument, Command, StringCommand, BoolCommand, FloatCommand, IntCommand, is_valid_ipv4
 from auspex.log import logger
+import pyvisa.util as util
 
 class HP33120A(SCPIInstrument):
     """HP33120A Arb Waveform Generator"""
@@ -470,8 +474,10 @@ class Agilent34970A(SCPIInstrument):
 # Commands needed to configure MUX for measurement with an external instrument
 
     dmm            = StringCommand(scpi_string="INST:DMM",value_map={'ON': '1', 'OFF': '0'})
-    trigger_source = StringCommand(scpi_string="TRIG:SOUR",allowed_values=TRIGSOUR_VALUES)
     advance_source = StringCommand(scpi_string="ROUT:CHAN:ADV:SOUR",allowed_values=ADVSOUR_VALUES)
+    trigger_source = StringCommand(scpi_string="TRIG:SOUR",allowed_values=TRIGSOUR_VALUES)
+    trigger_timer  = FloatCommand(get_string="TRIG:TIMER?", set_string="TRIG:TIMER {:f}")
+    trigger_count  = IntCommand(get_string="TRIG:COUNT?", set_string="TRIG:COUNT {:e}")
 
 # Generic init and connect methods
 
@@ -556,6 +562,18 @@ class Agilent34970A(SCPIInstrument):
         else:
             fw_char = "ON," if fw == 4 else "OFF,"
             self.interface.write(("ROUT:CHAN:FWIR {}"+self.ch_to_str(self.CONFIG_LIST)).format(fw_char))
+
+# Commands that configure measurement delay for external measurements
+
+    @property
+    def channel_delay(self):
+        query_str = "ROUT:CHAN:DELAY? "+self.ch_to_str(self.CONFIG_LIST)
+        output = self.interface.query_ascii_values(query_str, converter=u'e')
+        return {ch: val for ch, val in zip(self.CONFIG_LIST, output)}
+
+    @channel_delay.setter
+    def channel_delay(self, delay = 0.1):
+        self.interface.write(("ROUT:CHAN:DELAY {:e},"+self.ch_to_str(self.CONFIG_LIST)).format(delay))
 
 # Commands that configure resistance measurements with internal DMM
 
@@ -696,27 +714,41 @@ class AgilentN5183A(SCPIInstrument):
     def reference(self, ref=None):
         pass
 
-class AgilentE8363C(SCPIInstrument):
-    """Agilent E8363C VNA"""
+class _AgilentNetworkAnalyzer(SCPIInstrument):
+    """Base class for Agilent Vector network analyzers.
+    To use, a child class should declare at least a "ports" tuple which represent valid S-paramter ports on the
+    instrument.
+    """
+
     instrument_type = "Vector Network Analyzer"
 
-    AVERAGE_TIMEOUT = 12. * 60. * 60. * 1000. #milliseconds
+    TIMEOUT = 10 * 1000         #Timeout for VISA commands
+    data_query_raw = False      #Use low-level commands to parse block data transfer
 
-    power              = FloatCommand(scpi_string=":SOURce:POWer:LEVel:IMMediate:AMPLitude", value_range=(-27, 20))
-    frequency_center   = FloatCommand(scpi_string=":SENSe:FREQuency:CENTer")
-    frequency_span     = FloatCommand(scpi_string=":SENSe:FREQuency:SPAN")
-    frequency_start    = FloatCommand(scpi_string=":SENSe:FREQuency:STARt")
-    frequency_stop     = FloatCommand(scpi_string=":SENSe:FREQuency:STOP")
-    sweep_num_points   = IntCommand(scpi_string=":SENSe:SWEep:POINts")
-    averaging_factor   = IntCommand(scpi_string=":SENSe1:AVERage:COUNt")
-    averaging_enable   = StringCommand(get_string=":SENSe1:AVERage:STATe?", set_string=":SENSe1:AVERage:STATe {:s}", value_map={False:"0", True:"1"})
-    averaging_complete = StringCommand(get_string=":STATus:OPERation:AVERaging1:CONDition?", value_map={False:"+0", True:"+2"})
-    if_bandwidth       = FloatCommand(scpi_string=":SENSe1:BANDwidth")
-    sweep_time         = FloatCommand(get_string=":SENSe:SWEep:TIME?")
+    ports = ()                  #Set of ports that the NA has.
+
+    _port_powers = {}
+    _format_dict     = {"MLIN": "LINEAR", "MLOG": "LOGARITHMIC", "PHAS": "PHASE", "UPH": "UNWRAP PHASE",
+                        "REAL": "REAL", "IMAG": "IMAG", "POL": "POLAR", "SMIT": "SMITH",
+                        "SADM": "SMITH ADMITTANCE", "SWR": "SWR", "GDEL": "GROUP DELAY"}
+    _format_dict_inv = {v: k for k, v in _format_dict.items()}
+
+    ##Basic SCPI commands.
+    frequency_center    = FloatCommand(scpi_string=":SENSe:FREQuency:CENTer")
+    frequency_start     = FloatCommand(scpi_string=":SENSe:FREQuency:STARt")
+    frequency_stop      = FloatCommand(scpi_string=":SENSe:FREQuency:STOP")
+    frequency_span      = FloatCommand(scpi_string=":SENSe:FREQuency:SPAN")
+    if_bandwidth        = FloatCommand(scpi_string=":SENSe1:BANDwidth")
+    num_points          = IntCommand(scpi_string=":SENSe:SWEep:POINTS")
+
+    averaging_enable    = BoolCommand(get_string=":SENSe1:AVERage:STATe?", set_string=":SENSe1:AVERage:STATe {:s}", value_map={False: "0", True: "1"})
+    averaging_factor    = IntCommand(scpi_string=":SENSe1:AVERage:COUNt")
+    averaging_complete  = StringCommand(get_string=":STATus:OPERation:AVERaging1:CONDition?", value_map={False:"+0", True:"+2"})
+
 
     def __init__(self, resource_name=None, *args, **kwargs):
-        #If we only have an IP address then tack on the raw socket port to the VISA resource string
-        super(AgilentE8363C, self).__init__(resource_name, *args, **kwargs)
+        self.valid_meas = tuple(f"S{a}{b}" for a, b in product(self.ports, self.ports))
+        super().__init__(resource_name, *args, **kwargs)
 
     def connect(self, resource_name=None, interface_type="VISA"):
         if resource_name is not None:
@@ -724,51 +756,220 @@ class AgilentE8363C(SCPIInstrument):
         if is_valid_ipv4(self.resource_name):
             self.resource_name += "::hpib7,16::INSTR"
         else:
-            logger.error("The resource name for the Agilent E8363C: {} is " +
-                "not a valid IPv4 address.".format(self.resource_name))
-        super(AgilentE8363C, self).connect(resource_name=None,
-            interface_type=interface_type)
+            logger.error("The resource name for the {}: {} is " +
+                "not a valid IPv4 address.".format(self.__class__.__name__, self.resource_name))
+        super().connect(resource_name=None, interface_type=interface_type)
         self.interface._resource._read_termination = u"\n"
         self.interface._resource.write_termination = u"\n"
+        self.interface._resource.timeout = self.TIMEOUT
+        self.interface._resource.chunk_size = 2 ** 20 # Needed to fix binary transfers (?)
+
+        self.interface.OPC() #wait for any previous commands to complete
+        self.interface.write("SENSe1:SWEep:TIME:AUTO ON") #automatic sweep time
+        self.interface.write("FORM REAL,32") #return measurement data as 32-bit float
+
+        self.measurements = ["S21"]
+        for p in self.ports:
+            self.interface.write(f'SOUR:POW{p}:MODE AUTO')
+            self._port_powers[p] = (float(self.interface.query(f"SOUR:POW{p}? MIN")),
+                                    float(self.interface.query(f"SOUR:POW{p}? MAX")))
+
+    @property
+    def output_enable(self):
+        """Get output mode of each VNA port."""
+        outp = {}
+        for p in self.ports:
+            outp[p] = self.interface.query(f'SOUR:POW{p}:MODE?')
+        return outp
+
+    @output_enable.setter
+    def output_enable(self, outp):
+        """Set output mode of each port. Input is a dictionary mapping port numbers to booleans. `False` corresponds to
+            the port being in `OFF` mode, while `True` corresponds to the port being in `AUTO` mode.
+        """
+        if isinstance(outp, dict):
+            for k, v in self.outp.items():
+                val = "AUTO" if v else "OFF"
+                self.interface.write(f"SOUR:POW{k}:MODE {val}")
+        else:
+            val = "AUTO" if outp else "OFF"
+            for p in self.ports:
+                self.interface.write(f"SOUR:POW{p}:MODE {val}")
+
+    def set_port_power(self, port, power):
+        """Set the output power (in dBm) of a specific port."""
+        assert port in self.ports, f"This VNA does not have port {port}!"
+        minp = self._port_powers[port][0]
+        maxp = self._port_powers[port][1]
+        if power < minp or power > maxp:
+            raise ValueError(f"Power level outside allowable range for port {port}: ({minp} - {maxp}) dBm.")
+        self.interface.write(f"SOUR:POW{port} {power}")
+
+    def get_port_power(self, port):
+        """Get the output power in dBm of a specific port."""
+        assert port in self.ports, f"This VNA does not have port {port}!"
+        return float(self.interface.query(f"SOUR:POW{port}?"))
+
+    def _get_active_ports(self):
+        """Get ports that are used for currently active measurements."""
+        return [int(m[-1]) for m in self.measurements.keys()]
+
+    @property
+    def power(self):
+        """Get the output power in dBm of all currently active mesurements."""
+        ports = self._get_active_ports()
+        if len(ports) == 1:
+            return self.get_port_power(ports[0])
+        else:
+            return [self.get_port_power(p) for p in ports]
+
+    @power.setter
+    def power(self, level):
+        """Get the output power in dBm of all currently active mesurements."""
+        for p in self._get_active_ports():
+            self.set_port_power(p, level)
+
+    @property
+    def averaging_enable(self):
+        """Get the averaging state."""
+        state = self.interface.query(":SENSe1:AVERage:STATe?")
+        return bool(int(state))
+
+    @averaging_enable.setter
+    def averaging_enable(self, value):
+        """Set the averaging state."""
+        if value:
+            self.interface.write(":SENSe1:AVERage:STATe ON")
+        else:
+            self.interface.write(":SENSe1:AVERage:STATe OFF")
 
     def averaging_restart(self):
         """ Restart trace averaging """
         self.interface.write(":SENSe1:AVERage:CLEar")
 
+    @property
+    def format(self):
+        """Get the currently active measurement format."""
+        meas = list(self.measurements.values())
+        self.interface.write(f"CALC:PAR:SEL {meas[0]}")
+        return self._format_dict[self.interface.query("CALC:FORM?")]
+
+    @format.setter
+    def format(self, fmt):
+        """Set the currently active measurement format. See the `_format_dict` property for valid formats."""
+        if fmt in self._format_dict.keys():
+            pass
+        elif fmt in self._format_dict.values():
+            fmt = self._format_dict_inv[fmt]
+        else:
+            raise ValueError(f"Unrecognized VNA measurement format specifier: {fmt}")
+
+        for meas in self.measurements.values():
+            self.interface.write(f"CALC:PAR:SEL {meas}")
+            self.interface.write(f"CALC:FORM {fmt}")
+
+    def autoscale(self):
+        """Autoscale all traces."""
+        nm = len(list(self.measurements.values()))
+        for j in range(nm):
+            self.interface.write(f'DISP:WIND1:TRAC{j+1}:Y:AUTO')
+
+    @property
+    def measurements(self):
+        """Get currently active measurements and their trace names."""
+        active_meas = self.interface.query("CALC:PAR:CAT?")
+        meas = active_meas.strip('\"').split(",")[::2]
+        spars = active_meas.strip('\"').split(",")[1::2]
+        return {s: m for m, s in zip(meas,spars)}
+
+    @measurements.setter
+    def measurements(self, S):
+        """Set currently active measurements, passed as a list of S-parameters. This will overwrite measurements that
+        are currently active on the VNA."""
+        sp = [s.upper() for s in S]
+        for s in sp:
+            if s not in self.valid_meas:
+                raise ValueError(f"Invalid S-parameter measurement request: {s} is not in available measurements: {self.valid_meas}.")
+
+        #Delete all measurements
+        self.interface.write("CALC:PAR:DEL:ALL")
+        #Close window 1 if it exists
+        if (self.interface.query("DISP:WIND1:STATE?") == "1"):
+            self.interface.write("DISP:WIND1:STATE OFF")
+        self.interface.write("DISP:WIND1:STATE ON")
+
+        for j, s in enumerate(sp):
+            self.interface.write(f'CALC:PAR:DEF "M_{s}",{s}')
+            self.interface.write(f'DISP:WIND1:TRAC{j+1}:FEED "M_{s}"')
+            time.sleep(0.1)
+            self.interface.write(f'DISP:WIND1:TRAC{j+1}:Y:AUTO')
+
+        self.interface.write('SENS1:SWE:TIME:AUTO ON')
+        self.interface.write("SENS:SWE:MODE CONT")
+
     def reaverage(self):
-        """ Restart averaging and block until complete """
+        """ Restart averaging and block until complete."""
         if self.averaging_enable:
             self.averaging_restart()
             #trigger after the requested number of points has been averaged
             self.interface.write("SENSe1:SWEep:GROups:COUNt %d"%self.averaging_factor)
-            self.interface.write("ABORT;SENSe1:SWEep:MODE GRO")
+            self.interface.write("ABORT; SENSe1:SWEep:MODE GRO")
         else:
             #restart current sweep and send a trigger
-            self.interface.write("ABORT;SENS:SWE:MODE SING")
-        #wait for the measurement to finish, with a temporary long timeout
-        tmout = self.interface._resource.timeout
-        self.interface._resource.timeout = self.AVERAGE_TIMEOUT
-        self.interface.WAI()
-        while not self.averaging_complete:
-            time.sleep(0.1) #TODO: Asynchronous check of SRQ
-        self.interface._resource.timeout = tmout
+            self.interface.write("ABORT; SENS:SWE:MODE SING")
+
+        meas_done = False
+        self.interface.write('*OPC')
+        while not meas_done:
+            time.sleep(0.5)
+            opc_bit = int(self.interface.ESR()) & 0x1
+            if opc_bit == 1:
+                meas_done = True
+
+    def _raw_query(self, string, size=16):
+        """Some Agilent VNAs are stupid and do not understand VISA query commands for large binary transfers.
+            Hack around this. The raw read size seems to be safe with 16 bytes per read but this might need to be changed?
+        """
+        self.interface.write(string)
+        block =  self.interface.read_raw(size=size)
+        offset, data_length = util.parse_ieee_block_header(block)
+        return util.from_ieee_block(block, 'f', True, np.array)
+
 
     def get_trace(self, measurement=None):
-        """ Return a tupple of the trace frequencies and corrected complex points """
+        """ Return a tuple of the trace frequencies and corrected complex points. By default returns the data for the
+         first acive measurement. Pass an S-parameter (i.e. `S12`) as the `measurement` keyword argument to access others."""
         #If the measurement is not passed in just take the first one
         if measurement is None:
-            traces = self.interface.query(":CALCulate:PARameter:CATalog?")
-            #traces come e.g. as  u'"CH1_S11_1,S11,CH1_S21_2,S21"'
-            #so split on comma and avoid first quote
-            measurement = traces.split(",")[0][1:]
+            mchan = list(self.measurements.values())[0]
+        else:
+            if measurement not in self.measurements.keys():
+                raise ValueError(f"Unknown measurement: {measurement}. Available: {self.measurements.keys()}.")
+            mchan = self.measurements[measurement]
         #Select the measurment
-        self.interface.write(":CALCulate:PARameter:SELect '{}'".format(measurement))
+        self.interface.write(":CALCulate:PARameter:SELect '{}'".format(mchan))
+        self.reaverage()
         #Take the data as interleaved complex values
-        interleaved_vals = self.interface.values(":CALCulate:DATA? SDATA")
+        if self.data_query_raw:
+            interleaved_vals = self._raw_query(":CALC:DATA? SDATA")
+        else:
+            interleaved_vals = self.interface.query_binary_values(':CALC:DATA? SDATA', datatype="f", is_big_endian=True)
+
+        self.interface.write("SENS:SWE:MODE CONT")
         vals = interleaved_vals[::2] + 1j*interleaved_vals[1::2]
         #Get the associated frequencies
-        freqs = np.linspace(self.frequency_start, self.frequency_stop, self.sweep_num_points)
+        freqs = np.linspace(self.frequency_start, self.frequency_stop, self.num_points)
         return (freqs, vals)
+
+class AgilentN5230A(_AgilentNetworkAnalyzer):
+    """Agilent N5230A 4-port 20GHz VNA."""
+    ports = (1, 2, 3, 4)
+    data_query_raw = False
+
+class AgilentE8363C(_AgilentNetworkAnalyzer):
+    """Agilent E8363C 2-port 40GHz VNA."""
+    ports = (1, 2)
+    data_query_raw = False
 
 class AgilentE9010A(SCPIInstrument):
     """Agilent E9010A SA"""
@@ -782,6 +983,10 @@ class AgilentE9010A(SCPIInstrument):
     num_sweep_points = FloatCommand(scpi_string=":SWEep:POINTs")
     resolution_bandwidth = FloatCommand(scpi_string=":BANDwidth")
     sweep_time = FloatCommand(scpi_string=":SWEep:TIME")
+    averaging_count = IntCommand(scpi_string=':AVER:COUN')
+
+    marker1_amplitude = FloatCommand(scpi_string=':CALC:MARK1:Y')
+    marker1_position = FloatCommand(scpi_string=':CALC:MARK1:X')
 
     mode = StringCommand(scpi_string=":INSTrument", allowed_values=["SA", "BASIC", "PULSE", "PNOISE"])
 
@@ -797,9 +1002,9 @@ class AgilentE9010A(SCPIInstrument):
         if resource_name is not None:
             self.resource_name = resource_name
         #If we only have an IP address then tack on the raw socket port to the VISA resource string
-        if is_valid_ipv4(resource_name):
-            resource_name += "::5025::SOCKET"
-        super(AgilentE9010A, self).connect(resource_name=resource_name, interface_type=interface_type)
+        if is_valid_ipv4(self.resource_name):
+            self.resource_name += "::5025::SOCKET"
+        super(AgilentE9010A, self).connect(resource_name=self.resource_name, interface_type=interface_type)
         self.interface._resource.read_termination = u"\n"
         self.interface._resource.write_termination = u"\n"
         self.interface._resource.timeout = 3000 #seem to have trouble timing out on first query sometimes
@@ -824,3 +1029,12 @@ class AgilentE9010A(SCPIInstrument):
     def restart_sweep(self):
         """ Aborts current sweep and restarts. """
         self.interface.write(":INITiate:RESTart")
+
+    def peak_search(self, marker=1):
+        self.interface.write(':CALC:MARK{:d}:MAX'.format(marker))
+
+    def marker_to_center(self, marker=1):
+        self.interface.write(':CALC:MARK{:d}:CENT'.format(marker))
+
+    def clear_averaging(self):
+        self.interface.write(':AVER:CLE')
