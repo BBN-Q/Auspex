@@ -258,8 +258,14 @@ class MixerCalibrationExperiment(Experiment):
         self.config_dict = config_dict
         self.sideband_modulation = config_dict["sideband_modulation"]
         self._sa = spectrum_analyzer
-        assert self._sa.LO_source is not None, "No microwave source associated with spectrum analyzer"
-        self._LO = self._sa.LO_source
+
+        if isinstance(self._sa, bbn.SpectrumAnalyzer):
+            if self._sa.LO_source is None:
+                raise ValueError(f"Spectrum Analyzer f{self._sa.name} has no associated LO!")
+            self._LO = self._sa.LO_source
+        else:
+            self._LO = None #A spectrum analyzer with built-in LO
+
         if mixer.lower() == "measure":
             self._awg = channel.measure_chan.phys_chan.transmitter
             self._phys_chan = channel.measure_chan.phys_chan
@@ -273,7 +279,9 @@ class MixerCalibrationExperiment(Experiment):
         else:
             raise ValueError("Unknown mixer {}: must be either 'measure' or 'control'.".format(mixer))
 
-        self.instrument_proxies = [self._sa, self._LO, self._awg, self._source]
+        self.instrument_proxies = [self._sa, self._awg, self._source]
+        if self._LO:
+            self.instrument_proxies.append(self._LO)
         self.instruments = []
         for instrument in self.instrument_proxies:
             instr = instrument_map[instrument.model](instrument.address, instrument.label) # Instantiate
@@ -287,7 +295,7 @@ class MixerCalibrationExperiment(Experiment):
             self.instruments.append(instr)
 
         self.sa = self._instruments[self._sa.label]
-        self.LO = self._instruments[self._LO.label]
+        self.LO = self._instruments[self._LO.label] if self._LO else None
         self.source = self._instruments[self._source.label]
         self.awg = self._instruments[self._awg.label]
 
@@ -340,14 +348,32 @@ class MixerCalibrationExperiment(Experiment):
             instr.configure_with_proxy(instr.proxy_obj)
 
         #make sure the microwave generators are set up properly
+        
+        if self.LO:
+            self._setup_extrnal_LO()
+        else:
+            self._setup_internal_LO()
+
+        self._setup_awg_ssb()
+        time.sleep(0.1)
+
+    def _setup_extrnal_LO(self):
         self.source.output = True
         LO_freq = self.source.frequency - self.sa.IF_FREQ
         if self.sideband_modulation:
             LO_freq -= self.SSB_FREQ
         self.LO.frequency = LO_freq
         self.LO.output = True
-        self._setup_awg_ssb()
-        time.sleep(0.1)
+
+    def _setup_internal_LO(self):
+        #Assume (for now) that this is for an AgilentE9010A...
+        self.source.output = True
+        LO_freq = self.source.frequency
+        if self.sideband_modulation:
+            LO_freq -= self.SSB_FREQ
+
+        self.sa.frequency_center = LO_freq
+        self.sa.frequency_span   = 0.0
 
     def reset_calibration(self):
         """Set calibration back to default values.
@@ -392,7 +418,8 @@ class MixerCalibrationExperiment(Experiment):
 
     def shutdown_instruments(self):
         #reset the APS2, just in case.
-        self.LO.output = False
+        if self.LO:
+            self.LO.output = False
         self.source.output = False
         self.awg.stop()
 
@@ -401,4 +428,8 @@ class MixerCalibrationExperiment(Experiment):
 
     def run(self):
         time.sleep(0.05)
-        self.amplitude.push(self.sa.peak_amplitude())
+        if self.LO:
+            self.amplitude.push(self.sa.peak_amplitude())
+        else:
+            data = self.sa.get_trace()
+            self.amplitude.push(np.mean(data))
