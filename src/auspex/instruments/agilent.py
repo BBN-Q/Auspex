@@ -7,7 +7,7 @@
 #    http://www.apache.org/licenses/LICENSE-2.0
 
 __all__ = ['Agilent33220A', 'Agilent33500B', 'Agilent34970A',
-           'AgilentE8363C', 'AgilentN5183A', 'AgilentE9010A',
+           'AgilentE8363C', 'AgilentN5183A', 'AgilentN9010A',
            'HP33120A', 'AgilentN5230A']
 
 import socket
@@ -971,8 +971,8 @@ class AgilentE8363C(_AgilentNetworkAnalyzer):
     ports = (1, 2)
     data_query_raw = False
 
-class AgilentE9010A(SCPIInstrument):
-    """Agilent E9010A SA"""
+class AgilentN9010A(SCPIInstrument):
+    """Agilent N9010A SA"""
     instrument_type = "Spectrum Analyzer"
 
     frequency_center = FloatCommand(scpi_string=":FREQuency:CENTer")
@@ -996,7 +996,7 @@ class AgilentE9010A(SCPIInstrument):
     pn_carrier_freq = FloatCommand(scpi_string=":FREQuency:CARRier")
 
     def __init__(self, resource_name=None, *args, **kwargs):
-        super(AgilentE9010A, self).__init__(resource_name, *args, **kwargs)
+        super(AgilentN9010A, self).__init__(resource_name, *args, **kwargs)
 
     def connect(self, resource_name=None, interface_type=None):
         if resource_name is not None:
@@ -1004,7 +1004,7 @@ class AgilentE9010A(SCPIInstrument):
         #If we only have an IP address then tack on the raw socket port to the VISA resource string
         if is_valid_ipv4(self.resource_name):
             self.resource_name += "::5025::SOCKET"
-        super(AgilentE9010A, self).connect(resource_name=self.resource_name, interface_type=interface_type)
+        super(AgilentN9010A, self).connect(resource_name=self.resource_name, interface_type=interface_type)
         self.interface._resource.read_termination = u"\n"
         self.interface._resource.write_termination = u"\n"
         self.interface._resource.timeout = 3000 #seem to have trouble timing out on first query sometimes
