@@ -111,7 +111,7 @@ class SingleQubitCalTestCase(unittest.TestCase):
     def setUpClass(cls):
         global cl, pl
 
-        cl = ChannelLibrary(db_resource_name=":memory:")
+        cl = ChannelLibrary(":memory:")
         pl = PipelineManager()
 
     def _setUp(self, num_averages=50):
@@ -288,7 +288,7 @@ class TwoQubitCalTestCase(unittest.TestCase):
     def setUpClass(cls):
         global cl, pl
 
-        cl = ChannelLibrary(db_resource_name=":memory:")
+        cl = ChannelLibrary(":memory:")
         pl = PipelineManager()
 
     def _setUp(self, num_averages=50):
