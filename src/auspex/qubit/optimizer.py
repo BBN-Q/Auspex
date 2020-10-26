@@ -186,6 +186,62 @@ class QubitOptimizer(Calibration):
                                             self.stream_selectors, meta_file, 
                                             **self.kwargs)
 
+        #map the "other" parameters to associated qubit or instrument parameters
+        #Examples:
+        # "{qubit label} {channel} {attribute}"
+        # -or-
+        # "{instrument} {channel} {attribute}"
+        # -or-
+        # "{instrument} {attribute}"
+        #Is there a cleaner way to do this?"
+
+        for key, value in self.other_params.items():
+            spl = key.split(" ")
+            chan = None
+            if len(spl) == 3:
+                thing = list(filter(lambda q: q.label==spl[0], self.qubits))
+                
+                if len(thing) == 1:
+                    qubit = thing[0]
+                    attribute = spl[2]
+                    if spl[1] == "measure":
+                        qubit = qubit.measure_chan
+                    elif spl[1] == "control":
+                        pass
+                    else:
+                        raise ValueError(f"Invalid qubit attribute: {spl[0]} {spl[1]}")
+
+                    if qubit.phys_chan.generator and attribute == "frequency":
+                        name  = qubit.phys_chan.generator.label
+                        instr = list(filter(lambda x: x.name == name, exp._instruments.values()))[0]
+                    else:
+                        name, chan = qubit.phys_chan.label.split("-")[0:2]
+                        instr = exp._instruments[name]
+
+                        if insinstance(instr, auspex.instruments.APS2) and attribute=="amplitude":
+                            chan = [1,2]
+                else:
+                    try:
+                        instr = list(filter(lambda x: x.name == spl[0], exp._instruments.values()))[0]
+                    except IndexError:
+                        raise ValueError(f"Unknown qubit or instrument {spl[0]}.")
+                    chan = spl[1]
+                    attribute = spl[2]
+            elif len(spl) == 2:
+                try:
+                    instr = list(filter(lambda x: x.name == spl[0], exp._instruments.values()))[0]
+                except IndexError:
+                    raise ValueError(f"Unknown instrument {spl[0]}.")
+                attribute = spl[1]
+            else:
+                raise ValueError(f"Invalid parameter setting: {key}")
+            
+            if chan:
+                getattr(instr, "set_"+attribute)(chan, value)
+            else:
+                getattr(instr, "set_"+attribute)(value)
+
+
         if len(self.fake_data) > 0:
             raise NotImplementedError("Fake data not yet implemented!")
         self.exp_config(exp)
