@@ -49,150 +49,150 @@ from collections import Iterable, OrderedDict
 available_optimizers = ['SCIPY']
 
 try:
-	from bayes_opt import BayesianOptimization
-	available_optimizers += ['BAYES']
+    from bayes_opt import BayesianOptimization
+    available_optimizers += ['BAYES']
 except ImportError:
-	logger.info("Could not import BayesianOptimization package.")
+    logger.info("Could not import BayesianOptimization package.")
 
 
 class QubitOptimizer(Calibration):
-	"""
-	Class for running an optimization over Auspex experiments.
+    """
+    Class for running an optimization over Auspex experiments.
 
-	"""
+    """
 
-	def __init__(self, qubits, sequence_function, cost_function, 
-				 initial_parameters, other_variables=None, 
-				 optimizer="scipy", optim_params=None, output_nodes=None, 
-				 stream_selectors=None, do_plotting=True, **kwargs):
-		"""Setup an optimization over qubit experiments.
+    def __init__(self, qubits, sequence_function, cost_function, 
+                 initial_parameters, other_variables=None, 
+                 optimizer="scipy", optim_params=None, output_nodes=None, 
+                 stream_selectors=None, do_plotting=True, **kwargs):
+        """Setup an optimization over qubit experiments.
 
-		Args:
-			qubits:	The qubit(s) that the optimization is run over.
-			sequence_function: A function of the form 
+        Args:
+            qubits: The qubit(s) that the optimization is run over.
+            sequence_function: A function of the form 
 
-				`sequence_function(*qubits, **params)` 
+                `sequence_function(*qubits, **params)` 
 
-				that returns a valid QGL sequence for the qubits and initial 
-				parameters.
-			cost_function: The objective function for the optimization. The input
-				for this function comes from the filter pipeline node specified 
-				in `output_nodes` or inferred from the qubits (may not be 
-				reliable!). This function is responsible for choosing the 
-				appropriate quadrature as necessary.
-			initial_parameters: A dict of initial parameters for `sequence_function`.
-			other_variables: A dict of other Auspex qubit experiment variables 
-				(not associated with sequence generation) as keys and initial 
-				parameters as values. Example:
+                that returns a valid QGL sequence for the qubits and initial 
+                parameters.
+            cost_function: The objective function for the optimization. The input
+                for this function comes from the filter pipeline node specified 
+                in `output_nodes` or inferred from the qubits (may not be 
+                reliable!). This function is responsible for choosing the 
+                appropriate quadrature as necessary.
+            initial_parameters: A dict of initial parameters for `sequence_function`.
+            other_variables: A dict of other Auspex qubit experiment variables 
+                (not associated with sequence generation) as keys and initial 
+                parameters as values. Example:
 
-				`{"q1 control frequency": 5.4e9, "q2 measure frequency": 6.7e9}`
-			optimizer: String which chooses the optimization function. Supported
-				values are: "scipy" for scipy.optimize.minimize, "bayes" for 
-				the BayesianOptimization package. Others TODO!
-			optim_params: Dict of keyword arguments to be passed to the 
-				optimization function.
+                `{"q1 control frequency": 5.4e9, "q2 measure frequency": 6.7e9}`
+            optimizer: String which chooses the optimization function. Supported
+                values are: "scipy" for scipy.optimize.minimize, "bayes" for 
+                the BayesianOptimization package. Others TODO!
+            optim_params: Dict of keyword arguments to be passed to the 
+                optimization function.
 
-		"""
+        """
 
-		self.qubits = list(qubits) if isinstance(qubits, Iterable) else [qubits]
-		self.sequence_function  = sequence_function
-		self.cost_function      = cost_function
-		self.initial_parameters = OrderedDict(initial_parameters)
-		self.other_variables    = OrderedDict(other_variables)
-		self.optimizer 			= optimizer.upper() 
-		self.optim_params		= optim_params
+        self.qubits = list(qubits) if isinstance(qubits, Iterable) else [qubits]
+        self.sequence_function  = sequence_function
+        self.cost_function      = cost_function
+        self.initial_parameters = OrderedDict(initial_parameters)
+        self.other_variables    = OrderedDict(other_variables)
+        self.optimizer          = optimizer.upper() 
+        self.optim_params       = optim_params
 
-		self.seq_params 		= self.initial_parameters
-		self.other_params		= self.other_variables
+        self.seq_params         = self.initial_parameters
+        self.other_params       = self.other_variables
 
-		self.output_nodes 		= output_nodes
-		self.stream_selectors   = stream_selectors
-		self.do_plotting        = do_plotting 
+        self.output_nodes       = output_nodes
+        self.stream_selectors   = stream_selectors
+        self.do_plotting        = do_plotting 
 
-		self.cw_mode 			= False
-		self.leave_plots_open	= True
-		self.axis_descriptor	= None
-		self.succeeded 			= False
-		self.norm_points		= False
-		self.kwargs				= kwargs 
-		self.plotters 			= []
-		self.fake_data			= []
-		self.sample				= None
-		self.metafile			= None
+        self.cw_mode            = False
+        self.leave_plots_open   = True
+        self.axis_descriptor    = None
+        self.succeeded          = False
+        self.norm_points        = False
+        self.kwargs             = kwargs 
+        self.plotters           = []
+        self.fake_data          = []
+        self.sample             = None
+        self.metafile           = None
 
-		super().__init__()
+        super().__init__()
 
-		if self.optimizer not in available_optimizers:
-			raise ValueError(f"Unknown optimizer: {self.optimizer}. Availabe are: {available_optimizers}")
-	
-	def init_plots(self):
-		plot1 = ManualPlotter("Objective", x_label="Iteration", y_label="Value")
-		plot1.add_data_trace("Objective", {'color': 'C1'})
-		self.plot1 = plot1
-		return [plot1]
+        if self.optimizer not in available_optimizers:
+            raise ValueError(f"Unknown optimizer: {self.optimizer}. Availabe are: {available_optimizers}")
+    
+    def init_plots(self):
+        plot1 = ManualPlotter("Objective", x_label="Iteration", y_label="Value")
+        plot1.add_data_trace("Objective", {'color': 'C1'})
+        self.plot1 = plot1
+        return [plot1]
 
-	def _optimize_function(self):			
-		def _func(x):
+    def _optimize_function(self):           
+        def _func(x):
 
-			self._update_params(x)
-			data = self.run_sweeps()
-			return self.cost_function(data)
-		return _func
+            self._update_params(x)
+            data = self.run_sweeps()
+            return self.cost_function(data)
+        return _func
 
-	def _update_params(self, p):
-		if self.seq_params and self.other_params:
-			for idx, k in enumerate(self.seq_params.keys()):
-				self.seq_params[k] = p[idx]
-			for k in self.other_params.keys():
-				idx += 1
-				self.other_params[k] = p[idx]
-		elif self.seq_params:
-			for idx, k in enumerate(self.seq_params.keys()):
-				self.seq_params[k] = p[idx]
-		elif self.other_params:
-			for idx, k in enumerate(self.other_params.keys()):
-				self.other_params[k] = p[idx]
+    def _update_params(self, p):
+        if self.seq_params and self.other_params:
+            for idx, k in enumerate(self.seq_params.keys()):
+                self.seq_params[k] = p[idx]
+            for k in self.other_params.keys():
+                idx += 1
+                self.other_params[k] = p[idx]
+        elif self.seq_params:
+            for idx, k in enumerate(self.seq_params.keys()):
+                self.seq_params[k] = p[idx]
+        elif self.other_params:
+            for idx, k in enumerate(self.other_params.keys()):
+                self.other_params[k] = p[idx]
 
 
-	def set_constraints(self, constraints):
-		"""Add constraints to the optimization. 
+    def set_constraints(self, constraints):
+        """Add constraints to the optimization. 
 
-		Args:
-			constraints: A dictionary of constraints. The key should match up 
-			with the named parameters in `initial_parameters` or `other_variables`. 
-			The values should be a list that represents lower and upper bounds. 
-			Nonlinear constraints are not (yet!) supported.
-		"""
-		raise NotImplementedError("Constraints not yet impemented!")
+        Args:
+            constraints: A dictionary of constraints. The key should match up 
+            with the named parameters in `initial_parameters` or `other_variables`. 
+            The values should be a list that represents lower and upper bounds. 
+            Nonlinear constraints are not (yet!) supported.
+        """
+        raise NotImplementedError("Constraints not yet impemented!")
 
-	def parameters(self):
-		"""Returns the current set of parameters that are being optimized over"""
-		if self.seq_params and self.other_params:
-			return OrderedDict({**self.seq_params, **self.other_params})
-		elif self.seq_params:
-			return self.seq_params
-		elif self.other_params:
-			return self.other_params
+    def parameters(self):
+        """Returns the current set of parameters that are being optimized over"""
+        if self.seq_params and self.other_params:
+            return OrderedDict({**self.seq_params, **self.other_params})
+        elif self.seq_params:
+            return self.seq_params
+        elif self.other_params:
+            return self.other_params
 
-	def calibrate():
-		logger.info(f"Not a calibration! Please use {self.__class__.__name___}.optimize")
+    def calibrate():
+        logger.info(f"Not a calibration! Please use {self.__class__.__name___}.optimize")
 
-	def run_sweeps(self):
-		
-		seq = self.sequence_function(*self.qubits, **self.seq_params)
-		metafile = compile_to_hardware(seq, "optim/optim")
+    def run_sweeps(self):
+        
+        seq = self.sequence_function(*self.qubits, **self.seq_params)
+        metafile = compile_to_hardware(seq, "optim/optim")
 
-		exp       = CalibrationExperiment(self.qubits, self.output_nodes, 
-											self.stream_selectors, meta_file, 
-											**self.kwargs)
+        exp       = CalibrationExperiment(self.qubits, self.output_nodes, 
+                                            self.stream_selectors, meta_file, 
+                                            **self.kwargs)
 
-		if len(self.fake_data) > 0:
-			raise NotImplementedError("Fake data not yet implemented!")
-		self.exp_config(exp)
+        if len(self.fake_data) > 0:
+            raise NotImplementedError("Fake data not yet implemented!")
+        self.exp_config(exp)
 
-		exp.run_sweeps()
+        exp.run_sweeps()
 
-		data = {}
+        data = {}
 
         #sort nodes by qubit name to match data with metadata when normalizing
         qubit_indices = {q.label: idx for idx, q in enumerate(exp.qubits)}
@@ -213,25 +213,25 @@ class QubitOptimizer(Calibration):
             var = list(var.values())[0]
         return data
 
-	def set_fake_data():
-		raise NotImplementedError()
+    def set_fake_data():
+        raise NotImplementedError()
 
 
-	def optimize(self):
-		""" Carry out the optimization. """
+    def optimize(self):
+        """ Carry out the optimization. """
 
-		if self.optimizer == "SCIPY":
+        if self.optimizer == "SCIPY":
 
-			def plot_callback(xn, result):
-				self.plot1['Value'] = (result.nit, result.fun)
-			
-			x0  = list(self.parameters().values())
-			result = minimize(self._optimize_function(), x0, callback=plot_callbabck,
-								**self.optim_params)
+            def plot_callback(xn, result):
+                self.plot1['Value'] = (result.nit, result.fun)
+            
+            x0  = list(self.parameters().values())
+            result = minimize(self._optimize_function(), x0, callback=plot_callbabck,
+                                **self.optim_params)
 
-		if self.optimizer == "BAYES":
-			#TODO!
-			raise NotImplementedError()
+        if self.optimizer == "BAYES":
+            #TODO!
+            raise NotImplementedError()
 
 
 
