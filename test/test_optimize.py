@@ -59,7 +59,7 @@ class OptimizationTestCase(unittest.TestCase):
         pl["q1"].create_default_pipeline()
         cl.commit()
 
-    @unittest.skip("Very slow test.")
+    #@unittest.skip("Very slow test.")
     def test_scipy_optimize(self):
         self._setUp()
 
@@ -71,16 +71,15 @@ class OptimizationTestCase(unittest.TestCase):
             return [[X(qubit), MEAS(qubit)] for _ in range(4)]
 
         opt = QubitOptimizer((cl["q1"],), sequence_function, cost_function,
-                            {"x": 1.3, "y": 0.8}, optimizer="scipy", min_cost=0.08,
-                            optim_params={"method": "Nelder-Mead", "options": {"disp": True, "maxiter": 100}})
+                            {"x": 1.3, "y": 0.8}, optimizer="scipy", min_cost=0.01,
+                            optim_params={"method": "L-BFGS-B", "options": {"disp": True, "maxiter": 50}})
+        opt.set_bounds({"x": (0, 2), "y": (0, 2)})
         opt.setup_fake_data(cl["myX6"], parabola)
-
-        opt.recompile = True
         result = opt.optimize()
 
         self.assertTrue(opt.succeeded)
-        self.assertAlmostEqual(result.x[0], 1.0, places=2)
-        self.assertAlmostEqual(result.x[1], 1.0, places=2)
+        self.assertAlmostEqual(result["x"], 1.0, places=2)  
+        self.assertAlmostEqual(result["y"], 1.0, places=2)
 
 if __name__ == '__main__':
     unittest.main()

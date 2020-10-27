@@ -141,6 +141,8 @@ class QubitOptimizer(Calibration):
 
         self.param_history = OrderedDict({k: [] for k in self.parameters().keys()})
 
+        self.bounds   = OrderedDict({})
+
         super().__init__()
 
         if self.optimizer not in available_optimizers:
@@ -204,16 +206,17 @@ class QubitOptimizer(Calibration):
             self.param_history[k].append(v)
 
 
-    def set_constraints(self, constraints):
-        """Add constraints to the optimization. 
+    def set_bounds(self, bounds):
+        """Add bounds to the optimization. 
 
         Args:
-            constraints: A dictionary of constraints. The key should match up 
+            bounds: A dictionary of bounds. The key should match up 
             with the named parameters in `initial_parameters` or `other_variables`. 
-            The values should be a list that represents lower and upper bounds. 
-            Nonlinear constraints are not (yet!) supported.
+            The values should be a list that represents lower and upper bounds 
+            in the form (min, max). 
         """
-        raise NotImplementedError("Constraints not yet impemented!")
+        for k in self.parameters().keys():
+            self.bounds[k] = bounds[k]
 
     def parameters(self):
         """Returns the current set of parameters that are being optimized over"""
@@ -335,6 +338,13 @@ class QubitOptimizer(Calibration):
             self.start_plots()
 
         if self.optimizer == "SCIPY":
+
+            if self.bounds:
+                if "method" not in self.optim_params.keys():
+                    raise ValueError("A method must be named for bounded optimization with scipy.")
+                if "bounds" in self.optim_params.keys():
+                    raise ValueError("Please use the `set_bounds` methods to set bounds with scipy.")
+                self.optim_params["bounds"] = [v for v in self.bounds.values()]
 
             x0  = list(self.parameters().values())
             try:
