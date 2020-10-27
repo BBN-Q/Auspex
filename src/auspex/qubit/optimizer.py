@@ -173,9 +173,9 @@ class QubitOptimizer(Calibration):
         self.fake_data_fn = fake_data_function
         self.fake = True
 
-    def _optimize_function(self):           
+    def _optimize_function_scipy(self):           
         def _func(x):
-            self._update_params(x)
+            self._update_params(plist=x)
             data = self.run_sweeps()
             cost = self.cost_function(data)
             self.costs.append(cost)
@@ -188,19 +188,41 @@ class QubitOptimizer(Calibration):
             return cost
         return _func
 
-    def _update_params(self, p):
-        if self.seq_params and self.other_params:
-            for idx, k in enumerate(self.seq_params.keys()):
-                self.seq_params[k] = p[idx]
-            for k in self.other_params.keys():
-                idx += 1
-                self.other_params[k] = p[idx]
-        elif self.seq_params:
-            for idx, k in enumerate(self.seq_params.keys()):
-                self.seq_params[k] = p[idx]
-        elif self.other_params:
-            for idx, k in enumerate(self.other_params.keys()):
-                self.other_params[k] = p[idx]
+    def _optimize_function_bayes(self):           
+        def _func(**x):
+            self._update_params(pdict=x)
+            data = self.run_sweeps()
+            cost = self.cost_function(data)
+            self.costs.append(cost)
+            if self.do_plotting:
+                self.update_plots()
+            if self.min_cost:
+                if np.abs(cost) < self.min_cost:
+                    raise CloseEnough()
+
+            return cost
+        return _func
+
+    def _update_params(self, plist=None, pdict=None):
+        if pdict:
+            for k, v in pdict.items():
+                if self.seq_params and k in self.seq_params:
+                    self.seq_params[k] = v 
+                if self.other_params and k in self.other_params:
+                    self.other_params[k] = v
+        else:
+            if self.seq_params and self.other_params:
+                for idx, k in enumerate(self.seq_params.keys()):
+                    self.seq_params[k] = plist[idx]
+                for k in self.other_params.keys():
+                    idx += 1
+                    self.other_params[k] = plist[idx]
+            elif self.seq_params:
+                for idx, k in enumerate(self.seq_params.keys()):
+                    self.seq_params[k] = plist[idx]
+            elif self.other_params:
+                for idx, k in enumerate(self.other_params.keys()):
+                    self.other_params[k] = plist[idx]
 
         for k,v in self.parameters().items():
             self.param_history[k].append(v)
@@ -326,10 +348,6 @@ class QubitOptimizer(Calibration):
             data = list(data.values())[0]
         return data
 
-    def set_fake_data():
-        raise NotImplementedError()
-
-
     def optimize(self):
         """ Carry out the optimization. """
 
@@ -348,7 +366,7 @@ class QubitOptimizer(Calibration):
 
             x0  = list(self.parameters().values())
             try:
-                result = minimize(self._optimize_function(), x0,**self.optim_params)
+                result = minimize(self._optimize_function_scipy(), x0,**self.optim_params)
                 self.succeeded = result.success
             except CloseEnough:
                 self.succeeded = True
@@ -356,8 +374,23 @@ class QubitOptimizer(Calibration):
             return self.parameters()
 
         if self.optimizer == "BAYES":
-            #TODO!
-            raise NotImplementedError()
+            if not self.bounds:
+                raise ValueError("Bayesian optimization requires bounds.")
+
+            if self.min_cost:
+                logger.warning("Using `min_cost` with Bayesian optimization is not recommended...")
+                
+            optim = BayesianOptimization(f = self._optimize_function_bayes(), pbounds=self.bounds)
+            try:
+                optim.maximize(**self.optim_params)
+            except CloseEnough:
+                pass
+
+            self.succeeded = True
+
+            return optim.max['params']
+
+            
 
 
 
