@@ -54,6 +54,9 @@ try:
 except ImportError:
     logger.info("Could not import BayesianOptimization package.")
 
+class CloseEnough(Exception):
+    pass
+
 
 class QubitOptimizer(Calibration):
     """
@@ -62,9 +65,9 @@ class QubitOptimizer(Calibration):
     """
 
     def __init__(self, qubits, sequence_function, cost_function, 
-                 initial_parameters, other_variables=None, 
-                 optimizer="scipy", optim_params=None, output_nodes=None, 
-                 stream_selectors=None, do_plotting=True, **kwargs):
+                 initial_parameters=None, other_variables=None,
+                 optimizer="scipy", optim_params=None, min_cost = None, 
+                 output_nodes=None, stream_selectors=None, do_plotting=True, **kwargs):
         """Setup an optimization over qubit experiments.
 
         Args:
@@ -91,21 +94,17 @@ class QubitOptimizer(Calibration):
                 the BayesianOptimization package. Others TODO!
             optim_params: Dict of keyword arguments to be passed to the 
                 optimization function.
+            min_cost: Minimum value of cost function, optional. 
 
         """
 
         self.qubits = list(qubits) if isinstance(qubits, Iterable) else [qubits]
         self.sequence_function  = sequence_function
         self.cost_function      = cost_function
-        self.initial_parameters = OrderedDict(initial_parameters)
-        self.other_variables    = OrderedDict(other_variables)
         self.optimizer          = optimizer.upper() 
         self.optim_params       = optim_params
 
-        self.seq_params         = self.initial_parameters
-        self.other_params       = self.other_variables
-
-        self.output_nodes       = output_nodes
+        self.output_nodes       = output_nodes if isinstance(output_nodes, Iterable) else [output_nodes]
         self.stream_selectors   = stream_selectors
         self.do_plotting        = do_plotting 
 
@@ -119,6 +118,28 @@ class QubitOptimizer(Calibration):
         self.fake_data          = []
         self.sample             = None
         self.metafile           = None
+        self.costs              = []
+
+        self.fake               = False
+
+        self.niterations        = 0
+        self.min_cost           = min_cost
+
+        if initial_parameters:
+            self.initial_parameters = OrderedDict(initial_parameters)
+            self.recompile = True
+        else:
+            self.initial_parameters = {}
+            self.recompile = False
+        if other_variables:
+            self.other_variables    = OrderedDict(other_variables)
+        else:
+            self.other_variables = None
+
+        self.seq_params         = self.initial_parameters
+        self.other_params       = self.other_variables
+
+        self.param_history = OrderedDict({k: [] for k in self.parameters().keys()})
 
         super().__init__()
 
@@ -129,14 +150,40 @@ class QubitOptimizer(Calibration):
         plot1 = ManualPlotter("Objective", x_label="Iteration", y_label="Value")
         plot1.add_data_trace("Objective", {'color': 'C1'})
         self.plot1 = plot1
-        return [plot1]
+
+        plot2 = ManualPlotter("Paramters", x_label="Iteration", y_label="Value")
+        for idx, key in enumerate(self.parameters().keys()):
+            plot2.add_data_trace(key, {'color': f'C{idx}'})
+        self.plot2 = plot2
+
+        return [plot1, plot2]
+
+    def update_plots(self):
+        iters = np.array(range(1,self.niterations+1))
+        self.plot1['Objective'] = (iters, np.array(self.costs))
+
+        for k, v in self.param_history.items():
+            self.plot2[k] = (iters, np.array(v))
+
+    #TODO: Multi-qubit fake data generation...
+    def setup_fake_data(self, digitizer, fake_data_function):
+        self.fake_dig = digitizer
+        self.fake_data_fn = fake_data_function
+        self.fake = True
 
     def _optimize_function(self):           
         def _func(x):
-
             self._update_params(x)
             data = self.run_sweeps()
-            return self.cost_function(data)
+            cost = self.cost_function(data)
+            self.costs.append(cost)
+            if self.do_plotting:
+                self.update_plots()
+            if self.min_cost:
+                if cost < self.min_cost:
+                    raise CloseEnough()
+
+            return cost
         return _func
 
     def _update_params(self, p):
@@ -152,6 +199,9 @@ class QubitOptimizer(Calibration):
         elif self.other_params:
             for idx, k in enumerate(self.other_params.keys()):
                 self.other_params[k] = p[idx]
+
+        for k,v in self.parameters().items():
+            self.param_history[k].append(v)
 
 
     def set_constraints(self, constraints):
@@ -178,12 +228,13 @@ class QubitOptimizer(Calibration):
         logger.info(f"Not a calibration! Please use {self.__class__.__name___}.optimize")
 
     def run_sweeps(self):
-        
-        seq = self.sequence_function(*self.qubits, **self.seq_params)
-        metafile = compile_to_hardware(seq, "optim/optim")
+        self.niterations +=1
+        if self.recompile or self.niterations == 1:
+            seq = self.sequence_function(*self.qubits, **self.seq_params)
+            self.metafile = compile_to_hardware(seq, "optim/optim")
 
         exp       = CalibrationExperiment(self.qubits, self.output_nodes, 
-                                            self.stream_selectors, meta_file, 
+                                            self.stream_selectors, self.metafile, 
                                             **self.kwargs)
 
         #map the "other" parameters to associated qubit or instrument parameters
@@ -195,55 +246,59 @@ class QubitOptimizer(Calibration):
         # "{instrument} {attribute}"
         #Is there a cleaner way to do this?"
 
-        for key, value in self.other_params.items():
-            spl = key.split(" ")
-            chan = None
-            if len(spl) == 3:
-                thing = list(filter(lambda q: q.label==spl[0], self.qubits))
-                
-                if len(thing) == 1:
-                    qubit = thing[0]
-                    attribute = spl[2]
-                    if spl[1] == "measure":
-                        qubit = qubit.measure_chan
-                    elif spl[1] == "control":
-                        pass
-                    else:
-                        raise ValueError(f"Invalid qubit attribute: {spl[0]} {spl[1]}")
+        if self.other_params:
+            for key, value in self.other_params.items():
+                spl = key.split(" ")
+                chan = None
+                if len(spl) == 3:
+                    thing = list(filter(lambda q: q.label==spl[0], self.qubits))
+                    
+                    if len(thing) == 1:
+                        qubit = thing[0]
+                        attribute = spl[2]
+                        if spl[1] == "measure":
+                            qubit = qubit.measure_chan
+                        elif spl[1] == "control":
+                            pass
+                        else:
+                            raise ValueError(f"Invalid qubit attribute: {spl[0]} {spl[1]}")
 
-                    if qubit.phys_chan.generator and attribute == "frequency":
-                        name  = qubit.phys_chan.generator.label
-                        instr = list(filter(lambda x: x.name == name, exp._instruments.values()))[0]
-                    else:
-                        name, chan = qubit.phys_chan.label.split("-")[0:2]
-                        instr = exp._instruments[name]
+                        if qubit.phys_chan.generator and attribute == "frequency":
+                            name  = qubit.phys_chan.generator.label
+                            instr = list(filter(lambda x: x.name == name, exp._instruments.values()))[0]
+                        else:
+                            name, chan = qubit.phys_chan.label.split("-")[0:2]
+                            instr = exp._instruments[name]
 
-                        if insinstance(instr, auspex.instruments.APS2) and attribute=="amplitude":
-                            chan = [1,2]
-                else:
+                            if insinstance(instr, auspex.instruments.APS2) and attribute=="amplitude":
+                                chan = [1,2]
+                    else:
+                        try:
+                            instr = list(filter(lambda x: x.name == spl[0], exp._instruments.values()))[0]
+                        except IndexError:
+                            raise ValueError(f"Unknown qubit or instrument {spl[0]}.")
+                        chan = spl[1]
+                        attribute = spl[2]
+                elif len(spl) == 2:
                     try:
                         instr = list(filter(lambda x: x.name == spl[0], exp._instruments.values()))[0]
                     except IndexError:
-                        raise ValueError(f"Unknown qubit or instrument {spl[0]}.")
-                    chan = spl[1]
-                    attribute = spl[2]
-            elif len(spl) == 2:
-                try:
-                    instr = list(filter(lambda x: x.name == spl[0], exp._instruments.values()))[0]
-                except IndexError:
-                    raise ValueError(f"Unknown instrument {spl[0]}.")
-                attribute = spl[1]
-            else:
-                raise ValueError(f"Invalid parameter setting: {key}")
-            
-            if chan:
-                getattr(instr, "set_"+attribute)(chan, value)
-            else:
-                getattr(instr, "set_"+attribute)(value)
+                        raise ValueError(f"Unknown instrument {spl[0]}.")
+                    attribute = spl[1]
+                else:
+                    raise ValueError(f"Invalid parameter setting: {key}")
+                
+                if chan:
+                    getattr(instr, "set_"+attribute)(chan, value)
+                else:
+                    getattr(instr, "set_"+attribute)(value)
 
 
-        if len(self.fake_data) > 0:
-            raise NotImplementedError("Fake data not yet implemented!")
+        if self.fake:
+            fake_data = self.fake_data_fn(**self.parameters())
+            self.fake_data.append((self.fake_dig, fake_data))
+            for fd in self.fake_data:
+                exp.set_fake_data(fd[0], fd[1], random_mag=0.0)
         self.exp_config(exp)
 
         exp.run_sweeps()
@@ -254,9 +309,9 @@ class QubitOptimizer(Calibration):
         qubit_indices = {q.label: idx for idx, q in enumerate(exp.qubits)}
         exp.output_nodes.sort(key=lambda x: qubit_indices[x.qubit_name])
 
-        for i, (qubit, output_buff, var_buff) in enumerate(zip(exp.qubits,
+        for i, (qubit, output_buff) in enumerate(zip(exp.qubits,
                                 [exp.proxy_to_filter[on] for on in exp.output_nodes])):
-            if not isinstance(output_buff, DataBuffer) or isinstance(output_buff, WriteToFile):
+            if not isinstance(output_buff, DataBuffer):
                 raise ValueError("Could not find data buffer for calibration.")
 
             dataset, descriptor = output_buff.get_data()
@@ -266,7 +321,6 @@ class QubitOptimizer(Calibration):
         if len(data) == 1:
             # if single qubit, get rid of dictionary
             data = list(data.values())[0]
-            var = list(var.values())[0]
         return data
 
     def set_fake_data():
@@ -276,14 +330,20 @@ class QubitOptimizer(Calibration):
     def optimize(self):
         """ Carry out the optimization. """
 
+        if self.do_plotting:
+            self.plotters = self.init_plots()
+            self.start_plots()
+
         if self.optimizer == "SCIPY":
 
-            def plot_callback(xn, result):
-                self.plot1['Value'] = (result.nit, result.fun)
-            
             x0  = list(self.parameters().values())
-            result = minimize(self._optimize_function(), x0, callback=plot_callbabck,
-                                **self.optim_params)
+            try:
+                result = minimize(self._optimize_function(), x0,**self.optim_params)
+                self.succeeded = result.success
+            except CloseEnough:
+                self.succeeded = True
+
+            return self.parameters()
 
         if self.optimizer == "BAYES":
             #TODO!
