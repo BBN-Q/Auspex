@@ -54,6 +54,12 @@ try:
 except ImportError:
     logger.info("Could not import BayesianOptimization package.")
 
+try:
+    import cma
+    available_optimizers += ['CMA']
+except ImportError:
+    logger.info("Could not import pyCMA optimization package.")
+
 class CloseEnough(Exception):
     pass
 
@@ -91,7 +97,7 @@ class QubitOptimizer(Calibration):
                 `{"q1 control frequency": 5.4e9, "q2 measure frequency": 6.7e9}`
             optimizer: String which chooses the optimization function. Supported
                 values are: "scipy" for scipy.optimize.minimize, "bayes" for 
-                the BayesianOptimization package. Others TODO!
+                the BayesianOptimization package
             optim_params: Dict of keyword arguments to be passed to the 
                 optimization function.
             min_cost: Minimum value of cost function, optional. 
@@ -366,12 +372,16 @@ class QubitOptimizer(Calibration):
 
             x0  = list(self.parameters().values())
             try:
-                result = minimize(self._optimize_function_scipy(), x0,**self.optim_params)
+                if self.optim_params:
+                    result = minimize(self._optimize_function_scipy(), x0,**self.optim_params)
+                else:
+                    result = minimize(self._optimize_function_scipy(), x0)
                 self.succeeded = result.success
             except CloseEnough:
                 self.succeeded = True
+                return self.parameters()
 
-            return self.parameters()
+            return {k: result.x[j] for j, k in enumerate(self.parameters().keys())}
 
         if self.optimizer == "BAYES":
             if not self.bounds:
@@ -379,7 +389,7 @@ class QubitOptimizer(Calibration):
 
             if self.min_cost:
                 logger.warning("Using `min_cost` with Bayesian optimization is not recommended...")
-                
+
             optim = BayesianOptimization(f = self._optimize_function_bayes(), pbounds=self.bounds)
             try:
                 optim.maximize(**self.optim_params)
@@ -390,8 +400,102 @@ class QubitOptimizer(Calibration):
 
             return optim.max['params']
 
-            
+class QubitOptimizerCMA(QubitOptimizer):
+    """Particle swarm optimization using the CMA-ES algorithm through pycma.
+        See http://cma.gforge.inria.fr/cmaes_sourcecode_page.html
+    """
 
+    def __init__(self, qubits, sequence_function, cost_function, 
+             initial_parameters=None, other_variables=None, scale=True,
+             sigma0=None, parameter_scalers=None, 
+             optim_params=None, output_nodes=None, 
+             stream_selectors=None, do_plotting=True, **kwargs):
+        """Setup an optimization over qubit experiments.
+
+        Args:
+            qubits: The qubit(s) that the optimization is run over.
+            sequence_function: A function of the form 
+
+                `sequence_function(*qubits, **params)` 
+
+                that returns a valid QGL sequence for the qubits and initial 
+                parameters.
+            cost_function: The objective function for the optimization. The input
+                for this function comes from the filter pipeline node specified 
+                in `output_nodes` or inferred from the qubits (may not be 
+                reliable!). This function is responsible for choosing the 
+                appropriate quadrature as necessary.
+            initial_parameters: A dict of initial parameters for `sequence_function`.
+            other_variables: A dict of other Auspex qubit experiment variables 
+                (not associated with sequence generation) as keys and initial 
+                parameters as values. Example:
+                `{"q1 control frequency": 5.4e9, "q2 measure frequency": 6.7e9}`
+            scale: Scale optimization parameters.
+            sigma0: Initial standard deviation for all optimization parameters, 
+                if none is given all SD's are set to 0.5.
+            parameter_scalers: Dictionary of callables to scale the parameters such
+                that they all have roughly equal magnitude. If None, we scale everything
+                to 1 based on the initial value.
+            optim_params: Dict of keyword arguments to be passed to the 
+                optimization function.
+        """
+        if "CMA" not in available_optimizers:
+            raise ValueError("pyCMA does not appear to be installed.")
+
+        super().__init__(qubits, sequence_function, cost_function, 
+                 initial_parameters, other_variables,"cma", optim_params, 
+                 output_nodes, stream_selectors, do_plotting, **kwargs)
+
+        if sigma0:
+            self.sigma0 = sigma0
+        else:
+            self.sigma0 = 0.5
+
+        self.scale = scale
+
+        if parameter_scalers:
+            #make sure ordering is consistent
+            self.parameter_scalers = list(parameter_scalers[k] for k in self.parameters().keys()) 
+        else:
+            self.parameter_scalers = list(1.0/v for v in self.parameters().values())
+
+    def set_bounds(self, bounds):
+        raise NotImplementedError("Bounds are not implemented for CMA-ES optimization.")
+
+    def _optimize_function(self):           
+        def _func(x):
+            self._update_params(plist=x)
+            data = self.run_sweeps()
+            cost = self.cost_function(data)
+            self.costs.append(cost)
+            if self.do_plotting:
+                self.update_plots()
+            return cost
+        return _func
+
+    def optimize(self):
+        """ Carry out the optimization. """
+
+        if self.do_plotting:
+            self.plotters = self.init_plots()
+            self.start_plots()
+
+        x0 = list(self.parameters().values())
+        if self.optim_params:
+            es = cma.CMAEvolutionStrategy(x0, self.sigma0, self.optim_params)
+        else:
+            es = cma.CMAEvolutionStrategy(x0, self.sigma0)
+
+        if self.scale:
+            opt_func = cma.fitness_transformations.ScaleCoordinates(
+                self._optimize_function(), self.parameter_scalers)
+        else:
+            opt_func = self._optimize_function()
+
+        es.optimize(opt_func)
+
+        return {k: result.xbest[j] for j, k in enumerate(self.parameters.keys())}
+            
 
 
 

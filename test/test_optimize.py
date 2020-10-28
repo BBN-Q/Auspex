@@ -59,7 +59,9 @@ class OptimizationTestCase(unittest.TestCase):
         pl["q1"].create_default_pipeline()
         cl.commit()
 
-    @unittest.skip("Very slow test.")
+    #@unittest.skip("Very slow test.")
+    #Testing with SLSQP works OK as it seems to only require ~9 iterations to converge
+    #You wouldn't want to use this method on real measurements with noise, though, so user beware!
     def test_scipy_optimize(self):
         self._setUp()
 
@@ -72,7 +74,7 @@ class OptimizationTestCase(unittest.TestCase):
 
         opt = QubitOptimizer((cl["q1"],), sequence_function, cost_function,
                             {"x": 1.3, "y": 0.8}, optimizer="scipy", min_cost=0.01,
-                            optim_params={"method": "L-BFGS-B", "options": {"disp": True, "maxiter": 50}})
+                            optim_params={"method": "SLSQP", "options": {"maxiter": 100, "xtol": 1e-3}})
         opt.set_bounds({"x": (0, 2), "y": (0, 2)})
         opt.setup_fake_data(cl["myX6"], parabola)
         result = opt.optimize()
@@ -97,6 +99,27 @@ class OptimizationTestCase(unittest.TestCase):
                             optim_params={"init_points": 2, "n_iter": 20})
         opt.set_bounds({"x": (0, 2), "y": (0, 2)})
         opt.setup_fake_data(cl["myX6"], lambda x,y: -1*parabola(x,y))
+        result = opt.optimize()
+
+        self.assertTrue(opt.succeeded)
+        self.assertAlmostEqual(result["x"], 1.0, places=2)  
+        self.assertAlmostEqual(result["y"], 1.0, places=2)
+
+    @unittest.skip("Very slow test.")
+    def test_cma_optimize(self):
+        self._setUp()
+
+        def cost_function(data):
+            cost = np.mean(np.real(data))
+            return cost
+
+        def sequence_function(qubit, **kwargs):
+            return [[X(qubit), MEAS(qubit)] for _ in range(4)]
+
+        opt = QubitOptimizerCMA((cl["q1"],), sequence_function, cost_function,
+                            {"x": 1.3, "y": 0.8}, sigma0 = 1.0, 
+                            parameter_scalers = {"x": 2, "y": 2}, optim_params={"xtol": 1e-3})
+        opt.setup_fake_data(cl["myX6"], parabola)
         result = opt.optimize()
 
         self.assertTrue(opt.succeeded)
