@@ -162,7 +162,7 @@ class WriteTestCase(unittest.TestCase):
             exp.run_sweeps()
             self.assertTrue(os.path.exists(tmpdirname+"/test_write-0000.auspex"))
             container = AuspexDataContainer(tmpdirname+"/test_write-0000.auspex")
-            data, desc = container.open_dataset('main', 'data')
+            data, desc, _ = container.open_dataset('main', 'data')
 
             self.assertTrue(0.0 not in data)
             self.assertTrue(np.all(desc['field'] == np.linspace(0,100.0,4)))
@@ -210,7 +210,7 @@ class WriteTestCase(unittest.TestCase):
 
             self.assertTrue(os.path.exists(tmpdirname+"/test_write_metadata-0000.auspex"))
             container = AuspexDataContainer(tmpdirname+"/test_write_metadata-0000.auspex")
-            data, desc = container.open_dataset('main', 'data')
+            data, desc, _ = container.open_dataset('main', 'data')
             
             self.assertTrue(0.0 not in data)
             self.assertTrue(np.all(desc['field'] == np.linspace(0,100.0,4)))
@@ -319,8 +319,8 @@ class WriteTestCase(unittest.TestCase):
             exp.run_sweeps()
 
             container = AuspexDataContainer(tmpdirname+"/test_write_samefile-0000.auspex")
-            data1, desc1 = container.open_dataset('group1', 'data')
-            data2, desc2 = container.open_dataset('group2', 'data')
+            data1, desc1, _ = container.open_dataset('group1', 'data')
+            data2, desc2, _ = container.open_dataset('group2', 'data')
             self.assertTrue(os.path.exists(tmpdirname+"/test_write_samefile-0000.auspex"))
             self.assertTrue(0.0 not in data1)
             self.assertTrue(0.0 not in data2)
@@ -348,7 +348,7 @@ class WriteTestCase(unittest.TestCase):
 
             self.assertTrue(os.path.exists(tmpdirname+"/test_write_complex-0000.auspex"))
             container = AuspexDataContainer(tmpdirname+"/test_write_complex-0000.auspex")
-            data, desc = container.open_dataset('main', 'data')
+            data, desc, _ = container.open_dataset('main', 'data')
 
             self.assertTrue(0.0 not in data)
             self.assertTrue(np.all(desc['field'] == np.linspace(0,100.0,4)))
