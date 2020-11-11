@@ -315,9 +315,11 @@ class QubitExperiment(Experiment):
         # this must be done after adding channels.
         for dig in self.receivers:
             if dig.transceiver is not None and transcvr.initialize_separately == False:
+                dig.transceiver._locked = False
                 dig.transceiver.number_averages = averages
                 dig.transceiver.number_waveforms = 1
                 dig.transceiver.number_segments = segments_per_dig[dig]
+                dig.transceiver._locked = True
             else:
                 dig.number_averages  = averages
                 dig.number_waveforms = 1
