@@ -385,14 +385,25 @@ class Experiment(metaclass=MetaExperiment):
     def connect_instruments(self):
         # Connect the instruments to their resources
         if not self.instrs_connected:
+            connected_list = []
             for instrument in self._instruments.values():
-                instrument.connect()
+                try:
+                    instrument.connect()
+                    connected_list.append(instrument)
+                except:
+                    logger.error(f"Failed to connect to instrument {instrument.name}")
+                    logger.error("Disconnecting from other connected instruments")
+                    for instr in connected_list:
+                        instr.disconnect()
             self.instrs_connected = True
 
     def disconnect_instruments(self):
         # Connect the instruments to their resources
         for instrument in self._instruments.values():
-            instrument.disconnect()
+            try:
+                instrument.disconnect()
+            except:
+                logger.error(f"Failed to disconnect from {instrument.name}")
         self.instrs_connected = False
 
     def init_dashboard(self):
@@ -549,6 +560,7 @@ class Experiment(metaclass=MetaExperiment):
         time.sleep(0.1)
         #connect all instruments
         self.connect_instruments()
+        assert self.instrs_connected == True, "Instruments were not connected successfully."
 
         try:
             #initialize instruments
