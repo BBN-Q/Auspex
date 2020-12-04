@@ -567,18 +567,38 @@ class QubitExperiment(Experiment):
     def shutdown_instruments(self):
         # remove socket listeners
         logger.debug("Shutting down instruments")
-        try:
+                try:
             for awg in self.awgs:
-                awg.stop()
+                try:
+                    awg.stop()
+                except:
+                    logger.error(f"Could not stop AWG {awg.name}")
+                    pass
             for dig in self.digitizers:
-                dig.stop()
+                try:
+                    dig.stop()
+                except:
+                    logger.error(f"Could not stop digitizer {dig.name}")
+                    pass
             for gen_proxy in self.generators:
-                gen_proxy.instr.output = False
+                # print("Not shutting down generators! WARNING!")
+                try:
+                    gen_proxy.instr.output = False
+                except:
+                    logger.error(f"Could not set {gen_proxy.name} output to false")
+                    pass
         except:
-            logger.error('Could Not Stop AWGs or Digitizers; Reset Experiment')
+            logger.error('Could Not Stop AWGs or Digitizers; Reset Experiment') 
+        failflag = False
         for instr in self.instruments:
-            instr.disconnect()
-        self.dig_exit.set()
+            try:
+                instr.disconnect()
+            except:
+                logger.error(f"Could not disconnect instrument {instr.name}")
+                failflag = True
+        if failflag is True:
+            logger.error('Could not disconnect from some number of instruments, they may need to be reset.')
+        self.dig_exit.set() #This fails raising AttributeError sometimes, if it happens to others should also set this more carefully
         for listener in self.dig_listeners:
             listener.join(2)
             if listener.is_alive():
