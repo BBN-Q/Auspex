@@ -980,10 +980,14 @@ class AgilentN9010A(SCPIInstrument):
     frequency_start  = FloatCommand(scpi_string=":FREQuency:STARt")
     frequency_stop   = FloatCommand(scpi_string=":FREQuency:STOP")
 
-    num_sweep_points = FloatCommand(scpi_string=":SWEep:POINTs")
-    resolution_bandwidth = FloatCommand(scpi_string=":BANDwidth")
-    sweep_time = FloatCommand(scpi_string=":SWEep:TIME")
-    averaging_count = IntCommand(scpi_string=':AVER:COUN')
+    num_sweep_points        = FloatCommand(scpi_string=":SWEep:POINTs")
+    resolution_bandwidth    = FloatCommand(scpi_string=":BANDwidth")
+    video_bandwidth         = FloatCommand(scpi_string=":BANDwidth:VIDeo")
+    video_auto              = BoolCommand(get_string=":BANDwidth:VIDEO:AUTO?",
+                                set_string=":BANDwidth:VIDEO:AUTO {:s}",
+                                value_map={False: "0", True: "1"})
+    sweep_time              = FloatCommand(scpi_string=":SWEep:TIME")
+    averaging_count         = IntCommand(scpi_string=':AVER:COUN')
 
     marker1_amplitude = FloatCommand(scpi_string=':CALC:MARK1:Y')
     marker1_position = FloatCommand(scpi_string=':CALC:MARK1:X')
@@ -1035,6 +1039,54 @@ class AgilentN9010A(SCPIInstrument):
 
     def marker_to_center(self, marker=1):
         self.interface.write(':CALC:MARK{:d}:CENT'.format(marker))
+
+    @property
+    def marker_Y(self, marker=1):
+        """ Queries marker Y-value.
+
+        Args:
+            marker (int): Marker index (1-12).
+        Returns:
+            Trace value at selected marker.
+        """
+        return self.interface.query(":CALC:MARK{:d}:Y?".format(marker))
+
+    @property
+    def marker_X(self, marker=1):
+        """ Queries marker X-value.
+
+        Args:
+            marker (int): Marker index (1-12).
+        Returns:
+            X axis value of selected marker.
+        """
+        return self.interface.query(":CALC:MARK{:d}:X?".format(marker))
+
+    @marker_X.setter
+    def marker_X(self, value, marker=1):
+        """Sets marker X-value.
+
+        Args:
+            value (float): Marker x-axis value to set.
+            marker (int):  Marker index (1-2).
+        Returns:
+            None.
+        """
+        self.interface.write(":CALC:MARK{:d}:X {:f}".format(marker, value))
+
+    def noise_marker(self, marker=1, enable=True):
+        """Set/unset marker as a noise marker for noise figure measurements.
+
+        Args:
+            marker (int): Index of marker, [1,12].
+            enable (bool): Toggles between noise marker (True) and regular marker (False).
+        Returns:
+            None.
+        """
+        if enable:
+            self.interface.write(":CALC:MARK{:d}:FUNC NOISe".format(marker))
+        else:
+            self.interface.write(":CALC:MARK{:d}:FUNC OFF".format(marker))
 
     def clear_averaging(self):
         self.interface.write(':AVER:CLE')
