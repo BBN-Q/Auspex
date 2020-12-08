@@ -1,0 +1,33 @@
+name: Python Package using Conda
+
+on: [push]
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    strategy:
+      max-parallel: 5
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up Python 3.8
+      uses: actions/setup-python@v2
+      with:
+        python-version: 3.8
+    - name: Add conda to system path
+      run: |
+        # $CONDA is an environment variable pointing to the root of the miniconda directory
+        echo $CONDA/bin >> $GITHUB_PATH
+    - name: Install dependencies
+      run: |
+        conda install -yq numpy scipy h5py sphinx matplotlib pandas networkx cffi jupyter psutil sqlalchemy ipykernel ipywidgets
+        export GIT_LFS_SKIP_SMUDGE=1
+        pip install git+https://github.com/BBN-Q/bbndb.git
+        pip install git+https://github.com/BBN-Q/QGL.git@develop
+        pip install git+https://github.com/spatialaudio/nbsphinx.git@master
+        pip install pyvisa coveralls scikit-learn pyusb future python-usbtmc setproctitle progress serial
+        export GIT_LFS_SKIP_SMUDGE=0
+        export PYTHONPATH=$PYTHONPATH:$PWD/src
+    - name: Test with pytest
+      run: |
+        python -m unittest discover -v test
