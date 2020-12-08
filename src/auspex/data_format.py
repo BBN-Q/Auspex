@@ -27,7 +27,7 @@ class AuspexDataContainer(object):
                         | - DemodulatedData
     """
 
-    def __init__(self, base_path, mode='a'):
+    def __init__(self, base_path, mode='a', open_all=True):
         """Initialize the data container.
 
         Args:
@@ -40,6 +40,9 @@ class AuspexDataContainer(object):
         self.open_mmaps = []
         self.mode = mode
         self._create()
+        
+        if open_all:
+            self.open_all()
 
     def close(self):
         """Close the data container.
@@ -65,7 +68,7 @@ class AuspexDataContainer(object):
         if self.mode not in ['a', 'w+']:
             assert not os.path.exists(self.base_path), "Existing data container found. Did you want to open instead?"
         os.makedirs(os.path.join(self.base_path,groupname), exist_ok=True)
-        self.groups[groupname] = []
+        self.groups[groupname] = {}
 
     def new_dataset(self, groupname, datasetname, descriptor):
         """Add a dataset to a specific group.
@@ -75,9 +78,10 @@ class AuspexDataContainer(object):
             datasetname:        Name of the dataset to be added.
             descriptor:         `DataStreamDescriptor` that describes the dataset that is to be added.
         """
-        self.groups[groupname].append(datasetname)
         self._create_meta(groupname, datasetname, descriptor)
-        return self._create_memmap(groupname, datasetname, (np.product(descriptor.dims()),), descriptor.dtype)
+        mmap = self._create_memmap(groupname, datasetname, (np.product(descriptor.dims()),), descriptor.dtype)
+        self.groups[groupname][datasetname] = mmap
+        return mmap
 
     def _create_meta(self, groupname, datasetname, descriptor):
         """Create the metafile which accompanies the binary data.
@@ -111,8 +115,17 @@ class AuspexDataContainer(object):
         self.open_mmaps.append(mm)
         return mm
 
+    def __getitem__(self, key):
+        """Convenience function for the qubit side of things. Return data/desc of the default dataset name
+        for the given group name
+        """
+        if len(self.groups) == 0:
+            raise Exception("There are either no groups to index or open_all has not been called.")
+        return self.groups[key]['data'][:2]
+        
     def open_all(self):
-        """Open all of the datasets contained in this DataContainer.
+        """Open all of the datasets contained in this DataContainer. This also populates the 
+        list of groups.
 
         Returns:
             A dictionary of all of the datasets, which each item as an (array, descriptor) tuple.
@@ -120,9 +133,12 @@ class AuspexDataContainer(object):
         ret = {}
         for groupname in os.listdir(self.base_path):
             ret[groupname] = {}
+            self.groups[groupname] = {}
             for datasetname in os.listdir(os.path.join(self.base_path,groupname)):
                 if datasetname[-4:] == '.dat':
-                    ret[groupname][datasetname[:-4]] = self.open_dataset(groupname, datasetname[:-4])
+                    dat = self.open_dataset(groupname, datasetname[:-4])
+                    self.groups[groupname][datasetname[:-4]] = dat
+                    ret[groupname][datasetname[:-4]] = dat
         return ret
     def open_dataset(self, groupname, datasetname):
         """Open a particular dataset stored in this DataContainer.
