@@ -27,7 +27,7 @@ jobs:
         pip install git+https://github.com/spatialaudio/nbsphinx.git@master
         pip install pyvisa coveralls scikit-learn pyusb future python-usbtmc setproctitle progress serial
         export GIT_LFS_SKIP_SMUDGE=0
-        export PYTHONPATH=$PYTHONPATH:$PWD/src
-    - name: Test with pytest
+    - name: Test with unittest
       run: |
+        pip install -e .
         python -m unittest discover -v test
