@@ -399,12 +399,13 @@ class Experiment(metaclass=MetaExperiment):
 
     def disconnect_instruments(self):
         # Connect the instruments to their resources
-        for instrument in self._instruments.values():
-            try:
-                instrument.disconnect()
-            except:
-                logger.error(f"Failed to disconnect from {instrument.name}")
-        self.instrs_connected = False
+        if self.instrs_connected == True:
+            for instrument in self._instruments.values():
+                try:
+                    instrument.disconnect()
+                except:
+                    logger.error(f"Failed to disconnect from {instrument.name}")
+            self.instrs_connected = False
 
     def init_dashboard(self):
         from bqplot import DateScale, LinearScale, DateScale, Axis, Lines, Figure, Tooltip
