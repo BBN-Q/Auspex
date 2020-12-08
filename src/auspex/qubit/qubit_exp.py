@@ -598,13 +598,16 @@ class QubitExperiment(Experiment):
                 failflag = True
         if failflag is True:
             logger.error('Could not disconnect from some number of instruments, they may need to be reset.')
-        self.dig_exit.set() #This fails raising AttributeError sometimes, if it happens to others should also set this more carefully
-        for listener in self.dig_listeners:
-            listener.join(2)
-            if listener.is_alive():
-                logger.debug(f"Terminating listener {listener} aggressively")
-                listener.terminate()
-            del listener
+        
+        #Ensure that the digitizer-related attributes were created, since they aren't in certain failure conditions.
+        if hasattr(self,"dig_exit") and hasattr(self, "dig_listeners"):
+            self.dig_exit.set()
+            for listener in self.dig_listeners:
+                listener.join(2)
+                if listener.is_alive():
+                    logger.debug(f"Terminating listener {listener} aggressively")
+                    listener.terminate()
+                del listener
 
         import gc
         gc.collect()
