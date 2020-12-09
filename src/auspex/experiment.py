@@ -398,7 +398,7 @@ class Experiment(metaclass=MetaExperiment):
                             instr.disconnect()
                         except:
                             logger.error(f"Failed to disconnect from {instr.name}")
-                    pass
+                    raise Exception(f"Failed to connect to all instruments; disconnected as best as possible")
             self.instrs_connected = True
 
     def disconnect_instruments(self):
@@ -409,6 +409,7 @@ class Experiment(metaclass=MetaExperiment):
                     instrument.disconnect()
                 except:
                     logger.error(f"Failed to disconnect from {instrument.name}")
+                    #This probably should have a fail flag or something to throw a higher error after it's done trying to disconnect
             self.instrs_connected = False
 
     def init_dashboard(self):
