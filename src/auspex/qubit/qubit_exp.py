@@ -567,26 +567,25 @@ class QubitExperiment(Experiment):
     def shutdown_instruments(self):
         # remove socket listeners
         logger.debug("Shutting down instruments")
-                try:
+        try:
             for awg in self.awgs:
                 try:
                     awg.stop()
                 except:
                     logger.error(f"Could not stop AWG {awg.name}")
-                    pass
+                    raise Exception(f"Could not stop AWG {awg.name}")
             for dig in self.digitizers:
                 try:
                     dig.stop()
                 except:
                     logger.error(f"Could not stop digitizer {dig.name}")
-                    pass
+                    raise Exception(f"Could not stop digitizer {dig.name}")
             for gen_proxy in self.generators:
-                # print("Not shutting down generators! WARNING!")
                 try:
                     gen_proxy.instr.output = False
                 except:
                     logger.error(f"Could not set {gen_proxy.name} output to false")
-                    pass
+                    raise Exception(f"Could not set {gen_proxy.name} output to false")
         except:
             logger.error('Could Not Stop AWGs or Digitizers; Reset Experiment') 
         failflag = False
