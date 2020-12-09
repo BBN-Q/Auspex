@@ -384,7 +384,7 @@ class Experiment(metaclass=MetaExperiment):
 
     def connect_instruments(self):
         # Connect the instruments to their resources
-        if not self.instrs_connected:
+        if self.instrs_connected == False:
             connected_list = []
             for instrument in self._instruments.values():
                 try:
@@ -394,7 +394,11 @@ class Experiment(metaclass=MetaExperiment):
                     logger.error(f"Failed to connect to instrument {instrument.name}")
                     logger.error("Disconnecting from other connected instruments")
                     for instr in connected_list:
-                        instr.disconnect()
+                        try:
+                            instr.disconnect()
+                        except:
+                            logger.error(f"Failed to disconnect from {instr.name}")
+                    pass
             self.instrs_connected = True
 
     def disconnect_instruments(self):
