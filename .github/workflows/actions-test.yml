@@ -51,6 +51,8 @@ jobs:
         python -m unittest discover -v test
     - name: Build Documentation
       run: |
+        # This doesn't seem to get cached properly
+        pip install recommonmark
         cd doc
         make html
         cd ..
