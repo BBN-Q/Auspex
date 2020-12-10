@@ -18,7 +18,8 @@ jobs:
       run: |
         # $CONDA is an environment variable pointing to the root of the miniconda directory
         echo $CONDA/bin >> $GITHUB_PATH
-        echo "Conda is located at $(
+        echo "Pip is at $(which pip)"
+        echo "Conda is at $(which conda-build)"
 
     - name: pip cache
       uses: actions/cache@v2
