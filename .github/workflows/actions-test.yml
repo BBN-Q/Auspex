@@ -26,7 +26,7 @@ jobs:
       uses: actions/cache@v2
       id: cache
       with:
-        path: ${{ env.pythonLocation}}/lib/python3.8/site-packages/*
+        path: /usr/share/miniconda/lib/python3.8/site-packages/*
         key: ${{ runner.os }}-conda-${{ secrets.CACHE_VERSION }}-${{ hashFiles('requirements.txt') }}
         restore-keys: |
           ${{ runner.os }}-pip-
