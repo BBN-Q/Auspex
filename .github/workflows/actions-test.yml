@@ -18,13 +18,14 @@ jobs:
       run: |
         # $CONDA is an environment variable pointing to the root of the miniconda directory
         echo $CONDA/bin >> $GITHUB_PATH
+        echo "Conda is located at $(
 
     - name: pip cache
       uses: actions/cache@v2
       id: cache
       with:
         path: $CONDA/lib/python3.8/site-packages/*
-        key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+        key: ${{ runner.os }}-pip-${{ secrets.CACHE_VERSION }}-${{ hashFiles('requirements.txt') }}
         restore-keys: |
           ${{ runner.os }}-pip-
           ${{ runner.os }}
@@ -33,7 +34,10 @@ jobs:
       if: steps.cache.outputs.cache-hit != 'true'
       run: |
         echo "Cache miss. Installing dependencies"
-        conda install -yq numpy scipy h5py sphinx matplotlib pandas networkx cffi jupyter psutil sqlalchemy ipykernel ipywidgets
+        conda env update --file environment.yml --name base
+        conda install -yq pip numpy scipy h5py sphinx matplotlib pandas networkx cffi jupyter psutil sqlalchemy ipykernel ipywidgets
+        echo "Pip is at $(which pip)"
+        echo "Conda is at $(which conda-build)"
         
     - name: Install BBN dependencies
       run: |
@@ -51,7 +55,9 @@ jobs:
     - name: Build Documentation
       run: |
         # This doesn't seem to get cached properly
-        pip install recommonmark sphinx-rtd-theme nbsphinx mkdocs markdown commonmark
+        # pip install recommonmark sphinx-rtd-theme nbsphinx mkdocs markdown commonmark
+        echo "Pip is at $(which pip)"
+        echo "Conda is at $(which conda-build)"
         cd doc
         make html
         cd ..
