@@ -35,7 +35,6 @@ jobs:
       if: steps.cache.outputs.cache-hit != 'true'
       run: |
         echo "Cache miss. Installing dependencies"
-        conda env update --file environment.yml --name base
         conda install -yq pip numpy scipy h5py sphinx matplotlib pandas networkx cffi jupyter psutil sqlalchemy ipykernel ipywidgets
         echo "Pip is at $(which pip)"
         echo "Conda is at $(which conda-build)"
