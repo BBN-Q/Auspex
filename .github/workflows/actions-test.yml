@@ -34,7 +34,6 @@ jobs:
       run: |
         echo "Cache miss. Installing dependencies"
         conda install -yq numpy scipy h5py sphinx matplotlib pandas networkx cffi jupyter psutil sqlalchemy ipykernel ipywidgets
-        pip install recommonmark sphinx-rtd-theme nbsphinx mkdocs markdown commonmark
         
     - name: Install BBN dependencies
       run: |
@@ -52,7 +51,7 @@ jobs:
     - name: Build Documentation
       run: |
         # This doesn't seem to get cached properly
-        pip install recommonmark
+        pip install recommonmark sphinx-rtd-theme nbsphinx mkdocs markdown commonmark
         cd doc
         make html
         cd ..
