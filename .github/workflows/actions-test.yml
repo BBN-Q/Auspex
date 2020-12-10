@@ -19,17 +19,20 @@ jobs:
         # $CONDA is an environment variable pointing to the root of the miniconda directory
         echo $CONDA/bin >> $GITHUB_PATH
 
-    - uses: actions/cache@master
-        id: cache
-        with:
-          path: $CONDA/lib/python3.8/site-packages/*
-          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-            ${{ runner.os }}-
+    - name: pip cache
+      uses: actions/cache@v2
+      id: cache
+      with:
+        path: $CONDA/lib/python3.8/site-packages/*
+        key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+          ${{ runner.os }}
+            
     - name: Install dependencies
       if: steps.cache.outputs.cache-hit != 'true'
       run: |
+        echo "Cache miss. Installing dependencies"
         conda install -yq numpy scipy h5py sphinx matplotlib pandas networkx cffi jupyter psutil sqlalchemy ipykernel ipywidgets
         pip install recommonmark sphinx-rtd-theme nbsphinx mkdocs markdown commonmark
         
