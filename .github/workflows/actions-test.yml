@@ -27,18 +27,23 @@ jobs:
       id: cache
       with:
         path: /usr/share/miniconda/lib/python3.8/site-packages/*
-        key: ${{ runner.os }}-conda-${{ secrets.CACHE_VERSION }}-${{ hashFiles('requirements.txt') }}
+        key: ${{ runner.os }}-condapip-${{ secrets.CACHE_VERSION }}-${{ hashFiles('requirements.txt') }}
         restore-keys: |
-          ${{ runner.os }}-pip-
+          ${{ runner.os }}-condapip-
           ${{ runner.os }}
             
-    - name: Install dependencies
+    - name: Install conda dependencies
       if: steps.cache.outputs.cache-hit != 'true'
       run: |
         echo "Cache miss. Installing dependencies"
         conda install -yq pip numpy scipy h5py sphinx matplotlib pandas networkx cffi jupyter psutil sqlalchemy ipykernel ipywidgets
+    - name: Install pip dependencies
+      if: steps.cache.outputs.cache-hit != 'true'
+      run: |
+        echo "Cache miss. Installing dependencies"
         echo "Pip is at $(which pip)"
         echo "Env python location: ${{ env.pythonLocation}}"
+        pip install recommonmark sphinx-rtd-theme nbsphinx mkdocs markdown commonmark
         
     - name: Install BBN dependencies
       run: |
