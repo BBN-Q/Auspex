@@ -473,6 +473,8 @@ def InterleavedError(base_fit: SingleQubitRBFit,
     >>> n = [2**x for x in range(2,N+1)]
     >>> p1 = [0.5,0.008,0.5]
     >>> p2 = [0.5,0.01,0.5]
+    >>> def model(x, p):
+            return p[0] * (1-p[1])**x + p[2]
     >>> fit1 = SingleQubitRBFit(n, [model(x, p1) for x in n])
     >>> fit2 = SingleQubitRBFit(n, [model(x, p2) for x in n])
     >>> InterleavedError(fit1,fit2)
