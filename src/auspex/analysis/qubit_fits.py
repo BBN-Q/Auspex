@@ -442,7 +442,8 @@ class SingleQubitLeakageRBFit(SingleQubitRBFit):
         return pop0, pop0_err, pop1, pop1_err, pop2, pop2_err
 
 def InterleavedError(base_fit: SingleQubitRBFit, 
-                     inter_fit: SingleQubitRBFit, n_qubits=1) -> float:
+                     inter_fit: SingleQubitRBFit, 
+                     n_qubits=1, make_plots=False) -> float:
     """
     Take two Auspex fits for RB decay and calculate the effective $r$ 
     for the interleaved gate. r_c and r_c_error expressions are taken 
@@ -489,6 +490,24 @@ def InterleavedError(base_fit: SingleQubitRBFit,
     r_c_error = min(((d - 1) / d) * (np.abs(p - p_c/p) + (1 - p)), 
                     (2*(d**2 - 1)*(1 - p)) / p*d**2 + (4*np.sqrt(1 - p)*np.sqrt(d**2 - 1)) / p)
     
+    if make_plots:
+        plt.figure()
+        plt.errorbar(fit1.lengths, fit1.ypts, yerr=fit1.errors/np.sqrt(len(fit1.lengths)),
+                        fmt='*', elinewidth=2.0, capsize=4.0, label='mean')
+        plt.plot(range(int(fit1.lengths[-1])), fit1.model(range(int(fit1.lengths[-1]))), label='base fit')
+        plt.errorbar(fit2.lengths, fit2.ypts, yerr=fit2.errors/np.sqrt(len(fit2.lengths)),
+                        fmt='o', elinewidth=2.0, capsize=4.0, label='mean')
+        plt.plot(range(int(fit2.lengths[-1])), fit2.model(range(int(fit2.lengths[-1]))), label='inter fit')
+
+        plt.xlabel(fit1.xlabel)
+        plt.ylabel(fit1.ylabel)
+        plt.legend()
+        
+        def _annotation():
+            return 'interleaved gate \nerror rate ' + r'r = {:.2e}  {} {:.2e}'.format(r_c, chr(177), r_c_error, end='\n')
+        plt.annotate(_annotation(), xy=(0.3, 0.50),
+                     xycoords='axes fraction', size=12)
+
     return r_c, r_c_error
 
 
