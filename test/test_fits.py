@@ -173,14 +173,31 @@ class TestFitMethods(unittest.TestCase, FitAssertion):
     def test_SingleQubitRB(self):
         p0 = [0.99, 5e-3, 0.2]
 
-        x = np.array([2**n for n in range(10)])
+        x = np.array([2**n for n in range(2,11)])
         y = qubit_fits.SingleQubitRBFit._model(x, *p0)
         noise = np.random.randn(y.size) * p0[0]/100
         y += noise
 
         fit = qubit_fits.SingleQubitRBFit(x, y, make_plots=False)
-        self.assertFitInterval(p0[1], "r", fit, tol=20)
+        self.assertFitInterval(p0[1], "r", fit, tol=30)
 
+    def test_InterleavedError(self):
+        p0 = [0.99, 8e-3, 0.2]
+        p1 = [0.99, 1.0e-2, 0.2]
+
+        x = np.array([2**n for n in range(2,11)])
+        y = qubit_fits.SingleQubitRBFit._model(x, *p0)
+        noise = np.random.randn(y.size) * p0[0]/100
+        y += noise
+
+        z = qubit_fits.SingleQubitRBFit._model(x, *p1)
+        noise = np.random.randn(z.size) * p1[0]/100
+        z += noise
+
+        fit1 = qubit_fits.SingleQubitRBFit(x, y, make_plots=False)
+        fit2 = qubit_fits.SingleQubitRBFit(x, z, make_plots=False)
+        r_c, R_c_error = qubit_fits.InterleavedError(fit1,fit2)
+        self.assertAlmostEqual(r_c, 0.0020, places=3)
 
 
 if __name__ == '__main__':
