@@ -441,6 +441,74 @@ class SingleQubitLeakageRBFit(SingleQubitRBFit):
         pop2_err = np.std(np.reshape(self.pop2,(len(self.lengths),repeats)),1)
         return pop0, pop0_err, pop1, pop1_err, pop2, pop2_err
 
+def InterleavedError(base_fit: SingleQubitRBFit, 
+                     inter_fit: SingleQubitRBFit, 
+                     n_qubits=1, make_plots=False) -> float:
+    """
+    Take two Auspex fits for RB decay and calculate the effective $r$ 
+    for the interleaved gate. r_c and r_c_error expressions are taken 
+    from Magesan et al. https://arxiv.org/pdf/1203.4550.pdf
+
+    Note the r_c_error will likely over estimate the error. See Magesan et al.
+    for more detail.
+
+    Parameters
+    ----------
+    base_fit : analysis.qubit_fits.SingleQubitRBFit
+        decay curve for the non-interleaved experiment
+    inter_fit : analysis.qubit_fits.SingleQubitRBFit
+        decay curve for the interleaved experiment
+    n_qubits : int
+        number of qubits: 1 or 2
+
+    Returns
+    -------
+    r_c : float
+        error rate associated with the interleaved gate
+    r_c_error: float
+        error of the estimated r_c
+
+    Examples
+    --------
+    >>> N = 10
+    >>> n = [2**x for x in range(2,N+1)]
+    >>> p1 = [0.5,0.008,0.5]
+    >>> p2 = [0.5,0.01,0.5]
+    >>> def model(x, p):
+            return p[0] * (1-p[1])**x + p[2]
+    >>> fit1 = SingleQubitRBFit(n, [model(x, p1) for x in n])
+    >>> fit2 = SingleQubitRBFit(n, [model(x, p2) for x in n])
+    >>> InterleavedError(fit1,fit2)
+    (0.0020325203256145175, 0.013967479675201178)
+    """
+    d = 2**n_qubits
+    p   = 1 - (base_fit.fit_params['r'] * 2 * d/(d - 1))
+    p_c = 1 - (inter_fit.fit_params['r'] * 2 * d/(d - 1))
+
+    r_c = (d - 1) * (1 - p_c/p) / d
+    
+    r_c_error = min(((d - 1) / d) * (np.abs(p - p_c/p) + (1 - p)), 
+                    (2*(d**2 - 1)*(1 - p)) / p*d**2 + (4*np.sqrt(1 - p)*np.sqrt(d**2 - 1)) / p)
+    
+    if make_plots:
+        plt.figure()
+        plt.errorbar(fit1.lengths, fit1.ypts, yerr=fit1.errors/np.sqrt(len(fit1.lengths)),
+                        fmt='*', elinewidth=2.0, capsize=4.0, label='mean')
+        plt.plot(range(int(fit1.lengths[-1])), fit1.model(range(int(fit1.lengths[-1]))), label='base fit')
+        plt.errorbar(fit2.lengths, fit2.ypts, yerr=fit2.errors/np.sqrt(len(fit2.lengths)),
+                        fmt='o', elinewidth=2.0, capsize=4.0, label='mean')
+        plt.plot(range(int(fit2.lengths[-1])), fit2.model(range(int(fit2.lengths[-1]))), label='inter fit')
+
+        plt.xlabel(fit1.xlabel)
+        plt.ylabel(fit1.ylabel)
+        plt.legend()
+        
+        def _annotation():
+            return 'interleaved gate \nerror rate ' + r'r = {:.2e}  {} {:.2e}'.format(r_c, chr(177), r_c_error, end='\n')
+        plt.annotate(_annotation(), xy=(0.3, 0.50),
+                     xycoords='axes fraction', size=12)
+
+    return r_c, r_c_error
 
 
 class PhotonNumberFit(AuspexFit):
