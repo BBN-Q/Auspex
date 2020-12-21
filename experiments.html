@@ -1,0 +1,385 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Experiment Documentation &mdash; auspex 2019.2 documentation</title>
+  
+
+  
+  <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+
+  
+  
+  
+  
+
+  
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+        <script src="_static/jquery.js"></script>
+        <script src="_static/underscore.js"></script>
+        <script src="_static/doctools.js"></script>
+        <script src="_static/language_data.js"></script>
+        <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+        <script async="async" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
+        <script type="text/x-mathjax-config">MathJax.Hub.Config({"tex2jax": {"inlineMath": [["$", "$"], ["\\(", "\\)"]], "processEscapes": true, "ignoreClass": "document", "processClass": "math|output_area"}})</script>
+        <script src="https://unpkg.com/@jupyter-widgets/html-manager@^0.18.0/dist/embed-amd.js"></script>
+    
+    <script type="text/javascript" src="_static/js/theme.js"></script>
+
+    
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Sweep Documentation" href="sweeps.html" />
+    <link rel="prev" title="Instrument Documentation" href="instruments.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="index.html" class="icon icon-home" alt="Documentation Home"> auspex
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                2019.2
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="instruments.html">Instrument Drivers</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Defining Experiments</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#scripting">Scripting</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#defining-experiments">Defining Experiments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#the-measurement-pipeline">The Measurement Pipeline</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#connectors-streams-and-descriptors">Connectors, Streams, and Descriptors</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#running-experiments-in-jupyter-notebooks">Running Experiments in Jupyter Notebooks</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="sweeps.html">Advanced Sweeps</a></li>
+<li class="toctree-l1"><a class="reference internal" href="qubits.html">Qubit Experiments</a></li>
+<li class="toctree-l1"><a class="reference internal" href="plotting.html">Plotting Server</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api/auspex.html">Full API</a></li>
+</ul>
+
+            
+          
+        </div>
+        
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">auspex</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="index.html" class="icon icon-home"></a> &raquo;</li>
+        
+      <li>Experiment Documentation</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            <a href="_sources/experiments.rst.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  
+<style>
+/* CSS overrides for sphinx_rtd_theme */
+
+/* 24px margin */
+.nbinput.nblast.container,
+.nboutput.nblast.container {
+    margin-bottom: 19px;  /* padding has already 5px */
+}
+
+/* ... except between code cells! */
+.nblast.container + .nbinput.container {
+    margin-top: -19px;
+}
+
+.admonition > p:before {
+    margin-right: 4px;  /* make room for the exclamation icon */
+}
+
+/* Fix math alignment, see https://github.com/rtfd/sphinx_rtd_theme/pull/686 */
+.math {
+    text-align: unset;
+}
+</style>
+<div class="section" id="experiment-documentation">
+<h1>Experiment Documentation<a class="headerlink" href="#experiment-documentation" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="scripting">
+<h2>Scripting<a class="headerlink" href="#scripting" title="Permalink to this headline">¶</a></h2>
+<p>Instantiating a few <em>Instrument</em> classes as decribed in the <span class="xref std std-ref">relevant documentation</span> provides us with an environment sufficient to perform any sort of measurement. Let us revisit our simple example with a few added instruments, and also add a few software averages to our measurement.:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pspl</span>  <span class="o">=</span> <span class="n">Picosecond10070A</span><span class="p">(</span><span class="s2">&quot;GPIB0::24::INSTR&quot;</span><span class="p">)</span> <span class="c1"># Pulse generator</span>
+<span class="n">mag</span>   <span class="o">=</span> <span class="n">AMI430</span><span class="p">(</span><span class="s2">&quot;192.168.5.109&quot;</span><span class="p">)</span>              <span class="c1"># Magnet controller</span>
+<span class="n">keith</span> <span class="o">=</span> <span class="n">Keithley2400</span><span class="p">(</span><span class="s2">&quot;GPIB0::25::INSTR&quot;</span><span class="p">)</span>     <span class="c1"># Source meter</span>
+
+<span class="n">pspl</span><span class="o">.</span><span class="n">amplitude</span> <span class="o">=</span> <span class="mf">0.944</span> <span class="c1"># V</span>
+<span class="n">mag</span><span class="o">.</span><span class="n">field</span>      <span class="o">=</span> <span class="mf">0.010</span> <span class="c1"># T</span>
+<span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mf">0.1</span><span class="p">)</span> <span class="c1"># Stableize</span>
+
+<span class="n">resistance_values</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="k">for</span> <span class="n">dur</span> <span class="ow">in</span> <span class="mf">1e-9</span><span class="o">*</span><span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">11</span><span class="p">,</span> <span class="mf">0.05</span><span class="p">):</span>
+    <span class="n">pspl</span><span class="o">.</span><span class="n">duration</span> <span class="o">=</span> <span class="n">dur</span>
+    <span class="n">pspl</span><span class="o">.</span><span class="n">trigger</span><span class="p">()</span>
+    <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mf">0.05</span><span class="p">)</span>
+    <span class="n">resistance_values</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="n">keith</span><span class="o">.</span><span class="n">resistance</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">5</span><span class="p">)])</span>
+
+<span class="n">avg_res_vals</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">resistance</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>We have omitted a number of configuration commands for brevity. The above script works perfectly well if we always perform the exact same measurement, i.e. we hold the field and pulse amplitude fixed but vary its duration. This is normally an unrealistic restriction, since the experimentor more often than not will want to repeat the same fundamental measurement for any number of sweep conditions.</p>
+</div>
+<div class="section" id="defining-experiments">
+<h2>Defining Experiments<a class="headerlink" href="#defining-experiments" title="Permalink to this headline">¶</a></h2>
+<p>Therefore, we recommend that users package their measurements into <em>Experiments</em>, which provide the opportunity for re-use.:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">SwitchingExperiment</span><span class="p">(</span><span class="n">Experiment</span><span class="p">):</span>
+    <span class="c1"># Control parameters</span>
+    <span class="n">field</span>          <span class="o">=</span> <span class="n">FloatParameter</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">unit</span><span class="o">=</span><span class="s2">&quot;T&quot;</span><span class="p">)</span>
+    <span class="n">pulse_duration</span> <span class="o">=</span> <span class="n">FloatParameter</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="mf">5.0e-9</span><span class="p">,</span> <span class="n">unit</span><span class="o">=</span><span class="s2">&quot;s&quot;</span><span class="p">)</span>
+    <span class="n">pulse_voltage</span>  <span class="o">=</span> <span class="n">FloatParameter</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">unit</span><span class="o">=</span><span class="s2">&quot;V&quot;</span><span class="p">)</span>
+
+    <span class="c1"># Output data connectors</span>
+    <span class="n">resistance</span> <span class="o">=</span> <span class="n">OutputConnector</span><span class="p">()</span>
+
+    <span class="c1"># Constants</span>
+    <span class="n">samples</span> <span class="o">=</span> <span class="mi">5</span>
+
+    <span class="c1"># Instruments, connections aren&#39;t made until run_sweeps called</span>
+    <span class="n">pspl</span>  <span class="o">=</span> <span class="n">Picosecond10070A</span><span class="p">(</span><span class="s2">&quot;GPIB0::24::INSTR&quot;</span><span class="p">)</span>
+    <span class="n">mag</span>   <span class="o">=</span> <span class="n">AMI430</span><span class="p">(</span><span class="s2">&quot;192.168.5.109&quot;</span><span class="p">)</span>
+    <span class="n">keith</span> <span class="o">=</span> <span class="n">Keithley2400</span><span class="p">(</span><span class="s2">&quot;GPIB0::25::INSTR&quot;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">init_instruments</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c1"># Instrument initialization goes here, and is run</span>
+        <span class="c1"># automatically by run_sweeps</span>
+
+        <span class="c1"># Assign methods to parameters</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">field</span><span class="o">.</span><span class="n">assign_method</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">mag</span><span class="o">.</span><span class="n">set_field</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pulse_duration</span><span class="o">.</span><span class="n">assign_method</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">pspl</span><span class="o">.</span><span class="n">set_duration</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pulse_voltage</span><span class="o">.</span><span class="n">assign_method</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">pspl</span><span class="o">.</span><span class="n">set_voltage</span><span class="p">)</span>
+
+        <span class="c1"># Create hooks for relevant delays</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pulse_duration</span><span class="o">.</span><span class="n">add_post_push_hook</span><span class="p">(</span><span class="k">lambda</span><span class="p">:</span> <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mf">0.05</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pulse_voltage</span><span class="o">.</span><span class="n">add_post_push_hook</span><span class="p">(</span><span class="k">lambda</span><span class="p">:</span> <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mf">0.05</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">field</span><span class="o">.</span><span class="n">add_post_push_hook</span><span class="p">(</span><span class="k">lambda</span><span class="p">:</span> <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mf">0.1</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">init_streams</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c1"># Establish the &quot;intrinsic&quot; data dimensions</span>
+        <span class="c1"># run by run_sweeps.</span>
+        <span class="n">ax</span> <span class="o">=</span> <span class="n">DataAxis</span><span class="p">(</span><span class="s2">&quot;samples&quot;</span><span class="p">,</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">samples</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">resistance</span><span class="o">.</span><span class="n">add_axis</span><span class="p">(</span><span class="n">ax</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c1"># This is the inner loop, which is run for each set of</span>
+        <span class="c1"># sweep parameters by run_sweeps. Data is pushed out</span>
+        <span class="c1"># to the world through the output connectors.</span>
+        <span class="n">pspl</span><span class="o">.</span><span class="n">trigger</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">resistance</span><span class="o">.</span><span class="n">push</span><span class="p">(</span><span class="n">keith</span><span class="o">.</span><span class="n">resistance</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Here the control parameters, data flow, and the central measurement “kernel” have crystallized into separate entities. To run the same experiment as was performed above, we add a <em>sweep</em> to the experiment,:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># Define a 1D sweep</span>
+<span class="n">exp</span> <span class="o">=</span> <span class="n">SwitchingExperiment</span><span class="p">()</span>
+<span class="n">exp</span><span class="o">.</span><span class="n">add_sweep</span><span class="p">(</span><span class="n">exp</span><span class="o">.</span><span class="n">pulse_duration</span><span class="p">,</span> <span class="mf">1e-9</span><span class="o">*</span><span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">11</span><span class="p">,</span> <span class="mf">0.05</span><span class="p">))</span>
+<span class="n">exp</span><span class="o">.</span><span class="n">run_sweeps</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>but we can at this point sweep any <em>Parameter</em> or a combination thereof:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># Define a 2D sweep</span>
+<span class="n">exp</span> <span class="o">=</span> <span class="n">SwitchingExperiment</span><span class="p">()</span>
+<span class="n">exp</span><span class="o">.</span><span class="n">add_sweep</span><span class="p">(</span><span class="n">exp</span><span class="o">.</span><span class="n">field</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="o">-</span><span class="mf">0.01</span><span class="p">,</span> <span class="mf">0.015</span><span class="p">,</span> <span class="mf">0.005</span><span class="p">))</span>
+<span class="n">exp</span><span class="o">.</span><span class="n">add_sweep</span><span class="p">(</span><span class="n">exp</span><span class="o">.</span><span class="n">pulse_voltage</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mf">0.1</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mi">20</span><span class="p">))</span>
+<span class="n">exp</span><span class="o">.</span><span class="n">run_sweeps</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>These sweeps can be based on <em>Parameter</em> tuples in order to accomodate non-rectilinear sweeps, and can be made adaptive by specifying convergence criteria that can modifying the sweeps on the fly. Full documentation is provided here. The time spent writing a full <em>Experiment</em> often pays dividends in terms of flexibility.</p>
+</div>
+<div class="section" id="the-measurement-pipeline">
+<h2>The Measurement Pipeline<a class="headerlink" href="#the-measurement-pipeline" title="Permalink to this headline">¶</a></h2>
+<p>The central <code class="docutils literal notranslate"><span class="pre">run</span></code> method of an <em>Experiment</em> should not need to worry about file IO and plotting, nor should we bake common analysis routines (filtering, plotting, etc.) into the code that is only responsible for taking data. Auspex relegates these tasks to the measurement pipeline, which provides dataflow such as that in the image below.</p>
+<div class="figure align-center" id="id1">
+<img alt="_images/ExperimentFlow.png" src="_images/ExperimentFlow.png" />
+<p class="caption"><span class="caption-text">An example of measurement dataflow starting from the <em>Experiment</em> at left.</span><a class="headerlink" href="#id1" title="Permalink to this image">¶</a></p>
+</div>
+<p>Each block is referred to as a <em>node</em> of the experiment graph. Data flow is assumed to be acyclic, though auspex will not save you from yourself if you attempt to circumvent this restriction. Data flow can be one-to-many, but not many-to-one. Certain nodes, such as <em>correlators</em> may take multiple inputs, but they are always wired to distinct input connectors. There are a number of advantages to representing processing and analysis as graphs, most of which stem from the ease of reconfiguration. We have even developed a specialized tool, <em>Quince</em>, that provides a graphical interfaces for modifying the contents and connectivity of the graph.</p>
+<p>Finally, we stress data is streamed asynchronously across the graph. Each node processes data as it is received, though many types of nodes must wait until enough data has accumulated to perform their stated functions.</p>
+<div class="section" id="connectors-streams-and-descriptors">
+<h3>Connectors, Streams, and Descriptors<a class="headerlink" href="#connectors-streams-and-descriptors" title="Permalink to this headline">¶</a></h3>
+<p><em>OutputConnectors</em> are “ports” on the experiments through which all measurement data flows. As mentioned above, a single <em>OutputConnector</em> can send data to any number of subsequent filter nodes. Each such connection consists of a <em>DataStream</em>, which contains an asyncio-compatible queue for shuttling data. Since data is streamed, rather than passed as tidy arrays, all data streams are described by a <em>DataStreamDescriptor</em> that describes the dimensionality of the data.</p>
+<p>A <em>DataStreamDescriptor</em> contains a list of <em>Axes</em>, which contain a list of the points in the axis. These axes may be “intrinisic,” as in the case of the <code class="docutils literal notranslate"><span class="pre">DataAxis(&quot;samples&quot;,</span> <span class="pre">range(self.samples))</span></code> axis added in the <code class="docutils literal notranslate"><span class="pre">init_streams</span></code> method above. An axis may also be a <em>SweepAxis</em>, which is added to all descriptors automatically when you add a sweep to an experiment. Thus, assuming we’re using the 2D sweep from the example above, data emitted by the experiment is described by the following axes,:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">[</span><span class="n">DataAxis</span><span class="p">(</span><span class="s2">&quot;samples&quot;</span><span class="p">,</span> <span class="nb">range</span><span class="p">(</span><span class="mi">5</span><span class="p">)),</span>
+<span class="n">SweepAxis</span><span class="p">(</span><span class="s2">&quot;field&quot;</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="o">-</span><span class="mf">0.01</span><span class="p">,</span> <span class="mf">0.015</span><span class="p">,</span> <span class="mf">0.005</span><span class="p">)),</span>
+<span class="n">SweepAxis</span><span class="p">(</span><span class="s2">&quot;pulse_voltage&quot;</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mf">0.1</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mi">20</span><span class="p">))]</span>
+</pre></div>
+</div>
+<p>Importantly, there is no requirement for rectilinear sweeps, which was one of our design goals. Back on the experiment graph, each node can modify this <em>DataStreamDescriptor</em> for downstream data: e.g. an averaging node (such as that in the figure above) that is set to average over the “samples” axis will send out data described by the axes</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">[</span><span class="n">SweepAxis</span><span class="p">(</span><span class="s2">&quot;field&quot;</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="o">-</span><span class="mf">0.01</span><span class="p">,</span> <span class="mf">0.015</span><span class="p">,</span> <span class="mf">0.005</span><span class="p">)),</span>
+<span class="n">SweepAxis</span><span class="p">(</span><span class="s2">&quot;pulse_voltage&quot;</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mf">0.1</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mi">20</span><span class="p">))]</span>
+</pre></div>
+</div>
+<p>Nodes such as data writers are, of course, written such that they store all of the axis information alongside the data. To define our filter pipeline we instantiate the nodes and then we pass a list of “edges” of the graph to the experiment</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">exp</span>   <span class="o">=</span> <span class="n">SwitchingExperiment</span><span class="p">()</span>
+<span class="n">write</span> <span class="o">=</span> <span class="n">WriteToHDF5</span><span class="p">(</span><span class="s2">&quot;filename.h5&quot;</span><span class="p">)</span>
+<span class="n">avg</span>   <span class="o">=</span> <span class="n">Averager</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="s1">&#39;samples&#39;</span><span class="p">)</span>
+<span class="n">links</span> <span class="o">=</span> <span class="p">[(</span><span class="n">exp</span><span class="o">.</span><span class="n">resistance</span><span class="p">,</span> <span class="n">avg</span><span class="o">.</span><span class="n">sink</span><span class="p">),</span>
+         <span class="p">(</span><span class="n">avg</span><span class="o">.</span><span class="n">final_average</span><span class="p">,</span> <span class="n">write</span><span class="o">.</span><span class="n">sink</span><span class="p">)]</span>
+<span class="n">exp</span><span class="o">.</span><span class="n">set_graph</span><span class="p">(</span><span class="n">links</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Since this is rather tedious to do manually for large sets of nodes, tools like <em>Quince</em> and <em>PyQLab</em> can be used to lessen the burden.</p>
+</div>
+</div>
+<div class="section" id="running-experiments-in-jupyter-notebooks">
+<h2>Running Experiments in Jupyter Notebooks<a class="headerlink" href="#running-experiments-in-jupyter-notebooks" title="Permalink to this headline">¶</a></h2>
+<p>You should do this.</p>
+</div>
+</div>
+
+
+           </div>
+           
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="sweeps.html" class="btn btn-neutral float-right" title="Sweep Documentation" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="instruments.html" class="btn btn-neutral float-left" title="Instrument Documentation" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        
+        &copy; Copyright 2019, Auspex Developers
+
+    </p>
+  </div>
+    
+    
+    
+    Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a
+    
+    <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a>
+    
+    provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>

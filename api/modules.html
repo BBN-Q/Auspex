@@ -1,0 +1,317 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>auspex &mdash; auspex 2019.2 documentation</title>
+  
+
+  
+  <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+
+  
+  
+  
+  
+
+  
+  <!--[if lt IE 9]>
+    <script src="../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+        <script src="../_static/jquery.js"></script>
+        <script src="../_static/underscore.js"></script>
+        <script src="../_static/doctools.js"></script>
+        <script src="../_static/language_data.js"></script>
+        <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+        <script async="async" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
+        <script type="text/x-mathjax-config">MathJax.Hub.Config({"tex2jax": {"inlineMath": [["$", "$"], ["\\(", "\\)"]], "processEscapes": true, "ignoreClass": "document", "processClass": "math|output_area"}})</script>
+        <script src="https://unpkg.com/@jupyter-widgets/html-manager@^0.18.0/dist/embed-amd.js"></script>
+    
+    <script type="text/javascript" src="../_static/js/theme.js"></script>
+
+    
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="../index.html" class="icon icon-home" alt="Documentation Home"> auspex
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                2019.2
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../instruments.html">Instrument Drivers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../experiments.html">Defining Experiments</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../sweeps.html">Advanced Sweeps</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../qubits.html">Qubit Experiments</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../plotting.html">Plotting Server</a></li>
+<li class="toctree-l1"><a class="reference internal" href="auspex.html">Full API</a></li>
+</ul>
+
+            
+          
+        </div>
+        
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">auspex</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../index.html" class="icon icon-home"></a> &raquo;</li>
+        
+      <li>auspex</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            <a href="../_sources/api/modules.rst.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  
+<style>
+/* CSS overrides for sphinx_rtd_theme */
+
+/* 24px margin */
+.nbinput.nblast.container,
+.nboutput.nblast.container {
+    margin-bottom: 19px;  /* padding has already 5px */
+}
+
+/* ... except between code cells! */
+.nblast.container + .nbinput.container {
+    margin-top: -19px;
+}
+
+.admonition > p:before {
+    margin-right: 4px;  /* make room for the exclamation icon */
+}
+
+/* Fix math alignment, see https://github.com/rtfd/sphinx_rtd_theme/pull/686 */
+.math {
+    text-align: unset;
+}
+</style>
+<div class="section" id="auspex">
+<h1>auspex<a class="headerlink" href="#auspex" title="Permalink to this headline">¶</a></h1>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="auspex.html">auspex package</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="auspex.html#subpackages">Subpackages</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="auspex.analysis.html">auspex.analysis package</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="auspex.analysis.html#submodules">Submodules</a></li>
+<li class="toctree-l4"><a class="reference internal" href="auspex.analysis.html#module-auspex.analysis.fits">auspex.analysis.fits module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="auspex.analysis.html#module-auspex.analysis.helpers">auspex.analysis.helpers module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="auspex.analysis.html#module-auspex.analysis">Module contents</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="auspex.filters.html">auspex.filters package</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="auspex.filters.html#submodules">Submodules</a></li>
+<li class="toctree-l4"><a class="reference internal" href="auspex.filters.html#module-auspex.filters.average">auspex.filters.average module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="auspex.filters.html#module-auspex.filters.channelizer">auspex.filters.channelizer module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="auspex.filters.html#module-auspex.filters.correlator">auspex.filters.correlator module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="auspex.filters.html#module-auspex.filters.debug">auspex.filters.debug module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="auspex.filters.html#module-auspex.filters.elementwise">auspex.filters.elementwise module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="auspex.filters.html#module-auspex.filters.filter">auspex.filters.filter module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="auspex.filters.html#module-auspex.filters.framer">auspex.filters.framer module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="auspex.filters.html#module-auspex.filters.integrator">auspex.filters.integrator module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="auspex.filters.html#module-auspex.filters.io">auspex.filters.io module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="auspex.filters.html#module-auspex.filters.plot">auspex.filters.plot module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="auspex.filters.html#module-auspex.filters.stream_selectors">auspex.filters.stream_selectors module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="auspex.filters.html#module-auspex.filters">Module contents</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="auspex.instruments.html">auspex.instruments package</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="auspex.instruments.html#submodules">Submodules</a></li>
+<li class="toctree-l4"><a class="reference internal" href="auspex.instruments.html#module-auspex.instruments.agilent">auspex.instruments.agilent module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="auspex.instruments.html#module-auspex.instruments.alazar">auspex.instruments.alazar module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="auspex.instruments.html#module-auspex.instruments.ami">auspex.instruments.ami module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="auspex.instruments.html#module-auspex.instruments.bbn">auspex.instruments.bbn module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="auspex.instruments.html#module-auspex.instruments.binutils">auspex.instruments.binutils module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="auspex.instruments.html#module-auspex.instruments.bnc">auspex.instruments.bnc module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="auspex.instruments.html#module-auspex.instruments.hall_probe">auspex.instruments.hall_probe module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="auspex.instruments.html#module-auspex.instruments.holzworth">auspex.instruments.holzworth module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="auspex.instruments.html#module-auspex.instruments.instrument">auspex.instruments.instrument module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="auspex.instruments.html#module-auspex.instruments.interface">auspex.instruments.interface module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="auspex.instruments.html#module-auspex.instruments.keithley">auspex.instruments.keithley module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="auspex.instruments.html#module-auspex.instruments.kepco">auspex.instruments.kepco module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="auspex.instruments.html#module-auspex.instruments.keysight">auspex.instruments.keysight module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="auspex.instruments.html#module-auspex.instruments.lakeshore">auspex.instruments.lakeshore module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="auspex.instruments.html#module-auspex.instruments.lecroy">auspex.instruments.lecroy module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="auspex.instruments.html#module-auspex.instruments.magnet">auspex.instruments.magnet module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="auspex.instruments.html#module-auspex.instruments.picosecond">auspex.instruments.picosecond module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="auspex.instruments.html#module-auspex.instruments.prologix">auspex.instruments.prologix module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="auspex.instruments.html#module-auspex.instruments.rfmd">auspex.instruments.rfmd module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="auspex.instruments.html#module-auspex.instruments.stanford">auspex.instruments.stanford module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="auspex.instruments.html#module-auspex.instruments.tektronix">auspex.instruments.tektronix module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="auspex.instruments.html#module-auspex.instruments.vaunix">auspex.instruments.vaunix module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="auspex.instruments.html#module-auspex.instruments.X6">auspex.instruments.X6 module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="auspex.instruments.html#module-auspex.instruments.yokogawa">auspex.instruments.yokogawa module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="auspex.instruments.html#module-auspex.instruments">Module contents</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="auspex.qubit.html">auspex.qubit package</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="auspex.qubit.html#submodules">Submodules</a></li>
+<li class="toctree-l4"><a class="reference internal" href="auspex.qubit.html#module-auspex.qubit.pipeline">auspex.qubit.pipeline module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="auspex.qubit.html#module-auspex.qubit.qubit_exp">auspex.qubit.qubit_exp module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="auspex.qubit.html#module-auspex.qubit.mixer_calibration">auspex.qubit.mixer_calibration module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="auspex.qubit.html#module-auspex.qubit.pulse_calibration">auspex.qubit.pulse_calibration module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="auspex.qubit.html#module-auspex.qubit.single_shot_fidelity">auspex.qubit.single_shot_fidelity module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="auspex.qubit.html#module-auspex.qubit">Module contents</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="auspex.html#module-auspex.config">auspex.config module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="auspex.html#module-auspex.data_format">auspex.data_format module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="auspex.html#module-auspex.experiment">auspex.experiment module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="auspex.html#module-auspex.log">auspex.log module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="auspex.html#module-auspex.parameter">auspex.parameter module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="auspex.html#module-auspex.stream">auspex.stream module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="auspex.html#module-auspex.sweep">auspex.sweep module</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</div>
+
+
+           </div>
+           
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        
+        &copy; Copyright 2019, Auspex Developers
+
+    </p>
+  </div>
+    
+    
+    
+    Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a
+    
+    <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a>
+    
+    provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>

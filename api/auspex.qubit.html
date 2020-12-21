@@ -1,0 +1,1234 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>auspex.qubit package &mdash; auspex 2019.2 documentation</title>
+  
+
+  
+  <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+
+  
+  
+  
+  
+
+  
+  <!--[if lt IE 9]>
+    <script src="../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+        <script src="../_static/jquery.js"></script>
+        <script src="../_static/underscore.js"></script>
+        <script src="../_static/doctools.js"></script>
+        <script src="../_static/language_data.js"></script>
+        <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+        <script async="async" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
+        <script type="text/x-mathjax-config">MathJax.Hub.Config({"tex2jax": {"inlineMath": [["$", "$"], ["\\(", "\\)"]], "processEscapes": true, "ignoreClass": "document", "processClass": "math|output_area"}})</script>
+        <script src="https://unpkg.com/@jupyter-widgets/html-manager@^0.18.0/dist/embed-amd.js"></script>
+    
+    <script type="text/javascript" src="../_static/js/theme.js"></script>
+
+    
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="prev" title="auspex.instruments package" href="auspex.instruments.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="../index.html" class="icon icon-home" alt="Documentation Home"> auspex
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                2019.2
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../instruments.html">Instrument Drivers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../experiments.html">Defining Experiments</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../sweeps.html">Advanced Sweeps</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../qubits.html">Qubit Experiments</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../plotting.html">Plotting Server</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="auspex.html">Full API</a><ul class="current">
+<li class="toctree-l2 current"><a class="reference internal" href="auspex.html#subpackages">Subpackages</a><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="auspex.analysis.html">auspex.analysis package</a></li>
+<li class="toctree-l3"><a class="reference internal" href="auspex.filters.html">auspex.filters package</a></li>
+<li class="toctree-l3"><a class="reference internal" href="auspex.instruments.html">auspex.instruments package</a></li>
+<li class="toctree-l3 current"><a class="current reference internal" href="#">auspex.qubit package</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#submodules">Submodules</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#module-auspex.qubit.pipeline">auspex.qubit.pipeline module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#module-auspex.qubit.qubit_exp">auspex.qubit.qubit_exp module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#module-auspex.qubit.mixer_calibration">auspex.qubit.mixer_calibration module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#module-auspex.qubit.pulse_calibration">auspex.qubit.pulse_calibration module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#module-auspex.qubit.single_shot_fidelity">auspex.qubit.single_shot_fidelity module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#module-auspex.qubit">Module contents</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="auspex.html#module-auspex.config">auspex.config module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="auspex.html#module-auspex.data_format">auspex.data_format module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="auspex.html#module-auspex.experiment">auspex.experiment module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="auspex.html#module-auspex.log">auspex.log module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="auspex.html#module-auspex.parameter">auspex.parameter module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="auspex.html#module-auspex.stream">auspex.stream module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="auspex.html#module-auspex.sweep">auspex.sweep module</a></li>
+</ul>
+</li>
+</ul>
+
+            
+          
+        </div>
+        
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">auspex</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../index.html" class="icon icon-home"></a> &raquo;</li>
+        
+          <li><a href="auspex.html">auspex package</a> &raquo;</li>
+        
+      <li>auspex.qubit package</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            <a href="../_sources/api/auspex.qubit.rst.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  
+<style>
+/* CSS overrides for sphinx_rtd_theme */
+
+/* 24px margin */
+.nbinput.nblast.container,
+.nboutput.nblast.container {
+    margin-bottom: 19px;  /* padding has already 5px */
+}
+
+/* ... except between code cells! */
+.nblast.container + .nbinput.container {
+    margin-top: -19px;
+}
+
+.admonition > p:before {
+    margin-right: 4px;  /* make room for the exclamation icon */
+}
+
+/* Fix math alignment, see https://github.com/rtfd/sphinx_rtd_theme/pull/686 */
+.math {
+    text-align: unset;
+}
+</style>
+<div class="section" id="auspex-qubit-package">
+<h1>auspex.qubit package<a class="headerlink" href="#auspex-qubit-package" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="submodules">
+<h2>Submodules<a class="headerlink" href="#submodules" title="Permalink to this headline">¶</a></h2>
+</div>
+<div class="section" id="module-auspex.qubit.pipeline">
+<span id="auspex-qubit-pipeline-module"></span><h2>auspex.qubit.pipeline module<a class="headerlink" href="#module-auspex.qubit.pipeline" title="Permalink to this headline">¶</a></h2>
+<dl class="py class">
+<dt id="auspex.qubit.pipeline.PipelineManager">
+<em class="property">class </em><code class="sig-prename descclassname">auspex.qubit.pipeline.</code><code class="sig-name descname">PipelineManager</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">force_new</span><span class="o">=</span><span class="default_value">False</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pipeline.PipelineManager" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create and run Qubit Experiments.</p>
+<dl class="py method">
+<dt id="auspex.qubit.pipeline.PipelineManager.add_correlator">
+<code class="sig-name descname">add_correlator</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">input_stream1</span></em>, <em class="sig-param"><span class="n">input_stream2</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pipeline.PipelineManager.add_correlator" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.pipeline.PipelineManager.add_qubit_pipeline">
+<code class="sig-name descname">add_qubit_pipeline</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">qubit_label</span></em>, <em class="sig-param"><span class="n">stream_type</span></em>, <em class="sig-param"><span class="n">auto_create</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">buffers</span><span class="o">=</span><span class="default_value">False</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pipeline.PipelineManager.add_qubit_pipeline" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.pipeline.PipelineManager.clear_pipelines">
+<code class="sig-name descname">clear_pipelines</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pipeline.PipelineManager.clear_pipelines" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.pipeline.PipelineManager.commit">
+<code class="sig-name descname">commit</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pipeline.PipelineManager.commit" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.pipeline.PipelineManager.create_default_pipeline">
+<code class="sig-name descname">create_default_pipeline</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">qubits</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">buffers</span><span class="o">=</span><span class="default_value">False</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pipeline.PipelineManager.create_default_pipeline" title="Permalink to this definition">¶</a></dt>
+<dd><p>Look at the QGL channel library and create our pipeline from the current
+qubits.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.pipeline.PipelineManager.get_connections_by_name">
+<code class="sig-name descname">get_connections_by_name</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">pipeline_name</span></em>, <em class="sig-param"><span class="n">index</span><span class="o">=</span><span class="default_value">1</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pipeline.PipelineManager.get_connections_by_name" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.pipeline.PipelineManager.get_current_stream_selectors">
+<code class="sig-name descname">get_current_stream_selectors</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pipeline.PipelineManager.get_current_stream_selectors" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.pipeline.PipelineManager.get_stream_selector">
+<code class="sig-name descname">get_stream_selector</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">pipeline_name</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pipeline.PipelineManager.get_stream_selector" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.pipeline.PipelineManager.load">
+<code class="sig-name descname">load</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">pipeline_name</span></em>, <em class="sig-param"><span class="n">index</span><span class="o">=</span><span class="default_value">1</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pipeline.PipelineManager.load" title="Permalink to this definition">¶</a></dt>
+<dd><p>Load the latest instance for a particular name. Specifying index = 2 will select the second most recent instance</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.pipeline.PipelineManager.ls">
+<code class="sig-name descname">ls</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pipeline.PipelineManager.ls" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.pipeline.PipelineManager.print">
+<code class="sig-name descname">print</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">pipeline_name</span><span class="o">=</span><span class="default_value">None</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pipeline.PipelineManager.print" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.pipeline.PipelineManager.recreate_pipeline">
+<code class="sig-name descname">recreate_pipeline</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">qubits</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">buffers</span><span class="o">=</span><span class="default_value">False</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pipeline.PipelineManager.recreate_pipeline" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.pipeline.PipelineManager.reset_pipelines">
+<code class="sig-name descname">reset_pipelines</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pipeline.PipelineManager.reset_pipelines" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.pipeline.PipelineManager.rollback">
+<code class="sig-name descname">rollback</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pipeline.PipelineManager.rollback" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.pipeline.PipelineManager.save_as">
+<code class="sig-name descname">save_as</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">name</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pipeline.PipelineManager.save_as" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.pipeline.PipelineManager.show_pipeline">
+<code class="sig-name descname">show_pipeline</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">subgraph</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">pipeline_name</span><span class="o">=</span><span class="default_value">None</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pipeline.PipelineManager.show_pipeline" title="Permalink to this definition">¶</a></dt>
+<dd><p>If a pipeline name is specified query the database, otherwise show the current pipeline.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt id="auspex.qubit.pipeline.check_session_dirty">
+<code class="sig-prename descclassname">auspex.qubit.pipeline.</code><code class="sig-name descname">check_session_dirty</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">f</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pipeline.check_session_dirty" title="Permalink to this definition">¶</a></dt>
+<dd><p>Since we can’t mix db objects from separate sessions, re-fetch entities by their unique IDs</p>
+</dd></dl>
+
+</div>
+<div class="section" id="module-auspex.qubit.qubit_exp">
+<span id="auspex-qubit-qubit-exp-module"></span><h2>auspex.qubit.qubit_exp module<a class="headerlink" href="#module-auspex.qubit.qubit_exp" title="Permalink to this headline">¶</a></h2>
+<dl class="py class">
+<dt id="auspex.qubit.qubit_exp.QubitExperiment">
+<em class="property">class </em><code class="sig-prename descclassname">auspex.qubit.qubit_exp.</code><code class="sig-name descname">QubitExperiment</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">meta_file</span></em>, <em class="sig-param"><span class="n">averages</span><span class="o">=</span><span class="default_value">100</span></em>, <em class="sig-param"><span class="n">exp_name</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">save_chandb</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="o">**</span><span class="n">kwargs</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.qubit_exp.QubitExperiment" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create an <cite>Experiment</cite> with specialized config and run methods for qubit experiments.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>meta_file</strong> (<em>string</em>) – The filename of the QGL metainfo (<a href="#id1"><span class="problematic" id="id2">*</span></a>.json) corresponding to the desired
+experiment.</p></li>
+<li><p><strong>averages</strong> (<em>int</em>) – The number of shots to take. Results are only actually averaged
+if an <cite>Averager</cite> node is present in the processing pipeline.</p></li>
+<li><p><strong>exp_name</strong> (<em>string</em>) – Name of experiment. Used by any writers in pipeline to pick a data container name.</p></li>
+<li><p><strong>kwargs</strong> – Additional keyword arguments passed to the base Auspex <cite>Experiment</cite>
+class.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><dl class="simple">
+<dt>experiment instance (<cite>Experiment</cite>)</dt><dd><p>Returns the initialized Auspex <cite>Experiment</cite>.</p>
+</dd>
+</dl>
+</p>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<p>Creating a simple experiment.</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">mf</span> <span class="o">=</span> <span class="n">RabiAmp</span><span class="p">(</span><span class="n">q1</span><span class="p">,</span> <span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">exp</span> <span class="o">=</span> <span class="n">QubitExperiment</span><span class="p">(</span><span class="n">mf</span><span class="p">,</span> <span class="n">averages</span><span class="o">=</span><span class="mi">500</span><span class="p">)</span>
+</pre></div>
+</div>
+<dl class="py method">
+<dt id="auspex.qubit.qubit_exp.QubitExperiment.add_avg_sweep">
+<code class="sig-name descname">add_avg_sweep</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">num_averages</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.qubit_exp.QubitExperiment.add_avg_sweep" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.qubit_exp.QubitExperiment.add_connector">
+<code class="sig-name descname">add_connector</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">stream_selector</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.qubit_exp.QubitExperiment.add_connector" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.qubit_exp.QubitExperiment.add_instrument_sweep">
+<code class="sig-name descname">add_instrument_sweep</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">instrument_name</span></em>, <em class="sig-param"><span class="n">attribute</span></em>, <em class="sig-param"><span class="n">values</span></em>, <em class="sig-param"><span class="n">channel</span><span class="o">=</span><span class="default_value">None</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.qubit_exp.QubitExperiment.add_instrument_sweep" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.qubit_exp.QubitExperiment.add_manual_sweep">
+<code class="sig-name descname">add_manual_sweep</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">label</span></em>, <em class="sig-param"><span class="n">prompt</span></em>, <em class="sig-param"><span class="n">values</span></em>, <em class="sig-param"><span class="n">channel</span><span class="o">=</span><span class="default_value">None</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.qubit_exp.QubitExperiment.add_manual_sweep" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.qubit_exp.QubitExperiment.add_qubit_sweep">
+<code class="sig-name descname">add_qubit_sweep</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">qubit</span></em>, <em class="sig-param"><span class="n">measure_or_control</span></em>, <em class="sig-param"><span class="n">attribute</span></em>, <em class="sig-param"><span class="n">values</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.qubit_exp.QubitExperiment.add_qubit_sweep" title="Permalink to this definition">¶</a></dt>
+<dd><p>Add a <em>ParameterSweep</em> to the experiment. Users specify a qubit property that auspex
+will try to link back to the relevant instrument. For example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">exp</span> <span class="o">=</span> <span class="n">QubitExpFactory</span><span class="o">.</span><span class="n">create</span><span class="p">(</span><span class="n">PulsedSpec</span><span class="p">(</span><span class="n">q1</span><span class="p">))</span>
+<span class="bp">self</span><span class="o">.</span><span class="n">add_qubit_sweep</span><span class="p">(</span><span class="n">q1</span><span class="p">,</span> <span class="s2">&quot;measure&quot;</span><span class="p">,</span> <span class="s2">&quot;frequency&quot;</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mf">6e9</span><span class="p">,</span> <span class="mf">6.5e9</span><span class="p">,</span> <span class="mi">500</span><span class="p">))</span>
+<span class="bp">self</span><span class="o">.</span><span class="n">run_sweeps</span><span class="p">()</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.qubit_exp.QubitExperiment.clear_fake_data">
+<code class="sig-name descname">clear_fake_data</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">digitizer_proxy</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.qubit_exp.QubitExperiment.clear_fake_data" title="Permalink to this definition">¶</a></dt>
+<dd><p>Disable using fake data interface for a digitizer. Take note that dummy mode may
+still be active.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>digitizer_proxy</strong> (bbndb <cite>Receiver</cite> instance) – The digitizer instrument proxy to be used for fake data generation.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.qubit_exp.QubitExperiment.create_from_meta">
+<code class="sig-name descname">create_from_meta</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">meta_file</span></em>, <em class="sig-param"><span class="n">averages</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.qubit_exp.QubitExperiment.create_from_meta" title="Permalink to this definition">¶</a></dt>
+<dd><p>Method called during creation. Implementing a subclass of <cite>QubitExperiment</cite> this method
+may be overridden to provide additional functionality. However, this is a complex method, and
+it is recommended that the user instead override the <cite>modify_graph</cite> method to provide
+custom subclass behavior.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.qubit_exp.QubitExperiment.final_init">
+<code class="sig-name descname">final_init</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.qubit_exp.QubitExperiment.final_init" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.qubit_exp.QubitExperiment.init_instruments">
+<code class="sig-name descname">init_instruments</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.qubit_exp.QubitExperiment.init_instruments" title="Permalink to this definition">¶</a></dt>
+<dd><p>Gets run before a sweep starts</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.qubit_exp.QubitExperiment.init_progress_bars">
+<code class="sig-name descname">init_progress_bars</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.qubit_exp.QubitExperiment.init_progress_bars" title="Permalink to this definition">¶</a></dt>
+<dd><p>initialize the progress bars.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.qubit_exp.QubitExperiment.instantiate_filters">
+<code class="sig-name descname">instantiate_filters</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">graph</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.qubit_exp.QubitExperiment.instantiate_filters" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.qubit_exp.QubitExperiment.is_in_measured_qubit_names">
+<code class="sig-name descname">is_in_measured_qubit_names</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">qubit_name</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.qubit_exp.QubitExperiment.is_in_measured_qubit_names" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.qubit_exp.QubitExperiment.modify_graph">
+<code class="sig-name descname">modify_graph</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">graph</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.qubit_exp.QubitExperiment.modify_graph" title="Permalink to this definition">¶</a></dt>
+<dd><p>Method called near the end of <cite>create_from_meta</cite> to allow custom manipulation of the filter
+pipeline. For example, <cite>CalibrationExperiment</cite> implements a version of <cite>modify_graph</cite> that
+selectively removes portions of the graph and creates buffers as needed to perform the desired
+calibrations on specific qubits.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.qubit_exp.QubitExperiment.run">
+<code class="sig-name descname">run</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.qubit_exp.QubitExperiment.run" title="Permalink to this definition">¶</a></dt>
+<dd><p>This is the inner measurement loop, which is the smallest unit that
+is repeated across various sweep variables. For more complicated run control
+than can be provided by the automatic sweeping, the full experimental
+operation should be defined here</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.qubit_exp.QubitExperiment.set_fake_data">
+<code class="sig-name descname">set_fake_data</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">digitizer_proxy</span></em>, <em class="sig-param"><span class="n">ideal_data</span></em>, <em class="sig-param"><span class="n">increment</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">random_mag</span><span class="o">=</span><span class="default_value">0.1</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.qubit_exp.QubitExperiment.set_fake_data" title="Permalink to this definition">¶</a></dt>
+<dd><p>Enabled and use the fake data interface for digitizers in order that auspex can
+be run without hardware.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>digitizer_proxy</strong> (bbndb <cite>Receiver</cite> instance) – The digitizer instrument proxy to be used for fake data generation.</p></li>
+<li><p><strong>ideal_data</strong> (<em>numpy array</em>) – The actual data to be used. If <cite>increment</cite> is False, a 1D array with a single value
+per segment is used. The digitizer drivers automatical convert to a integrated, demodulated,
+or raw signal depending on the stream type being used. If <cite>increment</cite> is True, then this may be a
+2D array, which is incremented through to emulate sweeps such a qubit measurement frequency sweep.</p></li>
+<li><p><strong>increment</strong> (<em>boolean</em>) – Whether or not to step through a 2D data array after to incorporate extra sweeps. The behavior is
+defined above.</p></li>
+</ul>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<p>Make sure to set auspex dummy mode at import time.</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">auspex.config</span> <span class="k">as</span> <span class="nn">config</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">config</span><span class="o">.</span><span class="n">auspex_dummy_mode</span> <span class="o">=</span> <span class="kc">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="c1"># Configure channels and pipelines here</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">amps</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">51</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">exp</span> <span class="o">=</span> <span class="n">QubitExperiment</span><span class="p">(</span><span class="n">RabiAmp</span><span class="p">(</span><span class="n">q1</span><span class="p">,</span><span class="n">amps</span><span class="p">),</span><span class="n">averages</span><span class="o">=</span><span class="mi">50</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">exp</span><span class="o">.</span><span class="n">set_fake_data</span><span class="p">(</span><span class="n">digitizer_1</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="o">*</span><span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="p">,</span><span class="mi">51</span><span class="p">)))</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">exp</span><span class="o">.</span><span class="n">run_sweeps</span><span class="p">()</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.qubit_exp.QubitExperiment.shutdown_instruments">
+<code class="sig-name descname">shutdown_instruments</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.qubit_exp.QubitExperiment.shutdown_instruments" title="Permalink to this definition">¶</a></dt>
+<dd><p>Gets run after a sweep ends, or when the program is terminated.</p>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="module-auspex.qubit.mixer_calibration">
+<span id="auspex-qubit-mixer-calibration-module"></span><h2>auspex.qubit.mixer_calibration module<a class="headerlink" href="#module-auspex.qubit.mixer_calibration" title="Permalink to this headline">¶</a></h2>
+<dl class="py class">
+<dt id="auspex.qubit.mixer_calibration.MixerCalibration">
+<em class="property">class </em><code class="sig-prename descclassname">auspex.qubit.mixer_calibration.</code><code class="sig-name descname">MixerCalibration</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">channel</span></em>, <em class="sig-param"><span class="n">spectrum_analyzer</span></em>, <em class="sig-param"><span class="n">mixer</span><span class="o">=</span><span class="default_value">'control'</span></em>, <em class="sig-param"><span class="n">first_cal</span><span class="o">=</span><span class="default_value">'phase'</span></em>, <em class="sig-param"><span class="n">offset_range</span><span class="o">=</span><span class="default_value">- 0.2, 0.2</span></em>, <em class="sig-param"><span class="n">amp_range</span><span class="o">=</span><span class="default_value">0.4, 0.8</span></em>, <em class="sig-param"><span class="n">phase_range</span><span class="o">=</span><span class="default_value">- 1.5707963267948966, 1.5707963267948966</span></em>, <em class="sig-param"><span class="n">nsteps</span><span class="o">=</span><span class="default_value">101</span></em>, <em class="sig-param"><span class="n">use_fit</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">plot</span><span class="o">=</span><span class="default_value">True</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.mixer_calibration.MixerCalibration" title="Permalink to this definition">¶</a></dt>
+<dd><p>A calibration experiment that determines the optimal I and Q offsets, amplitude imbalance and phase imbalance
+for single-sideband modulation of  a mixer. Please see Analog Devices Application Note AN-1039 for an explanation
+of the optimization of a mixer for maximum sideband supression.</p>
+<dl class="py attribute">
+<dt id="auspex.qubit.mixer_calibration.MixerCalibration.MAX_AMPLITUDE">
+<code class="sig-name descname">MAX_AMPLITUDE</code><em class="property"> = 1.5</em><a class="headerlink" href="#auspex.qubit.mixer_calibration.MixerCalibration.MAX_AMPLITUDE" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt id="auspex.qubit.mixer_calibration.MixerCalibration.MAX_OFFSET">
+<code class="sig-name descname">MAX_OFFSET</code><em class="property"> = 0.4</em><a class="headerlink" href="#auspex.qubit.mixer_calibration.MixerCalibration.MAX_OFFSET" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt id="auspex.qubit.mixer_calibration.MixerCalibration.MAX_PHASE">
+<code class="sig-name descname">MAX_PHASE</code><em class="property"> = 0.3</em><a class="headerlink" href="#auspex.qubit.mixer_calibration.MixerCalibration.MAX_PHASE" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt id="auspex.qubit.mixer_calibration.MixerCalibration.MIN_AMPLITUDE">
+<code class="sig-name descname">MIN_AMPLITUDE</code><em class="property"> = 0.2</em><a class="headerlink" href="#auspex.qubit.mixer_calibration.MixerCalibration.MIN_AMPLITUDE" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt id="auspex.qubit.mixer_calibration.MixerCalibration.MIN_OFFSET">
+<code class="sig-name descname">MIN_OFFSET</code><em class="property"> = -0.4</em><a class="headerlink" href="#auspex.qubit.mixer_calibration.MixerCalibration.MIN_OFFSET" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt id="auspex.qubit.mixer_calibration.MixerCalibration.MIN_PHASE">
+<code class="sig-name descname">MIN_PHASE</code><em class="property"> = -0.3</em><a class="headerlink" href="#auspex.qubit.mixer_calibration.MixerCalibration.MIN_PHASE" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.mixer_calibration.MixerCalibration.init_plots">
+<code class="sig-name descname">init_plots</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.mixer_calibration.MixerCalibration.init_plots" title="Permalink to this definition">¶</a></dt>
+<dd><p>Initialize manual plotters for the mixer calibration. Three plot tabs open, one for I,Q offset, one for
+phase skew, one for amplitude imbalance.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.mixer_calibration.MixerCalibration.run_sweeps">
+<code class="sig-name descname">run_sweeps</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">sweep_parameter</span></em>, <em class="sig-param"><span class="n">pts</span></em>, <em class="sig-param"><span class="n">config_dict</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.mixer_calibration.MixerCalibration.run_sweeps" title="Permalink to this definition">¶</a></dt>
+<dd><p>Run the calibration sweeps.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.mixer_calibration.MixerCalibration.update_settings">
+<code class="sig-name descname">update_settings</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.mixer_calibration.MixerCalibration.update_settings" title="Permalink to this definition">¶</a></dt>
+<dd><p>Update the channel library settings to those found by calibration routine.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="auspex.qubit.mixer_calibration.MixerCalibrationExperiment">
+<em class="property">class </em><code class="sig-prename descclassname">auspex.qubit.mixer_calibration.</code><code class="sig-name descname">MixerCalibrationExperiment</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">channel</span></em>, <em class="sig-param"><span class="n">spectrum_analyzer</span></em>, <em class="sig-param"><span class="n">config_dict</span></em>, <em class="sig-param"><span class="n">mixer</span><span class="o">=</span><span class="default_value">'control'</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.mixer_calibration.MixerCalibrationExperiment" title="Permalink to this definition">¶</a></dt>
+<dd><p>A mixer calibration experiment, using an APS1 or APS2 unit to calibrate the mixer offsets. Pulls sideband
+modulation frequency (IF) and LO frequency from the channel library.</p>
+<dl class="py attribute">
+<dt id="auspex.qubit.mixer_calibration.MixerCalibrationExperiment.I_offset">
+<code class="sig-name descname">I_offset</code><em class="property"> = &lt;FloatParameter(name='I_offset',value=0.0,unit='V')&gt;</em><a class="headerlink" href="#auspex.qubit.mixer_calibration.MixerCalibrationExperiment.I_offset" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt id="auspex.qubit.mixer_calibration.MixerCalibrationExperiment.Q_offset">
+<code class="sig-name descname">Q_offset</code><em class="property"> = &lt;FloatParameter(name='Q_offset',value=0.0,unit='V')&gt;</em><a class="headerlink" href="#auspex.qubit.mixer_calibration.MixerCalibrationExperiment.Q_offset" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt id="auspex.qubit.mixer_calibration.MixerCalibrationExperiment.SSB_FREQ">
+<code class="sig-name descname">SSB_FREQ</code><em class="property"> = 10000000.0</em><a class="headerlink" href="#auspex.qubit.mixer_calibration.MixerCalibrationExperiment.SSB_FREQ" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt id="auspex.qubit.mixer_calibration.MixerCalibrationExperiment.amplitude">
+<code class="sig-name descname">amplitude</code><em class="property"> = &lt;OutputConnector(name=)&gt;</em><a class="headerlink" href="#auspex.qubit.mixer_calibration.MixerCalibrationExperiment.amplitude" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt id="auspex.qubit.mixer_calibration.MixerCalibrationExperiment.amplitude_factor">
+<code class="sig-name descname">amplitude_factor</code><em class="property"> = &lt;FloatParameter(name='amplitude_factor',value=1.0)&gt;</em><a class="headerlink" href="#auspex.qubit.mixer_calibration.MixerCalibrationExperiment.amplitude_factor" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.mixer_calibration.MixerCalibrationExperiment.connect_instruments">
+<code class="sig-name descname">connect_instruments</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.mixer_calibration.MixerCalibrationExperiment.connect_instruments" title="Permalink to this definition">¶</a></dt>
+<dd><p>Connect instruments, resetting all mixer offsets to default values.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.mixer_calibration.MixerCalibrationExperiment.init_instruments">
+<code class="sig-name descname">init_instruments</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.mixer_calibration.MixerCalibrationExperiment.init_instruments" title="Permalink to this definition">¶</a></dt>
+<dd><p>Initialize instruments for mixer calibration.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.mixer_calibration.MixerCalibrationExperiment.init_streams">
+<code class="sig-name descname">init_streams</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.mixer_calibration.MixerCalibrationExperiment.init_streams" title="Permalink to this definition">¶</a></dt>
+<dd><p>Establish the base descriptors for any internal data streams and connectors.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="auspex.qubit.mixer_calibration.MixerCalibrationExperiment.phase_skew">
+<code class="sig-name descname">phase_skew</code><em class="property"> = &lt;FloatParameter(name='phase_skew',value=0.0,unit='rad')&gt;</em><a class="headerlink" href="#auspex.qubit.mixer_calibration.MixerCalibrationExperiment.phase_skew" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.mixer_calibration.MixerCalibrationExperiment.reset_calibration">
+<code class="sig-name descname">reset_calibration</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.mixer_calibration.MixerCalibrationExperiment.reset_calibration" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set calibration back to default values.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.mixer_calibration.MixerCalibrationExperiment.run">
+<code class="sig-name descname">run</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.mixer_calibration.MixerCalibrationExperiment.run" title="Permalink to this definition">¶</a></dt>
+<dd><p>This is the inner measurement loop, which is the smallest unit that
+is repeated across various sweep variables. For more complicated run control
+than can be provided by the automatic sweeping, the full experimental
+operation should be defined here</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.mixer_calibration.MixerCalibrationExperiment.shutdown_instruments">
+<code class="sig-name descname">shutdown_instruments</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.mixer_calibration.MixerCalibrationExperiment.shutdown_instruments" title="Permalink to this definition">¶</a></dt>
+<dd><p>Gets run after a sweep ends, or when the program is terminated.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="auspex.qubit.mixer_calibration.MixerCalibrationExperiment.sideband_modulation">
+<code class="sig-name descname">sideband_modulation</code><em class="property"> = True</em><a class="headerlink" href="#auspex.qubit.mixer_calibration.MixerCalibrationExperiment.sideband_modulation" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt id="auspex.qubit.mixer_calibration.find_null_offset">
+<code class="sig-prename descclassname">auspex.qubit.mixer_calibration.</code><code class="sig-name descname">find_null_offset</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">xpts</span></em>, <em class="sig-param"><span class="n">powers</span></em>, <em class="sig-param"><span class="n">default</span><span class="o">=</span><span class="default_value">0.0</span></em>, <em class="sig-param"><span class="n">use_fit</span><span class="o">=</span><span class="default_value">True</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.mixer_calibration.find_null_offset" title="Permalink to this definition">¶</a></dt>
+<dd><p>Finds the offset corresponding to minimum power in a mixer calibration. Optionally will fit a quadratic to the
+linearized power and use the minimum of the fit to set the offset.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>xpts</strong> (<em>numpy.ndarray</em>) – Swept axis.</p></li>
+<li><p><strong>powers</strong> (<em>numpy.ndarray</em>) – Measured powers, in logarithmic scale.</p></li>
+<li><p><strong>default</strong> (<em>float</em><em>, </em><em>optional</em>) – Value to return if fit fails. Defaults to 0.0.</p></li>
+<li><p><strong>use_fit</strong> (<em>bool</em><em>, </em><em>optional</em>) – If true, use a fit to data. If false, return minimum value of data. Defaults to True.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>A tuple containing the offset with minumum power, a finer x points array, and the fit points.</p>
+</dd>
+</dl>
+</dd></dl>
+
+</div>
+<div class="section" id="module-auspex.qubit.pulse_calibration">
+<span id="auspex-qubit-pulse-calibration-module"></span><h2>auspex.qubit.pulse_calibration module<a class="headerlink" href="#module-auspex.qubit.pulse_calibration" title="Permalink to this headline">¶</a></h2>
+<dl class="py class">
+<dt id="auspex.qubit.pulse_calibration.CLEARCalibration">
+<em class="property">class </em><code class="sig-prename descclassname">auspex.qubit.pulse_calibration.</code><code class="sig-name descname">CLEARCalibration</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">qubit</span></em>, <em class="sig-param"><span class="n">kappa</span><span class="o">=</span><span class="default_value">12566370.614359172</span></em>, <em class="sig-param"><span class="n">chi</span><span class="o">=</span><span class="default_value">- 6283185.307179586</span></em>, <em class="sig-param"><span class="n">t_empty</span><span class="o">=</span><span class="default_value">4e-07</span></em>, <em class="sig-param"><span class="n">ramsey_delays</span><span class="o">=</span><span class="default_value">array([0.0, 4e-08, 8e-08, 1.2e-07, 1.6e-07, 2e-07, 2.4e-07, 2.8e-07, 3.2e-07, 3.6e-07, 4e-07, 4.4e-07, 4.8e-07, 5.2e-07, 5.6e-07, 6e-07, 6.4e-07, 6.8e-07, 7.2e-07, 7.6e-07, 8e-07, 8.4e-07, 8.8e-07, 9.2e-07, 9.6e-07, 1e-06, 1.04e-06, 1.08e-06, 1.12e-06, 1.16e-06, 1.2e-06, 1.24e-06, 1.28e-06, 1.32e-06, 1.36e-06, 1.4e-06, 1.44e-06, 1.48e-06, 1.52e-06, 1.56e-06, 1.6e-06, 1.64e-06, 1.68e-06, 1.72e-06, 1.76e-06, 1.8e-06, 1.84e-06, 1.88e-06, 1.92e-06, 1.96e-06, 2e-06])</span></em>, <em class="sig-param"><span class="n">ramsey_freq</span><span class="o">=</span><span class="default_value">2000000.0</span></em>, <em class="sig-param"><span class="n">meas_delay</span><span class="o">=</span><span class="default_value">0</span></em>, <em class="sig-param"><span class="n">preramsey_delay</span><span class="o">=</span><span class="default_value">0</span></em>, <em class="sig-param"><span class="n">alpha</span><span class="o">=</span><span class="default_value">1</span></em>, <em class="sig-param"><span class="n">T1factor</span><span class="o">=</span><span class="default_value">1</span></em>, <em class="sig-param"><span class="n">T2</span><span class="o">=</span><span class="default_value">3e-05</span></em>, <em class="sig-param"><span class="n">nsteps</span><span class="o">=</span><span class="default_value">5</span></em>, <em class="sig-param"><span class="n">eps1</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">eps2</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">cal_steps</span><span class="o">=</span><span class="default_value">1, 1, 1</span></em>, <em class="sig-param"><span class="o">**</span><span class="n">kwargs</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.CLEARCalibration" title="Permalink to this definition">¶</a></dt>
+<dd><p>Calibration of cavity reset pulse.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>kappa</strong> – Cavity linewith (angular frequency: 1/s).</p></li>
+<li><p><strong>chi</strong> – Half of the dispersive shift (anguler frequency: 1/s).</p></li>
+<li><p><strong>t_empty</strong> – Time for active depletion (s).</p></li>
+<li><p><strong>alpha</strong> – Scaling factor.</p></li>
+<li><p><strong>T1factor</strong> – decay due to T1 between end of measurement and start of Ramsey.</p></li>
+<li><p><strong>T2</strong> – Measured T2*</p></li>
+<li><p><strong>nsteps</strong> – number of calibration steps</p></li>
+<li><p><strong>ramsey_delays</strong> – List of times to use for Ramsey experiment.</p></li>
+<li><p><strong>ramsey_freq</strong> – Ramsey offset frequency.</p></li>
+<li><p><strong>meas_delay</strong> – Delay after end of measurement pulse</p></li>
+<li><p><strong>preramsey_delay</strong> – Delay before start of Ramsey sequence.</p></li>
+<li><p><strong>eps1</strong> – 1st CLEAR parameter. if set to <cite>None</cite> will use theory values as default for eps1 and eps2.</p></li>
+<li><p><strong>eps2</strong> – 2nd CLEAR parameter.</p></li>
+<li><p><strong>cal_steps</strong> (<em>bool</em><em>, </em><em>bool</em><em>, </em><em>bool</em>) – Calibration steps to execute. Currently, the first step sweeps eps1,</p></li>
+<li><p><strong>second eps2</strong> (<em>the</em>) – </p></li>
+<li><p><strong>the third eps1 again in a smaller range.</strong> (<em>and</em>) – </p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt id="auspex.qubit.pulse_calibration.CLEARCalibration.descriptor">
+<code class="sig-name descname">descriptor</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.CLEARCalibration.descriptor" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.pulse_calibration.CLEARCalibration.init_plots">
+<code class="sig-name descname">init_plots</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.CLEARCalibration.init_plots" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return a ManualPlotter object so we can plot calibrations. All
+plot lines, glyphs, etc. must be declared up front!</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.pulse_calibration.CLEARCalibration.sequence">
+<code class="sig-name descname">sequence</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.CLEARCalibration.sequence" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the sequence for the given calibration, must be overridden</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.pulse_calibration.CLEARCalibration.update_settings">
+<code class="sig-name descname">update_settings</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.CLEARCalibration.update_settings" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="auspex.qubit.pulse_calibration.CRAmpCalibration">
+<em class="property">class </em><code class="sig-prename descclassname">auspex.qubit.pulse_calibration.</code><code class="sig-name descname">CRAmpCalibration</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">edge</span></em>, <em class="sig-param"><span class="n">amp_range</span><span class="o">=</span><span class="default_value">0.4</span></em>, <em class="sig-param"><span class="n">amp</span><span class="o">=</span><span class="default_value">0.8</span></em>, <em class="sig-param"><span class="n">rise_fall</span><span class="o">=</span><span class="default_value">4e-08</span></em>, <em class="sig-param"><span class="n">num_CR</span><span class="o">=</span><span class="default_value">1</span></em>, <em class="sig-param"><span class="o">**</span><span class="n">kwargs</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.CRAmpCalibration" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="py attribute">
+<dt id="auspex.qubit.pulse_calibration.CRAmpCalibration.cal_type">
+<code class="sig-name descname">cal_type</code><em class="property"> = 3</em><a class="headerlink" href="#auspex.qubit.pulse_calibration.CRAmpCalibration.cal_type" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.pulse_calibration.CRAmpCalibration.descriptor">
+<code class="sig-name descname">descriptor</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.CRAmpCalibration.descriptor" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.pulse_calibration.CRAmpCalibration.sequence">
+<code class="sig-name descname">sequence</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.CRAmpCalibration.sequence" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the sequence for the given calibration, must be overridden</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="auspex.qubit.pulse_calibration.CRAmpCalibration_PhEst">
+<em class="property">class </em><code class="sig-prename descclassname">auspex.qubit.pulse_calibration.</code><code class="sig-name descname">CRAmpCalibration_PhEst</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">edge</span></em>, <em class="sig-param"><span class="n">num_pulses</span><span class="o">=</span><span class="default_value">5</span></em>, <em class="sig-param"><span class="o">**</span><span class="n">kwargs</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.CRAmpCalibration_PhEst" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="py method">
+<dt id="auspex.qubit.pulse_calibration.CRAmpCalibration_PhEst.update_settings">
+<code class="sig-name descname">update_settings</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.CRAmpCalibration_PhEst.update_settings" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="auspex.qubit.pulse_calibration.CRCalibration">
+<em class="property">class </em><code class="sig-prename descclassname">auspex.qubit.pulse_calibration.</code><code class="sig-name descname">CRCalibration</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">edge</span></em>, <em class="sig-param"><span class="n">lengths</span><span class="o">=</span><span class="default_value">array([2e-08, 7e-08, 1.2e-07, 1.7e-07, 2.2e-07, 2.7e-07, 3.2e-07, 3.7e-07, 4.2e-07, 4.7e-07, 5.2e-07, 5.7e-07, 6.2e-07, 6.7e-07, 7.2e-07, 7.7e-07, 8.2e-07, 8.7e-07, 9.2e-07, 9.7e-07, 1.02e-06])</span></em>, <em class="sig-param"><span class="n">phases</span><span class="o">=</span><span class="default_value">[0]</span></em>, <em class="sig-param"><span class="n">amps</span><span class="o">=</span><span class="default_value">[0.8]</span></em>, <em class="sig-param"><span class="n">rise_fall</span><span class="o">=</span><span class="default_value">4e-08</span></em>, <em class="sig-param"><span class="n">meas_qubits</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="o">**</span><span class="n">kwargs</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.CRCalibration" title="Permalink to this definition">¶</a></dt>
+<dd><p>Template for CR calibrations. Currently available steps: length, phase, amplitude</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>edge</strong> – Edge in the channel library defining the connection between control and target qubit</p></li>
+<li><p><strong>lengths</strong> (<em>array</em>) – CR pulse length(s). Longer than 1 for CRLenCalibration</p></li>
+<li><p><strong>phases</strong> (<em>array</em>) – CR pulse phase(s). Longer than 1 for CRPhaseCalibration</p></li>
+<li><p><strong>amps</strong> (<em>array</em>) – CR pulse amp(s). Longer than 1 for CRAmpCalibration</p></li>
+<li><p><strong>rise_fall</strong> (<em>float</em>) – length of rise/fall of CR pulses</p></li>
+<li><p><strong>meas_qubits</strong> (<em>list</em>) – specifies a subset of qubits to be measured (both by default)</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt id="auspex.qubit.pulse_calibration.CRCalibration.init_plots">
+<code class="sig-name descname">init_plots</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.CRCalibration.init_plots" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return a ManualPlotter object so we can plot calibrations. All
+plot lines, glyphs, etc. must be declared up front!</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.pulse_calibration.CRCalibration.update_settings">
+<code class="sig-name descname">update_settings</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.CRCalibration.update_settings" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="auspex.qubit.pulse_calibration.CRLenCalibration">
+<em class="property">class </em><code class="sig-prename descclassname">auspex.qubit.pulse_calibration.</code><code class="sig-name descname">CRLenCalibration</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">edge</span></em>, <em class="sig-param"><span class="n">lengths</span><span class="o">=</span><span class="default_value">array([2e-08, 7e-08, 1.2e-07, 1.7e-07, 2.2e-07, 2.7e-07, 3.2e-07, 3.7e-07, 4.2e-07, 4.7e-07, 5.2e-07, 5.7e-07, 6.2e-07, 6.7e-07, 7.2e-07, 7.7e-07, 8.2e-07, 8.7e-07, 9.2e-07, 9.7e-07, 1.02e-06])</span></em>, <em class="sig-param"><span class="n">phase</span><span class="o">=</span><span class="default_value">0</span></em>, <em class="sig-param"><span class="n">amp</span><span class="o">=</span><span class="default_value">0.8</span></em>, <em class="sig-param"><span class="n">rise_fall</span><span class="o">=</span><span class="default_value">4e-08</span></em>, <em class="sig-param"><span class="n">meas_qubits</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="o">**</span><span class="n">kwargs</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.CRLenCalibration" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="py attribute">
+<dt id="auspex.qubit.pulse_calibration.CRLenCalibration.cal_type">
+<code class="sig-name descname">cal_type</code><em class="property"> = 1</em><a class="headerlink" href="#auspex.qubit.pulse_calibration.CRLenCalibration.cal_type" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.pulse_calibration.CRLenCalibration.descriptor">
+<code class="sig-name descname">descriptor</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.CRLenCalibration.descriptor" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.pulse_calibration.CRLenCalibration.sequence">
+<code class="sig-name descname">sequence</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.CRLenCalibration.sequence" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the sequence for the given calibration, must be overridden</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="auspex.qubit.pulse_calibration.CRPhaseCalibration">
+<em class="property">class </em><code class="sig-prename descclassname">auspex.qubit.pulse_calibration.</code><code class="sig-name descname">CRPhaseCalibration</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">edge</span></em>, <em class="sig-param"><span class="n">length</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">phases</span><span class="o">=</span><span class="default_value">array([0.0, 0.31415927, 0.62831853, 0.9424778, 1.25663706, 1.57079633, 1.88495559, 2.19911486, 2.51327412, 2.82743339, 3.14159265, 3.45575192, 3.76991118, 4.08407045, 4.39822972, 4.71238898, 5.02654825, 5.34070751, 5.65486678, 5.96902604, 6.28318531])</span></em>, <em class="sig-param"><span class="n">amp</span><span class="o">=</span><span class="default_value">0.8</span></em>, <em class="sig-param"><span class="n">rise_fall</span><span class="o">=</span><span class="default_value">4e-08</span></em>, <em class="sig-param"><span class="o">**</span><span class="n">kwargs</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.CRPhaseCalibration" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="py attribute">
+<dt id="auspex.qubit.pulse_calibration.CRPhaseCalibration.cal_type">
+<code class="sig-name descname">cal_type</code><em class="property"> = 2</em><a class="headerlink" href="#auspex.qubit.pulse_calibration.CRPhaseCalibration.cal_type" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.pulse_calibration.CRPhaseCalibration.descriptor">
+<code class="sig-name descname">descriptor</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.CRPhaseCalibration.descriptor" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.pulse_calibration.CRPhaseCalibration.sequence">
+<code class="sig-name descname">sequence</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.CRPhaseCalibration.sequence" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the sequence for the given calibration, must be overridden</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="auspex.qubit.pulse_calibration.Calibration">
+<em class="property">class </em><code class="sig-prename descclassname">auspex.qubit.pulse_calibration.</code><code class="sig-name descname">Calibration</code><a class="headerlink" href="#auspex.qubit.pulse_calibration.Calibration" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="py method">
+<dt id="auspex.qubit.pulse_calibration.Calibration.calibrate">
+<code class="sig-name descname">calibrate</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.Calibration.calibrate" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.pulse_calibration.Calibration.descriptor">
+<code class="sig-name descname">descriptor</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.Calibration.descriptor" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.pulse_calibration.Calibration.exp_config">
+<code class="sig-name descname">exp_config</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">exp</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.Calibration.exp_config" title="Permalink to this definition">¶</a></dt>
+<dd><p>Any final experiment configuration before it gets run.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.pulse_calibration.Calibration.init_plots">
+<code class="sig-name descname">init_plots</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.Calibration.init_plots" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return a ManualPlotter object so we can plot calibrations. All
+plot lines, glyphs, etc. must be declared up front!</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.pulse_calibration.Calibration.start_plots">
+<code class="sig-name descname">start_plots</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.Calibration.start_plots" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.pulse_calibration.Calibration.stop_plots">
+<code class="sig-name descname">stop_plots</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.Calibration.stop_plots" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.pulse_calibration.Calibration.update_settings">
+<code class="sig-name descname">update_settings</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.Calibration.update_settings" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="auspex.qubit.pulse_calibration.CalibrationExperiment">
+<em class="property">class </em><code class="sig-prename descclassname">auspex.qubit.pulse_calibration.</code><code class="sig-name descname">CalibrationExperiment</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">qubits</span></em>, <em class="sig-param"><span class="n">output_nodes</span></em>, <em class="sig-param"><span class="n">stream_selectors</span></em>, <em class="sig-param"><span class="o">*</span><span class="n">args</span></em>, <em class="sig-param"><span class="o">**</span><span class="n">kwargs</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.CalibrationExperiment" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="py method">
+<dt id="auspex.qubit.pulse_calibration.CalibrationExperiment.add_cal_sweep">
+<code class="sig-name descname">add_cal_sweep</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">method</span></em>, <em class="sig-param"><span class="n">values</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.CalibrationExperiment.add_cal_sweep" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.pulse_calibration.CalibrationExperiment.guess_output_nodes">
+<code class="sig-name descname">guess_output_nodes</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">graph</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.CalibrationExperiment.guess_output_nodes" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.pulse_calibration.CalibrationExperiment.modify_graph">
+<code class="sig-name descname">modify_graph</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">graph</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.CalibrationExperiment.modify_graph" title="Permalink to this definition">¶</a></dt>
+<dd><p>Change the graph as needed. By default we changes all writers to buffers</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="auspex.qubit.pulse_calibration.CavityTuneup">
+<em class="property">class </em><code class="sig-prename descclassname">auspex.qubit.pulse_calibration.</code><code class="sig-name descname">CavityTuneup</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">qubit</span></em>, <em class="sig-param"><span class="n">frequencies</span></em>, <em class="sig-param"><span class="n">averages</span><span class="o">=</span><span class="default_value">750</span></em>, <em class="sig-param"><span class="o">**</span><span class="n">kwargs</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.CavityTuneup" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="py method">
+<dt id="auspex.qubit.pulse_calibration.CavityTuneup.exp_config">
+<code class="sig-name descname">exp_config</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">exp</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.CavityTuneup.exp_config" title="Permalink to this definition">¶</a></dt>
+<dd><p>Any final experiment configuration before it gets run.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.pulse_calibration.CavityTuneup.init_plots">
+<code class="sig-name descname">init_plots</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.CavityTuneup.init_plots" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return a ManualPlotter object so we can plot calibrations. All
+plot lines, glyphs, etc. must be declared up front!</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.pulse_calibration.CavityTuneup.sequence">
+<code class="sig-name descname">sequence</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.CavityTuneup.sequence" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the sequence for the given calibration, must be overridden</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="auspex.qubit.pulse_calibration.CustomCalibration">
+<em class="property">class </em><code class="sig-prename descclassname">auspex.qubit.pulse_calibration.</code><code class="sig-name descname">CustomCalibration</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">qubits</span></em>, <em class="sig-param"><span class="n">metafile</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">fit_name</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">fit_param</span><span class="o">=</span><span class="default_value">[]</span></em>, <em class="sig-param"><span class="n">set_param</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="o">**</span><span class="n">kwargs</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.CustomCalibration" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="py method">
+<dt id="auspex.qubit.pulse_calibration.CustomCalibration.update_settings">
+<code class="sig-name descname">update_settings</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.CustomCalibration.update_settings" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="auspex.qubit.pulse_calibration.DRAGCalibration">
+<em class="property">class </em><code class="sig-prename descclassname">auspex.qubit.pulse_calibration.</code><code class="sig-name descname">DRAGCalibration</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">qubit</span></em>, <em class="sig-param"><span class="n">deltas</span><span class="o">=</span><span class="default_value">array([- 1.0, - 0.9, - 0.8, - 0.7, - 0.6, - 0.5, - 0.4, - 0.3, - 0.2, - 0.1, 0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0])</span></em>, <em class="sig-param"><span class="n">num_pulses</span><span class="o">=</span><span class="default_value">array([8, 12, 16, 20, 24, 28, 32, 36, 40, 44])</span></em>, <em class="sig-param"><span class="o">**</span><span class="n">kwargs</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.DRAGCalibration" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="py method">
+<dt id="auspex.qubit.pulse_calibration.DRAGCalibration.exp_config">
+<code class="sig-name descname">exp_config</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">exp</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.DRAGCalibration.exp_config" title="Permalink to this definition">¶</a></dt>
+<dd><p>Any final experiment configuration before it gets run.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.pulse_calibration.DRAGCalibration.init_plots">
+<code class="sig-name descname">init_plots</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.DRAGCalibration.init_plots" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return a ManualPlotter object so we can plot calibrations. All
+plot lines, glyphs, etc. must be declared up front!</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.pulse_calibration.DRAGCalibration.sequence">
+<code class="sig-name descname">sequence</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.DRAGCalibration.sequence" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the sequence for the given calibration, must be overridden</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.pulse_calibration.DRAGCalibration.update_settings">
+<code class="sig-name descname">update_settings</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.DRAGCalibration.update_settings" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="auspex.qubit.pulse_calibration.PhaseEstimation">
+<em class="property">class </em><code class="sig-prename descclassname">auspex.qubit.pulse_calibration.</code><code class="sig-name descname">PhaseEstimation</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">channel</span></em>, <em class="sig-param"><span class="n">num_pulses</span><span class="o">=</span><span class="default_value">1</span></em>, <em class="sig-param"><span class="n">amplitude</span><span class="o">=</span><span class="default_value">0.1</span></em>, <em class="sig-param"><span class="n">direction</span><span class="o">=</span><span class="default_value">'X'</span></em>, <em class="sig-param"><span class="n">target</span><span class="o">=</span><span class="default_value">1.5707963267948966</span></em>, <em class="sig-param"><span class="n">epsilon</span><span class="o">=</span><span class="default_value">0.01</span></em>, <em class="sig-param"><span class="n">max_iter</span><span class="o">=</span><span class="default_value">5</span></em>, <em class="sig-param"><span class="o">**</span><span class="n">kwargs</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.PhaseEstimation" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="py attribute">
+<dt id="auspex.qubit.pulse_calibration.PhaseEstimation.amp2offset">
+<code class="sig-name descname">amp2offset</code><em class="property"> = 0.5</em><a class="headerlink" href="#auspex.qubit.pulse_calibration.PhaseEstimation.amp2offset" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.pulse_calibration.PhaseEstimation.init_plots">
+<code class="sig-name descname">init_plots</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.PhaseEstimation.init_plots" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return a ManualPlotter object so we can plot calibrations. All
+plot lines, glyphs, etc. must be declared up front!</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.pulse_calibration.PhaseEstimation.sequence">
+<code class="sig-name descname">sequence</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.PhaseEstimation.sequence" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the sequence for the given calibration, must be overridden</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.pulse_calibration.PhaseEstimation.update_settings">
+<code class="sig-name descname">update_settings</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.PhaseEstimation.update_settings" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="auspex.qubit.pulse_calibration.Pi2Calibration">
+<em class="property">class </em><code class="sig-prename descclassname">auspex.qubit.pulse_calibration.</code><code class="sig-name descname">Pi2Calibration</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">qubit</span></em>, <em class="sig-param"><span class="n">num_pulses</span><span class="o">=</span><span class="default_value">1</span></em>, <em class="sig-param"><span class="n">direction</span><span class="o">=</span><span class="default_value">'X'</span></em>, <em class="sig-param"><span class="n">epsilon</span><span class="o">=</span><span class="default_value">0.01</span></em>, <em class="sig-param"><span class="n">max_iter</span><span class="o">=</span><span class="default_value">5</span></em>, <em class="sig-param"><span class="o">**</span><span class="n">kwargs</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.Pi2Calibration" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="py method">
+<dt id="auspex.qubit.pulse_calibration.Pi2Calibration.update_settings">
+<code class="sig-name descname">update_settings</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.Pi2Calibration.update_settings" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="auspex.qubit.pulse_calibration.PiCalibration">
+<em class="property">class </em><code class="sig-prename descclassname">auspex.qubit.pulse_calibration.</code><code class="sig-name descname">PiCalibration</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">qubit</span></em>, <em class="sig-param"><span class="n">num_pulses</span><span class="o">=</span><span class="default_value">1</span></em>, <em class="sig-param"><span class="n">direction</span><span class="o">=</span><span class="default_value">'X'</span></em>, <em class="sig-param"><span class="n">epsilon</span><span class="o">=</span><span class="default_value">0.01</span></em>, <em class="sig-param"><span class="n">max_iter</span><span class="o">=</span><span class="default_value">5</span></em>, <em class="sig-param"><span class="o">**</span><span class="n">kwargs</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.PiCalibration" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="py method">
+<dt id="auspex.qubit.pulse_calibration.PiCalibration.update_settings">
+<code class="sig-name descname">update_settings</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.PiCalibration.update_settings" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="auspex.qubit.pulse_calibration.QubitCalibration">
+<em class="property">class </em><code class="sig-prename descclassname">auspex.qubit.pulse_calibration.</code><code class="sig-name descname">QubitCalibration</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">qubits</span></em>, <em class="sig-param"><span class="n">sample_name</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">output_nodes</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">stream_selectors</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">quad</span><span class="o">=</span><span class="default_value">'real'</span></em>, <em class="sig-param"><span class="n">auto_rollback</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">do_plotting</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="o">**</span><span class="n">kwargs</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.QubitCalibration" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="py attribute">
+<dt id="auspex.qubit.pulse_calibration.QubitCalibration.calibration_experiment">
+<code class="sig-name descname">calibration_experiment</code><em class="property"> = None</em><a class="headerlink" href="#auspex.qubit.pulse_calibration.QubitCalibration.calibration_experiment" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.pulse_calibration.QubitCalibration.run_sweeps">
+<code class="sig-name descname">run_sweeps</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.QubitCalibration.run_sweeps" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.pulse_calibration.QubitCalibration.sequence">
+<code class="sig-name descname">sequence</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.QubitCalibration.sequence" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the sequence for the given calibration, must be overridden</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.pulse_calibration.QubitCalibration.set_fake_data">
+<code class="sig-name descname">set_fake_data</code><span class="sig-paren">(</span><em class="sig-param"><span class="o">*</span><span class="n">args</span></em>, <em class="sig-param"><span class="o">**</span><span class="n">kwargs</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.QubitCalibration.set_fake_data" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="auspex.qubit.pulse_calibration.QubitTuneup">
+<em class="property">class </em><code class="sig-prename descclassname">auspex.qubit.pulse_calibration.</code><code class="sig-name descname">QubitTuneup</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">qubit</span></em>, <em class="sig-param"><span class="n">f_start</span><span class="o">=</span><span class="default_value">5000000000.0</span></em>, <em class="sig-param"><span class="n">f_stop</span><span class="o">=</span><span class="default_value">6000000000.0</span></em>, <em class="sig-param"><span class="n">coarse_step</span><span class="o">=</span><span class="default_value">100000000.0</span></em>, <em class="sig-param"><span class="n">fine_step</span><span class="o">=</span><span class="default_value">1000000.0</span></em>, <em class="sig-param"><span class="n">averages</span><span class="o">=</span><span class="default_value">500</span></em>, <em class="sig-param"><span class="n">amp</span><span class="o">=</span><span class="default_value">1.0</span></em>, <em class="sig-param"><span class="o">**</span><span class="n">kwargs</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.QubitTuneup" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="py method">
+<dt id="auspex.qubit.pulse_calibration.QubitTuneup.exp_config">
+<code class="sig-name descname">exp_config</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">exp</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.QubitTuneup.exp_config" title="Permalink to this definition">¶</a></dt>
+<dd><p>Any final experiment configuration before it gets run.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.pulse_calibration.QubitTuneup.init_plots">
+<code class="sig-name descname">init_plots</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.QubitTuneup.init_plots" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return a ManualPlotter object so we can plot calibrations. All
+plot lines, glyphs, etc. must be declared up front!</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.pulse_calibration.QubitTuneup.sequence">
+<code class="sig-name descname">sequence</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.QubitTuneup.sequence" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the sequence for the given calibration, must be overridden</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="auspex.qubit.pulse_calibration.RabiAmpCalibration">
+<em class="property">class </em><code class="sig-prename descclassname">auspex.qubit.pulse_calibration.</code><code class="sig-name descname">RabiAmpCalibration</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">qubit</span></em>, <em class="sig-param"><span class="n">num_steps</span><span class="o">=</span><span class="default_value">40</span></em>, <em class="sig-param"><span class="o">**</span><span class="n">kwargs</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.RabiAmpCalibration" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="py attribute">
+<dt id="auspex.qubit.pulse_calibration.RabiAmpCalibration.amp2offset">
+<code class="sig-name descname">amp2offset</code><em class="property"> = 0.5</em><a class="headerlink" href="#auspex.qubit.pulse_calibration.RabiAmpCalibration.amp2offset" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.pulse_calibration.RabiAmpCalibration.init_plots">
+<code class="sig-name descname">init_plots</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.RabiAmpCalibration.init_plots" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return a ManualPlotter object so we can plot calibrations. All
+plot lines, glyphs, etc. must be declared up front!</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.pulse_calibration.RabiAmpCalibration.sequence">
+<code class="sig-name descname">sequence</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.RabiAmpCalibration.sequence" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the sequence for the given calibration, must be overridden</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.pulse_calibration.RabiAmpCalibration.update_settings">
+<code class="sig-name descname">update_settings</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.RabiAmpCalibration.update_settings" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="auspex.qubit.pulse_calibration.RamseyCalibration">
+<em class="property">class </em><code class="sig-prename descclassname">auspex.qubit.pulse_calibration.</code><code class="sig-name descname">RamseyCalibration</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">qubit</span></em>, <em class="sig-param"><span class="n">delays</span><span class="o">=</span><span class="default_value">array([0.0, 5e-07, 1e-06, 1.5e-06, 2e-06, 2.5e-06, 3e-06, 3.5e-06, 4e-06, 4.5e-06, 5e-06, 5.5e-06, 6e-06, 6.5e-06, 7e-06, 7.5e-06, 8e-06, 8.5e-06, 9e-06, 9.5e-06, 1e-05, 1.05e-05, 1.1e-05, 1.15e-05, 1.2e-05, 1.25e-05, 1.3e-05, 1.35e-05, 1.4e-05, 1.45e-05, 1.5e-05, 1.55e-05, 1.6e-05, 1.65e-05, 1.7e-05, 1.75e-05, 1.8e-05, 1.85e-05, 1.9e-05, 1.95e-05, 2e-05])</span></em>, <em class="sig-param"><span class="n">two_freqs</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">added_detuning</span><span class="o">=</span><span class="default_value">150000.0</span></em>, <em class="sig-param"><span class="n">set_source</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">AIC</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="o">**</span><span class="n">kwargs</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.RamseyCalibration" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="py method">
+<dt id="auspex.qubit.pulse_calibration.RamseyCalibration.descriptor">
+<code class="sig-name descname">descriptor</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.RamseyCalibration.descriptor" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.pulse_calibration.RamseyCalibration.exp_config">
+<code class="sig-name descname">exp_config</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">exp</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.RamseyCalibration.exp_config" title="Permalink to this definition">¶</a></dt>
+<dd><p>Any final experiment configuration before it gets run.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.pulse_calibration.RamseyCalibration.init_plots">
+<code class="sig-name descname">init_plots</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.RamseyCalibration.init_plots" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return a ManualPlotter object so we can plot calibrations. All
+plot lines, glyphs, etc. must be declared up front!</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.pulse_calibration.RamseyCalibration.sequence">
+<code class="sig-name descname">sequence</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.RamseyCalibration.sequence" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the sequence for the given calibration, must be overridden</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.pulse_calibration.RamseyCalibration.update_settings">
+<code class="sig-name descname">update_settings</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.RamseyCalibration.update_settings" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt id="auspex.qubit.pulse_calibration.phase_estimation">
+<code class="sig-prename descclassname">auspex.qubit.pulse_calibration.</code><code class="sig-name descname">phase_estimation</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">data_in</span></em>, <em class="sig-param"><span class="n">vardata_in</span></em>, <em class="sig-param"><span class="n">verbose</span><span class="o">=</span><span class="default_value">False</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.phase_estimation" title="Permalink to this definition">¶</a></dt>
+<dd><p>Estimates pulse rotation angle from a sequence of P^k experiments, where
+k is of the form 2^n. Uses the modified phase estimation algorithm from
+Kimmel et al, quant-ph/1502.02677 (2015). Every experiment i doubled.
+vardata should be the variance of the mean</p>
+</dd></dl>
+
+<dl class="py function">
+<dt id="auspex.qubit.pulse_calibration.phase_to_amplitude">
+<code class="sig-prename descclassname">auspex.qubit.pulse_calibration.</code><code class="sig-name descname">phase_to_amplitude</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">phase</span></em>, <em class="sig-param"><span class="n">sigma</span></em>, <em class="sig-param"><span class="n">amp</span></em>, <em class="sig-param"><span class="n">target</span></em>, <em class="sig-param"><span class="n">epsilon</span><span class="o">=</span><span class="default_value">0.01</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.phase_to_amplitude" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="auspex.qubit.pulse_calibration.quick_norm_data">
+<code class="sig-prename descclassname">auspex.qubit.pulse_calibration.</code><code class="sig-name descname">quick_norm_data</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">data</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.quick_norm_data" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="auspex.qubit.pulse_calibration.restrict">
+<code class="sig-prename descclassname">auspex.qubit.pulse_calibration.</code><code class="sig-name descname">restrict</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">phase</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.restrict" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-auspex.qubit.single_shot_fidelity">
+<span id="auspex-qubit-single-shot-fidelity-module"></span><h2>auspex.qubit.single_shot_fidelity module<a class="headerlink" href="#module-auspex.qubit.single_shot_fidelity" title="Permalink to this headline">¶</a></h2>
+<dl class="py class">
+<dt id="auspex.qubit.single_shot_fidelity.SingleShotFidelityExperiment">
+<em class="property">class </em><code class="sig-prename descclassname">auspex.qubit.single_shot_fidelity.</code><code class="sig-name descname">SingleShotFidelityExperiment</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">qubit</span></em>, <em class="sig-param"><span class="n">sample_name</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">output_nodes</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">meta_file</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">optimize</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">set_threshold</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="o">**</span><span class="n">kwargs</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.single_shot_fidelity.SingleShotFidelityExperiment" title="Permalink to this definition">¶</a></dt>
+<dd><p>Experiment to measure single-shot measurement fidelity of a qubit.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>qubit</strong> – qubit object</p></li>
+<li><p><strong>output_nodes</strong> (<em>optional</em>) – the output node of the filter pipeline to use for single-shot readout. The default is choses, if single output.</p></li>
+<li><p><strong>meta_file</strong> (<em>string</em><em>, </em><em>optional</em>) – path to the QGL sequence meta_file. Default to standard SingleShot sequence</p></li>
+<li><p><strong>optimize</strong> (<em>bool</em><em>, </em><em>optional</em>) – if True and a qubit_sweep is added, set the parameter corresponding to the maximum measured fidelity at the end of the sweep</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt id="auspex.qubit.single_shot_fidelity.SingleShotFidelityExperiment.find_single_shot_filter">
+<code class="sig-name descname">find_single_shot_filter</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.single_shot_fidelity.SingleShotFidelityExperiment.find_single_shot_filter" title="Permalink to this definition">¶</a></dt>
+<dd><p>Make sure there is one single shot measurement filter in the pipeline.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.single_shot_fidelity.SingleShotFidelityExperiment.get_fidelity">
+<code class="sig-name descname">get_fidelity</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.single_shot_fidelity.SingleShotFidelityExperiment.get_fidelity" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.single_shot_fidelity.SingleShotFidelityExperiment.get_results">
+<code class="sig-name descname">get_results</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.single_shot_fidelity.SingleShotFidelityExperiment.get_results" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the PDF and fidelity numbers from the filters. Returns a dictionary of PDF data with the
+filter names as keys.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.single_shot_fidelity.SingleShotFidelityExperiment.get_threshold">
+<code class="sig-name descname">get_threshold</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.single_shot_fidelity.SingleShotFidelityExperiment.get_threshold" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.single_shot_fidelity.SingleShotFidelityExperiment.guess_output_nodes">
+<code class="sig-name descname">guess_output_nodes</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">graph</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.single_shot_fidelity.SingleShotFidelityExperiment.guess_output_nodes" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.single_shot_fidelity.SingleShotFidelityExperiment.init_plots">
+<code class="sig-name descname">init_plots</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.single_shot_fidelity.SingleShotFidelityExperiment.init_plots" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="auspex.qubit.single_shot_fidelity.SingleShotFidelityExperiment.run_sweeps">
+<code class="sig-name descname">run_sweeps</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.single_shot_fidelity.SingleShotFidelityExperiment.run_sweeps" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="module-auspex.qubit">
+<span id="module-contents"></span><h2>Module contents<a class="headerlink" href="#module-auspex.qubit" title="Permalink to this headline">¶</a></h2>
+</div>
+</div>
+
+
+           </div>
+           
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+      
+        <a href="auspex.instruments.html" class="btn btn-neutral float-left" title="auspex.instruments package" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        
+        &copy; Copyright 2019, Auspex Developers
+
+    </p>
+  </div>
+    
+    
+    
+    Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a
+    
+    <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a>
+    
+    provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>

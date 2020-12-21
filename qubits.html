@@ -1,0 +1,296 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Qubit Experiments &mdash; auspex 2019.2 documentation</title>
+  
+
+  
+  <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+
+  
+  
+  
+  
+
+  
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+        <script src="_static/jquery.js"></script>
+        <script src="_static/underscore.js"></script>
+        <script src="_static/doctools.js"></script>
+        <script src="_static/language_data.js"></script>
+        <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+        <script async="async" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
+        <script type="text/x-mathjax-config">MathJax.Hub.Config({"tex2jax": {"inlineMath": [["$", "$"], ["\\(", "\\)"]], "processEscapes": true, "ignoreClass": "document", "processClass": "math|output_area"}})</script>
+        <script src="https://unpkg.com/@jupyter-widgets/html-manager@^0.18.0/dist/embed-amd.js"></script>
+    
+    <script type="text/javascript" src="_static/js/theme.js"></script>
+
+    
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Example Q1: Configuring a Channel Library from Scratch" href="examples/Example-Config.html" />
+    <link rel="prev" title="Sweep Documentation" href="sweeps.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="index.html" class="icon icon-home" alt="Documentation Home"> auspex
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                2019.2
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="instruments.html">Instrument Drivers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="experiments.html">Defining Experiments</a></li>
+<li class="toctree-l1"><a class="reference internal" href="sweeps.html">Advanced Sweeps</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Qubit Experiments</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#important-changes-in-the-bbn-q-software-ecosystem">Important Changes in the BBN-Q Software Ecosystem</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#tutorials">Tutorials</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="examples/Example-Config.html">Q1 Tutorial: Creating Channel Library</a></li>
+<li class="toctree-l3"><a class="reference internal" href="examples/Example-Channel-Lib.html">Q2 Tutorial: Saving/Loading Library Versions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="examples/Example-Filter-Pipeline.html">Q3 Tutorial: Using the Pipeline Manager</a></li>
+<li class="toctree-l3"><a class="reference internal" href="examples/Example-Experiments.html">Q4 Tutorial: Running a Basic Qubit Experiment</a></li>
+<li class="toctree-l3"><a class="reference internal" href="examples/Example-Sweeps.html">Q5 Tutorial: Adding Sweeps to Experiments</a></li>
+<li class="toctree-l3"><a class="reference internal" href="examples/Example-Calibrations.html">Q6 Tutorial: Pulse Calibration</a></li>
+<li class="toctree-l3"><a class="reference internal" href="examples/Example-SingleShot-Fid.html">Q7 Tutorial: Single Shot Fidelity</a></li>
+<li class="toctree-l3"><a class="reference internal" href="examples/Example-APS2-2Qubit.html">Q8 Tutorial: Realistic Two Qubit Tuneup and Experiments</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#instrument-drivers">Instrument Drivers</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="plotting.html">Plotting Server</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api/auspex.html">Full API</a></li>
+</ul>
+
+            
+          
+        </div>
+        
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">auspex</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="index.html" class="icon icon-home"></a> &raquo;</li>
+        
+      <li>Qubit Experiments</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            <a href="_sources/qubits.rst.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  
+<style>
+/* CSS overrides for sphinx_rtd_theme */
+
+/* 24px margin */
+.nbinput.nblast.container,
+.nboutput.nblast.container {
+    margin-bottom: 19px;  /* padding has already 5px */
+}
+
+/* ... except between code cells! */
+.nblast.container + .nbinput.container {
+    margin-top: -19px;
+}
+
+.admonition > p:before {
+    margin-right: 4px;  /* make room for the exclamation icon */
+}
+
+/* Fix math alignment, see https://github.com/rtfd/sphinx_rtd_theme/pull/686 */
+.math {
+    text-align: unset;
+}
+</style>
+<div class="section" id="qubit-experiments">
+<span id="id1"></span><h1>Qubit Experiments<a class="headerlink" href="#qubit-experiments" title="Permalink to this headline">¶</a></h1>
+<p>Auspex and QGL comprise BBN’s qubit measurement softwre stack. Both packages utilize the underlying database schema provided by bbndb that allows them to easily share state and allows the user to take advantage of versioned measurement configurations.</p>
+<div class="section" id="important-changes-in-the-bbn-q-software-ecosystem">
+<h2>Important Changes in the BBN-Q Software Ecosystem<a class="headerlink" href="#important-changes-in-the-bbn-q-software-ecosystem" title="Permalink to this headline">¶</a></h2>
+<p>There has been a recent change in how we do things:</p>
+<ol class="arabic simple">
+<li><p>Both Auspex and QGL now utilize the bbndb backend for configuration information. YAML has been completely dropped as it was too freeform and error prone.</p></li>
+<li><p>HDF5 has been dropped as the datafile format for auspex and replaced with a simple numpy-backed binary format with metadata.</p></li>
+<li><p>HDF5 has also been dropped as the sequence file format for our APS1 and APS2 arbitrary pulse sequencers, a simple binary format prevails here as well.</p></li>
+<li><p>The plot server and client have been decoupled from the main auspex code and now are executed independently. They can even be run remotely!</p></li>
+<li><p>Bokeh has been replaced with bqplot where possible, which has much better data throughput.</p></li>
+</ol>
+</div>
+<div class="section" id="tutorials">
+<h2>Tutorials<a class="headerlink" href="#tutorials" title="Permalink to this headline">¶</a></h2>
+<p>The best way to gain experience is to follow through with these tutorials:</p>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="examples/Example-Config.html">Q1 Tutorial: Creating Channel Library</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples/Example-Channel-Lib.html">Q2 Tutorial: Saving/Loading Library Versions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples/Example-Filter-Pipeline.html">Q3 Tutorial: Using the Pipeline Manager</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples/Example-Experiments.html">Q4 Tutorial: Running a Basic Qubit Experiment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples/Example-Sweeps.html">Q5 Tutorial: Adding Sweeps to Experiments</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples/Example-Calibrations.html">Q6 Tutorial: Pulse Calibration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples/Example-SingleShot-Fid.html">Q7 Tutorial: Single Shot Fidelity</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples/Example-APS2-2Qubit.html">Q8 Tutorial: Realistic Two Qubit Tuneup and Experiments</a></li>
+</ul>
+</div>
+</div>
+<div class="section" id="instrument-drivers">
+<h2>Instrument Drivers<a class="headerlink" href="#instrument-drivers" title="Permalink to this headline">¶</a></h2>
+<p>For <a class="reference external" href="https://github.com/bbn-q/libaps2">libaps2</a>, <a class="reference external" href="https://github.com/bbn-q/libalazar">libalazar</a>, and <a class="reference external" href="https://github.com/bbn-q/libx6">libx6</a>, one should be able to <em>conda install -c bbn-q xxx</em> in order to obtain binary distributions of the relevant packages. Otherwise, one must obtain and build those libraries (according to their respective documentation), then make the shared library build products and any python packages available to Auspex by placing them on the path.</p>
+</div>
+</div>
+
+
+           </div>
+           
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="examples/Example-Config.html" class="btn btn-neutral float-right" title="Example Q1: Configuring a Channel Library from Scratch" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="sweeps.html" class="btn btn-neutral float-left" title="Sweep Documentation" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        
+        &copy; Copyright 2019, Auspex Developers
+
+    </p>
+  </div>
+    
+    
+    
+    Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a
+    
+    <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a>
+    
+    provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>

@@ -1,0 +1,294 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Introduction &mdash; auspex 2019.2 documentation</title>
+  
+
+  
+  <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+
+  
+  
+  
+  
+
+  
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+        <script src="_static/jquery.js"></script>
+        <script src="_static/underscore.js"></script>
+        <script src="_static/doctools.js"></script>
+        <script src="_static/language_data.js"></script>
+        <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+        <script async="async" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
+        <script type="text/x-mathjax-config">MathJax.Hub.Config({"tex2jax": {"inlineMath": [["$", "$"], ["\\(", "\\)"]], "processEscapes": true, "ignoreClass": "document", "processClass": "math|output_area"}})</script>
+        <script src="https://unpkg.com/@jupyter-widgets/html-manager@^0.18.0/dist/embed-amd.js"></script>
+    
+    <script type="text/javascript" src="_static/js/theme.js"></script>
+
+    
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Instrument Documentation" href="instruments.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="#" class="icon icon-home" alt="Documentation Home"> auspex
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                2019.2
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="instruments.html">Instrument Drivers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="experiments.html">Defining Experiments</a></li>
+<li class="toctree-l1"><a class="reference internal" href="sweeps.html">Advanced Sweeps</a></li>
+<li class="toctree-l1"><a class="reference internal" href="qubits.html">Qubit Experiments</a></li>
+<li class="toctree-l1"><a class="reference internal" href="plotting.html">Plotting Server</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api/auspex.html">Full API</a></li>
+</ul>
+
+            
+          
+        </div>
+        
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="#">auspex</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="#" class="icon icon-home"></a> &raquo;</li>
+        
+      <li>Introduction</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            <a href="_sources/index.rst.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  
+<style>
+/* CSS overrides for sphinx_rtd_theme */
+
+/* 24px margin */
+.nbinput.nblast.container,
+.nboutput.nblast.container {
+    margin-bottom: 19px;  /* padding has already 5px */
+}
+
+/* ... except between code cells! */
+.nblast.container + .nbinput.container {
+    margin-top: -19px;
+}
+
+.admonition > p:before {
+    margin-right: 4px;  /* make room for the exclamation icon */
+}
+
+/* Fix math alignment, see https://github.com/rtfd/sphinx_rtd_theme/pull/686 */
+.math {
+    text-align: unset;
+}
+</style>
+<a class="reference internal image-reference" href="_images/Auspex-Logo-LowRes.png"><img alt="_images/Auspex-Logo-LowRes.png" class="align-center" src="_images/Auspex-Logo-LowRes.png" style="width: 400px;" /></a>
+<div class="section" id="introduction">
+<h1>Introduction<a class="headerlink" href="#introduction" title="Permalink to this headline">¶</a></h1>
+<p>Auspex, the <em>automated system for python-based experiments</em>, is a framework for performing laboratory measurements. Auspex was developed by a group that primarily performs measurements on superconducting qubits and magnetic memory elements, but its underpinnings are sufficiently general to allow for extension to arbitrary equipment and experiments. Using several layers of abstraction, we attempt to meet the following goals:</p>
+<ol class="arabic simple">
+<li><p>Instrument drivers should be easy to write.</p></li>
+<li><p>Measurement code should be flexible and reusable.</p></li>
+<li><p>Data acquisition and processing should be asynchronous and reconfigurable.</p></li>
+<li><p>Experiments should be adaptive, not always pre-defined.</p></li>
+<li><p>Experiments should be concerned with information density, and not limited by the convenience of rectilinear sweeps.</p></li>
+</ol>
+<p>A number of inroads towards satisfying points (1) and (2) are made by utilizing metaprogramming to reduce boilerplate code in <em>Instrument</em> drivers and to provide a versatile framework for defining an <em>Experiment</em>. For (3) we make use of the python <em>asyncio</em> library to create a graph-based measurement <em>Filter</em> pipeline through which data passes to be processed, plotted, and written to file. For (4), we attempt to mitigate the sharp productivity hits associated with experimentors having to monitor and constantly tweak the parameters of an <em>Experiment</em>. This is done by creating a simple interface that allows <em>Sweeps</em> to refine themselves based on user-defined criterion functions. Finally, for (5) we build in “unstructured” sweeps that work with parameter tuples rather than “linspace” style ranges for each parameter. The combination of (4) and (5) allows us to take beautiful phase diagrams that require far fewer points than would be required in a rectilinear, non-adaptive scheme.</p>
+</div>
+<div class="section" id="installation-requirements">
+<h1>Installation &amp; Requirements<a class="headerlink" href="#installation-requirements" title="Permalink to this headline">¶</a></h1>
+<p>Auspex can be cloned from GitHub:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">git</span> <span class="n">clone</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">github</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">BBN</span><span class="o">-</span><span class="n">Q</span><span class="o">/</span><span class="n">auspex</span><span class="o">.</span><span class="n">git</span>
+</pre></div>
+</div>
+<p>And subsequently installed using pip:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">cd</span> <span class="n">auspex</span>
+<span class="n">pip</span> <span class="n">install</span> <span class="o">-</span><span class="n">e</span> <span class="o">.</span>
+</pre></div>
+</div>
+<p>Which will automatically fetch and install all of the requirements. If you are using an anaconda python distribution, some of the requirements should be install with <em>conda install</em> (like ruamel_yaml for example). The packages enumerated in <em>requirements.txt</em> are required by Auspex.</p>
+</div>
+<div class="section" id="qubit-experiments">
+<h1>Qubit Experiments<a class="headerlink" href="#qubit-experiments" title="Permalink to this headline">¶</a></h1>
+<p>Auspex is agnostic to the type of experiment being performed, but we include infrastructure for configuring and executing <span class="xref std std-ref">qubit experiments</span> using the gate-level <a class="reference external" href="https://github.com/BBN-Q/QGL">QGL</a> language. In this case, auspex relies on <a class="reference external" href="https://github.com/BBN-Q/bbndb">bbndb</a> as a database backend for sharing state and keeping track of configurations. Depending on the experiments being run, one may need to install a number of additional driver libraries.</p>
+<p>If you’re running on a system with a low file descriptor limit you may see a
+<cite>ulimit</cite> error when trying to run or simulate experiments.  This will look like a
+<cite>too many files error</cite> in python.  This stems from ZMQ asynchronously opening
+and closing a large number of files.  OSX has a default limit per notebook of
+256 open files.  You can easily change this number at the terminal before
+launching a notebook: <cite>ulimit -n 4096</cite> or put this line in your <cite>.bash_prifile</cite>.</p>
+</div>
+<div class="section" id="genealogy-and-etymology">
+<h1>Genealogy and Etymology<a class="headerlink" href="#genealogy-and-etymology" title="Permalink to this headline">¶</a></h1>
+<p>Auspex is a synonym for an <em>augur</em>, whose role was to interpret divine will through a variety of omens. While most researchers rightfully place their faiths in the scientific method, it is not uncommon to relate to the roles of the augur. Auspex incorporates concepts from BBN’s <em>QLab</em> project as well as from the <em>pymeasure</em> project from Cornell University.</p>
+<p>Contents:</p>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="instruments.html">Instrument Drivers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="experiments.html">Defining Experiments</a></li>
+<li class="toctree-l1"><a class="reference internal" href="sweeps.html">Advanced Sweeps</a></li>
+<li class="toctree-l1"><a class="reference internal" href="qubits.html">Qubit Experiments</a></li>
+<li class="toctree-l1"><a class="reference internal" href="plotting.html">Plotting Server</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api/auspex.html">Full API</a></li>
+</ul>
+</div>
+</div>
+
+
+           </div>
+           
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="instruments.html" class="btn btn-neutral float-right" title="Instrument Documentation" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        
+        &copy; Copyright 2019, Auspex Developers
+
+    </p>
+  </div>
+    
+    
+    
+    Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a
+    
+    <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a>
+    
+    provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>

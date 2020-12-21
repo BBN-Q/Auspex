@@ -1,0 +1,315 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Instrument Documentation &mdash; auspex 2019.2 documentation</title>
+  
+
+  
+  <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+
+  
+  
+  
+  
+
+  
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+        <script src="_static/jquery.js"></script>
+        <script src="_static/underscore.js"></script>
+        <script src="_static/doctools.js"></script>
+        <script src="_static/language_data.js"></script>
+        <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+        <script async="async" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
+        <script type="text/x-mathjax-config">MathJax.Hub.Config({"tex2jax": {"inlineMath": [["$", "$"], ["\\(", "\\)"]], "processEscapes": true, "ignoreClass": "document", "processClass": "math|output_area"}})</script>
+        <script src="https://unpkg.com/@jupyter-widgets/html-manager@^0.18.0/dist/embed-amd.js"></script>
+    
+    <script type="text/javascript" src="_static/js/theme.js"></script>
+
+    
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Experiment Documentation" href="experiments.html" />
+    <link rel="prev" title="Introduction" href="index.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="index.html" class="icon icon-home" alt="Documentation Home"> auspex
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                2019.2
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Instrument Drivers</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#instruments">Instruments</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#commands">Commands</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#property-access">Property Access</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="experiments.html">Defining Experiments</a></li>
+<li class="toctree-l1"><a class="reference internal" href="sweeps.html">Advanced Sweeps</a></li>
+<li class="toctree-l1"><a class="reference internal" href="qubits.html">Qubit Experiments</a></li>
+<li class="toctree-l1"><a class="reference internal" href="plotting.html">Plotting Server</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api/auspex.html">Full API</a></li>
+</ul>
+
+            
+          
+        </div>
+        
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">auspex</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="index.html" class="icon icon-home"></a> &raquo;</li>
+        
+      <li>Instrument Documentation</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            <a href="_sources/instruments.rst.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  
+<style>
+/* CSS overrides for sphinx_rtd_theme */
+
+/* 24px margin */
+.nbinput.nblast.container,
+.nboutput.nblast.container {
+    margin-bottom: 19px;  /* padding has already 5px */
+}
+
+/* ... except between code cells! */
+.nblast.container + .nbinput.container {
+    margin-top: -19px;
+}
+
+.admonition > p:before {
+    margin-right: 4px;  /* make room for the exclamation icon */
+}
+
+/* Fix math alignment, see https://github.com/rtfd/sphinx_rtd_theme/pull/686 */
+.math {
+    text-align: unset;
+}
+</style>
+<div class="section" id="instrument-documentation">
+<h1>Instrument Documentation<a class="headerlink" href="#instrument-documentation" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="instruments">
+<h2>Instruments<a class="headerlink" href="#instruments" title="Permalink to this headline">¶</a></h2>
+<p>The <em>Instrument</em> class is designed to dramatically reduce the amount of boilerplate code required for defining device drivers. The following (from <em>picosecond.py</em>) amounts to the majority of the driver definition:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">Picosecond10070A</span><span class="p">(</span><span class="n">SCPIInstrument</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Picosecond 10070A Pulser&quot;&quot;&quot;</span>
+    <span class="n">amplitude</span>      <span class="o">=</span> <span class="n">FloatCommand</span><span class="p">(</span><span class="n">scpi_string</span><span class="o">=</span><span class="s2">&quot;amplitude&quot;</span><span class="p">)</span>
+    <span class="n">delay</span>          <span class="o">=</span> <span class="n">FloatCommand</span><span class="p">(</span><span class="n">scpi_string</span><span class="o">=</span><span class="s2">&quot;delay&quot;</span><span class="p">)</span>
+    <span class="n">duration</span>       <span class="o">=</span> <span class="n">FloatCommand</span><span class="p">(</span><span class="n">scpi_string</span><span class="o">=</span><span class="s2">&quot;duration&quot;</span><span class="p">)</span>
+    <span class="n">trigger_level</span>  <span class="o">=</span> <span class="n">FloatCommand</span><span class="p">(</span><span class="n">scpi_string</span><span class="o">=</span><span class="s2">&quot;level&quot;</span><span class="p">)</span>
+    <span class="n">period</span>         <span class="o">=</span> <span class="n">FloatCommand</span><span class="p">(</span><span class="n">scpi_string</span><span class="o">=</span><span class="s2">&quot;period&quot;</span><span class="p">)</span>
+    <span class="n">frequency</span>      <span class="o">=</span> <span class="n">FloatCommand</span><span class="p">(</span><span class="n">scpi_string</span><span class="o">=</span><span class="s2">&quot;frequency&quot;</span><span class="p">,</span>
+                      <span class="n">aliases</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;freq&#39;</span><span class="p">])</span>
+    <span class="n">offset</span>         <span class="o">=</span> <span class="n">FloatCommand</span><span class="p">(</span><span class="n">scpi_string</span><span class="o">=</span><span class="s2">&quot;offset&quot;</span><span class="p">)</span>
+    <span class="n">trigger_source</span> <span class="o">=</span> <span class="n">StringCommand</span><span class="p">(</span><span class="n">scpi_string</span><span class="o">=</span><span class="s2">&quot;trigger&quot;</span><span class="p">,</span>
+                      <span class="n">allowed_values</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;INT&quot;</span><span class="p">,</span> <span class="s2">&quot;EXT&quot;</span><span class="p">,</span> <span class="s2">&quot;GPIB&quot;</span><span class="p">])</span>
+
+    <span class="k">def</span> <span class="nf">trigger</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">&quot;*TRG&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Each of the Commands is converted into the relevant driver code as detailed below.</p>
+<div class="section" id="commands">
+<h3>Commands<a class="headerlink" href="#commands" title="Permalink to this headline">¶</a></h3>
+<p>The <em>Command</em> class variables are parsed by the <em>MetaInstrument</em> metaclass, and automatically expanded into setters and getters (as appropriate) and a <em>property</em> that gives convenient access to commands. For example, the following <em>Command</em>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">frequency</span> <span class="o">=</span> <span class="n">FloatCommand</span><span class="p">(</span><span class="n">scpi_string</span><span class="o">=</span><span class="s1">&#39;frequency&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>will be expanded into the following equivalent set of class methods:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">get_frequency</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">return</span> <span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="s1">&#39;frequency?&#39;</span><span class="p">))</span>
+<span class="k">def</span> <span class="nf">set_frequency</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s1">&#39;frequency </span><span class="si">{:E}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">value</span><span class="p">))</span>
+<span class="nd">@property</span>
+<span class="k">def</span> <span class="nf">frequency</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_frequency</span><span class="p">()</span>
+<span class="nd">@frequency</span><span class="o">.</span><span class="n">setter</span>
+<span class="k">def</span> <span class="nf">frequency</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">set_frequency</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Instruments with consistent command syntax (which number fewer than one might hope) lend themselves to extremely concise drivers. Using additional keyword arguments such as <code class="docutils literal notranslate"><span class="pre">allowed_values</span></code>, <code class="docutils literal notranslate"><span class="pre">aliases</span></code>, and <code class="docutils literal notranslate"><span class="pre">value_map</span></code> allows for more advanced commands to specified without the usual driver fluff. Full documentation can be found in the API reference.</p>
+</div>
+<div class="section" id="property-access">
+<h3>Property Access<a class="headerlink" href="#property-access" title="Permalink to this headline">¶</a></h3>
+<p>Property access gives us a convenient way of interacting with instrument values. In the following example we construct an instance of the <code class="docutils literal notranslate"><span class="pre">Picosecond10070A</span></code> class and fire off a number of pulses:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pspl</span> <span class="o">=</span> <span class="n">Picosecond10070A</span><span class="p">(</span><span class="s2">&quot;GPIB0::24::INSTR&quot;</span><span class="p">)</span>
+
+<span class="n">pspl</span><span class="o">.</span><span class="n">amplitude</span> <span class="o">=</span> <span class="mf">0.944</span>                  <span class="c1"># Using setter</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Trigger delay is: &quot;</span><span class="p">,</span> <span class="n">pspl</span><span class="o">.</span><span class="n">delay</span><span class="p">)</span> <span class="c1"># Using getter</span>
+
+<span class="k">for</span> <span class="n">dur</span> <span class="ow">in</span> <span class="mf">1e-9</span><span class="o">*</span><span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">11</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">):</span>
+    <span class="n">pspl</span><span class="o">.</span><span class="n">duration</span> <span class="o">=</span> <span class="n">dur</span>
+    <span class="n">pspl</span><span class="o">.</span><span class="n">trigger</span><span class="p">()</span>
+    <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mf">0.05</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Properties present certain risks alongside their convenience: running <code class="docutils literal notranslate"><span class="pre">instr.falter_slop</span> <span class="pre">=</span> <span class="pre">18.0</span></code> will produce no errors (since it’s perfectly reasonable Python) despite the user having intended to set the <code class="docutils literal notranslate"><span class="pre">filter_slope</span></code> value. As such, we actually lock the class dictionary after parsing and intilization, and will produce errors informing you of your spelling creativities.</p>
+</div>
+</div>
+</div>
+
+
+           </div>
+           
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="experiments.html" class="btn btn-neutral float-right" title="Experiment Documentation" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="index.html" class="btn btn-neutral float-left" title="Introduction" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        
+        &copy; Copyright 2019, Auspex Developers
+
+    </p>
+  </div>
+    
+    
+    
+    Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a
+    
+    <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a>
+    
+    provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>
