@@ -1,0 +1,83 @@
+name: Python Package using Conda
+
+on: [push]
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    strategy:
+      max-parallel: 5
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up Python 3.8
+      uses: actions/setup-python@v2
+      with:
+        python-version: 3.8
+    - name: Add conda to system path
+      run: |
+        # $CONDA is an environment variable pointing to the root of the miniconda directory
+        echo $CONDA/bin >> $GITHUB_PATH
+        echo "Pip is at $(which pip)"
+        echo $CONDA
+        echo $GITHUB_PATH
+        
+    - name: pip cache
+      uses: actions/cache@v2
+      id: cache
+      with:
+        path: /usr/share/miniconda/lib/python3.8/site-packages/*
+        key: ${{ runner.os }}-condapip-${{ secrets.CACHE_VERSION }}-${{ hashFiles('requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-condapip-
+          ${{ runner.os }}
+            
+    - name: Install conda dependencies
+      if: steps.cache.outputs.cache-hit != 'true'
+      run: |
+        echo "Cache miss. Installing dependencies"
+        conda install -yq pip numpy scipy h5py sphinx matplotlib pandas networkx cffi jupyter psutil sqlalchemy ipykernel ipywidgets
+    - name: Install pip dependencies
+      if: steps.cache.outputs.cache-hit != 'true'
+      run: |
+        echo "Cache miss. Installing dependencies"
+        echo "Pip is at $(which pip)"
+        echo "Env python location: ${{ env.pythonLocation}}"
+        pip install recommonmark sphinx-rtd-theme nbsphinx mkdocs markdown commonmark
+        
+    - name: Install BBN dependencies
+      run: |
+        export GIT_LFS_SKIP_SMUDGE=1
+        pip install git+https://github.com/BBN-Q/bbndb.git
+        pip install git+https://github.com/BBN-Q/QGL.git@develop
+        pip install git+https://github.com/spatialaudio/nbsphinx.git@master
+        pip install pyvisa coveralls scikit-learn pyusb future python-usbtmc setproctitle progress serial
+        export GIT_LFS_SKIP_SMUDGE=0
+        
+    - name: Test with unittest
+      run: |
+        pip install -e .
+        python -m unittest discover -v test
+    - name: Build Documentation
+      run: |
+        cd doc
+        make html
+        cd ..
+    - name: Commit documentation changes
+      run: |
+        echo "Cloning from $GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
+        git clone $GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git --branch gh-pages --single-branch gh-pages
+        cp -r doc/_build/html/* gh-pages/
+        cd gh-pages
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add .
+        git commit -m "Update documentation" -a || true
+        # The above command will fail if no changes were present, so we ignore
+        # the return code.
+    - name: Push changes
+      uses: ad-m/github-push-action@master
+      with:
+        branch: gh-pages
+        directory: gh-pages
+        github_token: ${{ secrets.GITHUB_TOKEN }}
