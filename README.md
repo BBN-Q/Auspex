@@ -1,6 +1,6 @@
 ![auspex](doc/images/Auspex-Small.png)
 <!-- [![build status](https://qiplab.bbn.com/ci/projects/1/status.png?ref=master)](https://qiplab.bbn.com/ci/projects/1?ref=master) -->
-![Build](https://github.com/bbn-q/Auspex/workflows/Python%20Package%20using%20Conda/badge.svg?branch=develop) [Documentation on Github Pages](https://grahamrow.github.io/Auspex/)
+![Build](https://github.com/bbn-q/Auspex/workflows/Python%20Package%20using%20Conda/badge.svg?branch=develop) [Documentation on Github Pages](https://bbn-q.github.io/Auspex/)
 
 
 Auspex, the AUtomated System for Python-based EXperiments, is a framework for performing laboratory measurements. Auspex was developed by a group that primarily performs measurements on superconducting qubits and magnetic memory elements, but its underpinnings are sufficiently general to allow for extension to arbitrary equipment and experiments. Using several layers of abstraction, we attempt to meet the following goals:
