@@ -3,9 +3,9 @@
 <!DOCTYPE html>
 <html class="writer-html5" lang="en" >
 <head>
-  <meta charset="utf-8">
+  <meta charset="utf-8" />
   
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   
   <title>auspex.qubit package &mdash; auspex 2019.2 documentation</title>
   
@@ -16,7 +16,10 @@
 
   
   
+
   
+  
+
   
 
   
@@ -29,11 +32,10 @@
         <script src="../_static/jquery.js"></script>
         <script src="../_static/underscore.js"></script>
         <script src="../_static/doctools.js"></script>
-        <script src="../_static/language_data.js"></script>
         <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
         <script async="async" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
         <script type="text/x-mathjax-config">MathJax.Hub.Config({"tex2jax": {"inlineMath": [["$", "$"], ["\\(", "\\)"]], "processEscapes": true, "ignoreClass": "document", "processClass": "math|output_area"}})</script>
-        <script src="https://unpkg.com/@jupyter-widgets/html-manager@^0.18.0/dist/embed-amd.js"></script>
+        <script src="https://unpkg.com/@jupyter-widgets/html-manager@^0.20.0/dist/embed-amd.js"></script>
     
     <script type="text/javascript" src="../_static/js/theme.js"></script>
 
@@ -54,7 +56,7 @@
           
 
           
-            <a href="../index.html" class="icon icon-home" alt="Documentation Home"> auspex
+            <a href="../index.html" class="icon icon-home"> auspex
           
 
           
@@ -161,6 +163,8 @@
 
 
 
+
+
 <div role="navigation" aria-label="breadcrumbs navigation">
 
   <ul class="wy-breadcrumbs">
@@ -174,7 +178,7 @@
     
       <li class="wy-breadcrumbs-aside">
         
-            
+          
             <a href="../_sources/api/auspex.qubit.rst.txt" rel="nofollow"> View page source</a>
           
         
@@ -490,7 +494,7 @@ defined above.</p></li>
 <span id="auspex-qubit-mixer-calibration-module"></span><h2>auspex.qubit.mixer_calibration module<a class="headerlink" href="#module-auspex.qubit.mixer_calibration" title="Permalink to this headline">¶</a></h2>
 <dl class="py class">
 <dt id="auspex.qubit.mixer_calibration.MixerCalibration">
-<em class="property">class </em><code class="sig-prename descclassname">auspex.qubit.mixer_calibration.</code><code class="sig-name descname">MixerCalibration</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">channel</span></em>, <em class="sig-param"><span class="n">spectrum_analyzer</span></em>, <em class="sig-param"><span class="n">mixer</span><span class="o">=</span><span class="default_value">'control'</span></em>, <em class="sig-param"><span class="n">first_cal</span><span class="o">=</span><span class="default_value">'phase'</span></em>, <em class="sig-param"><span class="n">offset_range</span><span class="o">=</span><span class="default_value">- 0.2, 0.2</span></em>, <em class="sig-param"><span class="n">amp_range</span><span class="o">=</span><span class="default_value">0.4, 0.8</span></em>, <em class="sig-param"><span class="n">phase_range</span><span class="o">=</span><span class="default_value">- 1.5707963267948966, 1.5707963267948966</span></em>, <em class="sig-param"><span class="n">nsteps</span><span class="o">=</span><span class="default_value">101</span></em>, <em class="sig-param"><span class="n">use_fit</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">plot</span><span class="o">=</span><span class="default_value">True</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.mixer_calibration.MixerCalibration" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="sig-prename descclassname">auspex.qubit.mixer_calibration.</code><code class="sig-name descname">MixerCalibration</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">channel</span></em>, <em class="sig-param"><span class="n">spectrum_analyzer</span></em>, <em class="sig-param"><span class="n">mixer</span><span class="o">=</span><span class="default_value">'control'</span></em>, <em class="sig-param"><span class="n">first_cal</span><span class="o">=</span><span class="default_value">'phase'</span></em>, <em class="sig-param"><span class="n">offset_range</span><span class="o">=</span><span class="default_value">(- 0.2, 0.2)</span></em>, <em class="sig-param"><span class="n">amp_range</span><span class="o">=</span><span class="default_value">(0.4, 0.8)</span></em>, <em class="sig-param"><span class="n">phase_range</span><span class="o">=</span><span class="default_value">(- 1.5707963267948966, 1.5707963267948966)</span></em>, <em class="sig-param"><span class="n">nsteps</span><span class="o">=</span><span class="default_value">101</span></em>, <em class="sig-param"><span class="n">use_fit</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">plot</span><span class="o">=</span><span class="default_value">True</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.mixer_calibration.MixerCalibration" title="Permalink to this definition">¶</a></dt>
 <dd><p>A calibration experiment that determines the optimal I and Q offsets, amplitude imbalance and phase imbalance
 for single-sideband modulation of  a mixer. Please see Analog Devices Application Note AN-1039 for an explanation
 of the optimization of a mixer for maximum sideband supression.</p>
@@ -651,7 +655,7 @@ linearized power and use the minimum of the fit to set the offset.</p>
 <span id="auspex-qubit-pulse-calibration-module"></span><h2>auspex.qubit.pulse_calibration module<a class="headerlink" href="#module-auspex.qubit.pulse_calibration" title="Permalink to this headline">¶</a></h2>
 <dl class="py class">
 <dt id="auspex.qubit.pulse_calibration.CLEARCalibration">
-<em class="property">class </em><code class="sig-prename descclassname">auspex.qubit.pulse_calibration.</code><code class="sig-name descname">CLEARCalibration</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">qubit</span></em>, <em class="sig-param"><span class="n">kappa</span><span class="o">=</span><span class="default_value">12566370.614359172</span></em>, <em class="sig-param"><span class="n">chi</span><span class="o">=</span><span class="default_value">- 6283185.307179586</span></em>, <em class="sig-param"><span class="n">t_empty</span><span class="o">=</span><span class="default_value">4e-07</span></em>, <em class="sig-param"><span class="n">ramsey_delays</span><span class="o">=</span><span class="default_value">array([0.0, 4e-08, 8e-08, 1.2e-07, 1.6e-07, 2e-07, 2.4e-07, 2.8e-07, 3.2e-07, 3.6e-07, 4e-07, 4.4e-07, 4.8e-07, 5.2e-07, 5.6e-07, 6e-07, 6.4e-07, 6.8e-07, 7.2e-07, 7.6e-07, 8e-07, 8.4e-07, 8.8e-07, 9.2e-07, 9.6e-07, 1e-06, 1.04e-06, 1.08e-06, 1.12e-06, 1.16e-06, 1.2e-06, 1.24e-06, 1.28e-06, 1.32e-06, 1.36e-06, 1.4e-06, 1.44e-06, 1.48e-06, 1.52e-06, 1.56e-06, 1.6e-06, 1.64e-06, 1.68e-06, 1.72e-06, 1.76e-06, 1.8e-06, 1.84e-06, 1.88e-06, 1.92e-06, 1.96e-06, 2e-06])</span></em>, <em class="sig-param"><span class="n">ramsey_freq</span><span class="o">=</span><span class="default_value">2000000.0</span></em>, <em class="sig-param"><span class="n">meas_delay</span><span class="o">=</span><span class="default_value">0</span></em>, <em class="sig-param"><span class="n">preramsey_delay</span><span class="o">=</span><span class="default_value">0</span></em>, <em class="sig-param"><span class="n">alpha</span><span class="o">=</span><span class="default_value">1</span></em>, <em class="sig-param"><span class="n">T1factor</span><span class="o">=</span><span class="default_value">1</span></em>, <em class="sig-param"><span class="n">T2</span><span class="o">=</span><span class="default_value">3e-05</span></em>, <em class="sig-param"><span class="n">nsteps</span><span class="o">=</span><span class="default_value">5</span></em>, <em class="sig-param"><span class="n">eps1</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">eps2</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">cal_steps</span><span class="o">=</span><span class="default_value">1, 1, 1</span></em>, <em class="sig-param"><span class="o">**</span><span class="n">kwargs</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.CLEARCalibration" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="sig-prename descclassname">auspex.qubit.pulse_calibration.</code><code class="sig-name descname">CLEARCalibration</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">qubit</span></em>, <em class="sig-param"><span class="n">kappa</span><span class="o">=</span><span class="default_value">12566370.614359172</span></em>, <em class="sig-param"><span class="n">chi</span><span class="o">=</span><span class="default_value">- 6283185.307179586</span></em>, <em class="sig-param"><span class="n">t_empty</span><span class="o">=</span><span class="default_value">4e-07</span></em>, <em class="sig-param"><span class="n">ramsey_delays</span><span class="o">=</span><span class="default_value">array([0.00e+00, 4.00e-08, 8.00e-08, 1.20e-07, 1.60e-07, 2.00e-07, 2.40e-07, 2.80e-07, 3.20e-07, 3.60e-07, 4.00e-07, 4.40e-07, 4.80e-07, 5.20e-07, 5.60e-07, 6.00e-07, 6.40e-07, 6.80e-07, 7.20e-07, 7.60e-07, 8.00e-07, 8.40e-07, 8.80e-07, 9.20e-07, 9.60e-07, 1.00e-06, 1.04e-06, 1.08e-06, 1.12e-06, 1.16e-06, 1.20e-06, 1.24e-06, 1.28e-06, 1.32e-06, 1.36e-06, 1.40e-06, 1.44e-06, 1.48e-06, 1.52e-06, 1.56e-06, 1.60e-06, 1.64e-06, 1.68e-06, 1.72e-06, 1.76e-06, 1.80e-06, 1.84e-06, 1.88e-06, 1.92e-06, 1.96e-06, 2.00e-06])</span></em>, <em class="sig-param"><span class="n">ramsey_freq</span><span class="o">=</span><span class="default_value">2000000.0</span></em>, <em class="sig-param"><span class="n">meas_delay</span><span class="o">=</span><span class="default_value">0</span></em>, <em class="sig-param"><span class="n">preramsey_delay</span><span class="o">=</span><span class="default_value">0</span></em>, <em class="sig-param"><span class="n">alpha</span><span class="o">=</span><span class="default_value">1</span></em>, <em class="sig-param"><span class="n">T1factor</span><span class="o">=</span><span class="default_value">1</span></em>, <em class="sig-param"><span class="n">T2</span><span class="o">=</span><span class="default_value">3e-05</span></em>, <em class="sig-param"><span class="n">nsteps</span><span class="o">=</span><span class="default_value">5</span></em>, <em class="sig-param"><span class="n">eps1</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">eps2</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">cal_steps</span><span class="o">=</span><span class="default_value">(1, 1, 1)</span></em>, <em class="sig-param"><span class="o">**</span><span class="n">kwargs</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.CLEARCalibration" title="Permalink to this definition">¶</a></dt>
 <dd><p>Calibration of cavity reset pulse.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -733,7 +737,7 @@ plot lines, glyphs, etc. must be declared up front!</p>
 
 <dl class="py class">
 <dt id="auspex.qubit.pulse_calibration.CRCalibration">
-<em class="property">class </em><code class="sig-prename descclassname">auspex.qubit.pulse_calibration.</code><code class="sig-name descname">CRCalibration</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">edge</span></em>, <em class="sig-param"><span class="n">lengths</span><span class="o">=</span><span class="default_value">array([2e-08, 7e-08, 1.2e-07, 1.7e-07, 2.2e-07, 2.7e-07, 3.2e-07, 3.7e-07, 4.2e-07, 4.7e-07, 5.2e-07, 5.7e-07, 6.2e-07, 6.7e-07, 7.2e-07, 7.7e-07, 8.2e-07, 8.7e-07, 9.2e-07, 9.7e-07, 1.02e-06])</span></em>, <em class="sig-param"><span class="n">phases</span><span class="o">=</span><span class="default_value">[0]</span></em>, <em class="sig-param"><span class="n">amps</span><span class="o">=</span><span class="default_value">[0.8]</span></em>, <em class="sig-param"><span class="n">rise_fall</span><span class="o">=</span><span class="default_value">4e-08</span></em>, <em class="sig-param"><span class="n">meas_qubits</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="o">**</span><span class="n">kwargs</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.CRCalibration" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="sig-prename descclassname">auspex.qubit.pulse_calibration.</code><code class="sig-name descname">CRCalibration</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">edge</span></em>, <em class="sig-param"><span class="n">lengths</span><span class="o">=</span><span class="default_value">array([2.00e-08, 7.00e-08, 1.20e-07, 1.70e-07, 2.20e-07, 2.70e-07, 3.20e-07, 3.70e-07, 4.20e-07, 4.70e-07, 5.20e-07, 5.70e-07, 6.20e-07, 6.70e-07, 7.20e-07, 7.70e-07, 8.20e-07, 8.70e-07, 9.20e-07, 9.70e-07, 1.02e-06])</span></em>, <em class="sig-param"><span class="n">phases</span><span class="o">=</span><span class="default_value">[0]</span></em>, <em class="sig-param"><span class="n">amps</span><span class="o">=</span><span class="default_value">[0.8]</span></em>, <em class="sig-param"><span class="n">rise_fall</span><span class="o">=</span><span class="default_value">4e-08</span></em>, <em class="sig-param"><span class="n">meas_qubits</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="o">**</span><span class="n">kwargs</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.CRCalibration" title="Permalink to this definition">¶</a></dt>
 <dd><p>Template for CR calibrations. Currently available steps: length, phase, amplitude</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -763,7 +767,7 @@ plot lines, glyphs, etc. must be declared up front!</p>
 
 <dl class="py class">
 <dt id="auspex.qubit.pulse_calibration.CRLenCalibration">
-<em class="property">class </em><code class="sig-prename descclassname">auspex.qubit.pulse_calibration.</code><code class="sig-name descname">CRLenCalibration</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">edge</span></em>, <em class="sig-param"><span class="n">lengths</span><span class="o">=</span><span class="default_value">array([2e-08, 7e-08, 1.2e-07, 1.7e-07, 2.2e-07, 2.7e-07, 3.2e-07, 3.7e-07, 4.2e-07, 4.7e-07, 5.2e-07, 5.7e-07, 6.2e-07, 6.7e-07, 7.2e-07, 7.7e-07, 8.2e-07, 8.7e-07, 9.2e-07, 9.7e-07, 1.02e-06])</span></em>, <em class="sig-param"><span class="n">phase</span><span class="o">=</span><span class="default_value">0</span></em>, <em class="sig-param"><span class="n">amp</span><span class="o">=</span><span class="default_value">0.8</span></em>, <em class="sig-param"><span class="n">rise_fall</span><span class="o">=</span><span class="default_value">4e-08</span></em>, <em class="sig-param"><span class="n">meas_qubits</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="o">**</span><span class="n">kwargs</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.CRLenCalibration" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="sig-prename descclassname">auspex.qubit.pulse_calibration.</code><code class="sig-name descname">CRLenCalibration</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">edge</span></em>, <em class="sig-param"><span class="n">lengths</span><span class="o">=</span><span class="default_value">array([2.00e-08, 7.00e-08, 1.20e-07, 1.70e-07, 2.20e-07, 2.70e-07, 3.20e-07, 3.70e-07, 4.20e-07, 4.70e-07, 5.20e-07, 5.70e-07, 6.20e-07, 6.70e-07, 7.20e-07, 7.70e-07, 8.20e-07, 8.70e-07, 9.20e-07, 9.70e-07, 1.02e-06])</span></em>, <em class="sig-param"><span class="n">phase</span><span class="o">=</span><span class="default_value">0</span></em>, <em class="sig-param"><span class="n">amp</span><span class="o">=</span><span class="default_value">0.8</span></em>, <em class="sig-param"><span class="n">rise_fall</span><span class="o">=</span><span class="default_value">4e-08</span></em>, <em class="sig-param"><span class="n">meas_qubits</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="o">**</span><span class="n">kwargs</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.CRLenCalibration" title="Permalink to this definition">¶</a></dt>
 <dd><dl class="py attribute">
 <dt id="auspex.qubit.pulse_calibration.CRLenCalibration.cal_type">
 <code class="sig-name descname">cal_type</code><em class="property"> = 1</em><a class="headerlink" href="#auspex.qubit.pulse_calibration.CRLenCalibration.cal_type" title="Permalink to this definition">¶</a></dt>
@@ -784,7 +788,7 @@ plot lines, glyphs, etc. must be declared up front!</p>
 
 <dl class="py class">
 <dt id="auspex.qubit.pulse_calibration.CRPhaseCalibration">
-<em class="property">class </em><code class="sig-prename descclassname">auspex.qubit.pulse_calibration.</code><code class="sig-name descname">CRPhaseCalibration</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">edge</span></em>, <em class="sig-param"><span class="n">length</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">phases</span><span class="o">=</span><span class="default_value">array([0.0, 0.31415927, 0.62831853, 0.9424778, 1.25663706, 1.57079633, 1.88495559, 2.19911486, 2.51327412, 2.82743339, 3.14159265, 3.45575192, 3.76991118, 4.08407045, 4.39822972, 4.71238898, 5.02654825, 5.34070751, 5.65486678, 5.96902604, 6.28318531])</span></em>, <em class="sig-param"><span class="n">amp</span><span class="o">=</span><span class="default_value">0.8</span></em>, <em class="sig-param"><span class="n">rise_fall</span><span class="o">=</span><span class="default_value">4e-08</span></em>, <em class="sig-param"><span class="o">**</span><span class="n">kwargs</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.CRPhaseCalibration" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="sig-prename descclassname">auspex.qubit.pulse_calibration.</code><code class="sig-name descname">CRPhaseCalibration</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">edge</span></em>, <em class="sig-param"><span class="n">length</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">phases</span><span class="o">=</span><span class="default_value">array([0., 0.31415927, 0.62831853, 0.9424778, 1.25663706, 1.57079633, 1.88495559, 2.19911486, 2.51327412, 2.82743339, 3.14159265, 3.45575192, 3.76991118, 4.08407045, 4.39822972, 4.71238898, 5.02654825, 5.34070751, 5.65486678, 5.96902604, 6.28318531])</span></em>, <em class="sig-param"><span class="n">amp</span><span class="o">=</span><span class="default_value">0.8</span></em>, <em class="sig-param"><span class="n">rise_fall</span><span class="o">=</span><span class="default_value">4e-08</span></em>, <em class="sig-param"><span class="o">**</span><span class="n">kwargs</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.CRPhaseCalibration" title="Permalink to this definition">¶</a></dt>
 <dd><dl class="py attribute">
 <dt id="auspex.qubit.pulse_calibration.CRPhaseCalibration.cal_type">
 <code class="sig-name descname">cal_type</code><em class="property"> = 2</em><a class="headerlink" href="#auspex.qubit.pulse_calibration.CRPhaseCalibration.cal_type" title="Permalink to this definition">¶</a></dt>
@@ -903,7 +907,7 @@ plot lines, glyphs, etc. must be declared up front!</p>
 
 <dl class="py class">
 <dt id="auspex.qubit.pulse_calibration.DRAGCalibration">
-<em class="property">class </em><code class="sig-prename descclassname">auspex.qubit.pulse_calibration.</code><code class="sig-name descname">DRAGCalibration</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">qubit</span></em>, <em class="sig-param"><span class="n">deltas</span><span class="o">=</span><span class="default_value">array([- 1.0, - 0.9, - 0.8, - 0.7, - 0.6, - 0.5, - 0.4, - 0.3, - 0.2, - 0.1, 0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0])</span></em>, <em class="sig-param"><span class="n">num_pulses</span><span class="o">=</span><span class="default_value">array([8, 12, 16, 20, 24, 28, 32, 36, 40, 44])</span></em>, <em class="sig-param"><span class="o">**</span><span class="n">kwargs</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.DRAGCalibration" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="sig-prename descclassname">auspex.qubit.pulse_calibration.</code><code class="sig-name descname">DRAGCalibration</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">qubit</span></em>, <em class="sig-param"><span class="n">deltas</span><span class="o">=</span><span class="default_value">array([- 1., - 0.9, - 0.8, - 0.7, - 0.6, - 0.5, - 0.4, - 0.3, - 0.2, - 0.1, 0., 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.])</span></em>, <em class="sig-param"><span class="n">num_pulses</span><span class="o">=</span><span class="default_value">array([8, 12, 16, 20, 24, 28, 32, 36, 40, 44])</span></em>, <em class="sig-param"><span class="o">**</span><span class="n">kwargs</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.DRAGCalibration" title="Permalink to this definition">¶</a></dt>
 <dd><dl class="py method">
 <dt id="auspex.qubit.pulse_calibration.DRAGCalibration.exp_config">
 <code class="sig-name descname">exp_config</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">exp</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.DRAGCalibration.exp_config" title="Permalink to this definition">¶</a></dt>
@@ -1058,7 +1062,7 @@ plot lines, glyphs, etc. must be declared up front!</p>
 
 <dl class="py class">
 <dt id="auspex.qubit.pulse_calibration.RamseyCalibration">
-<em class="property">class </em><code class="sig-prename descclassname">auspex.qubit.pulse_calibration.</code><code class="sig-name descname">RamseyCalibration</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">qubit</span></em>, <em class="sig-param"><span class="n">delays</span><span class="o">=</span><span class="default_value">array([0.0, 5e-07, 1e-06, 1.5e-06, 2e-06, 2.5e-06, 3e-06, 3.5e-06, 4e-06, 4.5e-06, 5e-06, 5.5e-06, 6e-06, 6.5e-06, 7e-06, 7.5e-06, 8e-06, 8.5e-06, 9e-06, 9.5e-06, 1e-05, 1.05e-05, 1.1e-05, 1.15e-05, 1.2e-05, 1.25e-05, 1.3e-05, 1.35e-05, 1.4e-05, 1.45e-05, 1.5e-05, 1.55e-05, 1.6e-05, 1.65e-05, 1.7e-05, 1.75e-05, 1.8e-05, 1.85e-05, 1.9e-05, 1.95e-05, 2e-05])</span></em>, <em class="sig-param"><span class="n">two_freqs</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">added_detuning</span><span class="o">=</span><span class="default_value">150000.0</span></em>, <em class="sig-param"><span class="n">set_source</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">AIC</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="o">**</span><span class="n">kwargs</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.RamseyCalibration" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="sig-prename descclassname">auspex.qubit.pulse_calibration.</code><code class="sig-name descname">RamseyCalibration</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">qubit</span></em>, <em class="sig-param"><span class="n">delays</span><span class="o">=</span><span class="default_value">array([0.00e+00, 5.00e-07, 1.00e-06, 1.50e-06, 2.00e-06, 2.50e-06, 3.00e-06, 3.50e-06, 4.00e-06, 4.50e-06, 5.00e-06, 5.50e-06, 6.00e-06, 6.50e-06, 7.00e-06, 7.50e-06, 8.00e-06, 8.50e-06, 9.00e-06, 9.50e-06, 1.00e-05, 1.05e-05, 1.10e-05, 1.15e-05, 1.20e-05, 1.25e-05, 1.30e-05, 1.35e-05, 1.40e-05, 1.45e-05, 1.50e-05, 1.55e-05, 1.60e-05, 1.65e-05, 1.70e-05, 1.75e-05, 1.80e-05, 1.85e-05, 1.90e-05, 1.95e-05, 2.00e-05])</span></em>, <em class="sig-param"><span class="n">two_freqs</span><span class="o">=</span><span class="default_value">False</span></em>, <em class="sig-param"><span class="n">added_detuning</span><span class="o">=</span><span class="default_value">150000.0</span></em>, <em class="sig-param"><span class="n">set_source</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">AIC</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="o">**</span><span class="n">kwargs</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.RamseyCalibration" title="Permalink to this definition">¶</a></dt>
 <dd><dl class="py method">
 <dt id="auspex.qubit.pulse_calibration.RamseyCalibration.descriptor">
 <code class="sig-name descname">descriptor</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.qubit.pulse_calibration.RamseyCalibration.descriptor" title="Permalink to this definition">¶</a></dt>
@@ -1182,35 +1186,28 @@ filter names as keys.</p>
            
           </div>
           <footer>
-  
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
-      
-      
-        <a href="auspex.instruments.html" class="btn btn-neutral float-left" title="auspex.instruments package" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
-      
+        <a href="auspex.instruments.html" class="btn btn-neutral float-left" title="auspex.instruments package" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
     </div>
-  
 
   <hr/>
 
   <div role="contentinfo">
     <p>
-        
-        &copy; Copyright 2019, Auspex Developers
+        &#169; Copyright 2019, Auspex Developers.
 
     </p>
   </div>
     
     
     
-    Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a
+    Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
     
-    <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a>
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
     
     provided by <a href="https://readthedocs.org">Read the Docs</a>. 
 
 </footer>
-
         </div>
       </div>
 
