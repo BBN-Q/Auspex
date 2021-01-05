@@ -69,7 +69,6 @@ jobs:
         git clone $GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git --branch gh-pages --single-branch gh-pages
         cp -r doc/_build/html/* gh-pages/
         cp -r doc/_build/html auspex_documentation
-        tar -czf auspex_docs.tgz auspex_documentation
         cd gh-pages
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
@@ -86,4 +85,4 @@ jobs:
     - name: Auspex Documentation
       uses: actions/upload-artifact@v2
       with:
-        path: auspex_docs.tgz
+        path: auspex_documentation
