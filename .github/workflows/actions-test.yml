@@ -57,7 +57,7 @@ jobs:
     - name: Test with unittest
       run: |
         pip install -e .
-        python -m unittest discover -v test
+        python -m unittest discover -v
     - name: Build Documentation
       run: |
         cd doc
