@@ -1,6 +1,6 @@
 import pkgutil
 import importlib
-import visa
+import pyvisa as visa
 import os
 
 instrument_map = {}

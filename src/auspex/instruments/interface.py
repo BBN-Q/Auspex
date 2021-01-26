@@ -1,5 +1,5 @@
 import os
-import visa
+import pyvisa as visa
 import numpy as np
 from auspex.log import logger
 from .prologix import PrologixSocketResource
