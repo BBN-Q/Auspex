@@ -160,7 +160,7 @@ class AlazarATS9870(Instrument):
 
             buff += random_mag*np.random.random((self.number_segments, length))
 
-            wsock.send(struct.pack('n', self.number_segments*length*np.float32().itemsize) + buff.flatten().tostring())
+            wsock.send(struct.pack('n', self.number_segments*length*np.float32().itemsize) + buff.flatten().tobytes())
             counter[chan] += length*self.number_segments
 
         return length*self.number_segments*len(self._chan_to_wsocket)

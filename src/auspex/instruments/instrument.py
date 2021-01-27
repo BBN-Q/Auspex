@@ -167,7 +167,7 @@ class MetaInstrument(type):
         type.__init__(self, name, bases, dct)
 
         # What sort of instrument are we?
-        if len(bases) > 0 and bases[0].__name__ is not 'Instrument':
+        if len(bases) > 0 and bases[0].__name__ != 'Instrument':
             instr_type = bases[0].__name__.replace('Instrument','')
             logger.debug("Adding Commands to %s", name)
             logger.debug("We are metaprogramming a %s instrument.", instr_type)

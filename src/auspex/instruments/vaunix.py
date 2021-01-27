@@ -199,9 +199,9 @@ class Labbrick(Instrument, metaclass=MakeSettersGetters):
             self._lib.fnLMS_SetSweepDirection(self.device_id,0) #Sets sweep direction to DOWN
         if dir is not None:
             if isinstance(dir,str):
-                if dir.lower() is 'up':
+                if dir.lower() == 'up':
                     self._lib.fnLMS_SetSweepDirection(self.device_id,1)
-                elif dir.lower() is 'down':
+                elif dir.lower() == 'down':
                     self._lib.fnLMS_SetSweepDirection(self.device_id,0)
                 else:
                     logger.warning('Invalid input for dir, please input a string or bool')
