@@ -576,22 +576,44 @@ class QubitExperiment(Experiment):
         logger.debug("Shutting down instruments")
         try:
             for awg in self.awgs:
-                awg.stop()
+                try:
+                    awg.stop()
+                except:
+                    logger.error(f"Could not stop AWG {awg.name}")
+                    raise Exception(f"Could not stop AWG {awg.name}")
             for dig in self.digitizers:
-                dig.stop()
+                try:
+                    dig.stop()
+                except:
+                    logger.error(f"Could not stop digitizer {dig.name}")
+                    raise Exception(f"Could not stop digitizer {dig.name}")
             for gen_proxy in self.generators:
-                gen_proxy.instr.output = False
+                try:
+                    gen_proxy.instr.output = False
+                except:
+                    logger.error(f"Could not set {gen_proxy.name} output to false")
+                    raise Exception(f"Could not set {gen_proxy.name} output to false")
         except:
-            logger.error('Could Not Stop AWGs or Digitizers; Reset Experiment')
+            logger.error('Could Not Stop AWGs or Digitizers; Reset Experiment') 
+        failflag = False
         for instr in self.instruments:
-            instr.disconnect()
-        self.dig_exit.set()
-        for listener in self.dig_listeners:
-            listener.join(2)
-            if listener.is_alive():
-                logger.debug(f"Terminating listener {listener} aggressively")
-                listener.terminate()
-            del listener
+            try:
+                instr.disconnect()
+            except:
+                logger.error(f"Could not disconnect instrument {instr.name}")
+                failflag = True
+        if failflag is True:
+            logger.error('Could not disconnect from some number of instruments, they may need to be reset.')
+        
+        #Ensure that the digitizer-related attributes were created, since they aren't in certain failure conditions.
+        if hasattr(self,"dig_exit") and hasattr(self, "dig_listeners"):
+            self.dig_exit.set()
+            for listener in self.dig_listeners:
+                listener.join(2)
+                if listener.is_alive():
+                    logger.debug(f"Terminating listener {listener} aggressively")
+                    listener.terminate()
+                del listener
 
         import gc
         gc.collect()
