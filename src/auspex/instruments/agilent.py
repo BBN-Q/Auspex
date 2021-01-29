@@ -956,7 +956,7 @@ class _AgilentNetworkAnalyzer(SCPIInstrument):
         return util.from_binary_block(data, 0, None, 'f', True, np.array)
 
 
-    def get_trace(self, measurement=None):
+    def get_trace(self, measurement=None, restart_measurement=True):
         """ Return a tuple of the trace frequencies and corrected complex points. By default returns the data for the
          first acive measurement. Pass an S-parameter (i.e. `S12`) as the `measurement` keyword argument to access others."""
         #If the measurement is not passed in just take the first one
@@ -968,7 +968,8 @@ class _AgilentNetworkAnalyzer(SCPIInstrument):
             mchan = self.measurements[measurement]
         #Select the measurment
         self.interface.write(":CALCulate:PARameter:SELect '{}'".format(mchan))
-        self.reaverage()
+        if restart_measurement:
+            self.reaverage()
         #Take the data as interleaved complex values
         if self.data_query_raw:
             interleaved_vals = self._raw_query_bytes(":CALC:DATA? SDATA")
