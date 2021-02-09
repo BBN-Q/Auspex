@@ -920,9 +920,11 @@ class _AgilentNetworkAnalyzer(SCPIInstrument):
 
         meas_done = False
         self.interface.write('*OPC')
+        print(int(self.interface.ESR()) & 0x1)
         while not meas_done:
             time.sleep(0.5)
             opc_bit = int(self.interface.ESR()) & 0x1
+            print(opc_bit)
             if opc_bit == 1:
                 meas_done = True
 
@@ -935,8 +937,26 @@ class _AgilentNetworkAnalyzer(SCPIInstrument):
         offset, data_length = util.parse_ieee_block_header(block)
         return util.from_ieee_block(block, 'f', True, np.array)
 
+    def _raw_query_bytes(self, string, size=1024):
+        """Some combinations of Agilent VNAs and minimum MTUs don't work so brute force by manually reading bytes from the wire.
+        """
+        self.interface.write(string)
+        #IEEE header format is #<number of digits><number of bytes>
+        header = self.interface._resource.read_bytes(2)
+        ndig = int(header.decode()[-1])
+        nbytes = int(self.interface._resource.read_bytes(ndig).decode())
+        bytes_read = 0
+        data = b''
+        while ((bytes_read + size) < nbytes):
+            data += self.interface._resource.read_bytes(size)
+            bytes_read += size
+        data += self.interface._resource.read_bytes(nbytes - bytes_read)
+        #Read the termination to clear VISA buffer
+        self.interface._resource.read_bytes(1)
+        return util.from_binary_block(data, 0, None, 'f', True, np.array)
 
-    def get_trace(self, measurement=None):
+
+    def get_trace(self, measurement=None, restart_measurement=True):
         """ Return a tuple of the trace frequencies and corrected complex points. By default returns the data for the
          first acive measurement. Pass an S-parameter (i.e. `S12`) as the `measurement` keyword argument to access others."""
         #If the measurement is not passed in just take the first one
@@ -948,12 +968,13 @@ class _AgilentNetworkAnalyzer(SCPIInstrument):
             mchan = self.measurements[measurement]
         #Select the measurment
         self.interface.write(":CALCulate:PARameter:SELect '{}'".format(mchan))
-        self.reaverage()
+        if restart_measurement:
+            self.reaverage()
         #Take the data as interleaved complex values
         if self.data_query_raw:
-            interleaved_vals = self._raw_query(":CALC:DATA? SDATA")
+            interleaved_vals = self._raw_query_bytes(":CALC:DATA? SDATA")
         else:
-            interleaved_vals = self.interface.query_binary_values(':CALC:DATA? SDATA', datatype="f", is_big_endian=True)
+            interleaved_vals  = self.interface._resource.query_binary_values(':CALC:DATA? SDATA', datatype="f", is_big_endian=True, expect_termination=False)
 
         self.interface.write("SENS:SWE:MODE CONT")
         vals = interleaved_vals[::2] + 1j*interleaved_vals[1::2]
