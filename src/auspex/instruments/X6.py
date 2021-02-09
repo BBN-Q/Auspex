@@ -279,7 +279,7 @@ class X6(Instrument):
     def receive_data(self, channel, oc, exit, ready, run):
         try:
             sock = self._chan_to_rsocket[channel]
-            sock.settimeout(2)
+            sock.settimeout(10)
             self.last_timestamp.value = datetime.datetime.now().timestamp()
             total = 0
             ready.value += 1
