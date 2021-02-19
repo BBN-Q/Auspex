@@ -4,6 +4,7 @@ from auspex.log import logger
 from collections.abc import Iterable
 import matplotlib.pyplot as plt
 from sklearn.mixture import GaussianMixture
+from scipy.stats.distributions import t
 
 from .signal_analysis import *
 
@@ -113,7 +114,7 @@ class AuspexFit(object):
         fit = np.array([self._model(x, *popt) for x in self.xpts])
         self.sq_error = np.sum((fit - self.ypts)**2)
         dof = len(self.xpts) - len(p0)
-
+        self.dof = dof
         # Compute badness of fit:
         # Under the null hypothesis (that the model is valid and that the observations
         # do indeed have Gaussian statistics), the mean squared error is χ² distributed
@@ -125,6 +126,16 @@ class AuspexFit(object):
 
         self.fit_params = self._fit_dict(popt)
         self.fit_errors = self._fit_dict(perr)
+
+    def confidence_intervals(alpha=0.95):
+        """ Returns confidence intervals based on standard error 100*(1-alpha).
+        """
+        #Student's t value for the confidence interval
+        t = t.ppf(1. - alpha*0.5, self.dof)
+        fit_ci = {}
+        for k, v in self.fit_errors:
+            fit_ci[k] = tval*v 
+        return fit_ci
 
     def model(self, x=None):
         """ The fit function evaluated at the parameters found by `curve_fit`.
