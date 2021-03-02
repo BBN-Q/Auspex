@@ -33,8 +33,6 @@
         <script src="../_static/underscore.js"></script>
         <script src="../_static/doctools.js"></script>
         <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
-        <script async="async" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
-        <script type="text/x-mathjax-config">MathJax.Hub.Config({"tex2jax": {"inlineMath": [["$", "$"], ["\\(", "\\)"]], "processEscapes": true, "ignoreClass": "document", "processClass": "math|output_area"}})</script>
         <script src="https://unpkg.com/@jupyter-widgets/html-manager@^0.20.0/dist/embed-amd.js"></script>
     
     <script type="text/javascript" src="../_static/js/theme.js"></script>
@@ -1232,9 +1230,9 @@ array([10448491872987906048, 11601324317152903168, 11601379293808033792,
 <h2>Data written by <code class="docutils literal notranslate"><span class="pre">Auspex</span></code><a class="headerlink" href="#Data-written-by-Auspex" title="Permalink to this headline">¶</a></h2>
 <p>The other end of the data taking process involves saving experimental data to file. This data could have a very rich structure and will depend on how the data pipeline was constructed in <code class="docutils literal notranslate"><span class="pre">Auspex</span></code> and what was saved to file using the pipeline <code class="docutils literal notranslate"><span class="pre">Writer</span></code>. The writer uses a data structure called <strong>AuspexDataContainer</strong> specified in <code class="docutils literal notranslate"><span class="pre">auspex/data_format</span></code>. It creates a directory structure with a <code class="docutils literal notranslate"><span class="pre">.auspex</span></code> extension where the data files are stored. This choice to use directories was intentionally
 made to allow for multiple file writers to work at once. The files inside the folder have the following structure:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">folder</span><span class="o">/</span><span class="n">data_set_name</span><span class="o">/</span>
-                        <span class="n">data</span><span class="o">.</span><span class="n">dat</span>
-                        <span class="n">data_meta</span><span class="o">.</span><span class="n">json</span>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>folder/data_set_name/
+                        data.dat
+                        data_meta.json
 </pre></div>
 </div>
 <p>Where the .dat contains the actual data and the JSON file holds meta data about data in the .dat file. The data files are <code class="docutils literal notranslate"><span class="pre">numpy</span></code> memmaps as explained in more detail in the next section.</p>
