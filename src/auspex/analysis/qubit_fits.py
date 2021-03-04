@@ -11,6 +11,7 @@ from scipy.optimize import curve_fit
 from auspex.log import logger
 from copy import copy
 import matplotlib.pyplot as plt
+from typing import Tuple
 from .fits import AuspexFit, Auspex2DFit
 from .signal_analysis import KT_estimation
 
@@ -443,7 +444,8 @@ class SingleQubitLeakageRBFit(SingleQubitRBFit):
 
 def InterleavedError(base_fit: SingleQubitRBFit, 
                      inter_fit: SingleQubitRBFit, 
-                     n_qubits=1, make_plots=False) -> float:
+                     n_qubits:int = 1, 
+                     make_plots: bool = False) -> Tuple[float]:
     """
     Take two Auspex fits for RB decay and calculate the effective $r$ 
     for the interleaved gate. r_c and r_c_error expressions are taken 

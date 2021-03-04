@@ -8,6 +8,7 @@ from itertools import product
 import bbndb
 from IPython.display import HTML, display
 import matplotlib.pyplot as plt
+from typing import Tuple, Type, Iterable, Callable, Union, Dict
 
 def get_file_name():
     """Helper function to get a filepath from a dialog box"""
@@ -111,7 +112,11 @@ def load_data(dirpath=None):
 
     return data_sets
 
-def open_data(num=None, folder=None, groupname="main", datasetname="data", date=None):
+def open_data(num: int = None, 
+              folder: str = None, 
+              groupname: str = "main", 
+              datasetname: str = "data", 
+              date: str = None):
     """Convenience Load data from an `AuspexDataContainer` given a file number and folder.
         Assumes that files are named with the convention `ExperimentName-NNNNN.auspex`
 
@@ -160,7 +165,9 @@ def open_data(num=None, folder=None, groupname="main", datasetname="data", date=
     return data_container.open_dataset(groupname, datasetname)
 
 
-def normalize_data(data, zero_id = 0, one_id = 1):
+def normalize_data(data: Iterable[Union[int,float,np.complex]], 
+                   zero_id: int = 0, 
+                   one_id: int = 1) -> Iterable[float]:
     if np.any(np.iscomplex(data['Data'])):
         logger.warning("normalize_data should not be used with complex data.")
 
@@ -182,7 +189,11 @@ def normalize_data(data, zero_id = 0, one_id = 1):
     norm_data = [d for ind, d in enumerate(norm_data) if metadata[ind] == max(metadata)]
     return norm_data
 
-def normalize_buffer_data(data, desc, qubit_index, zero_id = 0, one_id = 1):
+def normalize_buffer_data(data: Iterable[Union[int,float,np.complex]], 
+                          desc: Dict, 
+                          qubit_index: int, 
+                          zero_id: int = 0, 
+                          one_id: int = 1) -> Iterable[float]:
     if np.any(np.iscomplex(data)):
         logger.warning("normalize_buffer_data should not be used with complex data.")
 
@@ -203,7 +214,10 @@ def normalize_buffer_data(data, desc, qubit_index, zero_id = 0, one_id = 1):
     #remove calibration points
     return norm_data[:metadata[0][0]]
 
-def cal_scale(data, bit=0, nqubits=1, repeats=2):
+def cal_scale(data: Iterable[Union[int,float,np.complex]], 
+              bit: int = 0, 
+              nqubits: int = 1, 
+              repeats: int = 2) ->  Iterable[float]:
     """
     Scale data from calibration points.
     Parameters
@@ -238,8 +252,12 @@ def cal_scale(data, bit=0, nqubits=1, repeats=2):
 
     return data
 
-def cal_data(data, quad=np.real, qubit_name="q1", group_name="main", \
-        return_type=np.float32, key=""):
+def cal_data(data: Iterable[Union[int,float,np.complex]], 
+             quad: Callable = np.real, 
+             qubit_name: str = "q1", 
+             group_name: str = "main", 
+             return_type: Type = np.float32,
+             key: str = "") ->  Iterable[float]:
     """
     Rescale data to :math:`\\sigma_z`. expectation value based on calibration sequences.
 
@@ -312,7 +330,10 @@ def cal_ls():
         table_code += f"<tr><td>{id}</td><td>{d}</td><td>{t.split('.')[0]}</td><td>{sample.name}</td><td>{name}</td><td>{round(value,3)}</td><td>{round(uncertainty,3)}</td></tr>"
     display(HTML(f"<table><tr><th>id</th><th>Date</th><th>Time</th><th>Sample</th><th>Name</th><th>Value</th><th>Uncertainty</th></tr><tr>{table_code}</tr></table>"))
 
-def get_cals(qubit, params, make_plots=True, depth=0):
+def get_cals(qubit: str, 
+             params: Union[str,Iterable[str]], 
+             make_plots: bool = True, 
+             depth: int = 0) -> Tuple[float]:
     """
     Return and optionally plot the result of the most recent calibrations/characterizations
     Parameters

@@ -6,10 +6,15 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
+from typing import List, Dict, Tuple
+from enum import Enum
+
 import numpy as np
 from auspex.log import logger
-from enum import Enum
 from .fits import AuspexFit
+
+# type declarations (requires python >= 3.5)
+# FloatVector = List[float]
 
 class CR_cal_type(Enum):
     LENGTH = 1
@@ -19,29 +24,33 @@ class CR_cal_type(Enum):
 
 class SineFit(AuspexFit):
 
-    def __init__(self, xpts, ypts, initial_phase, initial_freq):
+    def __init__(self, 
+                 xpts: List[float], 
+                 ypts: List[float], 
+                 initial_phase: float, 
+                 initial_freq: float):
 
         self.initial_phase = initial_phase
         self.initial_freq = initial_freq
         super().__init__(xpts, ypts, make_plots=False)
 
-    def _model(self, x, *p):
+    def _model(self, x, *p) -> float:
         return p[1]*np.sin(2*np.pi*p[0]*x + p[2]) + p[3]
 
-    def _initial_guess(self):
+    def _initial_guess(self) -> List[float]:
         return [self.initial_freq, 1.0, self.initial_phase, 0.0]
 
-    def _fit_dict(self, p):
+    def _fit_dict(self, p) -> Dict:
         return {"f": p[0],
                 "A": p[1],
                 "phi": p[2],
                 "y0": p[3]}
 
-    def __str__(self):
+    def __str__(self) -> str:
         return "A*sin(2*pi*f*x + phi) + y0"
 
 
-def fit_CR(xpoints, data, cal_type):
+def fit_CR(xpoints: List[float], data: List[float], cal_type: CR_cal_type):
 
     data0 = data[:len(data)//2]
     data1 = data[len(data)//2:]
@@ -54,7 +63,9 @@ def fit_CR(xpoints, data, cal_type):
     elif cal_type == CR_cal_type.AMP:
         return fit_CR_amp(xpoints, data0, data1)
 
-def fit_CR_length(xpoints, data0, data1):
+def fit_CR_length(xpoints: List[float], 
+                  data0: List[float], 
+                  data1: List[float]) -> Tuple[float]:
 
     xpoints = xpoints[0]
     x_fine = np.linspace(min(xpoints), max(xpoints), 1001)
@@ -70,12 +81,15 @@ def fit_CR_length(xpoints, data0, data1):
     yfit0 = fit0.model(x_fine[:idx0])
     yfit1 = fit1.model(x_fine[:idx1])
     #average between the two qc states, rounded to 10 ns
-    xopt = round((x_fine[np.argmin(abs(yfit0))] + x_fine[np.argmin(abs(yfit1))])/2/10e-9)*10e-9
+    xopt = round((x_fine[np.argmin(abs(yfit0))] + \
+        x_fine[np.argmin(abs(yfit1))])/2/10e-9)*10e-9
     logger.info('CR length = {} ns'.format(xopt*1e9))
 
     return xopt, fit0.fit_params, fit1.fit_params
 
-def fit_CR_phase(xpoints, data0, data1):
+def fit_CR_phase(xpoints: List[float], 
+                 data0: List[float], 
+                 data1: List[float]) -> Tuple[float]:
 
     xpoints = xpoints[1]
     x_fine = np.linspace(min(xpoints), max(xpoints), 1001)
@@ -92,7 +106,9 @@ def fit_CR_phase(xpoints, data0, data1):
     return xopt, fit0.fit_params, fit1.fit_params
 
 
-def fit_CR_amp(xpoints, data0, data1):
+def fit_CR_amp(xpoints: List[float], 
+               data0: List[float], 
+               data1: List[float]) -> Tuple[float]:
     xpoints = xpoints[2]
     x_fine = np.linspace(min(xpoints), max(xpoints), 1001)
     popt0 = np.polyfit(xpoints, data0, 1) # tentatively linearize
