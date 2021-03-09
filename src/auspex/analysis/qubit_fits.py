@@ -422,7 +422,7 @@ class SingleQubitLeakageRBFit(SingleQubitRBFit):
         self.pop0, self.pop1, self.pop2 = zip(*points)
 
         pop_comp = [(self.pop0[i] + self.pop1[i]) if leakage else self.pop0[i] for i in range(len(self.pop0))]
-        
+
         if fit:
             super().__init__(np.array(lengths[:-3*cal_repeats][::2]), np.array(pop_comp), make_plots, log_scale_x, smart_guess, bounded_fit, ax)
 
@@ -441,12 +441,12 @@ class SingleQubitLeakageRBFit(SingleQubitRBFit):
         pop2_err = np.std(np.reshape(self.pop2,(len(self.lengths),repeats)),1)
         return pop0, pop0_err, pop1, pop1_err, pop2, pop2_err
 
-def InterleavedError(base_fit: SingleQubitRBFit, 
-                     inter_fit: SingleQubitRBFit, 
+def InterleavedError(base_fit: SingleQubitRBFit,
+                     inter_fit: SingleQubitRBFit,
                      n_qubits=1, make_plots=False) -> float:
     """
-    Take two Auspex fits for RB decay and calculate the effective $r$ 
-    for the interleaved gate. r_c and r_c_error expressions are taken 
+    Take two Auspex fits for RB decay and calculate the effective $r$
+    for the interleaved gate. r_c and r_c_error expressions are taken
     from Magesan et al. https://arxiv.org/pdf/1203.4550.pdf
 
     Note the r_c_error will likely over estimate the error. See Magesan et al.
@@ -486,23 +486,23 @@ def InterleavedError(base_fit: SingleQubitRBFit,
     p_c = 1 - (inter_fit.fit_params['r'] * 2 * d/(d - 1))
 
     r_c = (d - 1) * (1 - p_c/p) / d
-    
-    r_c_error = min(((d - 1) / d) * (np.abs(p - p_c/p) + (1 - p)), 
+
+    r_c_error = min(((d - 1) / d) * (np.abs(p - p_c/p) + (1 - p)),
                     (2*(d**2 - 1)*(1 - p)) / p*d**2 + (4*np.sqrt(1 - p)*np.sqrt(d**2 - 1)) / p)
-    
+
     if make_plots:
         plt.figure()
-        plt.errorbar(fit1.lengths, fit1.ypts, yerr=fit1.errors/np.sqrt(len(fit1.lengths)),
+        plt.errorbar(base_fit.lengths, base_fit.ypts, yerr=base_fit.errors/np.sqrt(len(base_fit.lengths)),
                         fmt='*', elinewidth=2.0, capsize=4.0, label='mean')
-        plt.plot(range(int(fit1.lengths[-1])), fit1.model(range(int(fit1.lengths[-1]))), label='base fit')
-        plt.errorbar(fit2.lengths, fit2.ypts, yerr=fit2.errors/np.sqrt(len(fit2.lengths)),
+        plt.plot(range(int(base_fit.lengths[-1])), base_fit.model(range(int(base_fit.lengths[-1]))), label='base fit')
+        plt.errorbar(inter_fit.lengths, inter_fit.ypts, yerr=inter_fit.errors/np.sqrt(len(inter_fit.lengths)),
                         fmt='o', elinewidth=2.0, capsize=4.0, label='mean')
-        plt.plot(range(int(fit2.lengths[-1])), fit2.model(range(int(fit2.lengths[-1]))), label='inter fit')
+        plt.plot(range(int(inter_fit.lengths[-1])), inter_fit.model(range(int(inter_fit.lengths[-1]))), label='inter fit')
 
-        plt.xlabel(fit1.xlabel)
-        plt.ylabel(fit1.ylabel)
+        plt.xlabel(base_fit.xlabel)
+        plt.ylabel(base_fit.ylabel)
         plt.legend()
-        
+
         def _annotation():
             return 'interleaved gate \nerror rate ' + r'r = {:.2e}  {} {:.2e}'.format(r_c, chr(177), r_c_error, end='\n')
         plt.annotate(_annotation(), xy=(0.3, 0.50),
