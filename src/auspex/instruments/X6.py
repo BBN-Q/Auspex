@@ -279,7 +279,7 @@ class X6(Instrument):
     def receive_data(self, channel, oc, exit, ready, run):
         try:
             sock = self._chan_to_rsocket[channel]
-            sock.settimeout(2)
+            sock.settimeout(10) #was 2 11/30/20 TB
             self.last_timestamp.value = datetime.datetime.now().timestamp()
             total = 0
             ready.value += 1
@@ -310,6 +310,7 @@ class X6(Instrument):
 
             # logger.info('RECEIVED %d %d', total, oc.points_taken.value)
             # TODO: this is suspeicious
+            # TB 11/19/20 why is this suspicious?
             for stream in oc.output_streams:
                 abc = 0
                 while True:
@@ -320,7 +321,7 @@ class X6(Instrument):
                     except queue.Empty as e:
                         # logger.info(f"All my data {oc} has been consumed {abc}")
                         break
-            # logger.info("X6 receive data exiting")
+        	#logger.error("X6 receive data exiting")
         except Exception as e:
             logger.warning(f"{self} receiver raised exception {e}. Bailing.")
 

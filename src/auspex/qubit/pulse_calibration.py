@@ -198,6 +198,7 @@ class QubitCalibration(Calibration):
             for fd in self.fake_data:
                 exp.set_fake_data(*fd[0], **fd[1], random_mag=0.0)
         self.exp_config(exp)
+        time.sleep(2)
         exp.run_sweeps()
 
         data = {}

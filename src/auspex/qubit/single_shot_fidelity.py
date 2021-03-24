@@ -122,8 +122,9 @@ class SingleShotFidelityExperiment(QubitExperiment):
             self._update_histogram_plots()
             self.stop_manual_plotters()
             if self.set_threshold:
-                stream_sel = [s for s in self.stream_selectors if s.qubit_name == self.measured_qubits[0].label][0]
-                stream_sel.threshold = self.get_threshold()[0]
+                #stream_sel = [s for s in self.stream_selectors if s.qubit_name == self.measured_qubits[0].label][0]
+                #stream_sel.threshold = self.get_threshold()[0]
+                self.stream_selectors[0].threshold = self.get_threshold()[0] #Why doesn't the version above work for us?
             if self.sample:
                 c = bbndb.calibration.Calibration(value=self.get_fidelity()[0], sample=self.sample, name="Readout fid.", category="Readout")
                 c.date = datetime.datetime.now()

@@ -68,8 +68,8 @@ class MixerCalibration(Calibration):
     MAX_OFFSET = 0.4
     MIN_AMPLITUDE = 0.2
     MAX_AMPLITUDE = 1.5
-    MIN_PHASE = -0.3
-    MAX_PHASE = 0.3
+    MIN_PHASE = -1.4
+    MAX_PHASE = 1.4
 
     def __init__(self, channel, spectrum_analyzer, mixer="control", first_cal="phase",
                 offset_range = (-0.2,0.2), amp_range = (0.4,0.8), phase_range = (-np.pi/2,np.pi/2),
