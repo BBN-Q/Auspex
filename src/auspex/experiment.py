@@ -567,6 +567,7 @@ class Experiment(metaclass=MetaExperiment):
         time.sleep(0.1)
         #connect all instruments
         self.connect_instruments()
+        assert self.instrs_connected == True, "Instruments did not connect successfully."
 
         try:
             #initialize instruments
