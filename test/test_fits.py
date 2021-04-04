@@ -154,6 +154,19 @@ class TestFitMethods(unittest.TestCase, FitAssertion):
         self.assertFitInterval(p0[0], "f", fit)
         self.assertFitInterval(p0[2], "tau", fit)
 
+    def test_JAZZ_1f(self):
+        #x, f1, A1, tau1, phi1, y0_1, f2, A2, tau2, phi2, y0_2
+
+        p0 = [0.20, 1.0, 11.3, 0.01, 0.1]
+        p1 = [0.22, 1.0, 11.3, 0.01, 0.1]
+        x = np.linspace(0, 30, 201)
+        y = np.append(qubit_fits.RamseyFit._model_1f(x, *p0), qubit_fits.RamseyFit._model_1f(x, *p1))
+        noise = np.random.randn(y.size) * np.max(y)/10
+        y += noise
+
+        fit = qubit_fits.JAZZFit(np.linspace(0, 60, 402), y, make_plots=False)
+        self.assertAlmostEqual(fit.ZZ, 0.020, places=2)
+
     def test_RamseyFit_2f(self):
         #x, f, A, tau, phi, y0
 
