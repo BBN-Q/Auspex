@@ -90,7 +90,7 @@ class TestFitMethods(unittest.TestCase, FitAssertion):
         p = [0.35, 2.8, 2.04, 0.88, 1.93, -2.3, 1.19]
         x = np.linspace(-10, 10)
         y = fits.MultiGaussianFit._model(x, *p)
-        noise = np.random.randn(y.size) * 0.2
+        noise = np.random.randn(y.size) * 0.15
         y += noise
         fit = fits.MultiGaussianFit(x, y, make_plots=False, n_gaussians=2)
 
