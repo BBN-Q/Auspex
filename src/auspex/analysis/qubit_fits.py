@@ -305,6 +305,86 @@ class RamseyFit(AuspexFit):
                     "phi": p[3],
                     "y0": p[4]}
 
+class JAZZFit(AuspexFit):
+
+    """Fit two Ramsey experiments using a one frequency decaying
+        sine model.
+    """
+
+    xlabel = "Delay"
+    ylabel = r"<$\sigma_z$>"
+    title = "JAZZ Fit"
+
+    def __init__(self, xpts, ypts, make_plots=False, ax=None):
+        """One or two frequency Ramsey experiment fit. If a two-frequency fit is selected
+            by the user or by comparing AIC scores, fit parameters are returned as tuples instead
+            of single numbers.
+
+        Args:
+            xpts (numpy.array): Time data points.
+            ypts (numpy.array): Qubit measurements.
+            make_plots (Bool): Display a plot of data and fit result.
+            ax (Axes, optional): Axes on which to draw plot. If None, new figure is created
+        """
+
+        self.plots = make_plots
+        self.ax = ax
+
+        assert len(xpts) == len(ypts), "Length of X and Y points must match!"
+        self.xpts_0 = xpts[len(xpts)//2:]
+        self.ypts_0 = ypts[len(ypts)//2:]
+
+        self.xpts_1 = xpts[:len(xpts)//2]
+        self.ypts_1 = ypts[:len(ypts)//2]
+
+        self.fit0 = RamseyFit(self.xpts_0, self.ypts_0, two_freqs=False, make_plots=False)
+        self.fit1 = RamseyFit(self.xpts_1, self.ypts_1, two_freqs=False, make_plots=False)
+        # self._do_fit()
+
+        if self.plots:
+            self.make_plots
+
+    def make_plots(self):
+            if self.ax is None:
+                plt.figure()
+                plt.plot(self.fit0.xpts, self.fit0.ypts, ".", markersize=15, label="Data_Id")
+                plt.plot(self.fit0.xpts, self.fit0.model(self.fit0.xpts), "-", linewidth=3, label="Id")
+                plt.plot(self.fit1.xpts, self.fit1.ypts, ".", markersize=15, label="Data_X")
+                plt.plot(self.fit1.xpts, self.fit1.model(self.fit1.xpts), "-", linewidth=3, label="X")
+                plt.xlabel(self.xlabel, fontsize=14)
+                plt.ylabel(self.ylabel, fontsize=14)
+                plt.title(self.title, fontsize=14)
+                plt.legend()
+                plt.annotate(self.annotation(), xy=(0.4, 0.10),
+                             xycoords='axes fraction', size=12)
+            else:
+                self.ax.plot(self.fit0.xpts, self.fit0.ypts, ".", markersize=15, label="Data_Id")
+                self.ax.plot(self.fit0.xpts, self.fit0.model(self.fit0.xpts), "-", linewidth=3, label="Id")
+                self.ax.plot(self.fit1.xpts, self.fit1.ypts, ".", markersize=15, label="Data_X")
+                self.ax.plot(self.fit1.xpts, self.fit1.model(self.fit1.xpts), "-", linewidth=3, label="X")
+                self.ax.set_xlabel(self.xlabel, fontsize=14)
+                self.ax.set_ylabel(self.ylabel, fontsize=14)
+                self.ax.set_title(self.title, fontsize=14)
+                self.ax.legend()
+                self.ax.annotate(self.annotation(), xy=(0.4, 0.10),
+                             xycoords='axes fraction', size=12)
+
+    def annotation(self):
+        return r"$\Delta \, f$ = {0:.2e} {1} {2:.2e}".format(self.ZZ, 
+                                                          chr(177), 
+                                                          self.ZZ_error)
+
+    @property
+    def ZZ(self):
+        return self.fit0.fit_params["f"] - self.fit1.fit_params["f"]
+
+    @property
+    def ZZ_error(self):
+        return np.sqrt(self.fit0.fit_errors["f"]**2 + self.fit1.fit_errors["f"]**2)
+
+    def _fit_dict(self):
+        return {"ZZ": ZZ, "ZZ_error": self.ZZ_error}
+
 class SingleQubitRBFit(AuspexFit):
     """Fit to an RB decay curve using the model A*(r^n) + B
     """
