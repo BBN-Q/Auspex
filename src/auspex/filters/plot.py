@@ -47,7 +47,7 @@ class Plotter(Filter):
         self._final_buffer = Queue()
         self.final_buffer = None
 
-        self.quince_parameters = [self.plot_dims, self.plot_mode]
+        # self.quince_parameters = [self.plot_dims, self.plot_mode]
 
         # Unique id for plot server
         self.uuid = None

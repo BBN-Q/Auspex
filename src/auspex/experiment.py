@@ -10,6 +10,7 @@ import os
 import sys
 import uuid
 import json
+import traceback
 
 from auspex.log import logger
 
@@ -179,6 +180,9 @@ class Experiment(metaclass=MetaExperiment):
 
         # Should we show the dashboard?
         self.dashboard = False
+
+        # Profile?
+        self.profile = False
 
         # Multiprocessing manager?
         self.manager = mp.Manager()
@@ -814,13 +818,13 @@ class Experiment(metaclass=MetaExperiment):
                         logger.info("Connection established to plot server.")
                         self.do_plotting = True
                     else:
-                        raise Exception("Server returned invalid message, expected ACK.")
+                        raise Exception("Plot server returned invalid message, expected ACK.")
                 except:
-                    logger.info("Could not connect to server.")
+                    logger.info("Could not connect to plot server.")
                     for p in self.plotters:
                         p.do_plotting = False
             else:
-                logger.info("Plot Server did not respond.")
+                logger.info("Plot server did not respond.")
                 for p in self.plotters:
                     p.do_plotting = False
 
