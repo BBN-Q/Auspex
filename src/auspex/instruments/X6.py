@@ -22,7 +22,7 @@ import auspex.config as config
 from .instrument import Instrument, ReceiverChannel
 from unittest.mock import MagicMock
 
-from multiprocessing import Value
+from multiprocess import Value
 
 # win32 doesn't support MSG_WAITALL, so on windows we
 # need to do things a slower, less efficient way.
@@ -276,37 +276,48 @@ class X6(Instrument):
 
         return total
 
-    def receive_data(self, channel, oc, exit, ready, run):
+    @staticmethod
+    def receive_data(sock, oc, exit, ready, run, panic, last_timestamp, dtype):
         try:
-            sock = self._chan_to_rsocket[channel]
             sock.settimeout(10)
-            self.last_timestamp.value = datetime.datetime.now().timestamp()
+            last_timestamp.value = datetime.datetime.now().timestamp()
             total = 0
             ready.value += 1
 
-            logger.debug(f"{self} receiver launched with pid {os.getpid()}. ppid {os.getppid()}")
-            while not exit.is_set():
+            # logger.info(f"X6 Receiver launched with pid {os.getpid()}. ppid {os.getppid()}")
+            while not exit.is_set() and not panic.is_set():
                 # push data from a socket into an OutputConnector (oc)
                 # wire format is just: [size, buffer...]
                 # TODO receive 4 or 8 bytes depending on sizeof(size_t)
                 run.wait() # Block until we are running again
                 try:
                     msg = sock.recv(8)
-                    self.last_timestamp.value = datetime.datetime.now().timestamp()
+                    last_timestamp.value = datetime.datetime.now().timestamp()
                 except:
+                    logger.warning("Exceeded X6 listener socket timeout")
+                    if not exit.is_set():
+                        logger.warning("X6 listener timed out after 10 seconds, panic.")
+                        panic.set()
+                    break
+
+                if msg == b'':
+                    logger.info("X6 listener received blank message. This seems to happen when using multiprocessing with spawn instead of fork (i.e. on Windows)")
                     continue
 
                 # reinterpret as int (size_t)
                 msg_size = struct.unpack('n', msg)[0]
                 buf = sock_recvall(sock, msg_size)
                 if len(buf) != msg_size:
-                    logger.error("Channel %s socket msg shorter than expected" % channel.channel)
-                    logger.error("Expected %s bytes, received %s bytes" % (msg_size, len(buf)))
+                    # logger.error("Channel %s socket msg shorter than expected" % channel.channel)
+                    logger.error("X6 listener expected %s bytes, received %s bytes" % (msg_size, len(buf)))
                     return
-                data = np.frombuffer(buf, dtype=channel.dtype)
+                data = np.frombuffer(buf, dtype=dtype)
                 # logger.info(f"X6 {msg_size} got {len(data)}")
                 total += len(data)
                 oc.push(data)
+                # logger.info(f"listener got {data} ---- {oc.output_streams[0].queue}")
+                # raise Exception("Fake Error")
+
 
             # logger.info('RECEIVED %d %d', total, oc.points_taken.value)
             # TODO: this is suspeicious
@@ -322,12 +333,18 @@ class X6(Instrument):
                         break
             # logger.info("X6 receive data exiting")
         except Exception as e:
-            logger.warning(f"{self} receiver raised exception {e}. Bailing.")
+            import traceback
+            just_the_string = traceback.format_exc()
+            logger.warning(f"X6 listener raised exception {e}. Bailing.")
+
+            logger.warning(just_the_string)
+            logger.warning(f"X6 listener raised exception {e}. Bailing.")
+            panic.set()
 
     def get_buffer_for_channel(self, channel):
         return self._lib.transfer_stream(*channel.channel)
 
-    def wait_for_acquisition(self, dig_run, timeout=15, ocs=None, progressbars=None):
+    def wait_for_acquisition(self, dig_run, panic, timeout=15, ocs=None, progressbars=None):
 
         progress_updaters = {}
         if ocs and progressbars:
@@ -355,15 +372,17 @@ class X6(Instrument):
                         total_spewed += self.spew_fake_data(counter, self.ideal_data)
                 else:
                     total_spewed += self.spew_fake_data(counter, [0.0 for i in range(self.number_segments)])
-                # logger.info(f"Spewed {total_spewed}")
-                time.sleep(0.0001)
+                # logger.info(f"Spewed {total_spewed}... {j}")
+                time.sleep(0.0005)
 
             self.ideal_counter += 1
             # logger.info("Counter: %s", str(counter))
             # logger.info('TOTAL fake data generated %d', total_spewed)
             if ocs:
-                while True:
+                while not panic.is_set():
                     total_taken = 0
+                    if not dig_run.is_set():
+                        self.last_timestamp.value = datetime.datetime.now().timestamp()
                     for oc in ocs:
                         total_taken += oc.points_taken.value - initial_points[oc]
                         if progressbars:
@@ -372,9 +391,13 @@ class X6(Instrument):
                     if total_taken == total_spewed:
                         break
                     # logger.info('WAITING for acquisition to finish %d < %d', total_taken, total_spewed)
+                    
+                    if (datetime.datetime.now().timestamp() - self.last_timestamp.value) > timeout:
+                        logger.error("Digitizer %s timed out while sending fake data.", self.name)
+                        break
                     time.sleep(0.025)
                 for oc in ocs:
-                    if progressbars:
+                    if progressbars and (datetime.datetime.now().timestamp() - self.last_timestamp.value) > 1.0:
                         try:
                             progressbars[oc].next()
                             progressbars[oc].finish()

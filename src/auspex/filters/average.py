@@ -188,21 +188,42 @@ class Averager(Filter):
         if self.points_before_final_average is None:
             raise Exception("Average has not been initialized. Run 'update_descriptors'")
 
-        self.completed_averages = 0
-        self.idx_frame          = 0
-        self.idx_global         = 0
-        # We only need to accumulate up to the averaging axis
-        # BUT we may get something longer at any given time!
-        self.carry = np.zeros(0, dtype=self.source.descriptor.dtype)
+    def get_config(self):
+        config = super().get_config()
+        config['dtype']              = self.source.descriptor.dtype
+        config['completed_averages'] = 0
+        config['idx_frame']          = 0
+        config['idx_global']         = 0
+        config['passthrough']        = self.passthrough
+        config['pbfa']               = self.points_before_final_average
+        config['pbpa']               = self.points_before_partial_average
+        config['reshape_dims']       = self.reshape_dims
+        config['mean_axis']          = self.mean_axis
+        config['threshold']          = self.threshold.value
+        config['is_adaptive']        = self.sink.descriptor.is_adaptive()
+        config['num_averages']       = self.num_averages
+        config['axis_num']           = self.axis_num
+        config['avg_dims']           = self.avg_dims
+        config['data_dims']          = self.data_dims
+        config['last_update']        = self.last_update
+        config['update_interval']    = self.update_interval
+        return config
 
-    def process_data(self, data):
+    @classmethod
+    def execute_on_run(cls, config):
+        config['sum_so_far']        = np.zeros(config['avg_dims'], dtype=config['dtype'])
+        config['current_avg_frame'] = np.zeros(config['pbfa'], dtype=config['dtype'])
+        config['excited_counts']    = np.zeros(config['data_dims'], dtype=np.int64)
+        config['carry']             = np.zeros(0, dtype=config['dtype'])
 
-        if self.passthrough:
-            for os in self.source.output_streams:
+    @classmethod
+    def process_data(cls, config, ocs, ics, data):
+        if config['passthrough']:
+            for os in ocs['source'].output_streams:
                 os.push(data)
-            for os in self.final_variance.output_streams:
+            for os in ocs['final_variance'].output_streams:
                 os.push(data*0.0)
-            for os in self.partial_average.output_streams:
+            for os in ocs['partial_average'].output_streams:
                 os.push(data)
             return
 
@@ -213,100 +234,86 @@ class Averager(Filter):
         elif not isinstance(data, np.ndarray) and (data.size == 1):
             data = np.array([data])
 
-        if self.carry.size > 0:
-            data = np.concatenate((self.carry, data))
-            self.carry = np.zeros(0, dtype=self.source.descriptor.dtype)
+        if config['carry'].size > 0:
+            data = np.concatenate((config['carry'], data))
+            config['carry'] = np.zeros(0, dtype=config['dtype'])
 
         idx       = 0
         while idx < data.size:
             #check whether we have enough data to fill an averaging frame
-            if data.size - idx >= self.points_before_final_average:
+            if data.size - idx >= config['pbfa']:
                 #logger.debug("Have {} points, enough for final avg.".format(data.size))
                 # How many chunks can we process at once?
-                num_chunks = int((data.size - idx)/self.points_before_final_average)
-                new_points = num_chunks*self.points_before_final_average
-                reshaped   = data[idx:idx+new_points].reshape(self.reshape_dims)
-                averaged   = reshaped.mean(axis=self.mean_axis)
+                num_chunks = int((data.size - idx)/config['pbfa'])
+                new_points = num_chunks*config['pbfa']
+                reshaped   = data[idx:idx+new_points].reshape(config['reshape_dims'])
+                averaged   = reshaped.mean(axis=config['mean_axis'])
                 idx       += new_points
 
                 # do state assignment
-                excited_states = (np.real(reshaped) > self.threshold.value).sum(axis=self.mean_axis)
-                ground_states = self.num_averages - excited_states
+                excited_states = (np.real(reshaped) > config['threshold']).sum(axis=config['mean_axis'])
+                ground_states = config['num_averages'] - excited_states
 
-                if self.sink.descriptor.is_adaptive():
-                    new_tuples = self.sink.descriptor.tuples()[self.idx_global:self.idx_global + new_points]
-                    new_tuples_stripped = remove_fields(new_tuples, self.axis.value)
-                    take_axis = -1 if self.axis_num > 0 else 0
-                    reduced_tuples = new_tuples_stripped.reshape(self.reshape_dims).take((0,), axis=take_axis)
-                    self.idx_global += new_points
-
-                # Add to Visited tuples
-                if self.sink.descriptor.is_adaptive():
-                    for os in self.source.output_streams + self.final_variance.output_streams + self.partial_average.output_streams:
-                        os.descriptor.visited_tuples = np.append(os.descriptor.visited_tuples, reduced_tuples)
-
-                for os in self.source.output_streams:
+                for os in ocs['source'].output_streams:
                     os.push(averaged)
-
-                for os in self.final_variance.output_streams:
-                    os.push(reshaped.var(axis=self.mean_axis, ddof=1)) # N-1 in the denominator
-
-                for os in self.partial_average.output_streams:
+                for os in ocs['final_variance'].output_streams:
+                    os.push(reshaped.var(axis=config['mean_axis'], ddof=1)) # N-1 in the denominator
+                for os in ocs['partial_average'].output_streams:
                     os.push(averaged)
-
-                for os in self.final_counts.output_streams:
+                for os in ocs['final_counts'].output_streams:
                     os.push(ground_states)
                     os.push(excited_states)
 
             # Maybe we can fill a partial frame
-            elif data.size - idx >= self.points_before_partial_average:
+            elif data.size - idx >= config['pbpa']:
                 # logger.info("Have {} points, enough for partial avg.".format(data.size))
                 # How many chunks can we process at once?
-                num_chunks       = int((data.size - idx)/self.points_before_partial_average)
-                new_points       = num_chunks*self.points_before_partial_average
+                num_chunks       = int((data.size - idx)/config['pbpa'])
+                new_points       = num_chunks*config['pbpa']
 
                 # Find the appropriate dimensions for the partial
-                partial_reshape_dims = self.reshape_dims[:]
-                partial_reshape_dims[self.mean_axis] = -1
-                partial_reshape_dims = partial_reshape_dims[self.mean_axis:]
+                partial_reshape_dims = config['reshape_dims'][:]
+                partial_reshape_dims[config['mean_axis']] = -1
+                partial_reshape_dims = partial_reshape_dims[config['mean_axis']:]
 
                 reshaped         = data[idx:idx+new_points].reshape(partial_reshape_dims)
-                summed           = reshaped.sum(axis=self.mean_axis)
-                self.sum_so_far += summed
+                summed           = reshaped.sum(axis=config['mean_axis'])
+                config['sum_so_far'] += summed
 
-                self.current_avg_frame[self.idx_frame:self.idx_frame+new_points] = data[idx:idx+new_points]
+                config['current_avg_frame'][config['idx_frame']:config['idx_frame']+new_points] = data[idx:idx+new_points]
                 idx             += new_points
-                self.idx_frame  += new_points
+                config['idx_frame']  += new_points
 
-                self.completed_averages += num_chunks
+                config['completed_averages'] += num_chunks
 
                 # If we now have enoough for the final average, push to both partial and final...
-                if self.completed_averages == self.num_averages:
-                    reshaped = self.current_avg_frame.reshape(partial_reshape_dims)
-                    for os in self.source.output_streams + self.partial_average.output_streams:
-                        os.push(reshaped.mean(axis=self.mean_axis))
-                    for os in self.final_variance.output_streams:
-                        os.push(np.real(reshaped).var(axis=self.mean_axis, ddof=1)+1j*np.imag(reshaped).var(axis=self.mean_axis, ddof=1)) # N-1 in the denominator
+                if config['completed_averages'] == config['num_averages']:
+                    reshaped = config['current_avg_frame'].reshape(partial_reshape_dims)
+                    for os in ocs['source'].output_streams + ocs['partial_average'].output_streams:
+                        os.push(reshaped.mean(axis=config['mean_axis']))
+                    for os in ocs['final_variance'].output_streams:
+                        os.push(np.real(reshaped).var(axis=config['mean_axis'], ddof=1)+1j*np.imag(reshaped).var(axis=config['mean_axis'], ddof=1)) # N-1 in the denominator
 
                     # do state assignment
-                    excited_states = (np.real(reshaped) < self.threshold.value).sum(axis=self.mean_axis)
-                    ground_states  = self.num_averages - excited_states
-                    for os in self.final_counts.output_streams:
+                    excited_states = (np.real(reshaped) < config['threshold']).sum(axis=config['mean_axis'])
+                    ground_states  = config['num_averages'] - excited_states
+                    for os in ocs['final_counts'].output_streams:
                         os.push(ground_states)
                         os.push(excited_states)
 
-                    self.sum_so_far[:]        = 0.0
-                    self.current_avg_frame[:] = 0.0
-                    self.completed_averages   = 0
-                    self.idx_frame            = 0
+                    config['sum_so_far'][:]        = 0.0
+                    config['current_avg_frame'][:] = 0.0
+                    config['completed_averages']   = 0
+                    config['idx_frame']            = 0
                 else:
                     # Emit a partial average since we've accumulated enough data
-                    if (time.time() - self.last_update >= self.update_interval):
-                        for os in self.partial_average.output_streams:
-                            os.push(self.sum_so_far/self.completed_averages)
-                        self.last_update = time.time()
+                    if (time.time() - config['last_update'] >= config['update_interval']):
+                        for os in ocs['partial_average'].output_streams:
+                            os.push(config['sum_so_far']/config['completed_averages'])
+                        config['last_update'] = time.time()
 
             # otherwise just add it to the carry
             else:
-                self.carry = data[idx:]
+                config['carry'] = data[idx:]
                 break
+        # raise Exception("Fake Error")

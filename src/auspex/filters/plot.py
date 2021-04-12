@@ -24,8 +24,8 @@ if sys.platform == 'win32' or 'NOFORKING' in os.environ:
     import threading as mp
     from queue import Queue
 else:
-    import multiprocessing as mp
-    from multiprocessing import Queue
+    import multiprocess as mp
+    from multiprocess import Queue
 
 class Plotter(Filter):
     sink      = InputConnector()

@@ -20,7 +20,7 @@ import sys
 if sys.platform == 'win32' or 'NOFORKING' in os.environ:
     from queue import Queue
 else:
-    from multiprocessing import Queue
+    from multiprocess import Queue
 
 from .filter import Filter
 from auspex.parameter import Parameter, FloatParameter, IntParameter, BoolParameter

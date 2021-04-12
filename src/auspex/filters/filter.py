@@ -10,17 +10,17 @@ __all__ = ['Filter']
 
 import os
 import sys
+import traceback
 import psutil
 
 if sys.platform == 'win32' or 'NOFORKING' in os.environ:
-    from threading import Thread as Process
     from threading import Event
     from queue import Queue
 else:
-    from multiprocessing import Process
-    from multiprocessing import Event
-    from multiprocessing import Queue
-    from multiprocessing import Value, Array
+    from multiprocess import Event
+    from multiprocess import Queue
+    from multiprocess import Value, Array
+    import multiprocess as mp
 
 from setproctitle import setproctitle
 import cProfile
@@ -31,10 +31,10 @@ import copy
 import ctypes
 import numpy as np
 
+import auspex.config
 from auspex.parameter import Parameter
 from auspex.stream import DataStream, InputConnector, OutputConnector
 from auspex.log import logger
-import auspex.config
 
 class MetaFilter(type):
     """Meta class to bake the input/output connectors into a Filter class description
@@ -59,27 +59,20 @@ class MetaFilter(type):
                     v.name = k
                 self._parameters.append(v)
 
-class Filter(Process, metaclass=MetaFilter):
+class Filter(object, metaclass=MetaFilter):
     """Any node on the graph that takes input streams with optional output streams"""
 
-    def __init__(self, name=None, **kwargs):
+    def __init__(self, name=None, manager=None, **kwargs):
         super(Filter, self).__init__()
         self.filter_name = name
         self.input_connectors = {}
         self.output_connectors = {}
         self.parameters = {}
         self.qubit_name = ""
+        self.manager = manager
 
-        # Event for killing the filter properly
-        self.exit = Event()
+        # Event for keeping track of individual filters being done
         self.done = Event()
-
-        # Keep track of data throughput
-        self.processed = 0
-
-        # For objectively measuring doneness
-        self.finished_processing = Event()
-        self.finished_processing.clear()
 
         for ic in self._input_connectors:
             a = InputConnector(name=ic, parent=self)
@@ -98,8 +91,6 @@ class Filter(Process, metaclass=MetaFilter):
             setattr(self, param.name, a)
 
         # For sending performance information
-        self.last_performance_update = datetime.datetime.now()
-        self.beginning = datetime.datetime.now()
         self.perf_queue = None
 
     def __repr__(self):
@@ -118,9 +109,10 @@ class Filter(Process, metaclass=MetaFilter):
                     param.value = getattr(proxy_obj, name)
             else:
                 raise ValueError(f"{proxy_obj} was expected to have parameter {name}")
+                raise ValueError(f"{proxy_obj} was expected to have parameter {name}")
 
     def __repr__(self):
-        return "<{}(name={})>".format(self.__class__.__name__, self.name)
+        return "<{}(name={})>".format(self.__class__.__name__, self.filter_name)
 
     def update_descriptors(self):
         """This method is called whenever the connectivity of the graph changes. This may have implications
@@ -141,15 +133,26 @@ class Filter(Process, metaclass=MetaFilter):
         """Return a dict of the output descriptors."""
         return {'source': v for v in input_descriptors.values()}
 
-    def on_done(self):
+    def final_init(self):
+        """Any final configuration that gets run in the main thread before a process is
+        spawned on the class run method"""
+        pass
+
+    def get_config(self):
+        """Return a config dictionary for this object"""
+        config = {}
+        config['name']      = str(self)
+        config['processed'] = 0
+        return config
+
+    @classmethod
+    def on_done(cls):
         """To be run when the done signal is received, in case additional steps are
         needed (such as flushing a plot or data)."""
         pass
 
-    def shutdown(self):
-        self.exit.set()
-
-    def _parent_process_running(self):
+    @classmethod
+    def _parent_process_running(cls):
         try:
             os.kill(os.getppid(), 0)
         except OSError:
@@ -157,112 +160,154 @@ class Filter(Process, metaclass=MetaFilter):
         else:
             return True
 
-    def run(self):
-        self.p = psutil.Process(os.getpid())
-        logger.debug(f"{self} launched with pid {os.getpid()}. ppid {os.getppid()}")
-        if auspex.config.profile:
-            if not self.filter_name:
-                name = "Unlabeled"
-            else:
-                name = self.filter_name
-            cProfile.runctx('self.main()', globals(), locals(), 'prof-%s-%s.prof' % (self.__class__.__name__, name))
-        else:
-            self.execute_on_run()
-            self.main()
-        self.done.set()
+    @classmethod
+    def spawn_fix(cls, ocs, ics):
+        for oc in ocs.values():
+            for stream in oc.output_streams:
+                stream.spawn_fix()
+        for ic in ics.values():
+            for stream in ic.input_streams:
+                stream.spawn_fix()
 
-    def execute_on_run(self):
+    @classmethod
+    def run(cls, config, exit, done, panic, ocs, ics, profile, perf_queue, output_queue):
+        """This is the entry function when filters are launched as Processes.
+        config:       configuration dictionary for any necessary parameters at run-time
+        exit:         event for killing the filter
+        done:         event the filter uses to declare it is done
+        panic:        event the filter 
+        ocs:          output connectors
+        ics:          input connectors
+        profile:      push performance information (Boolean)
+        perf_queue:   where to push the performance information
+        output_queue: queue for returning key, value pairs to the main process
+        """
+        try:
+            p = psutil.Process(os.getpid())
+            name = config["name"]
+            logger.debug(f"{name} launched with pid {os.getpid()}. ppid {os.getppid()}")
+            if profile:
+                cProfile.runctx('cls.main(config, exit, done, panic, ocs, ics, perf_queue)', globals(), locals(), 'prof-%s.prof' % name)
+            else:
+                cls.spawn_fix(ocs, ics)
+                cls.execute_on_run(config)
+                cls.main(config, exit, done, panic, ocs, ics, perf_queue)
+                cls.execute_after_run(config, output_queue)
+            done.set()
+        except Exception as e:
+            just_the_string = traceback.format_exc()
+            logger.warning(f"Filter {config['name']} raised exception {e} (traceback follows). Bailing.")
+            logger.warning(just_the_string)
+
+            panic.set()
+            done.set()
+
+    @classmethod
+    def execute_on_run(cls, config):
         pass
 
-    def push_to_all(self, message):
-        for oc in self.output_connectors.values():
+    @classmethod
+    def execute_after_run(cls, config, output_queue):
+        pass
+
+    @classmethod
+    def push_to_all(cls, ocs, message):
+        for oc in ocs.values():
             for ost in oc.output_streams:
                 ost.queue.put(message)
                 if message['type'] == 'event' and message["event_type"] == "done":
                     logger.debug(f"Closing out queue {ost.queue}")
                     ost.queue.close()
 
-    def push_resource_usage(self):
-        if self.perf_queue and (datetime.datetime.now() - self.last_performance_update).seconds > 1.0:
-            perf_info = (str(self), datetime.datetime.now()-self.beginning, self.p.cpu_percent(), self.p.memory_info(), self.processed)
-            self.perf_queue.put(perf_info)
-            self.last_performance_update = datetime.datetime.now()
+    @classmethod
+    def push_resource_usage(cls, name, perf_queue, beginning, last_performance_update, processed):
+        if perf_queue and (datetime.datetime.now() - last_performance_update).seconds > 1.0:
+            perf_info = (name, datetime.datetime.now()-beginning, p.cpu_percent(), p.memory_info(), processed)
+            perf_queue.put(perf_info)
 
-    def process_message(self, msg):
+    @classmethod
+    def process_message(cls, config, msg):
         """To be overridden for interesting default behavior"""
         pass
 
-    def checkin(self):
+    @classmethod
+    def checkin(cls, config):
         """For any filter-specific loop needs"""
         pass
 
-    def main(self):
+    @classmethod
+    def process_data(cls, config, ocs, ics, message_data):
+        """Specific per-filter data processing"""
+        pass
+
+    @classmethod
+    def main(cls, config, exit, done, panic, ocs, ics, perf_queue):
         """
         Generic run method which waits on a single stream and calls `process_data` on any new_data
         """
-        # try:
+        name = config["name"]
+        setproctitle(f"auspex filt: {name}")
 
-        logger.debug('Running "%s" run loop', self.filter_name)
-        setproctitle(f"python auspex filter: {self}")
-        input_stream = getattr(self, self._input_connectors[0]).input_streams[0]
+        # Assume we only have a single input stream in this base implementation
+        input_stream = list(ics.values())[0].input_streams[0]
         desc = input_stream.descriptor
 
-        stream_done = False
+        stream_done   = False
         stream_points = 0
 
-        while not self.exit.is_set():# and not self.finished_processing.is_set():
-            # Try to pull all messages in the queue. queue.empty() is not reliable, so we
-            # ask for forgiveness rather than permission.
+        # For performance profiling
+        beginning = datetime.datetime.now()
+        last_performance_update = datetime.datetime.now()
+
+        while not exit.is_set() and not panic.is_set():
             messages = []
 
             # For any filter-specific loop needs
-            self.checkin()
+            cls.checkin(config)
 
             # Check to see if the parent process still exists:
-            if not self._parent_process_running():
-                logger.warning(f"{self} with pid {os.getpid()} could not find parent with pid {os.getppid()}. Assuming something has gone wrong. Exiting.")
+            if not cls._parent_process_running():
+                logger.warning(f"{name} with pid {os.getpid()} could not find parent with pid {os.getppid()}. Assuming something has gone wrong. Exiting.")
                 break
 
-            while not self.exit.is_set():
+            while not exit.is_set():
                 try:
                     messages.append(input_stream.queue.get(False))
                 except queue.Empty as e:
                     time.sleep(0.002)
                     break
+            
+            cls.push_resource_usage(name, perf_queue, beginning, last_performance_update, config['processed'])
+            last_performance_update = datetime.datetime.now()
 
-            self.push_resource_usage()
             for message in messages:
                 message_type = message['type']
                 if message['type'] == 'event':
-                    logger.debug('%s "%s" received event with type "%s"', self.__class__.__name__, message_type)
+                    logger.debug('%s received event with type "%s"', name, message['event_type'])
 
                     # Check to see if we're done
                     if message['event_type'] == 'done':
-                        logger.debug(f"{self} received done message!")
+                        logger.debug(f"{name} received done message!")
                         stream_done = True
                     else:
                         # Propagate along the graph
-                        self.push_to_all(message)
-                        self.process_message(message)
+                        cls.push_to_all(ocs, message)
+                        cls.process_message(config, message)
 
                 elif message['type'] == 'data':
-                    # if not hasattr(message_data, 'size'):
-                    #     message_data = np.array([message_data])
                     message_data = input_stream.pop()
                     if message_data is not None:
-                        logger.debug('%s "%s" received %d points.', self.__class__.__name__, self.filter_name, message_data.size)
+                        logger.debug('%s received %d points.', name, message_data.size)
                         logger.debug("Now has %d of %d points.", input_stream.points_taken.value, input_stream.num_points())
                         stream_points += len(message_data)
-                        self.process_data(message_data)
-                        self.processed += message_data.nbytes
+                        cls.process_data(config, ocs, ics, message_data)
+                        config['processed'] += message_data.nbytes
 
             if stream_done:
-                self.push_to_all({"type": "event", "event_type": "done", "data": None})
-                self.done.set()
+                cls.push_to_all(ocs, {"type": "event", "event_type": "done", "data": None})
+                done.set()
                 break
 
         # When we've finished, either prematurely or as expected
-        self.on_done()
+        cls.on_done()
 
-        # except Exception as e:
-        #     logger.warning(f"Filter {self} raised exception {e}. Bailing.")
