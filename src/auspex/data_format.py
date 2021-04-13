@@ -94,14 +94,7 @@ class AuspexDataContainer(object):
         filename = os.path.join(self.base_path,groupname,datasetname+'_meta.json')
         assert not os.path.exists(filename), "Existing dataset metafile found. Did you want to open instead?"
         meta = {'shape': tuple(descriptor.dims()), 'dtype': np.dtype(descriptor.dtype).str}
-        meta['axes'] = {a.name: a.points.tolist() for a in descriptor.axes}
-        meta['units'] = {a.name: a.unit for a in descriptor.axes}
-        meta['meta_data'] = {}
-        for a in descriptor.axes:
-            if a.metadata is not None:
-                meta['meta_data'][a.name] = a.metadata
-            else:
-                meta['meta_data'][a.name] = None
+        meta['axes'] = [{'name': a.name, 'unit': a.unit, 'points': a.points.tolist(), 'metadata': a.metadata} for a in descriptor.axes]
         meta['filename'] = os.path.join(self.base_path,groupname,datasetname)
         with open(filename, 'w') as f:
             json.dump(meta, f)
@@ -164,8 +157,8 @@ class AuspexDataContainer(object):
         del mm
 
         desc = DataStreamDescriptor(meta['dtype'])
-        for name, points in meta['axes'].items():
-            ax = DataAxis(name, points, unit=meta['units'][name])
-            ax.metadata = meta['meta_data'][name]
+        for a in meta['axes'][::-1]:
+            ax = DataAxis(a['name'], a['points'], unit=a['unit'])
+            ax.metadata = a['metadata']
             desc.add_axis(ax)
         return data, desc, self.base_path.replace('.auspex', '')

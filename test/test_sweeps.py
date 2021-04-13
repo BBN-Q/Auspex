@@ -9,6 +9,7 @@
 import unittest
 import time
 import os
+import tempfile
 import numpy as np
 
 import auspex.config as config
@@ -18,7 +19,7 @@ from auspex.experiment import Experiment
 from auspex.parameter import FloatParameter
 from auspex.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector
 from auspex.filters.debug import Print
-from auspex.filters.io import WriteToFile
+from auspex.filters.io import WriteToFile, DataBuffer
 from auspex.log import logger
 
 class SweptTestExperiment(Experiment):
@@ -103,7 +104,7 @@ class SweepTestCase(unittest.TestCase):
         exp.set_graph(edges)
 
         def rf(sweep_axis, exp):
-            logger.debug("Running refinement function.")
+            logger.info("Running refinement function.")
             if sweep_axis.num_points() >= 5:
                 return False
             sweep_axis.add_points(sweep_axis.points[-1]*2)
@@ -134,6 +135,38 @@ class SweepTestCase(unittest.TestCase):
         exp.add_sweep([exp.field, exp.freq], coords)
         exp.run_sweeps()
         self.assertTrue(pri.sink.input_streams[0].points_taken.value == exp.voltage.num_points())
+
+    def test_unstructured_sweep_io(self):
+        exp = SweptTestExperiment()
+        pri = Print()
+        buf = DataBuffer()
+
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            wri = WriteToFile(tmpdirname+"/test.auspex")
+
+            edges = [(exp.voltage, pri.sink), (exp.voltage, buf.sink), (exp.voltage, wri.sink)]
+            exp.set_graph(edges)
+
+            coords = [[ 0, 0.1],
+                      [10, 4.0],
+                      [15, 2.5],
+                      [40, 4.4],
+                      [50, 2.5],
+                      [60, 1.4],
+                      [65, 3.6],
+                      [66, 3.5],
+                      [67, 3.6],
+                      [68, 1.2]]
+            exp.add_sweep([exp.field, exp.freq], coords)
+            exp.run_sweeps()
+
+            self.assertTrue(pri.sink.input_streams[0].points_taken.value == exp.voltage.num_points())
+
+            data, desc, _ = wri.get_data()
+            self.assertTrue(np.allclose(desc.axes[0].points, coords))
+
+            data, desc = buf.get_data()
+            self.assertTrue(np.allclose(desc.axes[0].points, coords))
 
 if __name__ == '__main__':
     unittest.main()
