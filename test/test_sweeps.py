@@ -137,11 +137,11 @@ class SweepTestCase(unittest.TestCase):
         self.assertTrue(pri.sink.input_streams[0].points_taken.value == exp.voltage.num_points())
 
     def test_unstructured_sweep_io(self):
-        exp = SweptTestExperiment()
-        pri = Print()
-        buf = DataBuffer()
 
         with tempfile.TemporaryDirectory() as tmpdirname:
+            exp = SweptTestExperiment()
+            pri = Print()
+            buf = DataBuffer()
             wri = WriteToFile(tmpdirname+"/test.auspex")
 
             edges = [(exp.voltage, pri.sink), (exp.voltage, buf.sink), (exp.voltage, wri.sink)]

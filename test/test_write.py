@@ -219,7 +219,6 @@ class WriteTestCase(unittest.TestCase):
             self.assertTrue(np.all(np.isnan(desc['samples'][3:])))
             self.assertTrue(np.all(desc.axis('samples').metadata == ["data", "data", "data", "0", "1"]))
 
-    @unittest.skip("Need to update tests for new auspex data writer")
     def test_write_metadata_unstructured(self):
         with tempfile.TemporaryDirectory() as tmpdirname:
             exp = SweptTestExperimentMetadata()
@@ -243,22 +242,11 @@ class WriteTestCase(unittest.TestCase):
             exp.add_sweep([exp.field, exp.freq], coords, metadata=md)
             exp.run_sweeps()
             self.assertTrue(os.path.exists(tmpdirname+"/test_write_metadata_unstructured-0000.auspex"))
-            with h5py.File(tmpdirname+"/test_write_metadata_unstructured-0000.auspex", 'r') as f:
-                self.assertTrue(0.0 not in f['main/data/voltage'])
-                self.assertTrue(np.sum(np.isnan(f['main/data/field'])) == 3*5 )
-                self.assertTrue(np.sum(np.isnan(f['main/data/freq'])) == 3*5 )
-                self.assertTrue(np.sum(np.isnan(f['main/data/samples'])) == 3*4*2 )
-
-                md_enum = f['main/field+freq_metadata_enum'][:]
-                md = f['main/data/field+freq_metadata'][:]
-                md = md_enum[md]
-
-                self.assertTrue(np.sum(md == b'a') == 5)
-                self.assertTrue(np.sum(md == b'b') == 5)
-                self.assertTrue(np.sum(md == b'c') == 5)
-                self.assertTrue("Here the run loop merely spews" in f.attrs['exp_src'])
-                self.assertTrue(f['main/data'].attrs['time_val'] == 0)
-                self.assertTrue(f['main/data'].attrs['unit_freq'] == "Hz")
+            data, desc, _ = wr.get_data()
+            self.assertTrue(0.0 not in data)
+            self.assertTrue(desc.axes[0].metadata == md)      
+            self.assertTrue(np.allclose(desc.axes[0].points[:9], coords[:9]))
+            self.assertTrue(np.sum(np.isnan(desc.axes[0].points)) == 6 )
 
     @unittest.skip("need to add metadata to adaptive sweeps")
     def test_write_metadata_unstructured_adaptive(self):
@@ -382,7 +370,6 @@ class WriteTestCase(unittest.TestCase):
                 self.assertTrue(len(f['main/data/freq'][:]) == 5*11*5)
                 self.assertTrue(f['main/data/freq'][:].sum() == (55*(1+2+4+8+16)))
 
-    @unittest.skip("Need to update tests for new auspex data writer")
     def test_write_unstructured_sweep(self):
         with tempfile.TemporaryDirectory() as tmpdirname:
             exp = SweptTestExperiment()
@@ -405,13 +392,8 @@ class WriteTestCase(unittest.TestCase):
             exp.run_sweeps()
             self.assertTrue(os.path.exists(tmpdirname+"/test_write_unstructured-0000.auspex"))
 
-            with h5py.File(tmpdirname+"/test_write_unstructured-0000.auspex", 'r') as f:
-                self.assertTrue(len(f['main/data/voltage']) == 5*10)
-                self.assertTrue(f[f['main/field+freq'][0]] == f['main/field'])
-                self.assertTrue(f[f['main/field+freq'][1]] == f['main/freq'])
-
-            data, desc = load_from_HDF5(tmpdirname+"/test_write_unstructured-0000.auspex", reshape=False)
-            self.assertTrue(data['main']['field'][-5:].sum() == 5*68)
+            data, desc, _ = wr.get_data()
+            self.assertTrue(np.allclose(desc.axes[0].points, coords))
 
     @unittest.skip("Need to update tests for new auspex data writer")
     def test_write_adaptive_unstructured_sweep(self):
