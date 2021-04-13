@@ -372,11 +372,6 @@ class Experiment(metaclass=MetaExperiment):
             # Run the procedure
             self.run()
 
-            # See if the axes want to extend themselves. They will push updates
-            # directly to the output_connecters as messages that will be passed
-            # through the filter pipeline.
-            self.sweeper.check_for_refinement(self.output_connectors)
-
             # Finish up, checking to see whether we've received all of our data
             if self.sweeper.done():
                 self.declare_done()
@@ -670,8 +665,8 @@ class Experiment(metaclass=MetaExperiment):
             logger.debug("Adding axis %s to connector %s.", axis, oc.name)
             oc.descriptor.add_axis(axis, position=position)
 
-    def add_sweep(self, parameters, sweep_list, refine_func=None, callback_func=None, metadata=None):
-        ax = SweepAxis(parameters, sweep_list, refine_func=refine_func, callback_func=callback_func, metadata=metadata)
+    def add_sweep(self, parameters, sweep_list, callback_func=None, metadata=None):
+        ax = SweepAxis(parameters, sweep_list, callback_func=callback_func, metadata=metadata)
         ax.experiment = self
         self.sweeper.add_sweep(ax)
         self.add_axis(ax)

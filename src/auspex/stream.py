@@ -61,7 +61,6 @@ class DataAxis(object):
         # this will hold the most recently added points of the axis.
         self.points        = np.array(points)
         self.unit          = unit
-        self.refine_func   = None
         self.metadata      = metadata
 
         # By definition data axes will be done after every experiment.run() call
@@ -146,7 +145,7 @@ class DataAxis(object):
 class SweepAxis(DataAxis):
     """ Structure for sweep axis, separate from DataAxis.
     Can be an unstructured axis, in which case 'parameter' is actually a list of parameters. """
-    def __init__(self, parameter, points = [], metadata=None, refine_func=None, callback_func=None):
+    def __init__(self, parameter, points = [], metadata=None, callback_func=None):
 
         self.unstructured = hasattr(parameter, '__iter__')
         self.parameter    = parameter
@@ -161,10 +160,6 @@ class SweepAxis(DataAxis):
         # Current value of the metadata
         if self.metadata is not None:
             self.metadata_value = self.metadata[0]
-
-        # This is run at the end of this sweep axis
-        # Refine_func receives the sweep axis and the experiment as arguments
-        self.refine_func = refine_func
 
         # This is run before each point in the sweep axis is executed
         # Callback_func receives the sweep axis and the experiment as arguments
@@ -193,37 +188,6 @@ class SweepAxis(DataAxis):
             self.push()
             self.step += 1
             self.done = False
-
-    def check_for_refinement(self, output_connectors_dict):
-        """Check to see if we need to perform any refinements. If there is a refine_func
-        and it returns a list of points, then we need to extend the axes. Otherwise, if the
-        refine_func returns None or false, then we reset the axis to its original set of points. If
-        there is no refine_func then we don't do anything at all."""
-
-        if not self.done and self.step==self.num_points():
-            logger.debug("Refining on axis {}".format(self.name))
-            if self.refine_func:
-                points = self.refine_func(self, self.experiment)
-                if points is None or points is False:
-                    # Returns false if no refinements needed, otherwise adds points to list
-                    self.step = 0
-                    self.done = True
-                    self.reset()
-                    logger.debug("Sweep Axis '{}' complete.".format(self.name))
-                    # Push to ocs, which should push to processes
-                    for oc in output_connectors_dict.values():
-                        oc.push_event("refined", (self.name, True, self.original_points)) # axis name, reset, points
-                    return False
-                self.add_points(points)
-                self.done = False
-                for oc in output_connectors_dict.values():
-                    oc.push_event("refined", (self.name, False, points)) # axis name, reset, points
-                return True
-            else:
-                self.step = 0
-                self.done = True
-                logger.debug("Sweep Axis '{}' complete.".format(self.name))
-                return False
 
     def push(self):
         """ Push parameter value(s) """
@@ -261,9 +225,6 @@ class DataStreamDescriptor(object):
 
         # Keep track of the parameter permutations we have actually used...
         self.visited_tuples = []
-
-    def is_adaptive(self):
-        return True in [a.refine_func is not None for a in self.axes]
 
     def add_axis(self, axis, position=0):
         # Check if axis is DataAxis or SweepAxis (which inherits from DataAxis)
@@ -445,9 +406,6 @@ class DataStreamDescriptor(object):
             axis_num = axis_name
         else:
             axis_num = self.axis_num(axis_name)
-
-        # if False in [a.refine_func is None for a in self.axes[axis_num:]]:
-        #     raise Exception("Cannot call num_points_through_axis with interior adaptive sweeps.")
 
         if axis_num >= len(self.axes):
             return 0

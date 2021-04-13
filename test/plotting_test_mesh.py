@@ -14,7 +14,6 @@ import sys
 import itertools
 
 import numpy as np
-# import h5py
 import matplotlib.pyplot as plt
 
 from auspex.experiment import Experiment, FloatParameter
@@ -23,8 +22,6 @@ from auspex.filters.plot import Plotter, MeshPlotter
 from auspex.filters.io import WriteToHDF5
 from auspex.log import logger, logging
 from auspex.refine import delaunay_refine_from_file
-# import auspex.analysis.switching as sw
-# from adapt import refine
 
 class TestExperiment(Experiment):
     """Here the run loop merely spews data until it fills up the stream. """
@@ -66,5 +63,5 @@ if __name__ == '__main__':
 
     refine_func = delaunay_refine_from_file(wr, 'duration', 'amplitude', 'voltage', max_points=1000, plotter=fig1)
 
-    exp.add_sweep([exp.duration, exp.amplitude], points, refine_func=refine_func)
+    exp.add_sweep([exp.duration, exp.amplitude], points)
     exp.run_sweeps()
