@@ -152,17 +152,19 @@ class SweepAxis(DataAxis):
         """ Update value after each run.
         """
         if self.step < self.num_points():
-            if self.callback_func:
-                self.callback_func(self, self.experiment)
             self.value = self.points[self.step]
             if self.metadata is not None:
                 self.metadata_value = self.metadata[self.step]
+            if self.callback_func:
+                self.callback_func(self.value, self.experiment)
             logger.debug("Sweep Axis '{}' at step {} takes value: {}.".format(self.name,
-                                                                               self.step,self.value))
+                                                                               self.step+1,self.value))
             self.push()
             self.step += 1
             self.done = False
-        elif self.step == self.num_points():
+        
+        if self.step == self.num_points():
+            logger.debug("Sweep Axis '{}' claims to be done.".format(self.name))
             self.step = 0
             self.done = True
 
@@ -263,7 +265,7 @@ class DataStreamDescriptor(object):
 
     def expected_num_points(self):
         if len(self.axes)>0:
-            return reduce(lambda x,y: x*y, [len(a.original_points) for a in self.axes])
+            return reduce(lambda x,y: x*y, [len(a.points) for a in self.axes])
         else:
             return 0
 
