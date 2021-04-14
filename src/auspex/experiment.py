@@ -384,16 +384,34 @@ class Experiment(metaclass=MetaExperiment):
 
     def connect_instruments(self):
         # Connect the instruments to their resources
-        if not self.instrs_connected:
+        if self.instrs_connected is False:
+            connected_list = []
             for instrument in self._instruments.values():
-                instrument.connect()
+                try:
+                    instrument.connect()
+                    connected_list.append(instrument)
+                except:
+                    logger.error(f"Failed to connect to instrument {instrument.name}")
+                    print(f"Failed to connect to instrument {instrument.name}")
+                    logger.error("Disconnecting from all previously connected instruments.")
+                    for instr in connected_list:
+                        try:
+                            instr.disconnect()
+                        except:
+                            logger.error(f"Failed to disconnect from {instr.name}")
+                    raise Exception(f"Failed to connect to some instruments. Disconnected as best possible.")
+
             self.instrs_connected = True
 
     def disconnect_instruments(self):
         # Connect the instruments to their resources
-        for instrument in self._instruments.values():
-            instrument.disconnect()
-        self.instrs_connected = False
+        if self.instrs_connected is True:
+            for instrument in self._instruments.values():
+                try:
+                    instrument.disconnect()
+                except:
+                    logger.error(f"Failed to disconnect from {instrument.name}")
+            self.instrs_connected = False
 
     def init_dashboard(self):
         from bqplot import DateScale, LinearScale, DateScale, Axis, Lines, Figure, Tooltip
@@ -549,6 +567,7 @@ class Experiment(metaclass=MetaExperiment):
         time.sleep(0.1)
         #connect all instruments
         self.connect_instruments()
+        assert self.instrs_connected == True, "Instruments did not connect successfully."
 
         try:
             #initialize instruments
@@ -622,8 +641,8 @@ class Experiment(metaclass=MetaExperiment):
 
         except KeyboardInterrupt as e:
             print("Caught KeyboardInterrupt, terminating.")
-            self.shutdown()
-            sys.exit(0)
+            #self.shutdown() #Commented out, since this is already in the finally.
+            #sys.exit(0)
         finally:
             self.shutdown()
 
@@ -643,14 +662,17 @@ class Experiment(metaclass=MetaExperiment):
         try:
             ct_max = 5 #arbitrary waiting 10 s before giving up
             for ct in range(ct_max):
-                if any([n.is_alive() for n in self.other_nodes]):
-                    logger.warning("Filter pipeline appears stuck. Use keyboard interrupt to terminate.")
-                    time.sleep(2.0)
-                else:
-                    break
-                for n in self.other_nodes:
-                    n.terminate()
-                raise Exception('Filter pipeline stuck!')
+                if hasattr(self, 'other_nodes'):
+                    if any([n.is_alive() for n in self.other_nodes]):
+                        logger.warning("Filter pipeline appears stuck. Use keyboard interrupt to terminate.")
+                        time.sleep(2.0)
+                    else:
+                        break
+                        for n in self.other_nodes:
+                            n.terminate()
+                            raise Exception('Filter pipeline stuck!')
+                else: #Addng this if/else in order to account for "does not have other nodes" KeyError
+                    logger.debug("ct does not contain other_nodes")
         except KeyboardInterrupt as e:
             for n in self.other_nodes:
                 n.terminate()
@@ -662,8 +684,8 @@ class Experiment(metaclass=MetaExperiment):
         for n in self.other_nodes:
             n.done.set()
 
-        import gc
-        gc.collect()
+        #import gc
+        #gc.collect()
 
     def add_axis(self, axis, position=0):
         for oc in self.output_connectors.values():

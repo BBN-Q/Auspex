@@ -102,7 +102,7 @@ class AlazarTestCase(unittest.TestCase):
         self.basic(delay=1.0, averages=100)
 
     def test_qubit_experiment(self):
-        cl = ChannelLibrary(db_resource_name=":memory:")
+        cl = ChannelLibrary(":memory:")
         pl = PipelineManager()
         cl.clear()
         q1     = cl.new_qubit("q1")

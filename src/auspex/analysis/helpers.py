@@ -216,7 +216,7 @@ def cal_scale(data, bit=0, nqubits=1, repeats=2):
     -------
     data : scaled data array
     """
-    ncals = 2**nqubits * 2
+    ncals = 2**nqubits * repeats
     calSet = [0, 1]
     codes = [p for p in product(calSet, repeat=nqubits) for _ in range(repeats)]
     assert (len(codes) == ncals), "Did not calculate the right number of calibration points."

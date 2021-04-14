@@ -90,7 +90,7 @@ class TestFitMethods(unittest.TestCase, FitAssertion):
         p = [0.35, 2.8, 2.04, 0.88, 1.93, -2.3, 1.19]
         x = np.linspace(-10, 10)
         y = fits.MultiGaussianFit._model(x, *p)
-        noise = np.random.randn(y.size) * 0.2
+        noise = np.random.randn(y.size) * 0.15
         y += noise
         fit = fits.MultiGaussianFit(x, y, make_plots=False, n_gaussians=2)
 
@@ -154,6 +154,19 @@ class TestFitMethods(unittest.TestCase, FitAssertion):
         self.assertFitInterval(p0[0], "f", fit)
         self.assertFitInterval(p0[2], "tau", fit)
 
+    def test_JAZZ_1f(self):
+        #x, f1, A1, tau1, phi1, y0_1, f2, A2, tau2, phi2, y0_2
+
+        p0 = [0.20, 1.0, 11.3, 0.01, 0.1]
+        p1 = [0.22, 1.0, 11.3, 0.01, 0.1]
+        x = np.linspace(0, 30, 201)
+        y = np.append(qubit_fits.RamseyFit._model_1f(x, *p0), qubit_fits.RamseyFit._model_1f(x, *p1))
+        noise = np.random.randn(y.size) * np.max(y)/10
+        y += noise
+
+        fit = qubit_fits.JAZZFit(np.linspace(0, 60, 402), y, make_plots=False)
+        self.assertAlmostEqual(fit.ZZ, 0.020, places=2)
+
     def test_RamseyFit_2f(self):
         #x, f, A, tau, phi, y0
 
@@ -173,14 +186,32 @@ class TestFitMethods(unittest.TestCase, FitAssertion):
     def test_SingleQubitRB(self):
         p0 = [0.99, 5e-3, 0.2]
 
-        x = np.array([2**n for n in range(10)])
+        x = np.array([2**n for n in range(2,11)])
         y = qubit_fits.SingleQubitRBFit._model(x, *p0)
         noise = np.random.randn(y.size) * p0[0]/100
         y += noise
 
         fit = qubit_fits.SingleQubitRBFit(x, y, make_plots=False)
-        self.assertFitInterval(p0[1], "r", fit, tol=20)
+        self.assertFitInterval(p0[1], "r", fit, tol=30)
 
+    @unittest.skip("Fit not particularly stable?")
+    def test_InterleavedError(self):
+        p0 = [0.99, 8e-3, 0.2]
+        p1 = [0.99, 1.0e-2, 0.2]
+
+        x = np.array([2**n for n in range(2,11)])
+        y = qubit_fits.SingleQubitRBFit._model(x, *p0)
+        noise = np.random.randn(y.size) * p0[0]/100
+        y += noise
+
+        z = qubit_fits.SingleQubitRBFit._model(x, *p1)
+        noise = np.random.randn(z.size) * p1[0]/100
+        z += noise
+
+        fit1 = qubit_fits.SingleQubitRBFit(x, y, make_plots=False)
+        fit2 = qubit_fits.SingleQubitRBFit(x, z, make_plots=False)
+        r_c, R_c_error = qubit_fits.InterleavedError(fit1,fit2)
+        self.assertAlmostEqual(r_c, 0.0020, places=3)
 
 
 if __name__ == '__main__':

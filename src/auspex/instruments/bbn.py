@@ -14,7 +14,7 @@ import auspex.config as config
 from types import MethodType
 from unittest.mock import MagicMock
 from time import sleep
-from visa import VisaIOError
+from pyvisa import VisaIOError
 import numpy as np
 from copy import deepcopy
 import os.path

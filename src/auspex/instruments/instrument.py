@@ -167,7 +167,7 @@ class MetaInstrument(type):
         type.__init__(self, name, bases, dct)
 
         # What sort of instrument are we?
-        if len(bases) > 0 and bases[0].__name__ is not 'Instrument':
+        if len(bases) > 0 and bases[0].__name__ != 'Instrument':
             instr_type = bases[0].__name__.replace('Instrument','')
             logger.debug("Adding Commands to %s", name)
             logger.debug("We are metaprogramming a %s instrument.", instr_type)
@@ -207,6 +207,9 @@ class Instrument(metaclass=MetaInstrument):
         """Accept a sdettings dictionary and attempt to set all of the instrument
         parameters using the key/value pairs."""
         for name, value in settings_dict.items():
+            if name == 'params':
+                # Recursively configure parameters using the settings in params
+                self.configure_with_dict(settings_dict['params'])
             if name not in ["id", "label", "model", "address", "channel_db_id", "standalone"]:
                 if "_id" in name:
                     continue
