@@ -1,6 +1,6 @@
 from auspex.log import logger
 from auspex.config import isnotebook
-from auspex.experiment import Experiment, FloatParameter
+from auspex.experiment import Experiment, FloatParameter, Parameter
 from auspex.stream import DataStream, DataAxis, SweepAxis, DataStreamDescriptor, InputConnector, OutputConnector
 from auspex.instruments import instrument_map
 import auspex.filters
@@ -505,6 +505,31 @@ class QubitExperiment(Experiment):
         param.assign_method(method)
         self.add_sweep(param, values) # Create the requested sweep on this parameter
 
+    def add_sweep(self, parameters, sweep_list, metafile_func=None, callback_func=None, metadata=None):
+            if (metafile_func is not None) and (callback_func is not None):
+                raise Exception("Cannot specify a sweep with both a metafile function and a callback function")
+
+            if metafile_func is not None:
+                def callback_func(sweep_value, exp, metafile_func=metafile_func):
+                    mf = metafile_func(sweep_value)
+                    with open(mf, 'r') as FID:
+                        meta_info = json.load(FID)
+
+                    output_chans = exp.transmitters + exp.transceivers + exp.phys_chans + exp.trig_chans
+                    for xmit, fname in meta_info['instruments'].items():
+                        awg = [c for c in output_chans if c.label==xmit][0]
+                        awg.sequence_file = fname
+
+                    awgs = [v for _, v in exp._instruments.items() if "AWG" in v.instrument_type]
+                    for awg in awgs:
+                        awg.configure_with_proxy(awg.proxy_obj)
+
+            # Allows a dummy default parameter if passing a string
+            if isinstance("parameters", str):
+                parameters = Parameter(parameters)
+
+            super().add_sweep(parameters, sweep_list, callback_func=callback_func, metadata=metadata)
+
     def add_qubit_sweep(self, qubit, measure_or_control, attribute, values):
         """
         Add a *ParameterSweep* to the experiment. Users specify a qubit property that auspex
@@ -634,7 +659,7 @@ class QubitExperiment(Experiment):
 
         # Set flag to enable acquisition process
         self.dig_run.set()
-        time.sleep(1)
+        time.sleep(0)
         # Start the AWGs
         if not self.cw_mode:
             for awg in self.awgs:

@@ -24,12 +24,6 @@ from QGL import *
 from auspex.qubit import *
 import bbndb
 
-def clear_test_data():
-    for file in glob.glob("test_*.h5"):
-        os.remove(file)
-    for direc in glob.glob("test_writehdf5*"):
-        shutil.rmtree(direc)
-
 class PipelineTestCase(unittest.TestCase):
 
     qubits = ["q1"]
