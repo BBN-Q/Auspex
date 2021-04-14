@@ -234,7 +234,7 @@ class Filter(Process, metaclass=MetaFilter):
             for message in messages:
                 message_type = message['type']
                 if message['type'] == 'event':
-                    logger.debug('%s "%s" received event with type "%s"', self.__class__.__name__, message_type)
+                    logger.debug('%s received event with type "%s"', self.__class__.__name__, message_type)
 
                     # Check to see if we're done
                     if message['event_type'] == 'done':
