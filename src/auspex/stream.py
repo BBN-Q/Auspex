@@ -57,20 +57,13 @@ class DataAxis(object):
             self.unstructured = False
             self.name         = str(name)
 
-        # self.points holds the CURRENT set of points. During adaptive sweeps
-        # this will hold the most recently added points of the axis.
         self.points        = np.array(points)
         self.unit          = unit
         self.metadata      = metadata
 
         # By definition data axes will be done after every experiment.run() call
         self.done         = True
-
-        # For adaptive sweeps, etc., keep a record of the original points that we had around
-        self.original_points = self.points
-        self.has_been_extended = False
-        self.num_new_points = 0
-        self.dtype         = dtype
+        self.dtype        = dtype
 
         if self.unstructured:
             if unit is not None and len(name) != len(unit):
@@ -94,11 +87,11 @@ class DataAxis(object):
     def points_with_metadata(self):
         if self.metadata is not None:
             if self.unstructured:
-                return [list(self.original_points[i]) + [self.metadata[i]] for i in range(len(self.original_points))]
-            return [(self.original_points[i], self.metadata[i], ) for i in range(len(self.original_points))]
+                return [list(self.points[i]) + [self.metadata[i]] for i in range(len(self.points))]
+            return [(self.points[i], self.metadata[i], ) for i in range(len(self.points))]
         if self.unstructured:
-            return [tuple(self.original_points[i]) for i in range(len(self.original_points))]
-        return [(self.original_points[i],) for i in range(len(self.original_points))]
+            return [tuple(self.points[i]) for i in range(len(self.points))]
+        return [(self.points[i],) for i in range(len(self.points))]
 
     def tuple_width(self):
         if self.unstructured:
@@ -110,29 +103,10 @@ class DataAxis(object):
         return width
 
     def num_points(self):
-        if self.has_been_extended:
-            return len(self.points)
-        else:
-            return len(self.original_points)
-
-    def add_points(self, points):
-        if self.unstructured and len(self.parameter) != len(points[0]):
-            raise ValueError("Parameter value tuples must be the same length as the number of parameters.")
-
-        if type(points) in [list, np.ndarray]:
-            points = np.array(points)
-        else:
-            # Somebody gave one point to the "add_points" method...
-            points = np.array([points])
-
-        self.num_new_points = len(points)
-        self.points = np.append(self.points, points, axis=0)
-        self.has_been_extended = True
+        return len(self.points)
 
     def reset(self):
-        self.points = self.original_points
-        self.has_been_extended = False
-        self.num_new_points = 0
+        pass
 
     def __repr__(self):
         return "<DataAxis(name={}, start={}, stop={}, num={}, unit={})>".format(
@@ -188,6 +162,9 @@ class SweepAxis(DataAxis):
             self.push()
             self.step += 1
             self.done = False
+        elif self.step == self.num_points():
+            self.step = 0
+            self.done = True
 
     def push(self):
         """ Push parameter value(s) """
@@ -306,24 +283,8 @@ class DataStreamDescriptor(object):
                 dtype.extend(a.data_type(with_metadata=with_metadata))
         return dtype
 
-    def tuples(self, as_structured_array=True):
-        """Returns a list of all tuples visited by the sweeper. Should only
-        be used with adaptive sweeps."""
-        if len(self.visited_tuples) == 0:
-            self.visited_tuples = self.expected_tuples(with_metadata=True)
-
-        if as_structured_array:
-            # If we already have a structured array
-            if type(self.visited_tuples) is np.ndarray and type(self.visited_tuples.dtype.names) is tuple:
-                return self.visited_tuples
-            elif type(self.visited_tuples) is np.ndarray:
-                return np.rec.fromarrays(self.visited_tuples.T, dtype=self.axis_data_type(with_metadata=True))
-            return np.core.records.fromrecords(self.visited_tuples, dtype=self.axis_data_type(with_metadata=True))
-        return self.visited_tuples
-
     def expected_tuples(self, with_metadata=False, as_structured_array=True):
-        """Returns a list of tuples representing the cartesian product of the axis values. Should only
-        be used with non-adaptive sweeps."""
+        """Returns a list of tuples representing the cartesian product of the axis values."""
         vals           = [a.points_with_metadata() for a in self.axes]
 
         #
@@ -614,9 +575,6 @@ class OutputConnector(object):
             self.descriptor.data_name = self.data_name
             self.descriptor.unit = self.unit
         self.add_axis   = self.descriptor.add_axis
-
-        # Determine whether we need to deal with adaptive sweeps
-        self.has_adaptive_sweeps = False
 
     def __len__(self):
         with self.points_taken_lock:

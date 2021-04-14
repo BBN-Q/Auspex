@@ -96,25 +96,6 @@ class SweepTestCase(unittest.TestCase):
         exp.add_sweep(exp.freq, np.linspace(0,10.0,3))
         exp.run_sweeps()
 
-    def test_run_adaptive_sweep(self):
-        exp = SweptTestExperiment()
-        pri = Print(name="Printer")
-
-        edges = [(exp.voltage, pri.sink)]
-        exp.set_graph(edges)
-
-        def rf(sweep_axis, exp):
-            logger.info("Running refinement function.")
-            if sweep_axis.num_points() >= 5:
-                return False
-            sweep_axis.add_points(sweep_axis.points[-1]*2)
-            return True
-
-        exp.add_sweep(exp.field, np.linspace(0,100.0,11))
-        exp.add_sweep(exp.freq, [1.0, 2.0], refine_func=rf)
-        exp.run_sweeps()
-        # self.assertTrue(pri.sink.output_streams[0].points_taken.value == 5*11*5)
-
     def test_unstructured_sweep(self):
         exp = SweptTestExperiment()
         pri = Print()

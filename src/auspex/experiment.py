@@ -350,25 +350,6 @@ class Experiment(metaclass=MetaExperiment):
                         else:
                             self.progressbars[axis].goto(axis.step)
 
-            if self.sweeper.is_adaptive():
-                # Add the new tuples to the stream descriptors
-                for oc in self.output_connectors.values():
-                    # Obtain the lists of values for any fixed
-                    # DataAxes and append them to them to the sweep_values
-                    # in preperation for finding all combinations.
-                    vals = [a for a in oc.descriptor.data_axis_values()]
-                    if sweep_values:
-                        vals  = [[v] for v in sweep_values] + vals
-                    # Find all coordinate tuples and update the list of
-                    # tuples that the experiment has probed.
-                    nested_list    = list(itertools.product(*vals))
-                    flattened_list = [tuple((val for sublist in line for val in sublist)) for line in nested_list]
-                    oc.descriptor.visited_tuples = oc.descriptor.visited_tuples + flattened_list
-
-                    # Since the filters are in separate processes, pass them the same
-                    # information so that they may perform the same operations.
-                    oc.push_event("new_tuples", (axis_names, sweep_values,))
-
             # Run the procedure
             self.run()
 
