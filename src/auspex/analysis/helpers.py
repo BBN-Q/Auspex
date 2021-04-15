@@ -95,7 +95,7 @@ def load_data(dirpath=None):
             datanames = [re.match(r"(.+).dat", ds).groups()[0] for ds in datasets]
             for data in datanames:
                 data_sets[group][data] = {}
-                ds_data, ds_desc = data_container.open_dataset(group,data)
+                ds_data, ds_desc, _ = data_container.open_dataset(group,data)
                 data_sets[group][data]["data"] = ds_data
                 data_sets[group][data]["descriptor"] = ds_desc
     except FileNotFoundError:

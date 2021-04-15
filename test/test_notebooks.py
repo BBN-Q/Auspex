@@ -1,5 +1,5 @@
 import glob
-from Notebook_testcase import NotebooksTestCase
+from .Notebook_testcase import NotebooksTestCase
 
 class NotebooksMethods(NotebooksTestCase):
     def _setup(self):
