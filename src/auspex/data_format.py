@@ -10,6 +10,9 @@ from .stream import DataStreamDescriptor, DataAxis
 import numpy as np
 import os, os.path
 import json
+import datetime
+
+AUSPEX_CONTAINER_VERSION = 1.1
 
 class AuspexDataContainer(object):
     """A container for Auspex data. Data is stored as `datasets` which may be of any dimension. These are in turn
@@ -27,7 +30,7 @@ class AuspexDataContainer(object):
                         | - DemodulatedData
     """
 
-    def __init__(self, base_path, mode='a', open_all=True):
+    def __init__(self, base_path, mode='a', open_all=True, metadata=None):
         """Initialize the data container.
 
         Args:
@@ -40,7 +43,8 @@ class AuspexDataContainer(object):
         self.open_mmaps = []
         self.mode = mode
         self._create()
-        
+        self.metadata = metadata
+
         if open_all:
             self.open_all()
 
@@ -57,6 +61,22 @@ class AuspexDataContainer(object):
             assert not os.path.exists(self.base_path), "Existing data container found. Did you want to open instead?"
         os.makedirs(self.base_path, exist_ok=True)
         self.groups = {}
+
+    @property
+    def metadata(self):
+        filename = os.path.join(self.base_path,'meta.json')
+        assert os.path.exists(filename), "Container metadata does not exist, this must be an old .auspex file that is no longer supported."
+        with open(filename, 'r') as f:
+            a = json.load(f)
+        a['date'] = datetime.datetime.strptime(a['date'], '%Y-%m-%d %H:%M:%S.%f')
+        return a
+
+    @metadata.setter
+    def metadata(self, value):
+        filename = os.path.join(self.base_path,'meta.json')
+        meta = {'version': AUSPEX_CONTAINER_VERSION, 'date': str(datetime.datetime.now()), 'metadata': value}
+        with open(filename, 'w') as f:
+            json.dump(meta, f)
 
     def new_group(self, groupname):
         """Add a group to the data container.
@@ -125,14 +145,16 @@ class AuspexDataContainer(object):
         """
         ret = {}
         for groupname in os.listdir(self.base_path):
-            ret[groupname] = {}
-            self.groups[groupname] = {}
-            for datasetname in os.listdir(os.path.join(self.base_path,groupname)):
-                if datasetname[-4:] == '.dat':
-                    dat = self.open_dataset(groupname, datasetname[:-4])
-                    self.groups[groupname][datasetname[:-4]] = dat
-                    ret[groupname][datasetname[:-4]] = dat
+            if os.path.isdir(os.path.join(self.base_path,groupname)):
+                ret[groupname] = {}
+                self.groups[groupname] = {}
+                for datasetname in os.listdir(os.path.join(self.base_path,groupname)):
+                    if datasetname[-4:] == '.dat':
+                        dat = self.open_dataset(groupname, datasetname[:-4])
+                        self.groups[groupname][datasetname[:-4]] = dat
+                        ret[groupname][datasetname[:-4]] = dat
         return ret
+
     def open_dataset(self, groupname, datasetname):
         """Open a particular dataset stored in this DataContainer.
 

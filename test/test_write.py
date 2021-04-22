@@ -11,6 +11,7 @@ import unittest
 import tempfile
 import os, shutil
 import glob
+import datetime
 import time
 import numpy as np
 
@@ -24,7 +25,7 @@ from auspex.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConn
 from auspex.filters.debug import Print
 from auspex.filters.io import WriteToFile
 from auspex.log import logger
-from auspex.data_format import AuspexDataContainer
+from auspex.data_format import AuspexDataContainer, AUSPEX_CONTAINER_VERSION
 
 class SweptTestExperiment(Experiment):
     """Here the run loop merely spews data until it fills up the stream. """
@@ -162,7 +163,17 @@ class WriteTestCase(unittest.TestCase):
             exp.run_sweeps()
             self.assertTrue(os.path.exists(tmpdirname+"/test_write-0000.auspex"))
             container = AuspexDataContainer(tmpdirname+"/test_write-0000.auspex")
+
+            container.metadata = {'ping': 'pong'}
+            
             data, desc, _ = container.open_dataset('main', 'data')
+
+            m = container.metadata
+            self.assertTrue(m['version'] == AUSPEX_CONTAINER_VERSION)
+            self.assertTrue(m['metadata']['ping'] == 'pong')
+
+            time_delta = datetime.datetime.now() - m['date']
+            self.assertTrue(time_delta.seconds < 5.0)
 
             self.assertTrue(0.0 not in data)
             self.assertTrue(np.all(desc['field'] == np.linspace(0,100.0,4)))
