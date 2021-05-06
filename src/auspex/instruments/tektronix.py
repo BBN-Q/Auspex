@@ -6,37 +6,28 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-__all__ = ['DPO72004C']
+__all__ = ['DPO72004C','DPO2024','DPO2014','RSA3308A']
 
 from auspex.log import logger
 from .instrument import SCPIInstrument, Command, StringCommand, BoolCommand, FloatCommand, IntCommand, is_valid_ipv4
 import numpy as np
 
-class DPO72004C(SCPIInstrument):
-    """Tektronix DPO72004C Oscilloscope"""
-    encoding   = StringCommand(get_string="DAT:ENC;", set_string="DAT:ENC {:s};",
+class _TekDPscope(SCPIInstrument):
+    """Tektronix DP Oscilloscope Base Class"""
+    encoding   = StringCommand(get_string="DAT:ENC?;", set_string="DAT:ENC {:s};",
                         allowed_values=["ASCI","RIB","RPB","FPB","SRI","SRP","SFP"])
     byte_depth = IntCommand(get_string="WFMOutpre:BYT_Nr?;",
                             set_string="WFMOutpre:BYT_Nr {:d};", allowed_values=[1,2,4,8])
     data_start = IntCommand(get_string="DAT:STAR?;", set_string="DAT:STAR {:d};")
     data_stop  = IntCommand(get_string="DAT:STOP?;", set_string="DAT:STOP {:d};")
 
-    fast_frame      = StringCommand(get_string="HORizontal:FASTframe:STATE?;", set_string="HORizontal:FASTframe:STATE {:s};",
-                       value_map       = {True: '1', False: '0'})
-    num_fast_frames = IntCommand(get_string="HOR:FAST:COUN?;", set_string="HOR:FAST:COUN {:d};")
-
     preamble = StringCommand(get_string="WFMOutpre?;") # Curve preamble
 
     record_length   = IntCommand(get_string="HOR:ACQLENGTH?;")
-    record_duration = FloatCommand(get_string="HOR:ACQDURATION?;")
+    record_rate     = FloatCommand(get_string="HOR:SAMPLER?;")
 
     button_press = StringCommand(set_string="FPAnel:PRESS {:s};",
         allowed_values=["RUnstop", "SINGleseq"])
-
-    def __init__(self, resource_name, *args, **kwargs):
-        resource_name += "::4000::SOCKET" #user guide recommends HiSLIP protocol
-        super(DPO72004C, self).__init__(resource_name, *args, **kwargs)
-        self.name = "Tektronix DPO72004C Oscilloscope"
 
     def clear(self):
         self.interface.write("CLEAR ALL;")
@@ -63,12 +54,10 @@ class DPO72004C(SCPIInstrument):
         scale = self.interface.value('WFMO:YMU?;')
         offset = self.interface.value('WFMO:YOF?;')
         curve = (curve - offset)*scale
-        if self.fast_frame:
-            curve.resize((self.num_fast_frames, record_length))
         return curve
 
     def get_timebase(self):
-        return np.linspace(0, self.record_duration, self.record_length)
+        return np.linspace(0, self.record_length/self.record_rate, self.record_length)
 
     def get_fastaq_curve(self, channel=1):
         channel_string = "CH{:d}".format(channel)
@@ -83,6 +72,62 @@ class DPO72004C(SCPIInstrument):
 
     def get_math_curve(self, channel=1):
         pass
+
+class DPO72004C(_TekDPscope):
+
+    fast_frame      = StringCommand(get_string="HORizontal:FASTframe:STATE?;", set_string="HORizontal:FASTframe:STATE {:s};", value_map = {True: '1', False: '0'})
+    num_fast_frames = IntCommand(get_string="HOR:FAST:COUN?;", set_string="HOR:FAST:COUN {:d};")
+
+    def get_curve(self, channel=1, byte_depth=2):
+        channel_string = "CH{:d}".format(channel)
+        self.interface.write("DAT:SOU {:s};".format(channel_string))
+        #self.source_channel = 1
+        self.encoding = "SRI" # Signed ints
+
+        record_length = self.record_length
+        self.data_start = 1
+        self.data_stop  = record_length
+
+        self.byte_depth = byte_depth
+        strf_from_depth = {1: 'b', 2: 'h', 4: 'l', 8: 'q'}
+
+        curve = self.interface.query_binary_values("CURVe?;", datatype=strf_from_depth[byte_depth])
+        scale = self.interface.value('WFMO:YMU?;')
+        offset = self.interface.value('WFMO:YOF?;')
+        curve = (curve - offset)*scale
+        if self.fast_frame:
+            curve.resize((self.num_fast_frames, record_length))
+        return curve
+
+    def __init__(self, resource_name, *args, **kwargs):
+        resource_name += "::4000::SOCKET" #user guide recommends HiSLIP protocol
+        super(DPO72004C, self).__init__(resource_name, *args, **kwargs)
+        self.name = "Tektronix DPO72004C Oscilloscope"
+
+class DPO2024(_TekDPscope):
+    def __init__(self, resource_name, *args, **kwargs):
+        super(DPO2024, self).__init__(resource_name, *args, **kwargs)
+        self.name = "Tektronix DPO2024 Oscilloscope"
+
+    def connect(self, resource_name=None, interface_type=None):
+        if resource_name is not None:
+            self.resource_name = resource_name
+        super(DPO2024, self).connect(resource_name=self.resource_name, interface_type=interface_type)
+        self.interface._resource.read_termination = u"\n"
+        self.interface._resource.write_termination = u"\n"
+
+class DPO2014(_TekDPscope):
+    def __init__(self, resource_name, *args, **kwargs):
+        super(DPO2014, self).__init__(resource_name, *args, **kwargs)
+        self.name = "Tektronix DPO2014 Oscilloscope"
+
+    def connect(self, resource_name=None, interface_type=None):
+        if resource_name is not None:
+            self.resource_name = resource_name
+        super(DPO2014, self).connect(resource_name=self.resource_name, interface_type=interface_type)
+        self.interface._resource.read_termination = u"\n"
+        self.interface._resource.write_termination = u"\n"
+
 
 class RSA3308A(SCPIInstrument):
     """Tektronix RSA3308A SA"""

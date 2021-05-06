@@ -644,23 +644,29 @@ class APS3(Instrument, metaclass=MakeBitFieldParams):
             raise ValueError("Must supply a resource name!")
         elif resource_name is not None:
             self.resource_name = resource_name
+            
+        if isinstance(self.resource_name, str):
+            self.resource_name = self.resource_name.split(';')
 
         if len(self.resource_name) != 3:
             raise ValueError("Resource name must have 3 elements!")
         if self.resource_name[0] == None:
             raise ValueError("Resource name must contain IP address!")
-        if self.resource_name[1] == None:
-            raise ValueError("Resource name must contain serial port!")
-        if self.resource_name[2] == None:
-            raise ValueError("Resource name must contain channel!")
-        if not isinstance(self.resource_name[2], int) or not self.resource_name[2] in [0, 1]:
-            raise ValueError("Channel name must be 0 or 1!")
-
         if not is_valid_ipv4(self.resource_name[0]):
             raise ValueError("IP address must be valid!")
+        if self.resource_name[1] == None:
+            raise ValueError("Resource name must contain serial port!")
+        
+        if self.resource_name[2] == None:
+            raise ValueError("Resource name must contain channel!")
+        
+        channel = int(self.resource_name[2]) if not isinstance(self.resource_name[2], int) else self.resource_name[2]
+        
+        if not channel in [0, 1]:
+            raise ValueError("Channel name must be 0 or 1!")
 
         self.address = (self.resource_name[0], self.resource_name[1])
-        self.dac = self.resource_name[2]
+        self.dac = channel
 
         APS3CommunicationManager.connect(self.address)
 

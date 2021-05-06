@@ -11,7 +11,7 @@ from scipy.optimize import curve_fit
 from auspex.log import logger
 from copy import copy
 import matplotlib.pyplot as plt
-from .fits import AuspexFit
+from .fits import AuspexFit, Auspex2DFit
 from .signal_analysis import KT_estimation
 
 class RabiAmpFit(AuspexFit):
@@ -403,27 +403,28 @@ class SingleQubitRBFit(AuspexFit):
 
 class SingleQubitLeakageRBFit(SingleQubitRBFit):
 
-    def __init__(self, lengths, data, make_plots=False, log_scale_x=True, bounded_fit=True, ax=None, leakage=True):
+    def __init__(self, lengths, data, make_plots=False, log_scale_x=True, smart_guess=True, bounded_fit=True, ax=None, leakage=True, fit=True, cal_repeats=1):
 
         # Compute populations from the tomography data
-            a = data[-3]
-            b = data[-2]
-            c = data[-1]
+        a = np.mean(data[-3*cal_repeats:-2*cal_repeats])
+        b = np.mean(data[-2*cal_repeats:-1*cal_repeats])
+        c = np.mean(data[-1*cal_repeats:-1])
 
-            pop_mat = np.linalg.inv([[a,b,c],[b,a,c],[1,1,1]])
+        pop_mat = np.linalg.inv([[a,b,c],[b,a,c],[1,1,1]])
 
-            points = []
+        points = []
 
-            for i in range(len(data[:-3]) // 2):
-                v = data[2*i]
-                vp = data[2*i+1]
-                points.append(np.matmul(pop_mat, np.array([v, vp, 1])))
+        for i in range(len(data[:-3*cal_repeats]) // 2):
+            v = data[2*i]
+            vp = data[2*i+1]
+            points.append(np.matmul(pop_mat, np.array([v, vp, 1])))
 
-            self.pop0, self.pop1, self.pop2 = zip(*points)
+        self.pop0, self.pop1, self.pop2 = zip(*points)
 
-            pop_comp = [(self.pop0[i] + self.pop1[i]) if leakage else self.pop0[i] for i in range(len(self.pop0))]
+        pop_comp = [(self.pop0[i] + self.pop1[i]) if leakage else self.pop0[i] for i in range(len(self.pop0))]
 
-            super().__init__(lengths[:-3][::2], pop_comp, make_plots, log_scale_x, bounded_fit, ax)
+        if fit:
+            super().__init__(np.array(lengths[:-3*cal_repeats][::2]), np.array(pop_comp), make_plots, log_scale_x, smart_guess, bounded_fit, ax)
 
     def leakage(self):
         leak = (1 - self.fit_params['B'])*self.fit_params['r']
@@ -440,6 +441,74 @@ class SingleQubitLeakageRBFit(SingleQubitRBFit):
         pop2_err = np.std(np.reshape(self.pop2,(len(self.lengths),repeats)),1)
         return pop0, pop0_err, pop1, pop1_err, pop2, pop2_err
 
+def InterleavedError(base_fit: SingleQubitRBFit,
+                     inter_fit: SingleQubitRBFit,
+                     n_qubits=1, make_plots=False) -> float:
+    """
+    Take two Auspex fits for RB decay and calculate the effective $r$
+    for the interleaved gate. r_c and r_c_error expressions are taken
+    from Magesan et al. https://arxiv.org/pdf/1203.4550.pdf
+
+    Note the r_c_error will likely over estimate the error. See Magesan et al.
+    for more detail.
+
+    Parameters
+    ----------
+    base_fit : analysis.qubit_fits.SingleQubitRBFit
+        decay curve for the non-interleaved experiment
+    inter_fit : analysis.qubit_fits.SingleQubitRBFit
+        decay curve for the interleaved experiment
+    n_qubits : int
+        number of qubits: 1 or 2
+
+    Returns
+    -------
+    r_c : float
+        error rate associated with the interleaved gate
+    r_c_error: float
+        error of the estimated r_c
+
+    Examples
+    --------
+    >>> N = 10
+    >>> n = [2**x for x in range(2,N+1)]
+    >>> p1 = [0.5,0.008,0.5]
+    >>> p2 = [0.5,0.01,0.5]
+    >>> def model(x, p):
+            return p[0] * (1-p[1])**x + p[2]
+    >>> fit1 = SingleQubitRBFit(n, [model(x, p1) for x in n])
+    >>> fit2 = SingleQubitRBFit(n, [model(x, p2) for x in n])
+    >>> InterleavedError(fit1,fit2)
+    (0.0020325203256145175, 0.013967479675201178)
+    """
+    d = 2**n_qubits
+    p   = 1 - (base_fit.fit_params['r'] * 2 * d/(d - 1))
+    p_c = 1 - (inter_fit.fit_params['r'] * 2 * d/(d - 1))
+
+    r_c = (d - 1) * (1 - p_c/p) / d
+
+    r_c_error = min(((d - 1) / d) * (np.abs(p - p_c/p) + (1 - p)),
+                    (2*(d**2 - 1)*(1 - p)) / p*d**2 + (4*np.sqrt(1 - p)*np.sqrt(d**2 - 1)) / p)
+
+    if make_plots:
+        plt.figure()
+        plt.errorbar(base_fit.lengths, base_fit.ypts, yerr=base_fit.errors/np.sqrt(len(base_fit.lengths)),
+                        fmt='*', elinewidth=2.0, capsize=4.0, label='mean')
+        plt.plot(range(int(base_fit.lengths[-1])), base_fit.model(range(int(base_fit.lengths[-1]))), label='base fit')
+        plt.errorbar(inter_fit.lengths, inter_fit.ypts, yerr=inter_fit.errors/np.sqrt(len(inter_fit.lengths)),
+                        fmt='o', elinewidth=2.0, capsize=4.0, label='mean')
+        plt.plot(range(int(inter_fit.lengths[-1])), inter_fit.model(range(int(inter_fit.lengths[-1]))), label='inter fit')
+
+        plt.xlabel(base_fit.xlabel)
+        plt.ylabel(base_fit.ylabel)
+        plt.legend()
+
+        def _annotation():
+            return 'interleaved gate \nerror rate ' + r'r = {:.2e}  {} {:.2e}'.format(r_c, chr(177), r_c_error, end='\n')
+        plt.annotate(_annotation(), xy=(0.3, 0.50),
+                     xycoords='axes fraction', size=12)
+
+    return r_c, r_c_error
 
 
 class PhotonNumberFit(AuspexFit):
@@ -483,6 +552,54 @@ class PhotonNumberFit(AuspexFit):
 
     def _fit_dict(self, p):
         return {"phi0": p[0], "n0": p[1]}
+
+class RabiChevronFit(Auspex2DFit):
+    """A fit to a Rabi amplitude curve, assuming a cosine model.
+    """
+    xlabel = "Time"
+    ylabel = "Frequency"
+    title = "Rabi Amp Fit"
+
+    @staticmethod
+    def _model(x, *p):
+        return p[3]*(p[0]**2)/((x[1]-p[1])**2+p[0]**2)*np.sin(2*np.pi*x[0]*np.sqrt(p[0]**2+(x[1]-p[1])**2)+p[4])+p[2]
+
+    def _initial_guess(self):
+        #seed Rabi frequency from largest FFT component in the center
+        M = len(self.xpts)
+        N = len(self.xpts[0])
+        f_max_ind = np.zeros(M)
+        for k in range(M):
+            zpts = self.zpts[k]
+            zfft = np.fft.fft(zpts)
+            f_max_ind[k] = np.argmax(np.abs(zfft[1:N//2]))
+        lowest_f_max_ind = np.argmin(f_max_ind)
+        zpts_mid = self.zpts[lowest_f_max_ind]
+        fr_0 = max([1, f_max_ind[lowest_f_max_ind]]) / self.xpts[0][-1]
+        amp_0 = 0.5*(zpts_mid.max() - zpts_mid.min())
+        offset_0 = np.mean(zpts_mid)
+        phase_0 = 0
+        if zpts_mid[N//2 - 1] > offset_0:
+            amp_0 = -amp_0
+        return [fr_0, self.ypts[M//2][0], offset_0, amp_0, phase_0]
+
+    def _fit_dict(self, p):
+
+        return { "fr": p[0],
+                 "f0": p[1],
+                 "y0": p[2],
+                 "A":  p[3],
+                 "phi": p[4]
+              }
+
+    def __str__(self):
+        return "A*fr^2 / ((f - f0)^2 + fr^2) * A*sin(2*pi*t*sqrt(fr^2 + (f-f0)^2) + phi) + c)"
+
+    @property
+    def f_center(self):
+        """Returns the resonance frequency from the fit
+        """
+        return self.fit_params["f0"]
 
 #### OLD STYLE FITS THAT NEED TO BE CONVERTED
 

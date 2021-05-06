@@ -88,7 +88,7 @@ class PrologixSocketResource(object):
         self._addr()
         self.sock.send(b"++clr\r\n")
         idn = self.query(self.idn_string)
-        if idn is '':
+        if idn == '':
             logger.error(("Did not receive response to GPIB command {0} " +
                 "from GPIB device {1} on Prologix at {2}.").format(self.idn_string,
                 self.gpib, self.ipaddr))

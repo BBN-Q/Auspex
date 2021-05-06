@@ -7,7 +7,7 @@
 #    http://www.apache.org/licenses/LICENSE-2.0
 
 __all__ = ['Agilent33220A', 'Agilent33500B', 'Agilent34970A',
-           'AgilentE8363C', 'AgilentN5183A', 'AgilentE9010A',
+           'AgilentE8363C', 'AgilentN5183A', 'AgilentN9010A',
            'HP33120A', 'AgilentN5230A']
 
 import socket
@@ -920,9 +920,11 @@ class _AgilentNetworkAnalyzer(SCPIInstrument):
 
         meas_done = False
         self.interface.write('*OPC')
+        print(int(self.interface.ESR()) & 0x1)
         while not meas_done:
             time.sleep(0.5)
             opc_bit = int(self.interface.ESR()) & 0x1
+            print(opc_bit)
             if opc_bit == 1:
                 meas_done = True
 
@@ -935,8 +937,26 @@ class _AgilentNetworkAnalyzer(SCPIInstrument):
         offset, data_length = util.parse_ieee_block_header(block)
         return util.from_ieee_block(block, 'f', True, np.array)
 
+    def _raw_query_bytes(self, string, size=1024):
+        """Some combinations of Agilent VNAs and minimum MTUs don't work so brute force by manually reading bytes from the wire.
+        """
+        self.interface.write(string)
+        #IEEE header format is #<number of digits><number of bytes>
+        header = self.interface._resource.read_bytes(2)
+        ndig = int(header.decode()[-1])
+        nbytes = int(self.interface._resource.read_bytes(ndig).decode())
+        bytes_read = 0
+        data = b''
+        while ((bytes_read + size) < nbytes):
+            data += self.interface._resource.read_bytes(size)
+            bytes_read += size
+        data += self.interface._resource.read_bytes(nbytes - bytes_read)
+        #Read the termination to clear VISA buffer
+        self.interface._resource.read_bytes(1)
+        return util.from_binary_block(data, 0, None, 'f', True, np.array)
 
-    def get_trace(self, measurement=None):
+
+    def get_trace(self, measurement=None, restart_measurement=True):
         """ Return a tuple of the trace frequencies and corrected complex points. By default returns the data for the
          first acive measurement. Pass an S-parameter (i.e. `S12`) as the `measurement` keyword argument to access others."""
         #If the measurement is not passed in just take the first one
@@ -948,12 +968,13 @@ class _AgilentNetworkAnalyzer(SCPIInstrument):
             mchan = self.measurements[measurement]
         #Select the measurment
         self.interface.write(":CALCulate:PARameter:SELect '{}'".format(mchan))
-        self.reaverage()
+        if restart_measurement:
+            self.reaverage()
         #Take the data as interleaved complex values
         if self.data_query_raw:
-            interleaved_vals = self._raw_query(":CALC:DATA? SDATA")
+            interleaved_vals = self._raw_query_bytes(":CALC:DATA? SDATA")
         else:
-            interleaved_vals = self.interface.query_binary_values(':CALC:DATA? SDATA', datatype="f", is_big_endian=True)
+            interleaved_vals  = self.interface._resource.query_binary_values(':CALC:DATA? SDATA', datatype="f", is_big_endian=True, expect_termination=False)
 
         self.interface.write("SENS:SWE:MODE CONT")
         vals = interleaved_vals[::2] + 1j*interleaved_vals[1::2]
@@ -971,9 +992,8 @@ class AgilentE8363C(_AgilentNetworkAnalyzer):
     ports = (1, 2)
     data_query_raw = False
 
-
-class AgilentE9010A(SCPIInstrument):
-    """Agilent E9010A SA"""
+class AgilentN9010A(SCPIInstrument):
+    """Agilent N9010A SA"""
     instrument_type = "Spectrum Analyzer"
 
     frequency_center = FloatCommand(scpi_string=":FREQuency:CENTer")
@@ -981,10 +1001,14 @@ class AgilentE9010A(SCPIInstrument):
     frequency_start  = FloatCommand(scpi_string=":FREQuency:STARt")
     frequency_stop   = FloatCommand(scpi_string=":FREQuency:STOP")
 
-    num_sweep_points = FloatCommand(scpi_string=":SWEep:POINTs")
-    resolution_bandwidth = FloatCommand(scpi_string=":BANDwidth")
-    sweep_time = FloatCommand(scpi_string=":SWEep:TIME")
-    averaging_count = IntCommand(scpi_string=':AVER:COUN')
+    num_sweep_points        = FloatCommand(scpi_string=":SWEep:POINTs")
+    resolution_bandwidth    = FloatCommand(scpi_string=":BANDwidth")
+    video_bandwidth         = FloatCommand(scpi_string=":BANDwidth:VIDeo")
+    video_auto              = BoolCommand(get_string=":BANDwidth:VIDEO:AUTO?",
+                                set_string=":BANDwidth:VIDEO:AUTO {:s}",
+                                value_map={False: "0", True: "1"})
+    sweep_time              = FloatCommand(scpi_string=":SWEep:TIME")
+    averaging_count         = IntCommand(scpi_string=':AVER:COUN')
 
     marker1_amplitude = FloatCommand(scpi_string=':CALC:MARK1:Y')
     marker1_position = FloatCommand(scpi_string=':CALC:MARK1:X')
@@ -997,7 +1021,7 @@ class AgilentE9010A(SCPIInstrument):
     pn_carrier_freq = FloatCommand(scpi_string=":FREQuency:CARRier")
 
     def __init__(self, resource_name=None, *args, **kwargs):
-        super(AgilentE9010A, self).__init__(resource_name, *args, **kwargs)
+        super(AgilentN9010A, self).__init__(resource_name, *args, **kwargs)
 
     def connect(self, resource_name=None, interface_type=None):
         if resource_name is not None:
@@ -1005,7 +1029,7 @@ class AgilentE9010A(SCPIInstrument):
         #If we only have an IP address then tack on the raw socket port to the VISA resource string
         if is_valid_ipv4(self.resource_name):
             self.resource_name += "::5025::SOCKET"
-        super(AgilentE9010A, self).connect(resource_name=self.resource_name, interface_type=interface_type)
+        super(AgilentN9010A, self).connect(resource_name=self.resource_name, interface_type=interface_type)
         self.interface._resource.read_termination = u"\n"
         self.interface._resource.write_termination = u"\n"
         self.interface._resource.timeout = 3000 #seem to have trouble timing out on first query sometimes
@@ -1036,6 +1060,54 @@ class AgilentE9010A(SCPIInstrument):
 
     def marker_to_center(self, marker=1):
         self.interface.write(':CALC:MARK{:d}:CENT'.format(marker))
+
+    @property
+    def marker_Y(self, marker=1):
+        """ Queries marker Y-value.
+
+        Args:
+            marker (int): Marker index (1-12).
+        Returns:
+            Trace value at selected marker.
+        """
+        return self.interface.query(":CALC:MARK{:d}:Y?".format(marker))
+
+    @property
+    def marker_X(self, marker=1):
+        """ Queries marker X-value.
+
+        Args:
+            marker (int): Marker index (1-12).
+        Returns:
+            X axis value of selected marker.
+        """
+        return self.interface.query(":CALC:MARK{:d}:X?".format(marker))
+
+    @marker_X.setter
+    def marker_X(self, value, marker=1):
+        """Sets marker X-value.
+
+        Args:
+            value (float): Marker x-axis value to set.
+            marker (int):  Marker index (1-2).
+        Returns:
+            None.
+        """
+        self.interface.write(":CALC:MARK{:d}:X {:f}".format(marker, value))
+
+    def noise_marker(self, marker=1, enable=True):
+        """Set/unset marker as a noise marker for noise figure measurements.
+
+        Args:
+            marker (int): Index of marker, [1,12].
+            enable (bool): Toggles between noise marker (True) and regular marker (False).
+        Returns:
+            None.
+        """
+        if enable:
+            self.interface.write(":CALC:MARK{:d}:FUNC NOISe".format(marker))
+        else:
+            self.interface.write(":CALC:MARK{:d}:FUNC OFF".format(marker))
 
     def clear_averaging(self):
         self.interface.write(':AVER:CLE')

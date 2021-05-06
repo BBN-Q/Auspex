@@ -41,7 +41,7 @@ class PipelineTestCase(unittest.TestCase):
     def setUpClass(cls):
         global cl, pl
 
-        cl = ChannelLibrary(db_resource_name=":memory:")
+        cl = ChannelLibrary(":memory:")
         pl = PipelineManager()
 
     def test_create(self):

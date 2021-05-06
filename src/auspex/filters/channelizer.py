@@ -74,7 +74,7 @@ class Channelizer(Filter):
     def final_init(self):
         self.init_filters(self.frequency.value, self.bandwidth.value)
 
-        if self.follow_axis.value is not "":
+        if self.follow_axis.value != "":
             desc = self.sink.descriptor
             axis_num = desc.axis_num(self.follow_axis.value)
             self.pts_before_freq_update = desc.num_points_through_axis(axis_num + 1)
@@ -214,7 +214,7 @@ class Channelizer(Filter):
             reshaped_data = np.reshape(data, (num_records, self.record_length), order="C")
 
             # Update demodulation frequency if necessary
-            if self.follow_axis.value is not "":
+            if self.follow_axis.value != "":
                 freq = self.demod_freqs[(self.idx % self.pts_before_freq_reset) // self.pts_before_freq_update]
                 if freq != self.current_freq:
                     self.update_references(freq)

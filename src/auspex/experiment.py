@@ -641,9 +641,8 @@ class Experiment(metaclass=MetaExperiment):
 
         except KeyboardInterrupt as e:
             print("Caught KeyboardInterrupt, terminating.")
-            # self.shutdown() #TB notes 11/19 shouldn't both thes lines be in the finally, not here? It goes to finally even when there is an exception... Unless you have sys.exit there
-            #12/3/20 commenting out the sys exit TB, commenting shutdown as well since it's in the finally
-            # sys.exit(0)
+            #self.shutdown() #Commented out, since this is already in the finally.
+            #sys.exit(0)
         finally:
             self.shutdown()
 
@@ -684,9 +683,8 @@ class Experiment(metaclass=MetaExperiment):
 
         for n in self.other_nodes:
             n.done.set()
-
-        # import gc
-        # gc.collect()
+         #import gc
+        #gc.collect()
 
     def add_axis(self, axis, position=0):
         for oc in self.output_connectors.values():
