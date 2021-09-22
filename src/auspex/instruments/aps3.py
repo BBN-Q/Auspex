@@ -362,7 +362,7 @@ class AMC599(object):
 
         LSbits = self.serial_read_dac_register(dac, 0x041) & 0x03
         MSbits = self.serial_read_dac_register(dac, 0x042) & 0xFF
-        reg_value = (MSbits << 2) & LSbits
+        reg_value = (MSbits << 2) + LSbits
         return 32 * (reg_value / 1023) + 8
 
     def serial_set_nco_enable(self, dac, en):
@@ -644,7 +644,7 @@ class APS3(Instrument, metaclass=MakeBitFieldParams):
             raise ValueError("Must supply a resource name!")
         elif resource_name is not None:
             self.resource_name = resource_name
-            
+
         if isinstance(self.resource_name, str):
             self.resource_name = self.resource_name.split(';')
 
@@ -656,12 +656,12 @@ class APS3(Instrument, metaclass=MakeBitFieldParams):
             raise ValueError("IP address must be valid!")
         if self.resource_name[1] == None:
             raise ValueError("Resource name must contain serial port!")
-        
+
         if self.resource_name[2] == None:
             raise ValueError("Resource name must contain channel!")
-        
+
         channel = int(self.resource_name[2]) if not isinstance(self.resource_name[2], int) else self.resource_name[2]
-        
+
         if not channel in [0, 1]:
             raise ValueError("Channel name must be 0 or 1!")
 
