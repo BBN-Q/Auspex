@@ -68,7 +68,7 @@ class Channelizer(Filter):
             self.follow_axis.value = follow_axis
         if follow_freq_offset:
             self.follow_freq_offset.value = follow_freq_offset
-        self.quince_parameters = [self.decimation_factor, self.frequency, self.bandwidth]
+        # self.quince_parameters = [self.decimation_factor, self.frequency, self.bandwidth]
         self._phase = 0.0
 
     def final_init(self):

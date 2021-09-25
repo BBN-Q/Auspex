@@ -20,7 +20,7 @@ import sys
 if sys.platform == 'win32' or 'NOFORKING' in os.environ:
     from queue import Queue
 else:
-    from multiprocessing import Queue
+    from multiprocess import Queue
 
 from .filter import Filter
 from auspex.parameter import Parameter, FloatParameter, IntParameter, BoolParameter
@@ -53,8 +53,8 @@ class SingleShotMeasurement(Filter):
             self.set_threshold.value = set_threshold
             self.logistic_regression.value = logistic_regression
 
-        self.quince_parameters = [self.save_kernel, self.optimal_integration_time,
-            self.zero_mean, self.set_threshold, self.logistic_regression]
+        # self.quince_parameters = [self.save_kernel, self.optimal_integration_time,
+            # self.zero_mean, self.set_threshold, self.logistic_regression]
 
         self.pdf_data_queue = Queue() #Output queue
         self.fidelity       = self.source

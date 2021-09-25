@@ -13,9 +13,9 @@ if sys.platform == 'win32' or 'NOFORKING' in os.environ:
     from threading import Thread as Process
     from threading import Event
 else:
-    from multiprocessing import Process
-    from multiprocessing import Event
-    from multiprocessing import Value
+    from multiprocess import Process
+    from multiprocess import Event
+    from multiprocess import Value
 
 from . import pipeline
 import time
@@ -359,9 +359,9 @@ class QubitExperiment(Experiment):
             if isinstance(node, bbndb.auspex.FilterProxy):
                 if all(name in self.measured_qubit_names for name in node.qubit_name.split('-')):
                     #include correlators only if all participating qubits are measured
-                    new_filt = filter_map[type(node)]()
+                    new_filt = filter_map[type(node)](manager=self.manager)
                     new_filt.configure_with_proxy(node)
-                    new_filt.proxy = node
+                    # new_filt.proxy = node
                     self.filters.append(new_filt)
                     self.proxy_to_filter[node] = new_filt
                     if isinstance(node, bbndb.auspex.OutputProxy):
@@ -469,10 +469,21 @@ class QubitExperiment(Experiment):
         self.dig_run  = Event()
         self.dig_exit = Event()
         for chan, dig in self.chan_to_dig.items():
-            socket = dig.get_socket(chan)
+            sock = dig.get_socket(chan)
             oc = self.chan_to_oc[chan]
-            p = Process(target=dig.receive_data, args=(chan, oc, self.dig_exit, ready, self.dig_run))
+            
+            # Temporarility emove the parent from the output connector sent to the receive method since
+            # it contains all sorts of unpickleable content
+            parent = oc.parent 
+            oc.parent = None
+
+            ts = dig.last_timestamp
+            p = Process(target=dig.receive_data, args=(sock, oc, self.dig_exit, ready, self.dig_run, self.filter_panic, ts, chan.dtype))
             self.dig_listeners[p] = self.dig_exit
+
+            # Restore the parent
+            # oc.parent = parent
+
         assert None not in self.dig_listeners.keys()
         for listener in self.dig_listeners.keys():
             listener.start()
@@ -643,7 +654,8 @@ class QubitExperiment(Experiment):
         # Wait for all of the acquisitions to complete
         timeout = 10
         for dig in self.digitizers:
-            dig.wait_for_acquisition(self.dig_run, timeout=timeout, ocs=list(self.chan_to_oc.values()), progressbars=self.progressbars)
+            dig.wait_for_acquisition(self.dig_run, self.filter_panic, timeout=timeout, 
+                ocs=list(self.chan_to_oc.values()), progressbars=self.progressbars)
 
         # Bring everything to a stop
         for dig in self.digitizers:
