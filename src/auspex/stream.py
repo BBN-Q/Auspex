@@ -57,21 +57,13 @@ class DataAxis(object):
             self.unstructured = False
             self.name         = str(name)
 
-        # self.points holds the CURRENT set of points. During adaptive sweeps
-        # this will hold the most recently added points of the axis.
         self.points        = np.array(points)
         self.unit          = unit
-        self.refine_func   = None
         self.metadata      = metadata
 
         # By definition data axes will be done after every experiment.run() call
         self.done         = True
-
-        # For adaptive sweeps, etc., keep a record of the original points that we had around
-        self.original_points = self.points
-        self.has_been_extended = False
-        self.num_new_points = 0
-        self.dtype         = dtype
+        self.dtype        = dtype
 
         if self.unstructured:
             if unit is not None and len(name) != len(unit):
@@ -95,11 +87,11 @@ class DataAxis(object):
     def points_with_metadata(self):
         if self.metadata is not None:
             if self.unstructured:
-                return [list(self.original_points[i]) + [self.metadata[i]] for i in range(len(self.original_points))]
-            return [(self.original_points[i], self.metadata[i], ) for i in range(len(self.original_points))]
+                return [list(self.points[i]) + [self.metadata[i]] for i in range(len(self.points))]
+            return [(self.points[i], self.metadata[i], ) for i in range(len(self.points))]
         if self.unstructured:
-            return [tuple(self.original_points[i]) for i in range(len(self.original_points))]
-        return [(self.original_points[i],) for i in range(len(self.original_points))]
+            return [tuple(self.points[i]) for i in range(len(self.points))]
+        return [(self.points[i],) for i in range(len(self.points))]
 
     def tuple_width(self):
         if self.unstructured:
@@ -111,29 +103,10 @@ class DataAxis(object):
         return width
 
     def num_points(self):
-        if self.has_been_extended:
-            return len(self.points)
-        else:
-            return len(self.original_points)
-
-    def add_points(self, points):
-        if self.unstructured and len(self.parameter) != len(points[0]):
-            raise ValueError("Parameter value tuples must be the same length as the number of parameters.")
-
-        if type(points) in [list, np.ndarray]:
-            points = np.array(points)
-        else:
-            # Somebody gave one point to the "add_points" method...
-            points = np.array([points])
-
-        self.num_new_points = len(points)
-        self.points = np.append(self.points, points, axis=0)
-        self.has_been_extended = True
+        return len(self.points)
 
     def reset(self):
-        self.points = self.original_points
-        self.has_been_extended = False
-        self.num_new_points = 0
+        pass
 
     def __repr__(self):
         return "<DataAxis(name={}, start={}, stop={}, num={}, unit={})>".format(
@@ -146,7 +119,7 @@ class DataAxis(object):
 class SweepAxis(DataAxis):
     """ Structure for sweep axis, separate from DataAxis.
     Can be an unstructured axis, in which case 'parameter' is actually a list of parameters. """
-    def __init__(self, parameter, points = [], metadata=None, refine_func=None, callback_func=None):
+    def __init__(self, parameter, points = [], metadata=None, callback_func=None):
 
         self.unstructured = hasattr(parameter, '__iter__')
         self.parameter    = parameter
@@ -161,10 +134,6 @@ class SweepAxis(DataAxis):
         # Current value of the metadata
         if self.metadata is not None:
             self.metadata_value = self.metadata[0]
-
-        # This is run at the end of this sweep axis
-        # Refine_func receives the sweep axis and the experiment as arguments
-        self.refine_func = refine_func
 
         # This is run before each point in the sweep axis is executed
         # Callback_func receives the sweep axis and the experiment as arguments
@@ -183,47 +152,21 @@ class SweepAxis(DataAxis):
         """ Update value after each run.
         """
         if self.step < self.num_points():
-            if self.callback_func:
-                self.callback_func(self, self.experiment)
             self.value = self.points[self.step]
             if self.metadata is not None:
                 self.metadata_value = self.metadata[self.step]
+            if self.callback_func:
+                self.callback_func(self.value, self.experiment)
             logger.debug("Sweep Axis '{}' at step {} takes value: {}.".format(self.name,
-                                                                               self.step,self.value))
+                                                                               self.step+1,self.value))
             self.push()
             self.step += 1
             self.done = False
-
-    def check_for_refinement(self, output_connectors_dict):
-        """Check to see if we need to perform any refinements. If there is a refine_func
-        and it returns a list of points, then we need to extend the axes. Otherwise, if the
-        refine_func returns None or false, then we reset the axis to its original set of points. If
-        there is no refine_func then we don't do anything at all."""
-
-        if not self.done and self.step==self.num_points():
-            logger.debug("Refining on axis {}".format(self.name))
-            if self.refine_func:
-                points = self.refine_func(self, self.experiment)
-                if points is None or points is False:
-                    # Returns false if no refinements needed, otherwise adds points to list
-                    self.step = 0
-                    self.done = True
-                    self.reset()
-                    logger.debug("Sweep Axis '{}' complete.".format(self.name))
-                    # Push to ocs, which should push to processes
-                    for oc in output_connectors_dict.values():
-                        oc.push_event("refined", (self.name, True, self.original_points)) # axis name, reset, points
-                    return False
-                self.add_points(points)
-                self.done = False
-                for oc in output_connectors_dict.values():
-                    oc.push_event("refined", (self.name, False, points)) # axis name, reset, points
-                return True
-            else:
-                self.step = 0
-                self.done = True
-                logger.debug("Sweep Axis '{}' complete.".format(self.name))
-                return False
+        
+        if self.step == self.num_points():
+            logger.debug("Sweep Axis '{}' claims to be done.".format(self.name))
+            self.step = 0
+            self.done = True
 
     def push(self):
         """ Push parameter value(s) """
@@ -261,9 +204,6 @@ class DataStreamDescriptor(object):
 
         # Keep track of the parameter permutations we have actually used...
         self.visited_tuples = []
-
-    def is_adaptive(self):
-        return True in [a.refine_func is not None for a in self.axes]
 
     def add_axis(self, axis, position=0):
         # Check if axis is DataAxis or SweepAxis (which inherits from DataAxis)
@@ -325,7 +265,7 @@ class DataStreamDescriptor(object):
 
     def expected_num_points(self):
         if len(self.axes)>0:
-            return reduce(lambda x,y: x*y, [len(a.original_points) for a in self.axes])
+            return reduce(lambda x,y: x*y, [len(a.points) for a in self.axes])
         else:
             return 0
 
@@ -345,24 +285,8 @@ class DataStreamDescriptor(object):
                 dtype.extend(a.data_type(with_metadata=with_metadata))
         return dtype
 
-    def tuples(self, as_structured_array=True):
-        """Returns a list of all tuples visited by the sweeper. Should only
-        be used with adaptive sweeps."""
-        if len(self.visited_tuples) == 0:
-            self.visited_tuples = self.expected_tuples(with_metadata=True)
-
-        if as_structured_array:
-            # If we already have a structured array
-            if type(self.visited_tuples) is np.ndarray and type(self.visited_tuples.dtype.names) is tuple:
-                return self.visited_tuples
-            elif type(self.visited_tuples) is np.ndarray:
-                return np.rec.fromarrays(self.visited_tuples.T, dtype=self.axis_data_type(with_metadata=True))
-            return np.core.records.fromrecords(self.visited_tuples, dtype=self.axis_data_type(with_metadata=True))
-        return self.visited_tuples
-
     def expected_tuples(self, with_metadata=False, as_structured_array=True):
-        """Returns a list of tuples representing the cartesian product of the axis values. Should only
-        be used with non-adaptive sweeps."""
+        """Returns a list of tuples representing the cartesian product of the axis values."""
         vals           = [a.points_with_metadata() for a in self.axes]
 
         #
@@ -445,9 +369,6 @@ class DataStreamDescriptor(object):
             axis_num = axis_name
         else:
             axis_num = self.axis_num(axis_name)
-
-        # if False in [a.refine_func is None for a in self.axes[axis_num:]]:
-        #     raise Exception("Cannot call num_points_through_axis with interior adaptive sweeps.")
 
         if axis_num >= len(self.axes):
             return 0
@@ -656,9 +577,6 @@ class OutputConnector(object):
             self.descriptor.data_name = self.data_name
             self.descriptor.unit = self.unit
         self.add_axis   = self.descriptor.add_axis
-
-        # Determine whether we need to deal with adaptive sweeps
-        self.has_adaptive_sweeps = False
 
     def __len__(self):
         with self.points_taken_lock:

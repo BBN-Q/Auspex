@@ -350,32 +350,8 @@ class Experiment(metaclass=MetaExperiment):
                         else:
                             self.progressbars[axis].goto(axis.step)
 
-            if self.sweeper.is_adaptive():
-                # Add the new tuples to the stream descriptors
-                for oc in self.output_connectors.values():
-                    # Obtain the lists of values for any fixed
-                    # DataAxes and append them to them to the sweep_values
-                    # in preperation for finding all combinations.
-                    vals = [a for a in oc.descriptor.data_axis_values()]
-                    if sweep_values:
-                        vals  = [[v] for v in sweep_values] + vals
-                    # Find all coordinate tuples and update the list of
-                    # tuples that the experiment has probed.
-                    nested_list    = list(itertools.product(*vals))
-                    flattened_list = [tuple((val for sublist in line for val in sublist)) for line in nested_list]
-                    oc.descriptor.visited_tuples = oc.descriptor.visited_tuples + flattened_list
-
-                    # Since the filters are in separate processes, pass them the same
-                    # information so that they may perform the same operations.
-                    oc.push_event("new_tuples", (axis_names, sweep_values,))
-
             # Run the procedure
             self.run()
-
-            # See if the axes want to extend themselves. They will push updates
-            # directly to the output_connecters as messages that will be passed
-            # through the filter pipeline.
-            self.sweeper.check_for_refinement(self.output_connectors)
 
             # Finish up, checking to see whether we've received all of our data
             if self.sweeper.done():
@@ -692,8 +668,8 @@ class Experiment(metaclass=MetaExperiment):
             logger.debug("Adding axis %s to connector %s.", axis, oc.name)
             oc.descriptor.add_axis(axis, position=position)
 
-    def add_sweep(self, parameters, sweep_list, refine_func=None, callback_func=None, metadata=None):
-        ax = SweepAxis(parameters, sweep_list, refine_func=refine_func, callback_func=callback_func, metadata=metadata)
+    def add_sweep(self, parameters, sweep_list, callback_func=None, metadata=None):
+        ax = SweepAxis(parameters, sweep_list, callback_func=callback_func, metadata=metadata)
         ax.experiment = self
         self.sweeper.add_sweep(ax)
         self.add_axis(ax)
