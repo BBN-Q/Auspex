@@ -362,7 +362,7 @@ class AMC599(object):
 
         LSbits = self.serial_read_dac_register(dac, 0x041) & 0x03
         MSbits = self.serial_read_dac_register(dac, 0x042) & 0xFF
-        reg_value = (MSbits << 2) + LSbits
+        reg_value = (MSbits << 2) | LSbits
         return 32 * (reg_value / 1023) + 8
 
     def serial_set_nco_enable(self, dac, en):
@@ -669,7 +669,10 @@ class APS3(Instrument, metaclass=MakeBitFieldParams):
         self.dac = channel
 
         APS3CommunicationManager.connect(self.address)
-
+        ipreg = self.read_register(CSR_IPV4,dac = 0)
+        hexstring = '{:02X}{:02X}{:02X}{:02X}'.format(*map(int, self.address[0].split('.')))
+        if ipreg != int(hexstring, 16):
+            logger.warning("IP does not match expected value for ip", self.address[0], 'serial:', self.address[1])
         # Write the memory locations immediately
         self.write_register(CSR_WFA_OFFSET, (DRAM_WFA_0_LOC if self.dac == 0 else DRAM_WFA_1_LOC))
         self.write_register(CSR_WFB_OFFSET, (DRAM_WFB_0_LOC if self.dac == 0 else DRAM_WFB_1_LOC))
@@ -679,11 +682,15 @@ class APS3(Instrument, metaclass=MakeBitFieldParams):
         if APS3CommunicationManager.connected(self.address):
             APS3CommunicationManager.disconnect(self.address)
 
-    def write_register(self, offset, data):
+    def write_register(self, offset, data,dac = None):
         logger.debug(f"Setting CSR: {hex(offset)} to: {hex(data)}")
+        if dac == None:
+            dac = self.dac
         APS3CommunicationManager.board(self.address).write_memory((CSR_AXI_ADDR_BASE0 if self.dac == 0 else CSR_AXI_ADDR_BASE1) + offset, data)
 
-    def read_register(self, offset, num_words = 1):
+    def read_register(self, offset, num_words = 1,dac = None):
+        if dac == None:
+            dac = self.dac
         return APS3CommunicationManager.board(self.address).read_memory((CSR_AXI_ADDR_BASE0 if self.dac == 0 else CSR_AXI_ADDR_BASE1) + offset, num_words)
 
     def write_dram(self, offset, data):
@@ -707,8 +714,8 @@ class APS3(Instrument, metaclass=MakeBitFieldParams):
     sequencer_enable = BitFieldCommand(register=CSR_SEQ_CONTROL, shift=0,
         doc="""Sequencer, trigger input, modulator, SATA, VRAM, debug stream enable bit.""")
 
-    trigger_source = BitFieldCommand(register=CSR_SEQ_CONTROL, shift=1,
-        value_map={"external": 0b00, "internal": 0b01, "software": 0b10, "message": 0b11})
+    trigger_source = BitFieldCommand(register=CSR_SEQ_CONTROL, shift=1, mask=0b11,
+        value_map={"external": 0b00, "internal": 0b01, "software": 0b10, "message": 0b11, "system":0b10})
 
     soft_trigger = BitFieldCommand(register=CSR_SEQ_CONTROL, shift=3)
     trigger_enable = BitFieldCommand(register=CSR_SEQ_CONTROL, shift=4)
@@ -772,8 +779,8 @@ class APS3(Instrument, metaclass=MakeBitFieldParams):
         return np.array([[r00, r01], [r10, r11]], dtype=np.uint16)
 
     def set_correction_matrix(self, matrix):
-        row0 = ((matix[0, 0] & U16) << 16) | (matrix[0, 1] & U16)
-        row1 = ((matix[1, 0] & U16) << 16) | (matrix[1, 1] & U16)
+        row0 = ((matrix[0, 0] & U16) << 16) | (matrix[0, 1] & U16)
+        row1 = ((matrix[1, 0] & U16) << 16) | (matrix[1, 1] & U16)
         self.write_register(CSR_CMAT_R0, row0)
         self.write_register(CSR_CMAT_R1, row1)
 
@@ -811,7 +818,7 @@ class APS3(Instrument, metaclass=MakeBitFieldParams):
         self.write_register(CSR_BD_CONTROL, reg)
 
     trigger_input_select = BitFieldCommand(register=CSR_BD_CONTROL, shift=7,
-        doc="""True: Use the trigger form the other DAC as the trigger source.  When this bit is set then
+        doc="""True: Use the trigger from the other DAC as the trigger source.  When this bit is set then
                 for CSR0: DAC0 use DAC1 trigger; For CSR1 for DAC1 use DAC0 trigger.
                False: Use the trigger from the same DAC as the source.
                 for CSR0: DAC0 use DAC0 trigger; For CSR1 for DAC1 use DAC1 trigger.""")
@@ -848,7 +855,7 @@ class APS3(Instrument, metaclass=MakeBitFieldParams):
     ###### UTILITIES ###########################################################
     def run(self):
         logger.debug("Configuring JESD...")
-        #APS3CommunicationManager.board(self.address).serial_configure_JESD()
+        APS3CommunicationManager.board(self.address).serial_configure_JESD(self.dac)
         sleep(0.01)
         logger.debug("Taking cache controller out of reset...")
         self.cache_controller = True
@@ -866,7 +873,7 @@ class APS3(Instrument, metaclass=MakeBitFieldParams):
         sleep(0.01)
         logger.debug("Resetting sequencer...")
         self.sequencer_enable = False
-
+        sleep(0.01)
     ###### SEQUENCE LOADING ####################################################
 
     sequence_filename = ''
@@ -1002,3 +1009,13 @@ class APS3(Instrument, metaclass=MakeBitFieldParams):
     @dac_shuffle_mode.setter
     def dac_shuffle_mode(self, value):
         APS3CommunicationManager.board(self.address).serial_set_shuffle_mode(self.dac, value)
+
+    def get_dac_temp(self, device_index=None):
+        if device_index is None:
+            device_index=self.dac
+        APS3CommunicationManager.board(self.address).serial_write_dac_register(device_index, 0x134, 0b1)
+        sleep(0.1)
+        return APS3CommunicationManager.board(self.address).serial_read_dac_register(device_index, 0x132) | (APS3CommunicationManager.board(self.address).serial_read_dac_register(device_index, 0x133)<<8)
+
+    def test_configure_JESD(self):
+        return APS3CommunicationManager.board(self.address).serial_configure_JESD(self.dac)
