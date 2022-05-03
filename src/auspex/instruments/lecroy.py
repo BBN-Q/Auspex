@@ -37,7 +37,7 @@ class HDO6104(SCPIInstrument):
         yincrement = float(mydict["VERTICAL_GAIN"])
         yorigin = float(mydict["VERTICAL_OFFSET"])
         # Read waveform data
-        y_axis = np.array(self.interface.query_binary_values('C%d:WAVEFORM? DAT1' % channel, datatype='h', is_big_endian=True))
+        y_axis = np.array(self.interface.query_binary_values('C%d:WAVEFORM? DAT1' % channel, datatype='h', is_big_endian=False))
         y_axis = y_axis*yincrement - yorigin
         x_axis = xorigin + np.arange(0, xincrement*len(y_axis), xincrement)
         return x_axis, y_axis
