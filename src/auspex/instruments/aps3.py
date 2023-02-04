@@ -694,12 +694,12 @@ class APS3(Instrument, metaclass=MakeBitFieldParams):
         if dac == None:
             dac = self.dac
 
-        APS3CommunicationManager.board(self.address).write_memory((CSR_AXI_ADDR_BASE0 if self.dac == 0 else CSR_AXI_ADDR_BASE1) + offset, data)
+        APS3CommunicationManager.board(self.address).write_memory((CSR_AXI_ADDR_BASE0 if dac == 0 else CSR_AXI_ADDR_BASE1) + offset, data)
 
     def read_register(self, offset, num_words = 1,dac = None):
         if dac == None:
             dac = self.dac
-        return APS3CommunicationManager.board(self.address).read_memory((CSR_AXI_ADDR_BASE0 if self.dac == 0 else CSR_AXI_ADDR_BASE1) + offset, num_words)
+        return APS3CommunicationManager.board(self.address).read_memory((CSR_AXI_ADDR_BASE0 if dac == 0 else CSR_AXI_ADDR_BASE1) + offset, num_words)
 
     def write_dram(self, offset, data):
         APS3CommunicationManager.board(self.address).write_memory(DRAM_AXI_BASE + offset, data)
