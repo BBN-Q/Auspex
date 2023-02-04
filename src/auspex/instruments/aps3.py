@@ -690,12 +690,6 @@ class APS3(Instrument, metaclass=MakeBitFieldParams):
 
     def write_register(self, offset, data,dac = None):
         logger.debug(f"Setting CSR: {hex(offset)} to: {hex(data)}")
-        # if self.csr0_master and ((offset is CSR_CACHE_CONTROL) or (offset is CSR_SEQ_CONTROL)) :
-        #     if shift is 4 or shift is 5 or ((offset is CSR_CACHE_CONTROL) and (shift is 0)):
-        #         logger.debug("Special case for csr0_master, setting for both DACs")
-        #         APS3CommunicationManager.board(self.address).write_memory(CSR_AXI_ADDR_BASE0 + offset, data)
-        #         APS3CommunicationManager.board(self.address).write_memory(CSR_AXI_ADDR_BASE1 + offset, data)
-        #         return
         if dac == None:
             dac = self.dac
         APS3CommunicationManager.board(self.address).write_memory((CSR_AXI_ADDR_BASE0 if dac == 0 else CSR_AXI_ADDR_BASE1) + offset, data)
