@@ -351,7 +351,7 @@ class MixerCalibrationExperiment(Experiment):
             instr.configure_with_proxy(instr.proxy_obj)
 
         #make sure the microwave generators are set up properly
-        
+
         if self.LO:
             self._setup_extrnal_LO()
         else:

@@ -649,7 +649,7 @@ class APS3(Instrument, metaclass=MakeBitFieldParams):
             raise ValueError("Must supply a resource name!")
         elif resource_name is not None:
             self.resource_name = resource_name
-            
+
         if isinstance(self.resource_name, str):
             self.resource_name = self.resource_name.split(';')
 
@@ -661,12 +661,12 @@ class APS3(Instrument, metaclass=MakeBitFieldParams):
             raise ValueError("IP address must be valid!")
         if self.resource_name[1] == None:
             raise ValueError("Resource name must contain serial port!")
-        
+
         if self.resource_name[2] == None:
             raise ValueError("Resource name must contain channel!")
-        
+
         channel = int(self.resource_name[2]) if not isinstance(self.resource_name[2], int) else self.resource_name[2]
-        
+
         if not channel in [0, 1]:
             raise ValueError("Channel name must be 0 or 1!")
 
@@ -674,6 +674,7 @@ class APS3(Instrument, metaclass=MakeBitFieldParams):
         self.dac = channel
 
         APS3CommunicationManager.connect(self.address)
+
         ipreg = self.read_register(CSR_IPV4,dac=0)
         hexstring = '{:02X}{:02X}{:02X}{:02X}'.format(*map(int, self.address[0].split('.')))
         if ipreg != int(hexstring, 16):
@@ -692,12 +693,13 @@ class APS3(Instrument, metaclass=MakeBitFieldParams):
         logger.debug(f"Setting CSR: {hex(offset)} to: {hex(data)}")
         if dac == None:
             dac = self.dac
-        APS3CommunicationManager.board(self.address).write_memory((CSR_AXI_ADDR_BASE0 if dac == 0 else CSR_AXI_ADDR_BASE1) + offset, data)
 
-    def read_register(self, offset, num_words = 1, dac = None):
+        APS3CommunicationManager.board(self.address).write_memory((CSR_AXI_ADDR_BASE0 if self.dac == 0 else CSR_AXI_ADDR_BASE1) + offset, data)
+
+    def read_register(self, offset, num_words = 1,dac = None):
         if dac == None:
             dac = self.dac
-        return APS3CommunicationManager.board(self.address).read_memory((CSR_AXI_ADDR_BASE0 if dac == 0 else CSR_AXI_ADDR_BASE1) + offset, num_words)
+        return APS3CommunicationManager.board(self.address).read_memory((CSR_AXI_ADDR_BASE0 if self.dac == 0 else CSR_AXI_ADDR_BASE1) + offset, num_words)
 
     def write_dram(self, offset, data):
         APS3CommunicationManager.board(self.address).write_memory(DRAM_AXI_BASE + offset, data)
@@ -720,8 +722,8 @@ class APS3(Instrument, metaclass=MakeBitFieldParams):
     sequencer_enable = BitFieldCommand(register=CSR_SEQ_CONTROL, shift=0,
         doc="""Sequencer, trigger input, modulator, SATA, VRAM, debug stream enable bit.""")
 
-    trigger_source = BitFieldCommand(register=CSR_SEQ_CONTROL, shift=1, mask=0b11, 
-        value_map={"external": 0b00, "internal": 0b01, "software": 0b10, "message": 0b11, "system":0b10}) 
+    trigger_source = BitFieldCommand(register=CSR_SEQ_CONTROL, shift=1, mask=0b11,
+        value_map={"external": 0b00, "internal": 0b01, "software": 0b10, "message": 0b11, "system":0b10})
 
     soft_trigger = BitFieldCommand(register=CSR_SEQ_CONTROL, shift=3)
     trigger_enable = BitFieldCommand(register=CSR_SEQ_CONTROL, shift=4)
@@ -1016,7 +1018,6 @@ class APS3(Instrument, metaclass=MakeBitFieldParams):
     def dac_shuffle_mode(self, value):
         APS3CommunicationManager.board(self.address).serial_set_shuffle_mode(self.dac, value)
 
-
     def get_dac_temp(self, device_index=None):
         if device_index is None:
             device_index=self.dac
@@ -1026,6 +1027,7 @@ class APS3(Instrument, metaclass=MakeBitFieldParams):
 
     def test_configure_JESD(self):
         return APS3CommunicationManager.board(self.address).serial_configure_JESD(self.dac)
+
 
 class APS3_generator(APS3):
 

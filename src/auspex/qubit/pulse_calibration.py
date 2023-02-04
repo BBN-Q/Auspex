@@ -668,10 +668,8 @@ class RamseyCalibration(QubitCalibration):
         if self.first_ramsey:
             rcvr = self.qubit.measure_chan.receiver_chan.receiver
             self.source_proxy = self.qubit.phys_chan.generator # DB object
- #           self.qubit_source = exp._instruments[self.source_proxy.label] # auspex instrument
- #           self.orig_freq = self.source_proxy.frequency + self.qubit.frequency
+
             if self.set_source:
-  #              self.source_proxy = self.qubit.phys_chan.generator # DB object
                 self.qubit_source = exp._instruments[self.source_proxy.label] # auspex instrument
                 self.orig_freq = self.source_proxy.frequency + self.qubit.frequency
                 self.source_proxy.frequency += self.added_detuning
