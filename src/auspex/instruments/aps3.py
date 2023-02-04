@@ -677,8 +677,8 @@ class APS3(Instrument, metaclass=MakeBitFieldParams):
         ipreg = self.read_register(CSR_IPV4,dac=0)
         hexstring = '{:02X}{:02X}{:02X}{:02X}'.format(*map(int, self.address[0].split('.')))
         if ipreg != int(hexstring, 16):
-            print("IP does not match expected value for ip", self.address[0], 'serial:', self.address[1])
-            print(ipreg, hexstring, int(hexstring,16))
+            logger.warning("IP does not match expected value for ip", self.address[0], 'serial:', self.address[1])
+            logger.warning(ipreg, hexstring, int(hexstring,16))
         # Write the memory locations immediately
         self.write_register(CSR_WFA_OFFSET, (DRAM_WFA_0_LOC if self.dac == 0 else DRAM_WFA_1_LOC))
         self.write_register(CSR_WFB_OFFSET, (DRAM_WFB_0_LOC if self.dac == 0 else DRAM_WFB_1_LOC))
