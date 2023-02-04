@@ -6,7 +6,7 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-__all__ = ['APS3']
+__all__ = ['APS3','APS3_generator']
 
 from .instrument import Instrument, is_valid_ipv4, Command, MetaInstrument
 from .bbn import MakeSettersGetters
@@ -19,6 +19,8 @@ from unittest.mock import Mock
 import collections
 from struct import pack, iter_unpack
 import serial
+from QGL.drivers.APS3Pattern import Sync,Wait,Waveform,Goto,ModulationCommand
+from QGL.PulseShapes import constant
 
 U32 = 0xFFFFFFFF #mask for 32-bit unsigned int
 U16 = 0xFFFF
@@ -338,7 +340,7 @@ class AMC599(object):
 
         # From AD9164 datasheet:
         # IOUTFS = 32 mA × (ANA_FULL_SCALE_CURRENT[9:0]/1023) + 8 mA
-        reg_value = int(1023 * (current - 8) / 32)
+        reg_value = int(1023 * (current - 8) / 32)  
 
         if self.ser is None:
             logger.debug('{:#x}'.format(reg_value & 0x3))
@@ -636,6 +638,9 @@ class APS3(Instrument, metaclass=MakeBitFieldParams):
 
     def __init__(self, resource_name=None, name="Unlabeled APS3", debug=False):
         self.name = name
+        if len(resource_name) <3:
+            print("error: not enough parameters in resource name")
+            print(resource_name)
         self.resource_name = resource_name
         super().__init__()
 
@@ -669,10 +674,12 @@ class APS3(Instrument, metaclass=MakeBitFieldParams):
         self.dac = channel
 
         APS3CommunicationManager.connect(self.address)
-        ipreg = self.read_register(CSR_IPV4,dac = 0)
+
+        ipreg = self.read_register(CSR_IPV4,dac=0)
         hexstring = '{:02X}{:02X}{:02X}{:02X}'.format(*map(int, self.address[0].split('.')))
         if ipreg != int(hexstring, 16):
             logger.warning("IP does not match expected value for ip", self.address[0], 'serial:', self.address[1])
+            logger.warning(ipreg, hexstring, int(hexstring,16))
         # Write the memory locations immediately
         self.write_register(CSR_WFA_OFFSET, (DRAM_WFA_0_LOC if self.dac == 0 else DRAM_WFA_1_LOC))
         self.write_register(CSR_WFB_OFFSET, (DRAM_WFB_0_LOC if self.dac == 0 else DRAM_WFB_1_LOC))
@@ -686,6 +693,7 @@ class APS3(Instrument, metaclass=MakeBitFieldParams):
         logger.debug(f"Setting CSR: {hex(offset)} to: {hex(data)}")
         if dac == None:
             dac = self.dac
+
         APS3CommunicationManager.board(self.address).write_memory((CSR_AXI_ADDR_BASE0 if self.dac == 0 else CSR_AXI_ADDR_BASE1) + offset, data)
 
     def read_register(self, offset, num_words = 1,dac = None):
@@ -1019,3 +1027,107 @@ class APS3(Instrument, metaclass=MakeBitFieldParams):
 
     def test_configure_JESD(self):
         return APS3CommunicationManager.board(self.address).serial_configure_JESD(self.dac)
+
+
+class APS3_generator(APS3):
+
+    instrument_type = "Microwave Source"
+    reference = "FPGA"
+    sequence_length = 25e-6
+    cw_mode = True
+
+    def aps3_load_constant_waveform(self):
+        pulse = constant(amp=1, length=self.sequence_length, sampling_rate=5e9)
+        #wf_a, wf_b = pack_pulse_into_waveform(pulse)
+        WF_MAX_AMP = (1 << 15) - 1
+        self.load_waveforms([int(x * WF_MAX_AMP) for x in np.real(pulse)], 
+                            [int(x * WF_MAX_AMP) for x in np.imag(pulse)])
+        return len(pulse) // 2
+
+    def connect(self, resource_name=None):
+        super().connect(resource_name)
+        sleep(0.1)
+        self.dac_FIR85_enable = False
+        self.dac_switch_mode = 'MIX'
+        self.dac_full_scale_current = 40
+        self.bypass_nco = True
+        self.bypass_modulator = True
+        self.dac_nco_enable = True
+        self.dac_output_mux = 'APS'
+        self.trigger_input_select = 0b1
+        self.trigger_output_select = 0x2
+        self.dac_pll_reference = 'FPGA'
+        self.csr0_master = True
+        self.marker_delay = 0
+        self.delay = 0
+        self.trigger_source = 'external'
+
+        if self.cw_mode is False:
+            tmplen = self.aps3_load_constant_waveform()
+            wf_seq_cw = [Sync(),
+                         Wait(),
+                         Waveform(0x0, tmplen, False, write=True),
+                         Waveform(0x0, tmplen, False, write=True),
+                         Goto(0x0)]
+            self.trigger_source = 'external'
+            self.trigger_input_select = 0b1
+        else:
+            print("Hello!")
+            tmplen = self.aps3_load_constant_waveform()
+            wf_seq_cw = [Sync(),
+                         Waveform(0x0, tmplen, False, write=True),
+                         Goto(0x1)]
+            self.trigger_source='internal'
+            self.trigger_input_select = 0b0
+
+        self.load_sequence([s.flatten() for s in wf_seq_cw])
+    
+    def load_sequence(self, arg):
+        print("Loading sequence to APS3 generator")
+        super().load_sequence(arg)
+
+    @property
+    def output(self):
+        return self.sequencer_enable
+    @output.setter
+    def output(self, value):
+        if value == True:
+            self.run()
+            return True
+        elif value == False:
+            self.stop()
+            return False
+        else:
+            return False
+
+    @property
+    def frequency(self):
+        return self.dac_nco_frequency
+    @frequency.setter
+    def frequency(self, value):
+        self.dac_nco_frequency = value
+
+    #Power setter disabled for now
+    @property
+    def power(self):
+        return 0
+    @power.setter
+    def power(self, value):
+        return 0
+
+    @property
+    def reference(self):
+        return self.dac_pll_reference
+    @reference.setter
+    def reference(self, value):
+        ref_opts = ["FPGA", "REF IN"]
+        if value in ref_opts:
+            self.dac_pll_reference = value
+        else:
+            raise ValueError("Reference must be one of {}.".format(ref_opts))
+
+    def write_register(self, offset, data):
+        super().write_register(offset,data)
+
+    def read_register(self, offset, num_words = 1):
+        return super().read_register(offset,num_words)

@@ -265,7 +265,7 @@ class MixerCalibrationExperiment(Experiment):
             self._LO = self._sa.LO_source
         else:
             self._LO = None #A spectrum analyzer with built-in LO
-
+        self._LO = self._sa.LO_source    
         if mixer.lower() == "measure":
             self._awg = channel.measure_chan.phys_chan.transmitter
             self._phys_chan = channel.measure_chan.phys_chan
@@ -288,8 +288,11 @@ class MixerCalibrationExperiment(Experiment):
             # For easy lookup
             instr.proxy_obj = instrument
             instrument._locked = False
+            if hasattr(instr, 'cw_mode'):
+                instr.cw_mode=True
             instrument.instr = instr
             instrument._locked = True
+
             # Add to the experiment's instrument list
             self._instruments[instrument.label] = instr
             self.instruments.append(instr)

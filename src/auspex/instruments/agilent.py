@@ -924,7 +924,7 @@ class _AgilentNetworkAnalyzer(SCPIInstrument):
         while not meas_done:
             time.sleep(0.5)
             opc_bit = int(self.interface.ESR()) & 0x1
-            print(opc_bit)
+   #         print(opc_bit)
             if opc_bit == 1:
                 meas_done = True
 
