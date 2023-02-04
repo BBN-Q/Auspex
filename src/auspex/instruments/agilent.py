@@ -924,7 +924,7 @@ class _AgilentNetworkAnalyzer(SCPIInstrument):
         while not meas_done:
             time.sleep(0.5)
             opc_bit = int(self.interface.ESR()) & 0x1
-            print(opc_bit)
+   #         print(opc_bit)
             if opc_bit == 1:
                 meas_done = True
 
@@ -977,7 +977,7 @@ class _AgilentNetworkAnalyzer(SCPIInstrument):
             interleaved_vals  = self.interface._resource.query_binary_values(':CALC:DATA? SDATA', datatype="f", is_big_endian=True, expect_termination=False)
 
         self.interface.write("SENS:SWE:MODE CONT")
-        vals = interleaved_vals[::2] + 1j*interleaved_vals[1::2]
+        vals = np.array(interleaved_vals[::2]) + 1j*np.array(interleaved_vals[1::2])
         #Get the associated frequencies
         freqs = np.linspace(self.frequency_start, self.frequency_stop, self.num_points)
         return (freqs, vals)

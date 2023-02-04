@@ -68,8 +68,8 @@ class MixerCalibration(Calibration):
     MAX_OFFSET = 0.4
     MIN_AMPLITUDE = 0.2
     MAX_AMPLITUDE = 1.5
-    MIN_PHASE = -0.3
-    MAX_PHASE = 0.3
+    MIN_PHASE = -0.7
+    MAX_PHASE = 0.7
 
     def __init__(self, channel, spectrum_analyzer, mixer="control", first_cal="phase",
                 offset_range = (-0.2,0.2), amp_range = (0.4,0.8), phase_range = (-np.pi/2,np.pi/2),
@@ -265,7 +265,7 @@ class MixerCalibrationExperiment(Experiment):
             self._LO = self._sa.LO_source
         else:
             self._LO = None #A spectrum analyzer with built-in LO
-
+        self._LO = self._sa.LO_source    
         if mixer.lower() == "measure":
             self._awg = channel.measure_chan.phys_chan.transmitter
             self._phys_chan = channel.measure_chan.phys_chan
@@ -288,8 +288,11 @@ class MixerCalibrationExperiment(Experiment):
             # For easy lookup
             instr.proxy_obj = instrument
             instrument._locked = False
+            if hasattr(instr, 'cw_mode'):
+                instr.cw_mode=True
             instrument.instr = instr
             instrument._locked = True
+
             # Add to the experiment's instrument list
             self._instruments[instrument.label] = instr
             self.instruments.append(instr)

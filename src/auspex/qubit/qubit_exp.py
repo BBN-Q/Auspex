@@ -21,6 +21,7 @@ from . import pipeline
 import time
 import datetime
 import json
+from QGL.drivers.APS3Pattern import Sync,Wait,Goto
 
 stream_hierarchy = [
     bbndb.auspex.Demodulate,
@@ -135,6 +136,18 @@ class QubitExperiment(Experiment):
         self.generators        = list(set([q.phys_chan.generator for q in self.measured_qubits + self.controlled_qubits + self.measurements if q.phys_chan.generator]))
         self.qubits_by_name    = {q.label: q for q in self.measured_qubits + self.controlled_qubits}
 
+        #Find complementary APS3 channels
+        all_aps3 =[c for c in all_transmitters if c.dac == 0 or c.dac == 1]
+        my_aps3 = [c for c in self.transmitters if c.dac == 0 or c.dac == 1]
+        self.aps3_c = []
+
+        for c in my_aps3:
+            if c.params['trigger_input_select'] == 1:
+                a = [x for x in all_aps3 if (x not in my_aps3) and x.serial_port == c.serial_port and x.dac == (1-c.dac)%2 ]
+                if a: 
+                    self.aps3_c.append(a[0])
+                    logger.debug("Adding missing dac trigger channel ")
+
         # Load the relevant stream selectors from the pipeline.
         self.stream_selectors = pipeline.pipelineMgr.get_current_stream_selectors()
         if len(self.stream_selectors) == 0:
@@ -219,7 +232,7 @@ class QubitExperiment(Experiment):
 
         # Create microwave sources and receiver instruments from the database objects.
         # We configure the self.receivers later after adding channels.
-        self.instrument_proxies = self.generators + self.receivers + self.transmitters + self.transceivers + self.all_standalone + self.processors
+        self.instrument_proxies = self.generators + self.receivers + self.transmitters + self.transceivers + self.all_standalone + self.processors + self.aps3_c
         for t in self.transceivers:
             if t.initialize_separately:
                 self.instrument_proxies.remove(t)
@@ -480,6 +493,14 @@ class QubitExperiment(Experiment):
         while ready.value < len(self.chan_to_dig):
             time.sleep(0.1)
 
+        #Load empty sequence in trigger-input APS3 channels
+        wf_seq = [Sync(),
+                  Wait(),
+                  Goto(0x0)]
+
+        for c in self.aps3_c:
+            c.instr.load_sequence([s.flatten() for s in wf_seq])
+
         if self.cw_mode:
             for awg in self.awgs:
                 awg.run()
@@ -654,5 +675,5 @@ class QubitExperiment(Experiment):
 
         # Stop the AWGs
         if not self.cw_mode:
-            for awg in self.awgs:
+           for awg in self.awgs:
                 awg.stop()

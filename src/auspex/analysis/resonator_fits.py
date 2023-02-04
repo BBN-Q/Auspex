@@ -176,7 +176,7 @@ def resonator_circle_fit(data, freqs, makePlots=False, manual_qc=None):
     # The phase of this is 2 pi f t
     # Hence, taking a linear regression against f and finding the slope can give you
     # an idea of t
-    phases = numpy.unwrap(numpy.angle(data))
+    phases = numpy.unwrap(numpy.angle(data)).real
     m,b,r,p,err = scipy.stats.linregress(freqs*1e-9,phases)
     bound = 2*numpy.absolute(m)/(2*numpy.pi)
     result = scipy.optimize.minimize_scalar(_circle_residuals, 0, method='Bounded', args=(data,freqs), bounds=(0, bound))
