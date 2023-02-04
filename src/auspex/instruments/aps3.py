@@ -720,8 +720,8 @@ class APS3(Instrument, metaclass=MakeBitFieldParams):
     sequencer_enable = BitFieldCommand(register=CSR_SEQ_CONTROL, shift=0,
         doc="""Sequencer, trigger input, modulator, SATA, VRAM, debug stream enable bit.""")
 
-    trigger_source = BitFieldCommand(register=CSR_SEQ_CONTROL, shift=1, mask=0b11, #mask added TB 2/15/22
-        value_map={"external": 0b00, "internal": 0b01, "software": 0b10, "message": 0b11, "system":0b10}) #Added system option to avoid an error TB 12/7/21
+    trigger_source = BitFieldCommand(register=CSR_SEQ_CONTROL, shift=1, mask=0b11, 
+        value_map={"external": 0b00, "internal": 0b01, "software": 0b10, "message": 0b11, "system":0b10}) 
 
     soft_trigger = BitFieldCommand(register=CSR_SEQ_CONTROL, shift=3)
     trigger_enable = BitFieldCommand(register=CSR_SEQ_CONTROL, shift=4)
@@ -861,7 +861,7 @@ class APS3(Instrument, metaclass=MakeBitFieldParams):
     ###### UTILITIES ###########################################################
     def run(self):
         logger.debug("Configuring JESD...")
-        APS3CommunicationManager.board(self.address).serial_configure_JESD(self.dac) #was commented  as of 9/23/21, uncommenting TB
+        APS3CommunicationManager.board(self.address).serial_configure_JESD(self.dac)
         sleep(0.01)
         logger.debug("Taking cache controller out of reset...")
         self.cache_controller = True
