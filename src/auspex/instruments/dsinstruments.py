@@ -8,7 +8,7 @@
 
 # Drivers for controling the DS Instruments puresine rf signal generators
 
-__all__ = ['DSInstrumentsSG12000', 'DSInstrumentsSG12000Pro']
+__all__ = ['DSInstrumentsSG12000', 'DSInstrumentsSG12000Pro','DAT64H']
 
 from auspex.log import logger
 from .instrument import SCPIInstrument, MetaInstrument, StringCommand, FloatCommand, IntCommand, RampCommand, BoolCommand
@@ -141,3 +141,38 @@ class DSInstrumentsSG12000Pro(DSInstruments,metaclass=MakeSettersGetters):
 
     def temp(self): #Is this working?
         return self.interface.query("*TEMPC?")
+
+class DAT64H(SCPIInstrument,metaclass=MakeSettersGetters):
+
+    instrument_type = "Tunable Attenuator"
+    bool_map = {'ON':1, 'OFF':0}
+    bool_map_inv = {1:'ON', 0:'OFF'}
+
+    attenuation = FloatCommand(scpi_string="ATT")
+    step = FloatCommand(scpi_string="STEP")
+
+    def __init__(self, resource_name=None, *args, **kwargs):
+        super(DAT64H, self).__init__(resource_name, *args, **kwargs)
+
+    def connect(self, resource_name=None, interface_type="VISA"):
+        if resource_name is not None:
+            self.resource_name = resource_name
+        super(DAT64H, self).connect(resource_name=self.resource_name, interface_type=interface_type)
+        self.interface._resource.read_termination = u"\r\n"
+        self.interface._resource.write_termination = u"\r\n"
+        self.interface._resource.timeout = 1000
+        self.interface._resource.baud_rate = 115200
+
+    def increment(self):
+        self.interface.write("INCR")
+
+    def decrement(self):
+        self.interface.write("DECR")
+
+    @property
+    def attenuation(self):
+        return self.interface.query('ATT?')
+        
+    @attenuation.setter
+    def attenuation(self,value):
+        self.interface.write(f'ATT {value}')
