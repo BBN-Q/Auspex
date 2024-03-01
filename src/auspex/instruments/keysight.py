@@ -202,7 +202,8 @@ class KeysightM8190A(SCPIInstrument):
 
     continuous_mode = StringCommand(scpi_string=":INIT:CONT:STAT", value_map={True:"1", False:"0"})
     gate_mode       = StringCommand(scpi_string=":INIT:GATE:STAT", value_map={True:"1", False:"0"})
-
+    trigger_frequency = FloatCommand(scpi_string=":ARM:TRIG:FREQ")
+    
     def __init__(self, resource_name, *args, **kwargs):
         super(KeysightM8190A, self).__init__(resource_name, *args, **kwargs)
         self.name = "KeysightM8190A AWG"
@@ -329,3 +330,4 @@ class KeysightM8190A(SCPIInstrument):
 
     def trigger(self, channel=1):
         self.interface.write(":TRIG:BEG{:d}".format(channel))
+        
