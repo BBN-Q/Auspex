@@ -735,9 +735,9 @@ class _AgilentNetworkAnalyzer(SCPIInstrument):
 
     ##Basic SCPI commands.
     frequency_center    = FloatCommand(scpi_string=":SENSe:FREQuency:CENTer")
-    frequency_start     = FloatCommand(scpi_string=":SENSe:FREQuency:STARt")
-    frequency_stop      = FloatCommand(scpi_string=":SENSe:FREQuency:STOP")
-    frequency_span      = FloatCommand(scpi_string=":SENSe:FREQuency:SPAN")
+    frequency_start     = FloatCommand(scpi_string=":SENSe:FREQuency:STARt", formatter="{:.0f}")
+    frequency_stop      = FloatCommand(scpi_string=":SENSe:FREQuency:STOP", formatter="{:.0f}")
+    frequency_span      = FloatCommand(scpi_string=":SENSe:FREQuency:SPAN", formatter="{:.0f}")
     if_bandwidth        = FloatCommand(scpi_string=":SENSe1:BANDwidth")
     num_points          = IntCommand(scpi_string=":SENSe:SWEep:POINTS")
 
@@ -788,9 +788,10 @@ class _AgilentNetworkAnalyzer(SCPIInstrument):
             the port being in `OFF` mode, while `True` corresponds to the port being in `AUTO` mode.
         """
         if isinstance(outp, dict):
-            for k, v in self.outp.items():
+            for k, v in outp.items():
                 val = "AUTO" if v else "OFF"
-                self.interface.write(f"SOUR:POW{k}:MODE {val}")
+                self.interface.write(f" {val}")
+                print(f"Setting port {k} to {val}")
         else:
             val = "AUTO" if outp else "OFF"
             for p in self.ports:

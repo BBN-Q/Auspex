@@ -41,6 +41,9 @@ class Command(object):
                 setattr(self, a, self.kwargs.pop(a))
             else:
                 setattr(self, a, None) # Default to None
+        # Permit overiding the 'formatter' but keep the one defined as class variable if none is given
+        if 'formatter' in self.kwargs:
+            self.formatter = self.kwargs.pop('formatter')
 
         if 'doc' in self.kwargs:
             self.doc = self.kwargs.pop('doc')
