@@ -735,9 +735,9 @@ class _AgilentNetworkAnalyzer(SCPIInstrument):
 
     ##Basic SCPI commands.
     frequency_center    = FloatCommand(scpi_string=":SENSe:FREQuency:CENTer")
-    frequency_start     = FloatCommand(scpi_string=":SENSe:FREQuency:STARt", formatter={:.0f})
-    frequency_stop      = FloatCommand(scpi_string=":SENSe:FREQuency:STOP", formatter={:.0f})
-    frequency_span      = FloatCommand(scpi_string=":SENSe:FREQuency:SPAN", formatter={:.0f})
+    frequency_start     = FloatCommand(scpi_string=":SENSe:FREQuency:STARt", formatter="{:.0f}")
+    frequency_stop      = FloatCommand(scpi_string=":SENSe:FREQuency:STOP", formatter="{:.0f}")
+    frequency_span      = FloatCommand(scpi_string=":SENSe:FREQuency:SPAN", formatter="{:.0f}")
     if_bandwidth        = FloatCommand(scpi_string=":SENSe1:BANDwidth")
     num_points          = IntCommand(scpi_string=":SENSe:SWEep:POINTS")
 
@@ -920,7 +920,7 @@ class _AgilentNetworkAnalyzer(SCPIInstrument):
 
         meas_done = False
         self.interface.write('*OPC')
-        print(int(self.interface.ESR()) & 0x1)
+        #print(int(self.interface.ESR()) & 0x1)
         while not meas_done:
             time.sleep(0.5)
             opc_bit = int(self.interface.ESR()) & 0x1
