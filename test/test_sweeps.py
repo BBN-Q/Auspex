@@ -9,6 +9,7 @@
 import unittest
 import time
 import os
+import tempfile
 import numpy as np
 
 import auspex.config as config
@@ -18,8 +19,23 @@ from auspex.experiment import Experiment
 from auspex.parameter import FloatParameter
 from auspex.stream import DataStream, DataAxis, DataStreamDescriptor, OutputConnector
 from auspex.filters.debug import Print
-from auspex.filters.io import WriteToFile
+from auspex.filters.io import WriteToFile, DataBuffer
 from auspex.log import logger
+
+
+pl = None
+cl = None
+
+# Set temporary output directories
+awg_dir = tempfile.TemporaryDirectory()
+kern_dir = tempfile.TemporaryDirectory()
+import QGL
+config.AWGDir = QGL.config.AWGDir = awg_dir.name
+config.KernelDir = kern_dir.name
+
+from QGL import *
+from auspex.qubit import *
+import bbndb
 
 class SweptTestExperiment(Experiment):
     """Here the run loop merely spews data until it fills up the stream. """
@@ -56,9 +72,16 @@ class SweptTestExperiment(Experiment):
         self.time_val += time_step
         self.voltage.push(data_row)
         logger.debug("Stream pushed points {}.".format(data_row))
-        logger.debug("Stream has filled {} of {} points".format(self.voltage.points_taken, self.voltage.num_points() ))
+        logger.debug("Stream has filled {} of {} points".format(self.voltage.points_taken.value, self.voltage.num_points() ))
 
 class SweepTestCase(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        global cl, pl
+
+        cl = ChannelLibrary(":memory:")
+        pl = PipelineManager()
 
     def test_add_sweep(self):
         exp = SweptTestExperiment()
@@ -95,25 +118,6 @@ class SweepTestCase(unittest.TestCase):
         exp.add_sweep(exp.freq, np.linspace(0,10.0,3))
         exp.run_sweeps()
 
-    def test_run_adaptive_sweep(self):
-        exp = SweptTestExperiment()
-        pri = Print(name="Printer")
-
-        edges = [(exp.voltage, pri.sink)]
-        exp.set_graph(edges)
-
-        def rf(sweep_axis, exp):
-            logger.debug("Running refinement function.")
-            if sweep_axis.num_points() >= 5:
-                return False
-            sweep_axis.add_points(sweep_axis.points[-1]*2)
-            return True
-
-        exp.add_sweep(exp.field, np.linspace(0,100.0,11))
-        exp.add_sweep(exp.freq, [1.0, 2.0], refine_func=rf)
-        exp.run_sweeps()
-        # self.assertTrue(pri.sink.output_streams[0].points_taken.value == 5*11*5)
-
     def test_unstructured_sweep(self):
         exp = SweptTestExperiment()
         pri = Print()
@@ -134,6 +138,77 @@ class SweepTestCase(unittest.TestCase):
         exp.add_sweep([exp.field, exp.freq], coords)
         exp.run_sweeps()
         self.assertTrue(pri.sink.input_streams[0].points_taken.value == exp.voltage.num_points())
+
+    def test_unstructured_sweep_io(self):
+
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            exp = SweptTestExperiment()
+            pri = Print()
+            buf = DataBuffer()
+            wri = WriteToFile(tmpdirname+"/test.auspex")
+
+            edges = [(exp.voltage, pri.sink), (exp.voltage, buf.sink), (exp.voltage, wri.sink)]
+            exp.set_graph(edges)
+
+            coords = [[ 0, 0.1],
+                      [10, 4.0],
+                      [15, 2.5],
+                      [40, 4.4],
+                      [50, 2.5],
+                      [60, 1.4],
+                      [65, 3.6],
+                      [66, 3.5],
+                      [67, 3.6],
+                      [68, 1.2]]
+            exp.add_sweep([exp.field, exp.freq], coords)
+            exp.run_sweeps()
+
+            self.assertTrue(pri.sink.input_streams[0].points_taken.value == exp.voltage.num_points())
+
+            data, desc, _ = wri.get_data()
+            self.assertTrue(np.allclose(desc.axes[0].points, coords))
+
+            data, desc = buf.get_data()
+            self.assertTrue(np.allclose(desc.axes[0].points, coords))
+
+    def test_qubit_metafile_sweep(self):
+        cl.clear()
+        q1    = cl.new_qubit("q1")
+        aps1  = cl.new_APS2("BBNAPS1", address="192.168.5.102")
+        aps2  = cl.new_APS2("BBNAPS2", address="192.168.5.103")
+        x6_1  = cl.new_X6("X6_1", address="1", record_length=512)
+        holz1 = cl.new_source("Holz_1", "HolzworthHS9000", "HS9004A-009-1", power=-30)
+        holz2 = cl.new_source("Holz_2", "HolzworthHS9000", "HS9004A-009-2", power=-30)
+        cl.set_control(q1, aps1, generator=holz1)
+        cl.set_measure(q1, aps2, x6_1[1], generator=holz2)
+        cl.set_master(aps1, aps1.ch("m2"))
+        cl.commit()
+        pl.create_default_pipeline()
+        pl.reset_pipelines()
+        pl["q1"].clear_pipeline()
+        pl["q1"].stream_type = "integrated"
+        pl["q1"].create_default_pipeline(buffers=True)
+
+        def mf(sigma):
+            q1.pulse_params["sigma"] = sigma
+            mf = RabiAmp(q1, np.linspace(-1,1,21))
+            return mf
+
+        exp = QubitExperiment(mf(5e-9), averages=5)
+        exp.set_fake_data(x6_1, np.linspace(-1, 1, 21), random_mag=0.0)
+        exp.add_sweep("q1_sigma", np.linspace(1e-9, 10e-9, 10), metafile_func=mf)
+        exp.run_sweeps()
+
+        buf = list(exp.qubits_by_output.keys())[0]
+        ax  = buf.input_connectors["sink"].descriptor.axes[0]
+
+        self.assertTrue(buf.done.is_set())
+        
+        data, desc = buf.get_data()
+        self.assertTrue(np.allclose(np.linspace(1e-9, 10e-9, 10), desc.axes[0].points))
+        target_dat = np.vstack([np.linspace(-1.0, 1.0, 21)]*10)
+        self.assertTrue(np.allclose(target_dat, data.real))
+
 
 if __name__ == '__main__':
     unittest.main()

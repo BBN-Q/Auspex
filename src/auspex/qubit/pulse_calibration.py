@@ -16,7 +16,6 @@ except:
 import auspex.config as config
 from auspex.log import logger
 from copy import copy, deepcopy
-# from adapt.refine import refine_1D
 import os
 import uuid
 import pandas as pd
@@ -382,9 +381,7 @@ class CavityTuneup(QubitCalibration):
         self.frequencies = np.empty(0, dtype=np.complex128)
         self.group_delays = np.empty(0, dtype=np.complex128)
         self.datas = np.empty(0, dtype=np.complex128)
-        # orig_avg = self.kwargs['averages']
-        # Adaptive refinement to find cavity feature
-        # for i in range(self.iterations + 1):
+
         self.data, _      = self.run_sweeps()
         self.datas        = np.append(self.datas, self.data)
         self.frequencies  = np.append(self.frequencies, self.new_frequencies[:-1])
@@ -466,58 +463,6 @@ class CavityTuneup(QubitCalibration):
 
         shifted_cav = np.real(self.datas) - np.mean(np.real(self.datas))
         guess = np.abs(self.frequencies[np.argmax(np.abs(shifted_cav))])
-            # self.kwargs['averages'] = 2000
-
-            # import pdb; pdb.set_trace()
-            #
-            # self.new_frequencies = refine_1D(self.frequencies, subtracted, all_points=False,
-            #                             criterion="difference", threshold = "one_sigma")
-            # logger.info(f"new_frequencies {self.new_frequencies}")
-
-        # n, bins = sp.histogram(np.abs(self.frequencies), bins="auto")
-        # f_start = bins[np.argmax(n)]
-        # f_stop  = bins[np.argmax(n)+1]
-        # logger.info(f"Looking in bin from {f_start} to {f_stop}")
-
-        # # self.kwargs['averages'] = orig_avg
-        # self.new_frequencies = np.arange(f_start, f_stop, 2e6)
-        # self.frequencies = np.empty(0, dtype=np.complex128)
-        # self.group_delays = np.empty(0, dtype=np.complex128)
-        # self.datas = np.empty(0, dtype=np.complex128)
-        #
-        # for i in range(self.iterations + 3):
-        #     self.data, _      = self.run_sweeps()
-        #     self.datas        = np.append(self.datas, self.data)
-        #     self.frequencies  = np.append(self.frequencies, self.new_frequencies[:-1])
-        #
-        #     ord = np.argsort(self.frequencies)
-        #     self.datas = self.datas[ord]
-        #     self.frequencies = self.frequencies[ord]
-        #
-        #     self.group_delays = -np.diff(np.unwrap(np.angle(self.datas)))/np.diff(self.frequencies)
-        #     # self.group_delays = group_del
-        #
-        #     # ordering = np.argsort(self.frequencies[:-1])
-        #     self.plot3["Group Delay"] = (self.frequencies[1:],self.group_delays)
-        #     # self.plot2["Amplitude"] = (self.frequencies,np.abs(self.datas))
-        #     # self.kwargs['averages'] = 2000
-        #
-        #     self.new_frequencies = refine_1D(self.frequencies[:-1], self.group_delays, all_points=False,
-        #                                 criterion="integral", threshold = "one_sigma")
-        #     logger.info(f"new_frequencies {self.new_frequencies}")
-        # #
-
-        # # self.data, _ = self.run_sweeps()
-        # # group_delay = -np.diff(np.unwrap(np.angle(self.data)))/np.diff(self.new_frequencies)
-        # # self.plot3["Group Delay"] = (self.new_frequencies[1:],group_delay)
-        #
-        # def lor_der(x, a, x0, width, offset):
-        #     return offset-(x-x0)*a/((4.0*((x-x0)/width)**2 + a**2)**2)
-        # f0 = np.abs(self.frequencies[np.argmax(np.abs(self.group_delays))])
-        # p0 = [np.max(np.abs(self.group_delays))*1e-18, np.abs(f0), 200e6, np.abs(self.group_delays)[0]]
-        # popt, pcov = curve_fit(lor_der, np.abs(self.frequencies[1:]), np.abs(self.group_delays), p0=p0)
-        # self.plot3["Group Delay Fit"] = ( np.abs(self.frequencies[1:]),  lor_der( np.abs(self.frequencies[1:]), *popt))
-
 
     def init_plots(self):
         plot1 = ManualPlotter("Phase", x_label='Frequency (GHz)', y_label='Group Delay')
@@ -531,14 +476,11 @@ class CavityTuneup(QubitCalibration):
         plot2 = ManualPlotter("Amplitude", x_label='Frequency (GHz)', y_label='Amplitude (Arb. Units)')
         plot2.add_data_trace("Amplitude", {'color': 'C2'})
 
-        # plot3 = ManualPlotter("First refined sweep", x_label='Frequency (GHz)', y_label='Group Delay')
-        # plot3.add_data_trace("Group Delay", {'color': 'C3'})
-        # plot3.add_fit_trace("Group Delay Fit", {'color': 'C4'})
         self.plot1 = plot1
         self.plot1B = plot1B
         self.plot2 = plot2
-        # self.plot3 = plot3
-        return [plot1, plot1B, plot2] #, plot3]
+
+        return [plot1, plot1B, plot2] 
 
 class QubitTuneup(QubitCalibration):
     def __init__(self, qubit, f_start=5e9, f_stop=6e9, coarse_step=0.1e9, fine_step=1.0e6, averages=500, amp=1.0, **kwargs):

@@ -20,8 +20,7 @@ from auspex.stream import OutputConnector, DataStreamDescriptor
 from auspex.filters.plot import Plotter, ManualPlotter
 from auspex.filters.io import DataBuffer
 from auspex.log import logger, logging
-# import auspex.analysis.switching as sw
-# from adapt import refine
+
 
 class TestExperiment(Experiment):
     """Here the run loop merely spews data until it fills up the stream. """

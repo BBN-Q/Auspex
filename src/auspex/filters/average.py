@@ -131,17 +131,6 @@ class Averager(Filter):
         self.source.descriptor          = descriptor
         self.excited_counts             = np.zeros(self.data_dims, dtype=np.int64)
 
-        # We can update the visited_tuples upfront if none
-        # of the sweeps are adaptive...
-        desc_out_dtype = descriptor_in.axis_data_type(with_metadata=True, excluding_axis=self.axis.value)
-        if not descriptor_in.is_adaptive():
-            vals           = [a.points_with_metadata() for a in descriptor_in.axes if a.name != self.axis.value]
-            nested_list    = list(itertools.product(*vals))
-            flattened_list = [tuple((val for sublist in line for val in sublist)) for line in nested_list]
-            descriptor.visited_tuples = np.core.records.fromrecords(flattened_list, dtype=desc_out_dtype)
-        else:
-            descriptor.visited_tuples = np.empty((0), dtype=desc_out_dtype)
-
         for stream in self.partial_average.output_streams:
             stream.set_descriptor(descriptor)
             stream.descriptor.buffer_mult_factor = 20
@@ -170,11 +159,6 @@ class Averager(Filter):
             descriptor_count.unit = "counts"
         descriptor_count.metadata["num_counts"] = self.num_averages
         self.final_counts.descriptor = descriptor_count
-
-        if not descriptor_in.is_adaptive():
-            descriptor_var.visited_tuples = np.core.records.fromrecords(flattened_list, dtype=desc_out_dtype)
-        else:
-            descriptor_var.visited_tuples = np.empty((0), dtype=desc_out_dtype)
 
         for stream in self.final_variance.output_streams:
             stream.set_descriptor(descriptor_var)
@@ -232,18 +216,6 @@ class Averager(Filter):
                 # do state assignment
                 excited_states = (np.real(reshaped) > self.threshold.value).sum(axis=self.mean_axis)
                 ground_states = self.num_averages - excited_states
-
-                if self.sink.descriptor.is_adaptive():
-                    new_tuples = self.sink.descriptor.tuples()[self.idx_global:self.idx_global + new_points]
-                    new_tuples_stripped = remove_fields(new_tuples, self.axis.value)
-                    take_axis = -1 if self.axis_num > 0 else 0
-                    reduced_tuples = new_tuples_stripped.reshape(self.reshape_dims).take((0,), axis=take_axis)
-                    self.idx_global += new_points
-
-                # Add to Visited tuples
-                if self.sink.descriptor.is_adaptive():
-                    for os in self.source.output_streams + self.final_variance.output_streams + self.partial_average.output_streams:
-                        os.descriptor.visited_tuples = np.append(os.descriptor.visited_tuples, reduced_tuples)
 
                 for os in self.source.output_streams:
                     os.push(averaged)

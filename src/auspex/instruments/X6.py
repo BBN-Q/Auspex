@@ -107,6 +107,7 @@ class X6(Instrument):
         self.last_timestamp = Value('d', datetime.datetime.now().timestamp())
 
         self.gen_fake_data        = gen_fake_data
+        self.fake_data_random_mag = 0.1
         self.increment_ideal_data = False
         self.ideal_counter        = 0
         self.ideal_data           = None
@@ -233,7 +234,7 @@ class X6(Instrument):
         # todo: other checking here
         self._channels.append(channel)
 
-    def spew_fake_data(self, counter, ideal_data, random_mag=0.1, random_seed=12345):
+    def spew_fake_data(self, counter, ideal_data, random_seed=12345):
         """
         Generate fake data on the stream. For unittest usage.
         ideal_data: array or list giving means of the expected signal for each segment
@@ -242,8 +243,9 @@ class X6(Instrument):
         keep track of how many we expect to receive, when we're doing
         the test with fake data
         """
+        # logger.info(f"In Spew: got {ideal_data}")
+        random_mag = self.fake_data_random_mag
         total = 0
-        # import ipdb; ipdb.set_trace();
         segs = self._lib.nbr_segments
         for chan, wsock in self._chan_to_wsocket.items():
             if chan.stream_type == "integrated":
@@ -253,24 +255,21 @@ class X6(Instrument):
             else: #Raw
                 length = int(self._lib.record_length/4)
             buff = np.zeros((segs, length), dtype=chan.dtype)
-            # for chan, wsock in self._chan_to_wsocket.items():
             for i in range(segs):
                 if chan.stream_type == "integrated":
-                    # random_mag*(np.random.random(length).astype(chan.dtype) + 1j*np.random.random(length).astype(chan.dtype)) +
                     buff[i,:] = ideal_data[i]
                 elif chan.stream_type == "demodulated":
                     buff[i, int(length/4):int(3*length/4)] = 1.0 if ideal_data[i] == 0 else ideal_data[i]
                 else: #Raw
                     signal = np.sin(np.linspace(0,10.0*np.pi,int(length/2)))
                     buff[i, int(length/4):int(length/4)+len(signal)] = signal * (1.0 if ideal_data[i] == 0 else ideal_data[i])
-            # import ipdb; ipdb.set_trace();
             if chan.stream_type == "raw":
                 buff += random_mag*np.random.random((segs, length))
             else:
                 buff = buff.astype(np.complex128) + random_mag*np.random.random((segs, length))+ 1j*random_mag*np.random.random((segs, length))
 
             total += length*segs
-            # logger.info(f"In Spew: {buff.dtype} {chan.dtype} {buff.size}")
+            # logger.info(f"In Spew: {counter}: {buff}")
             wsock.send(struct.pack('n', segs*length*buff.dtype.itemsize) + buff.flatten().tostring())
             counter[chan] += length*segs
 
@@ -348,19 +347,25 @@ class X6(Instrument):
                     if hasattr(self, 'exp_step') and self.increment_ideal_data:
                         raise Exception("Cannot use both exp_step and increment_ideal_data")
                     elif hasattr(self, 'exp_step'):
+                        if self.exp_step >= len(self.ideal_data):
+                            # logger.info("Exp Step longer than ideal data... keeping at last element")
+                            self.exp_step = len(self.ideal_data)-1
                         total_spewed += self.spew_fake_data(counter, self.ideal_data[self.exp_step])
                     elif self.increment_ideal_data:
+                        if self.ideal_counter >= len(self.ideal_data):
+                            # logger.info("Ideal data counter longer than ideal data... keeping at last element")
+                            self.ideal_counter = len(self.ideal_data)-1
                         total_spewed += self.spew_fake_data(counter, self.ideal_data[self.ideal_counter])
                     else:
                         total_spewed += self.spew_fake_data(counter, self.ideal_data)
                 else:
                     total_spewed += self.spew_fake_data(counter, [0.0 for i in range(self.number_segments)])
-                # logger.info(f"Spewed {total_spewed}")
+                logger.debug("Spewed %d", total_spewed)
                 time.sleep(0.0001)
 
             self.ideal_counter += 1
-            # logger.info("Counter: %s", str(counter))
-            # logger.info('TOTAL fake data generated %d', total_spewed)
+            logger.debug("Counter: %s", str(counter))
+            logger.debug('TOTAL fake data generated %d', total_spewed)
             if ocs:
                 while True:
                     total_taken = 0
@@ -368,10 +373,10 @@ class X6(Instrument):
                         total_taken += oc.points_taken.value - initial_points[oc]
                         if progressbars:
                                 progress_updaters[oc](ocs[0].points_taken.value)
-                        # logger.info('TOTAL fake data received %d', oc.points_taken.value - initial_points[oc])
+                        logger.debug('TOTAL fake data received %d', oc.points_taken.value - initial_points[oc])
                     if total_taken == total_spewed:
                         break
-                    # logger.info('WAITING for acquisition to finish %d < %d', total_taken, total_spewed)
+                    logger.debug('WAITING for acquisition to finish %d < %d', total_taken, total_spewed)
                     time.sleep(0.025)
                 for oc in ocs:
                     if progressbars:

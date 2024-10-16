@@ -50,7 +50,7 @@ class WriteToFile(Filter):
     groupname   = Parameter(default='main')
     datasetname = Parameter(default='data')
 
-    def __init__(self, filename=None, groupname=None, datasetname=None, **kwargs):
+    def __init__(self, filename=None, groupname=None, datasetname=None, metadata=None, **kwargs):
         super(WriteToFile, self).__init__(**kwargs)
         if filename: 
             self.filename.value = filename
@@ -59,6 +59,7 @@ class WriteToFile(Filter):
         if datasetname:
             self.datasetname.value = datasetname
 
+        self.metadata = metadata
         self.ret_queue = None # MP queue For returning data
 
     def final_init(self):
@@ -67,7 +68,7 @@ class WriteToFile(Filter):
         assert self.datasetname.value, "Dataset name never supplied to writer."
 
         self.descriptor = self.sink.input_streams[0].descriptor
-        self.container  = AuspexDataContainer(self.filename.value)
+        self.container  = AuspexDataContainer(self.filename.value, metadata=self.metadata)
         self.group      = self.container.new_group(self.groupname.value)
         self.mmap       = self.container.new_dataset(self.groupname.value, self.datasetname.value, self.descriptor)
 

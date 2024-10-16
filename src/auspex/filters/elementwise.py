@@ -97,8 +97,6 @@ class ElementwiseFilter(Filter):
                     if message_type == 'event':
                         if message['event_type'] == 'done':
                             streams_done[stream] = True
-                        elif message['event_type'] == 'refine':
-                            logger.warning("ElementwiseFilter doesn't handle refinement yet!")
                     elif message_type == 'data':
                         # Add any old data...
                         message_data = stream.pop()

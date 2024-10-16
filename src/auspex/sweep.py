@@ -65,18 +65,6 @@ class Sweeper(object):
                     values.append((a.value,))
         return values, names
 
-    def is_adaptive(self):
-        return True in [a.refine_func is not None for a in self.axes]
-
-    def check_for_refinement(self, output_connectors_dict):
-        refined_axes = []
-        for a in self.axes:
-            if a.check_for_refinement(output_connectors_dict):
-                refined_axes.append(a.name)
-                break
-        if len(refined_axes) > 1:
-            raise Exception("More than one axis trying to refine simultaneously. This cannot be tolerated.")
-
     def done(self):
         return np.all([a.done for a in self.axes])
 
