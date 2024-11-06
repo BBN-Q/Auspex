@@ -71,8 +71,8 @@ class SingleShotMeasurement(Filter):
             raise ValueError("Single shot filter sink does not appear to have a time axis!")
         self.num_averages = len(self.sink.descriptor.axes[self.descriptor.axis_num("averages")].points)
         self.num_segments = len(self.sink.descriptor.axes[self.descriptor.axis_num("segment")].points)
-        self.ground_data = np.zeros((self.record_length, self.num_averages), dtype=np.complex)
-        self.excited_data = np.zeros((self.record_length, self.num_averages), dtype=np.complex)
+        self.ground_data = np.zeros((self.record_length, self.num_averages), dtype=np.complex128)
+        self.excited_data = np.zeros((self.record_length, self.num_averages), dtype=np.complex128)
         self.total_points = self.num_segments*self.record_length*self.num_averages # Total points BEFORE sweep axes
 
         output_descriptor = DataStreamDescriptor()
@@ -89,7 +89,7 @@ class SingleShotMeasurement(Filter):
 
 
     def final_init(self):
-        self.fid_buffer = np.empty(self.record_length*self.num_averages*self.num_segments, dtype=np.complex)
+        self.fid_buffer = np.empty(self.record_length*self.num_averages*self.num_segments, dtype=np.complex128)
         self.idx = 0
 
     def process_data(self, data):
