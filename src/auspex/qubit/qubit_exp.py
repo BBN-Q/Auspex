@@ -170,6 +170,9 @@ class QubitExperiment(Experiment):
         # The exception being any instruments that are declared as standalone
         self.all_standalone = [i for i in self.chan_db.all_instruments() if i.standalone and i not in self.transmitters + self.receivers + self.generators]
 
+        # The exception being any standalone instruments with output
+        self.standalone_w_output = [i for i in self.all_standalone if hasattr(i,'output')]
+
         # In case we need to access more detailed foundational information
         self.factory = self
 
@@ -463,7 +466,6 @@ class QubitExperiment(Experiment):
     def init_instruments(self):
         for name, instr in self._instruments.items():
             instr.configure_with_proxy(instr.proxy_obj)
-
         self.digitizers = [v for _, v in self._instruments.items() if "Digitizer" in v.instrument_type]
         self.awgs       = [v for _, v in self._instruments.items() if "AWG" in v.instrument_type]
         # Swap the master AWG so it is last in the list
@@ -475,7 +477,6 @@ class QubitExperiment(Experiment):
 
         for gen_proxy in self.generators:
             gen_proxy.instr.output = True
-
         # Start socket listening processes, store as keys in a dictionary with exit commands as values
         self.dig_listeners = {}
         ready = Value('i', 0)
@@ -602,6 +603,8 @@ class QubitExperiment(Experiment):
                 dig.stop()
             for gen_proxy in self.generators:
                 gen_proxy.instr.output = False
+            for std_aln_output in self.standalone_w_output:
+                std_aln_output.instr.output = False
         except:
             logger.error('Could Not Stop AWGs or Digitizers; Reset Experiment')
         for instr in self.instruments:
