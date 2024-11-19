@@ -44,7 +44,8 @@ from matplotlib import cm
 from scipy.optimize import curve_fit, minimize
 import numpy as np
 from itertools import product
-from collections import Iterable, OrderedDict
+from collections.abc import Iterable
+from collections import OrderedDict
 
 available_optimizers = ['SCIPY']
 
@@ -70,56 +71,56 @@ class QubitOptimizer(Calibration):
 
     """
 
-    def __init__(self, qubits, sequence_function, cost_function, 
+    def __init__(self, qubits, sequence_function, cost_function,
                  initial_parameters=None, other_variables=None,
-                 optimizer="scipy", optim_params=None, min_cost = None, 
+                 optimizer="scipy", optim_params=None, min_cost = None,
                  output_nodes=None, stream_selectors=None, do_plotting=True, **kwargs):
         """Setup an optimization over qubit experiments.
 
         Args:
             qubits: The qubit(s) that the optimization is run over.
-            sequence_function: A function of the form 
+            sequence_function: A function of the form
 
-                `sequence_function(*qubits, **params)` 
+                `sequence_function(*qubits, **params)`
 
-                that returns a valid QGL sequence for the qubits and initial 
+                that returns a valid QGL sequence for the qubits and initial
                 parameters.
             cost_function: The objective function for the optimization. The input
-                for this function comes from the filter pipeline node specified 
-                in `output_nodes` or inferred from the qubits (may not be 
-                reliable!). This function is responsible for choosing the 
+                for this function comes from the filter pipeline node specified
+                in `output_nodes` or inferred from the qubits (may not be
+                reliable!). This function is responsible for choosing the
                 appropriate quadrature as necessary.
             initial_parameters: A dict of initial parameters for `sequence_function`.
-            other_variables: A dict of other Auspex qubit experiment variables 
-                (not associated with sequence generation) as keys and initial 
+            other_variables: A dict of other Auspex qubit experiment variables
+                (not associated with sequence generation) as keys and initial
                 parameters as values. Example:
 
                 `{"q1 control frequency": 5.4e9, "q2 measure frequency": 6.7e9}`
             optimizer: String which chooses the optimization function. Supported
-                values are: "scipy" for scipy.optimize.minimize, "bayes" for 
+                values are: "scipy" for scipy.optimize.minimize, "bayes" for
                 the BayesianOptimization package
-            optim_params: Dict of keyword arguments to be passed to the 
+            optim_params: Dict of keyword arguments to be passed to the
                 optimization function.
-            min_cost: Minimum value of cost function, optional. 
+            min_cost: Minimum value of cost function, optional.
 
         """
 
         self.qubits = list(qubits) if isinstance(qubits, Iterable) else [qubits]
         self.sequence_function  = sequence_function
         self.cost_function      = cost_function
-        self.optimizer          = optimizer.upper() 
+        self.optimizer          = optimizer.upper()
         self.optim_params       = optim_params
 
         self.output_nodes       = output_nodes if isinstance(output_nodes, Iterable) else [output_nodes]
         self.stream_selectors   = stream_selectors
-        self.do_plotting        = do_plotting 
+        self.do_plotting        = do_plotting
 
         self.cw_mode            = False
         self.leave_plots_open   = True
         self.axis_descriptor    = None
         self.succeeded          = False
         self.norm_points        = False
-        self.kwargs             = kwargs 
+        self.kwargs             = kwargs
         self.plotters           = []
         self.fake_data          = []
         self.sample             = None
@@ -153,7 +154,7 @@ class QubitOptimizer(Calibration):
 
         if self.optimizer not in available_optimizers:
             raise ValueError(f"Unknown optimizer: {self.optimizer}. Availabe are: {available_optimizers}")
-    
+
     def init_plots(self):
         plot1 = ManualPlotter("Objective", x_label="Iteration", y_label="Value")
         plot1.add_data_trace("Objective", {'color': 'C1'})
@@ -179,7 +180,7 @@ class QubitOptimizer(Calibration):
         self.fake_data_fn = fake_data_function
         self.fake = True
 
-    def _optimize_function_scipy(self):           
+    def _optimize_function_scipy(self):
         def _func(x):
             self._update_params(plist=x)
             data = self.run_sweeps()
@@ -194,7 +195,7 @@ class QubitOptimizer(Calibration):
             return cost
         return _func
 
-    def _optimize_function_bayes(self):           
+    def _optimize_function_bayes(self):
         def _func(**x):
             self._update_params(pdict=x)
             data = self.run_sweeps()
@@ -213,7 +214,7 @@ class QubitOptimizer(Calibration):
         if pdict:
             for k, v in pdict.items():
                 if self.seq_params and k in self.seq_params:
-                    self.seq_params[k] = v 
+                    self.seq_params[k] = v
                 if self.other_params and k in self.other_params:
                     self.other_params[k] = v
         else:
@@ -235,13 +236,13 @@ class QubitOptimizer(Calibration):
 
 
     def set_bounds(self, bounds):
-        """Add bounds to the optimization. 
+        """Add bounds to the optimization.
 
         Args:
-            bounds: A dictionary of bounds. The key should match up 
-            with the named parameters in `initial_parameters` or `other_variables`. 
-            The values should be a list that represents lower and upper bounds 
-            in the form (min, max). 
+            bounds: A dictionary of bounds. The key should match up
+            with the named parameters in `initial_parameters` or `other_variables`.
+            The values should be a list that represents lower and upper bounds
+            in the form (min, max).
         """
         for k in self.parameters().keys():
             self.bounds[k] = bounds[k]
@@ -264,8 +265,8 @@ class QubitOptimizer(Calibration):
             seq = self.sequence_function(*self.qubits, **self.seq_params)
             self.metafile = compile_to_hardware(seq, "optim/optim")
 
-        exp       = CalibrationExperiment(self.qubits, self.output_nodes, 
-                                            self.stream_selectors, self.metafile, 
+        exp       = CalibrationExperiment(self.qubits, self.output_nodes,
+                                            self.stream_selectors, self.metafile,
                                             **self.kwargs)
 
         #map the "other" parameters to associated qubit or instrument parameters
@@ -283,7 +284,7 @@ class QubitOptimizer(Calibration):
                 chan = None
                 if len(spl) == 3:
                     thing = list(filter(lambda q: q.label==spl[0], self.qubits))
-                    
+
                     if len(thing) == 1:
                         qubit = thing[0]
                         attribute = spl[2]
@@ -318,7 +319,7 @@ class QubitOptimizer(Calibration):
                     attribute = spl[1]
                 else:
                     raise ValueError(f"Invalid parameter setting: {key}")
-                
+
                 if chan:
                     getattr(instr, "set_"+attribute)(chan, value)
                 else:
@@ -405,45 +406,45 @@ class QubitOptimizerCMA(QubitOptimizer):
         See http://cma.gforge.inria.fr/cmaes_sourcecode_page.html
     """
 
-    def __init__(self, qubits, sequence_function, cost_function, 
+    def __init__(self, qubits, sequence_function, cost_function,
              initial_parameters=None, other_variables=None, scale=True,
-             sigma0=None, parameter_scalers=None, 
-             optim_params=None, output_nodes=None, 
+             sigma0=None, parameter_scalers=None,
+             optim_params=None, output_nodes=None,
              stream_selectors=None, do_plotting=True, **kwargs):
         """Setup an optimization over qubit experiments.
 
         Args:
             qubits: The qubit(s) that the optimization is run over.
-            sequence_function: A function of the form 
+            sequence_function: A function of the form
 
-                `sequence_function(*qubits, **params)` 
+                `sequence_function(*qubits, **params)`
 
-                that returns a valid QGL sequence for the qubits and initial 
+                that returns a valid QGL sequence for the qubits and initial
                 parameters.
             cost_function: The objective function for the optimization. The input
-                for this function comes from the filter pipeline node specified 
-                in `output_nodes` or inferred from the qubits (may not be 
-                reliable!). This function is responsible for choosing the 
+                for this function comes from the filter pipeline node specified
+                in `output_nodes` or inferred from the qubits (may not be
+                reliable!). This function is responsible for choosing the
                 appropriate quadrature as necessary.
             initial_parameters: A dict of initial parameters for `sequence_function`.
-            other_variables: A dict of other Auspex qubit experiment variables 
-                (not associated with sequence generation) as keys and initial 
+            other_variables: A dict of other Auspex qubit experiment variables
+                (not associated with sequence generation) as keys and initial
                 parameters as values. Example:
                 `{"q1 control frequency": 5.4e9, "q2 measure frequency": 6.7e9}`
             scale: Scale optimization parameters.
-            sigma0: Initial standard deviation for all optimization parameters, 
+            sigma0: Initial standard deviation for all optimization parameters,
                 if none is given all SD's are set to 0.5.
             parameter_scalers: Dictionary of callables to scale the parameters such
                 that they all have roughly equal magnitude. If None, we scale everything
                 to 1 based on the initial value.
-            optim_params: Dict of keyword arguments to be passed to the 
+            optim_params: Dict of keyword arguments to be passed to the
                 optimization function.
         """
         if "CMA" not in available_optimizers:
             raise ValueError("pyCMA does not appear to be installed.")
 
-        super().__init__(qubits, sequence_function, cost_function, 
-                 initial_parameters, other_variables,"cma", optim_params, 
+        super().__init__(qubits, sequence_function, cost_function,
+                 initial_parameters, other_variables,"cma", optim_params,
                  output_nodes, stream_selectors, do_plotting, **kwargs)
 
         if sigma0:
@@ -455,14 +456,14 @@ class QubitOptimizerCMA(QubitOptimizer):
 
         if parameter_scalers:
             #make sure ordering is consistent
-            self.parameter_scalers = list(parameter_scalers[k] for k in self.parameters().keys()) 
+            self.parameter_scalers = list(parameter_scalers[k] for k in self.parameters().keys())
         else:
             self.parameter_scalers = list(1.0/v for v in self.parameters().values())
 
     def set_bounds(self, bounds):
         raise NotImplementedError("Bounds are not implemented for CMA-ES optimization.")
 
-    def _optimize_function(self):           
+    def _optimize_function(self):
         def _func(x):
             self._update_params(plist=x)
             data = self.run_sweeps()
@@ -495,7 +496,3 @@ class QubitOptimizerCMA(QubitOptimizer):
         es.optimize(opt_func)
 
         return {k: result.xbest[j] for j, k in enumerate(self.parameters.keys())}
-            
-
-
-
