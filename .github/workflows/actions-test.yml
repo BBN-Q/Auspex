@@ -4,6 +4,7 @@ on:
    push:
      paths-ignore:
 	- 'doc/examples/*'
+
 jobs:
   build-linux:
     runs-on: ubuntu-latest
