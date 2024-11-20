@@ -158,7 +158,7 @@ class AuspexDataContainer(object):
 
         filename = os.path.join(self.base_path,groupname,datasetname+'.dat')
         assert os.path.exists(filename), "Could not find dataset. Is this the correct name?"
-        flat_shape = (np.product(meta['shape']),)
+        flat_shape = (np.prod(meta['shape']),)
         mm = np.memmap(filename, dtype=meta['dtype'], mode='r', shape=flat_shape)
         data = np.array(mm).reshape(tuple(meta['shape']))
         del mm
