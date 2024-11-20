@@ -1,97 +1,50 @@
 
 
 <!DOCTYPE html>
-<html class="writer-html5" lang="en" >
+<html class="writer-html5" lang="en" data-content_root="../">
 <head>
-  <meta charset="utf-8" />
-  
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
+
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  
   <title>auspex.analysis package &mdash; auspex 2019.2 documentation</title>
-  
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b76e3c8a" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=e59714d7" />
 
   
-  <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
-  <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
-
-  
-  
-
-  
-  
-
-  
-
-  
-  <!--[if lt IE 9]>
-    <script src="../_static/js/html5shiv.min.js"></script>
-  <![endif]-->
-  
-    
-      <script type="text/javascript" id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
-        <script src="../_static/jquery.js"></script>
-        <script src="../_static/underscore.js"></script>
-        <script src="../_static/doctools.js"></script>
-        <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
-        <script src="https://unpkg.com/@jupyter-widgets/html-manager@^0.20.0/dist/embed-amd.js"></script>
-        <script async="async" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
-        <script type="text/x-mathjax-config">MathJax.Hub.Config({"tex2jax": {"inlineMath": [["$", "$"], ["\\(", "\\)"]], "processEscapes": true, "ignoreClass": "document", "processClass": "math|output_area"}})</script>
-    
-    <script type="text/javascript" src="../_static/js/theme.js"></script>
-
-    
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=8e83ba1c"></script>
+      <script src="../_static/doctools.js?v=9a2dae69"></script>
+      <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+      <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+      <script>window.MathJax = {"tex": {"inlineMath": [["$", "$"], ["\\(", "\\)"]], "processEscapes": true}, "options": {"ignoreHtmlClass": "tex2jax_ignore|mathjax_ignore|document", "processHtmlClass": "tex2jax_process|mathjax_process|math|output_area"}}</script>
+      <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="../_static/js/theme.js"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
     <link rel="next" title="auspex.filters package" href="auspex.filters.html" />
     <link rel="prev" title="auspex package" href="auspex.html" /> 
 </head>
 
-<body class="wy-body-for-nav">
-
-   
+<body class="wy-body-for-nav"> 
   <div class="wy-grid-for-nav">
-    
     <nav data-toggle="wy-nav-shift" class="wy-nav-side">
       <div class="wy-side-scroll">
         <div class="wy-side-nav-search" >
-          
 
           
-            <a href="../index.html" class="icon icon-home"> auspex
           
-
-          
+          <a href="../index.html" class="icon icon-home">
+            auspex
           </a>
-
-          
-            
-            
-              <div class="version">
-                2019.2
-              </div>
-            
-          
-
-          
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
-    <input type="text" name="q" placeholder="Search docs" />
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
     <input type="hidden" name="check_keywords" value="yes" />
     <input type="hidden" name="area" value="default" />
   </form>
 </div>
-
-          
-        </div>
-
-        
-        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
-          
-            
-            
-              
-            
-            
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
               <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="../instruments.html">Instrument Drivers</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../experiments.html">Defining Experiments</a></li>
@@ -123,371 +76,305 @@
 </li>
 </ul>
 
-            
-          
         </div>
-        
       </div>
     </nav>
 
-    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
-
-      
-      <nav class="wy-nav-top" aria-label="top navigation">
-        
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
           <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
           <a href="../index.html">auspex</a>
-        
       </nav>
 
-
       <div class="wy-nav-content">
-        
         <div class="rst-content">
-        
-          
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-<div role="navigation" aria-label="breadcrumbs navigation">
-
+          <div role="navigation" aria-label="Page navigation">
   <ul class="wy-breadcrumbs">
-    
-      <li><a href="../index.html" class="icon icon-home"></a> &raquo;</li>
-        
-          <li><a href="auspex.html">auspex package</a> &raquo;</li>
-        
-      <li>auspex.analysis package</li>
-    
-    
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="auspex.html">auspex package</a></li>
+      <li class="breadcrumb-item active">auspex.analysis package</li>
       <li class="wy-breadcrumbs-aside">
-        
-          
             <a href="../_sources/api/auspex.analysis.rst.txt" rel="nofollow"> View page source</a>
-          
-        
       </li>
-    
   </ul>
-
-  
   <hr/>
 </div>
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
-            
-  
-<style>
-/* CSS overrides for sphinx_rtd_theme */
-
-/* 24px margin */
-.nbinput.nblast.container,
-.nboutput.nblast.container {
-    margin-bottom: 19px;  /* padding has already 5px */
-}
-
-/* ... except between code cells! */
-.nblast.container + .nbinput.container {
-    margin-top: -19px;
-}
-
-.admonition > p:before {
-    margin-right: 4px;  /* make room for the exclamation icon */
-}
-
-/* Fix math alignment, see https://github.com/rtfd/sphinx_rtd_theme/pull/686 */
-.math {
-    text-align: unset;
-}
-</style>
-<div class="section" id="auspex-analysis-package">
-<h1>auspex.analysis package<a class="headerlink" href="#auspex-analysis-package" title="Permalink to this headline">¶</a></h1>
-<div class="section" id="submodules">
-<h2>Submodules<a class="headerlink" href="#submodules" title="Permalink to this headline">¶</a></h2>
-</div>
-<div class="section" id="module-auspex.analysis.fits">
-<span id="auspex-analysis-fits-module"></span><h2>auspex.analysis.fits module<a class="headerlink" href="#module-auspex.analysis.fits" title="Permalink to this headline">¶</a></h2>
+             
+  <section id="auspex-analysis-package">
+<h1>auspex.analysis package<a class="headerlink" href="#auspex-analysis-package" title="Link to this heading"></a></h1>
+<section id="submodules">
+<h2>Submodules<a class="headerlink" href="#submodules" title="Link to this heading"></a></h2>
+</section>
+<section id="module-auspex.analysis.fits">
+<span id="auspex-analysis-fits-module"></span><h2>auspex.analysis.fits module<a class="headerlink" href="#module-auspex.analysis.fits" title="Link to this heading"></a></h2>
 <dl class="py class">
-<dt id="auspex.analysis.fits.Auspex2DFit">
-<em class="property"><span class="pre">class</span> </em><code class="sig-prename descclassname"><span class="pre">auspex.analysis.fits.</span></code><code class="sig-name descname"><span class="pre">Auspex2DFit</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">xpts</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ypts</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">zpts</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">make_plots</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.analysis.fits.Auspex2DFit" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.analysis.fits.Auspex2DFit">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">auspex.analysis.fits.</span></span><span class="sig-name descname"><span class="pre">Auspex2DFit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">xpts</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ypts</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">zpts</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">make_plots</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.analysis.fits.Auspex2DFit" title="Link to this definition"></a></dt>
 <dd><dl class="simple">
 <dt>A generic fit class wrapping scipy.optimize.curve_fit for convenience.</dt><dd><p>Specific fits should inherit this class.</p>
 </dd>
 </dl>
 <dl class="py attribute">
-<dt id="auspex.analysis.fits.Auspex2DFit.xlabel">
-<code class="sig-name descname"><span class="pre">xlabel</span></code><a class="headerlink" href="#auspex.analysis.fits.Auspex2DFit.xlabel" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.analysis.fits.Auspex2DFit.xlabel">
+<span class="sig-name descname"><span class="pre">xlabel</span></span><a class="headerlink" href="#auspex.analysis.fits.Auspex2DFit.xlabel" title="Link to this definition"></a></dt>
 <dd><p>Plot x-axis label.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Type</dt>
+<dt class="field-odd">Type<span class="colon">:</span></dt>
 <dd class="field-odd"><p>str</p>
 </dd>
 </dl>
 </dd></dl>
 
 <dl class="py attribute">
-<dt id="auspex.analysis.fits.Auspex2DFit.ylabel">
-<code class="sig-name descname"><span class="pre">ylabel</span></code><a class="headerlink" href="#auspex.analysis.fits.Auspex2DFit.ylabel" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.analysis.fits.Auspex2DFit.ylabel">
+<span class="sig-name descname"><span class="pre">ylabel</span></span><a class="headerlink" href="#auspex.analysis.fits.Auspex2DFit.ylabel" title="Link to this definition"></a></dt>
 <dd><p>Plot y-axis label.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Type</dt>
+<dt class="field-odd">Type<span class="colon">:</span></dt>
 <dd class="field-odd"><p>str</p>
 </dd>
 </dl>
 </dd></dl>
 
 <dl class="py attribute">
-<dt id="auspex.analysis.fits.Auspex2DFit.title">
-<code class="sig-name descname"><span class="pre">title</span></code><a class="headerlink" href="#auspex.analysis.fits.Auspex2DFit.title" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.analysis.fits.Auspex2DFit.title">
+<span class="sig-name descname"><span class="pre">title</span></span><a class="headerlink" href="#auspex.analysis.fits.Auspex2DFit.title" title="Link to this definition"></a></dt>
 <dd><p>Plot title.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Type</dt>
+<dt class="field-odd">Type<span class="colon">:</span></dt>
 <dd class="field-odd"><p>str</p>
 </dd>
 </dl>
 </dd></dl>
 
 <dl class="py method">
-<dt id="auspex.analysis.fits.Auspex2DFit.annotation">
-<code class="sig-name descname"><span class="pre">annotation</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.analysis.fits.Auspex2DFit.annotation" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.analysis.fits.Auspex2DFit.annotation">
+<span class="sig-name descname"><span class="pre">annotation</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.analysis.fits.Auspex2DFit.annotation" title="Link to this definition"></a></dt>
 <dd><p>Annotation for the <cite>make_plot()</cite> method. Should return a string
 that is passed to <cite>matplotlib.pyplot.annotate</cite>.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt id="auspex.analysis.fits.Auspex2DFit.make_plots">
-<code class="sig-name descname"><span class="pre">make_plots</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.analysis.fits.Auspex2DFit.make_plots" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.analysis.fits.Auspex2DFit.make_plots">
+<span class="sig-name descname"><span class="pre">make_plots</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.analysis.fits.Auspex2DFit.make_plots" title="Link to this definition"></a></dt>
 <dd><p>Create a plot of the input data and the fitted model. By default will
 include any annotation defined in the <cite>annotation()</cite> class method.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt id="auspex.analysis.fits.Auspex2DFit.model">
-<code class="sig-name descname"><span class="pre">model</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.analysis.fits.Auspex2DFit.model" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.analysis.fits.Auspex2DFit.model">
+<span class="sig-name descname"><span class="pre">model</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.analysis.fits.Auspex2DFit.model" title="Link to this definition"></a></dt>
 <dd><p>The fit function evaluated at the parameters found by <cite>curve_fit</cite>.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>x</strong> – A number or <cite>numpy.array</cite> returned by the model function.</p>
 </dd>
 </dl>
 </dd></dl>
 
 <dl class="py attribute">
-<dt id="id0">
-<code class="sig-name descname"><span class="pre">title</span></code><em class="property"> <span class="pre">=</span> <span class="pre">'Auspex</span> <span class="pre">Fit'</span></em><a class="headerlink" href="#id0" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="id0">
+<span class="sig-name descname"><span class="pre">title</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'Auspex</span> <span class="pre">Fit'</span></em><a class="headerlink" href="#id0" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt id="id1">
-<code class="sig-name descname"><span class="pre">xlabel</span></code><em class="property"> <span class="pre">=</span> <span class="pre">'X</span> <span class="pre">points'</span></em><a class="headerlink" href="#id1" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="id1">
+<span class="sig-name descname"><span class="pre">xlabel</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'X</span> <span class="pre">points'</span></em><a class="headerlink" href="#id1" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt id="id2">
-<code class="sig-name descname"><span class="pre">ylabel</span></code><em class="property"> <span class="pre">=</span> <span class="pre">'Y</span> <span class="pre">points'</span></em><a class="headerlink" href="#id2" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="id2">
+<span class="sig-name descname"><span class="pre">ylabel</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'Y</span> <span class="pre">points'</span></em><a class="headerlink" href="#id2" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 </dd></dl>
 
 <dl class="py class">
-<dt id="auspex.analysis.fits.AuspexFit">
-<em class="property"><span class="pre">class</span> </em><code class="sig-prename descclassname"><span class="pre">auspex.analysis.fits.</span></code><code class="sig-name descname"><span class="pre">AuspexFit</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">xpts</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ypts</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">make_plots</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ax</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.analysis.fits.AuspexFit" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.analysis.fits.AuspexFit">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">auspex.analysis.fits.</span></span><span class="sig-name descname"><span class="pre">AuspexFit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">xpts</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ypts</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">make_plots</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ax</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.analysis.fits.AuspexFit" title="Link to this definition"></a></dt>
 <dd><dl class="simple">
 <dt>A generic fit class wrapping scipy.optimize.curve_fit for convenience.</dt><dd><p>Specific fits should inherit this class.</p>
 </dd>
 </dl>
 <dl class="py attribute">
-<dt id="auspex.analysis.fits.AuspexFit.xlabel">
-<code class="sig-name descname"><span class="pre">xlabel</span></code><a class="headerlink" href="#auspex.analysis.fits.AuspexFit.xlabel" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.analysis.fits.AuspexFit.xlabel">
+<span class="sig-name descname"><span class="pre">xlabel</span></span><a class="headerlink" href="#auspex.analysis.fits.AuspexFit.xlabel" title="Link to this definition"></a></dt>
 <dd><p>Plot x-axis label.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Type</dt>
+<dt class="field-odd">Type<span class="colon">:</span></dt>
 <dd class="field-odd"><p>str</p>
 </dd>
 </dl>
 </dd></dl>
 
 <dl class="py attribute">
-<dt id="auspex.analysis.fits.AuspexFit.ylabel">
-<code class="sig-name descname"><span class="pre">ylabel</span></code><a class="headerlink" href="#auspex.analysis.fits.AuspexFit.ylabel" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.analysis.fits.AuspexFit.ylabel">
+<span class="sig-name descname"><span class="pre">ylabel</span></span><a class="headerlink" href="#auspex.analysis.fits.AuspexFit.ylabel" title="Link to this definition"></a></dt>
 <dd><p>Plot y-axis label.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Type</dt>
+<dt class="field-odd">Type<span class="colon">:</span></dt>
 <dd class="field-odd"><p>str</p>
 </dd>
 </dl>
 </dd></dl>
 
 <dl class="py attribute">
-<dt id="auspex.analysis.fits.AuspexFit.title">
-<code class="sig-name descname"><span class="pre">title</span></code><a class="headerlink" href="#auspex.analysis.fits.AuspexFit.title" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.analysis.fits.AuspexFit.title">
+<span class="sig-name descname"><span class="pre">title</span></span><a class="headerlink" href="#auspex.analysis.fits.AuspexFit.title" title="Link to this definition"></a></dt>
 <dd><p>Plot title.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Type</dt>
+<dt class="field-odd">Type<span class="colon">:</span></dt>
 <dd class="field-odd"><p>str</p>
 </dd>
 </dl>
 </dd></dl>
 
 <dl class="py method">
-<dt id="auspex.analysis.fits.AuspexFit.annotation">
-<code class="sig-name descname"><span class="pre">annotation</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.analysis.fits.AuspexFit.annotation" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.analysis.fits.AuspexFit.annotation">
+<span class="sig-name descname"><span class="pre">annotation</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.analysis.fits.AuspexFit.annotation" title="Link to this definition"></a></dt>
 <dd><p>Annotation for the <cite>make_plot()</cite> method. Should return a string
 that is passed to <cite>matplotlib.pyplot.annotate</cite>.</p>
 </dd></dl>
 
 <dl class="py attribute">
-<dt id="auspex.analysis.fits.AuspexFit.ax">
-<code class="sig-name descname"><span class="pre">ax</span></code><em class="property"> <span class="pre">=</span> <span class="pre">None</span></em><a class="headerlink" href="#auspex.analysis.fits.AuspexFit.ax" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.analysis.fits.AuspexFit.ax">
+<span class="sig-name descname"><span class="pre">ax</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#auspex.analysis.fits.AuspexFit.ax" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt id="auspex.analysis.fits.AuspexFit.bounds">
-<code class="sig-name descname"><span class="pre">bounds</span></code><em class="property"> <span class="pre">=</span> <span class="pre">None</span></em><a class="headerlink" href="#auspex.analysis.fits.AuspexFit.bounds" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.analysis.fits.AuspexFit.bounds">
+<span class="sig-name descname"><span class="pre">bounds</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#auspex.analysis.fits.AuspexFit.bounds" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt id="auspex.analysis.fits.AuspexFit.make_plots">
-<code class="sig-name descname"><span class="pre">make_plots</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.analysis.fits.AuspexFit.make_plots" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.analysis.fits.AuspexFit.make_plots">
+<span class="sig-name descname"><span class="pre">make_plots</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.analysis.fits.AuspexFit.make_plots" title="Link to this definition"></a></dt>
 <dd><p>Create a plot of the input data and the fitted model. By default will
 include any annotation defined in the <cite>annotation()</cite> class method.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt id="auspex.analysis.fits.AuspexFit.model">
-<code class="sig-name descname"><span class="pre">model</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.analysis.fits.AuspexFit.model" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.analysis.fits.AuspexFit.model">
+<span class="sig-name descname"><span class="pre">model</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.analysis.fits.AuspexFit.model" title="Link to this definition"></a></dt>
 <dd><p>The fit function evaluated at the parameters found by <cite>curve_fit</cite>.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>x</strong> – A number or <cite>numpy.array</cite> returned by the model function.</p>
 </dd>
 </dl>
 </dd></dl>
 
 <dl class="py attribute">
-<dt id="id3">
-<code class="sig-name descname"><span class="pre">title</span></code><em class="property"> <span class="pre">=</span> <span class="pre">'Auspex</span> <span class="pre">Fit'</span></em><a class="headerlink" href="#id3" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="id3">
+<span class="sig-name descname"><span class="pre">title</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'Auspex</span> <span class="pre">Fit'</span></em><a class="headerlink" href="#id3" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt id="id4">
-<code class="sig-name descname"><span class="pre">xlabel</span></code><em class="property"> <span class="pre">=</span> <span class="pre">'X</span> <span class="pre">points'</span></em><a class="headerlink" href="#id4" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="id4">
+<span class="sig-name descname"><span class="pre">xlabel</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'X</span> <span class="pre">points'</span></em><a class="headerlink" href="#id4" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt id="id5">
-<code class="sig-name descname"><span class="pre">ylabel</span></code><em class="property"> <span class="pre">=</span> <span class="pre">'Y</span> <span class="pre">points'</span></em><a class="headerlink" href="#id5" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="id5">
+<span class="sig-name descname"><span class="pre">ylabel</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'Y</span> <span class="pre">points'</span></em><a class="headerlink" href="#id5" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 </dd></dl>
 
 <dl class="py class">
-<dt id="auspex.analysis.fits.GaussianFit">
-<em class="property"><span class="pre">class</span> </em><code class="sig-prename descclassname"><span class="pre">auspex.analysis.fits.</span></code><code class="sig-name descname"><span class="pre">GaussianFit</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">xpts</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ypts</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">make_plots</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ax</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.analysis.fits.GaussianFit" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.analysis.fits.GaussianFit">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">auspex.analysis.fits.</span></span><span class="sig-name descname"><span class="pre">GaussianFit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">xpts</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ypts</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">make_plots</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ax</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.analysis.fits.GaussianFit" title="Link to this definition"></a></dt>
 <dd><p>A fit to a gaussian function</p>
 <dl class="py attribute">
-<dt id="auspex.analysis.fits.GaussianFit.title">
-<code class="sig-name descname"><span class="pre">title</span></code><em class="property"> <span class="pre">=</span> <span class="pre">'Gaussian</span> <span class="pre">Fit'</span></em><a class="headerlink" href="#auspex.analysis.fits.GaussianFit.title" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.analysis.fits.GaussianFit.title">
+<span class="sig-name descname"><span class="pre">title</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'Gaussian</span> <span class="pre">Fit'</span></em><a class="headerlink" href="#auspex.analysis.fits.GaussianFit.title" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt id="auspex.analysis.fits.GaussianFit.xlabel">
-<code class="sig-name descname"><span class="pre">xlabel</span></code><em class="property"> <span class="pre">=</span> <span class="pre">'X</span> <span class="pre">Data'</span></em><a class="headerlink" href="#auspex.analysis.fits.GaussianFit.xlabel" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.analysis.fits.GaussianFit.xlabel">
+<span class="sig-name descname"><span class="pre">xlabel</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'X</span> <span class="pre">Data'</span></em><a class="headerlink" href="#auspex.analysis.fits.GaussianFit.xlabel" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt id="auspex.analysis.fits.GaussianFit.ylabel">
-<code class="sig-name descname"><span class="pre">ylabel</span></code><em class="property"> <span class="pre">=</span> <span class="pre">'Y</span> <span class="pre">Data'</span></em><a class="headerlink" href="#auspex.analysis.fits.GaussianFit.ylabel" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.analysis.fits.GaussianFit.ylabel">
+<span class="sig-name descname"><span class="pre">ylabel</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'Y</span> <span class="pre">Data'</span></em><a class="headerlink" href="#auspex.analysis.fits.GaussianFit.ylabel" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 </dd></dl>
 
 <dl class="py class">
-<dt id="auspex.analysis.fits.LorentzFit">
-<em class="property"><span class="pre">class</span> </em><code class="sig-prename descclassname"><span class="pre">auspex.analysis.fits.</span></code><code class="sig-name descname"><span class="pre">LorentzFit</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">xpts</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ypts</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">make_plots</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ax</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.analysis.fits.LorentzFit" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.analysis.fits.LorentzFit">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">auspex.analysis.fits.</span></span><span class="sig-name descname"><span class="pre">LorentzFit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">xpts</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ypts</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">make_plots</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ax</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.analysis.fits.LorentzFit" title="Link to this definition"></a></dt>
 <dd><p>A fit to a simple Lorentzian function <cite>A /((x-b)^2 + (c/2)^2) + d</cite></p>
 <dl class="py attribute">
-<dt id="auspex.analysis.fits.LorentzFit.title">
-<code class="sig-name descname"><span class="pre">title</span></code><em class="property"> <span class="pre">=</span> <span class="pre">'Lorentzian</span> <span class="pre">Fit'</span></em><a class="headerlink" href="#auspex.analysis.fits.LorentzFit.title" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.analysis.fits.LorentzFit.title">
+<span class="sig-name descname"><span class="pre">title</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'Lorentzian</span> <span class="pre">Fit'</span></em><a class="headerlink" href="#auspex.analysis.fits.LorentzFit.title" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt id="auspex.analysis.fits.LorentzFit.xlabel">
-<code class="sig-name descname"><span class="pre">xlabel</span></code><em class="property"> <span class="pre">=</span> <span class="pre">'X</span> <span class="pre">Data'</span></em><a class="headerlink" href="#auspex.analysis.fits.LorentzFit.xlabel" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.analysis.fits.LorentzFit.xlabel">
+<span class="sig-name descname"><span class="pre">xlabel</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'X</span> <span class="pre">Data'</span></em><a class="headerlink" href="#auspex.analysis.fits.LorentzFit.xlabel" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt id="auspex.analysis.fits.LorentzFit.ylabel">
-<code class="sig-name descname"><span class="pre">ylabel</span></code><em class="property"> <span class="pre">=</span> <span class="pre">'Y</span> <span class="pre">Data'</span></em><a class="headerlink" href="#auspex.analysis.fits.LorentzFit.ylabel" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.analysis.fits.LorentzFit.ylabel">
+<span class="sig-name descname"><span class="pre">ylabel</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'Y</span> <span class="pre">Data'</span></em><a class="headerlink" href="#auspex.analysis.fits.LorentzFit.ylabel" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 </dd></dl>
 
 <dl class="py class">
-<dt id="auspex.analysis.fits.MultiGaussianFit">
-<em class="property"><span class="pre">class</span> </em><code class="sig-prename descclassname"><span class="pre">auspex.analysis.fits.</span></code><code class="sig-name descname"><span class="pre">MultiGaussianFit</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">make_plots</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_gaussians</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_samples</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">100000</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.analysis.fits.MultiGaussianFit" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.analysis.fits.MultiGaussianFit">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">auspex.analysis.fits.</span></span><span class="sig-name descname"><span class="pre">MultiGaussianFit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">make_plots</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_gaussians</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_samples</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">100000</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.analysis.fits.MultiGaussianFit" title="Link to this definition"></a></dt>
 <dd><p>A fit to a sum of gaussian function. Use with care!</p>
 <dl class="py attribute">
-<dt id="auspex.analysis.fits.MultiGaussianFit.title">
-<code class="sig-name descname"><span class="pre">title</span></code><em class="property"> <span class="pre">=</span> <span class="pre">'Sum</span> <span class="pre">of</span> <span class="pre">Gaussians</span> <span class="pre">Fit'</span></em><a class="headerlink" href="#auspex.analysis.fits.MultiGaussianFit.title" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.analysis.fits.MultiGaussianFit.title">
+<span class="sig-name descname"><span class="pre">title</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'Sum</span> <span class="pre">of</span> <span class="pre">Gaussians</span> <span class="pre">Fit'</span></em><a class="headerlink" href="#auspex.analysis.fits.MultiGaussianFit.title" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt id="auspex.analysis.fits.MultiGaussianFit.xlabel">
-<code class="sig-name descname"><span class="pre">xlabel</span></code><em class="property"> <span class="pre">=</span> <span class="pre">'X</span> <span class="pre">Data'</span></em><a class="headerlink" href="#auspex.analysis.fits.MultiGaussianFit.xlabel" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.analysis.fits.MultiGaussianFit.xlabel">
+<span class="sig-name descname"><span class="pre">xlabel</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'X</span> <span class="pre">Data'</span></em><a class="headerlink" href="#auspex.analysis.fits.MultiGaussianFit.xlabel" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt id="auspex.analysis.fits.MultiGaussianFit.ylabel">
-<code class="sig-name descname"><span class="pre">ylabel</span></code><em class="property"> <span class="pre">=</span> <span class="pre">'Y</span> <span class="pre">Data'</span></em><a class="headerlink" href="#auspex.analysis.fits.MultiGaussianFit.ylabel" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.analysis.fits.MultiGaussianFit.ylabel">
+<span class="sig-name descname"><span class="pre">ylabel</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'Y</span> <span class="pre">Data'</span></em><a class="headerlink" href="#auspex.analysis.fits.MultiGaussianFit.ylabel" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 </dd></dl>
 
 <dl class="py class">
-<dt id="auspex.analysis.fits.QuadraticFit">
-<em class="property"><span class="pre">class</span> </em><code class="sig-prename descclassname"><span class="pre">auspex.analysis.fits.</span></code><code class="sig-name descname"><span class="pre">QuadraticFit</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">xpts</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ypts</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">make_plots</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ax</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.analysis.fits.QuadraticFit" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.analysis.fits.QuadraticFit">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">auspex.analysis.fits.</span></span><span class="sig-name descname"><span class="pre">QuadraticFit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">xpts</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ypts</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">make_plots</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ax</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.analysis.fits.QuadraticFit" title="Link to this definition"></a></dt>
 <dd><p>A fit to a simple quadratic function A*(x-x0)**2 + b</p>
 <dl class="py attribute">
-<dt id="auspex.analysis.fits.QuadraticFit.title">
-<code class="sig-name descname"><span class="pre">title</span></code><em class="property"> <span class="pre">=</span> <span class="pre">'Quadratic</span> <span class="pre">Fit'</span></em><a class="headerlink" href="#auspex.analysis.fits.QuadraticFit.title" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.analysis.fits.QuadraticFit.title">
+<span class="sig-name descname"><span class="pre">title</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'Quadratic</span> <span class="pre">Fit'</span></em><a class="headerlink" href="#auspex.analysis.fits.QuadraticFit.title" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt id="auspex.analysis.fits.QuadraticFit.xlabel">
-<code class="sig-name descname"><span class="pre">xlabel</span></code><em class="property"> <span class="pre">=</span> <span class="pre">'X</span> <span class="pre">Data'</span></em><a class="headerlink" href="#auspex.analysis.fits.QuadraticFit.xlabel" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.analysis.fits.QuadraticFit.xlabel">
+<span class="sig-name descname"><span class="pre">xlabel</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'X</span> <span class="pre">Data'</span></em><a class="headerlink" href="#auspex.analysis.fits.QuadraticFit.xlabel" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt id="auspex.analysis.fits.QuadraticFit.ylabel">
-<code class="sig-name descname"><span class="pre">ylabel</span></code><em class="property"> <span class="pre">=</span> <span class="pre">'Y</span> <span class="pre">Data'</span></em><a class="headerlink" href="#auspex.analysis.fits.QuadraticFit.ylabel" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.analysis.fits.QuadraticFit.ylabel">
+<span class="sig-name descname"><span class="pre">ylabel</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'Y</span> <span class="pre">Data'</span></em><a class="headerlink" href="#auspex.analysis.fits.QuadraticFit.ylabel" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 </dd></dl>
 
-</div>
-<div class="section" id="module-auspex.analysis.helpers">
-<span id="auspex-analysis-helpers-module"></span><h2>auspex.analysis.helpers module<a class="headerlink" href="#module-auspex.analysis.helpers" title="Permalink to this headline">¶</a></h2>
+</section>
+<section id="module-auspex.analysis.helpers">
+<span id="auspex-analysis-helpers-module"></span><h2>auspex.analysis.helpers module<a class="headerlink" href="#module-auspex.analysis.helpers" title="Link to this heading"></a></h2>
 <dl class="py function">
-<dt id="auspex.analysis.helpers.cal_data">
-<code class="sig-prename descclassname"><span class="pre">auspex.analysis.helpers.</span></code><code class="sig-name descname"><span class="pre">cal_data</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="pre">data</span></em>, <em class="sig-param"><span class="pre">quad=&lt;function</span> <span class="pre">real&gt;</span></em>, <em class="sig-param"><span class="pre">qubit_name='q1'</span></em>, <em class="sig-param"><span class="pre">group_name='main'</span></em>, <em class="sig-param"><span class="pre">return_type=&lt;class</span> <span class="pre">'numpy.float32'&gt;</span></em>, <em class="sig-param"><span class="pre">key=''</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.analysis.helpers.cal_data" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.analysis.helpers.cal_data">
+<span class="sig-prename descclassname"><span class="pre">auspex.analysis.helpers.</span></span><span class="sig-name descname"><span class="pre">cal_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">quad=&lt;function</span> <span class="pre">real&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">qubit_name='q1'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">group_name='main'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_type=&lt;class</span> <span class="pre">'numpy.float32'&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">key=''</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.analysis.helpers.cal_data" title="Link to this definition"></a></dt>
 <dd><p>Rescale data to <span class="math notranslate nohighlight">\(\sigma_z\)</span>. expectation value based on calibration sequences.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>data</strong> (<em>numpy array</em>) – The data from the writer or buffer, which is a dictionary
 whose keys are typically in the format qubit_name-group_name, e.g.
@@ -503,7 +390,7 @@ to the default format a string can be passed in specifying the
 data key to scale.</p></li>
 </ul>
 </dd>
-<dt class="field-even">Returns</dt>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p><dl class="simple">
 <dt>numpy array (type <code class="docutils literal notranslate"><span class="pre">return_type</span></code>)</dt><dd><p>Returns the data rescaled to match the calibration results for the <span class="math notranslate nohighlight">\(\sigma_z\)</span> expectation value.</p>
 </dd>
@@ -521,14 +408,14 @@ data key to scale.</p></li>
 </dd></dl>
 
 <dl class="py function">
-<dt id="auspex.analysis.helpers.cal_ls">
-<code class="sig-prename descclassname"><span class="pre">auspex.analysis.helpers.</span></code><code class="sig-name descname"><span class="pre">cal_ls</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.analysis.helpers.cal_ls" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.analysis.helpers.cal_ls">
+<span class="sig-prename descclassname"><span class="pre">auspex.analysis.helpers.</span></span><span class="sig-name descname"><span class="pre">cal_ls</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.analysis.helpers.cal_ls" title="Link to this definition"></a></dt>
 <dd><p>List of auspex.pulse_calibration results</p>
 </dd></dl>
 
 <dl class="py function">
-<dt id="auspex.analysis.helpers.cal_scale">
-<code class="sig-prename descclassname"><span class="pre">auspex.analysis.helpers.</span></code><code class="sig-name descname"><span class="pre">cal_scale</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bit</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nqubits</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">repeats</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.analysis.helpers.cal_scale" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.analysis.helpers.cal_scale">
+<span class="sig-prename descclassname"><span class="pre">auspex.analysis.helpers.</span></span><span class="sig-name descname"><span class="pre">cal_scale</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bit</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nqubits</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">repeats</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.analysis.helpers.cal_scale" title="Link to this definition"></a></dt>
 <dd><p>Scale data from calibration points.
 :param data:
 :type data: Unscaled data with cal points.
@@ -539,18 +426,18 @@ data key to scale.</p></li>
 :param repeats:
 :type repeats: Number of calibraiton repeats. Default 2.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Returns</dt>
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>data</strong></p>
 </dd>
-<dt class="field-even">Return type</dt>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
 <dd class="field-even"><p>scaled data array</p>
 </dd>
 </dl>
 </dd></dl>
 
 <dl class="py function">
-<dt id="auspex.analysis.helpers.get_cals">
-<code class="sig-prename descclassname"><span class="pre">auspex.analysis.helpers.</span></code><code class="sig-name descname"><span class="pre">get_cals</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">qubit</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">params</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">make_plots</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">depth</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.analysis.helpers.get_cals" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.analysis.helpers.get_cals">
+<span class="sig-prename descclassname"><span class="pre">auspex.analysis.helpers.</span></span><span class="sig-name descname"><span class="pre">get_cals</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">qubit</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">params</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">make_plots</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">depth</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.analysis.helpers.get_cals" title="Link to this definition"></a></dt>
 <dd><p>Return and optionally plot the result of the most recent calibrations/characterizations
 :param qubit:
 :type qubit: qubit name (string)
@@ -567,20 +454,20 @@ data key to scale.</p></li>
 </dd></dl>
 
 <dl class="py function">
-<dt id="auspex.analysis.helpers.get_file_name">
-<code class="sig-prename descclassname"><span class="pre">auspex.analysis.helpers.</span></code><code class="sig-name descname"><span class="pre">get_file_name</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.analysis.helpers.get_file_name" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.analysis.helpers.get_file_name">
+<span class="sig-prename descclassname"><span class="pre">auspex.analysis.helpers.</span></span><span class="sig-name descname"><span class="pre">get_file_name</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.analysis.helpers.get_file_name" title="Link to this definition"></a></dt>
 <dd><p>Helper function to get a filepath from a dialog box</p>
 </dd></dl>
 
 <dl class="py function">
-<dt id="auspex.analysis.helpers.load_data">
-<code class="sig-prename descclassname"><span class="pre">auspex.analysis.helpers.</span></code><code class="sig-name descname"><span class="pre">load_data</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dirpath</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.analysis.helpers.load_data" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.analysis.helpers.load_data">
+<span class="sig-prename descclassname"><span class="pre">auspex.analysis.helpers.</span></span><span class="sig-name descname"><span class="pre">load_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dirpath</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.analysis.helpers.load_data" title="Link to this definition"></a></dt>
 <dd><p>Open data in the .auspex file at dirpath/</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>dirpath</strong> (<em>string</em>) – Path to the .auspex file. If no folder is specified, a dialogue box will ask for a path.</p>
 </dd>
-<dt class="field-even">Returns</dt>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p><dl class="simple">
 <dt>data_set (Dict{data group}{data name}{data,descriptor})</dt><dd><p>Data as a dictionary structure with data groups, types of data and
 the data packed sequentially</p>
@@ -605,24 +492,24 @@ the data packed sequentially</p>
 </dd></dl>
 
 <dl class="py function">
-<dt id="auspex.analysis.helpers.normalize_buffer_data">
-<code class="sig-prename descclassname"><span class="pre">auspex.analysis.helpers.</span></code><code class="sig-name descname"><span class="pre">normalize_buffer_data</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">desc</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">qubit_index</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">zero_id</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">one_id</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.analysis.helpers.normalize_buffer_data" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.analysis.helpers.normalize_buffer_data">
+<span class="sig-prename descclassname"><span class="pre">auspex.analysis.helpers.</span></span><span class="sig-name descname"><span class="pre">normalize_buffer_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">desc</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">qubit_index</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">zero_id</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">one_id</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.analysis.helpers.normalize_buffer_data" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py function">
-<dt id="auspex.analysis.helpers.normalize_data">
-<code class="sig-prename descclassname"><span class="pre">auspex.analysis.helpers.</span></code><code class="sig-name descname"><span class="pre">normalize_data</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">zero_id</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">one_id</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.analysis.helpers.normalize_data" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.analysis.helpers.normalize_data">
+<span class="sig-prename descclassname"><span class="pre">auspex.analysis.helpers.</span></span><span class="sig-name descname"><span class="pre">normalize_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">zero_id</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">one_id</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.analysis.helpers.normalize_data" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py function">
-<dt id="auspex.analysis.helpers.open_data">
-<code class="sig-prename descclassname"><span class="pre">auspex.analysis.helpers.</span></code><code class="sig-name descname"><span class="pre">open_data</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">num</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">folder</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">groupname</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'main'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">datasetname</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'data'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">date</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.analysis.helpers.open_data" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.analysis.helpers.open_data">
+<span class="sig-prename descclassname"><span class="pre">auspex.analysis.helpers.</span></span><span class="sig-name descname"><span class="pre">open_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">num</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">folder</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">groupname</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'main'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">datasetname</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'data'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">date</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.analysis.helpers.open_data" title="Link to this definition"></a></dt>
 <dd><dl class="simple">
 <dt>Convenience Load data from an <cite>AuspexDataContainer</cite> given a file number and folder.</dt><dd><p>Assumes that files are named with the convention <cite>ExperimentName-NNNNN.auspex</cite></p>
 </dd>
 </dl>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>num</strong> (<em>int</em>) – File number to be loaded.</p></li>
 <li><p><strong>folder</strong> (<em>string</em>) – Base folder where file is stored. If the <cite>date</cite> parameter is not None, assumes file is a dated folder. If no folder is specified, open a dialogue box. Open the folder with the desired ExperimentName-NNNN.auspex, then press OK</p></li>
@@ -631,7 +518,7 @@ the data packed sequentially</p>
 <li><p><strong>date</strong> (<em>string</em><em>, </em><em>optional</em>) – Date folder from which data is to be loaded. Format is “YYMMDD” Defaults to today’s date.</p></li>
 </ul>
 </dd>
-<dt class="field-even">Returns</dt>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p><dl class="simple">
 <dt>data (numpy.array)</dt><dd><p>Data loaded from file.</p>
 </dd>
@@ -648,58 +535,41 @@ the data packed sequentially</p>
 </div>
 </dd></dl>
 
-</div>
-<div class="section" id="module-auspex.analysis">
-<span id="module-contents"></span><h2>Module contents<a class="headerlink" href="#module-auspex.analysis" title="Permalink to this headline">¶</a></h2>
-</div>
-</div>
+</section>
+<section id="module-auspex.analysis">
+<span id="module-contents"></span><h2>Module contents<a class="headerlink" href="#module-auspex.analysis" title="Link to this heading"></a></h2>
+</section>
+</section>
 
 
            </div>
-           
           </div>
-          <footer>
-    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
-        <a href="auspex.filters.html" class="btn btn-neutral float-right" title="auspex.filters package" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
         <a href="auspex.html" class="btn btn-neutral float-left" title="auspex package" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="auspex.filters.html" class="btn btn-neutral float-right" title="auspex.filters package" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
 
   <hr/>
 
   <div role="contentinfo">
-    <p>
-        &#169; Copyright 2019, Auspex Developers.
-
-    </p>
+    <p>&#169; Copyright 2019, Auspex Developers.</p>
   </div>
-    
-    
-    
-    Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
-    
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
     <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
-    
-    provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
 
 </footer>
         </div>
       </div>
-
     </section>
-
   </div>
-  
-
-  <script type="text/javascript">
+  <script>
       jQuery(function () {
           SphinxRtdTheme.Navigation.enable(true);
       });
-  </script>
-
-  
-  
-    
-   
+  </script> 
 
 </body>
 </html>

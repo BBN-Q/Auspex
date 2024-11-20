@@ -1,95 +1,48 @@
 
 
 <!DOCTYPE html>
-<html class="writer-html5" lang="en" >
+<html class="writer-html5" lang="en" data-content_root="../">
 <head>
-  <meta charset="utf-8" />
-  
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
+
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  
   <title>auspex.filters package &mdash; auspex 2019.2 documentation</title>
-  
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b76e3c8a" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=e59714d7" />
 
   
-  <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
-  <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
-
-  
-  
-
-  
-  
-
-  
-
-  
-  <!--[if lt IE 9]>
-    <script src="../_static/js/html5shiv.min.js"></script>
-  <![endif]-->
-  
-    
-      <script type="text/javascript" id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
-        <script src="../_static/jquery.js"></script>
-        <script src="../_static/underscore.js"></script>
-        <script src="../_static/doctools.js"></script>
-        <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
-        <script src="https://unpkg.com/@jupyter-widgets/html-manager@^0.20.0/dist/embed-amd.js"></script>
-    
-    <script type="text/javascript" src="../_static/js/theme.js"></script>
-
-    
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=8e83ba1c"></script>
+      <script src="../_static/doctools.js?v=9a2dae69"></script>
+      <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+      <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    <script src="../_static/js/theme.js"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
     <link rel="next" title="auspex.instruments package" href="auspex.instruments.html" />
     <link rel="prev" title="auspex.analysis package" href="auspex.analysis.html" /> 
 </head>
 
-<body class="wy-body-for-nav">
-
-   
+<body class="wy-body-for-nav"> 
   <div class="wy-grid-for-nav">
-    
     <nav data-toggle="wy-nav-shift" class="wy-nav-side">
       <div class="wy-side-scroll">
         <div class="wy-side-nav-search" >
-          
 
           
-            <a href="../index.html" class="icon icon-home"> auspex
           
-
-          
+          <a href="../index.html" class="icon icon-home">
+            auspex
           </a>
-
-          
-            
-            
-              <div class="version">
-                2019.2
-              </div>
-            
-          
-
-          
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
-    <input type="text" name="q" placeholder="Search docs" />
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
     <input type="hidden" name="check_keywords" value="yes" />
     <input type="hidden" name="area" value="default" />
   </form>
 </div>
-
-          
-        </div>
-
-        
-        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
-          
-            
-            
-              
-            
-            
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
               <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="../instruments.html">Instrument Drivers</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../experiments.html">Defining Experiments</a></li>
@@ -130,156 +83,90 @@
 </li>
 </ul>
 
-            
-          
         </div>
-        
       </div>
     </nav>
 
-    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
-
-      
-      <nav class="wy-nav-top" aria-label="top navigation">
-        
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
           <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
           <a href="../index.html">auspex</a>
-        
       </nav>
 
-
       <div class="wy-nav-content">
-        
         <div class="rst-content">
-        
-          
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-<div role="navigation" aria-label="breadcrumbs navigation">
-
+          <div role="navigation" aria-label="Page navigation">
   <ul class="wy-breadcrumbs">
-    
-      <li><a href="../index.html" class="icon icon-home"></a> &raquo;</li>
-        
-          <li><a href="auspex.html">auspex package</a> &raquo;</li>
-        
-      <li>auspex.filters package</li>
-    
-    
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="auspex.html">auspex package</a></li>
+      <li class="breadcrumb-item active">auspex.filters package</li>
       <li class="wy-breadcrumbs-aside">
-        
-          
             <a href="../_sources/api/auspex.filters.rst.txt" rel="nofollow"> View page source</a>
-          
-        
       </li>
-    
   </ul>
-
-  
   <hr/>
 </div>
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
-            
-  
-<style>
-/* CSS overrides for sphinx_rtd_theme */
-
-/* 24px margin */
-.nbinput.nblast.container,
-.nboutput.nblast.container {
-    margin-bottom: 19px;  /* padding has already 5px */
-}
-
-/* ... except between code cells! */
-.nblast.container + .nbinput.container {
-    margin-top: -19px;
-}
-
-.admonition > p:before {
-    margin-right: 4px;  /* make room for the exclamation icon */
-}
-
-/* Fix math alignment, see https://github.com/rtfd/sphinx_rtd_theme/pull/686 */
-.math {
-    text-align: unset;
-}
-</style>
-<div class="section" id="auspex-filters-package">
-<h1>auspex.filters package<a class="headerlink" href="#auspex-filters-package" title="Permalink to this headline">¶</a></h1>
-<div class="section" id="submodules">
-<h2>Submodules<a class="headerlink" href="#submodules" title="Permalink to this headline">¶</a></h2>
-</div>
-<div class="section" id="module-auspex.filters.average">
-<span id="auspex-filters-average-module"></span><h2>auspex.filters.average module<a class="headerlink" href="#module-auspex.filters.average" title="Permalink to this headline">¶</a></h2>
+             
+  <section id="auspex-filters-package">
+<h1>auspex.filters package<a class="headerlink" href="#auspex-filters-package" title="Link to this heading"></a></h1>
+<section id="submodules">
+<h2>Submodules<a class="headerlink" href="#submodules" title="Link to this heading"></a></h2>
+</section>
+<section id="module-auspex.filters.average">
+<span id="auspex-filters-average-module"></span><h2>auspex.filters.average module<a class="headerlink" href="#module-auspex.filters.average" title="Link to this heading"></a></h2>
 <dl class="py class">
-<dt id="auspex.filters.average.Averager">
-<em class="property"><span class="pre">class</span> </em><code class="sig-prename descclassname"><span class="pre">auspex.filters.average.</span></code><code class="sig-name descname"><span class="pre">Averager</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">axis</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.5</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.average.Averager" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.average.Averager">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">auspex.filters.average.</span></span><span class="sig-name descname"><span class="pre">Averager</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">axis</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.5</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.average.Averager" title="Link to this definition"></a></dt>
 <dd><p>Takes data and collapses along the specified axis.</p>
 <dl class="py attribute">
-<dt id="auspex.filters.average.Averager.axis">
-<code class="sig-name descname"><span class="pre">axis</span></code><em class="property"> <span class="pre">=</span> <span class="pre">&lt;Parameter(name='axis',value=None)&gt;</span></em><a class="headerlink" href="#auspex.filters.average.Averager.axis" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.average.Averager.axis">
+<span class="sig-name descname"><span class="pre">axis</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;Parameter(name='axis',value=None)&gt;</span></em><a class="headerlink" href="#auspex.filters.average.Averager.axis" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt id="auspex.filters.average.Averager.final_counts">
-<code class="sig-name descname"><span class="pre">final_counts</span></code><em class="property"> <span class="pre">=</span> <span class="pre">&lt;OutputConnector(name=)&gt;</span></em><a class="headerlink" href="#auspex.filters.average.Averager.final_counts" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.average.Averager.final_counts">
+<span class="sig-name descname"><span class="pre">final_counts</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;OutputConnector(name=)&gt;</span></em><a class="headerlink" href="#auspex.filters.average.Averager.final_counts" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.average.Averager.final_init">
-<code class="sig-name descname"><span class="pre">final_init</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.average.Averager.final_init" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.average.Averager.final_init">
+<span class="sig-name descname"><span class="pre">final_init</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.average.Averager.final_init" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt id="auspex.filters.average.Averager.final_variance">
-<code class="sig-name descname"><span class="pre">final_variance</span></code><em class="property"> <span class="pre">=</span> <span class="pre">&lt;OutputConnector(name=)&gt;</span></em><a class="headerlink" href="#auspex.filters.average.Averager.final_variance" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.average.Averager.final_variance">
+<span class="sig-name descname"><span class="pre">final_variance</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;OutputConnector(name=)&gt;</span></em><a class="headerlink" href="#auspex.filters.average.Averager.final_variance" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt id="auspex.filters.average.Averager.partial_average">
-<code class="sig-name descname"><span class="pre">partial_average</span></code><em class="property"> <span class="pre">=</span> <span class="pre">&lt;OutputConnector(name=)&gt;</span></em><a class="headerlink" href="#auspex.filters.average.Averager.partial_average" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.average.Averager.partial_average">
+<span class="sig-name descname"><span class="pre">partial_average</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;OutputConnector(name=)&gt;</span></em><a class="headerlink" href="#auspex.filters.average.Averager.partial_average" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.average.Averager.process_data">
-<code class="sig-name descname"><span class="pre">process_data</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.average.Averager.process_data" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.average.Averager.process_data">
+<span class="sig-name descname"><span class="pre">process_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.average.Averager.process_data" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt id="auspex.filters.average.Averager.sink">
-<code class="sig-name descname"><span class="pre">sink</span></code><em class="property"> <span class="pre">=</span> <span class="pre">&lt;InputConnector(name=)&gt;</span></em><a class="headerlink" href="#auspex.filters.average.Averager.sink" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.average.Averager.sink">
+<span class="sig-name descname"><span class="pre">sink</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;InputConnector(name=)&gt;</span></em><a class="headerlink" href="#auspex.filters.average.Averager.sink" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt id="auspex.filters.average.Averager.source">
-<code class="sig-name descname"><span class="pre">source</span></code><em class="property"> <span class="pre">=</span> <span class="pre">&lt;OutputConnector(name=)&gt;</span></em><a class="headerlink" href="#auspex.filters.average.Averager.source" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.average.Averager.source">
+<span class="sig-name descname"><span class="pre">source</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;OutputConnector(name=)&gt;</span></em><a class="headerlink" href="#auspex.filters.average.Averager.source" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt id="auspex.filters.average.Averager.threshold">
-<code class="sig-name descname"><span class="pre">threshold</span></code><em class="property"> <span class="pre">=</span> <span class="pre">&lt;FloatParameter(name='threshold',value=None)&gt;</span></em><a class="headerlink" href="#auspex.filters.average.Averager.threshold" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.average.Averager.threshold">
+<span class="sig-name descname"><span class="pre">threshold</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;FloatParameter(name='threshold',value=None)&gt;</span></em><a class="headerlink" href="#auspex.filters.average.Averager.threshold" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.average.Averager.update_descriptors">
-<code class="sig-name descname"><span class="pre">update_descriptors</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.average.Averager.update_descriptors" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.average.Averager.update_descriptors">
+<span class="sig-name descname"><span class="pre">update_descriptors</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.average.Averager.update_descriptors" title="Link to this definition"></a></dt>
 <dd><p>This method is called whenever the connectivity of the graph changes. This may have implications
 for the internal functioning of the filter, in which case update_descriptors should be overloaded.
 Any simple changes to the axes within the StreamDescriptors should take place via the class method
@@ -288,70 +175,70 @@ descriptor_map.</p>
 
 </dd></dl>
 
-</div>
-<div class="section" id="module-auspex.filters.channelizer">
-<span id="auspex-filters-channelizer-module"></span><h2>auspex.filters.channelizer module<a class="headerlink" href="#module-auspex.filters.channelizer" title="Permalink to this headline">¶</a></h2>
+</section>
+<section id="module-auspex.filters.channelizer">
+<span id="auspex-filters-channelizer-module"></span><h2>auspex.filters.channelizer module<a class="headerlink" href="#module-auspex.filters.channelizer" title="Link to this heading"></a></h2>
 <dl class="py class">
-<dt id="auspex.filters.channelizer.Channelizer">
-<em class="property"><span class="pre">class</span> </em><code class="sig-prename descclassname"><span class="pre">auspex.filters.channelizer.</span></code><code class="sig-name descname"><span class="pre">Channelizer</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">frequency</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bandwidth</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">decimation_factor</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">follow_axis</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">follow_freq_offset</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.channelizer.Channelizer" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.channelizer.Channelizer">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">auspex.filters.channelizer.</span></span><span class="sig-name descname"><span class="pre">Channelizer</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">frequency</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bandwidth</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">decimation_factor</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">follow_axis</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">follow_freq_offset</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.channelizer.Channelizer" title="Link to this definition"></a></dt>
 <dd><p>Digital demodulation and filtering to select a particular frequency multiplexed channel. If
 an axis name is supplied to <cite>follow_axis</cite> then the filter will demodulate at the freqency
 <cite>axis_frequency_value - follow_freq_offset</cite> otherwise it will demodulate at <cite>frequency</cite>. Note that
 the filter coefficients are still calculated with respect to the <cite>frequency</cite> paramter, so it should
 be chosen accordingly when <cite>follow_axis</cite> is defined.</p>
 <dl class="py attribute">
-<dt id="auspex.filters.channelizer.Channelizer.bandwidth">
-<code class="sig-name descname"><span class="pre">bandwidth</span></code><em class="property"> <span class="pre">=</span> <span class="pre">&lt;FloatParameter(name='bandwidth',value=5000000.0)&gt;</span></em><a class="headerlink" href="#auspex.filters.channelizer.Channelizer.bandwidth" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.channelizer.Channelizer.bandwidth">
+<span class="sig-name descname"><span class="pre">bandwidth</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;FloatParameter(name='bandwidth',value=5000000.0)&gt;</span></em><a class="headerlink" href="#auspex.filters.channelizer.Channelizer.bandwidth" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt id="auspex.filters.channelizer.Channelizer.decimation_factor">
-<code class="sig-name descname"><span class="pre">decimation_factor</span></code><em class="property"> <span class="pre">=</span> <span class="pre">&lt;IntParameter(name='decimation_factor',value=4)&gt;</span></em><a class="headerlink" href="#auspex.filters.channelizer.Channelizer.decimation_factor" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.channelizer.Channelizer.decimation_factor">
+<span class="sig-name descname"><span class="pre">decimation_factor</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;IntParameter(name='decimation_factor',value=4)&gt;</span></em><a class="headerlink" href="#auspex.filters.channelizer.Channelizer.decimation_factor" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.channelizer.Channelizer.final_init">
-<code class="sig-name descname"><span class="pre">final_init</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.channelizer.Channelizer.final_init" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.channelizer.Channelizer.final_init">
+<span class="sig-name descname"><span class="pre">final_init</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.channelizer.Channelizer.final_init" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt id="auspex.filters.channelizer.Channelizer.follow_axis">
-<code class="sig-name descname"><span class="pre">follow_axis</span></code><em class="property"> <span class="pre">=</span> <span class="pre">&lt;Parameter(name='follow_axis',value='')&gt;</span></em><a class="headerlink" href="#auspex.filters.channelizer.Channelizer.follow_axis" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.channelizer.Channelizer.follow_axis">
+<span class="sig-name descname"><span class="pre">follow_axis</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;Parameter(name='follow_axis',value='')&gt;</span></em><a class="headerlink" href="#auspex.filters.channelizer.Channelizer.follow_axis" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt id="auspex.filters.channelizer.Channelizer.follow_freq_offset">
-<code class="sig-name descname"><span class="pre">follow_freq_offset</span></code><em class="property"> <span class="pre">=</span> <span class="pre">&lt;FloatParameter(name='follow_freq_offset',value=0.0)&gt;</span></em><a class="headerlink" href="#auspex.filters.channelizer.Channelizer.follow_freq_offset" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.channelizer.Channelizer.follow_freq_offset">
+<span class="sig-name descname"><span class="pre">follow_freq_offset</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;FloatParameter(name='follow_freq_offset',value=0.0)&gt;</span></em><a class="headerlink" href="#auspex.filters.channelizer.Channelizer.follow_freq_offset" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt id="auspex.filters.channelizer.Channelizer.frequency">
-<code class="sig-name descname"><span class="pre">frequency</span></code><em class="property"> <span class="pre">=</span> <span class="pre">&lt;FloatParameter(name='frequency',value=10000000.0)&gt;</span></em><a class="headerlink" href="#auspex.filters.channelizer.Channelizer.frequency" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.channelizer.Channelizer.frequency">
+<span class="sig-name descname"><span class="pre">frequency</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;FloatParameter(name='frequency',value=10000000.0)&gt;</span></em><a class="headerlink" href="#auspex.filters.channelizer.Channelizer.frequency" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.channelizer.Channelizer.init_filters">
-<code class="sig-name descname"><span class="pre">init_filters</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">frequency</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bandwidth</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.channelizer.Channelizer.init_filters" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.channelizer.Channelizer.init_filters">
+<span class="sig-name descname"><span class="pre">init_filters</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">frequency</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bandwidth</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.channelizer.Channelizer.init_filters" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.channelizer.Channelizer.process_data">
-<code class="sig-name descname"><span class="pre">process_data</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.channelizer.Channelizer.process_data" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.channelizer.Channelizer.process_data">
+<span class="sig-name descname"><span class="pre">process_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.channelizer.Channelizer.process_data" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt id="auspex.filters.channelizer.Channelizer.sink">
-<code class="sig-name descname"><span class="pre">sink</span></code><em class="property"> <span class="pre">=</span> <span class="pre">&lt;InputConnector(name=)&gt;</span></em><a class="headerlink" href="#auspex.filters.channelizer.Channelizer.sink" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.channelizer.Channelizer.sink">
+<span class="sig-name descname"><span class="pre">sink</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;InputConnector(name=)&gt;</span></em><a class="headerlink" href="#auspex.filters.channelizer.Channelizer.sink" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt id="auspex.filters.channelizer.Channelizer.source">
-<code class="sig-name descname"><span class="pre">source</span></code><em class="property"> <span class="pre">=</span> <span class="pre">&lt;OutputConnector(name=)&gt;</span></em><a class="headerlink" href="#auspex.filters.channelizer.Channelizer.source" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.channelizer.Channelizer.source">
+<span class="sig-name descname"><span class="pre">source</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;OutputConnector(name=)&gt;</span></em><a class="headerlink" href="#auspex.filters.channelizer.Channelizer.source" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.channelizer.Channelizer.update_descriptors">
-<code class="sig-name descname"><span class="pre">update_descriptors</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.channelizer.Channelizer.update_descriptors" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.channelizer.Channelizer.update_descriptors">
+<span class="sig-name descname"><span class="pre">update_descriptors</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.channelizer.Channelizer.update_descriptors" title="Link to this definition"></a></dt>
 <dd><p>This method is called whenever the connectivity of the graph changes. This may have implications
 for the internal functioning of the filter, in which case update_descriptors should be overloaded.
 Any simple changes to the axes within the StreamDescriptors should take place via the class method
@@ -359,211 +246,211 @@ descriptor_map.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.channelizer.Channelizer.update_references">
-<code class="sig-name descname"><span class="pre">update_references</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">frequency</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.channelizer.Channelizer.update_references" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.channelizer.Channelizer.update_references">
+<span class="sig-name descname"><span class="pre">update_references</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">frequency</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.channelizer.Channelizer.update_references" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 </dd></dl>
 
-</div>
-<div class="section" id="module-auspex.filters.correlator">
-<span id="auspex-filters-correlator-module"></span><h2>auspex.filters.correlator module<a class="headerlink" href="#module-auspex.filters.correlator" title="Permalink to this headline">¶</a></h2>
+</section>
+<section id="module-auspex.filters.correlator">
+<span id="auspex-filters-correlator-module"></span><h2>auspex.filters.correlator module<a class="headerlink" href="#module-auspex.filters.correlator" title="Link to this heading"></a></h2>
 <dl class="py class">
-<dt id="auspex.filters.correlator.Correlator">
-<em class="property"><span class="pre">class</span> </em><code class="sig-prename descclassname"><span class="pre">auspex.filters.correlator.</span></code><code class="sig-name descname"><span class="pre">Correlator</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">filter_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.correlator.Correlator" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.correlator.Correlator">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">auspex.filters.correlator.</span></span><span class="sig-name descname"><span class="pre">Correlator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">filter_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.correlator.Correlator" title="Link to this definition"></a></dt>
 <dd><dl class="py attribute">
-<dt id="auspex.filters.correlator.Correlator.filter_name">
-<code class="sig-name descname"><span class="pre">filter_name</span></code><em class="property"> <span class="pre">=</span> <span class="pre">'Correlator'</span></em><a class="headerlink" href="#auspex.filters.correlator.Correlator.filter_name" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.correlator.Correlator.filter_name">
+<span class="sig-name descname"><span class="pre">filter_name</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'Correlator'</span></em><a class="headerlink" href="#auspex.filters.correlator.Correlator.filter_name" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.correlator.Correlator.operation">
-<code class="sig-name descname"><span class="pre">operation</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.correlator.Correlator.operation" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.correlator.Correlator.operation">
+<span class="sig-name descname"><span class="pre">operation</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.correlator.Correlator.operation" title="Link to this definition"></a></dt>
 <dd><p>Must be overridden with the desired mathematical function</p>
 </dd></dl>
 
 <dl class="py attribute">
-<dt id="auspex.filters.correlator.Correlator.sink">
-<code class="sig-name descname"><span class="pre">sink</span></code><em class="property"> <span class="pre">=</span> <span class="pre">&lt;InputConnector(name=)&gt;</span></em><a class="headerlink" href="#auspex.filters.correlator.Correlator.sink" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.correlator.Correlator.sink">
+<span class="sig-name descname"><span class="pre">sink</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;InputConnector(name=)&gt;</span></em><a class="headerlink" href="#auspex.filters.correlator.Correlator.sink" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt id="auspex.filters.correlator.Correlator.source">
-<code class="sig-name descname"><span class="pre">source</span></code><em class="property"> <span class="pre">=</span> <span class="pre">&lt;OutputConnector(name=)&gt;</span></em><a class="headerlink" href="#auspex.filters.correlator.Correlator.source" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.correlator.Correlator.source">
+<span class="sig-name descname"><span class="pre">source</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;OutputConnector(name=)&gt;</span></em><a class="headerlink" href="#auspex.filters.correlator.Correlator.source" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.correlator.Correlator.unit">
-<code class="sig-name descname"><span class="pre">unit</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">base_unit</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.correlator.Correlator.unit" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.correlator.Correlator.unit">
+<span class="sig-name descname"><span class="pre">unit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">base_unit</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.correlator.Correlator.unit" title="Link to this definition"></a></dt>
 <dd><p>Must be overridden accoriding the desired mathematical function
 e.g. return base_unit + “^{}”.format(len(self.sink.input_streams))</p>
 </dd></dl>
 
 </dd></dl>
 
-</div>
-<div class="section" id="module-auspex.filters.debug">
-<span id="auspex-filters-debug-module"></span><h2>auspex.filters.debug module<a class="headerlink" href="#module-auspex.filters.debug" title="Permalink to this headline">¶</a></h2>
+</section>
+<section id="module-auspex.filters.debug">
+<span id="auspex-filters-debug-module"></span><h2>auspex.filters.debug module<a class="headerlink" href="#module-auspex.filters.debug" title="Link to this heading"></a></h2>
 <dl class="py class">
-<dt id="auspex.filters.debug.Passthrough">
-<em class="property"><span class="pre">class</span> </em><code class="sig-prename descclassname"><span class="pre">auspex.filters.debug.</span></code><code class="sig-name descname"><span class="pre">Passthrough</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.debug.Passthrough" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.debug.Passthrough">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">auspex.filters.debug.</span></span><span class="sig-name descname"><span class="pre">Passthrough</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.debug.Passthrough" title="Link to this definition"></a></dt>
 <dd><dl class="py method">
-<dt id="auspex.filters.debug.Passthrough.process_data">
-<code class="sig-name descname"><span class="pre">process_data</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.debug.Passthrough.process_data" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.debug.Passthrough.process_data">
+<span class="sig-name descname"><span class="pre">process_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.debug.Passthrough.process_data" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt id="auspex.filters.debug.Passthrough.sink">
-<code class="sig-name descname"><span class="pre">sink</span></code><em class="property"> <span class="pre">=</span> <span class="pre">&lt;InputConnector(name=)&gt;</span></em><a class="headerlink" href="#auspex.filters.debug.Passthrough.sink" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.debug.Passthrough.sink">
+<span class="sig-name descname"><span class="pre">sink</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;InputConnector(name=)&gt;</span></em><a class="headerlink" href="#auspex.filters.debug.Passthrough.sink" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt id="auspex.filters.debug.Passthrough.source">
-<code class="sig-name descname"><span class="pre">source</span></code><em class="property"> <span class="pre">=</span> <span class="pre">&lt;OutputConnector(name=)&gt;</span></em><a class="headerlink" href="#auspex.filters.debug.Passthrough.source" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.debug.Passthrough.source">
+<span class="sig-name descname"><span class="pre">source</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;OutputConnector(name=)&gt;</span></em><a class="headerlink" href="#auspex.filters.debug.Passthrough.source" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 </dd></dl>
 
 <dl class="py class">
-<dt id="auspex.filters.debug.Print">
-<em class="property"><span class="pre">class</span> </em><code class="sig-prename descclassname"><span class="pre">auspex.filters.debug.</span></code><code class="sig-name descname"><span class="pre">Print</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.debug.Print" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.debug.Print">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">auspex.filters.debug.</span></span><span class="sig-name descname"><span class="pre">Print</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.debug.Print" title="Link to this definition"></a></dt>
 <dd><p>Debug printer that prints data comming through filter</p>
 <dl class="py method">
-<dt id="auspex.filters.debug.Print.process_data">
-<code class="sig-name descname"><span class="pre">process_data</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.debug.Print.process_data" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.debug.Print.process_data">
+<span class="sig-name descname"><span class="pre">process_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.debug.Print.process_data" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt id="auspex.filters.debug.Print.sink">
-<code class="sig-name descname"><span class="pre">sink</span></code><em class="property"> <span class="pre">=</span> <span class="pre">&lt;InputConnector(name=)&gt;</span></em><a class="headerlink" href="#auspex.filters.debug.Print.sink" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.debug.Print.sink">
+<span class="sig-name descname"><span class="pre">sink</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;InputConnector(name=)&gt;</span></em><a class="headerlink" href="#auspex.filters.debug.Print.sink" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 </dd></dl>
 
-</div>
-<div class="section" id="module-auspex.filters.elementwise">
-<span id="auspex-filters-elementwise-module"></span><h2>auspex.filters.elementwise module<a class="headerlink" href="#module-auspex.filters.elementwise" title="Permalink to this headline">¶</a></h2>
+</section>
+<section id="module-auspex.filters.elementwise">
+<span id="auspex-filters-elementwise-module"></span><h2>auspex.filters.elementwise module<a class="headerlink" href="#module-auspex.filters.elementwise" title="Link to this heading"></a></h2>
 <dl class="py class">
-<dt id="auspex.filters.elementwise.ElementwiseFilter">
-<em class="property"><span class="pre">class</span> </em><code class="sig-prename descclassname"><span class="pre">auspex.filters.elementwise.</span></code><code class="sig-name descname"><span class="pre">ElementwiseFilter</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">filter_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.elementwise.ElementwiseFilter" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.elementwise.ElementwiseFilter">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">auspex.filters.elementwise.</span></span><span class="sig-name descname"><span class="pre">ElementwiseFilter</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">filter_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.elementwise.ElementwiseFilter" title="Link to this definition"></a></dt>
 <dd><p>Perform elementwise operations on multiple streams:
 e.g. multiply or add all streams element-by-element</p>
 <dl class="py attribute">
-<dt id="auspex.filters.elementwise.ElementwiseFilter.filter_name">
-<code class="sig-name descname"><span class="pre">filter_name</span></code><em class="property"> <span class="pre">=</span> <span class="pre">'GenericElementwise'</span></em><a class="headerlink" href="#auspex.filters.elementwise.ElementwiseFilter.filter_name" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.elementwise.ElementwiseFilter.filter_name">
+<span class="sig-name descname"><span class="pre">filter_name</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'GenericElementwise'</span></em><a class="headerlink" href="#auspex.filters.elementwise.ElementwiseFilter.filter_name" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.elementwise.ElementwiseFilter.main">
-<code class="sig-name descname"><span class="pre">main</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.elementwise.ElementwiseFilter.main" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.elementwise.ElementwiseFilter.main">
+<span class="sig-name descname"><span class="pre">main</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.elementwise.ElementwiseFilter.main" title="Link to this definition"></a></dt>
 <dd><p>Generic run method which waits on a single stream and calls <cite>process_data</cite> on any new_data</p>
 </dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.elementwise.ElementwiseFilter.operation">
-<code class="sig-name descname"><span class="pre">operation</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.elementwise.ElementwiseFilter.operation" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.elementwise.ElementwiseFilter.operation">
+<span class="sig-name descname"><span class="pre">operation</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.elementwise.ElementwiseFilter.operation" title="Link to this definition"></a></dt>
 <dd><p>Must be overridden with the desired mathematical function</p>
 </dd></dl>
 
 <dl class="py attribute">
-<dt id="auspex.filters.elementwise.ElementwiseFilter.sink">
-<code class="sig-name descname"><span class="pre">sink</span></code><em class="property"> <span class="pre">=</span> <span class="pre">&lt;InputConnector(name=)&gt;</span></em><a class="headerlink" href="#auspex.filters.elementwise.ElementwiseFilter.sink" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.elementwise.ElementwiseFilter.sink">
+<span class="sig-name descname"><span class="pre">sink</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;InputConnector(name=)&gt;</span></em><a class="headerlink" href="#auspex.filters.elementwise.ElementwiseFilter.sink" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt id="auspex.filters.elementwise.ElementwiseFilter.source">
-<code class="sig-name descname"><span class="pre">source</span></code><em class="property"> <span class="pre">=</span> <span class="pre">&lt;OutputConnector(name=)&gt;</span></em><a class="headerlink" href="#auspex.filters.elementwise.ElementwiseFilter.source" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.elementwise.ElementwiseFilter.source">
+<span class="sig-name descname"><span class="pre">source</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;OutputConnector(name=)&gt;</span></em><a class="headerlink" href="#auspex.filters.elementwise.ElementwiseFilter.source" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.elementwise.ElementwiseFilter.unit">
-<code class="sig-name descname"><span class="pre">unit</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">base_unit</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.elementwise.ElementwiseFilter.unit" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.elementwise.ElementwiseFilter.unit">
+<span class="sig-name descname"><span class="pre">unit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">base_unit</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.elementwise.ElementwiseFilter.unit" title="Link to this definition"></a></dt>
 <dd><p>Must be overridden accoriding the desired mathematical function
 e.g. return base_unit + “^{}”.format(len(self.sink.input_streams))</p>
 </dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.elementwise.ElementwiseFilter.update_descriptors">
-<code class="sig-name descname"><span class="pre">update_descriptors</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.elementwise.ElementwiseFilter.update_descriptors" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.elementwise.ElementwiseFilter.update_descriptors">
+<span class="sig-name descname"><span class="pre">update_descriptors</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.elementwise.ElementwiseFilter.update_descriptors" title="Link to this definition"></a></dt>
 <dd><p>Must be overridden depending on the desired mathematical function</p>
 </dd></dl>
 
 </dd></dl>
 
-</div>
-<div class="section" id="module-auspex.filters.filter">
-<span id="auspex-filters-filter-module"></span><h2>auspex.filters.filter module<a class="headerlink" href="#module-auspex.filters.filter" title="Permalink to this headline">¶</a></h2>
+</section>
+<section id="module-auspex.filters.filter">
+<span id="auspex-filters-filter-module"></span><h2>auspex.filters.filter module<a class="headerlink" href="#module-auspex.filters.filter" title="Link to this heading"></a></h2>
 <dl class="py class">
-<dt id="auspex.filters.filter.Filter">
-<em class="property"><span class="pre">class</span> </em><code class="sig-prename descclassname"><span class="pre">auspex.filters.filter.</span></code><code class="sig-name descname"><span class="pre">Filter</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.filter.Filter" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.filter.Filter">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">auspex.filters.filter.</span></span><span class="sig-name descname"><span class="pre">Filter</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.filter.Filter" title="Link to this definition"></a></dt>
 <dd><p>Any node on the graph that takes input streams with optional output streams</p>
 <dl class="py method">
-<dt id="auspex.filters.filter.Filter.checkin">
-<code class="sig-name descname"><span class="pre">checkin</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.filter.Filter.checkin" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.filter.Filter.checkin">
+<span class="sig-name descname"><span class="pre">checkin</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.filter.Filter.checkin" title="Link to this definition"></a></dt>
 <dd><p>For any filter-specific loop needs</p>
 </dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.filter.Filter.configure_with_proxy">
-<code class="sig-name descname"><span class="pre">configure_with_proxy</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">proxy_obj</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.filter.Filter.configure_with_proxy" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.filter.Filter.configure_with_proxy">
+<span class="sig-name descname"><span class="pre">configure_with_proxy</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">proxy_obj</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.filter.Filter.configure_with_proxy" title="Link to this definition"></a></dt>
 <dd><p>For use with bbndb, sets this filter’s properties using a FilterProxy object
 taken from the filter database.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.filter.Filter.descriptor_map">
-<code class="sig-name descname"><span class="pre">descriptor_map</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input_descriptors</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.filter.Filter.descriptor_map" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.filter.Filter.descriptor_map">
+<span class="sig-name descname"><span class="pre">descriptor_map</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input_descriptors</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.filter.Filter.descriptor_map" title="Link to this definition"></a></dt>
 <dd><p>Return a dict of the output descriptors.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.filter.Filter.execute_on_run">
-<code class="sig-name descname"><span class="pre">execute_on_run</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.filter.Filter.execute_on_run" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.filter.Filter.execute_on_run">
+<span class="sig-name descname"><span class="pre">execute_on_run</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.filter.Filter.execute_on_run" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.filter.Filter.main">
-<code class="sig-name descname"><span class="pre">main</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.filter.Filter.main" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.filter.Filter.main">
+<span class="sig-name descname"><span class="pre">main</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.filter.Filter.main" title="Link to this definition"></a></dt>
 <dd><p>Generic run method which waits on a single stream and calls <cite>process_data</cite> on any new_data</p>
 </dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.filter.Filter.on_done">
-<code class="sig-name descname"><span class="pre">on_done</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.filter.Filter.on_done" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.filter.Filter.on_done">
+<span class="sig-name descname"><span class="pre">on_done</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.filter.Filter.on_done" title="Link to this definition"></a></dt>
 <dd><p>To be run when the done signal is received, in case additional steps are
 needed (such as flushing a plot or data).</p>
 </dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.filter.Filter.process_message">
-<code class="sig-name descname"><span class="pre">process_message</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">msg</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.filter.Filter.process_message" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.filter.Filter.process_message">
+<span class="sig-name descname"><span class="pre">process_message</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">msg</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.filter.Filter.process_message" title="Link to this definition"></a></dt>
 <dd><p>To be overridden for interesting default behavior</p>
 </dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.filter.Filter.push_resource_usage">
-<code class="sig-name descname"><span class="pre">push_resource_usage</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.filter.Filter.push_resource_usage" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.filter.Filter.push_resource_usage">
+<span class="sig-name descname"><span class="pre">push_resource_usage</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.filter.Filter.push_resource_usage" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.filter.Filter.push_to_all">
-<code class="sig-name descname"><span class="pre">push_to_all</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">message</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.filter.Filter.push_to_all" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.filter.Filter.push_to_all">
+<span class="sig-name descname"><span class="pre">push_to_all</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">message</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.filter.Filter.push_to_all" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.filter.Filter.run">
-<code class="sig-name descname"><span class="pre">run</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.filter.Filter.run" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.filter.Filter.run">
+<span class="sig-name descname"><span class="pre">run</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.filter.Filter.run" title="Link to this definition"></a></dt>
 <dd><p>Method to be run in sub-process; can be overridden in sub-class</p>
 </dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.filter.Filter.shutdown">
-<code class="sig-name descname"><span class="pre">shutdown</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.filter.Filter.shutdown" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.filter.Filter.shutdown">
+<span class="sig-name descname"><span class="pre">shutdown</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.filter.Filter.shutdown" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.filter.Filter.update_descriptors">
-<code class="sig-name descname"><span class="pre">update_descriptors</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.filter.Filter.update_descriptors" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.filter.Filter.update_descriptors">
+<span class="sig-name descname"><span class="pre">update_descriptors</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.filter.Filter.update_descriptors" title="Link to this definition"></a></dt>
 <dd><p>This method is called whenever the connectivity of the graph changes. This may have implications
 for the internal functioning of the filter, in which case update_descriptors should be overloaded.
 Any simple changes to the axes within the StreamDescriptors should take place via the class method
@@ -572,95 +459,95 @@ descriptor_map.</p>
 
 </dd></dl>
 
-</div>
-<div class="section" id="module-auspex.filters.framer">
-<span id="auspex-filters-framer-module"></span><h2>auspex.filters.framer module<a class="headerlink" href="#module-auspex.filters.framer" title="Permalink to this headline">¶</a></h2>
+</section>
+<section id="module-auspex.filters.framer">
+<span id="auspex-filters-framer-module"></span><h2>auspex.filters.framer module<a class="headerlink" href="#module-auspex.filters.framer" title="Link to this heading"></a></h2>
 <dl class="py class">
-<dt id="auspex.filters.framer.Framer">
-<em class="property"><span class="pre">class</span> </em><code class="sig-prename descclassname"><span class="pre">auspex.filters.framer.</span></code><code class="sig-name descname"><span class="pre">Framer</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">axis</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.framer.Framer" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.framer.Framer">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">auspex.filters.framer.</span></span><span class="sig-name descname"><span class="pre">Framer</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">axis</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.framer.Framer" title="Link to this definition"></a></dt>
 <dd><p>Mete out data in increments defined by the specified axis.</p>
 <dl class="py attribute">
-<dt id="auspex.filters.framer.Framer.axis">
-<code class="sig-name descname"><span class="pre">axis</span></code><em class="property"> <span class="pre">=</span> <span class="pre">&lt;Parameter(name='axis',value=None)&gt;</span></em><a class="headerlink" href="#auspex.filters.framer.Framer.axis" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.framer.Framer.axis">
+<span class="sig-name descname"><span class="pre">axis</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;Parameter(name='axis',value=None)&gt;</span></em><a class="headerlink" href="#auspex.filters.framer.Framer.axis" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.framer.Framer.final_init">
-<code class="sig-name descname"><span class="pre">final_init</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.framer.Framer.final_init" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.framer.Framer.final_init">
+<span class="sig-name descname"><span class="pre">final_init</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.framer.Framer.final_init" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.framer.Framer.process_data">
-<code class="sig-name descname"><span class="pre">process_data</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.framer.Framer.process_data" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.framer.Framer.process_data">
+<span class="sig-name descname"><span class="pre">process_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.framer.Framer.process_data" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt id="auspex.filters.framer.Framer.sink">
-<code class="sig-name descname"><span class="pre">sink</span></code><em class="property"> <span class="pre">=</span> <span class="pre">&lt;InputConnector(name=)&gt;</span></em><a class="headerlink" href="#auspex.filters.framer.Framer.sink" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.framer.Framer.sink">
+<span class="sig-name descname"><span class="pre">sink</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;InputConnector(name=)&gt;</span></em><a class="headerlink" href="#auspex.filters.framer.Framer.sink" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt id="auspex.filters.framer.Framer.source">
-<code class="sig-name descname"><span class="pre">source</span></code><em class="property"> <span class="pre">=</span> <span class="pre">&lt;OutputConnector(name=)&gt;</span></em><a class="headerlink" href="#auspex.filters.framer.Framer.source" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.framer.Framer.source">
+<span class="sig-name descname"><span class="pre">source</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;OutputConnector(name=)&gt;</span></em><a class="headerlink" href="#auspex.filters.framer.Framer.source" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 </dd></dl>
 
-</div>
-<div class="section" id="module-auspex.filters.integrator">
-<span id="auspex-filters-integrator-module"></span><h2>auspex.filters.integrator module<a class="headerlink" href="#module-auspex.filters.integrator" title="Permalink to this headline">¶</a></h2>
+</section>
+<section id="module-auspex.filters.integrator">
+<span id="auspex-filters-integrator-module"></span><h2>auspex.filters.integrator module<a class="headerlink" href="#module-auspex.filters.integrator" title="Link to this heading"></a></h2>
 <dl class="py class">
-<dt id="auspex.filters.integrator.KernelIntegrator">
-<em class="property"><span class="pre">class</span> </em><code class="sig-prename descclassname"><span class="pre">auspex.filters.integrator.</span></code><code class="sig-name descname"><span class="pre">KernelIntegrator</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.integrator.KernelIntegrator" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.integrator.KernelIntegrator">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">auspex.filters.integrator.</span></span><span class="sig-name descname"><span class="pre">KernelIntegrator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.integrator.KernelIntegrator" title="Link to this definition"></a></dt>
 <dd><dl class="py attribute">
-<dt id="auspex.filters.integrator.KernelIntegrator.bias">
-<code class="sig-name descname"><span class="pre">bias</span></code><em class="property"> <span class="pre">=</span> <span class="pre">&lt;FloatParameter(name='bias',value=0.0)&gt;</span></em><a class="headerlink" href="#auspex.filters.integrator.KernelIntegrator.bias" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.integrator.KernelIntegrator.bias">
+<span class="sig-name descname"><span class="pre">bias</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;FloatParameter(name='bias',value=0.0)&gt;</span></em><a class="headerlink" href="#auspex.filters.integrator.KernelIntegrator.bias" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt id="auspex.filters.integrator.KernelIntegrator.box_car_start">
-<code class="sig-name descname"><span class="pre">box_car_start</span></code><em class="property"> <span class="pre">=</span> <span class="pre">&lt;FloatParameter(name='box_car_start',value=0.0)&gt;</span></em><a class="headerlink" href="#auspex.filters.integrator.KernelIntegrator.box_car_start" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.integrator.KernelIntegrator.box_car_start">
+<span class="sig-name descname"><span class="pre">box_car_start</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;FloatParameter(name='box_car_start',value=0.0)&gt;</span></em><a class="headerlink" href="#auspex.filters.integrator.KernelIntegrator.box_car_start" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt id="auspex.filters.integrator.KernelIntegrator.box_car_stop">
-<code class="sig-name descname"><span class="pre">box_car_stop</span></code><em class="property"> <span class="pre">=</span> <span class="pre">&lt;FloatParameter(name='box_car_stop',value=1e-07)&gt;</span></em><a class="headerlink" href="#auspex.filters.integrator.KernelIntegrator.box_car_stop" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.integrator.KernelIntegrator.box_car_stop">
+<span class="sig-name descname"><span class="pre">box_car_stop</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;FloatParameter(name='box_car_stop',value=1e-07)&gt;</span></em><a class="headerlink" href="#auspex.filters.integrator.KernelIntegrator.box_car_stop" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt id="auspex.filters.integrator.KernelIntegrator.demod_frequency">
-<code class="sig-name descname"><span class="pre">demod_frequency</span></code><em class="property"> <span class="pre">=</span> <span class="pre">&lt;FloatParameter(name='demod_frequency',value=0.0)&gt;</span></em><a class="headerlink" href="#auspex.filters.integrator.KernelIntegrator.demod_frequency" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.integrator.KernelIntegrator.demod_frequency">
+<span class="sig-name descname"><span class="pre">demod_frequency</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;FloatParameter(name='demod_frequency',value=0.0)&gt;</span></em><a class="headerlink" href="#auspex.filters.integrator.KernelIntegrator.demod_frequency" title="Link to this definition"></a></dt>
 <dd><p>Integrate with a given kernel. Kernel will be padded/truncated to match record length</p>
 </dd></dl>
 
 <dl class="py attribute">
-<dt id="auspex.filters.integrator.KernelIntegrator.kernel">
-<code class="sig-name descname"><span class="pre">kernel</span></code><em class="property"> <span class="pre">=</span> <span class="pre">&lt;Parameter(name='kernel',value=None)&gt;</span></em><a class="headerlink" href="#auspex.filters.integrator.KernelIntegrator.kernel" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.integrator.KernelIntegrator.kernel">
+<span class="sig-name descname"><span class="pre">kernel</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;Parameter(name='kernel',value=None)&gt;</span></em><a class="headerlink" href="#auspex.filters.integrator.KernelIntegrator.kernel" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.integrator.KernelIntegrator.process_data">
-<code class="sig-name descname"><span class="pre">process_data</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.integrator.KernelIntegrator.process_data" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.integrator.KernelIntegrator.process_data">
+<span class="sig-name descname"><span class="pre">process_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.integrator.KernelIntegrator.process_data" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt id="auspex.filters.integrator.KernelIntegrator.simple_kernel">
-<code class="sig-name descname"><span class="pre">simple_kernel</span></code><em class="property"> <span class="pre">=</span> <span class="pre">&lt;BoolParameter(name='simple_kernel',value=True)&gt;</span></em><a class="headerlink" href="#auspex.filters.integrator.KernelIntegrator.simple_kernel" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.integrator.KernelIntegrator.simple_kernel">
+<span class="sig-name descname"><span class="pre">simple_kernel</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;BoolParameter(name='simple_kernel',value=True)&gt;</span></em><a class="headerlink" href="#auspex.filters.integrator.KernelIntegrator.simple_kernel" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt id="auspex.filters.integrator.KernelIntegrator.sink">
-<code class="sig-name descname"><span class="pre">sink</span></code><em class="property"> <span class="pre">=</span> <span class="pre">&lt;InputConnector(name=)&gt;</span></em><a class="headerlink" href="#auspex.filters.integrator.KernelIntegrator.sink" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.integrator.KernelIntegrator.sink">
+<span class="sig-name descname"><span class="pre">sink</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;InputConnector(name=)&gt;</span></em><a class="headerlink" href="#auspex.filters.integrator.KernelIntegrator.sink" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt id="auspex.filters.integrator.KernelIntegrator.source">
-<code class="sig-name descname"><span class="pre">source</span></code><em class="property"> <span class="pre">=</span> <span class="pre">&lt;OutputConnector(name=)&gt;</span></em><a class="headerlink" href="#auspex.filters.integrator.KernelIntegrator.source" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.integrator.KernelIntegrator.source">
+<span class="sig-name descname"><span class="pre">source</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;OutputConnector(name=)&gt;</span></em><a class="headerlink" href="#auspex.filters.integrator.KernelIntegrator.source" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.integrator.KernelIntegrator.update_descriptors">
-<code class="sig-name descname"><span class="pre">update_descriptors</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.integrator.KernelIntegrator.update_descriptors" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.integrator.KernelIntegrator.update_descriptors">
+<span class="sig-name descname"><span class="pre">update_descriptors</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.integrator.KernelIntegrator.update_descriptors" title="Link to this definition"></a></dt>
 <dd><p>This method is called whenever the connectivity of the graph changes. This may have implications
 for the internal functioning of the filter, in which case update_descriptors should be overloaded.
 Any simple changes to the axes within the StreamDescriptors should take place via the class method
@@ -669,204 +556,204 @@ descriptor_map.</p>
 
 </dd></dl>
 
-</div>
-<div class="section" id="module-auspex.filters.io">
-<span id="auspex-filters-io-module"></span><h2>auspex.filters.io module<a class="headerlink" href="#module-auspex.filters.io" title="Permalink to this headline">¶</a></h2>
+</section>
+<section id="module-auspex.filters.io">
+<span id="auspex-filters-io-module"></span><h2>auspex.filters.io module<a class="headerlink" href="#module-auspex.filters.io" title="Link to this heading"></a></h2>
 <dl class="py class">
-<dt id="auspex.filters.io.DataBuffer">
-<em class="property"><span class="pre">class</span> </em><code class="sig-prename descclassname"><span class="pre">auspex.filters.io.</span></code><code class="sig-name descname"><span class="pre">DataBuffer</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.io.DataBuffer" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.io.DataBuffer">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">auspex.filters.io.</span></span><span class="sig-name descname"><span class="pre">DataBuffer</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.io.DataBuffer" title="Link to this definition"></a></dt>
 <dd><p>Writes data to IO.</p>
 <dl class="py method">
-<dt id="auspex.filters.io.DataBuffer.checkin">
-<code class="sig-name descname"><span class="pre">checkin</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.io.DataBuffer.checkin" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.io.DataBuffer.checkin">
+<span class="sig-name descname"><span class="pre">checkin</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.io.DataBuffer.checkin" title="Link to this definition"></a></dt>
 <dd><p>For any filter-specific loop needs</p>
 </dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.io.DataBuffer.final_init">
-<code class="sig-name descname"><span class="pre">final_init</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.io.DataBuffer.final_init" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.io.DataBuffer.final_init">
+<span class="sig-name descname"><span class="pre">final_init</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.io.DataBuffer.final_init" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.io.DataBuffer.get_data">
-<code class="sig-name descname"><span class="pre">get_data</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.io.DataBuffer.get_data" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.io.DataBuffer.get_data">
+<span class="sig-name descname"><span class="pre">get_data</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.io.DataBuffer.get_data" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.io.DataBuffer.main">
-<code class="sig-name descname"><span class="pre">main</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.io.DataBuffer.main" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.io.DataBuffer.main">
+<span class="sig-name descname"><span class="pre">main</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.io.DataBuffer.main" title="Link to this definition"></a></dt>
 <dd><p>Generic run method which waits on a single stream and calls <cite>process_data</cite> on any new_data</p>
 </dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.io.DataBuffer.process_data">
-<code class="sig-name descname"><span class="pre">process_data</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.io.DataBuffer.process_data" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.io.DataBuffer.process_data">
+<span class="sig-name descname"><span class="pre">process_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.io.DataBuffer.process_data" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt id="auspex.filters.io.DataBuffer.sink">
-<code class="sig-name descname"><span class="pre">sink</span></code><em class="property"> <span class="pre">=</span> <span class="pre">&lt;InputConnector(name=)&gt;</span></em><a class="headerlink" href="#auspex.filters.io.DataBuffer.sink" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.io.DataBuffer.sink">
+<span class="sig-name descname"><span class="pre">sink</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;InputConnector(name=)&gt;</span></em><a class="headerlink" href="#auspex.filters.io.DataBuffer.sink" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 </dd></dl>
 
 <dl class="py class">
-<dt id="auspex.filters.io.WriteToFile">
-<em class="property"><span class="pre">class</span> </em><code class="sig-prename descclassname"><span class="pre">auspex.filters.io.</span></code><code class="sig-name descname"><span class="pre">WriteToFile</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">filename</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">groupname</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">datasetname</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.io.WriteToFile" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.io.WriteToFile">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">auspex.filters.io.</span></span><span class="sig-name descname"><span class="pre">WriteToFile</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">filename</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">groupname</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">datasetname</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.io.WriteToFile" title="Link to this definition"></a></dt>
 <dd><p>Writes data to file using the Auspex container type, which is a simple directory structure
 with subdirectories, binary datafiles, and json meta files that store the axis descriptors
 and other information.</p>
 <dl class="py attribute">
-<dt id="auspex.filters.io.WriteToFile.datasetname">
-<code class="sig-name descname"><span class="pre">datasetname</span></code><em class="property"> <span class="pre">=</span> <span class="pre">&lt;Parameter(name='datasetname',value='data')&gt;</span></em><a class="headerlink" href="#auspex.filters.io.WriteToFile.datasetname" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.io.WriteToFile.datasetname">
+<span class="sig-name descname"><span class="pre">datasetname</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;Parameter(name='datasetname',value='data')&gt;</span></em><a class="headerlink" href="#auspex.filters.io.WriteToFile.datasetname" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt id="auspex.filters.io.WriteToFile.filename">
-<code class="sig-name descname"><span class="pre">filename</span></code><em class="property"> <span class="pre">=</span> <span class="pre">&lt;Parameter(name='filename',value=None)&gt;</span></em><a class="headerlink" href="#auspex.filters.io.WriteToFile.filename" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.io.WriteToFile.filename">
+<span class="sig-name descname"><span class="pre">filename</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;Parameter(name='filename',value=None)&gt;</span></em><a class="headerlink" href="#auspex.filters.io.WriteToFile.filename" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.io.WriteToFile.final_init">
-<code class="sig-name descname"><span class="pre">final_init</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.io.WriteToFile.final_init" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.io.WriteToFile.final_init">
+<span class="sig-name descname"><span class="pre">final_init</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.io.WriteToFile.final_init" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.io.WriteToFile.get_data">
-<code class="sig-name descname"><span class="pre">get_data</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.io.WriteToFile.get_data" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.io.WriteToFile.get_data">
+<span class="sig-name descname"><span class="pre">get_data</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.io.WriteToFile.get_data" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.io.WriteToFile.get_data_while_running">
-<code class="sig-name descname"><span class="pre">get_data_while_running</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">return_queue</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.io.WriteToFile.get_data_while_running" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.io.WriteToFile.get_data_while_running">
+<span class="sig-name descname"><span class="pre">get_data_while_running</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">return_queue</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.io.WriteToFile.get_data_while_running" title="Link to this definition"></a></dt>
 <dd><p>Return data to the main thread or user as requested. Use a MP queue to transmit.</p>
 </dd></dl>
 
 <dl class="py attribute">
-<dt id="auspex.filters.io.WriteToFile.groupname">
-<code class="sig-name descname"><span class="pre">groupname</span></code><em class="property"> <span class="pre">=</span> <span class="pre">&lt;Parameter(name='groupname',value='main')&gt;</span></em><a class="headerlink" href="#auspex.filters.io.WriteToFile.groupname" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.io.WriteToFile.groupname">
+<span class="sig-name descname"><span class="pre">groupname</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;Parameter(name='groupname',value='main')&gt;</span></em><a class="headerlink" href="#auspex.filters.io.WriteToFile.groupname" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.io.WriteToFile.process_data">
-<code class="sig-name descname"><span class="pre">process_data</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.io.WriteToFile.process_data" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.io.WriteToFile.process_data">
+<span class="sig-name descname"><span class="pre">process_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.io.WriteToFile.process_data" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt id="auspex.filters.io.WriteToFile.sink">
-<code class="sig-name descname"><span class="pre">sink</span></code><em class="property"> <span class="pre">=</span> <span class="pre">&lt;InputConnector(name=)&gt;</span></em><a class="headerlink" href="#auspex.filters.io.WriteToFile.sink" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.io.WriteToFile.sink">
+<span class="sig-name descname"><span class="pre">sink</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;InputConnector(name=)&gt;</span></em><a class="headerlink" href="#auspex.filters.io.WriteToFile.sink" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 </dd></dl>
 
-</div>
-<div class="section" id="module-auspex.filters.plot">
-<span id="auspex-filters-plot-module"></span><h2>auspex.filters.plot module<a class="headerlink" href="#module-auspex.filters.plot" title="Permalink to this headline">¶</a></h2>
+</section>
+<section id="module-auspex.filters.plot">
+<span id="auspex-filters-plot-module"></span><h2>auspex.filters.plot module<a class="headerlink" href="#module-auspex.filters.plot" title="Link to this heading"></a></h2>
 <dl class="py class">
-<dt id="auspex.filters.plot.ManualPlotter">
-<em class="property"><span class="pre">class</span> </em><code class="sig-prename descclassname"><span class="pre">auspex.filters.plot.</span></code><code class="sig-name descname"><span class="pre">ManualPlotter</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x_label</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">['X']</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y_label</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">['y']</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y_lim</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">numplots</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.plot.ManualPlotter" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.plot.ManualPlotter">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">auspex.filters.plot.</span></span><span class="sig-name descname"><span class="pre">ManualPlotter</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x_label</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">['X']</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y_label</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">['y']</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y_lim</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">numplots</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.plot.ManualPlotter" title="Link to this definition"></a></dt>
 <dd><p>Establish a figure, then give the user complete control over plot creation and data. There isn’t any reason to
 run this as a process, but we provide the same interface for convenience.</p>
 <dl class="py method">
-<dt id="auspex.filters.plot.ManualPlotter.add_data_trace">
-<code class="sig-name descname"><span class="pre">add_data_trace</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">custom_mpl_kwargs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">{}</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">subplot_num</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.plot.ManualPlotter.add_data_trace" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.plot.ManualPlotter.add_data_trace">
+<span class="sig-name descname"><span class="pre">add_data_trace</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">custom_mpl_kwargs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">{}</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">subplot_num</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.plot.ManualPlotter.add_data_trace" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.plot.ManualPlotter.add_fit_trace">
-<code class="sig-name descname"><span class="pre">add_fit_trace</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">custom_mpl_kwargs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">{}</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">subplot_num</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.plot.ManualPlotter.add_fit_trace" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.plot.ManualPlotter.add_fit_trace">
+<span class="sig-name descname"><span class="pre">add_fit_trace</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">custom_mpl_kwargs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">{}</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">subplot_num</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.plot.ManualPlotter.add_fit_trace" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.plot.ManualPlotter.add_trace">
-<code class="sig-name descname"><span class="pre">add_trace</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">matplotlib_kwargs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">{}</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">subplot_num</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.plot.ManualPlotter.add_trace" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.plot.ManualPlotter.add_trace">
+<span class="sig-name descname"><span class="pre">add_trace</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">matplotlib_kwargs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">{}</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">subplot_num</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.plot.ManualPlotter.add_trace" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.plot.ManualPlotter.desc">
-<code class="sig-name descname"><span class="pre">desc</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.plot.ManualPlotter.desc" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.plot.ManualPlotter.desc">
+<span class="sig-name descname"><span class="pre">desc</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.plot.ManualPlotter.desc" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.plot.ManualPlotter.execute_on_run">
-<code class="sig-name descname"><span class="pre">execute_on_run</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.plot.ManualPlotter.execute_on_run" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.plot.ManualPlotter.execute_on_run">
+<span class="sig-name descname"><span class="pre">execute_on_run</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.plot.ManualPlotter.execute_on_run" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.plot.ManualPlotter.send">
-<code class="sig-name descname"><span class="pre">send</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">message</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.plot.ManualPlotter.send" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.plot.ManualPlotter.send">
+<span class="sig-name descname"><span class="pre">send</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">message</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.plot.ManualPlotter.send" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.plot.ManualPlotter.set_data">
-<code class="sig-name descname"><span class="pre">set_data</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">trace_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">xdata</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ydata</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.plot.ManualPlotter.set_data" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.plot.ManualPlotter.set_data">
+<span class="sig-name descname"><span class="pre">set_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">trace_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">xdata</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ydata</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.plot.ManualPlotter.set_data" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.plot.ManualPlotter.set_done">
-<code class="sig-name descname"><span class="pre">set_done</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.plot.ManualPlotter.set_done" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.plot.ManualPlotter.set_done">
+<span class="sig-name descname"><span class="pre">set_done</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.plot.ManualPlotter.set_done" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.plot.ManualPlotter.set_quit">
-<code class="sig-name descname"><span class="pre">set_quit</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.plot.ManualPlotter.set_quit" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.plot.ManualPlotter.set_quit">
+<span class="sig-name descname"><span class="pre">set_quit</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.plot.ManualPlotter.set_quit" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.plot.ManualPlotter.start">
-<code class="sig-name descname"><span class="pre">start</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.plot.ManualPlotter.start" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.plot.ManualPlotter.start">
+<span class="sig-name descname"><span class="pre">start</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.plot.ManualPlotter.start" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.plot.ManualPlotter.stop">
-<code class="sig-name descname"><span class="pre">stop</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.plot.ManualPlotter.stop" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.plot.ManualPlotter.stop">
+<span class="sig-name descname"><span class="pre">stop</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.plot.ManualPlotter.stop" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 </dd></dl>
 
 <dl class="py class">
-<dt id="auspex.filters.plot.MeshPlotter">
-<em class="property"><span class="pre">class</span> </em><code class="sig-prename descclassname"><span class="pre">auspex.filters.plot.</span></code><code class="sig-name descname"><span class="pre">MeshPlotter</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">plot_mode</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x_label</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y_label</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">plot_args</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.plot.MeshPlotter" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.plot.MeshPlotter">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">auspex.filters.plot.</span></span><span class="sig-name descname"><span class="pre">MeshPlotter</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">plot_mode</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x_label</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y_label</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">plot_args</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.plot.MeshPlotter" title="Link to this definition"></a></dt>
 <dd><dl class="py method">
-<dt id="auspex.filters.plot.MeshPlotter.desc">
-<code class="sig-name descname"><span class="pre">desc</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.plot.MeshPlotter.desc" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.plot.MeshPlotter.desc">
+<span class="sig-name descname"><span class="pre">desc</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.plot.MeshPlotter.desc" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.plot.MeshPlotter.execute_on_run">
-<code class="sig-name descname"><span class="pre">execute_on_run</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.plot.MeshPlotter.execute_on_run" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.plot.MeshPlotter.execute_on_run">
+<span class="sig-name descname"><span class="pre">execute_on_run</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.plot.MeshPlotter.execute_on_run" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.plot.MeshPlotter.on_done">
-<code class="sig-name descname"><span class="pre">on_done</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.plot.MeshPlotter.on_done" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.plot.MeshPlotter.on_done">
+<span class="sig-name descname"><span class="pre">on_done</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.plot.MeshPlotter.on_done" title="Link to this definition"></a></dt>
 <dd><p>To be run when the done signal is received, in case additional steps are
 needed (such as flushing a plot or data).</p>
 </dd></dl>
 
 <dl class="py attribute">
-<dt id="auspex.filters.plot.MeshPlotter.plot_mode">
-<code class="sig-name descname"><span class="pre">plot_mode</span></code><em class="property"> <span class="pre">=</span> <span class="pre">&lt;Parameter(name='plot_mode',value='quad')&gt;</span></em><a class="headerlink" href="#auspex.filters.plot.MeshPlotter.plot_mode" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.plot.MeshPlotter.plot_mode">
+<span class="sig-name descname"><span class="pre">plot_mode</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;Parameter(name='plot_mode',value='quad')&gt;</span></em><a class="headerlink" href="#auspex.filters.plot.MeshPlotter.plot_mode" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.plot.MeshPlotter.process_direct">
-<code class="sig-name descname"><span class="pre">process_direct</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.plot.MeshPlotter.process_direct" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.plot.MeshPlotter.process_direct">
+<span class="sig-name descname"><span class="pre">process_direct</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.plot.MeshPlotter.process_direct" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.plot.MeshPlotter.send">
-<code class="sig-name descname"><span class="pre">send</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">message</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.plot.MeshPlotter.send" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.plot.MeshPlotter.send">
+<span class="sig-name descname"><span class="pre">send</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">message</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.plot.MeshPlotter.send" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt id="auspex.filters.plot.MeshPlotter.sink">
-<code class="sig-name descname"><span class="pre">sink</span></code><em class="property"> <span class="pre">=</span> <span class="pre">&lt;InputConnector(name=)&gt;</span></em><a class="headerlink" href="#auspex.filters.plot.MeshPlotter.sink" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.plot.MeshPlotter.sink">
+<span class="sig-name descname"><span class="pre">sink</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;InputConnector(name=)&gt;</span></em><a class="headerlink" href="#auspex.filters.plot.MeshPlotter.sink" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.plot.MeshPlotter.update_descriptors">
-<code class="sig-name descname"><span class="pre">update_descriptors</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.plot.MeshPlotter.update_descriptors" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.plot.MeshPlotter.update_descriptors">
+<span class="sig-name descname"><span class="pre">update_descriptors</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.plot.MeshPlotter.update_descriptors" title="Link to this definition"></a></dt>
 <dd><p>This method is called whenever the connectivity of the graph changes. This may have implications
 for the internal functioning of the filter, in which case update_descriptors should be overloaded.
 Any simple changes to the axes within the StreamDescriptors should take place via the class method
@@ -876,83 +763,83 @@ descriptor_map.</p>
 </dd></dl>
 
 <dl class="py class">
-<dt id="auspex.filters.plot.Plotter">
-<em class="property"><span class="pre">class</span> </em><code class="sig-prename descclassname"><span class="pre">auspex.filters.plot.</span></code><code class="sig-name descname"><span class="pre">Plotter</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">plot_dims</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">plot_mode</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">plot_args</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.plot.Plotter" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.plot.Plotter">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">auspex.filters.plot.</span></span><span class="sig-name descname"><span class="pre">Plotter</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">plot_dims</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">plot_mode</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">plot_args</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.plot.Plotter" title="Link to this definition"></a></dt>
 <dd><dl class="py method">
-<dt id="auspex.filters.plot.Plotter.axis_label">
-<code class="sig-name descname"><span class="pre">axis_label</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">index</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.plot.Plotter.axis_label" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.plot.Plotter.axis_label">
+<span class="sig-name descname"><span class="pre">axis_label</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">index</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.plot.Plotter.axis_label" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.plot.Plotter.desc">
-<code class="sig-name descname"><span class="pre">desc</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.plot.Plotter.desc" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.plot.Plotter.desc">
+<span class="sig-name descname"><span class="pre">desc</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.plot.Plotter.desc" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.plot.Plotter.execute_on_run">
-<code class="sig-name descname"><span class="pre">execute_on_run</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.plot.Plotter.execute_on_run" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.plot.Plotter.execute_on_run">
+<span class="sig-name descname"><span class="pre">execute_on_run</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.plot.Plotter.execute_on_run" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.plot.Plotter.final_init">
-<code class="sig-name descname"><span class="pre">final_init</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.plot.Plotter.final_init" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.plot.Plotter.final_init">
+<span class="sig-name descname"><span class="pre">final_init</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.plot.Plotter.final_init" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.plot.Plotter.get_final_plot">
-<code class="sig-name descname"><span class="pre">get_final_plot</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="pre">quad_funcs=[&lt;ufunc</span> <span class="pre">'absolute'&gt;,</span> <span class="pre">&lt;function</span> <span class="pre">angle&gt;]</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.plot.Plotter.get_final_plot" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.plot.Plotter.get_final_plot">
+<span class="sig-name descname"><span class="pre">get_final_plot</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="pre">quad_funcs=[&lt;ufunc</span> <span class="pre">'absolute'&gt;,</span> <span class="pre">&lt;function</span> <span class="pre">angle&gt;]</span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.plot.Plotter.get_final_plot" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.plot.Plotter.on_done">
-<code class="sig-name descname"><span class="pre">on_done</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.plot.Plotter.on_done" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.plot.Plotter.on_done">
+<span class="sig-name descname"><span class="pre">on_done</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.plot.Plotter.on_done" title="Link to this definition"></a></dt>
 <dd><p>To be run when the done signal is received, in case additional steps are
 needed (such as flushing a plot or data).</p>
 </dd></dl>
 
 <dl class="py attribute">
-<dt id="auspex.filters.plot.Plotter.plot_dims">
-<code class="sig-name descname"><span class="pre">plot_dims</span></code><em class="property"> <span class="pre">=</span> <span class="pre">&lt;IntParameter(name='plot_dims',value=0)&gt;</span></em><a class="headerlink" href="#auspex.filters.plot.Plotter.plot_dims" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.plot.Plotter.plot_dims">
+<span class="sig-name descname"><span class="pre">plot_dims</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;IntParameter(name='plot_dims',value=0)&gt;</span></em><a class="headerlink" href="#auspex.filters.plot.Plotter.plot_dims" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt id="auspex.filters.plot.Plotter.plot_mode">
-<code class="sig-name descname"><span class="pre">plot_mode</span></code><em class="property"> <span class="pre">=</span> <span class="pre">&lt;Parameter(name='plot_mode',value='quad')&gt;</span></em><a class="headerlink" href="#auspex.filters.plot.Plotter.plot_mode" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.plot.Plotter.plot_mode">
+<span class="sig-name descname"><span class="pre">plot_mode</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;Parameter(name='plot_mode',value='quad')&gt;</span></em><a class="headerlink" href="#auspex.filters.plot.Plotter.plot_mode" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.plot.Plotter.process_data">
-<code class="sig-name descname"><span class="pre">process_data</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.plot.Plotter.process_data" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.plot.Plotter.process_data">
+<span class="sig-name descname"><span class="pre">process_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.plot.Plotter.process_data" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.plot.Plotter.send">
-<code class="sig-name descname"><span class="pre">send</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">message</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.plot.Plotter.send" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.plot.Plotter.send">
+<span class="sig-name descname"><span class="pre">send</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">message</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.plot.Plotter.send" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.plot.Plotter.set_done">
-<code class="sig-name descname"><span class="pre">set_done</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.plot.Plotter.set_done" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.plot.Plotter.set_done">
+<span class="sig-name descname"><span class="pre">set_done</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.plot.Plotter.set_done" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.plot.Plotter.set_quit">
-<code class="sig-name descname"><span class="pre">set_quit</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.plot.Plotter.set_quit" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.plot.Plotter.set_quit">
+<span class="sig-name descname"><span class="pre">set_quit</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.plot.Plotter.set_quit" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt id="auspex.filters.plot.Plotter.sink">
-<code class="sig-name descname"><span class="pre">sink</span></code><em class="property"> <span class="pre">=</span> <span class="pre">&lt;InputConnector(name=)&gt;</span></em><a class="headerlink" href="#auspex.filters.plot.Plotter.sink" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.plot.Plotter.sink">
+<span class="sig-name descname"><span class="pre">sink</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;InputConnector(name=)&gt;</span></em><a class="headerlink" href="#auspex.filters.plot.Plotter.sink" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.plot.Plotter.update">
-<code class="sig-name descname"><span class="pre">update</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.plot.Plotter.update" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.plot.Plotter.update">
+<span class="sig-name descname"><span class="pre">update</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.plot.Plotter.update" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.plot.Plotter.update_descriptors">
-<code class="sig-name descname"><span class="pre">update_descriptors</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.plot.Plotter.update_descriptors" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.plot.Plotter.update_descriptors">
+<span class="sig-name descname"><span class="pre">update_descriptors</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.plot.Plotter.update_descriptors" title="Link to this definition"></a></dt>
 <dd><p>This method is called whenever the connectivity of the graph changes. This may have implications
 for the internal functioning of the filter, in which case update_descriptors should be overloaded.
 Any simple changes to the axes within the StreamDescriptors should take place via the class method
@@ -964,17 +851,17 @@ descriptor_map.</p>
 <p>SingleShotMeasurement
 auspex.filters.singleshot module
 —————————-</p>
-<span class="target" id="module-auspex.filters.singleshot"></span><dl class="py class">
-<dt id="auspex.filters.singleshot.SingleShotMeasurement">
-<em class="property"><span class="pre">class</span> </em><code class="sig-prename descclassname"><span class="pre">auspex.filters.singleshot.</span></code><code class="sig-name descname"><span class="pre">SingleShotMeasurement</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">save_kernel</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">optimal_integration_time</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">zero_mean</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">set_threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">logistic_regression</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.singleshot.SingleShotMeasurement" title="Permalink to this definition">¶</a></dt>
+<dl class="py class" id="module-auspex.filters.singleshot">
+<dt class="sig sig-object py" id="auspex.filters.singleshot.SingleShotMeasurement">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">auspex.filters.singleshot.</span></span><span class="sig-name descname"><span class="pre">SingleShotMeasurement</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">save_kernel</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">optimal_integration_time</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">zero_mean</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">set_threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">logistic_regression</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.singleshot.SingleShotMeasurement" title="Link to this definition"></a></dt>
 <dd><dl class="py attribute">
-<dt id="auspex.filters.singleshot.SingleShotMeasurement.TOLERANCE">
-<code class="sig-name descname"><span class="pre">TOLERANCE</span></code><em class="property"> <span class="pre">=</span> <span class="pre">0.001</span></em><a class="headerlink" href="#auspex.filters.singleshot.SingleShotMeasurement.TOLERANCE" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.singleshot.SingleShotMeasurement.TOLERANCE">
+<span class="sig-name descname"><span class="pre">TOLERANCE</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0.001</span></em><a class="headerlink" href="#auspex.filters.singleshot.SingleShotMeasurement.TOLERANCE" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.singleshot.SingleShotMeasurement.compute_filter">
-<code class="sig-name descname"><span class="pre">compute_filter</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.singleshot.SingleShotMeasurement.compute_filter" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.singleshot.SingleShotMeasurement.compute_filter">
+<span class="sig-name descname"><span class="pre">compute_filter</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.singleshot.SingleShotMeasurement.compute_filter" title="Link to this definition"></a></dt>
 <dd><p>Compute the single shot kernel and obtain single-shot measurement
 fidelity.</p>
 <p>Expects that the data will be in self.ground_data and self.excited_data,
@@ -983,54 +870,54 @@ number of shots.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.singleshot.SingleShotMeasurement.final_init">
-<code class="sig-name descname"><span class="pre">final_init</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.singleshot.SingleShotMeasurement.final_init" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.singleshot.SingleShotMeasurement.final_init">
+<span class="sig-name descname"><span class="pre">final_init</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.singleshot.SingleShotMeasurement.final_init" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.singleshot.SingleShotMeasurement.logistic_fidelity">
-<code class="sig-name descname"><span class="pre">logistic_fidelity</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.singleshot.SingleShotMeasurement.logistic_fidelity" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.singleshot.SingleShotMeasurement.logistic_fidelity">
+<span class="sig-name descname"><span class="pre">logistic_fidelity</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.singleshot.SingleShotMeasurement.logistic_fidelity" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt id="auspex.filters.singleshot.SingleShotMeasurement.logistic_regression">
-<code class="sig-name descname"><span class="pre">logistic_regression</span></code><em class="property"> <span class="pre">=</span> <span class="pre">&lt;BoolParameter(name='logistic_regression',value=False)&gt;</span></em><a class="headerlink" href="#auspex.filters.singleshot.SingleShotMeasurement.logistic_regression" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.singleshot.SingleShotMeasurement.logistic_regression">
+<span class="sig-name descname"><span class="pre">logistic_regression</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;BoolParameter(name='logistic_regression',value=False)&gt;</span></em><a class="headerlink" href="#auspex.filters.singleshot.SingleShotMeasurement.logistic_regression" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt id="auspex.filters.singleshot.SingleShotMeasurement.optimal_integration_time">
-<code class="sig-name descname"><span class="pre">optimal_integration_time</span></code><em class="property"> <span class="pre">=</span> <span class="pre">&lt;BoolParameter(name='optimal_integration_time',value=False)&gt;</span></em><a class="headerlink" href="#auspex.filters.singleshot.SingleShotMeasurement.optimal_integration_time" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.singleshot.SingleShotMeasurement.optimal_integration_time">
+<span class="sig-name descname"><span class="pre">optimal_integration_time</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;BoolParameter(name='optimal_integration_time',value=False)&gt;</span></em><a class="headerlink" href="#auspex.filters.singleshot.SingleShotMeasurement.optimal_integration_time" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.singleshot.SingleShotMeasurement.process_data">
-<code class="sig-name descname"><span class="pre">process_data</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.singleshot.SingleShotMeasurement.process_data" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.singleshot.SingleShotMeasurement.process_data">
+<span class="sig-name descname"><span class="pre">process_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.singleshot.SingleShotMeasurement.process_data" title="Link to this definition"></a></dt>
 <dd><p>Fill the ground and excited data bins</p>
 </dd></dl>
 
 <dl class="py attribute">
-<dt id="auspex.filters.singleshot.SingleShotMeasurement.save_kernel">
-<code class="sig-name descname"><span class="pre">save_kernel</span></code><em class="property"> <span class="pre">=</span> <span class="pre">&lt;BoolParameter(name='save_kernel',value=False)&gt;</span></em><a class="headerlink" href="#auspex.filters.singleshot.SingleShotMeasurement.save_kernel" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.singleshot.SingleShotMeasurement.save_kernel">
+<span class="sig-name descname"><span class="pre">save_kernel</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;BoolParameter(name='save_kernel',value=False)&gt;</span></em><a class="headerlink" href="#auspex.filters.singleshot.SingleShotMeasurement.save_kernel" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt id="auspex.filters.singleshot.SingleShotMeasurement.set_threshold">
-<code class="sig-name descname"><span class="pre">set_threshold</span></code><em class="property"> <span class="pre">=</span> <span class="pre">&lt;BoolParameter(name='set_threshold',value=False)&gt;</span></em><a class="headerlink" href="#auspex.filters.singleshot.SingleShotMeasurement.set_threshold" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.singleshot.SingleShotMeasurement.set_threshold">
+<span class="sig-name descname"><span class="pre">set_threshold</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;BoolParameter(name='set_threshold',value=False)&gt;</span></em><a class="headerlink" href="#auspex.filters.singleshot.SingleShotMeasurement.set_threshold" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt id="auspex.filters.singleshot.SingleShotMeasurement.sink">
-<code class="sig-name descname"><span class="pre">sink</span></code><em class="property"> <span class="pre">=</span> <span class="pre">&lt;InputConnector(name=)&gt;</span></em><a class="headerlink" href="#auspex.filters.singleshot.SingleShotMeasurement.sink" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.singleshot.SingleShotMeasurement.sink">
+<span class="sig-name descname"><span class="pre">sink</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;InputConnector(name=)&gt;</span></em><a class="headerlink" href="#auspex.filters.singleshot.SingleShotMeasurement.sink" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt id="auspex.filters.singleshot.SingleShotMeasurement.source">
-<code class="sig-name descname"><span class="pre">source</span></code><em class="property"> <span class="pre">=</span> <span class="pre">&lt;OutputConnector(name=)&gt;</span></em><a class="headerlink" href="#auspex.filters.singleshot.SingleShotMeasurement.source" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.singleshot.SingleShotMeasurement.source">
+<span class="sig-name descname"><span class="pre">source</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;OutputConnector(name=)&gt;</span></em><a class="headerlink" href="#auspex.filters.singleshot.SingleShotMeasurement.source" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.singleshot.SingleShotMeasurement.update_descriptors">
-<code class="sig-name descname"><span class="pre">update_descriptors</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.singleshot.SingleShotMeasurement.update_descriptors" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.singleshot.SingleShotMeasurement.update_descriptors">
+<span class="sig-name descname"><span class="pre">update_descriptors</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.singleshot.SingleShotMeasurement.update_descriptors" title="Link to this definition"></a></dt>
 <dd><p>This method is called whenever the connectivity of the graph changes. This may have implications
 for the internal functioning of the filter, in which case update_descriptors should be overloaded.
 Any simple changes to the axes within the StreamDescriptors should take place via the class method
@@ -1038,145 +925,128 @@ descriptor_map.</p>
 </dd></dl>
 
 <dl class="py attribute">
-<dt id="auspex.filters.singleshot.SingleShotMeasurement.zero_mean">
-<code class="sig-name descname"><span class="pre">zero_mean</span></code><em class="property"> <span class="pre">=</span> <span class="pre">&lt;BoolParameter(name='zero_mean',value=False)&gt;</span></em><a class="headerlink" href="#auspex.filters.singleshot.SingleShotMeasurement.zero_mean" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.singleshot.SingleShotMeasurement.zero_mean">
+<span class="sig-name descname"><span class="pre">zero_mean</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;BoolParameter(name='zero_mean',value=False)&gt;</span></em><a class="headerlink" href="#auspex.filters.singleshot.SingleShotMeasurement.zero_mean" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 </dd></dl>
 
-</div>
-<div class="section" id="module-auspex.filters.stream_selectors">
-<span id="auspex-filters-stream-selectors-module"></span><h2>auspex.filters.stream_selectors module<a class="headerlink" href="#module-auspex.filters.stream_selectors" title="Permalink to this headline">¶</a></h2>
+</section>
+<section id="module-auspex.filters.stream_selectors">
+<span id="auspex-filters-stream-selectors-module"></span><h2>auspex.filters.stream_selectors module<a class="headerlink" href="#module-auspex.filters.stream_selectors" title="Link to this heading"></a></h2>
 <dl class="py class">
-<dt id="auspex.filters.stream_selectors.AlazarStreamSelector">
-<em class="property"><span class="pre">class</span> </em><code class="sig-prename descclassname"><span class="pre">auspex.filters.stream_selectors.</span></code><code class="sig-name descname"><span class="pre">AlazarStreamSelector</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.stream_selectors.AlazarStreamSelector" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.stream_selectors.AlazarStreamSelector">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">auspex.filters.stream_selectors.</span></span><span class="sig-name descname"><span class="pre">AlazarStreamSelector</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.stream_selectors.AlazarStreamSelector" title="Link to this definition"></a></dt>
 <dd><p>Digital demodulation and filtering to select a particular frequency multiplexed channel</p>
 <dl class="py attribute">
-<dt id="auspex.filters.stream_selectors.AlazarStreamSelector.channel">
-<code class="sig-name descname"><span class="pre">channel</span></code><em class="property"> <span class="pre">=</span> <span class="pre">&lt;IntParameter(name='channel',value=None)&gt;</span></em><a class="headerlink" href="#auspex.filters.stream_selectors.AlazarStreamSelector.channel" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.stream_selectors.AlazarStreamSelector.channel">
+<span class="sig-name descname"><span class="pre">channel</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;IntParameter(name='channel',value=None)&gt;</span></em><a class="headerlink" href="#auspex.filters.stream_selectors.AlazarStreamSelector.channel" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.stream_selectors.AlazarStreamSelector.get_channel">
-<code class="sig-name descname"><span class="pre">get_channel</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">channel_proxy</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.stream_selectors.AlazarStreamSelector.get_channel" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.stream_selectors.AlazarStreamSelector.get_channel">
+<span class="sig-name descname"><span class="pre">get_channel</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">channel_proxy</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.stream_selectors.AlazarStreamSelector.get_channel" title="Link to this definition"></a></dt>
 <dd><p>Create and return a channel object corresponding to this stream selector</p>
 </dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.stream_selectors.AlazarStreamSelector.get_descriptor">
-<code class="sig-name descname"><span class="pre">get_descriptor</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">stream_selector</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">receiver_channel</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.stream_selectors.AlazarStreamSelector.get_descriptor" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.stream_selectors.AlazarStreamSelector.get_descriptor">
+<span class="sig-name descname"><span class="pre">get_descriptor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">stream_selector</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">receiver_channel</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.stream_selectors.AlazarStreamSelector.get_descriptor" title="Link to this definition"></a></dt>
 <dd><p>Get the axis descriptor corresponding to this stream selector. For the Alazar cards this
 is always just a time axis.</p>
 </dd></dl>
 
 <dl class="py attribute">
-<dt id="auspex.filters.stream_selectors.AlazarStreamSelector.sink">
-<code class="sig-name descname"><span class="pre">sink</span></code><em class="property"> <span class="pre">=</span> <span class="pre">&lt;InputConnector(name=)&gt;</span></em><a class="headerlink" href="#auspex.filters.stream_selectors.AlazarStreamSelector.sink" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.stream_selectors.AlazarStreamSelector.sink">
+<span class="sig-name descname"><span class="pre">sink</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;InputConnector(name=)&gt;</span></em><a class="headerlink" href="#auspex.filters.stream_selectors.AlazarStreamSelector.sink" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt id="auspex.filters.stream_selectors.AlazarStreamSelector.source">
-<code class="sig-name descname"><span class="pre">source</span></code><em class="property"> <span class="pre">=</span> <span class="pre">&lt;OutputConnector(name=)&gt;</span></em><a class="headerlink" href="#auspex.filters.stream_selectors.AlazarStreamSelector.source" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.stream_selectors.AlazarStreamSelector.source">
+<span class="sig-name descname"><span class="pre">source</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;OutputConnector(name=)&gt;</span></em><a class="headerlink" href="#auspex.filters.stream_selectors.AlazarStreamSelector.source" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 </dd></dl>
 
 <dl class="py class">
-<dt id="auspex.filters.stream_selectors.X6StreamSelector">
-<em class="property"><span class="pre">class</span> </em><code class="sig-prename descclassname"><span class="pre">auspex.filters.stream_selectors.</span></code><code class="sig-name descname"><span class="pre">X6StreamSelector</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.stream_selectors.X6StreamSelector" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.stream_selectors.X6StreamSelector">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">auspex.filters.stream_selectors.</span></span><span class="sig-name descname"><span class="pre">X6StreamSelector</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.stream_selectors.X6StreamSelector" title="Link to this definition"></a></dt>
 <dd><p>Digital demodulation and filtering to select a particular frequency multiplexed channel</p>
 <dl class="py attribute">
-<dt id="auspex.filters.stream_selectors.X6StreamSelector.channel">
-<code class="sig-name descname"><span class="pre">channel</span></code><em class="property"> <span class="pre">=</span> <span class="pre">&lt;IntParameter(name='channel',value=None)&gt;</span></em><a class="headerlink" href="#auspex.filters.stream_selectors.X6StreamSelector.channel" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.stream_selectors.X6StreamSelector.channel">
+<span class="sig-name descname"><span class="pre">channel</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;IntParameter(name='channel',value=None)&gt;</span></em><a class="headerlink" href="#auspex.filters.stream_selectors.X6StreamSelector.channel" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt id="auspex.filters.stream_selectors.X6StreamSelector.dsp_channel">
-<code class="sig-name descname"><span class="pre">dsp_channel</span></code><em class="property"> <span class="pre">=</span> <span class="pre">&lt;IntParameter(name='dsp_channel',value=None)&gt;</span></em><a class="headerlink" href="#auspex.filters.stream_selectors.X6StreamSelector.dsp_channel" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.stream_selectors.X6StreamSelector.dsp_channel">
+<span class="sig-name descname"><span class="pre">dsp_channel</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;IntParameter(name='dsp_channel',value=None)&gt;</span></em><a class="headerlink" href="#auspex.filters.stream_selectors.X6StreamSelector.dsp_channel" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.stream_selectors.X6StreamSelector.get_channel">
-<code class="sig-name descname"><span class="pre">get_channel</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">channel_proxy</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.stream_selectors.X6StreamSelector.get_channel" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.stream_selectors.X6StreamSelector.get_channel">
+<span class="sig-name descname"><span class="pre">get_channel</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">channel_proxy</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.stream_selectors.X6StreamSelector.get_channel" title="Link to this definition"></a></dt>
 <dd><p>Create and return a channel object corresponding to this stream selector</p>
 </dd></dl>
 
 <dl class="py method">
-<dt id="auspex.filters.stream_selectors.X6StreamSelector.get_descriptor">
-<code class="sig-name descname"><span class="pre">get_descriptor</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">stream_selector</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">receiver_channel</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.stream_selectors.X6StreamSelector.get_descriptor" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.stream_selectors.X6StreamSelector.get_descriptor">
+<span class="sig-name descname"><span class="pre">get_descriptor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">stream_selector</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">receiver_channel</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#auspex.filters.stream_selectors.X6StreamSelector.get_descriptor" title="Link to this definition"></a></dt>
 <dd><p>Get the axis descriptor corresponding to this stream selector. If it’s an integrated stream,
 then the time axis has already been eliminated. Otherswise, add the time axis.</p>
 </dd></dl>
 
 <dl class="py attribute">
-<dt id="auspex.filters.stream_selectors.X6StreamSelector.sink">
-<code class="sig-name descname"><span class="pre">sink</span></code><em class="property"> <span class="pre">=</span> <span class="pre">&lt;InputConnector(name=)&gt;</span></em><a class="headerlink" href="#auspex.filters.stream_selectors.X6StreamSelector.sink" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.stream_selectors.X6StreamSelector.sink">
+<span class="sig-name descname"><span class="pre">sink</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;InputConnector(name=)&gt;</span></em><a class="headerlink" href="#auspex.filters.stream_selectors.X6StreamSelector.sink" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt id="auspex.filters.stream_selectors.X6StreamSelector.source">
-<code class="sig-name descname"><span class="pre">source</span></code><em class="property"> <span class="pre">=</span> <span class="pre">&lt;OutputConnector(name=)&gt;</span></em><a class="headerlink" href="#auspex.filters.stream_selectors.X6StreamSelector.source" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.stream_selectors.X6StreamSelector.source">
+<span class="sig-name descname"><span class="pre">source</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;OutputConnector(name=)&gt;</span></em><a class="headerlink" href="#auspex.filters.stream_selectors.X6StreamSelector.source" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt id="auspex.filters.stream_selectors.X6StreamSelector.stream_type">
-<code class="sig-name descname"><span class="pre">stream_type</span></code><em class="property"> <span class="pre">=</span> <span class="pre">&lt;Parameter(name='stream_type',value='demodulated')&gt;</span></em><a class="headerlink" href="#auspex.filters.stream_selectors.X6StreamSelector.stream_type" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="auspex.filters.stream_selectors.X6StreamSelector.stream_type">
+<span class="sig-name descname"><span class="pre">stream_type</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;Parameter(name='stream_type',value='demodulated')&gt;</span></em><a class="headerlink" href="#auspex.filters.stream_selectors.X6StreamSelector.stream_type" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 </dd></dl>
 
-</div>
-<div class="section" id="module-auspex.filters">
-<span id="module-contents"></span><h2>Module contents<a class="headerlink" href="#module-auspex.filters" title="Permalink to this headline">¶</a></h2>
-</div>
-</div>
+</section>
+<section id="module-auspex.filters">
+<span id="module-contents"></span><h2>Module contents<a class="headerlink" href="#module-auspex.filters" title="Link to this heading"></a></h2>
+</section>
+</section>
 
 
            </div>
-           
           </div>
-          <footer>
-    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
-        <a href="auspex.instruments.html" class="btn btn-neutral float-right" title="auspex.instruments package" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
         <a href="auspex.analysis.html" class="btn btn-neutral float-left" title="auspex.analysis package" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="auspex.instruments.html" class="btn btn-neutral float-right" title="auspex.instruments package" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
 
   <hr/>
 
   <div role="contentinfo">
-    <p>
-        &#169; Copyright 2019, Auspex Developers.
-
-    </p>
+    <p>&#169; Copyright 2019, Auspex Developers.</p>
   </div>
-    
-    
-    
-    Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
-    
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
     <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
-    
-    provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
 
 </footer>
         </div>
       </div>
-
     </section>
-
   </div>
-  
-
-  <script type="text/javascript">
+  <script>
       jQuery(function () {
           SphinxRtdTheme.Navigation.enable(true);
       });
-  </script>
-
-  
-  
-    
-   
+  </script> 
 
 </body>
 </html>
