@@ -17,6 +17,7 @@ import operator
 from functools import reduce
 from IPython.display import HTML, display
 from sqlalchemy import inspect
+from sqlalchemy.orm import aliased
 
 import auspex.config as config
 import auspex.instruments
@@ -79,7 +80,11 @@ class PipelineManager(object):
     def add_qubit_pipeline(self, qubit_label, stream_type, auto_create=True, buffers=False):
         # if qubit_label not in self.stream_selectors:
         m = bbndb.qgl.Measurement
-        mqs = [l[0] for l in self.session.query(m.label).join(m.channel_db, aliased=True).filter_by(label="working").all()]
+        #n1 = aliased(m.label)
+
+        #mqs = [l[0] for l in self.session.query(m.label).join(m.channel_db.of_type(n1)).filter_by(n1.name == "working").all()]
+        mqs = [l[0] for l in self.session.query(m.label).join(m.channel_db).filter_by(label="working").all()]
+        #mqs = [l[0] for l in self.session.query(m.label).join(m.channel_db, aliased=True).filter_by(label="working").all()]
         if f'M-{qubit_label}' not in mqs:
             raise Exception(f"Could not find qubit {qubit_label} in pipeline...")
 
