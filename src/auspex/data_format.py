@@ -79,7 +79,7 @@ class AuspexDataContainer(object):
             descriptor:         `DataStreamDescriptor` that describes the dataset that is to be added.
         """
         self._create_meta(groupname, datasetname, descriptor)
-        mmap = self._create_memmap(groupname, datasetname, (np.product(descriptor.dims()),), descriptor.dtype)
+        mmap = self._create_memmap(groupname, datasetname, (np.prod(descriptor.dims()),), descriptor.dtype)
         self.groups[groupname][datasetname] = mmap
         return mmap
 
