@@ -1,9 +1,7 @@
 name: Python Package using Conda
 
-on: 
-   push:
-     paths-ignore:
-     - 'doc/examples/*.*'
+on: [push]
+
 
 jobs:
   build-linux:
@@ -55,7 +53,7 @@ jobs:
         pip install git+https://github.com/BBN-Q/bbndb.git
         pip install git+https://github.com/BBN-Q/QGL.git@develop
         pip install git+https://github.com/spatialaudio/nbsphinx.git@master
-        pip install pyvisa coveralls scikit-learn pyusb future python-usbtmc setproctitle progress serial
+        pip install pyvisa coveralls scikit-learn pyusb future python-usbtmc setproctitle progress serial pandoc
         export GIT_LFS_SKIP_SMUDGE=0
 
     - name: Test with unittest
