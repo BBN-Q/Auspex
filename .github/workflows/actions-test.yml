@@ -1,7 +1,8 @@
 name: Python Package using Conda
 
 on: [push]
-
+paths-ignore:
+	- 'doc/esamples/*'
 jobs:
   build-linux:
     runs-on: ubuntu-latest
