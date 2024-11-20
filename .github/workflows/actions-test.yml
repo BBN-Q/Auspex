@@ -2,7 +2,7 @@ name: Python Package using Conda
 
 on: 
    push:
-	paths-ignore:
+     paths-ignore:
 		- 'doc/examples/*'
 jobs:
   build-linux:
