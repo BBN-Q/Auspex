@@ -11,7 +11,6 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-    - uses: docker://pandoc/core:3.5
     - name: Set up Python 3.8
       uses: actions/setup-python@v2
       with:
@@ -53,7 +52,7 @@ jobs:
         pip install git+https://github.com/BBN-Q/bbndb.git
         pip install git+https://github.com/BBN-Q/QGL.git@develop
         pip install git+https://github.com/spatialaudio/nbsphinx.git@master
-        pip install pyvisa coveralls scikit-learn pyusb future python-usbtmc setproctitle progress serial pandoc
+        pip install pyvisa coveralls scikit-learn pyusb future python-usbtmc setproctitle progress serial
         export GIT_LFS_SKIP_SMUDGE=0
 
     - name: Test with unittest
