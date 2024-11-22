@@ -60,6 +60,7 @@ jobs:
         pip install -e .
         python -m unittest discover -v test
     - name: Build Documentation
+      uses: docker://pandoc/core:3.5
       run: |
         cd doc
         make html
