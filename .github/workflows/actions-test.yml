@@ -59,10 +59,10 @@ jobs:
       run: |
         pip install -e .
         python -m unittest discover -v test
-    - name: Documentation Environment
-      uses: docker://pandoc/core:3.5
     - name: Build Documentation
       run: |
+	sudo apt-get install pandoc
+	pip install pandoc
         cd doc
         make html
         cd ..
