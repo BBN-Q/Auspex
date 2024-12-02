@@ -48,7 +48,6 @@ jobs:
 
     - name: Install BBN dependencies
       run: |
-        sudo apt-get install pandoc
         export GIT_LFS_SKIP_SMUDGE=1
         pip install git+https://github.com/BBN-Q/bbndb.git
         pip install git+https://github.com/BBN-Q/QGL.git@develop
