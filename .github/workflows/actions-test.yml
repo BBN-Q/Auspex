@@ -24,7 +24,7 @@ jobs:
         echo $GITHUB_PATH
 
     - name: pip cache
-      uses: actions/cache@v2
+      uses: actions/cache@v3
       id: cache
       with:
         path: /usr/share/miniconda/lib/python3.8/site-packages/*
