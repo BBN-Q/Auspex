@@ -1,93 +1,50 @@
 
 
 <!DOCTYPE html>
-<html class="writer-html5" lang="en" >
+<html class="writer-html5" lang="en" data-content_root="../">
 <head>
-  <meta charset="utf-8" />
-  
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
+
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  
   <title>Data writers in QGL, Auspex, libaps2 &mdash; auspex 2019.2 documentation</title>
-  
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b76e3c8a" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="../_static/nbsphinx-code-cells.css?v=2aa19091" />
 
   
-  <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
-  <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
-
-  
-  
-
-  
-  
-
-  
-
-  
-  <!--[if lt IE 9]>
-    <script src="../_static/js/html5shiv.min.js"></script>
-  <![endif]-->
-  
-    
-      <script type="text/javascript" id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
-        <script src="../_static/jquery.js"></script>
-        <script src="../_static/underscore.js"></script>
-        <script src="../_static/doctools.js"></script>
-        <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
-        <script src="https://unpkg.com/@jupyter-widgets/html-manager@^0.20.0/dist/embed-amd.js"></script>
-    
-    <script type="text/javascript" src="../_static/js/theme.js"></script>
-
-    
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=8e83ba1c"></script>
+      <script src="../_static/doctools.js?v=9a2dae69"></script>
+      <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+      <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+      <script src="https://cdn.jsdelivr.net/npm/@jupyter-widgets/html-manager@^1.0.1/dist/embed-amd.js"></script>
+      <script>window.MathJax = {"tex": {"inlineMath": [["$", "$"], ["\\(", "\\)"]], "processEscapes": true}, "options": {"ignoreHtmlClass": "tex2jax_ignore|mathjax_ignore|document", "processHtmlClass": "tex2jax_process|mathjax_process|math|output_area"}}</script>
+      <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="../_static/js/theme.js"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" /> 
 </head>
 
-<body class="wy-body-for-nav">
-
-   
+<body class="wy-body-for-nav"> 
   <div class="wy-grid-for-nav">
-    
     <nav data-toggle="wy-nav-shift" class="wy-nav-side">
       <div class="wy-side-scroll">
         <div class="wy-side-nav-search" >
-          
 
           
-            <a href="../index.html" class="icon icon-home"> auspex
           
-
-          
+          <a href="../index.html" class="icon icon-home">
+            auspex
           </a>
-
-          
-            
-            
-              <div class="version">
-                2019.2
-              </div>
-            
-          
-
-          
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
-    <input type="text" name="q" placeholder="Search docs" />
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
     <input type="hidden" name="check_keywords" value="yes" />
     <input type="hidden" name="area" value="default" />
   </form>
 </div>
-
-          
-        </div>
-
-        
-        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
-          
-            
-            
-              
-            
-            
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
               <ul>
 <li class="toctree-l1"><a class="reference internal" href="../instruments.html">Instrument Drivers</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../experiments.html">Defining Experiments</a></li>
@@ -97,354 +54,42 @@
 <li class="toctree-l1"><a class="reference internal" href="../api/auspex.html">Full API</a></li>
 </ul>
 
-            
-          
         </div>
-        
       </div>
     </nav>
 
-    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
-
-      
-      <nav class="wy-nav-top" aria-label="top navigation">
-        
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
           <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
           <a href="../index.html">auspex</a>
-        
       </nav>
 
-
       <div class="wy-nav-content">
-        
         <div class="rst-content">
-        
-          
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-<div role="navigation" aria-label="breadcrumbs navigation">
-
+          <div role="navigation" aria-label="Page navigation">
   <ul class="wy-breadcrumbs">
-    
-      <li><a href="../index.html" class="icon icon-home"></a> &raquo;</li>
-        
-      <li>Data writers in QGL, Auspex, libaps2</li>
-    
-    
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Data writers in QGL, Auspex, libaps2</li>
       <li class="wy-breadcrumbs-aside">
-        
-          
             <a href="../_sources/examples/Example-Datafiles.ipynb.txt" rel="nofollow"> View page source</a>
-          
-        
       </li>
-    
   </ul>
-
-  
   <hr/>
 </div>
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
-            
-  
-<style>
-/* CSS for nbsphinx extension */
-
-/* remove conflicting styling from Sphinx themes */
-div.nbinput.container div.prompt *,
-div.nboutput.container div.prompt *,
-div.nbinput.container div.input_area pre,
-div.nboutput.container div.output_area pre,
-div.nbinput.container div.input_area .highlight,
-div.nboutput.container div.output_area .highlight {
-    border: none;
-    padding: 0;
-    margin: 0;
-    box-shadow: none;
-}
-
-div.nbinput.container > div[class*=highlight],
-div.nboutput.container > div[class*=highlight] {
-    margin: 0;
-}
-
-div.nbinput.container div.prompt *,
-div.nboutput.container div.prompt * {
-    background: none;
-}
-
-div.nboutput.container div.output_area .highlight,
-div.nboutput.container div.output_area pre {
-    background: unset;
-}
-
-div.nboutput.container div.output_area div.highlight {
-    color: unset;  /* override Pygments text color */
-}
-
-/* avoid gaps between output lines */
-div.nboutput.container div[class*=highlight] pre {
-    line-height: normal;
-}
-
-/* input/output containers */
-div.nbinput.container,
-div.nboutput.container {
-    display: -webkit-flex;
-    display: flex;
-    align-items: flex-start;
-    margin: 0;
-    width: 100%;
-}
-@media (max-width: 540px) {
-    div.nbinput.container,
-    div.nboutput.container {
-        flex-direction: column;
-    }
-}
-
-/* input container */
-div.nbinput.container {
-    padding-top: 5px;
-}
-
-/* last container */
-div.nblast.container {
-    padding-bottom: 5px;
-}
-
-/* input prompt */
-div.nbinput.container div.prompt pre {
-    color: #307FC1;
-}
-
-/* output prompt */
-div.nboutput.container div.prompt pre {
-    color: #BF5B3D;
-}
-
-/* all prompts */
-div.nbinput.container div.prompt,
-div.nboutput.container div.prompt {
-    width: 4.5ex;
-    padding-top: 5px;
-    position: relative;
-    user-select: none;
-}
-
-div.nbinput.container div.prompt > div,
-div.nboutput.container div.prompt > div {
-    position: absolute;
-    right: 0;
-    margin-right: 0.3ex;
-}
-
-@media (max-width: 540px) {
-    div.nbinput.container div.prompt,
-    div.nboutput.container div.prompt {
-        width: unset;
-        text-align: left;
-        padding: 0.4em;
-    }
-    div.nboutput.container div.prompt.empty {
-        padding: 0;
-    }
-
-    div.nbinput.container div.prompt > div,
-    div.nboutput.container div.prompt > div {
-        position: unset;
-    }
-}
-
-/* disable scrollbars on prompts */
-div.nbinput.container div.prompt pre,
-div.nboutput.container div.prompt pre {
-    overflow: hidden;
-}
-
-/* input/output area */
-div.nbinput.container div.input_area,
-div.nboutput.container div.output_area {
-    -webkit-flex: 1;
-    flex: 1;
-    overflow: auto;
-}
-@media (max-width: 540px) {
-    div.nbinput.container div.input_area,
-    div.nboutput.container div.output_area {
-        width: 100%;
-    }
-}
-
-/* input area */
-div.nbinput.container div.input_area {
-    border: 1px solid #e0e0e0;
-    border-radius: 2px;
-    /*background: #f5f5f5;*/
-}
-
-/* override MathJax center alignment in output cells */
-div.nboutput.container div[class*=MathJax] {
-    text-align: left !important;
-}
-
-/* override sphinx.ext.imgmath center alignment in output cells */
-div.nboutput.container div.math p {
-    text-align: left;
-}
-
-/* standard error */
-div.nboutput.container div.output_area.stderr {
-    background: #fdd;
-}
-
-/* ANSI colors */
-.ansi-black-fg { color: #3E424D; }
-.ansi-black-bg { background-color: #3E424D; }
-.ansi-black-intense-fg { color: #282C36; }
-.ansi-black-intense-bg { background-color: #282C36; }
-.ansi-red-fg { color: #E75C58; }
-.ansi-red-bg { background-color: #E75C58; }
-.ansi-red-intense-fg { color: #B22B31; }
-.ansi-red-intense-bg { background-color: #B22B31; }
-.ansi-green-fg { color: #00A250; }
-.ansi-green-bg { background-color: #00A250; }
-.ansi-green-intense-fg { color: #007427; }
-.ansi-green-intense-bg { background-color: #007427; }
-.ansi-yellow-fg { color: #DDB62B; }
-.ansi-yellow-bg { background-color: #DDB62B; }
-.ansi-yellow-intense-fg { color: #B27D12; }
-.ansi-yellow-intense-bg { background-color: #B27D12; }
-.ansi-blue-fg { color: #208FFB; }
-.ansi-blue-bg { background-color: #208FFB; }
-.ansi-blue-intense-fg { color: #0065CA; }
-.ansi-blue-intense-bg { background-color: #0065CA; }
-.ansi-magenta-fg { color: #D160C4; }
-.ansi-magenta-bg { background-color: #D160C4; }
-.ansi-magenta-intense-fg { color: #A03196; }
-.ansi-magenta-intense-bg { background-color: #A03196; }
-.ansi-cyan-fg { color: #60C6C8; }
-.ansi-cyan-bg { background-color: #60C6C8; }
-.ansi-cyan-intense-fg { color: #258F8F; }
-.ansi-cyan-intense-bg { background-color: #258F8F; }
-.ansi-white-fg { color: #C5C1B4; }
-.ansi-white-bg { background-color: #C5C1B4; }
-.ansi-white-intense-fg { color: #A1A6B2; }
-.ansi-white-intense-bg { background-color: #A1A6B2; }
-
-.ansi-default-inverse-fg { color: #FFFFFF; }
-.ansi-default-inverse-bg { background-color: #000000; }
-
-.ansi-bold { font-weight: bold; }
-.ansi-underline { text-decoration: underline; }
-
-
-div.nbinput.container div.input_area div[class*=highlight] > pre,
-div.nboutput.container div.output_area div[class*=highlight] > pre,
-div.nboutput.container div.output_area div[class*=highlight].math,
-div.nboutput.container div.output_area.rendered_html,
-div.nboutput.container div.output_area > div.output_javascript,
-div.nboutput.container div.output_area:not(.rendered_html) > img{
-    padding: 5px;
-    margin: 0;
-}
-
-/* fix copybtn overflow problem in chromium (needed for 'sphinx_copybutton') */
-div.nbinput.container div.input_area > div[class^='highlight'],
-div.nboutput.container div.output_area > div[class^='highlight']{
-    overflow-y: hidden;
-}
-
-/* hide copybtn icon on prompts (needed for 'sphinx_copybutton') */
-.prompt a.copybtn {
-    display: none;
-}
-
-/* Some additional styling taken form the Jupyter notebook CSS */
-div.rendered_html table {
-  border: none;
-  border-collapse: collapse;
-  border-spacing: 0;
-  color: black;
-  font-size: 12px;
-  table-layout: fixed;
-}
-div.rendered_html thead {
-  border-bottom: 1px solid black;
-  vertical-align: bottom;
-}
-div.rendered_html tr,
-div.rendered_html th,
-div.rendered_html td {
-  text-align: right;
-  vertical-align: middle;
-  padding: 0.5em 0.5em;
-  line-height: normal;
-  white-space: normal;
-  max-width: none;
-  border: none;
-}
-div.rendered_html th {
-  font-weight: bold;
-}
-div.rendered_html tbody tr:nth-child(odd) {
-  background: #f5f5f5;
-}
-div.rendered_html tbody tr:hover {
-  background: rgba(66, 165, 245, 0.2);
-}
-
-/* CSS overrides for sphinx_rtd_theme */
-
-/* 24px margin */
-.nbinput.nblast.container,
-.nboutput.nblast.container {
-    margin-bottom: 19px;  /* padding has already 5px */
-}
-
-/* ... except between code cells! */
-.nblast.container + .nbinput.container {
-    margin-top: -19px;
-}
-
-.admonition > p:before {
-    margin-right: 4px;  /* make room for the exclamation icon */
-}
-
-/* Fix math alignment, see https://github.com/rtfd/sphinx_rtd_theme/pull/686 */
-.math {
-    text-align: unset;
-}
-</style>
-<div class="section" id="Data-writers-in-QGL,-Auspex,-libaps2">
-<h1>Data writers in QGL, Auspex, libaps2<a class="headerlink" href="#Data-writers-in-QGL,-Auspex,-libaps2" title="Permalink to this headline">¶</a></h1>
+             
+  <section id="Data-writers-in-QGL,-Auspex,-libaps2">
+<h1>Data writers in QGL, Auspex, libaps2<a class="headerlink" href="#Data-writers-in-QGL,-Auspex,-libaps2" title="Link to this heading"></a></h1>
 <p>It would be nice to have some documentation on how data is stored, processed, and passed around between the three software packages. I see four situations where data is passed into or out of files. * Data written to <code class="docutils literal notranslate"><span class="pre">.aps2</span></code> files by <code class="docutils literal notranslate"><span class="pre">QGL</span></code> * Data read by <code class="docutils literal notranslate"><span class="pre">libaps2</span></code> and set to the APS2 * Data written by <code class="docutils literal notranslate"><span class="pre">Auspex</span></code> into <code class="docutils literal notranslate"><span class="pre">.auspex</span></code> data files * Data read by <code class="docutils literal notranslate"><span class="pre">Auspex</span></code>/<code class="docutils literal notranslate"><span class="pre">Qlab.jl</span></code> for analysis</p>
 <p>These cover ~99% of the situations I can imagine in our normal data flow. The rest of this document is an exploration and note-to-future-self about how this process works and how it could be changed in the future.</p>
-<div class="section" id="QGL-to-.aps2-files">
-<h2>QGL to .aps2 files<a class="headerlink" href="#QGL-to-.aps2-files" title="Permalink to this headline">¶</a></h2>
+<section id="QGL-to-.aps2-files">
+<h2>QGL to .aps2 files<a class="headerlink" href="#QGL-to-.aps2-files" title="Link to this heading"></a></h2>
 <p>The first situation will require <code class="docutils literal notranslate"><span class="pre">QGL</span></code> to create sequence files for the APS2. Here, we’ll create these files and read them back into the workspace to see how they are packed.</p>
 <div class="nbinput nblast docutils container">
 <div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[1]:
 </pre></div>
 </div>
-<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre>
-<span></span><span class="kn">import</span> <span class="nn">QGL.config</span>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">QGL.config</span>
 <span class="kn">from</span> <span class="nn">QGL</span> <span class="kn">import</span> <span class="o">*</span>
 </pre></div>
 </div>
@@ -453,8 +98,7 @@ div.rendered_html tbody tr:hover {
 <div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[2]:
 </pre></div>
 </div>
-<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre>
-<span></span><span class="c1"># a minimal example of a qubit control chain</span>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># a minimal example of a qubit control chain</span>
 <span class="n">cl</span> <span class="o">=</span> <span class="n">ChannelLibrary</span><span class="p">(</span><span class="s2">&quot;:memory:&quot;</span><span class="p">)</span>
 <span class="n">q2</span> <span class="o">=</span> <span class="n">cl</span><span class="o">.</span><span class="n">new_qubit</span><span class="p">(</span><span class="s2">&quot;q2&quot;</span><span class="p">)</span>
 
@@ -481,8 +125,7 @@ div.rendered_html tbody tr:hover {
 
 <span class="n">cl</span><span class="o">.</span><span class="n">set_measure</span><span class="p">(</span><span class="n">q2</span><span class="p">,</span> <span class="n">aps2</span><span class="o">.</span><span class="n">tx</span><span class="p">(</span><span class="mi">2</span><span class="p">),</span> <span class="n">dig_1</span><span class="o">.</span><span class="n">channels</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">gate</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">trig_channel</span><span class="o">=</span><span class="n">aps2</span><span class="o">.</span><span class="n">tx</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">ch</span><span class="p">(</span><span class="s2">&quot;m2&quot;</span><span class="p">),</span> <span class="n">generator</span><span class="o">=</span><span class="n">AM2</span><span class="p">)</span>
 <span class="n">cl</span><span class="o">.</span><span class="n">set_control</span><span class="p">(</span><span class="n">q2</span><span class="p">,</span> <span class="n">aps2</span><span class="o">.</span><span class="n">tx</span><span class="p">(</span><span class="mi">4</span><span class="p">),</span> <span class="n">generator</span><span class="o">=</span><span class="n">q2src</span><span class="p">)</span>
-
-</pre></div>
+<br/></pre></div>
 </div>
 </div>
 <div class="nboutput nblast docutils container">
@@ -497,8 +140,7 @@ Creating engine...
 <div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[3]:
 </pre></div>
 </div>
-<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre>
-<span></span><span class="n">seqs</span> <span class="o">=</span> <span class="p">[[</span><span class="n">X</span><span class="p">(</span><span class="n">q2</span><span class="p">),</span><span class="n">Y</span><span class="p">(</span><span class="n">q2</span><span class="p">),</span><span class="n">X</span><span class="p">(</span><span class="n">q2</span><span class="p">),</span><span class="n">MEAS</span><span class="p">(</span><span class="n">q2</span><span class="p">)]]</span>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">seqs</span> <span class="o">=</span> <span class="p">[[</span><span class="n">X</span><span class="p">(</span><span class="n">q2</span><span class="p">),</span><span class="n">Y</span><span class="p">(</span><span class="n">q2</span><span class="p">),</span><span class="n">X</span><span class="p">(</span><span class="n">q2</span><span class="p">),</span><span class="n">MEAS</span><span class="p">(</span><span class="n">q2</span><span class="p">)]]</span>
 </pre></div>
 </div>
 </div>
@@ -506,8 +148,7 @@ Creating engine...
 <div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[4]:
 </pre></div>
 </div>
-<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre>
-<span></span><span class="n">mf</span> <span class="o">=</span> <span class="n">compile_to_hardware</span><span class="p">(</span><span class="n">seqs</span><span class="p">,</span> <span class="s1">&#39;utils/file_doc&#39;</span><span class="p">)</span>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">mf</span> <span class="o">=</span> <span class="n">compile_to_hardware</span><span class="p">(</span><span class="n">seqs</span><span class="p">,</span> <span class="s1">&#39;utils/file_doc&#39;</span><span class="p">)</span>
 </pre></div>
 </div>
 </div>
@@ -524,8 +165,7 @@ Compiled 1 sequences.
 <div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[5]:
 </pre></div>
 </div>
-<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre>
-<span></span><span class="n">mf</span>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">mf</span>
 </pre></div>
 </div>
 </div>
@@ -542,8 +182,7 @@ Compiled 1 sequences.
 <div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[6]:
 </pre></div>
 </div>
-<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre>
-<span></span><span class="kn">import</span> <span class="nn">json</span>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">json</span>
 </pre></div>
 </div>
 </div>
@@ -551,8 +190,7 @@ Compiled 1 sequences.
 <div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[7]:
 </pre></div>
 </div>
-<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre>
-<span></span><span class="n">md</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="nb">open</span><span class="p">(</span><span class="n">mf</span><span class="p">,</span> <span class="s2">&quot;r&quot;</span><span class="p">))</span>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">md</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="nb">open</span><span class="p">(</span><span class="n">mf</span><span class="p">,</span> <span class="s2">&quot;r&quot;</span><span class="p">))</span>
 <span class="n">md</span>
 </pre></div>
 </div>
@@ -585,8 +223,7 @@ Compiled 1 sequences.
 <div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[8]:
 </pre></div>
 </div>
-<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre>
-<span></span><span class="n">APS2_control_file</span> <span class="o">=</span> <span class="n">md</span><span class="p">[</span><span class="s2">&quot;instruments&quot;</span><span class="p">][</span><span class="s2">&quot;Maxwell_U4&quot;</span><span class="p">]</span>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">APS2_control_file</span> <span class="o">=</span> <span class="n">md</span><span class="p">[</span><span class="s2">&quot;instruments&quot;</span><span class="p">][</span><span class="s2">&quot;Maxwell_U4&quot;</span><span class="p">]</span>
 <span class="n">APS2_measure_file</span> <span class="o">=</span> <span class="n">md</span><span class="p">[</span><span class="s2">&quot;instruments&quot;</span><span class="p">][</span><span class="s2">&quot;Maxwell_U2&quot;</span><span class="p">]</span>
 </pre></div>
 </div>
@@ -620,8 +257,7 @@ Compiled 1 sequences.
 <div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[9]:
 </pre></div>
 </div>
-<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre>
-<span></span><span class="nb">print</span><span class="p">(</span><span class="sa">b</span><span class="s1">&#39;APS2&#39;</span><span class="p">)</span>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="nb">print</span><span class="p">(</span><span class="sa">b</span><span class="s1">&#39;APS2&#39;</span><span class="p">)</span>
 </pre></div>
 </div>
 </div>
@@ -637,8 +273,7 @@ b&#39;APS2&#39;
 <div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[10]:
 </pre></div>
 </div>
-<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre>
-<span></span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">(</span><span class="mf">4.0</span><span class="p">)</span><span class="o">.</span><span class="n">tobytes</span><span class="p">()</span>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">(</span><span class="mf">4.0</span><span class="p">)</span><span class="o">.</span><span class="n">tobytes</span><span class="p">()</span>
 </pre></div>
 </div>
 </div>
@@ -655,8 +290,7 @@ b&#39;\x00\x00\x80@&#39;
 <div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[11]:
 </pre></div>
 </div>
-<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre>
-<span></span><span class="n">np</span><span class="o">.</span><span class="n">uint16</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">tobytes</span><span class="p">()</span>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">np</span><span class="o">.</span><span class="n">uint16</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">tobytes</span><span class="p">()</span>
 </pre></div>
 </div>
 </div>
@@ -673,8 +307,7 @@ b&#39;\x02\x00&#39;
 <div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[12]:
 </pre></div>
 </div>
-<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre>
-<span></span><span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">APS2_control_file</span><span class="p">,</span> <span class="s2">&quot;rb&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">APS2_control_file</span><span class="p">,</span> <span class="s2">&quot;rb&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
     <span class="nb">print</span><span class="p">(</span><span class="n">f</span><span class="o">.</span><span class="n">read</span><span class="p">())</span>
 </pre></div>
 </div>
@@ -692,8 +325,7 @@ b&#39;APS2\x00\x00\x80@\x00\x00\x80@\x02\x00\x0b\x00\x00\x00\x00\x00\x00\x00\x00
 <div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[13]:
 </pre></div>
 </div>
-<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre>
-<span></span><span class="n">QGL</span><span class="o">.</span><span class="n">drivers</span><span class="o">.</span><span class="n">APS2Pattern</span><span class="o">.</span><span class="n">read_sequence_file</span><span class="p">(</span><span class="n">APS2_control_file</span><span class="p">)</span>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">QGL</span><span class="o">.</span><span class="n">drivers</span><span class="o">.</span><span class="n">APS2Pattern</span><span class="o">.</span><span class="n">read_sequence_file</span><span class="p">(</span><span class="n">APS2_control_file</span><span class="p">)</span>
 </pre></div>
 </div>
 </div>
@@ -859,8 +491,7 @@ b&#39;APS2\x00\x00\x80@\x00\x00\x80@\x02\x00\x0b\x00\x00\x00\x00\x00\x00\x00\x00
 <div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[14]:
 </pre></div>
 </div>
-<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre>
-<span></span><span class="n">QGL</span><span class="o">.</span><span class="n">drivers</span><span class="o">.</span><span class="n">APS2Pattern</span><span class="o">.</span><span class="n">read_sequence_file</span><span class="p">(</span><span class="n">APS2_measure_file</span><span class="p">)</span>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">QGL</span><span class="o">.</span><span class="n">drivers</span><span class="o">.</span><span class="n">APS2Pattern</span><span class="o">.</span><span class="n">read_sequence_file</span><span class="p">(</span><span class="n">APS2_measure_file</span><span class="p">)</span>
 </pre></div>
 </div>
 </div>
@@ -1127,8 +758,7 @@ b&#39;APS2\x00\x00\x80@\x00\x00\x80@\x02\x00\x0b\x00\x00\x00\x00\x00\x00\x00\x00
 <div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[15]:
 </pre></div>
 </div>
-<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre>
-<span></span><span class="n">plot_pulse_files</span><span class="p">(</span><span class="n">mf</span><span class="p">)</span>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">plot_pulse_files</span><span class="p">(</span><span class="n">mf</span><span class="p">)</span>
 </pre></div>
 </div>
 </div>
@@ -1143,8 +773,7 @@ b&#39;APS2\x00\x00\x80@\x00\x00\x80@\x02\x00\x0b\x00\x00\x00\x00\x00\x00\x00\x00
 <div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[16]:
 </pre></div>
 </div>
-<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre>
-<span></span><span class="n">QGL</span><span class="o">.</span><span class="n">drivers</span><span class="o">.</span><span class="n">APS2Pattern</span><span class="o">.</span><span class="n">raw_instructions</span><span class="p">(</span><span class="n">APS2_control_file</span><span class="p">)</span>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">QGL</span><span class="o">.</span><span class="n">drivers</span><span class="o">.</span><span class="n">APS2Pattern</span><span class="o">.</span><span class="n">raw_instructions</span><span class="p">(</span><span class="n">APS2_control_file</span><span class="p">)</span>
 </pre></div>
 </div>
 </div>
@@ -1164,8 +793,7 @@ array([10448491872987906048, 11601324317152903168, 11601379293808033792,
 <div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[17]:
 </pre></div>
 </div>
-<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre>
-<span></span><span class="n">QGL</span><span class="o">.</span><span class="n">drivers</span><span class="o">.</span><span class="n">APS2Pattern</span><span class="o">.</span><span class="n">read_instructions</span><span class="p">(</span><span class="n">APS2_control_file</span><span class="p">)</span>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">QGL</span><span class="o">.</span><span class="n">drivers</span><span class="o">.</span><span class="n">APS2Pattern</span><span class="o">.</span><span class="n">read_instructions</span><span class="p">(</span><span class="n">APS2_control_file</span><span class="p">)</span>
 </pre></div>
 </div>
 </div>
@@ -1189,45 +817,45 @@ array([10448491872987906048, 11601324317152903168, 11601379293808033792,
 </pre></div></div>
 </div>
 <p>Users will likely never need to inspect .aps2 files in this detail but the above is illustrative of what information is in the files. See the documentations for more details on what the instructions actually do when decoded by the hardware. The above is a representation of our simple X,Y,X sequence created above.</p>
-</div>
-<div class="section" id="Data-read-buy-libaps2">
-<h2>Data read buy libaps2<a class="headerlink" href="#Data-read-buy-libaps2" title="Permalink to this headline">¶</a></h2>
+</section>
+<section id="Data-read-buy-libaps2">
+<h2>Data read buy libaps2<a class="headerlink" href="#Data-read-buy-libaps2" title="Link to this heading"></a></h2>
 <p>The data read by <code class="docutils literal notranslate"><span class="pre">libaps2</span></code> can be specified by the user manually or read from files like <code class="docutils literal notranslate"><span class="pre">.aps2</span></code> above with the <code class="docutils literal notranslate"><span class="pre">load_sequence_file()</span></code> function inside libaps2:</p>
 <div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="c1">// Read the header information</span>
-<span class="kt">char</span> <span class="n">junk</span><span class="p">[</span><span class="mi">100</span><span class="p">];</span>
-<span class="kt">uint64_t</span> <span class="n">buff_length</span><span class="p">;</span>
-<span class="kt">uint16_t</span> <span class="n">num_chans</span><span class="p">;</span>
+<span class="kt">char</span><span class="w"> </span><span class="n">junk</span><span class="p">[</span><span class="mi">100</span><span class="p">];</span>
+<span class="kt">uint64_t</span><span class="w"> </span><span class="n">buff_length</span><span class="p">;</span>
+<span class="kt">uint16_t</span><span class="w"> </span><span class="n">num_chans</span><span class="p">;</span>
 
-<span class="n">std</span><span class="o">::</span><span class="n">fstream</span> <span class="n">file</span><span class="p">(</span><span class="n">seqFile</span><span class="p">,</span> <span class="n">std</span><span class="o">::</span><span class="n">ios</span><span class="o">::</span><span class="n">binary</span> <span class="o">|</span> <span class="n">std</span><span class="o">::</span><span class="n">ios</span><span class="o">::</span><span class="n">in</span><span class="p">);</span>
-<span class="k">if</span><span class="p">(</span> <span class="o">!</span><span class="n">file</span> <span class="p">)</span> <span class="k">throw</span> <span class="n">APS2_SEQFILE_FAIL</span><span class="p">;</span>
+<span class="n">std</span><span class="o">::</span><span class="n">fstream</span><span class="w"> </span><span class="nf">file</span><span class="p">(</span><span class="n">seqFile</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">ios</span><span class="o">::</span><span class="n">binary</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">ios</span><span class="o">::</span><span class="n">in</span><span class="p">);</span>
+<span class="k">if</span><span class="p">(</span><span class="w"> </span><span class="o">!</span><span class="n">file</span><span class="w"> </span><span class="p">)</span><span class="w"> </span><span class="k">throw</span><span class="w"> </span><span class="n">APS2_SEQFILE_FAIL</span><span class="p">;</span>
 
-<span class="n">file</span><span class="p">.</span><span class="n">read</span><span class="p">(</span><span class="n">junk</span><span class="p">,</span> <span class="mi">12</span><span class="p">);</span> <span class="c1">// Don&#39;t need this info</span>
-<span class="n">file</span><span class="p">.</span><span class="n">read</span><span class="p">(</span><span class="k">reinterpret_cast</span><span class="o">&lt;</span><span class="kt">char</span> <span class="o">*&gt;</span> <span class="p">(</span><span class="o">&amp;</span><span class="n">num_chans</span><span class="p">),</span> <span class="k">sizeof</span><span class="p">(</span><span class="kt">uint16_t</span><span class="p">));</span>
+<span class="n">file</span><span class="p">.</span><span class="n">read</span><span class="p">(</span><span class="n">junk</span><span class="p">,</span><span class="w"> </span><span class="mi">12</span><span class="p">);</span><span class="w"> </span><span class="c1">// Don&#39;t need this info</span>
+<span class="n">file</span><span class="p">.</span><span class="n">read</span><span class="p">(</span><span class="k">reinterpret_cast</span><span class="o">&lt;</span><span class="kt">char</span><span class="w"> </span><span class="o">*&gt;</span><span class="w"> </span><span class="p">(</span><span class="o">&amp;</span><span class="n">num_chans</span><span class="p">),</span><span class="w"> </span><span class="k">sizeof</span><span class="p">(</span><span class="kt">uint16_t</span><span class="p">));</span>
 
 <span class="c1">// Start anew</span>
 <span class="n">clear_channel_data</span><span class="p">();</span>
 
 <span class="c1">// Read the instructions</span>
-<span class="n">file</span><span class="p">.</span><span class="n">read</span><span class="p">(</span><span class="k">reinterpret_cast</span><span class="o">&lt;</span><span class="kt">char</span> <span class="o">*&gt;</span> <span class="p">(</span><span class="o">&amp;</span><span class="n">buff_length</span><span class="p">),</span> <span class="k">sizeof</span><span class="p">(</span><span class="kt">uint64_t</span><span class="p">));</span>
-<span class="n">vector</span><span class="o">&lt;</span><span class="kt">uint64_t</span><span class="o">&gt;</span> <span class="n">instructions</span><span class="p">;</span>
+<span class="n">file</span><span class="p">.</span><span class="n">read</span><span class="p">(</span><span class="k">reinterpret_cast</span><span class="o">&lt;</span><span class="kt">char</span><span class="w"> </span><span class="o">*&gt;</span><span class="w"> </span><span class="p">(</span><span class="o">&amp;</span><span class="n">buff_length</span><span class="p">),</span><span class="w"> </span><span class="k">sizeof</span><span class="p">(</span><span class="kt">uint64_t</span><span class="p">));</span>
+<span class="n">vector</span><span class="o">&lt;</span><span class="kt">uint64_t</span><span class="o">&gt;</span><span class="w"> </span><span class="n">instructions</span><span class="p">;</span>
 <span class="n">instructions</span><span class="p">.</span><span class="n">resize</span><span class="p">(</span><span class="n">buff_length</span><span class="p">);</span>
-<span class="n">file</span><span class="p">.</span><span class="n">read</span><span class="p">(</span><span class="k">reinterpret_cast</span><span class="o">&lt;</span><span class="kt">char</span> <span class="o">*&gt;</span> <span class="p">(</span><span class="n">instructions</span><span class="p">.</span><span class="n">data</span><span class="p">()),</span> <span class="n">buff_length</span><span class="o">*</span><span class="k">sizeof</span><span class="p">(</span><span class="kt">uint64_t</span><span class="p">));</span>
+<span class="n">file</span><span class="p">.</span><span class="n">read</span><span class="p">(</span><span class="k">reinterpret_cast</span><span class="o">&lt;</span><span class="kt">char</span><span class="w"> </span><span class="o">*&gt;</span><span class="w"> </span><span class="p">(</span><span class="n">instructions</span><span class="p">.</span><span class="n">data</span><span class="p">()),</span><span class="w"> </span><span class="n">buff_length</span><span class="o">*</span><span class="k">sizeof</span><span class="p">(</span><span class="kt">uint64_t</span><span class="p">));</span>
 <span class="n">write_sequence</span><span class="p">(</span><span class="n">instructions</span><span class="p">);</span>
 
 <span class="c1">// Read the waveforms</span>
-<span class="n">vector</span><span class="o">&lt;</span><span class="kt">int16_t</span><span class="o">&gt;</span> <span class="n">waveform</span><span class="p">;</span>
-<span class="k">for</span> <span class="p">(</span><span class="kt">int</span> <span class="n">chanct</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">chanct</span> <span class="o">&lt;</span> <span class="n">num_chans</span><span class="p">;</span> <span class="n">chanct</span><span class="o">++</span><span class="p">)</span> <span class="p">{</span>
-  <span class="n">file</span><span class="p">.</span><span class="n">read</span><span class="p">(</span><span class="k">reinterpret_cast</span><span class="o">&lt;</span><span class="kt">char</span> <span class="o">*&gt;</span> <span class="p">(</span><span class="o">&amp;</span><span class="n">buff_length</span><span class="p">),</span> <span class="k">sizeof</span><span class="p">(</span><span class="kt">uint64_t</span><span class="p">));</span>
-  <span class="n">waveform</span><span class="p">.</span><span class="n">resize</span><span class="p">(</span><span class="n">buff_length</span><span class="p">);</span>
-  <span class="n">file</span><span class="p">.</span><span class="n">read</span><span class="p">(</span><span class="k">reinterpret_cast</span><span class="o">&lt;</span><span class="kt">char</span> <span class="o">*&gt;</span> <span class="p">(</span><span class="n">waveform</span><span class="p">.</span><span class="n">data</span><span class="p">()),</span> <span class="n">buff_length</span><span class="o">*</span><span class="k">sizeof</span><span class="p">(</span><span class="kt">int16_t</span><span class="p">));</span>
-  <span class="n">set_waveform</span><span class="p">(</span><span class="n">chanct</span><span class="p">,</span> <span class="n">waveform</span><span class="p">);</span>
+<span class="n">vector</span><span class="o">&lt;</span><span class="kt">int16_t</span><span class="o">&gt;</span><span class="w"> </span><span class="n">waveform</span><span class="p">;</span>
+<span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="kt">int</span><span class="w"> </span><span class="n">chanct</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">chanct</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">num_chans</span><span class="p">;</span><span class="w"> </span><span class="n">chanct</span><span class="o">++</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">file</span><span class="p">.</span><span class="n">read</span><span class="p">(</span><span class="k">reinterpret_cast</span><span class="o">&lt;</span><span class="kt">char</span><span class="w"> </span><span class="o">*&gt;</span><span class="w"> </span><span class="p">(</span><span class="o">&amp;</span><span class="n">buff_length</span><span class="p">),</span><span class="w"> </span><span class="k">sizeof</span><span class="p">(</span><span class="kt">uint64_t</span><span class="p">));</span>
+<span class="w">  </span><span class="n">waveform</span><span class="p">.</span><span class="n">resize</span><span class="p">(</span><span class="n">buff_length</span><span class="p">);</span>
+<span class="w">  </span><span class="n">file</span><span class="p">.</span><span class="n">read</span><span class="p">(</span><span class="k">reinterpret_cast</span><span class="o">&lt;</span><span class="kt">char</span><span class="w"> </span><span class="o">*&gt;</span><span class="w"> </span><span class="p">(</span><span class="n">waveform</span><span class="p">.</span><span class="n">data</span><span class="p">()),</span><span class="w"> </span><span class="n">buff_length</span><span class="o">*</span><span class="k">sizeof</span><span class="p">(</span><span class="kt">int16_t</span><span class="p">));</span>
+<span class="w">  </span><span class="n">set_waveform</span><span class="p">(</span><span class="n">chanct</span><span class="p">,</span><span class="w"> </span><span class="n">waveform</span><span class="p">);</span>
 <span class="p">}</span>
 </pre></div>
 </div>
 <p>To manually set the values a user could use the <code class="docutils literal notranslate"><span class="pre">write_sequence</span></code> function to write sequence instruction information and the <code class="docutils literal notranslate"><span class="pre">set_waveform</span></code> function to write the waveform data.</p>
-</div>
-<div class="section" id="Data-written-by-Auspex">
-<h2>Data written by <code class="docutils literal notranslate"><span class="pre">Auspex</span></code><a class="headerlink" href="#Data-written-by-Auspex" title="Permalink to this headline">¶</a></h2>
+</section>
+<section id="Data-written-by-Auspex">
+<h2>Data written by <code class="docutils literal notranslate"><span class="pre">Auspex</span></code><a class="headerlink" href="#Data-written-by-Auspex" title="Link to this heading"></a></h2>
 <p>The other end of the data taking process involves saving experimental data to file. This data could have a very rich structure and will depend on how the data pipeline was constructed in <code class="docutils literal notranslate"><span class="pre">Auspex</span></code> and what was saved to file using the pipeline <code class="docutils literal notranslate"><span class="pre">Writer</span></code>. The writer uses a data structure called <strong>AuspexDataContainer</strong> specified in <code class="docutils literal notranslate"><span class="pre">auspex/data_format</span></code>. It creates a directory structure with a <code class="docutils literal notranslate"><span class="pre">.auspex</span></code> extension where the data files are stored. This choice to use directories was intentionally
 made to allow for multiple file writers to work at once. The files inside the folder have the following structure:</p>
 <div class="highlight-none notranslate"><div class="highlight"><pre><span></span>folder/data_set_name/
@@ -1236,16 +864,15 @@ made to allow for multiple file writers to work at once. The files inside the fo
 </pre></div>
 </div>
 <p>Where the .dat contains the actual data and the JSON file holds meta data about data in the .dat file. The data files are <code class="docutils literal notranslate"><span class="pre">numpy</span></code> memmaps as explained in more detail in the next section.</p>
-</div>
-<div class="section" id="Data-read-by-Auspex">
-<h2>Data read by <code class="docutils literal notranslate"><span class="pre">Auspex</span></code><a class="headerlink" href="#Data-read-by-Auspex" title="Permalink to this headline">¶</a></h2>
+</section>
+<section id="Data-read-by-Auspex">
+<h2>Data read by <code class="docutils literal notranslate"><span class="pre">Auspex</span></code><a class="headerlink" href="#Data-read-by-Auspex" title="Link to this heading"></a></h2>
 <p>The last situation is where data needs to be read from file after the experiment is over. This could be necessary for plotting, analysis, etc… Auspex has two main functions for doing this: <code class="docutils literal notranslate"><span class="pre">open_data</span></code> and <code class="docutils literal notranslate"><span class="pre">load_data</span></code>.</p>
 <div class="nbinput nblast docutils container">
 <div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[18]:
 </pre></div>
 </div>
-<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre>
-<span></span><span class="kn">from</span> <span class="nn">auspex.analysis.helpers</span> <span class="kn">import</span> <span class="n">open_data</span><span class="p">,</span> <span class="n">load_data</span>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">auspex.analysis.helpers</span> <span class="kn">import</span> <span class="n">open_data</span><span class="p">,</span> <span class="n">load_data</span>
 </pre></div>
 </div>
 </div>
@@ -1253,8 +880,7 @@ made to allow for multiple file writers to work at once. The files inside the fo
 <div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[19]:
 </pre></div>
 </div>
-<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre>
-<span></span><span class="n">auspex_data</span> <span class="o">=</span> <span class="n">load_data</span><span class="p">(</span><span class="s1">&#39;/Users/mware/test_data.auspex/&#39;</span><span class="p">)</span>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">auspex_data</span> <span class="o">=</span> <span class="n">load_data</span><span class="p">(</span><span class="s1">&#39;/Users/mware/test_data.auspex/&#39;</span><span class="p">)</span>
 </pre></div>
 </div>
 </div>
@@ -1262,8 +888,7 @@ made to allow for multiple file writers to work at once. The files inside the fo
 <div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[20]:
 </pre></div>
 </div>
-<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre>
-<span></span><span class="n">auspex_data</span>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">auspex_data</span>
 </pre></div>
 </div>
 </div>
@@ -1481,8 +1106,7 @@ made to allow for multiple file writers to work at once. The files inside the fo
 <div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[21]:
 </pre></div>
 </div>
-<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre>
-<span></span><span class="n">dat</span> <span class="o">=</span> <span class="n">open_data</span><span class="p">(</span><span class="s1">&#39;/Users/mware/test_data.auspex/&#39;</span><span class="p">,</span> <span class="n">groupname</span><span class="o">=</span><span class="s2">&quot;q2-main&quot;</span><span class="p">,</span> <span class="n">datasetname</span><span class="o">=</span><span class="s2">&quot;data&quot;</span><span class="p">)</span>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">dat</span> <span class="o">=</span> <span class="n">open_data</span><span class="p">(</span><span class="s1">&#39;/Users/mware/test_data.auspex/&#39;</span><span class="p">,</span> <span class="n">groupname</span><span class="o">=</span><span class="s2">&quot;q2-main&quot;</span><span class="p">,</span> <span class="n">datasetname</span><span class="o">=</span><span class="s2">&quot;data&quot;</span><span class="p">)</span>
 <span class="c1"># because no file numer is given, this functions the same as load data</span>
 </pre></div>
 </div>
@@ -1491,8 +1115,7 @@ made to allow for multiple file writers to work at once. The files inside the fo
 <div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[22]:
 </pre></div>
 </div>
-<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre>
-<span></span><span class="n">dat</span>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">dat</span>
 </pre></div>
 </div>
 </div>
@@ -1710,8 +1333,7 @@ made to allow for multiple file writers to work at once. The files inside the fo
 <div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[23]:
 </pre></div>
 </div>
-<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre>
-<span></span><span class="n">dat</span><span class="p">,</span> <span class="n">desc</span> <span class="o">=</span> <span class="n">open_data</span><span class="p">(</span><span class="mi">25</span><span class="p">,</span> <span class="s1">&#39;/Users/mware/IpythonNotebooks/explorations/Tomography/&#39;</span><span class="p">,</span> <span class="n">groupname</span><span class="o">=</span><span class="s2">&quot;q2-main&quot;</span><span class="p">,</span> <span class="n">datasetname</span><span class="o">=</span><span class="s2">&quot;data&quot;</span><span class="p">,</span> <span class="n">date</span><span class="o">=</span><span class="s2">&quot;200428&quot;</span><span class="p">)</span>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">dat</span><span class="p">,</span> <span class="n">desc</span> <span class="o">=</span> <span class="n">open_data</span><span class="p">(</span><span class="mi">25</span><span class="p">,</span> <span class="s1">&#39;/Users/mware/IpythonNotebooks/explorations/Tomography/&#39;</span><span class="p">,</span> <span class="n">groupname</span><span class="o">=</span><span class="s2">&quot;q2-main&quot;</span><span class="p">,</span> <span class="n">datasetname</span><span class="o">=</span><span class="s2">&quot;data&quot;</span><span class="p">,</span> <span class="n">date</span><span class="o">=</span><span class="s2">&quot;200428&quot;</span><span class="p">)</span>
 </pre></div>
 </div>
 </div>
@@ -1719,8 +1341,7 @@ made to allow for multiple file writers to work at once. The files inside the fo
 <div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[24]:
 </pre></div>
 </div>
-<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre>
-<span></span><span class="n">dat</span>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">dat</span>
 </pre></div>
 </div>
 </div>
@@ -1762,8 +1383,7 @@ array([ 0.11757491+8.94790649e-04j,  0.11372945+7.61291504e-04j,
 <div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[25]:
 </pre></div>
 </div>
-<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre>
-<span></span><span class="n">desc</span>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">desc</span>
 </pre></div>
 </div>
 </div>
@@ -1781,8 +1401,7 @@ array([ 0.11757491+8.94790649e-04j,  0.11372945+7.61291504e-04j,
 <div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[26]:
 </pre></div>
 </div>
-<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre>
-<span></span><span class="n">test_file</span> <span class="o">=</span> <span class="s1">&#39;/Users/mware/test_data.auspex/q2-main/data.dat&#39;</span>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">test_file</span> <span class="o">=</span> <span class="s1">&#39;/Users/mware/test_data.auspex/q2-main/data.dat&#39;</span>
 </pre></div>
 </div>
 </div>
@@ -1790,8 +1409,7 @@ array([ 0.11757491+8.94790649e-04j,  0.11372945+7.61291504e-04j,
 <div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[27]:
 </pre></div>
 </div>
-<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre>
-<span></span><span class="n">test_data</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">memmap</span><span class="p">(</span><span class="n">test_file</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">complex</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s1">&#39;r&#39;</span><span class="p">)</span>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">test_data</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">memmap</span><span class="p">(</span><span class="n">test_file</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">complex</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s1">&#39;r&#39;</span><span class="p">)</span>
 </pre></div>
 </div>
 </div>
@@ -1799,8 +1417,7 @@ array([ 0.11757491+8.94790649e-04j,  0.11372945+7.61291504e-04j,
 <div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[28]:
 </pre></div>
 </div>
-<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre>
-<span></span><span class="n">test_data</span>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">test_data</span>
 </pre></div>
 </div>
 </div>
@@ -1842,8 +1459,7 @@ memmap([-0.21082539-0.01154156j, -0.21598453-0.0102796j ,
 <div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[29]:
 </pre></div>
 </div>
-<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre>
-<span></span><span class="n">np</span><span class="o">.</span><span class="n">size</span><span class="p">(</span><span class="n">test_data</span><span class="p">)</span>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">np</span><span class="o">.</span><span class="n">size</span><span class="p">(</span><span class="n">test_data</span><span class="p">)</span>
 </pre></div>
 </div>
 </div>
@@ -1857,51 +1473,35 @@ memmap([-0.21082539-0.01154156j, -0.21598453-0.0102796j ,
 </pre></div></div>
 </div>
 <p>Anyone using <code class="docutils literal notranslate"><span class="pre">Auspex</span></code> should never have to work at this level. This breakdown of the file structures is presented only for reference.</p>
-</div>
-</div>
+</section>
+</section>
 
 
            </div>
-           
           </div>
           <footer>
 
   <hr/>
 
   <div role="contentinfo">
-    <p>
-        &#169; Copyright 2019, Auspex Developers.
-
-    </p>
+    <p>&#169; Copyright 2019, Auspex Developers.</p>
   </div>
-    
-    
-    
-    Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
-    
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
     <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
-    
-    provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
 
 </footer>
         </div>
       </div>
-
     </section>
-
   </div>
-  
-
-  <script type="text/javascript">
+  <script>
       jQuery(function () {
           SphinxRtdTheme.Navigation.enable(true);
       });
-  </script>
-
-  
-  
-    
-   
+  </script> 
 
 </body>
 </html>
