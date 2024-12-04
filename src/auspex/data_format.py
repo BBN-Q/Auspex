@@ -79,7 +79,7 @@ class AuspexDataContainer(object):
             descriptor:         `DataStreamDescriptor` that describes the dataset that is to be added.
         """
         self._create_meta(groupname, datasetname, descriptor)
-        mmap = self._create_memmap(groupname, datasetname, (np.product(descriptor.dims()),), descriptor.dtype)
+        mmap = self._create_memmap(groupname, datasetname, (np.prod(descriptor.dims()),), descriptor.dtype)
         self.groups[groupname][datasetname] = mmap
         return mmap
 
@@ -158,7 +158,7 @@ class AuspexDataContainer(object):
 
         filename = os.path.join(self.base_path,groupname,datasetname+'.dat')
         assert os.path.exists(filename), "Could not find dataset. Is this the correct name?"
-        flat_shape = (np.product(meta['shape']),)
+        flat_shape = (np.prod(meta['shape']),)
         mm = np.memmap(filename, dtype=meta['dtype'], mode='r', shape=flat_shape)
         data = np.array(mm).reshape(tuple(meta['shape']))
         del mm

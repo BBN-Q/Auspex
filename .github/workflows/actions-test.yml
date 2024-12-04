@@ -2,6 +2,7 @@ name: Python Package using Conda
 
 on: [push]
 
+
 jobs:
   build-linux:
     runs-on: ubuntu-latest
@@ -23,7 +24,7 @@ jobs:
         echo $GITHUB_PATH
 
     - name: pip cache
-      uses: actions/cache@v2
+      uses: actions/cache@v4
       id: cache
       with:
         path: /usr/share/miniconda/lib/python3.8/site-packages/*
@@ -47,11 +48,12 @@ jobs:
 
     - name: Install BBN dependencies
       run: |
+        sudo apt-get install pandoc
         export GIT_LFS_SKIP_SMUDGE=1
         pip install git+https://github.com/BBN-Q/bbndb.git
         pip install git+https://github.com/BBN-Q/QGL.git@develop
         pip install git+https://github.com/spatialaudio/nbsphinx.git@master
-        pip install pyvisa coveralls scikit-learn pyusb future python-usbtmc setproctitle progress serial
+        pip install pyvisa coveralls scikit-learn pyusb future python-usbtmc setproctitle progress serial pandoc
         export GIT_LFS_SKIP_SMUDGE=0
 
     - name: Test with unittest

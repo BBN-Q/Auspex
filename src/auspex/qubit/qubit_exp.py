@@ -534,6 +534,12 @@ class QubitExperiment(Experiment):
             exp = QubitExpFactory.create(PulsedSpec(q1))
             self.add_qubit_sweep(q1, "measure", "frequency", np.linspace(6e9, 6.5e9, 500))
             self.run_sweeps()
+
+        Parameters:
+            qubit the qubit to sweep
+            measure_or_control measure or control channel
+            attribute the attribute to sweep
+            values the values to sweep through
         """
         param = FloatParameter() # Create the parameter
         param.name = f"{qubit.label} {measure_or_control} {attribute}"
