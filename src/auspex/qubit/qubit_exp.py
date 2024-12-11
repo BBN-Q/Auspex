@@ -144,7 +144,7 @@ class QubitExperiment(Experiment):
         for c in my_aps3:
             if c.params['trigger_input_select'] == 1:
                 a = [x for x in all_aps3 if (x not in my_aps3) and x.serial_port == c.serial_port and x.dac == (1-c.dac)%2 ]
-                if a: 
+                if a:
                     self.aps3_c.append(a[0])
                     logger.debug("Adding missing dac trigger channel ")
 
@@ -268,15 +268,15 @@ class QubitExperiment(Experiment):
             # Add to class dictionary for convenience
             if not hasattr(self, instrument.label):
                 setattr(self, instrument.label, instr)
-        
+
         processed_sels = []
         for mq in self.measured_qubits:
 
             # Stream selectors from the pipeline database:
             # These contain all information except for the physical channel
-            mq_stream_sels = [ss for ss in self.stream_selectors if mq.label in ss.label.split("-")] 
-            
-            # Look up the receiver channel 
+            mq_stream_sels = [ss for ss in self.stream_selectors if mq.label in ss.label.split("-")]
+
+            # Look up the receiver channel
             rcv = receiver_chans_by_qubit_label[mq.label]
 
             # Look up the digitizer/transceiver and find the correct stream selector class
@@ -329,7 +329,7 @@ class QubitExperiment(Experiment):
                     dig.instr.add_channel(channel)
                     self.chan_to_dig[channel] = dig.instr
                     self.chan_to_oc[channel] = self.connector_by_sel[mq_stream_sel]
-                
+
         # Find the number of self.measurements
         segments_per_dig = {receiver_chan.receiver: meta_info["receivers"][receiver_chan.label] for receiver_chan in self.receiver_chans
                                                          if receiver_chan.label in meta_info["receivers"].keys()}
@@ -611,6 +611,7 @@ class QubitExperiment(Experiment):
                 gen_proxy.instr.output = False
             for std_aln_output in self.standalone_w_output:
                 std_aln_output.instr.output = False
+                time.sleep(1)
         except:
             logger.error('Could Not Stop AWGs or Digitizers; Reset Experiment')
         for instr in self.instruments:
