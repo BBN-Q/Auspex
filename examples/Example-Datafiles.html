@@ -80,7 +80,13 @@
              
   <section id="Data-writers-in-QGL,-Auspex,-libaps2">
 <h1>Data writers in QGL, Auspex, libaps2<a class="headerlink" href="#Data-writers-in-QGL,-Auspex,-libaps2" title="Link to this heading"></a></h1>
-<p>It would be nice to have some documentation on how data is stored, processed, and passed around between the three software packages. I see four situations where data is passed into or out of files. * Data written to <code class="docutils literal notranslate"><span class="pre">.aps2</span></code> files by <code class="docutils literal notranslate"><span class="pre">QGL</span></code> * Data read by <code class="docutils literal notranslate"><span class="pre">libaps2</span></code> and set to the APS2 * Data written by <code class="docutils literal notranslate"><span class="pre">Auspex</span></code> into <code class="docutils literal notranslate"><span class="pre">.auspex</span></code> data files * Data read by <code class="docutils literal notranslate"><span class="pre">Auspex</span></code>/<code class="docutils literal notranslate"><span class="pre">Qlab.jl</span></code> for analysis</p>
+<p>It would be nice to have some documentation on how data is stored, processed, and passed around between the three software packages. I see four situations where data is passed into or out of files.</p>
+<ul class="simple">
+<li><p>Data written to <code class="docutils literal notranslate"><span class="pre">.aps2</span></code> files by <code class="docutils literal notranslate"><span class="pre">QGL</span></code></p></li>
+<li><p>Data read by <code class="docutils literal notranslate"><span class="pre">libaps2</span></code> and set to the APS2</p></li>
+<li><p>Data written by <code class="docutils literal notranslate"><span class="pre">Auspex</span></code> into <code class="docutils literal notranslate"><span class="pre">.auspex</span></code> data files</p></li>
+<li><p>Data read by <code class="docutils literal notranslate"><span class="pre">Auspex</span></code>/<code class="docutils literal notranslate"><span class="pre">Qlab.jl</span></code> for analysis</p></li>
+</ul>
 <p>These cover ~99% of the situations I can imagine in our normal data flow. The rest of this document is an exploration and note-to-future-self about how this process works and how it could be changed in the future.</p>
 <section id="QGL-to-.aps2-files">
 <h2>QGL to .aps2 files<a class="headerlink" href="#QGL-to-.aps2-files" title="Link to this heading"></a></h2>
