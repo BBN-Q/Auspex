@@ -19,9 +19,12 @@ from unittest.mock import Mock
 import collections
 from struct import pack, iter_unpack
 import serial
-from QGL.drivers.APS3Pattern import Sync,Wait,Waveform,Goto,ModulationCommand
-from QGL.PulseShapes import constant
-
+try:
+    from QGL.drivers.APS3Pattern import Sync,Wait,Waveform,Goto,ModulationCommand
+    from QGL.PulseShapes import constant
+except:
+    print("QGL not found. Needed by APS3 driver")
+    
 U32 = 0xFFFFFFFF #mask for 32-bit unsigned int
 U16 = 0xFFFF
 
@@ -340,7 +343,7 @@ class AMC599(object):
 
         # From AD9164 datasheet:
         # IOUTFS = 32 mA × (ANA_FULL_SCALE_CURRENT[9:0]/1023) + 8 mA
-        reg_value = int(1023 * (current - 8) / 32)  
+        reg_value = int(1023 * (current - 8) / 32)
 
         if self.ser is None:
             logger.debug('{:#x}'.format(reg_value & 0x3))
@@ -1040,7 +1043,7 @@ class APS3_generator(APS3):
         pulse = constant(amp=1, length=self.sequence_length, sampling_rate=5e9)
         #wf_a, wf_b = pack_pulse_into_waveform(pulse)
         WF_MAX_AMP = (1 << 15) - 1
-        self.load_waveforms([int(x * WF_MAX_AMP) for x in np.real(pulse)], 
+        self.load_waveforms([int(x * WF_MAX_AMP) for x in np.real(pulse)],
                             [int(x * WF_MAX_AMP) for x in np.imag(pulse)])
         return len(pulse) // 2
 
@@ -1081,7 +1084,7 @@ class APS3_generator(APS3):
             self.trigger_input_select = 0b0
 
         self.load_sequence([s.flatten() for s in wf_seq_cw])
-    
+
     def load_sequence(self, arg):
         print("Loading sequence to APS3 generator")
         super().load_sequence(arg)
