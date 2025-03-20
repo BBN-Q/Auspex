@@ -49,6 +49,13 @@ else:
         aps1_missing = True
         libaps = MagicMock()
 
+spec_an_missing = False
+fake_spec_an = False
+if config.auspex_dummy_mode:
+    spec_an_missing = True
+    fake_spec_an = True
+    spec_an = MagicMock()
+
 class DigitalAttenuator(SCPIInstrument):
     """BBN 3 Channel Instrument"""
     instrument_type = "Digital attenuator"
@@ -124,6 +131,10 @@ class SpectrumAnalyzer(SCPIInstrument):
 
     def __init__(self, resource_name=None, *args, **kwargs):
         super(SpectrumAnalyzer, self).__init__(resource_name, *args, **kwargs)
+        if spec_an_missing:
+            logger.warning("Using dummy spectrum analyzer")
+        if fake_spec_an:
+            self.interface = MagicMock()
 
     def connect(self, resource_name=None, interface_type=None):
         super(SpectrumAnalyzer, self).connect(resource_name, interface_type)
@@ -146,9 +157,24 @@ class SpectrumAnalyzer(SCPIInstrument):
                 " at {}.".format(self.resource_name))
         return volt
 
+    def spew_fake_data(self, random_mag=0.1):
+        """
+        Generate fake data for the SpectrumAnalyzer. For unittest usage.
+
+        Returns a random voltage reading
+        """
+        # import ipdb; ipdb.set_trace();
+        v = np.zeros((1,), dtype=np.float64)
+        # import ipdb; ipdb.set_trace();
+        v += random_mag*np.random.random((1,))
+        return v
+
     @property
     def voltage(self):
-        return self.get_voltage()
+        if fake_spec_an:
+            return spew_fake_data()
+        else:
+            return self.get_voltage()
 
     def peak_amplitude(self):
         volt = self.get_voltage()
