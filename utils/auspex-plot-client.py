@@ -38,8 +38,8 @@ from PyQt5 import QtCore, QtWidgets
 from PyQt5.QtGui import QIcon
 
 import numpy as np
-from matplotlib.backends.backend_qt4agg import NavigationToolbar2QT as NavigationToolbar
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.backends.backend_qtagg import NavigationToolbar2QT as NavigationToolbar
+from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 from matplotlib.pyplot import subplots
 
@@ -137,7 +137,7 @@ class DescListener(QtCore.QObject):
 def label_offset(ax): #, axis="y"):
     ax.xaxis.offsetText.set_visible(False)
     ax.yaxis.offsetText.set_visible(False)
-    
+
     def update_label(event_axes):
         if event_axes:
             old_xlabel = event_axes.get_xlabel()
@@ -153,7 +153,7 @@ def label_offset(ax): #, axis="y"):
             else:
                 offset_x = ''
             if offset_y != 0:
-                offset_y = r" (10$^{"+ str(offset_y) + r"}$)" 
+                offset_y = r" (10$^{"+ str(offset_y) + r"}$)"
             else:
                 offset_y = ''
             ax.set_xlabel(old_xlabel + offset_x)
@@ -345,7 +345,7 @@ class Canvas2D(MplCanvas):
             else:
                 offset_x = ''
             if offset_y != 0:
-                offset_y = r" (10$^{"+ str(offset_y) + r"}$)" 
+                offset_y = r" (10$^{"+ str(offset_y) + r"}$)"
             else:
                 offset_y = ''
             if 'x_label' in desc.keys():
@@ -413,7 +413,7 @@ class MatplotWindowMixin(object):
 
     def init_comms(self):
         self.context = zmq.Context()
-        
+
         self.uuid = None
         self.data_listener_thread = None
 
