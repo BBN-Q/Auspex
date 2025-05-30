@@ -3,18 +3,18 @@
 <!DOCTYPE html>
 <html class="writer-html5" lang="en" data-content_root="./">
 <head>
-  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Experiment Documentation &mdash; auspex 2019.2 documentation</title>
-      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b76e3c8a" />
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
       <script src="_static/documentation_options.js?v=8e83ba1c"></script>
-      <script src="_static/doctools.js?v=9a2dae69"></script>
+      <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
       <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
       <script src="https://cdn.jsdelivr.net/npm/@jupyter-widgets/html-manager@^1.0.1/dist/embed-amd.js"></script>
@@ -114,7 +114,7 @@
 <section id="defining-experiments">
 <h2>Defining Experiments<a class="headerlink" href="#defining-experiments" title="Link to this heading"></a></h2>
 <p>Therefore, we recommend that users package their measurements into <em>Experiments</em>, which provide the opportunity for re-use.:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">SwitchingExperiment</span><span class="p">(</span><span class="n">Experiment</span><span class="p">):</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">class</span><span class="w"> </span><span class="nc">SwitchingExperiment</span><span class="p">(</span><span class="n">Experiment</span><span class="p">):</span>
     <span class="c1"># Control parameters</span>
     <span class="n">field</span>          <span class="o">=</span> <span class="n">FloatParameter</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">unit</span><span class="o">=</span><span class="s2">&quot;T&quot;</span><span class="p">)</span>
     <span class="n">pulse_duration</span> <span class="o">=</span> <span class="n">FloatParameter</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="mf">5.0e-9</span><span class="p">,</span> <span class="n">unit</span><span class="o">=</span><span class="s2">&quot;s&quot;</span><span class="p">)</span>
@@ -131,7 +131,7 @@
     <span class="n">mag</span>   <span class="o">=</span> <span class="n">AMI430</span><span class="p">(</span><span class="s2">&quot;192.168.5.109&quot;</span><span class="p">)</span>
     <span class="n">keith</span> <span class="o">=</span> <span class="n">Keithley2400</span><span class="p">(</span><span class="s2">&quot;GPIB0::25::INSTR&quot;</span><span class="p">)</span>
 
-    <span class="k">def</span> <span class="nf">init_instruments</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">init_instruments</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="c1"># Instrument initialization goes here, and is run</span>
         <span class="c1"># automatically by run_sweeps</span>
 
@@ -145,13 +145,13 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">pulse_voltage</span><span class="o">.</span><span class="n">add_post_push_hook</span><span class="p">(</span><span class="k">lambda</span><span class="p">:</span> <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mf">0.05</span><span class="p">))</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">field</span><span class="o">.</span><span class="n">add_post_push_hook</span><span class="p">(</span><span class="k">lambda</span><span class="p">:</span> <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mf">0.1</span><span class="p">))</span>
 
-    <span class="k">def</span> <span class="nf">init_streams</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">init_streams</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="c1"># Establish the &quot;intrinsic&quot; data dimensions</span>
         <span class="c1"># run by run_sweeps.</span>
         <span class="n">ax</span> <span class="o">=</span> <span class="n">DataAxis</span><span class="p">(</span><span class="s2">&quot;samples&quot;</span><span class="p">,</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">samples</span><span class="p">))</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">resistance</span><span class="o">.</span><span class="n">add_axis</span><span class="p">(</span><span class="n">ax</span><span class="p">)</span>
 
-    <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="c1"># This is the inner loop, which is run for each set of</span>
         <span class="c1"># sweep parameters by run_sweeps. Data is pushed out</span>
         <span class="c1"># to the world through the output connectors.</span>

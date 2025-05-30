@@ -3,11 +3,11 @@
 <!DOCTYPE html>
 <html class="writer-html5" lang="en" data-content_root="../">
 <head>
-  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Example Q8: Realistic Two Qubit Tuneup and Experiments &mdash; auspex 2019.2 documentation</title>
-      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b76e3c8a" />
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
       <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=e59714d7" />
       <link rel="stylesheet" type="text/css" href="../_static/nbsphinx-code-cells.css?v=2aa19091" />
 
@@ -15,7 +15,7 @@
       <script src="../_static/jquery.js?v=5d32c60e"></script>
       <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
       <script src="../_static/documentation_options.js?v=8e83ba1c"></script>
-      <script src="../_static/doctools.js?v=9a2dae69"></script>
+      <script src="../_static/doctools.js?v=9bcbadda"></script>
       <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
       <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
       <script src="https://cdn.jsdelivr.net/npm/@jupyter-widgets/html-manager@^1.0.1/dist/embed-amd.js"></script>
@@ -120,13 +120,13 @@
 <div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[ ]:
 </pre></div>
 </div>
-<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">os</span>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
 <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s1">&#39;AWG_DIR&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;./AWG&quot;</span>
 
-<span class="kn">import</span> <span class="nn">matplotlib</span>
-<span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="k">as</span> <span class="nn">plt</span>
-<span class="kn">import</span> <span class="nn">QGL.config</span>
-<span class="kn">import</span> <span class="nn">auspex.config</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">QGL.config</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">auspex.config</span>
 <span class="n">auspex</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">AWGDir</span> <span class="o">=</span> <span class="s2">&quot;/home/qlab/BBN/AWG&quot;</span>
 <span class="n">QGL</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">AWGDir</span> <span class="o">=</span> <span class="s2">&quot;/home/qlab/BBN/AWG&quot;</span>
 <span class="n">auspex</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">KernelDir</span> <span class="o">=</span> <span class="s2">&quot;/home/qlab/BBN/Kernels&quot;</span>
@@ -134,11 +134,11 @@
 
 <span class="o">%</span><span class="k">matplotlib</span> inline
 
-<span class="kn">from</span> <span class="nn">auspex.analysis.qubit_fits</span> <span class="kn">import</span> <span class="o">*</span>
-<span class="kn">from</span> <span class="nn">auspex.analysis.helpers</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">auspex.analysis.qubit_fits</span><span class="w"> </span><span class="kn">import</span> <span class="o">*</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">auspex.analysis.helpers</span><span class="w"> </span><span class="kn">import</span> <span class="o">*</span>
 
-<span class="kn">from</span> <span class="nn">QGL</span> <span class="kn">import</span> <span class="o">*</span>
-<span class="kn">from</span> <span class="nn">auspex.qubit</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">QGL</span><span class="w"> </span><span class="kn">import</span> <span class="o">*</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">auspex.qubit</span><span class="w"> </span><span class="kn">import</span> <span class="o">*</span>
 
 <span class="c1">#import seaborn as sns</span>
 <span class="c1">#sns.set_style(&#39;whitegrid&#39;)</span>
@@ -431,7 +431,7 @@
 <div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[ ]:
 </pre></div>
 </div>
-<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">auspex.instruments</span> <span class="kn">import</span> <span class="n">enumerate_visa_instruments</span><span class="p">,</span> <span class="n">SpectrumAnalyzer</span>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">auspex.instruments</span><span class="w"> </span><span class="kn">import</span> <span class="n">enumerate_visa_instruments</span><span class="p">,</span> <span class="n">SpectrumAnalyzer</span>
 </pre></div>
 </div>
 </div>
@@ -632,8 +632,8 @@
 <div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[ ]:
 </pre></div>
 </div>
-<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">auspex.analysis.qubit_fits</span> <span class="kn">import</span> <span class="n">T1Fit</span><span class="p">,</span> <span class="n">RamseyFit</span>
-<span class="kn">from</span> <span class="nn">auspex.analysis.helpers</span> <span class="kn">import</span> <span class="n">cal_scale</span>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">auspex.analysis.qubit_fits</span><span class="w"> </span><span class="kn">import</span> <span class="n">T1Fit</span><span class="p">,</span> <span class="n">RamseyFit</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">auspex.analysis.helpers</span><span class="w"> </span><span class="kn">import</span> <span class="n">cal_scale</span>
 </pre></div>
 </div>
 </div>
@@ -818,8 +818,8 @@
 <div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[ ]:
 </pre></div>
 </div>
-<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">auspex.analysis.qubit_fits</span> <span class="kn">import</span> <span class="o">*</span>
-<span class="kn">from</span> <span class="nn">auspex.analysis.helpers</span> <span class="kn">import</span> <span class="o">*</span>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">auspex.analysis.qubit_fits</span><span class="w"> </span><span class="kn">import</span> <span class="o">*</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">auspex.analysis.helpers</span><span class="w"> </span><span class="kn">import</span> <span class="o">*</span>
 </pre></div>
 </div>
 </div>
@@ -881,8 +881,8 @@
 <div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[ ]:
 </pre></div>
 </div>
-<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">auspex.parameter</span> <span class="kn">import</span> <span class="n">IntParameter</span>
-<span class="kn">import</span> <span class="nn">time</span>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">auspex.parameter</span><span class="w"> </span><span class="kn">import</span> <span class="n">IntParameter</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
 </pre></div>
 </div>
 </div>
@@ -911,7 +911,7 @@
 <div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">wait_param</span> <span class="o">=</span> <span class="n">IntParameter</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
 <span class="n">wait_param</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="s2">&quot;Repeat&quot;</span>
 <span class="c1">#wait = lambda x: print(f&quot;{x}&quot;)</span>
-<span class="k">def</span> <span class="nf">wait</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">wait</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
     <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">x</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
     <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
 <span class="n">wait_param</span><span class="o">.</span><span class="n">assign_method</span><span class="p">(</span><span class="n">wait</span><span class="p">)</span>
