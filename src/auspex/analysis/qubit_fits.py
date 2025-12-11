@@ -466,7 +466,7 @@ class SingleQubitRBFit(AuspexFit):
             plt.xlabel(self.xlabel)
             plt.ylabel(self.ylabel)
             plt.legend()
-            plt.annotate(self.annotation(), xy=(0.4, 0.10),
+            plt.annotate(self.annotation(), xy=(0.4, 0.60),
                          xycoords='axes fraction', size=12)
         else:
             self.ax.errorbar(self.lengths, self.ypts, yerr=self.errors/np.sqrt(len(self.lengths)),

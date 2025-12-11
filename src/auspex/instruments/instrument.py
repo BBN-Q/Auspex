@@ -220,7 +220,8 @@ class Instrument(metaclass=MetaInstrument):
                 # when queried by hasattr. Avoid this behavior with the
                 # "ask for forgiveness" paradigm.
                 try:
-                    setattr(self, name, value)
+                    if (value is not None): 
+                        setattr(self, name, value)
                 except (AttributeError, TypeError) as e:
                     logger.info("Instrument {} property: {} could not be set to {}.".format(self.name,name,value))
                     pass

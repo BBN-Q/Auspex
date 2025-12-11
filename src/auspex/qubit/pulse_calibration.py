@@ -591,6 +591,8 @@ class RabiAmpCalibration(QubitCalibration):
 
     def _calibrate(self):
         data, _ = self.run_sweeps()
+        time.sleep(5)
+        print("Sleep for 5s")
         N = len(data)
         I_fit = RabiAmpFit(self.amps, data[N//2:])
         Q_fit = RabiAmpFit(self.amps, data[:N//2])
@@ -753,15 +755,15 @@ class RamseyCalibration(QubitCalibration):
         else:
             self.qubit.frequency = float(round(self.fit_freq))
 
-        for edge in self.qubit.edge_target:
-            if edge.phys_chan.generator is not None:
-                edge_source = edge.phys_chan.generator
-                if self.set_source:
-                    edge_source.frequency = self.source_proxy.frequency + self.qubit.frequency - edge.frequency
-                else:
-                    edge.frequency = self.source_proxy.frequency + self.qubit.frequency - edge_source.frequency
-            else:
-                edge.frequency = self.qubit.frequency
+      #  for edge in self.qubit.edge_target:
+      #      if edge.phys_chan.generator is not None:
+      #          edge_source = edge.phys_chan.generator
+      #          if self.set_source:
+      #              edge_source.frequency = self.source_proxy.frequency + self.qubit.frequency - edge.frequency
+      #          else:
+      #              edge.frequency = self.source_proxy.frequency + self.qubit.frequency - edge_source.frequency
+      #      else:
+      #          edge.frequency = self.qubit.frequency
 
         if self.sample:
             frequency = round(self.fit_freq,9)

@@ -843,6 +843,7 @@ class APS3(Instrument, metaclass=MakeBitFieldParams):
         assert (trig_bits >= 0 and trig_bits < U16), "Marker delay out of range!"
         self.write_register(CSR_MARKER_DELAY, trig_bits)
 
+
     ###### DRAM OFFSET REGISTERS ###############################################
     def SEQ_OFFSET(self):
         return (self.read_register(CSR_SEQ_OFFSET) - DRAM_AXI_BASE)

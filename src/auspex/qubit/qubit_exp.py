@@ -611,6 +611,7 @@ class QubitExperiment(Experiment):
                 gen_proxy.instr.output = False
             for std_aln_output in self.standalone_w_output:
                 std_aln_output.instr.output = False
+                time.sleep(1)
         except:
             logger.error('Could Not Stop AWGs or Digitizers; Reset Experiment')
         for instr in self.instruments:

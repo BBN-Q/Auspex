@@ -14,6 +14,8 @@ from auspex.log import logger
 from auspex import config
 from unittest.mock import MagicMock
 import ctypes
+# from numpy import round, floor, log2
+import numpy as np
 
 #check to see if we are in Travis
 istravis = os.environ.get('TRAVIS') == 'true'
@@ -171,8 +173,47 @@ class HolzworthInstrument(Instrument, metaclass=MakeSettersGetters):
     @frequency.setter
     def frequency(self, value):
         if self.fmin <= value <= self.fmax:
+            value = np.float128(value)
             # WARNING!!! The Holzworth might blow up if you ask for >12 digits of precision here
+            
+            #This can obviously be done better
+            band = np.floor(np.log2(value*1e-6)-6)
+            if band < 0:
+                band = 0
+            if band > 6:
+                band = 6
+            if self.fmax >6.8e9 and value > 5e9: #Account for the different bands used by the 12GHz Holzworth
+                if value <= 16.388e9:
+                    band = 7
+                else:
+                    band = 8
+            #The device is reporting its range to be greater than its specification (spec is 6400MHz, range reported is 6720MHz)
+            #Not sure how this new frequency setting will behave outside of the specified range, but this should work
+            # elif value <= 6400e6: #The range that was listed before is higher than this...
+            #     band = 6
+            # else:
+            #     err_msg = "The value {} GHz is outside of the frequency bands specified for instrument '{}'.".format(value*1e-9, self.fmin*1e-9, self.fmax*1e-9, self.name)
+            #     raise ValueError(err_msg)
+            FTW = int((value * np.float128(2**48)) // (np.float128(1e9) * np.float128(2**band)))
+            if FTW % 2 == 1: #The Holzworth internally only uses 47 bits of the 48 bit register, so rounding to the nearest even number will be slightly more accurate
+                FTW = FTW + 1
+            # print(FTW*np.float128(1e9)*np.float128(2**band)/np.float128(2**48) - value, FTW*np.float128(1e9)*np.float128(2**band)/np.float128(2**48) / value)
+            # print(value, band, FTW)
             self.ch_query(":FREQ:{:.12g} Hz".format(value))
+            self.ch_query(f":FREQ:FTW:{int(FTW)}")
+            set_ftw = int(self.ch_query(":FREQ:FTW?"))
+            set_freq= float(self.ch_query(":FREQ?")[0:-4])*1e6
+            assert set_ftw == FTW, f"Failed to write {value} ({FTW}) (FTW failed) to {self.name}. Instead wrote {set_freq} ({set_ftw}). Device may need to be reset."
+            if set_freq != float("{:.12g}".format(value)):
+                logger.warning(f"Failed to write {value} ({FTW}) (Frequency failed) to {self.name}. Instead wrote {set_freq} ({set_ftw}). Device may need to be reset.")
+            # print(np.abs(set_freq - value), set_freq/value)
+            # assert set_freq == float("{:.12g}".format(value)), f"Failed to write {value} ({FTW}) (Frequency failed) to {self.name}. Instead wrote {set_freq} ({set_ftw}). Device may need to be reset."
+            # if set_ftw != FTW:
+            #     print(f"Failed to write {value} ({FTW}) (FTW) to {self.name}. Instead wrote {set_freq} ({set_ftw})")
+            #     logger.warning(f"Failed to write {value} ({FTW}) (FTW) to {self.name}. Instead wrote {set_freq} ({set_ftw})")
+            # if set_freq != value:
+            #     print(f"Failed to write {value} ({FTW}) to {self.name}. Instead wrote {set_freq} ({set_ftw})")
+            #     logger.warning(f"Failed to write {value} ({FTW}) to {self.name}. Instead wrote {set_freq} ({set_ftw})")
         else:
             err_msg = "The value {} GHz is outside of the allowable range {}-{} GHz specified for instrument '{}'.".format(value*1e-9, self.fmin*1e-9, self.fmax*1e-9, self.name)
             raise ValueError(err_msg)
