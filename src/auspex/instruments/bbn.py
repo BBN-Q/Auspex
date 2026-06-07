@@ -6,7 +6,7 @@
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 
-__all__ = ['APS', 'APS2', 'TDM', 'DigitalAttenuator', 'SpectrumAnalyzer']
+__all__ = ['APS', 'APS2', 'TDM', 'DigitalAttenuator', 'SpectrumAnalyzer', 'RelayDriver']
 
 from .instrument import Instrument, SCPIInstrument, VisaInterface, MetaInstrument
 from auspex.log import logger
@@ -48,6 +48,50 @@ else:
         fake_aps1 = True
         aps1_missing = True
         libaps = MagicMock()
+
+class RelayDriver(SCPIInstrument):
+    """Leo Ranzani's switcher for cryogenic relays. Based on earlier Matlab code.
+       Drives two six-pole Radiall microwave relays. Both open and close are done
+       on individual poles, no common reset. Relays are numbered 0 and 1, and poles
+       1-6. Communication is on a virtual COM port"""
+
+    instrument_type = "Relay Driver"
+    pulse_width = 125       # ms
+    
+    def __init__(self, resource_name=None, *args, **kwargs):
+        super(RelayDriver, self).__init__(resource_name, *args, **kwargs)
+
+    def connect(self, resource_name=None, interface_type=None):
+        if resource_name is not None:
+            self.resource_name = resource_name
+        super(RelayDriver, self).connect(resource_name=self.resource_name,
+            interface_type=interface_type)
+        self.interface._resource.baud_rate = 9600
+        self.interface._resource.read_termination = "\n"
+        self.interface._resource.write_termination = "\n"
+        self.interface._resource.timeout = 1000
+
+        #self.park()
+
+    def park(self):
+        for n in range(6):
+            self.interface.write(f"W{0*8+n+1:02d}F")  # Set all control relays for Switch 0 open
+            self.interface.write(f"W{1*8+n+1:02d}F")  # Set all control relays for Switch 1 open
+        self.interface.write("W07F")                  # CTRL to low
+        self.interface.write("W08F")                  # COM to low
+    
+    def close_switch(self, relay, pole):
+        self.interface.write(f"W{relay*8+pole:02d}L")         #Arm the pole
+        self.interface.write("W07F")
+        self.interface.write(f"P08{self.pulse_width:03d}")    # Pulse CTRL
+        self.park()
+
+    def open_switch(self, relay, pole):
+        self.interface.write(f"W{relay*8+pole:02d}L")    # Arm the pole
+        self.interface.write("W08F")                  # Open COM
+        self.interface.write(f"P07{self.pulse_width:03d}")
+        self.park()
+    
 
 class DigitalAttenuator(SCPIInstrument):
     """BBN 3 Channel Instrument"""
