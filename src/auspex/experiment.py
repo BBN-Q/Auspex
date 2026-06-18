@@ -10,17 +10,26 @@ import os
 import sys
 import uuid
 import json
+import traceback
 
-if sys.platform == 'win32' or 'NOFORKING' in os.environ:
-    from queue import Queue as Queue
-    from threading import Event
-    from threading import Thread as Process
-    from threading import Thread as Thread
-else:
-    from multiprocessing import Queue as Queue
-    from multiprocessing import Event
-    from multiprocessing import Process
-    from threading import Thread as Thread
+from auspex.log import logger
+
+# if sys.platform == 'win32' or 'NOFORKING' in os.environ:
+#     logger.info("Using threads")
+#     from queue import Queue as Queue
+#     from threading import Event
+#     from threading import Thread as Process
+#     from threading import Thread as Thread
+# else:
+
+from multiprocess import Queue as Queue
+from multiprocess import Event
+from multiprocess import Process
+import multiprocess as mp
+from threading import Thread as Thread
+import multiprocess.context as ctx
+# ctx._force_start_method('fork')
+logger.info(f"Using pathos multiprocess with {mp.get_start_method()}")
 
 from IPython.core.getipython import get_ipython
 in_notebook = False
@@ -53,7 +62,7 @@ from auspex.parameter import ParameterGroup, FloatParameter, IntParameter, Param
 from auspex.sweep import Sweeper
 from auspex.stream import DataStream, DataAxis, SweepAxis, DataStreamDescriptor, InputConnector, OutputConnector
 from auspex.filters import Plotter, MeshPlotter, ManualPlotter, WriteToFile, DataBuffer, Filter
-from auspex.log import logger
+
 import auspex.config
 from auspex.config import isnotebook
 
@@ -85,9 +94,10 @@ def update_filename(filename, add_date=True):
     return "{}-{:04d}".format(basename,i)
 
 class ExperimentGraph(object):
-    def __init__(self, edges):
+    def __init__(self, edges, manager):
         self.dag = None
         self.edges = []
+        self.manager = manager
         self.create_graph(edges)
 
     def dfs_edges(self):
@@ -110,7 +120,8 @@ class ExperimentGraph(object):
         dag = nx.DiGraph()
         self.edges = []
         for edge in edges:
-            obj = DataStream(name="{}_TO_{}".format(edge[0].name, edge[1].name))
+            logger.debug(f"{edge[0].name}_TO_{edge[1].name}:  {self.manager}")
+            obj = DataStream(name="{}_TO_{}".format(edge[0].name, edge[1].name), manager=self.manager)
             edge[0].add_output_stream(obj)
             edge[1].add_input_stream(obj)
             self.edges.append(obj)
@@ -169,6 +180,12 @@ class Experiment(metaclass=MetaExperiment):
 
         # Should we show the dashboard?
         self.dashboard = False
+
+        # Profile?
+        self.profile = False
+
+        # Multiprocessing manager?
+        self.manager = mp.Manager()
 
         # Create and use plots?
         self.do_plotting = False
@@ -246,6 +263,12 @@ class Experiment(metaclass=MetaExperiment):
         # Run the stream init
         self.init_streams()
 
+        # Event for filters to register a panic
+        self.filter_panic = Event()
+
+        # Event to tell all filters to exit
+        self.filter_exit  = Event()
+
     def set_graph(self, edges):
         unique_nodes = []
         for eb, ee in edges:
@@ -254,7 +277,7 @@ class Experiment(metaclass=MetaExperiment):
             if ee.parent not in unique_nodes:
                 unique_nodes.append(ee.parent)
         self.nodes = unique_nodes
-        self.graph = ExperimentGraph(edges)
+        self.graph = ExperimentGraph(edges, manager=self.manager)
 
     def init_streams(self):
         """Establish the base descriptors for any internal data streams and connectors."""
@@ -371,6 +394,12 @@ class Experiment(metaclass=MetaExperiment):
 
             # Run the procedure
             self.run()
+
+            # Check for any filter panics
+            if self.filter_panic.is_set():
+                logger.warning("Panic detected in listeners/filters. Exiting.")
+                self.filter_exit.set()
+                break
 
             # See if the axes want to extend themselves. They will push updates
             # directly to the output_connecters as messages that will be passed
@@ -573,23 +602,15 @@ class Experiment(metaclass=MetaExperiment):
             #initialize instruments
             self.init_instruments()
 
-            # def catch_ctrl_c(signum, frame):
-            #     import ipdb; ipdb.set_trace();
-            #     logger.info("Caught SIGINT. Shutting down.")
-            #     self.declare_done() # Ask nicely
-
-            #     self.shutdown()
-            #     raise NameError("Shutting down.")
-            #     sys.exit(0)
-
-            # signal.signal(signal.SIGINT, catch_ctrl_c)
-
             # We want to wait for the sweep method above,
             # not the experiment's run method, so replace this
             # in the list of tasks.
             self.other_nodes = self.nodes[:]
             self.other_nodes.extend(self.extra_plotters)
             self.other_nodes.remove(self)
+            self.other_node_processes = {}
+            self.other_node_configs = {}
+            self.other_node_outputs = {}
 
             # If we are launching the process dashboard,
             # setup the bokeh server and establish a queue for
@@ -601,7 +622,15 @@ class Experiment(metaclass=MetaExperiment):
 
             # Start the filter processes
             for n in self.other_nodes:
-                n.start()
+                conf = n.get_config()
+                oq = Queue()
+                p = Process(target=n.run, args=(conf, self.filter_exit, n.done, self.filter_panic,
+                                                 n.output_connectors, n.input_connectors, 
+                                                 self.profile, n.perf_queue, oq))
+                p.start()
+                self.other_node_configs[n] = conf 
+                self.other_node_processes[n] = p
+                self.other_node_outputs[n] = oq
 
             # Run the main experiment loop
             self.sweep()
@@ -611,7 +640,7 @@ class Experiment(metaclass=MetaExperiment):
                 if callback:
                     callback(plot)
 
-            # Wait for the
+            # Wait for the filters to finish.
             time.sleep(0.1)
             times = {n: 0 for n in self.other_nodes}
             dones = {n: n.done.is_set() for n in self.other_nodes}
@@ -630,7 +659,19 @@ class Experiment(metaclass=MetaExperiment):
                     n.final_buffer = n._final_buffer.get()
 
             for n in self.other_nodes:
-                n.join()
+                p = self.other_node_processes[n]
+                conf = self.other_node_configs[n]
+                oq = self.other_node_outputs[n]
+                
+                while True:
+                    try:
+                        # Get the Output Queue
+                        param, v = oq.get(False)
+                        setattr(n, param, v)
+                    except:
+                        break
+
+                p.join()
 
             for buff in self.buffers:
                 buff.output_data, buff.descriptor = buff.get_data()
@@ -640,9 +681,11 @@ class Experiment(metaclass=MetaExperiment):
                 self.perf_thread.join()
 
         except KeyboardInterrupt as e:
-            print("Caught KeyboardInterrupt, terminating.")
-            #self.shutdown() #Commented out, since this is already in the finally.
-            #sys.exit(0)
+            logger.warning("Caught KeyboardInterrupt, shutting down.")
+        except Exception as e:
+            just_the_string = traceback.format_exc()
+            logger.warning(f"Experiment raised exception {e} (traceback follows). Bailing.")
+            logger.warning(just_the_string)
         finally:
             self.shutdown()
 
@@ -655,7 +698,6 @@ class Experiment(metaclass=MetaExperiment):
             mp.stop()
 
     def shutdown(self):
-        logger.debug("Shutting down instruments")
         # This includes stopping the flow of data, and must be done before terminating nodes
         self.shutdown_instruments()
 
@@ -663,7 +705,7 @@ class Experiment(metaclass=MetaExperiment):
             ct_max = 5 #arbitrary waiting 10 s before giving up
             for ct in range(ct_max):
                 if hasattr(self, 'other_nodes'):
-                    if any([n.is_alive() for n in self.other_nodes]):
+                    if any([p.is_alive() for p in self.other_node_processes.values()]):
                         logger.warning("Filter pipeline appears stuck. Use keyboard interrupt to terminate.")
                         time.sleep(2.0)
                     else:
@@ -776,13 +818,13 @@ class Experiment(metaclass=MetaExperiment):
                         logger.info("Connection established to plot server.")
                         self.do_plotting = True
                     else:
-                        raise Exception("Server returned invalid message, expected ACK.")
+                        raise Exception("Plot server returned invalid message, expected ACK.")
                 except:
-                    logger.info("Could not connect to server.")
+                    logger.info("Could not connect to plot server.")
                     for p in self.plotters:
                         p.do_plotting = False
             else:
-                logger.info("Plot Server did not respond.")
+                logger.info("Plot server did not respond.")
                 for p in self.plotters:
                     p.do_plotting = False
 

@@ -32,7 +32,7 @@ class Framer(Filter):
         self.sum_so_far = None
         self.num_averages = None
 
-        self.quince_parameters = [self.axis]
+        # self.quince_parameters = [self.axis]
 
     def final_init(self):
         descriptor_in = self.sink.descriptor

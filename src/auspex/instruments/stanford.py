@@ -86,7 +86,7 @@ class SR830(SCPIInstrument):
         self.interface.write("TRCB?{:d},0,{:d}".format(channel, stored_points))
         #buf = self.interface.read_raw(numbytes=4)
         buf = self.interface.read_bytes(4*stored_points,chunk_size=4)
-        logger.info(f"Raw buffer is {buf} with length {len(buf)} bytes.")
+        # logger.info(f"Raw buffer is {buf} with length {len(buf)} bytes.")
         return np.frombuffer(buf, dtype=np.float32)
 
     def buffer_start(self):

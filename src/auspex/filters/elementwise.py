@@ -31,7 +31,7 @@ class ElementwiseFilter(Filter):
     def __init__(self, filter_name=None, **kwargs):
         super(ElementwiseFilter, self).__init__(filter_name=filter_name, **kwargs)
         self.sink.max_input_streams = 100
-        self.quince_parameters = []
+        # self.quince_parameters = []
 
     def operation(self):
         """Must be overridden with the desired mathematical function"""

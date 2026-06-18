@@ -1,4 +1,4 @@
-from multiprocessing import Queue, Process, Event, Value
+from multiprocess import Queue, Process, Event, Value
 from auspex.instruments import AlazarATS9870, AlazarChannel
 
 import time

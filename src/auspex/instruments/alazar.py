@@ -15,7 +15,7 @@ import datetime, time
 import sys
 import numpy as np
 
-from multiprocessing import Value
+from multiprocess import Value
 
 from .instrument import Instrument, ReceiverChannel
 from auspex.log import logger

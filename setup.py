@@ -24,6 +24,7 @@ install_requires = [
     "ipywidgets >= 7.0.0",
     "sqlalchemy >= 1.2.15",
     "pyserial >= 3.4",
+    "multiprocess == 0.70.11.1",
     "setproctitle",
     "progress"
 ]

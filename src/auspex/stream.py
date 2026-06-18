@@ -13,9 +13,9 @@ if sys.platform == 'win32' or 'NOFORKING' in os.environ:
     import threading as mp
     from queue import Queue
 else:
-    import multiprocessing as mp
-    from multiprocessing import Queue
-from multiprocessing import Value, RawValue, RawArray
+    import multiprocess as mp
+    from multiprocess import Queue
+from multiprocess import Value, RawValue, RawArray, Array
 import ctypes
 import logging
 import numbers
@@ -25,7 +25,6 @@ import datetime
 
 import numpy as np
 from functools import reduce
-
 from auspex.log import logger
 
 def cartesian(arrays, out=None, dtype='f'):
@@ -479,14 +478,14 @@ class DataStreamDescriptor(object):
     def _ipython_key_completions_(self):
         return [a.name for a in self.axes]
 
+        
 class DataStream(object):
     """A stream of data"""
-    def __init__(self, name=None, unit=None):
+    def __init__(self, name=None, unit=None, manager=None):
         super(DataStream, self).__init__()
-        self.queue = Queue()
+        self.manager = None
         self.name = name
         self.unit = unit
-        self.points_taken_lock = mp.Lock()
         self.points_taken = Value('i', 0) # Using shared memory since these are used in filter processes
         self.descriptor = None
         self.start_connector = None
@@ -494,9 +493,25 @@ class DataStream(object):
         self.closed = False
 
         # Shared memory interface
-        self.buffer_lock    = mp.Lock()
-        # self.buffer_size    = 500000
-        self.buff_idx       = Value('i', 0)
+        self.buffer_size    = None
+        self.init_multiprocessing_objs()
+
+        self.re_np = None
+        self.im_np = None
+
+    def init_multiprocessing_objs(self):
+        if self.manager:
+            logger.debug(f"{self.name} stream using manager")
+            self.queue             = self.manager.Queue()
+            self.buffer_lock       = self.manager.Lock()
+            self.points_taken_lock = self.manager.Lock()
+            self.buff_idx          = self.manager.Value('i', 0)
+        else:
+            logger.debug(f"{self.name} stream not using manager")
+            self.queue             = Queue()
+            self.buff_idx          = Value('i', 0)
+            self.buffer_lock       = mp.Lock()
+            self.points_taken_lock = mp.Lock()
 
     def final_init(self):
         self.buffer_size = self.descriptor.num_points()*self.descriptor.buffer_mult_factor
@@ -506,8 +521,6 @@ class DataStream(object):
             self.buffer_size = 50e6
         self.buff_shared_re = RawArray(ctypes.c_double, int(self.buffer_size))
         self.buff_shared_im = RawArray(ctypes.c_double, int(self.buffer_size))
-        self.re_np = np.frombuffer(self.buff_shared_re, dtype=np.float64)
-        self.im_np = np.frombuffer(self.buff_shared_im, dtype=np.float64)
 
     def set_descriptor(self, descriptor):
         if isinstance(descriptor,DataStreamDescriptor):
@@ -536,6 +549,7 @@ class DataStream(object):
 
     def reset(self):
         self.descriptor.reset()
+        self.init_multiprocessing_objs()
         with self.points_taken_lock:
             self.points_taken.value = 0
         while not self.queue.empty():
@@ -547,7 +561,17 @@ class DataStream(object):
         return "<DataStream(name={}, completion={}%, descriptor={})>".format(
             self.name, self.percent_complete(), self.descriptor)
 
+    def spawn_fix(self):
+        # Make sure we have regenerated the wrappers properly. By putting this code here
+        # we hope to force any spawned sub-processes to properly recreate the numpy arrays
+        # wrapping the synchronization objects.
+        if self.re_np is None:
+            self.re_np = np.frombuffer(self.buff_shared_re, dtype=np.float64)
+            self.im_np = np.frombuffer(self.buff_shared_im, dtype=np.float64)
+
     def push(self, data):
+        self.spawn_fix()
+
         if self.closed:
             raise Exception("The queue is closed and should not be receiving any more data")
         with self.points_taken_lock:
@@ -663,6 +687,10 @@ class OutputConnector(object):
     def __len__(self):
         with self.points_taken_lock:
             return self.points_taken.value
+
+    def spawn_fix(self):
+        for stream in self.output_streams:
+            stream.spawn_fix()
 
     # We allow the connectors itself to posess
     # a descriptor, that it may pass
