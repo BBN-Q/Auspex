@@ -80,13 +80,13 @@ class RelayDriver(SCPIInstrument):
         self.interface.write("W07F")                  # CTRL to low
         self.interface.write("W08F")                  # COM to low
     
-    def close_switch(self, relay, pole):
+    def open_switch(self, relay, pole):
         self.interface.write(f"W{relay*8+pole:02d}L")         #Arm the pole
         self.interface.write("W07F")
         self.interface.write(f"P08{self.pulse_width:03d}")    # Pulse CTRL
         self.park()
 
-    def open_switch(self, relay, pole):
+    def close_switch(self, relay, pole):
         self.interface.write(f"W{relay*8+pole:02d}L")    # Arm the pole
         self.interface.write("W08F")                  # Open COM
         self.interface.write(f"P07{self.pulse_width:03d}")
