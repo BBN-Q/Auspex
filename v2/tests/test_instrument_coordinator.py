@@ -12,8 +12,7 @@ import unittest
 
 import numpy as np
 
-from auspex_v2.instruments.client import CoordinatorClient, RemoteError
-from auspex_v2.instruments.coordinator import PROTOCOL_VERSION
+from auspex_v2.instruments.coordinator import CoordinatorClient, PROTOCOL_VERSION, RemoteError
 
 
 class CoordinatorTest(unittest.TestCase):
@@ -25,7 +24,7 @@ class CoordinatorTest(unittest.TestCase):
         self.server = None
         self.start_server()
 
-    def start_server(self, *, cli=False, quiet=False, capture=False):
+    def start_server(self, *, cli=False, quiet=False, capture=False, clean=False):
         """Launch the service or operator CLI and wait for its handshake."""
         env = dict(os.environ)
         source_dir = str(Path(__file__).resolve().parents[1] / "src")
@@ -35,6 +34,8 @@ class CoordinatorTest(unittest.TestCase):
         argv = [sys.executable, "-B", *entrypoint, "--socket", str(self.socket)]
         if quiet:
             argv.append("--quiet")
+        if clean:
+            argv.append("--clean")
         self.server = subprocess.Popen(argv, stdout=subprocess.PIPE if capture else subprocess.DEVNULL,
                                        stderr=subprocess.PIPE, env=env)
         deadline = time.monotonic() + 5
@@ -69,38 +70,43 @@ class CoordinatorTest(unittest.TestCase):
         self.stop_server()
         self.tmp.cleanup()
 
-    def register(self, client, name="src", resource="SIM::SRC"):
-        return client.register(name, "simulated_source", resource)
+    def register_connected(self, client, name="src", resource="SIM::SRC"):
+        """Register and explicitly connect a simulator for tests that need live use."""
+        result = client.register(name, "simulated_source", resource)
+        client.connect(name)
+        return result
 
     def test_cli_logs_commands_and_transitions_unless_quiet(self):
         """Show a splash and operator events by default but emit nothing in quiet mode."""
         self.stop_server()
         self.start_server(cli=True, capture=True)
         with CoordinatorClient(self.socket) as c:
-            self.register(c)
+            self.register_connected(c)
             with c.live("src") as source:
                 source.set("frequency", 5e9)
                 self.assertEqual(source.get("frequency"), 5e9)
             with c.begin_run("observed-run"):
                 pass
-            c.terminate("src", "test reset")
+            c.terminate("src")
             c.recover("src")
             c.terminate("src", "test reset")
             c.recover("src", "Operator checked source")
         output, _ = self.stop_server()
         text = output.decode()
         self.assertIn("INSTRUMENT COORDINATOR", text)
-        self.assertIn("UNREGISTERED -> IDLE", text)
+        self.assertIn("UNREGISTERED -> DISCONNECTED", text)
         self.assertIn("SET frequency value=5000000000.0", text)
         self.assertIn("GET frequency -> 5000000000.0", text)
         self.assertIn("UNLOCKED -> LOCKED", text)
         self.assertIn("LOCKED -> UNLOCKED", text)
-        self.assertIn("src: TERMINATED -> IDLE\n", text)
-        self.assertIn("src: TERMINATED -> IDLE (Operator checked source)", text)
+        self.assertIn("src: CONNECTED -> TERMINATED\n", text)
+        self.assertIn("src: TERMINATED -> DISCONNECTED\n", text)
+        self.assertIn("src: TERMINATED -> DISCONNECTED (Operator checked source)", text)
+        self.assertNotIn("STATUS requested", text)  # GUI-style monitoring must not flood the console
 
         self.start_server(cli=True, quiet=True, capture=True)
         with CoordinatorClient(self.socket) as c:
-            c.recover("src")
+            c.connect("src")
             with c.live("src") as source:
                 source.set("frequency", 6e9)
         output, _ = self.stop_server()
@@ -110,6 +116,7 @@ class CoordinatorTest(unittest.TestCase):
         """Transfer complex VNA traces without desynchronizing subsequent requests."""
         with CoordinatorClient(self.socket) as c:
             c.register("vna", "simulated_vna", "SIM::VNA")
+            c.connect("vna")
             with c.live("vna") as vna:
                 vna.set("frequency_center", 6.1e9)
                 frequencies, values = vna.call("get_trace", measurement="S21")
@@ -125,7 +132,7 @@ class CoordinatorTest(unittest.TestCase):
                 vna.set("num_points", 1_000_000)
                 with self.assertRaisesRegex(RemoteError, "Command executed but result unavailable"):
                     vna.call("get_trace")
-                self.assertEqual(c.status()["instruments"]["vna"]["state"], "IDLE")
+                self.assertEqual(c.status()["instruments"]["vna"]["state"], "CONNECTED")
                 vna.set("num_points", 2000)
                 self.assertEqual(vna.call("get_trace")[1].shape, (2000,))
 
@@ -133,6 +140,7 @@ class CoordinatorTest(unittest.TestCase):
         """Discard an abandoned array reply without retaining live ownership."""
         with CoordinatorClient(self.socket) as observer:
             observer.register("vna", "simulated_vna", "SIM::VNA")
+            observer.connect("vna")
             sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
             sock.settimeout(5)
             sock.connect(str(self.socket))
@@ -163,8 +171,8 @@ class CoordinatorTest(unittest.TestCase):
     def test_live_run_lockout_and_commands(self):
         """Verify live access blocks atomic run lockout and run access locks all devices."""
         with CoordinatorClient(self.socket) as client, CoordinatorClient(self.socket) as other:
-            self.register(client)
-            self.register(client, "spare", "SIM::SPARE")
+            self.register_connected(client)
+            self.register_connected(client, "spare", "SIM::SPARE")
             with client.live("src") as source:
                 self.assertEqual(source.get("frequency"), 1e9)
                 source.set("frequency", 5e9)
@@ -177,7 +185,7 @@ class CoordinatorTest(unittest.TestCase):
                 self.assertIsNone(other.status()["run"])  # no partial lockout
                 with self.assertRaisesRegex(RemoteError, "Not a registered operation"):
                     source.call("disconnect")
-                self.assertEqual(other.status()["instruments"]["src"]["state"], "IDLE")
+                self.assertEqual(other.status()["instruments"]["src"]["state"], "CONNECTED")
             with other.begin_run("experiment-42") as run:
                 self.assertEqual(other.status()["run"]["run_id"], "experiment-42")
                 self.assertTrue(other.status()["instruments"]["spare"]["locked"])
@@ -191,10 +199,62 @@ class CoordinatorTest(unittest.TestCase):
             with client.live("spare") as spare:
                 self.assertEqual(spare.get("frequency"), 1e9)
 
+    def test_live_proxy_settings_operations_and_parameterized_commands(self):
+        """Expose only declared members, with local argument errors leaving the worker alive."""
+        with CoordinatorClient(self.socket) as c:
+            self.register_connected(c)
+            with c.live("src") as source:
+                self.assertEqual(source.frequency, 1e9)
+                source.set_frequency(5e9)
+                self.assertEqual(source.get_frequency(), 5e9)
+                source.output = True
+                self.assertTrue(source.output)
+                self.assertEqual(source.identify(), "SimulatedSource:SIM::SRC")
+                source.set_channel_frequency(6e9, channel=2)
+                self.assertEqual(source.get_channel_frequency(channel=2), 6e9)
+                self.assertEqual(source.session.get("channel_frequency", channel=2), 6e9)
+                with self.assertRaises(TypeError):
+                    source.set_channel_frequency(7e9)
+                with self.assertRaises(AttributeError):
+                    source.channel_frequency
+                with self.assertRaises(AttributeError):
+                    source.disconnect()
+                with self.assertRaises(AttributeError):
+                    source.unknown = 1
+                with self.assertRaisesRegex(RemoteError, "requires arguments"):
+                    source.session.get("channel_frequency")
+                with self.assertRaisesRegex(RemoteError, "requires arguments"):
+                    source.session.get("frequency", channel=1)
+                self.assertEqual(c.status()["instruments"]["src"]["state"], "CONNECTED")
+                self.assertEqual(source.get_channel_frequency(channel=2), 6e9)
+            with self.assertRaisesRegex(RuntimeError, "closed"):
+                source.get_frequency()
+            with self.assertRaisesRegex(RuntimeError, "closed"):
+                source.frequency = 2e9
+
+    def test_run_instrument_proxy_and_vna_trace(self):
+        """Bind run device views to one exclusive session and return array results."""
+        with CoordinatorClient(self.socket) as c:
+            self.register_connected(c)
+            c.register("vna", "simulated_vna", "SIM::VNA")
+            with c.begin_run("proxy-run") as run:
+                run.connect("vna")
+                source = run.instrument("src")
+                vna = run.instrument("vna")
+                source.set_frequency(4e9)
+                vna.frequency_center = 6.1e9
+                vna.set_num_points(100)
+                frequencies, response = vna.get_trace(measurement="S21")
+                self.assertEqual(frequencies.shape, (100,))
+                self.assertEqual(response.dtype, np.complex64)
+                self.assertEqual(source.get_frequency(), 4e9)
+            with self.assertRaisesRegex(RuntimeError, "closed"):
+                vna.get_trace()
+
     def test_disconnect_releases_live_but_orphans_run(self):
         """Distinguish transient live disconnects from orphaned run ownership."""
         with CoordinatorClient(self.socket) as owner, CoordinatorClient(self.socket) as observer:
-            self.register(owner)
+            self.register_connected(owner)
             live = owner.live("src")
             owner.close()  # simulate notebook disappearance
             for _ in range(100):
@@ -215,6 +275,8 @@ class CoordinatorTest(unittest.TestCase):
             self.assertEqual(observer.status()["instruments"]["src"]["state"], "UNKNOWN")
             with self.assertRaises(RemoteError):
                 observer.live("src")
+            with self.assertRaisesRegex(RemoteError, "reconciliation reason required"):
+                observer.reconcile_run("")
             observer.reconcile_run("Operator examined interrupted run")
             with self.assertRaisesRegex(RemoteError, "recover instruments src"):
                 observer.begin_run("next")
@@ -223,51 +285,187 @@ class CoordinatorTest(unittest.TestCase):
                 pass
 
     def test_termination_is_latched_and_recovery_is_explicit(self):
-        """Require a reason for termination but not for explicit recovery."""
+        """Allow immediate termination, but require explicit recovery afterward."""
         with CoordinatorClient(self.socket) as c:
-            self.register(c)
+            self.register_connected(c)
             with c.live("src"):
                 pass
-            with self.assertRaisesRegex(RemoteError, "reason required"):
-                c.terminate("src", "")
-            c.terminate("src", "Operator found unresponsive worker")
+            with self.assertRaisesRegex(RemoteError, "Reason must be a string"):
+                c.request("TERMINATE", name="src", reason=42)
+            c.terminate("src")
             self.assertEqual(c.status()["instruments"]["src"]["state"], "TERMINATED")
-            with self.assertRaisesRegex(RemoteError, "explicit recovery"):
+            with self.assertRaisesRegex(RemoteError, "explicit connect or recovery"):
                 c.live("src")
-            with self.assertRaisesRegex(RemoteError, "Recovery reason must be a string"):
+            with self.assertRaisesRegex(RemoteError, "Reason must be a string"):
                 c.request("RECOVER", name="src", reason=42)
             self.assertEqual(c.status()["instruments"]["src"]["state"], "TERMINATED")
             c.recover("src")
-            self.assertEqual(c.status()["instruments"]["src"]["state"], "IDLE")
+            self.assertEqual(c.status()["instruments"]["src"]["state"], "DISCONNECTED")
             c.terminate("src", "Operator requested a second check")
             c.recover("src", "Operator inspected simulated device")
-            self.assertEqual(c.status()["instruments"]["src"]["state"], "IDLE")
+            self.assertEqual(c.status()["instruments"]["src"]["state"], "DISCONNECTED")
+
+    def test_terminate_all_preserves_run_and_live_ownership(self):
+        """Latch every instrument, even idle ones, without freeing existing leases."""
+        with CoordinatorClient(self.socket) as c:
+            self.register_connected(c)
+            self.register_connected(c, "spare", "SIM::SPARE")
+            with c.live("src") as source:
+                self.assertEqual(source.get("frequency"), 1e9)
+                self.assertEqual(c.terminate_all()["terminated"], ["spare", "src"])
+                status = c.status()
+                self.assertEqual(status["instruments"]["src"]["state"], "TERMINATED")
+                self.assertEqual(status["instruments"]["spare"]["state"], "TERMINATED")
+                self.assertEqual(status["instruments"]["src"]["live_sessions"], 1)
+                with self.assertRaisesRegex(RemoteError, "explicit connect or recovery"):
+                    source.get("frequency")
+                self.assertEqual(c.terminate_all()["terminated"], ["spare", "src"])
+            c.recover("src")
+            c.recover("spare")
+            with c.begin_run("active") as run:
+                run.connect("src")
+                self.assertEqual(run.get("frequency", name="src"), 1e9)
+                c.terminate_all()
+                self.assertEqual(c.status()["run"]["run_id"], "active")
+                self.assertTrue(c.status()["instruments"]["src"]["locked"])
+                with self.assertRaisesRegex(RemoteError, "explicit connect or recovery"):
+                    run.get("frequency", name="src")
+                with self.assertRaises(RemoteError):
+                    c.recover("src")
+            self.assertIsNone(c.status()["run"])
+        self.stop_server()
+        self.start_server()
+        with CoordinatorClient(self.socket) as c:
+            self.assertEqual(c.status()["instruments"]["src"]["state"], "TERMINATED")
+            self.assertEqual(c.status()["instruments"]["spare"]["state"], "TERMINATED")
+            c.recover("src")
+            c.recover("spare")
 
     def test_unexpected_worker_death_latches_terminated(self):
         """Verify an unexpected subprocess exit quarantines its instrument."""
         with CoordinatorClient(self.socket) as c:
-            self.register(c)
+            self.register_connected(c)
             with c.live("src") as source:
                 with self.assertRaisesRegex(RemoteError, "Worker exited"):
                     source.call("crash_for_test")
             self.assertEqual(c.status()["instruments"]["src"]["state"], "TERMINATED")
             c.recover("src", "Operator inspected device after process crash")
+            c.connect("src")
             with c.live("src") as source:
                 self.assertEqual(source.get("frequency"), 1e9)
 
-    def test_restart_requires_recovery_and_duplicate_physical_device_fails(self):
-        """Preserve inventory across restarts without trusting old worker state."""
+    def test_explicit_connection_and_clean_inventory(self):
+        """Require connect before live use and clearing only after disconnection."""
         with CoordinatorClient(self.socket) as c:
-            self.register(c)
-            with self.assertRaisesRegex(RemoteError, "Physical device already registered"):
-                self.register(c, "duplicate", "SIM::SRC")
+            c.register("src", "simulated_source", "SIM::SRC")
+            self.assertEqual(c.status()["instruments"]["src"]["state"], "DISCONNECTED")
+            with self.assertRaisesRegex(RemoteError, "explicit connect"):
+                c.live("src")
+            c.connect("src")
+            self.assertTrue(c.status()["instruments"]["src"]["worker_running"])
+            with c.live("src") as source:
+                self.assertEqual(source.frequency, 1e9)
+                with self.assertRaises(RemoteError):
+                    c.disconnect("src")
+                with self.assertRaises(RemoteError):
+                    c.clear_instruments()
+            self.assertEqual(c.disconnect_all()["failures"], {})
+            self.assertFalse(c.status()["instruments"]["src"]["worker_running"])
+            self.assertEqual(c.clear_instruments()["cleared"], ["src"])
+            self.assertEqual(c.status()["instruments"], {})
         self.stop_server()
         self.start_server()
         with CoordinatorClient(self.socket) as c:
+            self.assertEqual(c.status()["instruments"], {})
+
+    def test_failed_connect_and_disconnect_require_recovery(self):
+        """Latch uncertainty and prevent clear or retry after a worker I/O failure."""
+        with CoordinatorClient(self.socket) as c:
+            c.register("bad", "simulated_source", "SIM::FAIL_CONNECT")
+            with self.assertRaisesRegex(RemoteError, "Simulated connect failure"):
+                c.connect("bad")
+            self.assertEqual(c.status()["instruments"]["bad"]["state"], "UNKNOWN")
+            with self.assertRaises(RemoteError):
+                c.connect("bad")
+            with self.assertRaises(RemoteError):
+                c.clear_instruments()
+            c.recover("bad", "Operator checked simulated failure")
+            c.deregister("bad")
+            c.register("src", "simulated_source", "SIM::FAIL_DISCONNECT")
+            c.connect("src")
+            outcome = c.disconnect_all()
+            self.assertIn("src", outcome["failures"])
             self.assertEqual(c.status()["instruments"]["src"]["state"], "UNKNOWN")
             with self.assertRaises(RemoteError):
-                c.begin_run("new")
-            c.recover("src", "Operator inspected device after restart")
+                c.clear_instruments()
+            c.recover("src", "Operator checked simulated disconnection")
+            self.assertEqual(c.clear_instruments()["cleared"], ["src"])
+
+    def test_terminate_disconnected_and_run_connect(self):
+        """Allow quarantine without a worker and explicit connection under a run lock."""
+        with CoordinatorClient(self.socket) as c:
+            c.register("src", "simulated_source", "SIM::SRC")
+            c.terminate("src")
+            self.assertEqual(c.status()["instruments"]["src"]["state"], "TERMINATED")
+            self.assertFalse(c.status()["instruments"]["src"]["worker_running"])
+            c.recover("src", "Inspected simulator")
+            with c.begin_run("connect-under-run") as run:
+                with self.assertRaises(RemoteError):
+                    c.connect("src")
+                with self.assertRaises(RemoteError):
+                    run.get("frequency", name="src")
+                run.connect("src")
+                self.assertEqual(run.get("frequency", name="src"), 1e9)
+                with self.assertRaises(RemoteError):
+                    c.disconnect_all()
+            c.disconnect("src")
+            c.clear_instruments()
+
+    def test_shutdown_requires_cleared_inventory(self):
+        """Keep the headless service alive until all registrations are cleared."""
+        with CoordinatorClient(self.socket) as c:
+            c.register("src", "simulated_source", "SIM::SRC")
+            with self.assertRaisesRegex(RemoteError, "empty inventory"):
+                c.request("SHUTDOWN")
+            c.clear_instruments()
+            c.request("SHUTDOWN")
+        self.assertEqual(self.server.wait(timeout=5), 0)
+        self.server.communicate()
+        self.server = None
+        self.start_server()
+        with CoordinatorClient(self.socket) as c:
+            self.assertEqual(c.status()["instruments"], {})
+
+    def test_clean_start_discards_inventory_and_orphaned_run(self):
+        """Reset persisted simulated state only when explicitly requested at startup."""
+        with CoordinatorClient(self.socket) as c:
+            self.register_connected(c)
+            c.begin_run("interrupted")
+        self.stop_server()
+        self.start_server()
+        with CoordinatorClient(self.socket) as c:
+            self.assertIn("src", c.status()["instruments"])
+            self.assertEqual(c.status()["run"]["run_id"], "interrupted")
+        self.stop_server()
+        self.start_server(clean=True)
+        with CoordinatorClient(self.socket) as c:
+            self.assertEqual(c.status(), {"instruments": {}, "run": None})
+            c.register("src", "simulated_source", "SIM::SRC")
+        self.stop_server()
+        self.start_server()
+        with CoordinatorClient(self.socket) as c:
+            self.assertEqual(c.status()["instruments"]["src"]["state"], "DISCONNECTED")
+
+    def test_restart_disconnects_and_duplicate_physical_device_fails(self):
+        """Preserve inventory across clean service restarts without retaining workers."""
+        with CoordinatorClient(self.socket) as c:
+            self.register_connected(c)
+            with self.assertRaisesRegex(RemoteError, "Physical device already registered"):
+                c.register("duplicate", "simulated_source", "SIM::SRC")
+        self.stop_server()
+        self.start_server()
+        with CoordinatorClient(self.socket) as c:
+            self.assertEqual(c.status()["instruments"]["src"]["state"], "DISCONNECTED")
             c.deregister("src")
             self.assertEqual(c.status()["instruments"], {})
 

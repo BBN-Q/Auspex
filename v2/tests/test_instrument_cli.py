@@ -1,0 +1,121 @@
+"""CLI lifecycle tests without starting Qt or instrument workers."""
+
+import importlib.util
+import io
+import threading
+from pathlib import Path
+import unittest
+from unittest.mock import Mock, patch
+
+
+CLI_PATH = Path(__file__).resolve().parents[1] / "utils" / "instrument_coordinator.py"
+spec = importlib.util.spec_from_file_location("instrument_coordinator_cli", CLI_PATH)
+cli = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(cli)
+
+
+class CoordinatorCliTest(unittest.TestCase):
+    """Check that one command launches and owns only its optional GUI child."""
+
+    def test_gui_starts_after_socket_bind_and_closes_on_service_exit(self):
+        """Forward service flags and pass the bound socket to the GUI process."""
+        process = Mock()
+        process.poll.return_value = None
+
+        def run_service(args, *, on_start, on_bound):
+            self.assertEqual(args, ["--socket", "/tmp/test.sock", "-q"])
+            self.assertIs(on_start, cli.print_splash)
+            on_bound(Path("/tmp/test.sock"))
+            return 7
+
+        with patch.object(cli.importlib.util, "find_spec", return_value=object()), \
+             patch.object(cli, "run_service", side_effect=run_service), \
+             patch.object(cli.subprocess, "Popen", return_value=process) as popen:
+            self.assertEqual(cli.main(["--gui", "--socket", "/tmp/test.sock", "-q"]), 7)
+        popen.assert_called_once_with([cli.sys.executable, "-m", "auspex_v2.instruments.coordinator.gui",
+                                       "--socket", "/tmp/test.sock"])
+        process.terminate.assert_called_once()
+        process.wait.assert_called_once_with(timeout=5)
+
+    def test_closed_gui_does_not_end_service(self):
+        """Do not treat a client window's normal exit as a service shutdown."""
+        process = Mock()
+        process.poll.return_value = 0
+        with patch.object(cli.importlib.util, "find_spec", return_value=object()), \
+             patch.object(cli.subprocess, "Popen", return_value=process), \
+             patch.object(cli, "run_service", side_effect=lambda args, *, on_start, on_bound:
+                          (on_bound(Path("/tmp/test.sock")), "still running")[1]):
+            self.assertEqual(cli.main(["--gui"]), "still running")
+        process.terminate.assert_not_called()
+
+    def test_headless_launch_never_needs_gui_dependencies(self):
+        """Preserve the headless CLI when optional Qt packages are unavailable."""
+        with patch.object(cli.importlib.util, "find_spec", return_value=None), \
+             patch.object(cli, "run_service", return_value=None) as run_service:
+            cli.main(["-q"])
+            run_service.assert_called_once()
+            self.assertEqual(run_service.call_args.args, (["-q"],))
+            self.assertIs(run_service.call_args.kwargs["on_start"], cli.print_splash)
+            self.assertTrue(callable(run_service.call_args.kwargs["on_bound"]))
+
+    def test_clean_flag_reaches_service(self):
+        """Forward both spellings of the reset flag through the operator CLI."""
+        with patch.object(cli, "run_service", return_value=None) as run_service:
+            cli.main(["-c"])
+            cli.main(["--clean"])
+        self.assertEqual([call.args[0] for call in run_service.call_args_list], [["-c"], ["-c"]])
+
+    def test_terminal_shutdown_disconnects_clears_and_stops(self):
+        """Drive the headless terminal command through the normal client protocol."""
+        done = threading.Event()
+        calls = []
+
+        class Terminal(io.StringIO):
+            """Supply one command from an interactive-looking input stream."""
+
+            def isatty(self):
+                return True
+
+        class FakeClient:
+            """Record the order of coordinator requests."""
+
+            def __init__(self, path):
+                self.path = path
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                pass
+
+            def disconnect_all(self):
+                calls.append("disconnect")
+                return {"failures": {}}
+
+            def clear_instruments(self):
+                calls.append("clear")
+
+            def request(self, op):
+                calls.append(op)
+                done.set()
+
+        def run_service(args, *, on_start, on_bound):
+            on_bound(Path("/tmp/test.sock"))
+
+        with patch.object(cli.sys, "stdin", Terminal("shutdown\n")), \
+             patch.object(cli, "CoordinatorClient", FakeClient), \
+             patch.object(cli, "run_service", side_effect=run_service):
+            cli.main([])
+            self.assertTrue(done.wait(2))
+        self.assertEqual(calls, ["disconnect", "clear", "SHUTDOWN"])
+
+    def test_gui_dependency_failure_prevents_service_startup(self):
+        """Fail before claiming a socket when GUI dependencies are missing."""
+        with patch.object(cli.importlib.util, "find_spec", return_value=None), \
+             patch.object(cli, "run_service") as run_service, \
+             patch.object(cli.subprocess, "Popen") as popen:
+            with patch.object(cli.sys, "stderr"):
+                with self.assertRaises(SystemExit):
+                    cli.main(["--gui"])
+            run_service.assert_not_called()
+            popen.assert_not_called()

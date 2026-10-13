@@ -4,11 +4,12 @@ import json
 import socket
 
 from .bulk import decode_result
-from .coordinator import MAX_MESSAGE, PROTOCOL_VERSION, default_socket
+from .proxy import InstrumentProxy
+from .service import MAX_MESSAGE, PROTOCOL_VERSION, default_socket
 
 
 class RemoteError(Exception):
-    """Coordinator rejected an operation; no result was committed to this client."""
+    """Coordinator reported failure; a dispatched command may have changed hardware."""
 
 
 class CoordinatorClient:
@@ -58,8 +59,27 @@ class CoordinatorClient:
     def deregister(self, name):
         return self.request("DEREGISTER", name=name)
 
+    def connect(self, name):
+        """Explicitly connect a registered instrument outside a run."""
+        return self.request("CONNECT", name=name)
+
+    def disconnect(self, name):
+        return self.request("DISCONNECT", name=name)
+
+    def disconnect_all(self):
+        return self.request("DISCONNECT_ALL")
+
+    def clear_instruments(self):
+        return self.request("CLEAR_INSTRUMENTS")
+
     def live(self, name):
-        return Session(self, name, self.request("OPEN_LIVE", name=name)["session"], run=False)
+        opened = self.request("OPEN_LIVE", name=name)
+        try:
+            return Session(self, name, opened["session"], run=False,
+                           capabilities=opened["capabilities"]).device
+        except Exception:
+            self.request("CLOSE_LIVE", session=opened["session"])
+            raise
 
     def begin_run(self, run_id):
         return Session(self, None, self.request("BEGIN_RUN", run_id=run_id)["session"], run=True)
@@ -67,11 +87,19 @@ class CoordinatorClient:
     def reconcile_run(self, reason):
         return self.request("RECONCILE_RUN", reason=reason)
 
-    def terminate(self, name, reason):
-        return self.request("TERMINATE", name=name, reason=reason)
+    def terminate(self, name, reason=None):
+        """Quarantine one instrument, optionally recording a console note."""
+        kwargs = {"name": name}
+        if reason is not None:
+            kwargs["reason"] = reason
+        return self.request("TERMINATE", **kwargs)
+
+    def terminate_all(self):
+        """Quarantine every registered instrument without releasing run ownership."""
+        return self.request("TERMINATE_ALL")
 
     def recover(self, name, reason=None):
-        """Reconnect a quarantined instrument with an optional log note."""
+        """Acknowledge recovery and mark a quarantined instrument disconnected."""
         kwargs = {"name": name}
         if reason is not None:
             kwargs["reason"] = reason
@@ -93,9 +121,25 @@ class CoordinatorClient:
 class Session:
     """One live instrument, or one run with access to the registered domain."""
 
-    def __init__(self, client, name, token, *, run):
+    def __init__(self, client, name, token, *, run, capabilities=None):
         self.client, self.name, self.token, self.run = client, name, token, run
         self.closed = False
+        self.device = InstrumentProxy(self, name, capabilities) if not run else None
+
+    def connect(self, name):
+        """Connect a registered instrument under this run's exclusive lease."""
+        if not self.run:
+            raise RuntimeError("Only run sessions can connect under a run lease")
+        self._name(name)
+        return self.client.request("CONNECT", name=name, session=self.token)
+
+    def instrument(self, name):
+        """Create a device view owned by this run, without opening another lease."""
+        if not self.run:
+            raise RuntimeError("Only run sessions select instruments")
+        self._name(name)
+        capabilities = self.client.request("DESCRIBE", session=self.token, name=name)
+        return InstrumentProxy(self, name, capabilities)
 
     def _name(self, name):
         if self.closed:
@@ -108,11 +152,13 @@ class Session:
             raise ValueError("Live session is for one instrument only")
         return self.name
 
-    def get(self, member, *, name=None):
-        return self.client.request("GET", session=self.token, name=self._name(name), member=member)
+    def get(self, member, *, name=None, **kwargs):
+        return self.client.request("GET", session=self.token, name=self._name(name),
+                                   member=member, kwargs=kwargs)
 
-    def set(self, member, value, *, name=None):
-        return self.client.request("SET", session=self.token, name=self._name(name), member=member, value=value)
+    def set(self, member, value, *, name=None, **kwargs):
+        return self.client.request("SET", session=self.token, name=self._name(name),
+                                   member=member, value=value, kwargs=kwargs)
 
     def call(self, member, *args, name=None, **kwargs):
         return self.client.request("CALL", session=self.token, name=self._name(name),

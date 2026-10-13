@@ -170,12 +170,12 @@ class TestDrivers(unittest.TestCase):
 
     def test_import_does_not_import_pyvisa(self):
         with patch.dict(sys.modules, {"pyvisa": None}):
-            importlib.reload(importlib.import_module("auspex_v2.instruments.agilent"))
-            importlib.reload(importlib.import_module("auspex_v2.instruments.yokogawa"))
+            importlib.reload(importlib.import_module("auspex_v2.instruments.drivers.agilent"))
+            importlib.reload(importlib.import_module("auspex_v2.instruments.drivers.yokogawa"))
 
     def test_visa_resource_normalization_and_failure(self):
         """Normalize VISA addresses without masking connection failures."""
-        with patch("auspex_v2.instruments.visa.VisaTransport") as transport:
+        with patch("auspex_v2.instruments.drivers.visa.VisaTransport") as transport:
             io = FakeTransport()
             transport.return_value = io
             device = AgilentN5183A("192.0.2.5")
@@ -183,7 +183,7 @@ class TestDrivers(unittest.TestCase):
             transport.assert_called_once_with("TCPIP0::192.0.2.5::5025::SOCKET", backend=None)
             self.assertEqual(device.physical_resource, "192.0.2.5")
             device.disconnect()
-        with patch("auspex_v2.instruments.visa.VisaTransport", side_effect=OSError("offline")):
+        with patch("auspex_v2.instruments.drivers.visa.VisaTransport", side_effect=OSError("offline")):
             device = AgilentN5183A("192.0.2.5")
             with self.assertRaisesRegex(OSError, "offline"):
                 device.connect()
@@ -243,7 +243,7 @@ class TestDrivers(unittest.TestCase):
         self.assertFalse(device.output)
         with self.assertRaises(AttributeError):
             device.sense_value = 1
-        with patch("auspex_v2.instruments.core.time.sleep"):
+        with patch("auspex_v2.instruments.drivers.core.time.sleep"):
             device.ramp = 0.0002
         self.assertEqual(io.writes, [":sense:trigger immediate",
                                       ":source:level 1.000000E-04", ":source:level 2.000000E-04"])

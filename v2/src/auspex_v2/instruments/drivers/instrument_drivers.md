@@ -1,12 +1,12 @@
 # Writing V2 instrument drivers (preliminary)
 
-V2 instruments should work directly from Python, without an experiment or a coordinator. The future local instrument coordinator will use the **same drivers**, owning their connections in worker processes. This API is an initial driver slice; there is no coordinator IPC yet. See `core.py`, `agilent.py`, `yokogawa.py`, and the offline tests in `v2/tests/test_instruments.py`.
+V2 instruments should work directly from Python, without an experiment or a coordinator. The local instrument coordinator owns simulated driver connections in worker processes; real driver registration remains future work. This is the initial direct-use driver slice. See `core.py`, `agilent.py`, `yokogawa.py`, and the offline tests in `v2/tests/test_instruments.py`.
 
 ## The model
 
 An `Instrument` represents a logical instrument. Construction and import must **not** open, enumerate, or reset hardware. `connect()` opens the connection; `disconnect()` closes it. Drivers can be used with `with`, which connects and disconnects automatically. A driver has a `resource_name` and a `physical_resource` identity; override the latter when several logical channels share one physical device. Do not open independent workers for channels that share a USB connection.
 
-A future coordinator will use just three operations:
+The coordinator uses three instrument operations:
 
 | Protocol | Driver declaration | Direct Python usage |
 | --- | --- | --- |
@@ -74,4 +74,4 @@ Inject an interface implementing `write`, `query`, and `close` (plus `query_bina
 python -m unittest discover -s v2/tests -v
 ```
 
-These tests never touch lab hardware. Real-device smoke tests should be separate, opt-in, and reviewed for output and ramp safety. Direct drivers do not yet participate in coordinator registration or lockout; that remains future work.
+These tests never touch lab hardware. Real-device smoke tests should be separate, opt-in, and reviewed for output and ramp safety. Direct-use real drivers do not yet participate in coordinator registration or lockout; coordinator workers currently allow simulated drivers only.

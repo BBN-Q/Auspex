@@ -4,7 +4,7 @@ import unittest
 
 import numpy as np
 
-from auspex_v2.instruments.bulk import (MAX_BULK_BYTES, ResultEncodingError,
+from auspex_v2.instruments.coordinator.bulk import (MAX_BULK_BYTES, ResultEncodingError,
                                         decode_result, encode_result)
 
 

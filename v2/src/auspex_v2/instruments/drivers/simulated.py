@@ -4,7 +4,7 @@ import os
 
 import numpy as np
 
-from .core import Instrument, managed_property, operation
+from .core import Command, Instrument, managed_property, operation
 
 
 class _MemoryBackend:
@@ -13,18 +13,43 @@ class _MemoryBackend:
     def __init__(self):
         self.frequency = 1e9
         self.output = False
+        self.channels = {1: 1e9, 2: 1e9}
 
     def close(self):
-        pass
+        if getattr(self, "fail_disconnect", False):
+            raise OSError("Simulated disconnect failure")
+
+
+class _ChannelFrequency(Command):
+    """Exercise parameterized coordinator GET/SET without a SCPI transport."""
+
+    def __init__(self):
+        super().__init__(get_string=":CH{channel}:FREQ?", set_string=":CH{channel}:FREQ {}",
+                         additional_args=("channel",))
+
+    def get(self, instrument, **kwargs):
+        self._check_args(kwargs)
+        return instrument._transport().channels[kwargs["channel"]]
+
+    def set(self, instrument, value, **kwargs):
+        self._check_args(kwargs)
+        if not 1e6 <= value <= 20e9:
+            raise ValueError("Frequency must be between 1 MHz and 20 GHz")
+        instrument._transport().channels[kwargs["channel"]] = float(value)
 
 
 class SimulatedSource(Instrument):
     """Provide a hardware-free source with managed settings and a test crash."""
 
+    channel_frequency = _ChannelFrequency()
+
     def connect(self, resource_name=None):
         if self.interface is None:
             self.interface = _MemoryBackend()
         super().connect(resource_name)
+        if self.resource_name == "SIM::FAIL_CONNECT":
+            raise OSError("Simulated connect failure")
+        self.interface.fail_disconnect = self.resource_name == "SIM::FAIL_DISCONNECT"
 
     @managed_property
     def frequency(self):

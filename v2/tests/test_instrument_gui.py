@@ -1,0 +1,95 @@
+"""Optional offscreen smoke test of the inventory-only operator window."""
+
+import importlib.util
+import os
+import time
+import unittest
+from unittest.mock import patch
+
+
+@unittest.skipUnless(importlib.util.find_spec("PySide6"), "install auspex-v2[gui] to test Qt")
+class InstrumentGuiTest(unittest.TestCase):
+    """Verify GUI actions do not open instrument sessions or access settings."""
+
+    def test_connection_actions_and_clear_gating(self):
+        """Show actions for each state and gate clearing until fully disconnected."""
+        os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+        os.environ.setdefault("PYQTGRAPH_QT_LIB", "PySide6")
+        from pyqtgraph.Qt import QtWidgets
+        from auspex_v2.instruments.coordinator import gui
+
+        class FakeClient:
+            """Track GUI requests with one mutable simulated device."""
+
+            calls = []
+            state = "DISCONNECTED"
+            present = True
+
+            def __init__(self, socket_path):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                pass
+
+            def request(self, op, **kwargs):
+                self.calls.append(op)
+                if op == "CONNECT":
+                    type(self).state = "CONNECTED"
+                elif op == "DISCONNECT" or op == "DISCONNECT_ALL":
+                    type(self).state = "DISCONNECTED"
+                elif op in ("TERMINATE", "TERMINATE_ALL"):
+                    type(self).state = "TERMINATED"
+                elif op == "RECOVER":
+                    type(self).state = "DISCONNECTED"
+                elif op == "CLEAR_INSTRUMENTS":
+                    type(self).present = False
+                if op == "STATUS":
+                    return {"run": None, "instruments": {"src": {
+                        "driver": "simulated_source", "physical": "SIM::SRC",
+                        "state": self.state, "worker_running": self.state == "CONNECTED",
+                        "live_sessions": 0, "locked": False}} if self.present else {}}
+                return None
+
+        app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+
+        def until(predicate):
+            deadline = time.monotonic() + 3
+            while time.monotonic() < deadline:
+                app.processEvents()
+                if predicate():
+                    return
+                time.sleep(0.01)
+            self.fail("GUI request did not finish")
+
+        def button(window, label):
+            panel = window.table.cellWidget(0, 5)
+            buttons = panel.findChildren(QtWidgets.QPushButton)
+            return next(item for item in buttons if item.text() == label)
+
+        with patch.object(gui, "CoordinatorClient", FakeClient), \
+             patch.object(gui.QtWidgets.QMessageBox, "question",
+                          return_value=QtWidgets.QMessageBox.StandardButton.Yes):
+            window = gui.InstrumentWindow()
+            try:
+                until(lambda: window.status is not None and not window.pending)
+                self.assertTrue(window.clear_instruments.isEnabled())
+                button(window, "Connect").click()
+                until(lambda: FakeClient.state == "CONNECTED" and not window.pending)
+                self.assertFalse(window.clear_instruments.isEnabled())
+                button(window, "Disconnect").click()
+                until(lambda: FakeClient.state == "DISCONNECTED" and not window.pending)
+                button(window, "Terminate").click()  # disconnected devices can be quarantined
+                until(lambda: FakeClient.state == "TERMINATED" and not window.pending)
+                self.assertFalse(window.clear_instruments.isEnabled())
+                button(window, "Recover").click()
+                until(lambda: FakeClient.state == "DISCONNECTED" and not window.pending)
+                window.clear_instruments.click()
+                until(lambda: not FakeClient.present and not window.pending)
+                self.assertEqual(window.table.rowCount(), 0)
+                self.assertEqual(set(FakeClient.calls), {"STATUS", "CONNECT", "DISCONNECT",
+                                                        "TERMINATE", "RECOVER", "CLEAR_INSTRUMENTS"})
+            finally:
+                window.close()

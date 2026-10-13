@@ -1,9 +1,9 @@
-"""V2 drivers; no VISA or USB connection is opened on import."""
+"""Instrument API; direct-use drivers remain available at this import path."""
 
-from .core import (BoolCommand, Command, FloatCommand, Instrument, InstrumentError,
-                   IntCommand, RampCommand, SCPIInstrument, StringCommand, managed_property, operation)
-from .agilent import AgilentE8363C, AgilentN5183A, AgilentN5230A
-from .yokogawa import YokogawaGS200
+from .drivers import (AgilentE8363C, AgilentN5183A, AgilentN5230A, BoolCommand,
+                      Command, FloatCommand, Instrument, InstrumentError, IntCommand,
+                      RampCommand, SCPIInstrument, StringCommand, YokogawaGS200,
+                      managed_property, operation)
 
 __all__ = ["Instrument", "InstrumentError", "SCPIInstrument", "Command",
            "BoolCommand", "StringCommand", "FloatCommand", "IntCommand",

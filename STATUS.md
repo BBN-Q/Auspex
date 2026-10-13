@@ -1,0 +1,24 @@
+# Auspex V2 — current status
+
+See [PLAN.md](PLAN.md) for design decisions and open questions. This is a **simulated/offline prototype**, not hardware-ready. V1 remains unchanged.
+
+## Implemented
+
+- Independent Python 3.13 package (`v2/`) with direct-use, targeted ports for `AgilentN5183A`, `YokogawaGS200`, `AgilentE8363C`, and `AgilentN5230A`. Optional VISA is imported only when needed. Fake transports test commands and complex VNA trace decoding; **no real hardware tests**.
+- An explicitly started, persistent **instrument coordinator** (`v2/src/auspex_v2/instruments/coordinator/`) for `simulated_source` and `simulated_vna` only. It uses a permission-restricted Unix socket, a single-instance lock, saved inventory/run state, and one spawned process per connected device. No experiment coordinator yet.
+- Separate **connection and ownership**: registration does not connect (`DISCONNECTED`); `connect(name)` or `run.connect(name)` is explicit. Live use requires `CONNECTED`; ending a live lease leaves it connected. A run locks *all* registered devices against live access, regardless of connection. A lost live client releases its lease; a lost run client leaves an orphaned lockout requiring `reconcile_run(reason)`.
+- Failures of connect/disconnect latch `UNKNOWN`; worker deaths, command failures, and operator termination latch `TERMINATED`. `recover(name)` requires an explicit operator action and returns to `DISCONNECTED`, **not** to a connected worker or verified safe hardware. `disconnect_all()` attempts every connected worker and reports per-device failures. `terminate_all()` quarantines all registrations, including disconnected ones, and kills workers without freeing ownership. Kills are not hardware emergency-off commands.
+- Session-bound driver-shaped live proxies (`source.set_frequency(...)`, `source.frequency`, `vna.get_trace(...)`), with `source.session` retaining explicit GET/SET/CALL. Run sessions use `run.instrument(name)`. GET/SET support declared keyword arguments. Only declared settings/operations are callable; invalid names/argument names fail before worker dispatch. The protocol uses 64 KiB JSON control envelopes and up to 16 inline numeric NumPy arrays / 8 MiB per result, suitable for VNA traces **but not digitizer streaming**.
+- `clear_instruments()` persists a blank inventory only after all devices are disconnected, no workers remain, and no sessions/run exist. Normal service shutdown disconnects workers but retains registrations. Interactive headless CLI `shutdown` disconnects, clears, then exits only on success; Ctrl+C retains inventory. Simulator-only startup `-c`/`--clean` bypasses reconciliation and discards saved inventory/run state after acquiring the single-instance lock.
+- Optional pyqtgraph/PySide6 inventory GUI: connection and ownership status; state-relevant Connect, Disconnect, Recover and Terminate actions; Disconnect All, Clear Instruments and Terminate All. Registration remains in the notebook. No instrument settings or data access. Closing the GUI leaves the service running; headless operation needs no Qt. Successful status polls are silent on the operator console.
+
+## Not implemented / safety limits
+
+No real-device coordinator worker, physical-device readback or safety verification on recovery, hardware interlocks, operator authentication beyond socket permissions, durable lab-notebook audit trail, typed operation argument schemas, experiment coordinator, saved plans/runner, filter pipeline, or shared-buffer digitizer transport. Direct drivers used outside the coordinator bypass its lockout. Console output is transient, not a durable or secret-safe audit trail.
+
+## Resume here
+
+- [Coordinator guide and CLI](v2/src/auspex_v2/instruments/coordinator/instrument_coordinator.md); [GUI guide](v2/src/auspex_v2/instruments/coordinator/instrument_coordinator_gui.md); [driver guide](v2/src/auspex_v2/instruments/drivers/instrument_drivers.md).
+- From the repository root: `python -B -m unittest discover -s v2/tests -q` — **43 tests passed** at this snapshot. Tests use fake/simulated devices; the GUI smoke test runs offscreen if PySide6 is installed.
+- **Next reviewed slice is undecided:** (a) real-driver coordinator admission with physical identity, command schemas, safe connection/disconnection/recovery and opt-in hardware tests; or (b) the smallest saved-plan/experiment-coordinator run against the simulated VNA. Agree on interfaces and acceptance tests first. Keep high-rate digitizer buffers separate from VNA-sized inline results.
+- The working tree has pre-existing uncommitted V2 package reorganization (old instrument modules moved into `instruments/drivers/` and `instruments/coordinator/`), updated tests/docs, and an untracked notebook. Do not treat the old-path deletions as an instruction to restore V1-style modules; review `git status` before committing or changing scope.
