@@ -16,7 +16,7 @@ class InstrumentGuiTest(unittest.TestCase):
         os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
         os.environ.setdefault("PYQTGRAPH_QT_LIB", "PySide6")
         from pyqtgraph.Qt import QtWidgets
-        from auspex_v2.instruments.coordinator import gui
+        from auspex_v2.instruments.server import gui
 
         class FakeClient:
             """Track GUI requests with one mutable simulated device."""
@@ -69,11 +69,12 @@ class InstrumentGuiTest(unittest.TestCase):
             buttons = panel.findChildren(QtWidgets.QPushButton)
             return next(item for item in buttons if item.text() == label)
 
-        with patch.object(gui, "CoordinatorClient", FakeClient), \
+        with patch.object(gui, "InstrumentServerClient", FakeClient), \
              patch.object(gui.QtWidgets.QMessageBox, "question",
                           return_value=QtWidgets.QMessageBox.StandardButton.Yes):
             window = gui.InstrumentWindow()
             try:
+                self.assertEqual(window.windowTitle(), "Auspex V2 — Instrument Server")
                 until(lambda: window.status is not None and not window.pending)
                 self.assertTrue(window.clear_instruments.isEnabled())
                 button(window, "Connect").click()

@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Start the standalone V2 coordinator, optionally opening its operator GUI."""
+"""Start the standalone V2 server, optionally opening its operator GUI."""
 
 import importlib.util
 import subprocess
 import sys
 import threading
 
-from auspex_v2.instruments.coordinator import CoordinatorClient, main as run_service
-from auspex_v2.instruments.coordinator.service import argument_parser
+from auspex_v2.instruments.server import InstrumentServerClient, main as run_service
+from auspex_v2.instruments.server.service import argument_parser
 
 
 SPLASH = r"""
@@ -16,12 +16,12 @@ SPLASH = r"""
      / _ \| | | / __| '_ \ / _ \ \/ /
     / ___ \ |_| \__ \ |_) |  __/>  <
    /_/   \_\__,_|___/ .__/ \___/_/\_\
-                    |_|  INSTRUMENT COORDINATOR
+                    |_|  INSTRUMENT SERVER
 """
 
 
 def print_splash():
-    """Display the operator banner after the coordinator binds its socket."""
+    """Display the operator banner after the server binds its socket."""
     print(SPLASH, flush=True)
 
 
@@ -55,13 +55,13 @@ def main(argv=None):
                     print("Available command: shutdown", flush=True)
                     continue
                 try:
-                    with CoordinatorClient(socket_path) as client:
+                    with InstrumentServerClient(socket_path) as client:
                         outcome = client.disconnect_all()
                         if outcome["failures"]:
                             raise RuntimeError(f"Disconnect failures: {outcome['failures']}")
                         client.clear_instruments()
                         client.request("SHUTDOWN")
-                    print("All instruments disconnected; inventory cleared; coordinator stopped.", flush=True)
+                    print("All instruments disconnected; inventory cleared; server stopped.", flush=True)
                     return
                 except Exception as exc:
                     print(f"Shutdown refused: {exc}", flush=True)
@@ -71,7 +71,7 @@ def main(argv=None):
     def launch_gui(socket_path):
         """Start the client after the service has claimed and bound its socket."""
         nonlocal gui_process
-        gui_process = subprocess.Popen([sys.executable, "-m", "auspex_v2.instruments.coordinator.gui",
+        gui_process = subprocess.Popen([sys.executable, "-m", "auspex_v2.instruments.server.gui",
                                         "--socket", str(socket_path)])
 
     try:

@@ -1,7 +1,7 @@
 """Small, hardware-independent instrument and command definitions.
 
 A command remains a descriptor (rather than being replaced by a property), so
-both direct Python access and coordinator-facing metadata use one definition.
+both direct Python access and server-facing metadata use one definition.
 """
 
 from __future__ import annotations
@@ -85,7 +85,7 @@ class Instrument:
 
     @property
     def physical_resource(self):
-        """Coordinator identity; override when several channels share a device."""
+        """Server identity; override when several channels share a device."""
         return self.resource_name
 
     def connect(self, resource_name=None):
@@ -120,7 +120,7 @@ class Instrument:
 
 
 class ManagedProperty(property):
-    """Opt a handwritten property into coordinator GET/SET discovery."""
+    """Opt a handwritten property into server GET/SET discovery."""
 
     @property
     def readable(self):

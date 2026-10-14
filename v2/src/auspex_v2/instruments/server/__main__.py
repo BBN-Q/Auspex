@@ -1,4 +1,4 @@
-"""Start the coordinator with ``python -m auspex_v2.instruments.coordinator``."""
+"""Start the server with ``python -m auspex_v2.instruments.server``."""
 
 from .service import main
 

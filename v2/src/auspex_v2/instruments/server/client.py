@@ -1,4 +1,4 @@
-"""Synchronous, local-only client for the instrument coordinator."""
+"""Synchronous, local-only client for the instrument server."""
 
 import json
 import socket
@@ -9,14 +9,14 @@ from .service import MAX_MESSAGE, PROTOCOL_VERSION, default_socket
 
 
 class RemoteError(Exception):
-    """Coordinator reported failure; a dispatched command may have changed hardware."""
+    """Server reported failure; a dispatched command may have changed hardware."""
 
 
-class CoordinatorClient:
+class InstrumentServerClient:
     """Connect notebooks or scripts to the persistent local instrument service."""
 
     def __init__(self, socket_path=None):
-        """Open the Unix socket and verify the coordinator protocol version."""
+        """Open the Unix socket and verify the server protocol version."""
         self.socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self.socket.settimeout(10)
         try:
@@ -40,7 +40,7 @@ class CoordinatorClient:
         self.file.flush()
         line = self.file.readline(MAX_MESSAGE + 1)
         if not line or len(line) > MAX_MESSAGE:
-            raise ConnectionError("Instrument coordinator disconnected or sent an oversized response")
+            raise ConnectionError("Instrument server disconnected or sent an oversized response")
         result = json.loads(line)
         if not result["ok"]:
             raise RemoteError(result["error"])

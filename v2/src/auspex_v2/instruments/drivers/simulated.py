@@ -1,4 +1,4 @@
-"""Small simulated source used to exercise the coordinator without hardware."""
+"""Small simulated source used to exercise the server without hardware."""
 
 import os
 
@@ -8,7 +8,7 @@ from .core import Command, Instrument, managed_property, operation
 
 
 class _MemoryBackend:
-    """Hold scalar source settings in memory for offline coordinator tests."""
+    """Hold scalar source settings in memory for offline server tests."""
 
     def __init__(self):
         self.frequency = 1e9
@@ -21,7 +21,7 @@ class _MemoryBackend:
 
 
 class _ChannelFrequency(Command):
-    """Exercise parameterized coordinator GET/SET without a SCPI transport."""
+    """Exercise parameterized server GET/SET without a SCPI transport."""
 
     def __init__(self):
         super().__init__(get_string=":CH{channel}:FREQ?", set_string=":CH{channel}:FREQ {}",

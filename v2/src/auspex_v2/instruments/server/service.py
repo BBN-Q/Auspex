@@ -1,6 +1,6 @@
-"""Local-only instrument coordinator for simulated devices and bounded results.
+"""Local-only instrument server for simulated devices and bounded results.
 
-Run explicitly: python -m auspex_v2.instruments.coordinator [--socket PATH]
+Run explicitly: python -m auspex_v2.instruments.server [--socket PATH]
 This is not the experiment coordinator. It owns registrations, live sessions,
 exclusive run lockout and instrument worker processes, never notebook kernels.
 """
@@ -29,7 +29,7 @@ DRIVERS = {"simulated_source": SimulatedSource, "simulated_vna": SimulatedVNA}
 
 
 def _capabilities(driver):
-    """Describe only coordinator-exposed members without constructing a driver."""
+    """Describe only server-exposed members without constructing a driver."""
     settings = {}
     for name, spec in driver.commands.items():
         settings[name] = {"read": spec.get_string is not None,
@@ -50,8 +50,8 @@ TERMINATED = "TERMINATED"
 RECOVERY_REQUIRED = frozenset((UNKNOWN, TERMINATED))
 
 
-class CoordinatorError(Exception):
-    """Report rejected coordinator requests or failed instrument workers."""
+class InstrumentServerError(Exception):
+    """Report rejected server requests or failed instrument workers."""
 
     pass
 
@@ -156,29 +156,29 @@ class Worker:
         try:
             reply = self._receive()
             if not reply.get("ok"):
-                raise CoordinatorError(f"Connection failed: {reply.get('error', 'worker exited')}")
+                raise InstrumentServerError(f"Connection failed: {reply.get('error', 'worker exited')}")
         except Exception:
             self.kill()
             raise
 
     def _receive(self):
         if not self.pipe.poll(WORKER_TIMEOUT):
-            raise CoordinatorError("Worker timed out")
+            raise InstrumentServerError("Worker timed out")
         try:
             return self.pipe.recv()
         except EOFError as exc:
-            raise CoordinatorError("Worker exited without a reply") from exc
+            raise InstrumentServerError("Worker exited without a reply") from exc
 
     def request(self, request):
         if not self.process.is_alive():
-            raise CoordinatorError("Worker exited")
+            raise InstrumentServerError("Worker exited")
         try:
             self.pipe.send(request)
             reply = self._receive()
         except (OSError, EOFError, BrokenPipeError) as exc:
-            raise CoordinatorError("Worker communication failed") from exc
+            raise InstrumentServerError("Worker communication failed") from exc
         if not reply.get("ok"):
-            raise CoordinatorError(reply.get("error", "Worker failed"))
+            raise InstrumentServerError(reply.get("error", "Worker failed"))
         return reply.get("value")
 
     def stop(self):
@@ -213,21 +213,21 @@ class Registry:
         self.run = None  # {run_id, owner, token, orphaned}
         if clean:
             self._save()  # persist the empty inventory before accepting clients
-            self.announce("coordinator: CLEAN start; saved registrations and run lockout discarded")
+            self.announce("server: CLEAN start; saved registrations and run lockout discarded")
         elif self.path.exists():
             with self.path.open(encoding="utf8") as stream:
                 saved = json.load(stream)
             for name, spec in saved.get("instruments", {}).items():
                 if spec["driver"] not in DRIVERS:
-                    raise CoordinatorError(f"Unknown persisted driver: {spec['driver']}")
+                    raise InstrumentServerError(f"Unknown persisted driver: {spec['driver']}")
                 state = (spec["state"] if spec["state"] in (DISCONNECTED, TERMINATED)
                          else UNKNOWN)
                 self.instruments[name] = dict(spec, state=state)
-                self.announce(f"{name}: {spec['state']} -> {state} on coordinator restart")
+                self.announce(f"{name}: {spec['state']} -> {state} on server restart")
             if saved.get("run") is not None:
                 self.run = {"run_id": saved["run"]["run_id"], "owner": None,
                             "token": None, "orphaned": True}
-                self.announce(f"run {self.run['run_id']}: ORPHANED on coordinator restart")
+                self.announce(f"run {self.run['run_id']}: ORPHANED on server restart")
             self._save()  # after restart, prior worker state is not trusted
 
     def announce(self, message):
@@ -284,7 +284,7 @@ class Registry:
             op = request.get("op")
             if op == "HELLO":
                 if request.get("version") != PROTOCOL_VERSION:
-                    raise CoordinatorError(f"Expected protocol version {PROTOCOL_VERSION}")
+                    raise InstrumentServerError(f"Expected protocol version {PROTOCOL_VERSION}")
                 return {"version": PROTOCOL_VERSION, "operations": ["GET", "SET", "CALL"],
                         "features": ["inline_arrays", "terminate_all", "optional_termination_reason"]}
             if op == "STATUS":
@@ -308,7 +308,7 @@ class Registry:
                 return self._clear_instruments()
             if op == "SHUTDOWN":
                 if self.instruments or self.workers or self.live or self.run:
-                    raise CoordinatorError("Shutdown requires an empty inventory and no sessions or run")
+                    raise InstrumentServerError("Shutdown requires an empty inventory and no sessions or run")
                 return None
             if op == "OPEN_LIVE":
                 return self._open_live(request, connection)
@@ -334,7 +334,7 @@ class Registry:
                 return self._recover(request)
             if op in ("GET", "SET", "CALL"):
                 return self._command(request, connection, op)
-            raise CoordinatorError(f"Unknown operation: {op}")
+            raise InstrumentServerError(f"Unknown operation: {op}")
 
     def _connect(self, request, connection):
         """Connect explicitly, under the run lease if the domain is locked."""
@@ -343,7 +343,7 @@ class Registry:
         if self.run:
             self._run_owner(request["session"], connection)
         if self._has_live(name) or spec["state"] != DISCONNECTED:
-            raise CoordinatorError("Connect requires a disconnected instrument with no live session")
+            raise InstrumentServerError("Connect requires a disconnected instrument with no live session")
         previous = spec["state"]
         spec["state"] = UNKNOWN  # a crash mid-connect cannot imply a safe device
         self._save()
@@ -357,11 +357,11 @@ class Registry:
         """Stop a worker, retaining uncertainty if the driver cannot disconnect."""
         spec = self._instrument(name)
         if spec["state"] != CONNECTED:
-            raise CoordinatorError(f"{name} is not connected")
+            raise InstrumentServerError(f"{name} is not connected")
         if name not in self.workers:
             spec["state"] = UNKNOWN
             self._save()
-            raise CoordinatorError(f"{name} has no connected worker")
+            raise InstrumentServerError(f"{name} has no connected worker")
         self._stop_worker(name)
         spec["state"] = DISCONNECTED
         self._save()
@@ -393,9 +393,9 @@ class Registry:
         """Forget only a fully disconnected, unowned inventory."""
         self._require_unowned("Clear Instruments")
         if any(spec["state"] != DISCONNECTED for spec in self.instruments.values()):
-            raise CoordinatorError("Clear Instruments requires all devices disconnected")
+            raise InstrumentServerError("Clear Instruments requires all devices disconnected")
         if self.workers:
-            raise CoordinatorError("Cannot clear inventory while workers remain")
+            raise InstrumentServerError("Cannot clear inventory while workers remain")
         previous = self.instruments
         self.instruments = {}
         try:
@@ -403,7 +403,7 @@ class Registry:
         except Exception:
             self.instruments = previous
             raise
-        self.announce("coordinator: cleared registered instruments")
+        self.announce("server: cleared registered instruments")
         return {"cleared": sorted(previous)}
 
     def _open_live(self, request, connection):
@@ -411,7 +411,7 @@ class Registry:
         name = request["name"]
         self._available(name)
         if any(v[1] == name for v in self.live.values()):
-            raise CoordinatorError(f"{name} already has a live session")
+            raise InstrumentServerError(f"{name} already has a live session")
         token = secrets.token_hex(16)
         self.live[token] = (connection, name)
         self.announce(f"{name}: LIVE session opened")
@@ -429,17 +429,17 @@ class Registry:
     def _begin_run(self, request, connection):
         """Lock the entire domain atomically if no live use or recovery blocks it."""
         if self.run:
-            raise CoordinatorError(f"Run {self.run['run_id']} already owns the registered domain")
+            raise InstrumentServerError(f"Run {self.run['run_id']} already owns the registered domain")
         if self.live:
             names = sorted({name for _, name in self.live.values()})
-            raise CoordinatorError(f"Cannot begin run: close live sessions on {', '.join(names)}")
+            raise InstrumentServerError(f"Cannot begin run: close live sessions on {', '.join(names)}")
         blocked = [name for name, spec in self.instruments.items()
                    if spec["state"] in RECOVERY_REQUIRED]
         if blocked:
-            raise CoordinatorError(f"Cannot begin run: recover instruments {', '.join(blocked)}")
+            raise InstrumentServerError(f"Cannot begin run: recover instruments {', '.join(blocked)}")
         run_id = request["run_id"]
         if not isinstance(run_id, str) or not run_id:
-            raise CoordinatorError("run_id must be a nonempty string")
+            raise InstrumentServerError("run_id must be a nonempty string")
         token = secrets.token_hex(16)
         self.run = {"run_id": run_id, "token": token, "owner": connection, "orphaned": False}
         try:
@@ -466,7 +466,7 @@ class Registry:
     def _reconcile_run(self, request):
         """Require operator acknowledgement before clearing an orphaned run."""
         if not self.run or not self.run["orphaned"]:
-            raise CoordinatorError("No orphaned run to reconcile")
+            raise InstrumentServerError("No orphaned run to reconcile")
         self._reason(request)
         run_id = self.run["run_id"]
         self.run = None
@@ -505,7 +505,7 @@ class Registry:
         for name, state in previous.items():
             self.announce(f"{name}: {state} -> TERMINATED (Terminate All)")
         if failures:
-            raise CoordinatorError(f"Terminate All failed to kill workers: {failures}")
+            raise InstrumentServerError(f"Terminate All failed to kill workers: {failures}")
         return {"terminated": sorted(previous)}
 
     def _recover(self, request):
@@ -515,7 +515,7 @@ class Registry:
         note = self._optional_note(request)
         self._require_unowned("recover", name)
         if spec["state"] not in RECOVERY_REQUIRED:
-            raise CoordinatorError("Instrument does not need recovery")
+            raise InstrumentServerError("Instrument does not need recovery")
         previous = spec["state"]
         if name in self.workers:
             self._stop_worker(name)  # recovery must not leave a worker attached
@@ -527,15 +527,15 @@ class Registry:
     def _register(self, request):
         """Add a logical instrument after checking domain and physical identity."""
         if self.run or self.live:
-            raise CoordinatorError("Cannot register during a run or while live sessions are open")
+            raise InstrumentServerError("Cannot register during a run or while live sessions are open")
         name, driver_type, resource = request["name"], request["driver"], request["resource"]
         if not all(isinstance(v, str) and v for v in (name, driver_type, resource)):
-            raise CoordinatorError("Name, driver and resource must be nonempty strings")
+            raise InstrumentServerError("Name, driver and resource must be nonempty strings")
         if name in self.instruments or driver_type not in DRIVERS:
-            raise CoordinatorError("Instrument name exists or driver is not registered")
+            raise InstrumentServerError("Instrument name exists or driver is not registered")
         physical = DRIVERS[driver_type](resource).physical_resource
         if any(s["physical"] == physical for s in self.instruments.values()):
-            raise CoordinatorError(f"Physical device already registered: {physical}")
+            raise InstrumentServerError(f"Physical device already registered: {physical}")
         self.instruments[name] = {"driver": driver_type, "resource": resource,
                                   "physical": physical, "state": DISCONNECTED}
         self._save()
@@ -548,7 +548,7 @@ class Registry:
         spec = self._instrument(name)
         self._require_unowned("Deregistration")
         if spec["state"] != DISCONNECTED:
-            raise CoordinatorError("Deregistration requires DISCONNECTED state")
+            raise InstrumentServerError("Deregistration requires DISCONNECTED state")
         if name in self.workers:
             self._stop_worker(name)
         del self.instruments[name]
@@ -569,28 +569,28 @@ class Registry:
         member = request["member"]
         driver = DRIVERS[self.instruments[name]["driver"]]
         if not isinstance(member, str):
-            raise CoordinatorError("Member must be a string")
+            raise InstrumentServerError("Member must be a string")
         if op == "CALL":
             if member not in driver.operations:
-                raise CoordinatorError(f"Not a registered operation: {member}")
+                raise InstrumentServerError(f"Not a registered operation: {member}")
             if not isinstance(request.get("args", []), list) or not isinstance(request.get("kwargs", {}), dict):
-                raise CoordinatorError("CALL requires an args list and kwargs object")
+                raise InstrumentServerError("CALL requires an args list and kwargs object")
         else:
             kwargs = request.get("kwargs", {})
             if not isinstance(kwargs, dict) or not all(isinstance(key, str) for key in kwargs):
-                raise CoordinatorError("GET/SET kwargs must be a string-keyed object")
+                raise InstrumentServerError("GET/SET kwargs must be a string-keyed object")
             spec = driver.commands.get(member) or driver.properties.get(member)
             if spec is None:
-                raise CoordinatorError(f"Not a registered property: {member}")
+                raise InstrumentServerError(f"Not a registered property: {member}")
             readable = spec.get_string is not None if member in driver.commands else spec.readable
             writable = spec.set_string is not None if member in driver.commands else spec.writable
             if not (readable if op == "GET" else writable):
-                raise CoordinatorError(f"{member} cannot be {op.lower()} by the coordinator")
+                raise InstrumentServerError(f"{member} cannot be {op.lower()} by the server")
             expected = set(spec.additional_args) if member in driver.commands else set()
             if set(kwargs) != expected:
-                raise CoordinatorError(f"{member} requires arguments {sorted(expected)}")
+                raise InstrumentServerError(f"{member} requires arguments {sorted(expected)}")
             if op == "SET" and "value" not in request:
-                raise CoordinatorError("SET requires a value")
+                raise InstrumentServerError("SET requires a value")
         return name, member
 
     def _command(self, request, connection, op):
@@ -623,13 +623,13 @@ class Registry:
         """Validate an optional operator note without logging empty parentheses."""
         reason = request.get("reason")
         if reason is not None and not isinstance(reason, str):
-            raise CoordinatorError("Reason must be a string when provided")
+            raise InstrumentServerError("Reason must be a string when provided")
         return f" ({reason.strip()})" if reason and reason.strip() else ""
 
     @staticmethod
     def _reason(request):
         if not isinstance(request.get("reason"), str) or not request["reason"].strip():
-            raise CoordinatorError("Explicit nonempty reconciliation reason required")
+            raise InstrumentServerError("Explicit nonempty reconciliation reason required")
 
     def _has_live(self, name=None):
         """Check for a live lease, optionally limited to one instrument."""
@@ -639,29 +639,29 @@ class Registry:
         """Keep operator actions from disrupting live sessions or runs."""
         if self.run or self._has_live(name):
             if action in ("disconnect", "recover"):
-                raise CoordinatorError(f"Cannot {action} during run or live use")
-            raise CoordinatorError(f"{action} requires no run or live sessions")
+                raise InstrumentServerError(f"Cannot {action} during run or live use")
+            raise InstrumentServerError(f"{action} requires no run or live sessions")
 
     def _instrument(self, name):
         if name not in self.instruments:
-            raise CoordinatorError(f"Instrument not registered: {name}")
+            raise InstrumentServerError(f"Instrument not registered: {name}")
         return self.instruments[name]
 
     def _available(self, name, *, allow_run=False):
         spec = self._instrument(name)
         if self.run and not allow_run:
-            raise CoordinatorError(f"Run {self.run['run_id']} locks all registered instruments")
+            raise InstrumentServerError(f"Run {self.run['run_id']} locks all registered instruments")
         if spec["state"] != CONNECTED:
-            raise CoordinatorError(f"{name} state is {spec['state']}; explicit connect or recovery required")
+            raise InstrumentServerError(f"{name} state is {spec['state']}; explicit connect or recovery required")
 
     def _live_owner(self, token, connection, name=None):
         session = self.live.get(token)
         if not session or session[0] != connection or (name is not None and session[1] != name):
-            raise CoordinatorError("No live session for this connection and instrument")
+            raise InstrumentServerError("No live session for this connection and instrument")
 
     def _run_owner(self, token, connection):
         if not self.run or self.run["orphaned"] or self.run["owner"] != connection or self.run["token"] != token:
-            raise CoordinatorError("No active run session for this connection")
+            raise InstrumentServerError("No active run session for this connection")
 
     def _start_worker(self, name):
         """Connect on demand and quarantine the instrument if startup fails."""
@@ -697,7 +697,7 @@ class Registry:
             for name, worker in list(self.workers.items()):
                 try:
                     worker.stop()
-                    self.announce(f"{name}: worker DISCONNECTED (coordinator shutdown)")
+                    self.announce(f"{name}: worker DISCONNECTED (server shutdown)")
                 except Exception as exc:
                     previous = self.instruments[name]["state"]
                     self.instruments[name]["state"] = UNKNOWN
@@ -729,7 +729,7 @@ class Handler(socketserver.StreamRequestHandler):
                     if not isinstance(request, dict):
                         raise ValueError("Expected a JSON object")
                     if not greeted and request.get("op") != "HELLO":
-                        raise CoordinatorError("HELLO required before other operations")
+                        raise InstrumentServerError("HELLO required before other operations")
                     result = self.server.registry.dispatch(request, connection)
                     tree, arrays, chunks = encode_result(result)
                     if request.get("op") == "HELLO":
@@ -739,7 +739,7 @@ class Handler(socketserver.StreamRequestHandler):
                     op = request.get("op", "?") if isinstance(request, dict) else "?"
                     self.server.registry.announce(f"{op} executed; result not delivered: {exc}")
                     response, chunks = {"ok": False, "error": f"Command executed but result unavailable: {exc}"}, []
-                except (KeyError, TypeError, ValueError, CoordinatorError) as exc:
+                except (KeyError, TypeError, ValueError, InstrumentServerError) as exc:
                     self.server.registry.announce(
                         f"REJECTED {request.get('op', '?') if isinstance(request, dict) else '?'}: {exc}")
                     response, chunks = {"ok": False, "error": str(exc)}, []
@@ -776,9 +776,9 @@ class Server(socketserver.ThreadingUnixStreamServer):
             fcntl.flock(self._lockfile, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError as exc:
             self._lockfile.close()
-            raise CoordinatorError("Instrument coordinator is already running") from exc
+            raise InstrumentServerError("Instrument server is already running") from exc
         if self.path.is_symlink() or (self.path.exists() and not stat.S_ISSOCK(self.path.lstat().st_mode)):
-            raise CoordinatorError(f"Not a coordinator socket: {self.path}")
+            raise InstrumentServerError(f"Not a server socket: {self.path}")
         if self.path.exists():
             self.path.unlink()  # stale socket: the single-instance lock is held
         self.registry = Registry(str(self.path) + ".state.json", quiet=quiet, clean=clean)
@@ -797,7 +797,7 @@ class Server(socketserver.ThreadingUnixStreamServer):
 
 def argument_parser():
     """Share service arguments with the operator CLI's optional GUI flag."""
-    parser = argparse.ArgumentParser(description="Local Auspex V2 instrument coordinator")
+    parser = argparse.ArgumentParser(description="Local Auspex V2 instrument server")
     parser.add_argument("--socket", type=Path, default=default_socket())
     parser.add_argument("-q", "--quiet", action="store_true", help="suppress command/state output")
     parser.add_argument("-c", "--clean", action="store_true",
@@ -818,7 +818,7 @@ def main(argv=None, *, on_start=None, on_bound=None):
             if not args.quiet:
                 if on_start is not None:
                     on_start()
-                print(f"Instrument coordinator listening on {args.socket}", flush=True)
+                print(f"Instrument server listening on {args.socket}", flush=True)
             server.serve_forever(poll_interval=0.2)
         except KeyboardInterrupt:
             pass

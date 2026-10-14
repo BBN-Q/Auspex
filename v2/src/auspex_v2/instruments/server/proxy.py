@@ -1,4 +1,4 @@
-"""Driver-shaped, session-bound views of coordinator-registered instruments."""
+"""Driver-shaped, session-bound views of server-registered instruments."""
 
 
 class InstrumentProxy:

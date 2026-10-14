@@ -1,10 +1,10 @@
-"""Typed inline-array framing tests with no coordinator or hardware."""
+"""Typed inline-array framing tests with no server or hardware."""
 
 import unittest
 
 import numpy as np
 
-from auspex_v2.instruments.coordinator.bulk import (MAX_BULK_BYTES, ResultEncodingError,
+from auspex_v2.instruments.server.bulk import (MAX_BULK_BYTES, ResultEncodingError,
                                         decode_result, encode_result)
 
 

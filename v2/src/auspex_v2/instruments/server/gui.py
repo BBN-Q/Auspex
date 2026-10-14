@@ -1,4 +1,4 @@
-"""Optional, status-only Qt client for the local instrument coordinator."""
+"""Optional, status-only Qt client for the local instrument server."""
 
 from __future__ import annotations
 
@@ -8,14 +8,14 @@ import os
 os.environ.setdefault("PYQTGRAPH_QT_LIB", "PySide6")
 from pyqtgraph.Qt import QtCore, QtWidgets, QT_LIB
 
-from .client import CoordinatorClient
+from .client import InstrumentServerClient
 
 if QT_LIB != "PySide6":
     raise RuntimeError("The instrument GUI requires PySide6 (install auspex-v2[gui])")
 
 
 class RequestWorker(QtCore.QObject):
-    """Keep synchronous coordinator requests off the GUI event loop."""
+    """Keep synchronous server requests off the GUI event loop."""
 
     finished = QtCore.Signal(str, object)
 
@@ -27,7 +27,7 @@ class RequestWorker(QtCore.QObject):
     def perform(self, op, kwargs):
         """Use a short-lived, session-free client for one serialized request."""
         try:
-            with CoordinatorClient(self.socket_path) as client:
+            with InstrumentServerClient(self.socket_path) as client:
                 result = client.request(op, **kwargs)
             self.finished.emit(op, (True, result))
         except Exception as exc:
@@ -42,7 +42,7 @@ class InstrumentWindow(QtWidgets.QWidget):
     def __init__(self, socket_path=None):
         """Build a status-only window and start its serialized background client."""
         super().__init__()
-        self.setWindowTitle("Auspex V2 — Instruments")
+        self.setWindowTitle("Auspex V2 — Instrument Server")
         self.resize(900, 420)
         self.pending = False
         self.status = None
@@ -144,7 +144,7 @@ class InstrumentWindow(QtWidgets.QWidget):
     def _show_status(self, status):
         """Render a snapshot, never treating worker state as physical readback."""
         self.status = status
-        self.connection.setText("Connected to instrument coordinator")
+        self.connection.setText("Connected to Instrument Server")
         run = status["run"]
         self.domain.setText("Domain: " + (f"ORPHANED — {run['run_id']}" if run and run["orphaned"] else
                                            f"RUN LOCKED — {run['run_id']}" if run else "NO RUN LOCK"))
@@ -200,9 +200,9 @@ class InstrumentWindow(QtWidgets.QWidget):
 
 
 def main(argv=None):
-    """Launch the optional GUI without starting or owning the coordinator."""
+    """Launch the optional GUI without starting or owning the server."""
     parser = argparse.ArgumentParser(description="Auspex V2 instrument status and termination GUI")
-    parser.add_argument("--socket", help="Path to an explicitly started instrument coordinator")
+    parser.add_argument("--socket", help="Path to an explicitly started instrument server")
     args = parser.parse_args(argv)
     app = QtWidgets.QApplication([])
     window = InstrumentWindow(args.socket)

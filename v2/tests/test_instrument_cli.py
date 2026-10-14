@@ -8,13 +8,13 @@ import unittest
 from unittest.mock import Mock, patch
 
 
-CLI_PATH = Path(__file__).resolve().parents[1] / "utils" / "instrument_coordinator.py"
-spec = importlib.util.spec_from_file_location("instrument_coordinator_cli", CLI_PATH)
+CLI_PATH = Path(__file__).resolve().parents[1] / "utils" / "instrument_server.py"
+spec = importlib.util.spec_from_file_location("instrument_server_cli", CLI_PATH)
 cli = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(cli)
 
 
-class CoordinatorCliTest(unittest.TestCase):
+class InstrumentServerCliTest(unittest.TestCase):
     """Check that one command launches and owns only its optional GUI child."""
 
     def test_gui_starts_after_socket_bind_and_closes_on_service_exit(self):
@@ -32,7 +32,7 @@ class CoordinatorCliTest(unittest.TestCase):
              patch.object(cli, "run_service", side_effect=run_service), \
              patch.object(cli.subprocess, "Popen", return_value=process) as popen:
             self.assertEqual(cli.main(["--gui", "--socket", "/tmp/test.sock", "-q"]), 7)
-        popen.assert_called_once_with([cli.sys.executable, "-m", "auspex_v2.instruments.coordinator.gui",
+        popen.assert_called_once_with([cli.sys.executable, "-m", "auspex_v2.instruments.server.gui",
                                        "--socket", "/tmp/test.sock"])
         process.terminate.assert_called_once()
         process.wait.assert_called_once_with(timeout=5)
@@ -77,7 +77,7 @@ class CoordinatorCliTest(unittest.TestCase):
                 return True
 
         class FakeClient:
-            """Record the order of coordinator requests."""
+            """Record the order of server requests."""
 
             def __init__(self, path):
                 self.path = path
@@ -103,7 +103,7 @@ class CoordinatorCliTest(unittest.TestCase):
             on_bound(Path("/tmp/test.sock"))
 
         with patch.object(cli.sys, "stdin", Terminal("shutdown\n")), \
-             patch.object(cli, "CoordinatorClient", FakeClient), \
+             patch.object(cli, "InstrumentServerClient", FakeClient), \
              patch.object(cli, "run_service", side_effect=run_service):
             cli.main([])
             self.assertTrue(done.wait(2))

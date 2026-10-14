@@ -12,11 +12,11 @@ import unittest
 
 import numpy as np
 
-from auspex_v2.instruments.coordinator import CoordinatorClient, PROTOCOL_VERSION, RemoteError
+from auspex_v2.instruments.server import InstrumentServerClient, PROTOCOL_VERSION, RemoteError
 
 
-class CoordinatorTest(unittest.TestCase):
-    """Exercise coordinator ownership and recovery over a real local socket."""
+class InstrumentServerTest(unittest.TestCase):
+    """Exercise server ownership and recovery over a real local socket."""
 
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -29,8 +29,8 @@ class CoordinatorTest(unittest.TestCase):
         env = dict(os.environ)
         source_dir = str(Path(__file__).resolve().parents[1] / "src")
         env["PYTHONPATH"] = source_dir + os.pathsep + env.get("PYTHONPATH", "")
-        entrypoint = ([str(Path(__file__).resolve().parents[1] / "utils" / "instrument_coordinator.py")]
-                      if cli else ["-m", "auspex_v2.instruments.coordinator"])
+        entrypoint = ([str(Path(__file__).resolve().parents[1] / "utils" / "instrument_server.py")]
+                      if cli else ["-m", "auspex_v2.instruments.server"])
         argv = [sys.executable, "-B", *entrypoint, "--socket", str(self.socket)]
         if quiet:
             argv.append("--quiet")
@@ -41,14 +41,14 @@ class CoordinatorTest(unittest.TestCase):
         deadline = time.monotonic() + 5
         while time.monotonic() < deadline:
             try:
-                with CoordinatorClient(self.socket) as c:
+                with InstrumentServerClient(self.socket) as c:
                     c.status()
                 return
             except (OSError, ConnectionError):
                 if self.server.poll() is not None:
-                    self.fail(f"Coordinator exited: {self.server.communicate()[1].decode()}")
+                    self.fail(f"Server exited: {self.server.communicate()[1].decode()}")
                 time.sleep(0.02)
-        self.fail("Coordinator did not start")
+        self.fail("Server did not start")
 
     def stop_server(self):
         """Terminate the service and assert that it shuts down cleanly."""
@@ -59,7 +59,7 @@ class CoordinatorTest(unittest.TestCase):
             except subprocess.TimeoutExpired:
                 self.server.kill()
                 self.server.communicate()
-                self.fail("Coordinator did not terminate")
+                self.fail("Server did not terminate")
             self.assertEqual(self.server.returncode, 0, errors.decode())
             self.server = None
             return output or b"", errors
@@ -80,7 +80,7 @@ class CoordinatorTest(unittest.TestCase):
         """Show a splash and operator events by default but emit nothing in quiet mode."""
         self.stop_server()
         self.start_server(cli=True, capture=True)
-        with CoordinatorClient(self.socket) as c:
+        with InstrumentServerClient(self.socket) as c:
             self.register_connected(c)
             with c.live("src") as source:
                 source.set("frequency", 5e9)
@@ -93,7 +93,7 @@ class CoordinatorTest(unittest.TestCase):
             c.recover("src", "Operator checked source")
         output, _ = self.stop_server()
         text = output.decode()
-        self.assertIn("INSTRUMENT COORDINATOR", text)
+        self.assertIn("INSTRUMENT SERVER", text)
         self.assertIn("UNREGISTERED -> DISCONNECTED", text)
         self.assertIn("SET frequency value=5000000000.0", text)
         self.assertIn("GET frequency -> 5000000000.0", text)
@@ -105,7 +105,7 @@ class CoordinatorTest(unittest.TestCase):
         self.assertNotIn("STATUS requested", text)  # GUI-style monitoring must not flood the console
 
         self.start_server(cli=True, quiet=True, capture=True)
-        with CoordinatorClient(self.socket) as c:
+        with InstrumentServerClient(self.socket) as c:
             c.connect("src")
             with c.live("src") as source:
                 source.set("frequency", 6e9)
@@ -114,7 +114,7 @@ class CoordinatorTest(unittest.TestCase):
 
     def test_vna_inline_arrays_and_size_limit(self):
         """Transfer complex VNA traces without desynchronizing subsequent requests."""
-        with CoordinatorClient(self.socket) as c:
+        with InstrumentServerClient(self.socket) as c:
             c.register("vna", "simulated_vna", "SIM::VNA")
             c.connect("vna")
             with c.live("vna") as vna:
@@ -138,7 +138,7 @@ class CoordinatorTest(unittest.TestCase):
 
     def test_disconnect_mid_bulk_result_releases_live_session(self):
         """Discard an abandoned array reply without retaining live ownership."""
-        with CoordinatorClient(self.socket) as observer:
+        with InstrumentServerClient(self.socket) as observer:
             observer.register("vna", "simulated_vna", "SIM::VNA")
             observer.connect("vna")
             sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -170,7 +170,7 @@ class CoordinatorTest(unittest.TestCase):
 
     def test_live_run_lockout_and_commands(self):
         """Verify live access blocks atomic run lockout and run access locks all devices."""
-        with CoordinatorClient(self.socket) as client, CoordinatorClient(self.socket) as other:
+        with InstrumentServerClient(self.socket) as client, InstrumentServerClient(self.socket) as other:
             self.register_connected(client)
             self.register_connected(client, "spare", "SIM::SPARE")
             with client.live("src") as source:
@@ -201,7 +201,7 @@ class CoordinatorTest(unittest.TestCase):
 
     def test_live_proxy_settings_operations_and_parameterized_commands(self):
         """Expose only declared members, with local argument errors leaving the worker alive."""
-        with CoordinatorClient(self.socket) as c:
+        with InstrumentServerClient(self.socket) as c:
             self.register_connected(c)
             with c.live("src") as source:
                 self.assertEqual(source.frequency, 1e9)
@@ -234,7 +234,7 @@ class CoordinatorTest(unittest.TestCase):
 
     def test_run_instrument_proxy_and_vna_trace(self):
         """Bind run device views to one exclusive session and return array results."""
-        with CoordinatorClient(self.socket) as c:
+        with InstrumentServerClient(self.socket) as c:
             self.register_connected(c)
             c.register("vna", "simulated_vna", "SIM::VNA")
             with c.begin_run("proxy-run") as run:
@@ -253,7 +253,7 @@ class CoordinatorTest(unittest.TestCase):
 
     def test_disconnect_releases_live_but_orphans_run(self):
         """Distinguish transient live disconnects from orphaned run ownership."""
-        with CoordinatorClient(self.socket) as owner, CoordinatorClient(self.socket) as observer:
+        with InstrumentServerClient(self.socket) as owner, InstrumentServerClient(self.socket) as observer:
             self.register_connected(owner)
             live = owner.live("src")
             owner.close()  # simulate notebook disappearance
@@ -264,7 +264,7 @@ class CoordinatorTest(unittest.TestCase):
             self.assertEqual(observer.status()["instruments"]["src"]["live_sessions"], 0)
             with observer.live("src") as new_live:
                 self.assertEqual(new_live.get("frequency"), 1e9)
-            run_owner = CoordinatorClient(self.socket)
+            run_owner = InstrumentServerClient(self.socket)
             run_owner.begin_run("lost-run")
             run_owner.close()
             for _ in range(100):
@@ -286,7 +286,7 @@ class CoordinatorTest(unittest.TestCase):
 
     def test_termination_is_latched_and_recovery_is_explicit(self):
         """Allow immediate termination, but require explicit recovery afterward."""
-        with CoordinatorClient(self.socket) as c:
+        with InstrumentServerClient(self.socket) as c:
             self.register_connected(c)
             with c.live("src"):
                 pass
@@ -307,7 +307,7 @@ class CoordinatorTest(unittest.TestCase):
 
     def test_terminate_all_preserves_run_and_live_ownership(self):
         """Latch every instrument, even idle ones, without freeing existing leases."""
-        with CoordinatorClient(self.socket) as c:
+        with InstrumentServerClient(self.socket) as c:
             self.register_connected(c)
             self.register_connected(c, "spare", "SIM::SPARE")
             with c.live("src") as source:
@@ -335,7 +335,7 @@ class CoordinatorTest(unittest.TestCase):
             self.assertIsNone(c.status()["run"])
         self.stop_server()
         self.start_server()
-        with CoordinatorClient(self.socket) as c:
+        with InstrumentServerClient(self.socket) as c:
             self.assertEqual(c.status()["instruments"]["src"]["state"], "TERMINATED")
             self.assertEqual(c.status()["instruments"]["spare"]["state"], "TERMINATED")
             c.recover("src")
@@ -343,7 +343,7 @@ class CoordinatorTest(unittest.TestCase):
 
     def test_unexpected_worker_death_latches_terminated(self):
         """Verify an unexpected subprocess exit quarantines its instrument."""
-        with CoordinatorClient(self.socket) as c:
+        with InstrumentServerClient(self.socket) as c:
             self.register_connected(c)
             with c.live("src") as source:
                 with self.assertRaisesRegex(RemoteError, "Worker exited"):
@@ -356,7 +356,7 @@ class CoordinatorTest(unittest.TestCase):
 
     def test_explicit_connection_and_clean_inventory(self):
         """Require connect before live use and clearing only after disconnection."""
-        with CoordinatorClient(self.socket) as c:
+        with InstrumentServerClient(self.socket) as c:
             c.register("src", "simulated_source", "SIM::SRC")
             self.assertEqual(c.status()["instruments"]["src"]["state"], "DISCONNECTED")
             with self.assertRaisesRegex(RemoteError, "explicit connect"):
@@ -375,12 +375,12 @@ class CoordinatorTest(unittest.TestCase):
             self.assertEqual(c.status()["instruments"], {})
         self.stop_server()
         self.start_server()
-        with CoordinatorClient(self.socket) as c:
+        with InstrumentServerClient(self.socket) as c:
             self.assertEqual(c.status()["instruments"], {})
 
     def test_failed_connect_and_disconnect_require_recovery(self):
         """Latch uncertainty and prevent clear or retry after a worker I/O failure."""
-        with CoordinatorClient(self.socket) as c:
+        with InstrumentServerClient(self.socket) as c:
             c.register("bad", "simulated_source", "SIM::FAIL_CONNECT")
             with self.assertRaisesRegex(RemoteError, "Simulated connect failure"):
                 c.connect("bad")
@@ -403,7 +403,7 @@ class CoordinatorTest(unittest.TestCase):
 
     def test_terminate_disconnected_and_run_connect(self):
         """Allow quarantine without a worker and explicit connection under a run lock."""
-        with CoordinatorClient(self.socket) as c:
+        with InstrumentServerClient(self.socket) as c:
             c.register("src", "simulated_source", "SIM::SRC")
             c.terminate("src")
             self.assertEqual(c.status()["instruments"]["src"]["state"], "TERMINATED")
@@ -423,7 +423,7 @@ class CoordinatorTest(unittest.TestCase):
 
     def test_shutdown_requires_cleared_inventory(self):
         """Keep the headless service alive until all registrations are cleared."""
-        with CoordinatorClient(self.socket) as c:
+        with InstrumentServerClient(self.socket) as c:
             c.register("src", "simulated_source", "SIM::SRC")
             with self.assertRaisesRegex(RemoteError, "empty inventory"):
                 c.request("SHUTDOWN")
@@ -433,38 +433,38 @@ class CoordinatorTest(unittest.TestCase):
         self.server.communicate()
         self.server = None
         self.start_server()
-        with CoordinatorClient(self.socket) as c:
+        with InstrumentServerClient(self.socket) as c:
             self.assertEqual(c.status()["instruments"], {})
 
     def test_clean_start_discards_inventory_and_orphaned_run(self):
         """Reset persisted simulated state only when explicitly requested at startup."""
-        with CoordinatorClient(self.socket) as c:
+        with InstrumentServerClient(self.socket) as c:
             self.register_connected(c)
             c.begin_run("interrupted")
         self.stop_server()
         self.start_server()
-        with CoordinatorClient(self.socket) as c:
+        with InstrumentServerClient(self.socket) as c:
             self.assertIn("src", c.status()["instruments"])
             self.assertEqual(c.status()["run"]["run_id"], "interrupted")
         self.stop_server()
         self.start_server(clean=True)
-        with CoordinatorClient(self.socket) as c:
+        with InstrumentServerClient(self.socket) as c:
             self.assertEqual(c.status(), {"instruments": {}, "run": None})
             c.register("src", "simulated_source", "SIM::SRC")
         self.stop_server()
         self.start_server()
-        with CoordinatorClient(self.socket) as c:
+        with InstrumentServerClient(self.socket) as c:
             self.assertEqual(c.status()["instruments"]["src"]["state"], "DISCONNECTED")
 
     def test_restart_disconnects_and_duplicate_physical_device_fails(self):
         """Preserve inventory across clean service restarts without retaining workers."""
-        with CoordinatorClient(self.socket) as c:
+        with InstrumentServerClient(self.socket) as c:
             self.register_connected(c)
             with self.assertRaisesRegex(RemoteError, "Physical device already registered"):
                 c.register("duplicate", "simulated_source", "SIM::SRC")
         self.stop_server()
         self.start_server()
-        with CoordinatorClient(self.socket) as c:
+        with InstrumentServerClient(self.socket) as c:
             self.assertEqual(c.status()["instruments"]["src"]["state"], "DISCONNECTED")
             c.deregister("src")
             self.assertEqual(c.status()["instruments"], {})
