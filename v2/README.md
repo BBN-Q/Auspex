@@ -6,6 +6,10 @@ An independent Python 3.13 package. V1 remains in `../src/auspex/`; see `../PLAN
 
 The versioned `.auspex` dataset store is documented in [data.md](src/auspex_v2/data.md). It writes completed numeric arrays with actual coordinate axes and reads V2 folders only; run-level plans, events, and reports are not yet implemented.
 
+## Filter pipeline (first slice)
+
+See the [filter guide](src/auspex_v2/filters/README.md) for the reference DAG executor, dedicated-thread multi-worker Filter Server, bounded overlapping execution and capacity policies, simulated VNA smoke tests, and remaining persistence/plotting limits.
+
 ## Instruments (first slice)
 
 See the preliminary [driver-authoring guide](src/auspex_v2/instruments/drivers/instrument_drivers.md) and [local instrument server guide](src/auspex_v2/instruments/server/instrument_server.md). The server is currently simulated-device-only; it does not control the real drivers below. A separate optional [pyqtgraph/PySide6 operator GUI](src/auspex_v2/instruments/server/instrument_server_gui.md) shows status and worker termination only; it cannot access instrument data or settings.
