@@ -52,6 +52,9 @@ def _worker(kind, schema, config, input_edge, outputs, status, control):
                 elif event == "window_end":
                     state.end_window(payload["window"])
                     emitted = processor.on_window_end(payload["window"])
+                elif event == "scan_end":
+                    state.end_scan(payload["group"])
+                    emitted = processor.on_scan_end(payload["group"])
                 elif event == "run_end":
                     state.finish()
                     emitted = processor.on_run_end()
@@ -141,6 +144,11 @@ class FilterWorker:
         self.state.end_window(window)
         self.input.send_event("window_end", None, window)
 
+    def end_scan(self, scan):
+        """Deliver the runner's scan boundary after the last window."""
+        self.state.end_scan(scan)
+        self.input.send_event("scan_end", scan)
+
     def finish(self):
         """Request worker validation of any unfinished filter-owned group."""
         self.state.finish()
@@ -182,7 +190,7 @@ class FilterWorker:
             snapshot = Batch(payload.group, payload.window, payload.sequence, payload.revision,
                 np.array(payload.data, copy=True),
                 tuple(Axis(a.name, np.array(a.points, copy=True), a.unit) for a in payload.axes),
-                payload.count, payload.expected_count)
+                payload.count, payload.expected_count, payload.scan, payload.sweep)
             return event, snapshot
         finally:
             edge.release(slot)

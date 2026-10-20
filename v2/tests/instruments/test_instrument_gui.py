@@ -15,7 +15,7 @@ class InstrumentGuiTest(unittest.TestCase):
         """Show actions for each state and gate clearing until fully disconnected."""
         os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
         os.environ.setdefault("PYQTGRAPH_QT_LIB", "PySide6")
-        from pyqtgraph.Qt import QtWidgets
+        from pyqtgraph.Qt import QtGui, QtWidgets
         from auspex_v2.instruments.server import gui
 
         class FakeClient:
@@ -54,6 +54,9 @@ class InstrumentGuiTest(unittest.TestCase):
                 return None
 
         app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+        gui.dark_theme(app)
+        self.assertEqual(app.palette().color(QtGui.QPalette.ColorRole.Window).name(), "#202632")
+        self.assertEqual(app.palette().color(QtGui.QPalette.ColorRole.Base).name(), "#171b24")
 
         def until(predicate):
             deadline = time.monotonic() + 3
@@ -75,6 +78,8 @@ class InstrumentGuiTest(unittest.TestCase):
             window = gui.InstrumentWindow()
             try:
                 self.assertEqual(window.windowTitle(), "Auspex V2 — Instrument Server")
+                self.assertTrue(window.table.alternatingRowColors())
+                self.assertIn("#ff8c95", window.terminate_all.styleSheet())
                 until(lambda: window.status is not None and not window.pending)
                 self.assertTrue(window.clear_instruments.isEnabled())
                 button(window, "Connect").click()

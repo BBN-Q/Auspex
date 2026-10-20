@@ -13,7 +13,7 @@ from multiprocessing import shared_memory
 import numpy as np
 
 from ..data import Axis
-from .core import Batch, PipelineError
+from .core import Batch, PipelineError, SweepPosition
 
 MAX_MESSAGE = 16_384
 
@@ -76,12 +76,13 @@ class SharedEdge:
               "axes": [{"name": axis.name, "unit": axis.unit} for axis in batch.axes],
               "group": batch.group, "window": batch.window, "sequence": batch.sequence,
               "revision": batch.revision, "count": batch.count,
-              "expected_count": batch.expected_count})
+              "expected_count": batch.expected_count, "scan": batch.scan,
+              "sweep": [{"name": p.name, "value": p.value, "unit": p.unit} for p in batch.sweep]})
         return True
 
     def send_event(self, kind, group, window=None):
         """Order completion after previously published batches on this edge."""
-        if kind not in ("window_end", "group_end", "run_end", "stop"):
+        if kind not in ("window_end", "group_end", "scan_end", "run_end", "stop"):
             raise ValueError("Unknown edge event")
         _send(self.writer_connection, {"type": kind, "group": group, "window": window})
 
@@ -110,7 +111,8 @@ class SharedEdge:
                      for axis, points in zip(message["axes"], arrays[1:]))
         batch = Batch(message["group"], message["window"], message["sequence"],
                       message["revision"], arrays[0], axes,
-                      message["count"], message["expected_count"])
+                      message["count"], message["expected_count"], message.get("scan", "default"),
+                      tuple(SweepPosition(**p) for p in message.get("sweep", ())))
         return "batch", batch, slot
 
     def release(self, slot):

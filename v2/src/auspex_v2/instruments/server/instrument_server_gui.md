@@ -1,6 +1,6 @@
 # Instrument Server GUI — operator prototype
 
-The optional **pyqtgraph + PySide6** inventory client displays registered devices, their connection state (`DISCONNECTED`, `CONNECTED`, `UNKNOWN`, `TERMINATED`), worker presence and separate ownership (`Free`, `Live session`, `Run locked`). It never opens sessions, reads instrument settings or data, or registers instruments; register from a notebook. A disconnected GUI never displays stale status as current.
+The optional **pyqtgraph + PySide6** dark-themed inventory client displays registered devices, their connection state (`DISCONNECTED`, `CONNECTED`, `UNKNOWN`, `TERMINATED`), worker presence and separate ownership (`Free`, `Live session`, `Run locked`). It never opens sessions, reads instrument settings or data, or registers instruments; register from a notebook. A disconnected GUI never displays stale status as current.
 
 Run `python v2/utils/instrument_server.py --gui` to start the service and window, or attach a standalone window with `python v2/utils/instrument_server_gui.py --socket PATH`. Closing the GUI does not stop the service. Headless service use never requires Qt.
 

@@ -25,6 +25,8 @@ class ComplexAverager(Filter):
         self.total = None
         self.axes = None
         self.last_revision = None
+        self.sweep = None
+        self.scan = None
 
     def configure(self, changes):
         """Change the repeat target only after the previous group has ended."""
@@ -38,6 +40,8 @@ class ComplexAverager(Filter):
             raise PipelineError("Extra trace in window or averaging group")
         if self.last_revision is not None and batch.revision != self.last_revision:
             raise PipelineError("Configuration changed during averaging group")
+        if self.group is not None and (batch.scan != self.scan or batch.sweep != self.sweep):
+            raise PipelineError("Averaging group crossed scan or sweep position")
         if self.axes is not None:
             if any(a.name != b.name or a.unit != b.unit or
                    not np.array_equal(np.asarray(a.points), np.asarray(b.points))
@@ -47,6 +51,7 @@ class ComplexAverager(Filter):
             self.axes = tuple(Axis(a.name, np.array(a.points, copy=True), a.unit) for a in batch.axes)
         if self.group is None:
             self.group = f"{self.group_name}-{self.groups_completed}"
+            self.scan, self.sweep = batch.scan, batch.sweep
         self.window, self.last_revision = batch.window, batch.revision
         if self.total is None:
             self.total = np.zeros(batch.data.shape, dtype=np.complex128)
@@ -61,16 +66,25 @@ class ComplexAverager(Filter):
         self.window = None
         snapshot = (self.total / self.count).astype(np.dtype(self.input_schema.dtype))
         partial = Emission("partial", Batch(self.group, window, 0, self.last_revision,
-                                             snapshot, self.axes, self.count, self.repeats))
+                                             snapshot, self.axes, self.count, self.repeats,
+                                             self.scan, self.sweep))
         if self.count < self.repeats:
             return (partial,)
         final = Emission("final", Batch(self.group, window, 0, self.last_revision,
-                                         snapshot.copy(), self.axes, self.count, self.repeats))
+                                         snapshot.copy(), self.axes, self.count, self.repeats,
+                                         self.scan, self.sweep))
         complete = GroupComplete(self.group)
         self.group, self.window, self.count = None, None, 0
         self.total, self.axes, self.last_revision = None, None, None
+        self.scan, self.sweep = None, None
         self.groups_completed += 1
         return (partial, final, complete)
+
+    def on_scan_end(self, scan):
+        """A group must finish within its owning scan."""
+        if self.group is not None:
+            raise PipelineError("Averaging group is incomplete at scan end")
+        return ()
 
     def on_run_end(self):
         """Never treat an unfinished average as a valid final result."""

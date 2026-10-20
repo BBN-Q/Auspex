@@ -4,11 +4,13 @@ Public submission is serialized, but does not wait for downstream completion.
 Arrays travel directly between workers. Only terminal results enter the supervisor.
 """
 
-from dataclasses import dataclass, field, replace
+from dataclasses import asdict, dataclass, field, replace
+from datetime import datetime, timezone
 import json
 import multiprocessing as mp
 import os
 import queue
+import re
 import threading
 import time
 
@@ -19,6 +21,14 @@ from .core import GroupComplete, PipelineError, PortSchema, WindowState
 from .graph_transport import GraphEdge
 from .transport import _receive, _send
 from .worker import FILTER_TYPES
+from .store_owner import store_owner
+from .inspection import GraphInspector
+from .buffer import BufferSink
+
+# Keep these in sync with the supported worker constructors; the inspector must
+# show effective values even when NodeSpec omits optional constructor arguments.
+FILTER_DEFAULTS = {"passthrough": {},
+                   "complex_average": {"repeats": 5, "group_name": "average"}}
 
 
 @dataclass(frozen=True)
@@ -28,6 +38,19 @@ class NodeSpec:
     kind: str
     schema: PortSchema
     config: dict = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class WriterSpec:
+    """Required sink in one run folder: prefix + scan ID, or an exact dataset name."""
+
+    node: str
+    port: str
+    group: str = "data"
+    prefix: str = ""
+    max_scan_bytes: int = 64 * 1024 * 1024
+    max_scan_windows: int = 8192
+    dataset: str | None = None  # Exact name; None retains legacy prefix + scan naming.
 
 
 @dataclass(frozen=True)
@@ -47,6 +70,7 @@ def _snapshot(batch):
 
 def _graph_worker(name, spec, input_edge, outputs, status, control, stop):
     """Run one sequential processor; downstream backpressure is cancellable."""
+    context = "startup"
     try:
         processor = FILTER_TYPES[spec.kind](spec.schema, **spec.config)
         revision = 0
@@ -84,6 +108,8 @@ def _graph_worker(name, spec, input_edge, outputs, status, control, stop):
             if not input_edge.reader_connection.poll(0.01):
                 continue
             event, payload, slot = input_edge.receive()
+            context = (f"window {payload.window}" if event == "batch" else
+                       f"{event} window={payload['window']} group={payload['group']}")
             try:
                 if event == "batch":
                     processor.input_schema.check(payload)
@@ -92,6 +118,8 @@ def _graph_worker(name, spec, input_edge, outputs, status, control, stop):
                     emit(processor.on_window_end(payload["window"]))
                 elif event == "group_end":
                     emit(processor.on_group_end(payload["group"]))
+                elif event == "scan_end":
+                    emit(processor.on_scan_end(payload["group"]))
                 elif event == "run_end":
                     emit(processor.on_run_end())
                 else:
@@ -104,7 +132,7 @@ def _graph_worker(name, spec, input_edge, outputs, status, control, stop):
                     input_edge.release(slot)
     except Exception as exc:
         if not stop.is_set():
-            _send(status, {"type": "error", "error": f"{name}: {type(exc).__name__}: {exc}"})
+            _send(status, {"type": "error", "error": f"{name} ({context}): {type(exc).__name__}: {exc}"})
     finally:
         status.close()
         control.close()
@@ -123,21 +151,43 @@ class FilterServer:
     `close()` cancels an unfinished run; it never manufactures successful completion.
     """
 
-    def __init__(self, schema, nodes, edges, results, *, backpressure=True,
-                 slots=2, result_capacity=2, max_windows=8, startup_timeout=10,
-                 memory_budget_bytes=64 * 1024 * 1024):
+    def __init__(self, schema, nodes, edges, results, *, writers=None, buffer_sinks=None, store_path=None,
+                 run_metadata=None, input_name=None, inspect_socket=None,
+                 backpressure=True, slots=2, result_capacity=2, max_windows=8,
+                 startup_timeout=10, memory_budget_bytes=64 * 1024 * 1024,
+                 store_scan_budget_bytes=256 * 1024 * 1024):
         self.schema = schema
+        self.input_name = input_name if input_name is not None else schema.value_name
+        if not isinstance(self.input_name, str) or not self.input_name:
+            raise ValueError("Pipeline input needs a name")
         self.nodes = {name: replace(spec, config=json.loads(json.dumps(spec.config, allow_nan=False)))
                       for name, spec in nodes.items()}
         self.edges = list(edges)
         self.results = dict(results)
+        self.buffer_specs = dict(buffer_sinks or {})
+        if self.results.keys() & self.buffer_specs.keys():
+            raise PipelineError("Buffer and result names must be distinct")
+        self.buffer_sinks = {name: BufferSink(name, spec.capacity) for name, spec in self.buffer_specs.items()}
+        self.results.update({name: ResultSpec(spec.node, spec.port) for name, spec in self.buffer_specs.items()})
+        self.writers = dict(writers or {})
+        self.store_path = store_path
+        self.run_metadata = (json.loads(json.dumps(run_metadata, allow_nan=False))
+                             if run_metadata is not None else None)
+        if self.run_metadata is not None and (not isinstance(self.run_metadata, dict) or not self.writers):
+            raise ValueError("Run metadata requires a store and a mapping")
+        if bool(self.writers) != (store_path is not None):
+            raise ValueError("Writers require a store path, and vice versa")
         if min(slots, result_capacity, max_windows) < 1 or type(backpressure) is not bool:
             raise ValueError("Positive capacities and boolean backpressure are required")
         self._validate()
+        if store_scan_budget_bytes < 1 or sum(w.max_scan_bytes for w in self.writers.values()) > store_scan_budget_bytes:
+            raise PipelineError("Writer staging exceeds scan budget")
         edge_bytes = sum(self.nodes[c].schema.max_bytes * slots for _, _, c in self.edges)
         edge_bytes += sum(self.nodes[r.node].schema.max_bytes * slots for r in self.results.values())
-        retained_bytes = sum(self.nodes[r.node].schema.max_bytes * result_capacity
-                             for r in self.results.values())
+        edge_bytes += sum(self.nodes[w.node].schema.max_bytes * slots for w in self.writers.values())
+        retained_bytes = sum(self.nodes[r.node].schema.max_bytes *
+                             (self.buffer_specs[name].capacity + 1 if name in self.buffer_specs else result_capacity)
+                             for name, r in self.results.items())
         if edge_bytes + retained_bytes > memory_budget_bytes:
             raise PipelineError("Graph transport and result retention exceed memory budget")
         self.backpressure = backpressure
@@ -152,12 +202,18 @@ class FilterServer:
         self.lifecycle = "STARTING"
         self.completed_window = -1
         self.revisions = {name: 0 for name in nodes}
+        self.current_configs = {name: {**FILTER_DEFAULTS[spec.kind], **spec.config}
+                                for name, spec in self.nodes.items()}
+        self.inspector = None
         self.buffers = {name: queue.Queue(maxsize=result_capacity) for name in results}
+        self.buffers.update(self.buffer_sinks)
         self.processes = {}
         self.controls = {}
         self.channels = []
         self.ready = threading.Event()
         self.failed = threading.Event()
+        self.scan_acks = {}
+        self.published = []
         self.thread = threading.Thread(target=self._supervise, name="auspex-filter-server")
         self.thread.start()
         if not self.ready.wait(startup_timeout):
@@ -168,11 +224,43 @@ class FilterServer:
         except PipelineError:
             self.close()
             raise
+        if inspect_socket is not None:
+            try:
+                self.inspector = GraphInspector(inspect_socket, self.inspection_snapshot)
+            except BaseException:
+                self.close()
+                raise
+
+    def inspection_snapshot(self):
+        """Return a read-only, JSON-compatible graph and acknowledged configurations."""
+        with self.condition:
+            nodes = {name: {"kind": spec.kind,
+                            "config": json.loads(json.dumps(self.current_configs[name])),
+                            "revision": self.revisions[name], "schema": asdict(spec.schema),
+                            "inputs": ["in"],
+                            "outputs": ["out"] if spec.kind == "passthrough" else ["partial", "final"]}
+                     for name, spec in sorted(self.nodes.items())}
+            lifecycle = self.lifecycle
+        edges = [{"source": producer, "port": port, "target": consumer,
+                  "target_port": "in", "preview": False}
+                 for producer, port, consumer in self.edges]
+        for name, spec in self.results.items():
+            edges.append({"source": spec.node, "port": spec.port, "target": f"result:{name}",
+                          "target_port": "in", "preview": spec.preview})
+        for name, spec in self.writers.items():
+            edges.append({"source": spec.node, "port": spec.port, "target": f"writer:{name}",
+                          "target_port": "in", "preview": False})
+        return {"snapshot_version": 1, "captured_at": datetime.now(timezone.utc).isoformat(),
+                "lifecycle": lifecycle, "input": {"name": self.input_name, "schema": asdict(self.schema)},
+                "nodes": nodes, "edges": edges,
+                "results": {name: asdict(spec) for name, spec in sorted(self.results.items())},
+                "writers": {name: asdict(spec) for name, spec in sorted(self.writers.items())},
+                "buffers": {name: asdict(spec) for name, spec in sorted(self.buffer_specs.items())}}
 
     def _validate(self):
         """Reject unsupported topology before allocating memory or spawning children."""
-        if not self.nodes or not self.results:
-            raise PipelineError("Graph needs workers and terminal results")
+        if not self.nodes or not (self.writers or any(not r.preview for r in self.results.values())):
+            raise PipelineError("Graph needs workers and at least one required result or writer")
         ports = {}
         for name, spec in self.nodes.items():
             if name == "$input" or spec.kind not in FILTER_TYPES:
@@ -207,6 +295,24 @@ class FilterServer:
             if (result.port == "partial") != result.preview:
                 raise PipelineError("Only partial outputs may be preview sinks")
             used.add((result.node, result.port))
+        destinations = set()
+        for writer in self.writers.values():
+            if writer.node not in ports or writer.port not in ports[writer.node] or writer.port == "partial":
+                raise PipelineError("Writer needs a declared required output port")
+            if (not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", writer.group)
+                    or writer.group in (".", "..") or
+                    (writer.prefix and not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", writer.prefix)) or
+                    (writer.dataset is not None and
+                     (not isinstance(writer.dataset, str) or
+                      not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", writer.dataset) or writer.prefix)) or
+                    type(writer.max_scan_bytes) is not int or writer.max_scan_bytes < 1 or
+                    type(writer.max_scan_windows) is not int or writer.max_scan_windows < 1):
+                raise PipelineError("Invalid writer destination or capacity")
+            destination = (writer.group, writer.dataset if writer.dataset is not None else writer.prefix)
+            if destination in destinations:
+                raise PipelineError("Writer destinations may collide")
+            destinations.add(destination)
+            used.add((writer.node, writer.port))
         for name, spec in self.nodes.items():
             required = "out" if spec.kind == "passthrough" else "final"
             if (name, required) not in used:
@@ -252,6 +358,22 @@ class FilterServer:
                 edge = self._new_edge(f"result:{name}", self.nodes[spec.node].schema)
                 terminals[name] = edge
                 outputs[spec.node].setdefault(spec.port, []).append((edge, spec.preview))
+            writer_edges = {}
+            for name, spec in self.writers.items():
+                edge = self._new_edge(f"writer:{name}", self.nodes[spec.node].schema)
+                writer_edges[name] = edge
+                outputs[spec.node].setdefault(spec.port, []).append((edge, False))
+            if self.writers:
+                owner_status, child_status = self.context.Pipe(duplex=False)
+                statuses["$store"] = owner_status
+                child_handles.append(child_status)
+                process = self.context.Process(target=store_owner, name="auspex-store-owner",
+                    args=(self.store_path, self.writers,
+                          {n: self.nodes[w.node].schema for n, w in self.writers.items()},
+                          writer_edges, child_status, self.stop, self.run_metadata, self.input_name))
+                process.start()
+                self.processes["$store"] = process
+                child_status.close()
             for name, spec in self.nodes.items():
                 parent_status, child_status = self.context.Pipe(duplex=False)
                 parent_control, child_control = self.context.Pipe()
@@ -264,7 +386,7 @@ class FilterServer:
                 self.processes[name] = process
                 child_status.close()
                 child_control.close()
-            pending = set(self.nodes)
+            pending = set(statuses)
             while pending and not self.stop.is_set():
                 for name in list(pending):
                     if statuses[name].poll(0.01):
@@ -282,7 +404,9 @@ class FilterServer:
             self.lifecycle = "RUNNING"
             self.ready.set()
             windows = {name: -1 for name, spec in self.results.items() if not spec.preview}
+            windows.update({f"writer:{name}": -1 for name in self.writers})
             finished = set()
+            pending_buffers = {}  # A batch is not readable until its ordered window end.
             while not self.stop.is_set():
                 for name, connection in statuses.items():
                     if connection.poll():
@@ -290,8 +414,24 @@ class FilterServer:
                             response = _receive(connection)
                         except (EOFError, OSError) as exc:
                             raise PipelineError(f"Worker status channel closed: {name}") from exc
+                        if name == "$store" and response["type"] == "window":
+                            key = f"writer:{response['writer']}"
+                            if response["window"] != windows[key] + 1:
+                                raise PipelineError("Out-of-order store window")
+                            windows[key] = response["window"]
+                            with self.condition:
+                                self.completed_window = min(windows.values())
+                                self.condition.notify_all()
+                            continue
+                        if name == "$store" and response["type"] == "scan":
+                            self._ack_scan(response["scan"])
+                            self.published.append(response)
+                            continue
+                        if name == "$store" and response["type"] == "finished":
+                            finished.add("$store")
+                            continue
                         raise PipelineError(response.get("error", f"Unexpected status: {name}"))
-                    if not self.processes[name].is_alive():
+                    if not self.processes[name].is_alive() and not (name == "$store" and name in finished):
                         raise PipelineError(f"Worker exited: {name}")
                 for name, edge in terminals.items():
                     if not edge.reader_connection.poll():
@@ -310,19 +450,32 @@ class FilterServer:
                                     self.buffers[name].get_nowait()
                                 except queue.Empty:
                                     pass  # A client consumed the snapshot concurrently.
-                            self.buffers[name].put_nowait(_snapshot(payload))
+                            if name in self.buffer_sinks:
+                                if name in pending_buffers:
+                                    raise PipelineError(f"Buffer {name} expects one batch per output window")
+                                pending_buffers[name] = _snapshot(payload)
+                            else:
+                                self.buffers[name].put_nowait(_snapshot(payload))
                         finally:
                             edge.release(slot)
                     elif event == "window_end":
                         if payload["window"] != windows[name] + 1:
                             raise PipelineError(f"Out-of-order terminal window: {name}")
+                        if name in pending_buffers:
+                            batch = pending_buffers.pop(name)
+                            if batch.window != payload["window"]:
+                                raise PipelineError(f"Buffer {name} window mismatch")
+                            self.buffer_sinks[name]._put_completed(batch)
                         windows[name] = payload["window"]
+                    elif event == "scan_end" and not preview:
+                        self._ack_scan(payload["group"])
                     elif event == "run_end":
                         finished.add(name)
                     with self.condition:
                         self.completed_window = min(windows.values())
                         self.condition.notify_all()
-                if finished == set(windows):
+                required = {name for name, spec in self.results.items() if not spec.preview}
+                if finished == required | ({"$store"} if self.writers else set()):
                     with self.condition:
                         self.lifecycle = "SUCCEEDED"
                         self.condition.notify_all()
@@ -350,8 +503,18 @@ class FilterServer:
                     edge.close()
             for connection in list(statuses.values()) + list(self.controls.values()) + child_handles:
                 connection.close()
+            for sink in self.buffer_sinks.values():
+                sink._finish(self.error)
             with self.condition:
                 self.condition.notify_all()
+
+    def _ack_scan(self, scan):
+        """Count terminal drainage and durable writer publication for one scan."""
+        with self.condition:
+            if scan not in self.scan_acks or self.scan_acks[scan] <= 0:
+                raise PipelineError(f"Unexpected scan acknowledgement: {scan}")
+            self.scan_acks[scan] -= 1
+            self.condition.notify_all()
 
     def _wait(self, predicate, timeout):
         deadline = None if timeout is None else time.monotonic() + timeout
@@ -393,6 +556,24 @@ class FilterServer:
                 self._fail(exc)
                 raise
 
+    def end_scan(self, scan):
+        """Close the runner-owned scan after its last window and await required sinks."""
+        with self.admission:
+            self.check()
+            try:
+                self.state.end_scan(scan)
+                with self.condition:
+                    self.scan_acks[scan] = sum(not spec.preview for spec in self.results.values()) + len(self.writers)
+                for edge in self.ingress:
+                    edge.send_event("scan_end", scan)
+            except Exception as exc:
+                self._fail(exc)
+                raise
+
+    def wait_scan(self, scan, *, timeout=10):
+        """Wait for all required paths, including manifest publication."""
+        self._wait(lambda: self.scan_acks.get(scan) == 0, timeout)
+
     def finish(self):
         """Submit ordered run end without waiting for pending terminal results."""
         with self.admission:
@@ -419,6 +600,8 @@ class FilterServer:
             self._wait(lambda: not self.buffers[name].empty() or self.lifecycle == "SUCCEEDED",
                        max(0, deadline - time.monotonic()))
             try:
+                if name in self.buffer_sinks:
+                    return self.buffer_sinks[name]._get_nowait()
                 return self.buffers[name].get_nowait()
             except queue.Empty as exc:
                 if self.lifecycle == "SUCCEEDED":
@@ -436,6 +619,7 @@ class FilterServer:
                 raise PipelineError("Unknown filter node")
             self.wait_window(self.state.last_window, timeout=timeout)
             connection = self.controls[node]
+            changes = json.loads(json.dumps(changes, allow_nan=False))
             _send(connection, {"changes": changes})
             try:
                 self._wait(lambda: connection.poll(), timeout)
@@ -445,7 +629,9 @@ class FilterServer:
                 raise
             if reply["type"] != "updated":
                 raise PipelineError(reply["error"])
-            self.revisions[node] = reply["revision"]
+            with self.condition:
+                self.current_configs[node].update(changes)
+                self.revisions[node] = reply["revision"]
             return reply["revision"]
 
     def cancel(self):
@@ -454,6 +640,9 @@ class FilterServer:
             self._fail("Filter graph cancelled")
 
     def close(self):
+        if self.inspector is not None:
+            self.inspector.close()
+            self.inspector = None
         self.cancel()
         self.thread.join()
 

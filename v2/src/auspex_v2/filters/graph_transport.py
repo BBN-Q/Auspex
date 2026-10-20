@@ -5,6 +5,7 @@ Unlike a pipe send, a full notification queue can be interrupted by cancellation
 """
 
 import queue
+import time
 
 from .core import PipelineError
 from .transport import SharedEdge
@@ -79,7 +80,7 @@ class GraphEdge(SharedEdge):
                 return False
             if not self.backpressure:
                 raise PipelineError(f"Capacity exhausted: {self.label} data slots")
-            self.stop.wait(0.005)
+            time.sleep(0.005)  # a killed worker must not hold Event's condition lock
         raise PipelineError("Graph cancelled")
 
     def close(self):

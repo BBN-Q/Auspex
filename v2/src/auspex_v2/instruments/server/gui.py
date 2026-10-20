@@ -6,7 +6,7 @@ import argparse
 import os
 
 os.environ.setdefault("PYQTGRAPH_QT_LIB", "PySide6")
-from pyqtgraph.Qt import QtCore, QtWidgets, QT_LIB
+from pyqtgraph.Qt import QtCore, QtGui, QtWidgets, QT_LIB
 
 from .client import InstrumentServerClient
 
@@ -60,11 +60,12 @@ class InstrumentWindow(QtWidgets.QWidget):
         self.table = QtWidgets.QTableWidget(0, 6)
         self.table.setHorizontalHeaderLabels(["Name", "Driver", "Physical resource", "Connection", "Ownership", "Actions"])
         self.table.verticalHeader().setVisible(False)
+        self.table.setAlternatingRowColors(True)
         self.table.setEditTriggers(QtWidgets.QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.ResizeMode.Stretch)
 
         self.terminate_all = QtWidgets.QPushButton("Terminate All")
-        self.terminate_all.setStyleSheet("font-weight: bold; color: #b00020")
+        self.terminate_all.setStyleSheet("font-weight: bold; color: #ff8c95")
         self.terminate_all.clicked.connect(lambda: self._confirm("TERMINATE_ALL",
             "Kill and quarantine all registered workers? This does NOT switch off hardware."))
         self.disconnect_all = QtWidgets.QPushButton("Disconnect All")
@@ -76,6 +77,7 @@ class InstrumentWindow(QtWidgets.QWidget):
         for button in (self.terminate_all, self.disconnect_all, self.clear_instruments):
             actions.addWidget(button)
         self.warning = QtWidgets.QLabel("Terminate kills software workers only; disconnect does not switch off hardware.")
+        self.warning.setStyleSheet("color: #ffd18a")
         self.message = QtWidgets.QLabel("Status only: no instrument settings or data access.")
         layout = QtWidgets.QVBoxLayout(self)
         layout.addLayout(header)
@@ -199,12 +201,35 @@ class InstrumentWindow(QtWidgets.QWidget):
         super().closeEvent(event)
 
 
+def dark_theme(app):
+    """Apply an accessible dark palette to the standalone operator GUI."""
+    app.setStyle("Fusion")
+    palette = QtGui.QPalette()
+    for role, color in ((QtGui.QPalette.ColorRole.Window, "#202632"),
+                        (QtGui.QPalette.ColorRole.WindowText, "#e7eef8"),
+                        (QtGui.QPalette.ColorRole.Base, "#171b24"),
+                        (QtGui.QPalette.ColorRole.AlternateBase, "#293241"),
+                        (QtGui.QPalette.ColorRole.Text, "#e7eef8"),
+                        (QtGui.QPalette.ColorRole.Button, "#344052"),
+                        (QtGui.QPalette.ColorRole.ButtonText, "#e7eef8"),
+                        (QtGui.QPalette.ColorRole.Highlight, "#337ba3"),
+                        (QtGui.QPalette.ColorRole.HighlightedText, "#ffffff"),
+                        (QtGui.QPalette.ColorRole.ToolTipBase, "#293241"),
+                        (QtGui.QPalette.ColorRole.ToolTipText, "#e7eef8")):
+        palette.setColor(role, QtGui.QColor(color))
+    for role in (QtGui.QPalette.ColorRole.Text, QtGui.QPalette.ColorRole.ButtonText,
+                 QtGui.QPalette.ColorRole.WindowText):
+        palette.setColor(QtGui.QPalette.ColorGroup.Disabled, role, QtGui.QColor("#9eabbc"))
+    app.setPalette(palette)
+
+
 def main(argv=None):
     """Launch the optional GUI without starting or owning the server."""
     parser = argparse.ArgumentParser(description="Auspex V2 instrument status and termination GUI")
     parser.add_argument("--socket", help="Path to an explicitly started instrument server")
     args = parser.parse_args(argv)
-    app = QtWidgets.QApplication([])
+    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    dark_theme(app)
     window = InstrumentWindow(args.socket)
     window.show()
     return app.exec()

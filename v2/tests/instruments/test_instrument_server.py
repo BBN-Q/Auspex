@@ -27,9 +27,9 @@ class InstrumentServerTest(unittest.TestCase):
     def start_server(self, *, cli=False, quiet=False, capture=False, clean=False):
         """Launch the service or operator CLI and wait for its handshake."""
         env = dict(os.environ)
-        source_dir = str(Path(__file__).resolve().parents[1] / "src")
+        source_dir = str(Path(__file__).resolve().parents[2] / "src")
         env["PYTHONPATH"] = source_dir + os.pathsep + env.get("PYTHONPATH", "")
-        entrypoint = ([str(Path(__file__).resolve().parents[1] / "utils" / "instrument_server.py")]
+        entrypoint = ([str(Path(__file__).resolve().parents[2] / "utils" / "instrument_server.py")]
                       if cli else ["-m", "auspex_v2.instruments.server"])
         argv = [sys.executable, "-B", *entrypoint, "--socket", str(self.socket)]
         if quiet:

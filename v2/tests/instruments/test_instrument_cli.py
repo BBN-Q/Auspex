@@ -8,7 +8,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 
-CLI_PATH = Path(__file__).resolve().parents[1] / "utils" / "instrument_server.py"
+CLI_PATH = Path(__file__).resolve().parents[2] / "utils" / "instrument_server.py"
 spec = importlib.util.spec_from_file_location("instrument_server_cli", CLI_PATH)
 cli = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(cli)

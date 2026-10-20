@@ -21,7 +21,7 @@ class Collector(Filter):
         saved = Batch(batch.group, batch.window, batch.sequence, batch.revision,
                       np.array(batch.data, copy=True),
                       tuple(Axis(a.name, np.array(a.points, copy=True), a.unit) for a in batch.axes),
-                      batch.count, batch.expected_count)
+                      batch.count, batch.expected_count, batch.scan, batch.sweep)
         if self.preview:
             self.batches[:] = [saved]  # bounded latest snapshot, not a data archive
         else:
@@ -55,14 +55,16 @@ class DatasetWriter(Filter):
         self.pending = Batch(batch.group, batch.window, batch.sequence, batch.revision,
             np.array(batch.data, copy=True),
             tuple(Axis(a.name, np.array(a.points, copy=True), a.unit) for a in batch.axes),
-            batch.count, batch.expected_count)
+            batch.count, batch.expected_count, batch.scan, batch.sweep)
         return ()
 
     def _publish(self):
         if self.pending is not None:
             batch = self.pending
             name = f"{batch.group or 'window'}_{batch.window:04d}"
-            self.store.write_dataset(self.group, name, batch.data, batch.axes)
+            self.store.write_dataset(self.group, name, batch.data, batch.axes,
+                                     value_name=self.input_schema.value_name,
+                                     value_unit=self.input_schema.value_unit)
             self.published.append((self.group, name))
             self.pending = None
 

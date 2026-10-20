@@ -152,17 +152,26 @@ class Session:
             raise ValueError("Live session is for one instrument only")
         return self.name
 
+    def _dispatch(self, operation, instrument, member, /, *, args=(), kwargs=None, value=None):
+        """Proxy backend: driver arguments never share the routing namespace."""
+        fields = {"session": self.token, "name": self._name(instrument),
+                  "member": member, "kwargs": kwargs or {}}
+        if operation == "SET":
+            fields["value"] = value
+        elif operation == "CALL":
+            fields["args"] = args
+        elif operation != "GET":
+            raise ValueError(f"Unknown instrument operation: {operation}")
+        return self.client.request(operation, **fields)
+
     def get(self, member, *, name=None, **kwargs):
-        return self.client.request("GET", session=self.token, name=self._name(name),
-                                   member=member, kwargs=kwargs)
+        return self._dispatch("GET", name, member, kwargs=kwargs)
 
     def set(self, member, value, *, name=None, **kwargs):
-        return self.client.request("SET", session=self.token, name=self._name(name),
-                                   member=member, value=value, kwargs=kwargs)
+        return self._dispatch("SET", name, member, value=value, kwargs=kwargs)
 
     def call(self, member, *args, name=None, **kwargs):
-        return self.client.request("CALL", session=self.token, name=self._name(name),
-                                   member=member, args=args, kwargs=kwargs)
+        return self._dispatch("CALL", name, member, args=args, kwargs=kwargs)
 
     def close(self):
         if not self.closed:

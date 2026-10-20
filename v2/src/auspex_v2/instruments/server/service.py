@@ -24,20 +24,10 @@ import numpy as np
 
 from .bulk import encode_result, ResultEncodingError
 from ..drivers.simulated import SimulatedSource, SimulatedVNA
+from ..drivers.capabilities import describe_driver as _capabilities
 
 DRIVERS = {"simulated_source": SimulatedSource, "simulated_vna": SimulatedVNA}
 
-
-def _capabilities(driver):
-    """Describe only server-exposed members without constructing a driver."""
-    settings = {}
-    for name, spec in driver.commands.items():
-        settings[name] = {"read": spec.get_string is not None,
-                          "write": spec.set_string is not None,
-                          "args": list(spec.additional_args)}
-    for name, spec in driver.properties.items():
-        settings[name] = {"read": spec.readable, "write": spec.writable, "args": []}
-    return {"settings": settings, "operations": list(driver.operations)}
 MAX_MESSAGE = 64 * 1024
 PROTOCOL_VERSION = 2  # Prototype protocol; clients and service are updated together.
 WORKER_TIMEOUT = 5.0
