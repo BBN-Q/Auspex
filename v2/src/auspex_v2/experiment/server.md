@@ -9,7 +9,34 @@ laboratory operation; offline tests do not constitute model-specific hardware va
 
 ## Start and submit
 
-Start both services on the acquisition host (separate terminals):
+Start both services together on the acquisition host:
+
+```sh
+python v2/utils/launch_auspex.py
+# Optional InstrumentServer operator GUI:
+python v2/utils/launch_auspex.py --gui
+```
+
+The foreground launcher waits for InstrumentServer readiness before starting
+ExperimentServer, and prints both endpoints. Use `--instrument-socket PATH` and
+`--experiment-socket PATH` for custom endpoints. It refuses existing services,
+never uses `--clean`, and preserves saved registrations. Individual service
+scripts remain available.
+
+Ctrl+C stops ExperimentServer before InstrumentServer. **Finish active runs before
+stopping:** shutdown is supervision loss, not cooperative run cancellation or
+hardware output-off; an active lease may need reconciliation. If either service
+exits unexpectedly, the launcher stops the other and returns a failure status.
+Unresponsive shutdown is force-killed after 25 seconds with an operator warning.
+Closing the optional GUI does not stop the services.
+
+ExperimentServer prints its banner and concise `[ExperimentServer]` run lifecycle messages:
+accepted (ID/folder), running, cancellation requested, and terminal state/reason.
+Persistence failures and unexpected runner exits are prominent. Detailed command
+traces remain in `execution.log`; terminal output is diagnostic, not authoritative.
+Both services prefix their activity messages for a shared terminal.
+
+Alternatively, start services separately (separate terminals):
 
 ```sh
 python v2/utils/instrument_server.py

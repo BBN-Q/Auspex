@@ -22,6 +22,24 @@ from ..instruments.server.client import InstrumentServerClient
 from .protocol import MAX_MESSAGE, PROTOCOL_VERSION, default_socket
 
 
+SPLASH = r"""
+       _
+      / \  _   _ ___ _ __   _____  __
+     / _ \| | | / __| '_ \ / _ \ \/ /
+    / ___ \ |_| \__ \ |_) |  __/>  <
+   /_/   \_\__,_|___/ .__/ \___/_/\_\
+                    |_|  EXPERIMENT SERVER
+"""
+
+
+def announce(message):
+    """Best-effort operator output, never part of durable run state."""
+    try:
+        print(f"[ExperimentServer] {message}", flush=True)
+    except (OSError, UnicodeError):
+        pass
+
+
 class Registry:
     def __init__(self, instrument_socket):
         self.instrument_socket = str(instrument_socket) if instrument_socket else None
@@ -40,9 +58,12 @@ class Registry:
             self.degraded = (f"Cannot persist {state} status for {entry['id']} at {entry['folder'].path}: {exc}. "
                              f"Details: {details}. Durable status is unresolved; new runs are disabled.")
             entry["diagnostic"] = self.degraded
-            print(self.degraded, flush=True)
+            announce(self.degraded)
             raise
         entry["status"] = status
+        detail = f" — {details['reason']}" if details.get("reason") else ""
+        location = f" — {entry['folder'].path}" if state == "ACCEPTED" else ""
+        announce(f"Run {entry['id']}: {state}{location}{detail}")
 
     def _log(self, entry, text):
         try:
@@ -190,6 +211,7 @@ class Registry:
             if op == "cancel":
                 if self.active == entry["id"] and not entry["channel"].closed:
                     send(entry["channel"], {"type": "cancel"})
+                    announce(f"Run {entry['id']}: cancellation requested (cooperative)")
                 return None
             if op == "cleanup":
                 if self.active == entry["id"]:
@@ -201,6 +223,7 @@ class Registry:
     def close(self):
         with self.lock:
             self.closing = True
+            announce("Stopping; active runner supervision will close. An active instrument lease may require reconciliation.")
             entry = self.runs.get(self.active)
             if entry:
                 try:
@@ -251,17 +274,27 @@ class ExperimentServer(socketserver.ThreadingUnixStreamServer):
         self._lock_file.close()
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--socket")
     parser.add_argument("--instrument-socket")
-    args = parser.parse_args()
-    with ExperimentServer(args.socket, instrument_socket=args.instrument_socket) as server:
-        print(f"ExperimentServer listening on {server.path}", flush=True)
-        try:
-            server.serve_forever()
-        except KeyboardInterrupt:
-            pass
+    parser.add_argument("--no-splash", action="store_true", help="hide the startup banner")
+    args = parser.parse_args(argv)
+    def stop_on_term(*_):
+        raise KeyboardInterrupt
+    previous = signal.signal(signal.SIGTERM, stop_on_term)
+    try:
+        with ExperimentServer(args.socket, instrument_socket=args.instrument_socket) as server:
+            if not args.no_splash:
+                print(SPLASH, flush=True)
+            announce(f"Listening on {server.path}")
+            try:
+                server.serve_forever()
+            except KeyboardInterrupt:
+                pass
+        announce("Stopped")
+    finally:
+        signal.signal(signal.SIGTERM, previous)
 
 
 if __name__ == "__main__":

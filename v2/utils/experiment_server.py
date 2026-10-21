@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Start the simulator-only ExperimentServer; client disconnect does not stop it."""
+"""Start ExperimentServer; client disconnect does not stop an accepted run."""
 from auspex_v2.experiment.service import main
 
 if __name__ == "__main__":

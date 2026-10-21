@@ -230,7 +230,7 @@ class Registry:
     def announce(self, message):
         """Print an operator-facing command or transition unless quiet mode is active."""
         if not self.quiet:
-            print(f"[{datetime.now().astimezone().isoformat(timespec='seconds')}] {message}", flush=True)
+            print(f"[InstrumentServer] [{datetime.now().astimezone().isoformat(timespec='seconds')}] {message}", flush=True)
 
     def _save(self):
         payload = {"instruments": self.instruments,
@@ -885,7 +885,7 @@ def main(argv=None, *, on_start=None, on_bound=None):
             if not args.quiet:
                 if on_start is not None:
                     on_start()
-                print(f"Instrument server listening on {args.socket}", flush=True)
+                print(f"[InstrumentServer] Listening on {args.socket}", flush=True)
             server.serve_forever(poll_interval=0.2)
         except KeyboardInterrupt:
             pass

@@ -30,6 +30,7 @@ def main(argv=None):
     parser = argument_parser()
     parser.set_defaults(socket=None)  # let the service resolve its own default endpoint
     parser.add_argument("--gui", action="store_true", help="open the optional operator GUI")
+    parser.add_argument("--no-splash", action="store_true", help="hide the startup banner")
     options = parser.parse_args(argv)
     if options.gui and any(importlib.util.find_spec(module) is None for module in ("PySide6", "pyqtgraph")):
         parser.error("--gui requires PySide6 and pyqtgraph; install auspex-v2[gui]")
@@ -49,10 +50,10 @@ def main(argv=None):
             return
 
         def read_commands():
-            print("Type 'shutdown' to disconnect, clear instruments, and exit.", flush=True)
+            print("[InstrumentServer] Type 'shutdown' to disconnect, clear instruments, and exit.", flush=True)
             for line in sys.stdin:
                 if line.strip().lower() != "shutdown":
-                    print("Available command: shutdown", flush=True)
+                    print("[InstrumentServer] Available command: shutdown", flush=True)
                     continue
                 try:
                     with InstrumentServerClient(socket_path) as client:
@@ -61,10 +62,10 @@ def main(argv=None):
                             raise RuntimeError(f"Disconnect failures: {outcome['failures']}")
                         client.clear_instruments()
                         client.request("SHUTDOWN")
-                    print("All instruments disconnected; inventory cleared; server stopped.", flush=True)
+                    print("[InstrumentServer] All instruments disconnected; inventory cleared; server stopped.", flush=True)
                     return
                 except Exception as exc:
-                    print(f"Shutdown refused: {exc}", flush=True)
+                    print(f"[InstrumentServer] Shutdown refused: {exc}", flush=True)
 
         threading.Thread(target=read_commands, daemon=True).start()
 
@@ -75,7 +76,7 @@ def main(argv=None):
                                         "--socket", str(socket_path)])
 
     try:
-        return run_service(service_args, on_start=print_splash,
+        return run_service(service_args, on_start=None if options.no_splash else print_splash,
                            on_bound=launch_gui if options.gui else start_terminal)
     finally:
         if gui_process is not None and gui_process.poll() is None:
