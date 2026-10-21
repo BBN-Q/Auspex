@@ -1,4 +1,6 @@
 *checkpoint.ipynb
+*.ipynb
+.ipynb_checkpoints/
 *.pyc
 *.xml
 *.html
@@ -8,6 +10,7 @@
 *_meta.json
 data/*
 doc/_build/*
+v1/doc/_build/*
 doc/make.bat
 config/config.json
 *.egg-info*
