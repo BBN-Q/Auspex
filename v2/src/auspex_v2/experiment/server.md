@@ -1,7 +1,7 @@
 # ExperimentServer: writer-only laboratory slice
 
 ExperimentServer is an explicitly started local service. It admits **one active
-writer-only run, no queue**, and executes a saved version-4 plan in a separate
+writer-only run, no queue**, and executes a saved version-5 plan in a separate
 runner process. A client can disconnect or exit without cancelling its run. The
 runner accepts every driver in the instrument server's explicit registry when its
 fixed KIND matches the experiment role. Real-hardware use is trusted, attended
@@ -23,18 +23,61 @@ ExperimentServer, and prints both endpoints. Use `--instrument-socket PATH` and
 never uses `--clean`, and preserves saved registrations. Individual service
 scripts remain available.
 
-Ctrl+C stops ExperimentServer before InstrumentServer. **Finish active runs before
-stopping:** shutdown is supervision loss, not cooperative run cancellation or
-hardware output-off; an active lease may need reconciliation. If either service
-exits unexpectedly, the launcher stops the other and returns a failure status.
-Unresponsive shutdown is force-killed after 25 seconds with an operator warning.
-Closing the optional GUI does not stop the services.
+First Ctrl+C requests cooperative cancellation of the active run and waits for
+teardown and durable completion, then stops ExperimentServer before InstrumentServer.
+A second Ctrl+C stops supervision without waiting for cooperative completion; an
+active lease may need reconciliation. SIGTERM uses non-interactive ordered shutdown
+and warns about the active run. If status/cancellation is unavailable, the launcher
+reports that it cannot confirm completion before stopping supervision.
+**Neither cancellation nor service shutdown guarantees hardware outputs are off.**
+If either service exits unexpectedly, the launcher stops the other and returns a
+failure status. Unresponsive service shutdown is force-killed after 25 seconds
+with an operator warning. Closing the optional GUI does not stop the services.
+
+Startup includes a read-only inventory/ownership summary: no hardware queries,
+automatic connections, or recovery. Inspect the same information at any time:
+
+```sh
+python v2/utils/auspex_status.py
+python v2/utils/auspex_status.py --json
+```
+
+The utility accepts the same socket options, checks each service independently
+with bounded waits, and reports unavailable services, recovery blockers, active
+run progress/folder, and degraded status. Exit status is nonzero if either service
+is unavailable; ownership and recovery blockers remain visible in the snapshot.
 
 ExperimentServer prints its banner and concise `[ExperimentServer]` run lifecycle messages:
 accepted (ID/folder), running, cancellation requested, and terminal state/reason.
 Persistence failures and unexpected runner exits are prominent. Detailed command
 traces remain in `execution.log`; terminal output is diagnostic, not authoritative.
-Both services prefix their activity messages for a shared terminal.
+Both services prefix their activity messages for a shared terminal. After durable
+terminal persistence, every outcome prints its result folder and, when the checkout's
+DataBrowser utility is available, a shell-quoted command to open it **on the server
+host** (GUI dependencies required). A failed run may have no published datasets.
+
+### Point progress
+
+A completed point is a completed execution of `sequence()`, not an instrument
+command, VNA internal sweep, publication, or saved dataset. Nested sweep totals
+are the product of axis lengths; joint axes count their shared points once.
+No sweeps means one sequence execution. Internal conditions/loops/acquisitions do
+not inflate the point count. Early termination, failure, and cancellation retain
+the actual completed count; the bar is never forced to 100%. Unknown totals use
+count-only display. Recompile older plans: version 5 introduces explicit point
+boundaries.
+
+`run.status()['progress']` contains `phase`, `completed`, `total` (or null),
+`coordinates`, `coordinate_units`, `windows_submitted`, and `updated_at`.
+Phases distinguish starting, connecting, setup, acquisition, teardown, and processing
+drain. Progress is a live in-memory snapshot; the latest snapshot is also included
+in durable terminal status. An old timestamp means no progress update, not proof of
+a hang. Point completion does **not** mean teardown or data publication has finished.
+
+Terminal updates are throttled to about two seconds, plus phase changes. A standalone
+interactive server updates a bar in place; redirected output and the launcher's
+shared terminal use complete bar lines so instrument messages do not collide with
+an unfinished line. Detailed command logs remain unchanged.
 
 Alternatively, start services separately (separate terminals):
 

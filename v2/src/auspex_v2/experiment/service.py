@@ -6,6 +6,8 @@ import json
 from multiprocessing.connection import Connection
 import os
 import signal
+import shlex
+import time
 import socket
 import subprocess
 import sys
@@ -19,7 +21,9 @@ from .resources import RunFolder, _atomic_json, preflight_run
 from .runner import check_inventory, receive, send
 from ..instruments.server.client import InstrumentServerClient
 
-from .protocol import MAX_MESSAGE, PROTOCOL_VERSION, default_socket
+from .protocol import MAX_MESSAGE, PROTOCOL_VERSION, TERMINAL, default_socket
+from .progress import point_total
+from ..status import progress_text
 
 
 SPLASH = r"""
@@ -32,9 +36,16 @@ SPLASH = r"""
 """
 
 
+_progress_line = False
+
+
 def announce(message):
     """Best-effort operator output, never part of durable run state."""
+    global _progress_line
     try:
+        if _progress_line:
+            print(flush=True)
+            _progress_line = False
         print(f"[ExperimentServer] {message}", flush=True)
     except (OSError, UnicodeError):
         pass
@@ -52,6 +63,8 @@ class Registry:
     def _status(self, entry, state, **details):
         status = {"run_id": entry["id"], "path": str(entry["folder"].path),
                   "state": state, "updated_at": datetime.now().isoformat(), **details}
+        if "progress" in entry:
+            status["progress"] = entry["progress"]
         try:
             _atomic_json(entry["folder"].path / "status.json", status)
         except Exception as exc:
@@ -64,6 +77,32 @@ class Registry:
         detail = f" — {details['reason']}" if details.get("reason") else ""
         location = f" — {entry['folder'].path}" if state == "ACCEPTED" else ""
         announce(f"Run {entry['id']}: {state}{location}{detail}")
+        if state in TERMINAL:
+            announce(f"Results (server host): {entry['folder'].path}")
+            browser = Path(__file__).resolve().parents[3] / "utils" / "data_browser.py"
+            if browser.is_file():
+                announce("Browse on server host (GUI required): " + shlex.join(
+                    [sys.executable, str(browser), str(entry['folder'].path)]))
+
+    def _progress(self, entry, progress):
+        global _progress_line
+        previous = entry.get("progress", {})
+        entry["progress"] = progress
+        now = time.monotonic()
+        if (previous.get("phase") == progress["phase"]
+                and now - entry.get("progress_printed", 0) < 2):
+            return
+        entry["progress_printed"] = now
+        text = f"Run {entry['id']}: {progress_text(progress)}"
+        if not sys.stdout.isatty() or os.environ.get("AUSPEX_SHARED_TERMINAL"):
+            # Other service processes also write here: don't leave a partial line.
+            announce(text)
+        else:
+            try:
+                print("\r\033[2K[ExperimentServer] " + text, end="", flush=True)
+                _progress_line = True
+            except (OSError, UnicodeError):
+                pass
 
     def _log(self, entry, text):
         try:
@@ -97,7 +136,10 @@ class Registry:
                 directory.mkdir(exist_ok=True)
             folder = RunFolder.allocate(plan, name=name, directory=directory)
             run_id = uuid.uuid4().hex
-            entry = {"id": run_id, "folder": folder, "status": folder.status()}
+            entry = {"id": run_id, "folder": folder, "status": folder.status(),
+                     "progress": {"phase": "starting", "completed": 0, "total": point_total(plan.document),
+                                  "coordinates": {}, "coordinate_units": {}, "windows_submitted": 0,
+                                  "updated_at": datetime.now().astimezone().isoformat()}}
             self.runs[run_id] = entry
             self.active = run_id
             try:
@@ -141,6 +183,8 @@ class Registry:
                                 send(channel, {"type": "error", "reason": str(exc)})
                             else:
                                 send(channel, {"type": "ack"})
+                        elif kind == "progress":
+                            self._progress(entry, message["progress"])
                         elif kind == "log":
                             self._log(entry, message["text"])
                         elif kind == "terminal":
@@ -192,12 +236,12 @@ class Registry:
             return self.submit(request)
         with self.lock:
             if op == "list_runs":
-                return [{**e["status"], "diagnostic": e.get("diagnostic")} for e in self.runs.values()]
+                return [{**e["status"], "progress": e.get("progress"), "diagnostic": e.get("diagnostic")} for e in self.runs.values()]
             if op == "server_status":
                 return {"active": self.active, "degraded": self.degraded}
             entry = self.runs[request["run_id"]]
             if op == "status":
-                return {**entry["status"], "diagnostic": entry.get("diagnostic")}
+                return {**entry["status"], "progress": entry.get("progress"), "diagnostic": entry.get("diagnostic")}
             if op == "plan":
                 return json.loads((entry["folder"].path / "plan.json").read_text())
             if op == "log":

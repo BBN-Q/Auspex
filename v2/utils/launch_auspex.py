@@ -13,7 +13,9 @@ import sys
 import time
 
 from auspex_v2.instruments.server.service import default_socket as instrument_socket, PROTOCOL_VERSION as INSTRUMENT_VERSION
-from auspex_v2.experiment.protocol import default_socket as experiment_socket, PROTOCOL_VERSION as EXPERIMENT_VERSION
+from auspex_v2.experiment.protocol import default_socket as experiment_socket, PROTOCOL_VERSION as EXPERIMENT_VERSION, TERMINAL
+from auspex_v2.experiment.client import ExperimentServerClient
+from auspex_v2.status import inspect_services, format_status
 
 
 SPLASH = r"""
@@ -103,6 +105,31 @@ def stop(process, name):
         process.wait()
 
 
+def cancel_and_wait(path, children):
+    """First Ctrl+C: allow cooperative teardown; a second interrupt escapes this wait."""
+    client = ExperimentServerClient(path, timeout=1)
+    try:
+        status = client.status()
+        if not status["active"]:
+            return
+        handle = client.run(status["active"])
+        announce(f"Run {handle.run_id} is active. Requesting cooperative cancellation.")
+        announce("Waiting for teardown/finalization. Ctrl+C again stops supervision; neither action guarantees outputs are off.")
+        handle.cancel()
+        while True:
+            if any(process.poll() is not None for process, _ in children[:2]):
+                raise RuntimeError("A service exited while waiting for cancellation")
+            status = handle.status()
+            if status["state"] in TERMINAL:
+                announce(f"Run {handle.run_id}: {status['state']}; proceeding with shutdown")
+                return
+            if client.status().get("degraded"):
+                raise RuntimeError("Durable run status is unresolved")
+            time.sleep(.2)
+    except (OSError, RuntimeError, ValueError) as exc:
+        announce(f"Could not confirm cooperative completion: {exc}. Stopping supervision; inspect hardware and leases.")
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--instrument-socket", default=str(instrument_socket()))
@@ -119,7 +146,10 @@ def main(argv=None):
         parser.error("--gui requires auspex-v2[gui]")
 
     children = []
+    terminated = False
     def interrupted(*_):
+        nonlocal terminated
+        terminated = True
         raise KeyboardInterrupt
     previous = signal.signal(signal.SIGTERM, interrupted)
     try:
@@ -129,7 +159,8 @@ def main(argv=None):
         utility = Path(__file__).resolve().parent
         def start(name, command):
             process = subprocess.Popen([sys.executable, "-u", *command],
-                                       stdin=subprocess.DEVNULL, start_new_session=True)
+                                       stdin=subprocess.DEVNULL, start_new_session=True,
+                                       env={**os.environ, "AUSPEX_SHARED_TERMINAL": "1"})
             children.append((process, name))
             return process
         instrument = start("InstrumentServer", [str(utility / "instrument_server.py"), "--no-splash", "--socket", str(instruments)])
@@ -141,13 +172,26 @@ def main(argv=None):
             start("Instrument GUI", ["-m", "auspex_v2.instruments.server.gui", "--socket", str(instruments)])
         announce(f"Ready. Instruments: {instruments}")
         announce(f"Experiments: {experiments}")
-        announce("Ctrl+C stops both services, not hardware outputs. Finish active runs first; registrations are preserved.")
+        for line in format_status(inspect_services(instruments, experiments)).splitlines():
+            announce(line)
+        announce("Ctrl+C cancels an active run and waits; Ctrl+C again stops supervision. Registrations are preserved.")
         while True:
             for process, name in children[:2]:
                 if process.poll() is not None:
                     raise RuntimeError(f"{name} exited unexpectedly ({process.returncode})")
             time.sleep(0.2)
     except KeyboardInterrupt:
+        if not terminated:
+            try:
+                cancel_and_wait(experiments, children)
+            except KeyboardInterrupt:
+                announce("Second interrupt: stopping supervision now. Hardware may remain active; leases may need reconciliation.")
+        else:
+            try:
+                active = ExperimentServerClient(experiments, timeout=1).status()["active"]
+                announce(f"SIGTERM: stopping supervision; active run: {active or 'none'}. Hardware outputs are not switched off.")
+            except (OSError, RuntimeError, ValueError):
+                announce("SIGTERM: run status unavailable; inspect hardware and leases after shutdown.")
         announce("Shutdown requested")
         return 0
     except (OSError, RuntimeError) as exc:

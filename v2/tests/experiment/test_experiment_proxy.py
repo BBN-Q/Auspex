@@ -118,7 +118,7 @@ class ProxyCompilerTest(TestCase):
         exp = Job()
         exp.bind_instrument("device", "test")
         plan = exp.compile()
-        call = plan.document["main"][1]
+        call = next(node for node in plan.document["main"] if node["op"] == "CALL")
         self.assertEqual(call["kwargs"]["wait"], {"op": "literal", "value": True})
         self.assertNotIn("WAIT", plan.explain())
         class Bad(Job):

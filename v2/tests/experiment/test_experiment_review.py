@@ -200,10 +200,10 @@ class CompilerReviewTest(unittest.TestCase):
                     seq.wait(0.5)
 
         plan = Counts().compile()
-        loop = plan.document["main"][1]
+        loop = next(node for node in plan.document["main"] if node["op"] == "REPEAT")
         self.assertEqual(loop["count"], {"op": "literal", "value": 2})
         self.assertEqual(loop["max_iterations"], 2)
-        self.assertEqual(loop["body"][0]["id"], "main.001.body.000")
+        self.assertEqual(loop["body"][0]["id"], loop["id"] + ".body.000")
         self.assertEqual(FakeExecutor().run(plan).time, 1.)
         self.assertEqual(CompiledPlan(plan.document).identity, plan.identity)
 

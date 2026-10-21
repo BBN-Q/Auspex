@@ -84,7 +84,7 @@ class PublicationCompilerTest(unittest.TestCase):
         experiment = configured(External)
         experiment.connect(experiment.trace, buffer_input())
         plan = experiment.compile()
-        self.assertEqual(plan.document["version"], 4)
+        self.assertEqual(plan.document["version"], 5)
         self.assertEqual(plan.document["pipelines"][0]["connections"], {"input": "trace"})
 
     def test_internal_setup_uses_config_and_runs_only_on_detached_copy(self):
@@ -191,7 +191,7 @@ class PublicationCompilerTest(unittest.TestCase):
             lambda d: d.update(pipelines=[]),
             lambda d: d["pipelines"][0]["connections"].update(trace_input="missing"),
             lambda d: d["outputs"]["trace"].update(dtype="float64"),
-            lambda d: d["main"][2].update(output="missing"),
+            lambda d: next(node for node in d["main"] if node["op"] == "PUBLISH").update(output="missing"),
         ):
             document = plan.document
             change(document)

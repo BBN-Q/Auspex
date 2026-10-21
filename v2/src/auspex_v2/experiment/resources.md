@@ -21,7 +21,7 @@ server's inline buffer-transfer limit.
 ## Folder handoff
 
 `RunFolder.allocate(plan, name="experiment", directory=existing_directory)`
-requires a validated version-4 compiled plan. It claims an unused
+requires a validated version-5 compiled plan. It claims an unused
 `experiment_NNN.auspex` folder starting at `000`, advancing beyond the highest
 existing number. `AuspexStore(mode="w")` initializes an empty manifest and an
 atomic `UNINITIALIZED` status stub. The helper atomically writes `plan.json`,

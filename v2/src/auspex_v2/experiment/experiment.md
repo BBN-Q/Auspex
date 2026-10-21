@@ -1,8 +1,8 @@
 # Experiment compiler and explicit pipeline publication
 
 `compiler.py` implements trusted Python authoring, a structured instruction
-compiler, detached version-4 JSON execution units, `save`/`load`, and `explain()`.
-Only version 4 is accepted; older plans must be recompiled from their experiment
+compiler, detached version-5 JSON execution units, `save`/`load`, and `explain()`.
+Only version 5 is accepted; older plans must be recompiled from their experiment
 authoring code. New compilation requires an attached pipeline. No saved source, pickle, or `eval` is used.
 
 `FakeExecutor` interprets commands and publications without workers or storage.
@@ -366,7 +366,9 @@ without rewriting the document; a final pass assigns stable instruction IDs.
 `FlowState` records available references, mutable variables, and initialized
 parameters at each point. Branches intersect availability and general loops do not
 export possibly uninitialized declarations. Compile/load share these passes.
-Only version-4 plans are accepted. Versions 1–3 fail immediately with guidance
+Version 5 adds explicit `POINT_BEGIN`/`POINT_END` boundaries around each execution
+of `sequence()`, enabling point progress without counting commands or publications.
+Only version-5 plans are accepted. Versions 1–4 fail immediately with guidance
 to recompile; there is no silent plan upgrade. Plans contain validated `pipelines`
 attachments and explicit `PUBLISH` instructions. Unknown top-level fields and
 obsolete `ACQUIRE` instructions are rejected rather than ignored.

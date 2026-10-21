@@ -36,7 +36,7 @@ class RealExampleTest(unittest.TestCase):
                 parameter.bind(getattr(experiment, role), "ramp" if parameter_name == "bias" else "frequency")
                 experiment.add_sweep(parameter, points)
                 plan = experiment.compile()
-                self.assertEqual(plan.document["version"], 4)
+                self.assertEqual(plan.document["version"], 5)
                 setup = plan.document["setup"][:4]
                 self.assertEqual([node["member"] for node in setup],
                                  ["output", "mode", "level", "output"] if role == "bias_source"

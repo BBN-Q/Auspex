@@ -223,14 +223,14 @@ print(json.dumps([p.identity, r.time, [w["coordinates"] for w in r.windows], r.o
         """Reject older versions before normalization or executing any instructions."""
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "obsolete-plan.json"
-            for version in (1, 2, 3, 999):
+            for version in (1, 2, 3, 4, 999):
                 path.write_text(json.dumps({"version": version, "main": [{"op": "EXEC_PYTHON"}]}))
                 with self.subTest(version=version), self.assertRaisesRegex(CompileError, "recompile"):
                     CompiledPlan.load(path)
 
     def test_reject_unbound_unknown_instructions_and_version(self):
         with self.assertRaises(CompileError): Measurement().compile()
-        for old_version in (1, 2, 3, 100):
+        for old_version in (1, 2, 3, 4, 100):
             doc = configured().compile().document
             doc["version"] = old_version
             with self.subTest(version=old_version), self.assertRaisesRegex(CompileError, "recompile"):

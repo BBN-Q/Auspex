@@ -5,6 +5,8 @@ commands, publication and lifecycle here are real. Hardware behavior remains the
 """
 import json
 import time
+from datetime import datetime
+from .progress import point_total
 
 from .compiler import CompiledPlan
 from .fake import FakeExecutor, _Terminate
@@ -65,6 +67,27 @@ class LiveInterpreter(FakeExecutor):
         self.cancelled = False
         self.started = time.monotonic()
         self.publications = 0
+        self.completed = 0
+        self.total = point_total(document)
+        self.coordinates = {}
+        self.phase = "connecting"
+
+    def progress(self, phase=None):
+        if phase is not None:
+            self.phase = phase
+        try:
+            send(self.channel, {"type": "progress", "progress": {
+                "phase": self.phase, "completed": self.completed, "total": self.total,
+                "coordinates": dict(self.coordinates), "windows_submitted": self.publications,
+                "coordinate_units": {name: self.doc["parameters"][name]["unit"] for name in self.coordinates},
+                "updated_at": datetime.now().astimezone().isoformat()}})
+        except (OSError, EOFError):
+            raise SupervisionLost() from None
+
+    def _point(self, node):
+        if node["op"] == "POINT_END":
+            self.completed += 1
+        self.progress("acquisition")
 
     def poll(self):
         try:
@@ -130,6 +153,7 @@ class LiveInterpreter(FakeExecutor):
         self.pipeline.submit(data, axes=axes, sweep=self.coordinates, sweep_units=units)
         self._log(node, f"PUBLISH {node['output']} window={self.publications} submitted (not publication acknowledgment)")
         self.publications += 1
+        self.progress()
 
     def _scan_end(self, node):
         self.pipeline._seal_scan()
@@ -152,6 +176,7 @@ def run(channel, document, path, run_id, instrument_socket):
         inventory = check_inventory(plan, client, owned_run_id=run_id)
         pipeline = ManualPipeline(compiled, store_path=path, existing_store=True, buffer_full="fail")
         interpreter = LiveInterpreter(channel, session, pipeline, document)
+        interpreter.progress("connecting")
         interpreter.poll()
         for name in dict.fromkeys(spec["name"] for spec in document["instruments"].values()):
             interpreter.poll()
@@ -176,7 +201,9 @@ def run(channel, document, path, run_id, instrument_socket):
         interpreter.poll()
         setup_started = True
         try:
+            interpreter.progress("setup")
             interpreter._body(document["setup"])
+            interpreter.progress("acquisition")
             interpreter._body(document["main"])
             outcome, reason = "SUCCEEDED", ""
         except _Terminate as exc:
@@ -185,6 +212,7 @@ def run(channel, document, path, run_id, instrument_socket):
             outcome, reason = "FAILED", str(exc)
         # SupervisionLost is a BaseException: it bypasses this cleanup entirely.
         interpreter.cleaning = True
+        interpreter.progress("teardown")
         interpreter.steps = 0
         try:
             interpreter._body(document["teardown"])
@@ -199,6 +227,7 @@ def run(channel, document, path, run_id, instrument_socket):
         else:
             client.close()  # No END_RUN: explicit operator reconciliation is required.
             client = None
+        interpreter.progress("processing drain")
         if outcome == "SUCCEEDED" or interpreter.scan_complete:
             pipeline.close()
         else:

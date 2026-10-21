@@ -12,7 +12,7 @@ class CompileError(ValueError):
     """An experiment cannot be represented as a valid executable plan."""
 
 
-PLAN_VERSION = 4  # Plan versions are not silently upgraded during WIP development.
+PLAN_VERSION = 5  # Plan versions are not silently upgraded during WIP development.
 
 
 def plain(value):
@@ -298,12 +298,24 @@ class PlanValidator:
 
     def validate_body(self, nodes, incoming, path, teardown=False):
         state = incoming.copy()
+        point_open = False
         for index, node in enumerate(nodes):
             location = f"{path}.{index:03d}"
             try:
+                if node["op"] in ("POINT_BEGIN", "POINT_END"):
+                    if not path.startswith("main") or teardown:
+                        raise CompileError("Point boundaries belong only in main")
+                    if (node["op"] == "POINT_BEGIN") == point_open:
+                        raise CompileError("Unbalanced point boundaries")
+                    point_open = not point_open
+                elif point_open and any(child["op"] in ("POINT_BEGIN", "POINT_END")
+                                        for block in CHILD_BLOCKS for child in walk_instructions(node.get(block, []))):
+                    raise CompileError("Nested point boundaries are not allowed")
                 state = self.validate_instruction(node, state, location, teardown)
             except CompileError as exc:
                 raise CompileError(f"{location}: {exc}") from exc
+        if point_open:
+            raise CompileError(f"{path}: Unclosed point boundary")
         return state
 
     def validate_instruction(self, node, state, path, teardown):
@@ -373,7 +385,7 @@ class PlanValidator:
         elif op == "TERMINATE":
             if teardown or node["outcome"] not in ("SUCCEEDED", "FAILED"):
                 raise CompileError("Invalid termination")
-        elif op not in ("SCAN_BEGIN", "SCAN_END"):
+        elif op not in ("SCAN_BEGIN", "SCAN_END", "POINT_BEGIN", "POINT_END"):
             raise CompileError(f"Unknown instruction: {op}")
         return state
 

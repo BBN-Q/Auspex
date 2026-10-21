@@ -138,8 +138,13 @@ class FakeExecutor:
                 self._log(node, op + " " + node["name"])
             elif op == "SCAN_END":
                 self._scan_end(node)
+            elif op in ("POINT_BEGIN", "POINT_END"):
+                self._point(node)
             else:
                 raise RuntimeError(f"Unknown instruction: {op}")
+
+    def _point(self, node):
+        """Explicit sequence boundary; live execution supplies progress reporting."""
 
     def _command(self, node):
         op = node["op"]

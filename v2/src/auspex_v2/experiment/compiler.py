@@ -695,7 +695,9 @@ class Experiment:
     def _record_sweeps(self, builder, index):
         """Nest last-added axes outside first-added axes, without unrolling."""
         if index < 0:
+            builder._emit("POINT_BEGIN")
             self._invoke_hook(builder, self.sequence)
+            builder._emit("POINT_END")
             return
         axis = self.sweeps[index]
         self._invoke_hook(builder, self.sweep_begin, axis)

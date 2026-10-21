@@ -1,6 +1,7 @@
 """Launcher integration tests use empty services/simulators, never hardware."""
 import json
 import os
+import signal
 from pathlib import Path
 import subprocess
 import sys
@@ -65,6 +66,50 @@ class LauncherTest(unittest.TestCase):
         self.assertNotIn("\033[", self.text())
         self.assertIn("Stopping ExperimentServer", self.text())
         self.assertLess(self.text().index("Stopping ExperimentServer"), self.text().index("Stopping InstrumentServer"))
+
+    def start_run(self, *, blocking=False):
+        from .test_experiment_server import Measurement, plan
+        class Slow(Measurement):
+            def sequence(self, seq):
+                if blocking:
+                    self.source.wait_for_test(4)
+                else:
+                    seq.wait(10)
+                seq.publish(self.signal, data=1.0)
+        with InstrumentServerClient(self.instrument) as client:
+            client.register("source", "SimulatedSource", "SIM::SRC")
+        run = ExperimentServerClient(self.experiment).submit(plan(Slow), name="slow", dir=self.tmp.name)
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline:
+            started = ("CALL source.wait_for_test" in run.log() if blocking
+                       else run.status()["state"] == "RUNNING")
+            if started:
+                return run
+            time.sleep(.05)
+        self.fail("Run did not start")
+
+    def test_first_interrupt_cancels_and_preserves_teardown(self):
+        run = self.start_run()
+        self.process.send_signal(signal.SIGINT)
+        self.process.wait(timeout=25)
+        self.assertEqual(self.process.returncode, 0, self.text())
+        result = json.loads((run.path / "status.json").read_text())
+        self.assertEqual(result["state"], "CANCELLED", self.text())
+        self.assertTrue(result["lease_released"])
+        self.assertEqual(result["progress"]["completed"], 0)
+        self.assertIn("Requesting cooperative cancellation", self.text())
+
+    def test_second_interrupt_stops_supervision(self):
+        self.start_run(blocking=True)
+        self.process.send_signal(signal.SIGINT)
+        deadline = time.monotonic() + 5
+        while "Waiting for teardown/finalization" not in self.text():
+            self.assertLess(time.monotonic(), deadline)
+            time.sleep(.02)
+        self.process.send_signal(signal.SIGINT)
+        self.process.wait(timeout=30)
+        self.assertIn("Second interrupt", self.text())
+        self.assertIn("leases may need reconciliation", self.text())
 
     def test_unexpected_service_exit_stops_other_service(self):
         with InstrumentServerClient(self.instrument) as client:

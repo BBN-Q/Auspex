@@ -1,5 +1,6 @@
 """Operator messages follow durable state and cannot change run outcomes."""
 import tempfile
+import shlex
 from pathlib import Path
 from types import SimpleNamespace
 import unittest
@@ -11,6 +12,8 @@ from auspex_v2.experiment.service import Registry, announce
 class TerminalLoggingTest(unittest.TestCase):
     def test_status_messages_follow_persistence_and_include_identity(self):
         with tempfile.TemporaryDirectory() as directory:
+            directory = str(Path(directory) / "run with 'quotes'.auspex")
+            Path(directory).mkdir()
             registry = Registry(None)
             entry = {"id": "test-run", "folder": SimpleNamespace(path=Path(directory))}
             with patch("auspex_v2.experiment.service.announce") as output:
@@ -19,7 +22,9 @@ class TerminalLoggingTest(unittest.TestCase):
                 registry._status(entry, "RUNNING")
                 self.assertIn("test-run: RUNNING", output.call_args.args[0])
                 registry._status(entry, "FAILED", reason="example failure")
-                self.assertIn("example failure", output.call_args.args[0])
+                self.assertTrue(any("example failure" in call.args[0] for call in output.call_args_list))
+                self.assertIn("Browse on server host", output.call_args.args[0])
+                self.assertEqual(shlex.split(output.call_args.args[0].split(": ", 1)[1])[-1], directory)
                 with patch("auspex_v2.experiment.service._atomic_json", side_effect=OSError("disk full")):
                     with self.assertRaises(OSError):
                         registry._status(entry, "SUCCEEDED")
