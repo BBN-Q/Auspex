@@ -66,6 +66,16 @@ def buffer_input(name="input", schema=None):
 
 class PublicationCompilerTest(unittest.TestCase):
     """Check syntactic wiring, detached setup and plain saved-plan validation."""
+    def test_legacy_graph_is_not_silently_saved_as_executable(self):
+        """Legacy-looking graph configuration must not imply a running graph."""
+        experiment = configured()
+        with self.assertRaisesRegex(CompileError, "PipelineDefinition"):
+            experiment.set_graph({"writer": "disk"})
+        with self.assertRaisesRegex(CompileError, "OutputConnector"):
+            experiment.outputs = {"trace": {"dtype": "float64"}}
+        with self.assertRaisesRegex(CompileError, "OutputConnector"):
+            experiment.graph = {"writer": "disk"}
+
     def test_pipeline_required_and_none_setup_ignored(self):
         with self.assertRaisesRegex(CompileError, "requires an attached pipeline"):
             Experiment().compile()
@@ -74,7 +84,7 @@ class PublicationCompilerTest(unittest.TestCase):
         experiment = configured(External)
         experiment.connect(experiment.trace, buffer_input())
         plan = experiment.compile()
-        self.assertEqual(plan.document["version"], 2)
+        self.assertEqual(plan.document["version"], 4)
         self.assertEqual(plan.document["pipelines"][0]["connections"], {"input": "trace"})
 
     def test_internal_setup_uses_config_and_runs_only_on_detached_copy(self):
@@ -319,6 +329,26 @@ if __name__ == "__main__":
         self.assertEqual(run.outcome, "FAILED")
         self.assertIn("safe", calls)
         self.assertIn("pipeline finalization", run.reason)
+
+    def test_unattended_buffer_overflow_fails_without_a_consumer(self):
+        """A buffer plus a disk writer must fail clearly, not hang on scan closure."""
+        class Small(Measurement):
+            def setup_pipeline(self):
+                source = PipelineInput("input")
+                buffer = DataBuffer(name="memory", capacity=1)
+                disk = WriteToFile(name="disk")
+                PipelineDefinition(inputs=[source], edges=[
+                    (source, buffer.sink), (source, disk.sink)])
+                self.connect(self.trace, source)
+            def sequence(self, seq):
+                super().sequence(seq)
+                super().sequence(seq)
+        with tempfile.TemporaryDirectory() as directory:
+            run = PipelineExecutor(command).run(configured(Small).compile(),
+                                                store_path=Path(directory) / "run.auspex", timeout=1)
+        self.assertEqual(run.outcome, "FAILED")
+        self.assertIn("Buffer 'memory' capacity exceeded", run.reason)
+        self.assertNotIn("Timed out", run.reason)
 
     def test_symbolic_tuple_results_cannot_be_implicitly_iterated(self):
         class Unpack(Measurement):

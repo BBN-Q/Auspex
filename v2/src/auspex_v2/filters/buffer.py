@@ -35,10 +35,11 @@ class BufferSink:
     view copies without consuming. No partial outputs are exposed. Producer and
     nonblocking queue operations are private FilterServer implementation details.
     """
-    def __init__(self, name, capacity):
+    def __init__(self, name, capacity, *, warn_on_full=True):
         if type(capacity) is not int or capacity < 1:
             raise ValueError("Buffer capacity must be a positive integer")
         self.name, self.capacity = name, capacity
+        self.warn_on_full = warn_on_full
         self._items = deque()
         self._condition = threading.Condition()
         self._done, self._error, self._warned = False, None, False
@@ -57,7 +58,7 @@ class BufferSink:
             if len(self._items) >= self.capacity:
                 raise queue.Full
             self._items.append(snapshot(batch))
-            if len(self._items) == self.capacity and not self._warned:
+            if self.warn_on_full and len(self._items) == self.capacity and not self._warned:
                 self._warned = True
                 warn = True
             self._condition.notify_all()

@@ -18,7 +18,8 @@ class InstrumentServerClient:
     def __init__(self, socket_path=None):
         """Open the Unix socket and verify the server protocol version."""
         self.socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        self.socket.settimeout(10)
+        # Whole-command deadlines belong to each registered instrument. Do not
+        # impose a shorter hidden client transport timeout.
         try:
             self.socket.connect(str(socket_path or default_socket()))
         except BaseException:
@@ -53,8 +54,17 @@ class InstrumentServerClient:
     def status(self):
         return self.request("STATUS")
 
-    def register(self, name, driver, resource):
-        return self.request("REGISTER", name=name, driver=driver, resource=resource)
+    def register(self, name, driver, resource, *, command_timeout=None, io_timeout=None):
+        return self.request("REGISTER", name=name, driver=driver, resource=resource,
+                            command_timeout=command_timeout, io_timeout=io_timeout)
+
+    def set_command_timeout(self, name, timeout):
+        """Set a whole-worker-request deadline in seconds, or None for no deadline."""
+        return self.request("SET_COMMAND_TIMEOUT", name=name, timeout=timeout)
+
+    def set_io_timeout(self, name, timeout):
+        """Set per-VISA-I/O seconds while disconnected; None restores driver default."""
+        return self.request("SET_IO_TIMEOUT", name=name, timeout=timeout)
 
     def deregister(self, name):
         return self.request("DEREGISTER", name=name)

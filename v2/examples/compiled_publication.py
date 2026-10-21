@@ -17,7 +17,7 @@ from auspex_v2.instruments.drivers.simulated import SimulatedVNA
 class VnaSweep(Experiment):
     """Publish a complete complex trace at each requested bias."""
     vna = InstrumentRef(kind="VNA", driver=SimulatedVNA)
-    source = InstrumentRef(kind="SOURCE")
+    source = InstrumentRef(kind="MICROWAVE_SOURCE")
     bias = FloatParameter(default=0., unit="V")
     trace = OutputConnector(dtype="complex128", dimensions=("frequency",),
                             axis_units={"frequency": "Hz"})

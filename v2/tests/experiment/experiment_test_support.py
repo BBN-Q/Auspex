@@ -10,10 +10,10 @@ from auspex_v2.filters.definitions import PipelineInput, PipelineDefinition, Dat
 
 class Experiment(BaseExperiment):
     """Supply a trivial, data-free pipeline to older instruction authoring fixtures."""
-    test_output = OutputConnector(dtype="float64", max_bytes=1024)
+    signal = OutputConnector(dtype="float64", max_bytes=1024)
 
     def setup_pipeline(self):
         source = PipelineInput("input")
         memory = DataBuffer(name="test_memory", capacity=2)
         PipelineDefinition(inputs=[source], edges=[(source, memory.sink)])
-        self.connect(self.test_output, source)
+        self.connect(self.signal, source)

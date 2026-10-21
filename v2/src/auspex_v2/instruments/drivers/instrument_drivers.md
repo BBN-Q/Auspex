@@ -1,8 +1,15 @@
 # Writing V2 instrument drivers (preliminary)
 
-V2 instruments should work directly from Python, without an experiment or a server. The local instrument server owns simulated driver connections in worker processes; real driver registration remains future work. This is the initial direct-use driver slice. See `core.py`, `agilent.py`, `yokogawa.py`, and the offline tests in `v2/tests/test_instruments.py`.
+V2 instruments work directly from Python or through the local instrument server. The server explicitly admits the currently ported real and simulated drivers by canonical class name and owns each connection in a worker process. See `core.py`, `agilent.py`, `yokogawa.py`, and the offline tests in `v2/tests/test_instruments.py`.
 
 ## The model
+
+`InstrumentKind` in `auspex_v2.instruments.kinds` is the fixed role vocabulary used
+by plans and services: `MICROWAVE_SOURCE`, `DC_SOURCE`, `AWG`, `DIGITIZER`, `VNA`,
+`SPECTRUM_ANALYZER`, `OSCILLOSCOPE`, `FUNCTION_GENERATOR`, `PULSE_GENERATOR`,
+`LOCKIN`, `ATTENUATOR`, `SWITCH`, `MAGNET_SUPPLY`, `TEMPERATURE_CONTROLLER`, `DAQ`,
+and `SENSOR`. Every admitted driver declares `KIND`; models sharing a role can fill
+the same experiment role. Unsupported members still fail at command dispatch.
 
 An `Instrument` represents a logical instrument. Construction and import must **not** open, enumerate, or reset hardware. `connect()` opens the connection; `disconnect()` closes it. Drivers can be used with `with`, which connects and disconnects automatically. A driver has a `resource_name` and a `physical_resource` identity; override the latter when several logical channels share one physical device. Do not open independent workers for channels that share a USB connection.
 
@@ -37,7 +44,20 @@ with BenchSource("TCPIP0::192.168.1.20::5025::SOCKET") as source:
 
 Aliases and parameterized commands are supported. For example, `aliases=("value",)` exposes the same command by two names; `additional_args=("channel",)` gives you `get_frequency(channel=2)` / `set_frequency(value, channel=2)` rather than a property. Keep aliases and overrides unambiguous. Declarations are descriptors and remain inspectable on the class; they are not replaced by generated properties as in V1.
 
-PyVISA is optional and imported only when connecting a real SCPI resource. Install with `python -m pip install -e './v2[visa]'` from the repository root. You can pass `visa_backend="@py"` to `SCPIInstrument` when using PyVISA-py. Driver-specific VISA address normalization, termination, timeout, and chunk size belong in `connect()`; call `super().connect(...)` and disconnect if subsequent configuration fails. **Do not** convert connection errors into a mock or claim to be connected when hardware initialization failed.
+PyVISA is optional and imported only when connecting a real SCPI resource. Install with `python -m pip install -e './v2[visa]'` from the repository root. V2 consistently uses the PyVISA-py `@py` backend. `io_timeout=` is expressed in seconds and overrides the driver's per-I/O default. Driver-specific VISA address normalization, termination and chunk size belong in `connect()`; call `super().connect(...)` and disconnect if subsequent configuration fails. **Do not** convert connection errors into a mock or claim to be connected when hardware initialization failed.
+
+### Current VNA acquisition assumptions
+
+`AgilentE8363C` and `AgilentN5230A.get_trace()` return `(frequencies, complex_values)`.
+The frequency axis is **linear spacing between read-back start/stop endpoints**,
+using the read-back point count, not a queried stimulus vector. Configure linear
+sweeps; logarithmic/segmented axes are not supported or automatically detected.
+This deliberately retains the V1 laboratory convention.
+
+`reaverage()` retains V1's single/group sweep trigger, `*OPC`, and ESR polling.
+It first validates the optional timeout and reads `*ESR?` to discard stale events.
+That read clears all ESR event bits, not just operation-complete; it does not issue
+`*CLS`. Physical behavior still requires model-specific bench validation.
 
 ### Custom hardware and commands
 
@@ -74,4 +94,4 @@ Inject an interface implementing `write`, `query`, and `close` (plus `query_bina
 python -m unittest discover -s v2/tests -v
 ```
 
-These tests never touch lab hardware. Real-device smoke tests should be separate, opt-in, and reviewed for output and ramp safety. Direct-use real drivers do not yet participate in server registration or lockout; server workers currently allow simulated drivers only.
+These tests never touch lab hardware. Real-device smoke tests should be separate, opt-in, and reviewed for output and ramp safety. Direct-use drivers intentionally do not participate in server lockout. Server-managed use is available for the explicit registry documented in the instrument-server guide; real-device tests remain opt-in lab work.

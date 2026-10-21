@@ -5,6 +5,7 @@ import os
 import numpy as np
 
 from .core import Command, Instrument, managed_property, operation
+from ..kinds import InstrumentKind
 
 
 class _MemoryBackend:
@@ -40,6 +41,7 @@ class _ChannelFrequency(Command):
 
 class SimulatedSource(Instrument):
     """Provide a hardware-free source with managed settings and a test crash."""
+    KIND = InstrumentKind.MICROWAVE_SOURCE
 
     channel_frequency = _ChannelFrequency()
 
@@ -76,6 +78,11 @@ class SimulatedSource(Instrument):
         return f"SimulatedSource:{self.resource_name}"
 
     @operation
+    def wait_for_test(self, seconds):
+        import time
+        time.sleep(seconds)
+
+    @operation
     def crash_for_test(self):
         """Exercise unexpected worker death; available only on the simulator."""
         os._exit(1)
@@ -95,6 +102,7 @@ class _MemoryVNABackend:
 
 class SimulatedVNA(Instrument):
     """Produce two-array complex resonance traces for bulk IPC tests."""
+    KIND = InstrumentKind.VNA
 
     def connect(self, resource_name=None):
         if self.interface is None:

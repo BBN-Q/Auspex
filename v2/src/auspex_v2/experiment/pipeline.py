@@ -4,13 +4,13 @@ Commands are injected Python callbacks and WAIT is virtual. There is no instrume
 lease, service supervision, cancellation API, or durable execution log here.
 """
 from .fake import FakeExecutor
-from ._experiment_plan import walk_instructions
+from ._experiment_plan import PLAN_VERSION
 from ..filters import ManualPipeline, PipelineError
 from ..filters.definitions import CompiledPipeline
 
 
 class PipelineExecutor(FakeExecutor):
-    """Execute a v2 plan into one real filter pipeline using fake instrument results.
+    """Execute a current-version plan into one filter pipeline using fake instrument results.
 
     Teardown is attempted before waiting for final processing/storage. It stops on
     error. Completed scans can still publish if teardown failed; a failed partial
@@ -20,16 +20,16 @@ class PipelineExecutor(FakeExecutor):
         """Admit supported topology before startup, then finalize after teardown."""
         document = plan.document
         attachments = document.get("pipelines", [])
-        if document["version"] != 2 or len(attachments) != 1:
-            raise PipelineError("Offline pipeline runner requires one attached v2 pipeline")
-        for phase in ("setup", "main", "teardown"):
-            if any(node["op"] == "ACQUIRE" for node in walk_instructions(document[phase])):
-                raise PipelineError("Legacy ACQUIRE has no publication adapter; use CALL and explicit PUBLISH")
+        if document["version"] != PLAN_VERSION or len(attachments) != 1:
+            raise PipelineError("Offline pipeline runner requires one attached current-version pipeline")
         attachment = attachments[0]
         compiled = CompiledPipeline.from_document(attachment["pipeline"])
         compiled.runtime()  # Reject multi-input/empty recipes before opening storage.
         output = next(iter(attachment["connections"].values()))
+        pipeline_options.setdefault("buffer_full", "fail")
         pipeline = ManualPipeline(compiled, store_path=store_path, **pipeline_options)
+        previous_retention = self.retain_windows
+        self.retain_windows = False
         self._active_pipeline = pipeline
         previous_publisher = self.publisher
 
@@ -57,6 +57,7 @@ class PipelineExecutor(FakeExecutor):
             return self
         finally:
             self.publisher = previous_publisher
+            self.retain_windows = previous_retention
             pipeline.cancel()  # Idempotent after normal finalization; cleans up unexpected errors.
             self._active_pipeline = None
 

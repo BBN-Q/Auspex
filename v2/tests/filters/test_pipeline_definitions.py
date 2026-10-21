@@ -1,4 +1,5 @@
 """Shared inert graph authoring, snapshots, and the single-ingress adapter."""
+import copy
 from pathlib import Path
 import subprocess
 import sys
@@ -44,6 +45,37 @@ class DefinitionTest(unittest.TestCase):
         self.assertEqual(buffers["memory"].node, "forward")
         self.assertEqual(writers, {})
         self.assertIsNone(source.schema)  # Inference never changes the definition.
+
+    def test_saved_pipeline_rejects_unrecognized_nested_fields(self):
+        """Do not silently drop fields of a newer or misspelled execution recipe."""
+        document = buffered(SCHEMA)[0].compile().document
+        for path in (("extra",), ("definition", "extra"),
+                     ("definition", "inputs", 0, "extra"),
+                     ("definition", "inputs", 0, "schema", "extra"),
+                     ("definition", "nodes", 0, "extra"),
+                     ("definition", "nodes", 1, "config", "extra")):
+            changed = copy.deepcopy(document)
+            target = changed
+            for key in path[:-1]:
+                target = target[key]
+            target[path[-1]] = 10
+            with self.subTest(path=path), self.assertRaisesRegex(PipelineError, "fields"):
+                CompiledPipeline.from_document(changed)
+        changed = copy.deepcopy(document)
+        changed["empty_inputs"] = ["trace", "trace"]
+        with self.assertRaisesRegex(PipelineError, "empty pipeline inputs"):
+            CompiledPipeline.from_document(changed)
+
+    def test_failed_construction_does_not_claim_other_inputs(self):
+        """Validate all input ownership before mutating even one input definition."""
+        owned = PipelineInput("owned")
+        PipelineDefinition(inputs=[owned], edges=[(owned, DataBuffer(name="old").sink)])
+        fresh = PipelineInput("fresh")
+        with self.assertRaisesRegex(PipelineError, "belongs to one"):
+            PipelineDefinition(inputs=[fresh, owned], edges=[
+                (fresh, DataBuffer(name="new").sink), (owned, DataBuffer(name="other").sink)])
+        self.assertIsNone(getattr(fresh, "_pipeline", None))
+        PipelineDefinition(inputs=[fresh], edges=[(fresh, DataBuffer(name="usable").sink)])
 
     def test_explicit_schema_and_missing_or_conflicting_bindings(self):
         """Require a known schema and respect an explicit input contract."""

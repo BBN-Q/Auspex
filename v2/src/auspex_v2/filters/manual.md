@@ -75,7 +75,13 @@ Only writers, only buffers, or both are supported. A store path is required exac
 when writer sinks are configured. Multiple writers still share one store owner.
 Filter graph options such as `backpressure`, `slots`, and memory budgets pass
 through to FilterServer. `timeout=10` bounds completion waits, **not** capacity
-waits during submission. An exception/timeout during finalization fails and cleans
+waits during submission. By default, a required buffer blocks when full, so a
+manual caller can consume concurrently. `buffer_full="fail"` instead fails clearly
+at capacity, without requiring a consumer; this is the offline unattended-run
+policy. It is independent of graph-edge `backpressure=`. With server-managed runs,
+use `existing_store=True` and an already initialized `.auspex` folder to let the
+store owner append datasets; `run_metadata` must then be written by the server,
+not by the filter owner. Ordinary manual runs still create a new folder. An exception/timeout during finalization fails and cleans
 up; it does not imply publication success.
 
 ## Explicit bounded buffer sinks

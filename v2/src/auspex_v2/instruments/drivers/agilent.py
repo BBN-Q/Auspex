@@ -9,6 +9,7 @@ import numpy as np
 
 from .core import (BoolCommand, FloatCommand, InstrumentError, IntCommand,
                    SCPIInstrument, StringCommand, managed_property, operation)
+from ..kinds import InstrumentKind
 
 
 def _ipv4(resource):
@@ -19,9 +20,16 @@ def _ipv4(resource):
         return False
 
 
+def _validate_sweep_timeout(timeout):
+    if timeout is not None and (type(timeout) not in (int, float)
+                                or not np.isfinite(timeout) or timeout <= 0):
+        raise ValueError("timeout must be finite positive seconds or None")
+
+
 class AgilentN5183A(SCPIInstrument):
     """Agilent N5183A microwave source."""
 
+    KIND = InstrumentKind.MICROWAVE_SOURCE
     instrument_type = "Microwave Source"
     frequency = FloatCommand(scpi_string=":freq")
     power = FloatCommand(scpi_string=":power")
@@ -39,7 +47,8 @@ class AgilentN5183A(SCPIInstrument):
         try:
             self.interface.read_termination = "\n"
             self.interface.write_termination = "\n"
-            self.interface.timeout = 3000
+            if self.io_timeout is None:
+                self.interface.timeout = 3000
         except Exception:
             self.disconnect()
             raise
@@ -50,9 +59,11 @@ class _AgilentNetworkAnalyzer(SCPIInstrument):
 
     ``connect`` does not change output power or measurement configuration.
     ``get_trace`` explicitly triggers a sweep by default. The returned
-    frequency axis comes from instrument readback, not requested settings.
+    frequency axis is linear spacing between read-back endpoints. Linear sweeps
+    are assumed; logarithmic and segmented stimulus readback is not implemented.
     """
 
+    KIND = InstrumentKind.VNA
     instrument_type = "Vector Network Analyzer"
     ports = ()
     frequency_center = FloatCommand(scpi_string=":SENSe:FREQuency:CENTer")
@@ -65,8 +76,8 @@ class _AgilentNetworkAnalyzer(SCPIInstrument):
                                    value_map={False: "0", True: "1"})
     averaging_factor = IntCommand(scpi_string=":SENSe1:AVERage:COUNt")
 
-    def __init__(self, resource_name=None, name=None, *, interface=None, visa_backend=None):
-        super().__init__(resource_name, name, interface=interface, visa_backend=visa_backend)
+    def __init__(self, resource_name=None, name=None, *, interface=None, io_timeout=None):
+        super().__init__(resource_name, name, interface=interface, io_timeout=io_timeout)
 
     def connect(self, resource_name=None):
         """Open VNA I/O without selecting measurements or changing RF output."""
@@ -77,7 +88,8 @@ class _AgilentNetworkAnalyzer(SCPIInstrument):
         try:
             self.interface.read_termination = "\n"
             self.interface.write_termination = "\n"
-            self.interface.timeout = 10000
+            if self.io_timeout is None:
+                self.interface.timeout = 10000
             self.interface.chunk_size = 2 ** 20
         except Exception:
             self.disconnect()
@@ -118,7 +130,16 @@ class _AgilentNetworkAnalyzer(SCPIInstrument):
 
     @output_enable.setter
     def output_enable(self, state):
-        settings = state if isinstance(state, dict) else {port: state for port in self.ports}
+        if isinstance(state, dict):
+            settings = {}
+            for port, enabled in state.items():
+                if isinstance(port, str) and port.isdecimal():
+                    port = int(port)
+                if port in settings:
+                    raise ValueError("Duplicate VNA output port")
+                settings[port] = enabled
+        else:
+            settings = {port: state for port in self.ports}
         if not settings.keys() <= set(self.ports) or any(type(v) is not bool for v in settings.values()):
             raise ValueError("Expected a boolean or a mapping from valid port numbers to booleans")
         for port, enabled in settings.items():
@@ -136,9 +157,11 @@ class _AgilentNetworkAnalyzer(SCPIInstrument):
             self._transport().write(f'CALC:PAR:DEF "M_{s}",{s}')
 
     @operation
-    def reaverage(self, *, timeout=30):
-        """Start one sweep (or an averaging group) and wait with a deadline."""
+    def reaverage(self, *, timeout=None):
+        """Start one sweep/averaging group; optionally impose a total deadline."""
+        _validate_sweep_timeout(timeout)
         io = self._transport()
+        io.query("*ESR?")  # Clear stale event bits before starting this acquisition.
         if self.averaging_enable:
             io.write(":SENSe1:AVERage:CLEar")
             io.write(f"SENSe1:SWEep:GROups:COUNt {self.averaging_factor}")
@@ -146,17 +169,22 @@ class _AgilentNetworkAnalyzer(SCPIInstrument):
         else:
             io.write("ABORT; SENS:SWE:MODE SING")
         io.write("*OPC")
-        deadline = time.monotonic() + timeout
+        deadline = None if timeout is None else time.monotonic() + timeout
         while True:
             if int(io.query("*ESR?")) & 1:
                 return
-            if time.monotonic() >= deadline:
+            if deadline is not None and time.monotonic() >= deadline:
                 raise TimeoutError("VNA sweep did not complete")
             time.sleep(0.1)
 
     @operation
-    def get_trace(self, measurement=None, restart_measurement=True):
-        """Return (frequency in Hz, complex S-parameter) for one measurement."""
+    def get_trace(self, measurement=None, restart_measurement=True, timeout=None):
+        """Return (frequency in Hz, complex S-parameter), assuming a linear sweep.
+
+        Coordinates are synthesized from read-back endpoints and point count, not
+        queried as a stimulus vector. Configure linear sweep mode before use.
+        """
+        _validate_sweep_timeout(timeout)
         active = self.measurements
         if measurement is None:
             if not active:
@@ -169,7 +197,7 @@ class _AgilentNetworkAnalyzer(SCPIInstrument):
         io.write(f":CALCulate:PARameter:SELect '{active[measurement]}'")
         try:
             if restart_measurement:
-                self.reaverage()
+                self.reaverage(timeout=timeout)
             io.write("FORM REAL,32")
             raw = np.asarray(io.query_binary_values(":CALC:DATA? SDATA", datatype="f",
                              is_big_endian=True, expect_termination=False), dtype=np.float32)

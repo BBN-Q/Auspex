@@ -30,6 +30,12 @@ class BulkResultTest(unittest.TestCase):
         self.assertTrue(result[0].flags.writeable)
         self.assertEqual(meta[0]["transport"], "inline")
 
+    def test_dictionary_keys_preserve_port_numbers(self):
+        result, _ = self.roundtrip({1: True, 2: False, "label": "ports"})
+        self.assertEqual(result, {1: True, 2: False, "label": "ports"})
+        with self.assertRaises(ResultEncodingError):
+            encode_result({(1, 2): True})
+
     def test_reject_unsupported_and_oversized_results(self):
         """Reject unsafe dtypes and oversized results before copying their bytes."""
         for result in (np.array([object()]), 1+2j, float("nan"),

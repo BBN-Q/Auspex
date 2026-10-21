@@ -168,10 +168,29 @@ class TestCommandDefinitions(unittest.TestCase):
 class TestDrivers(unittest.TestCase):
     """Test targeted V2 driver ports using deterministic fake transports."""
 
+    def test_ported_driver_kinds_are_fixed_role_families(self):
+        from auspex_v2.instruments import InstrumentKind
+        self.assertEqual(AgilentN5183A.KIND, InstrumentKind.MICROWAVE_SOURCE)
+        self.assertEqual(AgilentE8363C.KIND, InstrumentKind.VNA)
+        self.assertEqual(AgilentN5230A.KIND, InstrumentKind.VNA)
+        self.assertEqual(YokogawaGS200.KIND, InstrumentKind.DC_SOURCE)
+
     def test_import_does_not_import_pyvisa(self):
         with patch.dict(sys.modules, {"pyvisa": None}):
             importlib.reload(importlib.import_module("auspex_v2.instruments.drivers.agilent"))
             importlib.reload(importlib.import_module("auspex_v2.instruments.drivers.yokogawa"))
+
+    def test_visa_transport_always_uses_pyvisa_py(self):
+        from auspex_v2.instruments.drivers.visa import VisaTransport
+        manager = unittest.mock.Mock()
+        manager.open_resource.return_value = unittest.mock.Mock()
+        module = unittest.mock.Mock()
+        module.ResourceManager.return_value = manager
+        with patch.dict(sys.modules, {"pyvisa": module}):
+            transport = VisaTransport("TCPIP0::host::INSTR")
+        module.ResourceManager.assert_called_once_with("@py")
+        manager.open_resource.assert_called_once_with("TCPIP0::host::INSTR")
+        transport.close()
 
     def test_visa_resource_normalization_and_failure(self):
         """Normalize VISA addresses without masking connection failures."""
@@ -180,7 +199,7 @@ class TestDrivers(unittest.TestCase):
             transport.return_value = io
             device = AgilentN5183A("192.0.2.5")
             device.connect()
-            transport.assert_called_once_with("TCPIP0::192.0.2.5::5025::SOCKET", backend=None)
+            transport.assert_called_once_with("TCPIP0::192.0.2.5::5025::SOCKET")
             self.assertEqual(device.physical_resource, "192.0.2.5")
             device.disconnect()
         with patch("auspex_v2.instruments.drivers.visa.VisaTransport", side_effect=OSError("offline")):
@@ -193,16 +212,30 @@ class TestDrivers(unittest.TestCase):
     def test_n5183a(self):
         """Exercise microwave-source properties and connection settings."""
         io = FakeTransport({":freq?;": "5e9", ":output?;": "1"})
-        device = AgilentN5183A("SIM", interface=io)
+        device = AgilentN5183A("SIM", interface=io, io_timeout=12)
         device.connect()
         device.frequency = 5e9
         device.output = True
         self.assertEqual(device.frequency, 5e9)
         self.assertIs(device.output, True)
         self.assertEqual(io.writes, [":freq 5.000000E+09", ":output 1"])
-        self.assertEqual(io.timeout, 3000)
+        self.assertEqual(io.timeout, 12000)
         device.disconnect()
         self.assertTrue(io.closed)
+
+    def test_base_io_timeout_failure_closes_transport(self):
+        class BrokenTimeout(FakeTransport):
+            def __setattr__(self, name, value):
+                if name == "timeout" and value is not None:
+                    raise OSError("timeout configuration failed")
+                object.__setattr__(self, name, value)
+        io = BrokenTimeout()
+        device = SCPIInstrument("SIM", interface=io, io_timeout=1)
+        with self.assertRaisesRegex(OSError, "timeout configuration failed"):
+            device.connect()
+        self.assertFalse(device.connected)
+        self.assertTrue(io.closed)
+        self.assertIs(device.interface, io)  # Injected ownership/reference is preserved.
 
     def test_connect_configuration_failure_cleans_up(self):
         """Close a partially initialized connection after a transport error."""
@@ -266,12 +299,14 @@ class TestDrivers(unittest.TestCase):
             device.set_port_power(3, -10)
         self.assertEqual(io.writes, [])
         device.set_port_power(1, -25)
-        device.output_enable = {2: True}
+        device.output_enable = {"2": True}  # JSON-backed proxies carry object keys as strings.
         self.assertEqual(io.writes, ["SOUR:POW1 -25", "SOUR:POW2:MODE AUTO"])
+        with self.assertRaisesRegex(ValueError, "Duplicate"):
+            device.output_enable = {1: True, "1": False}
         device.disconnect()
 
-    def test_vna_complex_trace_and_readback_axis(self):
-        """Decode complex traces against instrument-readback frequency axes."""
+    def test_vna_complex_trace_and_linear_axis(self):
+        """Construct a linear axis from read-back endpoints, not a stimulus vector."""
         for cls in (AgilentE8363C, AgilentN5230A):
             with self.subTest(cls=cls):
                 io = FakeTransport({"CALC:PAR:CAT?": '"M_S21,S21"',
@@ -299,6 +334,47 @@ class TestDrivers(unittest.TestCase):
             device.get_trace("S11", restart_measurement=False)
         with self.assertRaises(InstrumentError):
             device.get_trace("S21", restart_measurement=False)
+        device.disconnect()
+
+    def test_vna_completion_discards_stale_event_before_trigger(self):
+        for cls in (AgilentE8363C, AgilentN5230A):
+            for averaging in (False, True):
+                with self.subTest(driver=cls.__name__, averaging=averaging):
+                    events = []
+                    esr = iter(["1", "0", "1"])  # stale, not done yet, newly done
+                    class ScriptedTransport(FakeTransport):
+                        def query(self, text):
+                            events.append(("query", text))
+                            if text == "*ESR?":
+                                return next(esr)
+                            return super().query(text)
+
+                        def write(self, text):
+                            events.append(("write", text))
+                            super().write(text)
+                    io = ScriptedTransport({":SENSe1:AVERage:STATe?;": str(int(averaging)),
+                                            ":SENSe1:AVERage:COUNt?;": "3"})
+                    device = cls("SIM", interface=io)
+                    device.connect()
+                    with patch("auspex_v2.instruments.drivers.agilent.time.sleep") as sleep:
+                        device.reaverage()
+                    self.assertEqual(events[0], ("query", "*ESR?"))
+                    self.assertEqual(events.count(("query", "*ESR?")), 3)
+                    trigger = "ABORT; SENSe1:SWEep:MODE GRO" if averaging else "ABORT; SENS:SWE:MODE SING"
+                    self.assertLess(events.index(("write", trigger)), events.index(("write", "*OPC")))
+                    sleep.assert_called_once()
+                    device.disconnect()
+
+    def test_vna_invalid_timeout_does_not_touch_hardware(self):
+        io = FakeTransport()
+        device = AgilentE8363C("SIM", interface=io)
+        device.connect()
+        for timeout in (0, -1, True, "1", float("nan"), float("inf")):
+            for acquire in (device.reaverage, device.get_trace):
+                with self.subTest(timeout=timeout, method=acquire.__name__), self.assertRaises(ValueError):
+                    acquire(timeout=timeout)
+        self.assertEqual(io.writes, [])
+        self.assertEqual(io.queries, [])
         device.disconnect()
 
     def test_vna_acquisition_triggers_only_when_requested(self):

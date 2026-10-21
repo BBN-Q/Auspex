@@ -14,7 +14,7 @@ from .experiment_test_support import Experiment
 
 
 class Measurement(Experiment):
-    source = InstrumentRef(kind="SOURCE")
+    source = InstrumentRef(kind="MICROWAVE_SOURCE")
     x = FloatParameter(default=1, bounds=(0, 10), unit="V")
     y = FloatParameter(default=2)
     delay = FloatParameter(default=0.5)
@@ -26,7 +26,8 @@ class Measurement(Experiment):
         seq.call(self.source, "begin", axis.name)
 
     def sequence(self, seq):
-        seq.acquire(self.source, "measure", output="signal")
+        seq.call(self.source, "measure")
+        seq.publish(self.signal, data=1.0)
 
     def sweep_end(self, seq, axis):
         seq.call(self.source, "end", axis.name)
@@ -40,7 +41,6 @@ def configured(cls=Measurement):
     exp.bind_instrument("source", "lab_source")
     exp.x.bind(exp.source, "x", wait=exp.delay)
     exp.y.bind(exp.source, "y")
-    exp.outputs = {"signal": {"dtype": "float64", "rank": 0}}
     return exp
 
 
@@ -99,13 +99,13 @@ from auspex_v2.experiment import CompiledPlan
 from auspex_v2.experiment.fake import FakeExecutor
 p = CompiledPlan.load(sys.argv[1])
 r = FakeExecutor().run(p)
-print(json.dumps([p.identity, r.time, r.windows, r.outcome]))
+print(json.dumps([p.identity, r.time, [w["coordinates"] for w in r.windows], r.outcome]))
 '''
             env = dict(os.environ, PYTHONPATH=str(Path(__file__).resolve().parents[1] / "src"))
             result = subprocess.check_output([sys.executable, "-B", "-c", script, str(path)], env=env, text=True)
             identity, seconds, windows, outcome = json.loads(result)
             self.assertEqual((identity, seconds, outcome), (before, 1, "SUCCEEDED"))
-            self.assertEqual([w["coordinates"]["x"] for w in windows], [1, 2])
+            self.assertEqual([w["x"] for w in windows], [1, 2])
         self.assertIn("WAIT", plan.explain())
         self.assertIn("SWEEP", plan.explain())
 
@@ -219,12 +219,31 @@ print(json.dumps([p.identity, r.time, r.windows, r.outcome]))
                 with seq.if_(4): pass
         with self.assertRaises(CompileError): configured(BadCondition).compile()
 
+    def test_loading_incompatible_saved_plans_requires_recompilation(self):
+        """Reject older versions before normalization or executing any instructions."""
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "obsolete-plan.json"
+            for version in (1, 2, 3, 999):
+                path.write_text(json.dumps({"version": version, "main": [{"op": "EXEC_PYTHON"}]}))
+                with self.subTest(version=version), self.assertRaisesRegex(CompileError, "recompile"):
+                    CompiledPlan.load(path)
+
     def test_reject_unbound_unknown_instructions_and_version(self):
         with self.assertRaises(CompileError): Measurement().compile()
+        for old_version in (1, 2, 3, 100):
+            doc = configured().compile().document
+            doc["version"] = old_version
+            with self.subTest(version=old_version), self.assertRaisesRegex(CompileError, "recompile"):
+                CompiledPlan(doc)
         doc = configured().compile().document
-        doc["version"] = 100
-        with self.assertRaises(CompileError): CompiledPlan(doc)
-        doc["version"] = 1
+        doc["graph"] = {}
+        with self.assertRaisesRegex(CompileError, "Incompatible experiment plan fields"):
+            CompiledPlan(doc)
+        doc = configured().compile().document
+        doc["main"][1]["op"] = "ACQUIRE"
+        with self.assertRaisesRegex(CompileError, "Unknown instruction"):
+            CompiledPlan(doc)
+        doc = configured().compile().document
         doc["main"][0]["op"] = "EXEC_PYTHON"
         with self.assertRaises(CompileError): CompiledPlan(doc)
 

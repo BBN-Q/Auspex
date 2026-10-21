@@ -12,6 +12,9 @@ class CompileError(ValueError):
     """An experiment cannot be represented as a valid executable plan."""
 
 
+PLAN_VERSION = 4  # Plan versions are not silently upgraded during WIP development.
+
+
 def plain(value):
     """Detach JSON data, normalizing NumPy values even inside nested containers."""
     def normalize(item):
@@ -113,7 +116,6 @@ def assign_instruction_ids(document):
         for index, node in enumerate(nodes):
             node["id"] = f"{path}.{index:03d}"
             for block in CHILD_BLOCKS:
-                # Preserve the version-1 path spelling for ELSE branches.
                 suffix = "else" if block == "otherwise" else block
                 assign(node.get(block, []), node["id"] + "." + suffix)
 
@@ -179,28 +181,35 @@ class PlanValidator:
         self.dynamic = self.swept | self.updated
 
     def validate(self):
-        if self.document["version"] not in (1, 2):
-            raise CompileError("Unsupported experiment plan version")
-        self.connected_outputs = set()
-        if self.document["version"] == 2:
-            from ._experiment_publication import validate_attachments
-            from ..filters.core import PipelineError
-            try:
-                self.connected_outputs = validate_attachments(self.document)
-            except (PipelineError, ValueError, KeyError, TypeError) as exc:
-                raise CompileError(f"Pipeline: {exc}") from exc
-            main = self.document["main"]
-            if (len(main) < 2 or main[0]["op"] != "SCAN_BEGIN" or main[-1]["op"] != "SCAN_END"
-                    or main[0]["name"] != main[-1]["name"]):
-                raise CompileError("Publication plans require one explicit main scan envelope")
-            boundaries = [node for phase in ("setup", "main", "teardown")
-                          for node in walk_instructions(self.document[phase])
-                          if node["op"] in ("SCAN_BEGIN", "SCAN_END")]
-            if len(boundaries) != 2:
-                raise CompileError("Nested or additional scan boundaries are not supported")
+        if self.document["version"] != PLAN_VERSION:
+            raise CompileError(f"Unsupported experiment plan version: expected {PLAN_VERSION}")
+        expected = {"version", "pipelines", "instruments", "parameters", "setup", "main",
+                    "teardown", "outputs", "metadata"}
+        if set(self.document) != expected:
+            raise CompileError(f"Incompatible experiment plan fields: {sorted(set(self.document) ^ expected)}")
+        from ._experiment_publication import validate_attachments
+        from ..filters.core import PipelineError
+        try:
+            self.connected_outputs = validate_attachments(self.document)
+        except (PipelineError, ValueError, KeyError, TypeError) as exc:
+            raise CompileError(f"Pipeline: {exc}") from exc
+        main = self.document["main"]
+        if (len(main) < 2 or main[0]["op"] != "SCAN_BEGIN" or main[-1]["op"] != "SCAN_END"
+                or main[0]["name"] != main[-1]["name"]):
+            raise CompileError("Publication plans require one explicit main scan envelope")
+        boundaries = [node for phase in ("setup", "main", "teardown")
+                      for node in walk_instructions(self.document[phase])
+                      if node["op"] in ("SCAN_BEGIN", "SCAN_END")]
+        if len(boundaries) != 2:
+            raise CompileError("Nested or additional scan boundaries are not supported")
+        from ..instruments.kinds import instrument_kind
         for role, spec in self.document["instruments"].items():
             if not role or not all(isinstance(spec[key], str) and spec[key] for key in ("kind", "name")):
                 raise CompileError("Invalid instrument binding")
+            try:
+                instrument_kind(spec["kind"])
+            except ValueError as exc:
+                raise CompileError(str(exc)) from exc
 
         initial = FlowState()
         for name, spec in self.parameters.items():
@@ -299,10 +308,10 @@ class PlanValidator:
 
     def validate_instruction(self, node, state, path, teardown):
         op = node["op"]
-        if op in ("GET", "SET", "CALL", "ACQUIRE"):
+        if op in ("GET", "SET", "CALL"):
             self.validate_command(node, state, teardown)
         elif op == "PUBLISH":
-            if self.document["version"] != 2 or not path.startswith("main.") or teardown:
+            if not path.startswith("main.") or teardown:
                 raise CompileError("Publication is allowed only inside the main scan")
             name = node["output"]
             if name not in self.connected_outputs:
@@ -389,8 +398,6 @@ class PlanValidator:
             self.check_expression(expr, state)
         if op == "SET":
             self.check_expression(node["value"], state)
-        if op == "ACQUIRE" and (teardown or node["output"] not in self.document["outputs"]):
-            raise CompileError("Acquisition needs a declared output and cannot occur in teardown")
         state.references[node["result"]] = "unknown"
 
     def validate_loop(self, node, state, path):

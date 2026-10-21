@@ -114,6 +114,10 @@ multiple-scan behavior. A broader explicit multiple-scan naming policy is deferr
 
 ## Serialization and future inputs
 
+A failed definition construction never claims any input: all inputs are checked
+before ownership is assigned. Each `PipelineInput` still belongs to only one
+`PipelineDefinition`; create fresh inputs to build a different topology.
+
 `PipelineDefinition.save/load` persists a reusable definition, including optional
 input schemas. `CompiledPipeline.save/load` persists resolved schemas and empty
 input bindings. Loading a compiled recipe revalidates it. Documents contain only
@@ -143,5 +147,10 @@ internal `setup_pipeline()` now consume these same definitions; see the
 [experiment guide](../experiment/experiment.md). Inputs belong to one definition so an
 experiment connection can identify the whole attached graph. Reuse that definition
 across executions, or create fresh input objects for a different definition.
+Saved compiled pipeline recipes reject unknown fields at every schema, input,
+node, configuration, and definition level; incompatible fields are not silently
+dropped on load. The pipeline-definition format's version 1 is independent of
+the experiment-plan format's version 4.
+
 The experiment's legacy opaque `set_graph()` is not executable pipeline wiring.
 Persistent ExperimentServer and live execution remain unimplemented.

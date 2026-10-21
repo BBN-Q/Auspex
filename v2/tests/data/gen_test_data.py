@@ -1,6 +1,6 @@
 """Generate deterministic, synthetic V2 .auspex folders for manual DataBrowser demos.
 
-Run from the repository root: python test/gen_test_data.py
+Run from the repository root: python v2/tests/data/gen_test_data.py
 This is not a unittest. The generated .auspex folders are intentionally ignored
 by the repository's data-file gitignore rules; rerun the script to recreate them.
 """
@@ -53,11 +53,11 @@ def resonances(path):
         axis = [Axis("frequency", frequency, "Hz")]
         store.write_dataset("traces", "three_lorentzians", transmission.astype(np.float64), axis,
                             value_name="S21 magnitude", value_unit="dimensionless",
-                            label="three dips plus noise", input_name="simulated_vna",
+                            label="three dips plus noise", input_name="SimulatedVNA",
                             source="reference_generator.lorentzians")
         store.write_dataset("traces", "complex_s21", complex_trace.astype(np.complex128), axis,
                             value_name="S21", value_unit="dimensionless",
-                            label="dispersive resonances", input_name="simulated_vna",
+                            label="dispersive resonances", input_name="SimulatedVNA",
                             source="reference_generator.complex_response")
 
 
@@ -95,7 +95,10 @@ def generate_test_data(directory=DEFAULT_DIRECTORY):
         if path.exists():
             # Never overwrite a run folder, including one somebody edited later.
             with AuspexStore(path) as store:
-                metadata = store.read_run_metadata()
+                try:
+                    metadata = store.read_run_metadata()
+                except (OSError, ValueError) as exc:
+                    raise ValueError(f"Existing {path} is not the expected demo; move it before regenerating") from exc
                 if (not isinstance(metadata, dict) or metadata.get("fixture_id") != FIXTURE_ID or
                         {f"{group}/{name}" for group, name in store.list_datasets()} != expected):
                     raise ValueError(f"Existing {path} is not the expected demo; move it before regenerating")
@@ -107,7 +110,7 @@ def generate_test_data(directory=DEFAULT_DIRECTORY):
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Generate deterministic Auspex V2 DataBrowser demo runs")
     parser.add_argument("--directory", type=Path, default=DEFAULT_DIRECTORY,
-                        help="Output directory (default: test/test_data)")
+                        help="Output directory (default: v2/tests/data/test_data)")
     args = parser.parse_args(argv)
     for path in generate_test_data(args.directory):
         print(path)

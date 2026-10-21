@@ -13,7 +13,7 @@ import json
 from pathlib import Path
 
 from ._experiment_plan import (
-    CompileError, PlanValidator, assign_instruction_ids, check_parameter,
+    PLAN_VERSION, CompileError, PlanValidator, assign_instruction_ids, check_parameter,
     explain_value, normalize_plan, plain as _plain, walk_instructions,
 )
 
@@ -120,12 +120,47 @@ class PipelineOverrideWarning(UserWarning):
 
 
 class InstrumentRef:
-    def __init__(self, *, kind, driver=None):
-        if not isinstance(kind, str) or not kind:
-            raise CompileError("Instrument KIND must be a nonempty string")
-        self.kind = kind
-        self.driver = driver
-        self._proxy = None
+    def __init__(self, *, kind=None, driver=None):
+        object.__setattr__(self, "_kind", None)
+        object.__setattr__(self, "_driver", None)
+        object.__setattr__(self, "_proxy", None)
+        if driver is not None:
+            self.bind(driver)
+        if kind is not None:
+            from ..instruments.kinds import instrument_kind
+            try:
+                declared = instrument_kind(kind)
+            except ValueError as exc:
+                raise CompileError(str(exc)) from exc
+            if self.kind is not None and self.kind != declared:
+                raise CompileError(f"Instrument driver KIND {self.kind.value} disagrees with {declared.value}")
+            object.__setattr__(self, "_kind", declared)
+
+    @property
+    def kind(self):
+        return self._kind
+
+    @property
+    def driver(self):
+        return self._driver
+
+    def bind(self, driver):
+        """Bind an authoring driver and infer its fixed role KIND; return this reference."""
+        from ..instruments.drivers.core import Instrument
+        from ..instruments.kinds import instrument_kind
+        if self.__dict__.get("_recording", False):
+            raise CompileError("Instrument configuration is frozen during recording")
+        if not isinstance(driver, type) or not issubclass(driver, Instrument):
+            raise CompileError("InstrumentRef.bind() requires an Instrument driver class")
+        try:
+            kind = instrument_kind(driver.KIND)
+        except ValueError as exc:
+            raise CompileError(f"Driver {driver.__name__} has no valid KIND") from exc
+        if self.kind is not None and self.kind != kind:
+            raise CompileError(f"Instrument driver KIND {kind.value} disagrees with {self.kind.value}")
+        object.__setattr__(self, "_kind", kind)
+        object.__setattr__(self, "_driver", driver)
+        return self
 
     def _recording_proxy(self):
         proxy = object.__getattribute__(self, "_proxy")
@@ -139,9 +174,13 @@ class InstrumentRef:
         return getattr(self._recording_proxy(), name)
 
     def __setattr__(self, name, value):
-        if name in ("kind", "driver", "_proxy", "_recording"):
-            if name in ("kind", "driver") and self.__dict__.get("_recording", False):
+        if name in ("kind", "driver"):
+            if self.__dict__.get("_recording", False):
                 raise CompileError("Instrument configuration is frozen during recording")
+            raise CompileError(f"Instrument {name} is read-only; use InstrumentRef.bind()")
+        if name in ("_kind", "_driver"):
+            raise CompileError("Instrument metadata is private; use InstrumentRef.bind()")
+        if name in ("_proxy", "_recording"):
             object.__setattr__(self, name, value)
         else:
             setattr(self._recording_proxy(), name, value)
@@ -291,9 +330,6 @@ class SequenceBuilder:
         arguments = [expression(arg) for arg in args]
         return self._command("CALL", instrument, member, args=arguments, kwargs=kwargs, wait=wait)
 
-    def acquire(self, instrument, member, *, output, kwargs=None, wait=0):
-        return self._command("ACQUIRE", instrument, member, output=output, kwargs=kwargs, wait=wait)
-
     def publish(self, output, *, data, axes=None):
         """Record one complete window with explicit data and coordinate expressions."""
         name = next((key for key, port in self.outputs.items() if port is output), None)
@@ -389,10 +425,12 @@ class Sweep:
 
 class Experiment:
     setup_pipeline = None
-    _CONFIGURATION_FIELDS = {"parameters", "instruments", "bindings", "sweeps", "outputs", "graph", "metadata",
+    _CONFIGURATION_FIELDS = {"parameters", "instruments", "bindings", "sweeps", "metadata",
                              "output_connectors", "_connections"}
 
     def __setattr__(self, name, value):
+        if name in ("outputs", "graph"):
+            raise CompileError(f"Legacy {name} configuration is unsupported; use OutputConnector and PipelineDefinition")
         parameters = self.__dict__.get("parameters", {})
         instruments = self.__dict__.get("instruments", {})
         if name in parameters:
@@ -432,9 +470,6 @@ class Experiment:
                 object.__setattr__(self, name, self.output_connectors[name])
         self.bindings = {}
         self.sweeps = []
-        # Plain frozen configuration only; no filter processes are started here.
-        self.outputs = {}
-        self.graph = {}
         self.metadata = {}
 
     def bind_instrument(self, role, registered_name):
@@ -466,8 +501,8 @@ class Experiment:
         self._connections.append((source, target))
 
     def set_graph(self, configuration):
-        """Attach plain graph configuration; graph-runtime validation is deferred."""
-        self.graph = _plain(configuration)
+        """Reject obsolete graph authoring with an actionable diagnostic."""
+        raise CompileError("set_graph() is unsupported; use PipelineDefinition and connect()")
 
     def setup(self, seq):
         """Record commands before automatic static parameter application."""
@@ -497,8 +532,8 @@ class Experiment:
         from ..filters.core import PipelineError
         try:
             pipelines = compile_attachments(experiment._connections, experiment.output_connectors)
-            experiment.outputs.update({name: asdict(port.schema(name))
-                                       for name, port in experiment.output_connectors.items()})
+            outputs = {name: asdict(port.schema(name))
+                       for name, port in experiment.output_connectors.items()}
         except (PipelineError, ValueError, TypeError) as exc:
             raise CompileError(str(exc)) from exc
         parameters = experiment._parameter_specs()
@@ -534,15 +569,14 @@ class Experiment:
                 instrument._proxy = None
 
         document = {
-            "version": 2,
+            "version": PLAN_VERSION,
             "pipelines": pipelines,
             "instruments": instruments,
             "parameters": parameters,
             "setup": setup,
             "main": builder.body,
             "teardown": teardown,
-            "outputs": _plain(experiment.outputs),
-            "graph": _plain(experiment.graph),
+            "outputs": outputs,
             "metadata": _plain(experiment.metadata),
         }
         return CompiledPlan(document)
@@ -574,8 +608,7 @@ class Experiment:
         sweeps = [{"name": axis.name, "parameters": [p.name for p in axis.parameters],
                    "points": axis.points} for axis in self.sweeps]
         return _plain({"parameters": parameters, "instruments": self._instrument_specs(),
-                       "sweeps": sweeps, "outputs": self.outputs, "graph": self.graph,
-                       "metadata": self.metadata,
+                       "sweeps": sweeps, "metadata": self.metadata,
                        "output_declarations": {name: asdict(port.schema(name))
                                                for name, port in self.output_connectors.items()},
                        "pipeline_definitions": self._pipeline_snapshot()})
@@ -640,7 +673,9 @@ class Experiment:
         for role, instrument in self.instruments.items():
             if role not in self.bindings:
                 raise CompileError(f"Unbound instrument: {role}")
-            specs[role] = {"kind": instrument.kind, "name": self.bindings[role]}
+            if instrument.kind is None:
+                raise CompileError(f"Instrument role {role} needs kind= or a bound driver")
+            specs[role] = {"kind": instrument.kind.value, "name": self.bindings[role]}
             if instrument.driver is not None:
                 specs[role]["capabilities"] = describe_driver(instrument.driver)
         return specs
@@ -676,6 +711,9 @@ class Experiment:
 class CompiledPlan:
     def __init__(self, document):
         document = _plain(document)
+        if not isinstance(document, dict) or document.get("version") != PLAN_VERSION:
+            raise CompileError(f"Unsupported experiment plan version: expected {PLAN_VERSION}; "
+                               "recompile the experiment")
         try:
             normalize_plan(document)
             PlanValidator(document).validate()
@@ -722,7 +760,6 @@ class CompiledPlan:
             for node in attachment["pipeline"]["definition"]["nodes"]:
                 lines.append(f"    {node['name']}: {node['kind']} {node['config']}")
         lines.append("  outputs=" + json.dumps(document["outputs"], sort_keys=True))
-        lines.append("  graph=" + json.dumps(document["graph"], sort_keys=True))
 
         def render(nodes, depth):
             for node in nodes:

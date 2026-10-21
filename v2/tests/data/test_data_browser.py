@@ -10,6 +10,7 @@ import numpy as np
 
 from auspex_v2.data.browser import inspect_folder
 from auspex_v2.data import AuspexStore, Axis, Coordinate
+from . import gen_test_data
 
 
 def populate(path, *, extra=False):
@@ -48,10 +49,52 @@ class BrowserDiscoveryTest(unittest.TestCase):
             self.assertEqual(entries["trace"].header["arrays"]["value"]["shape"], [3])
 
 
+class BrowserDemoGeneratorTest(unittest.TestCase):
+    """Keep synthetic V2 demo runs reproducible and independent of GUI startup."""
+
+    def test_two_noisy_runs_complex_and_ramsey_are_reusable(self):
+        """The visual demo receives two real stores, not missing import paths."""
+        with tempfile.TemporaryDirectory() as directory:
+            resonance, ramsey = gen_test_data.generate_test_data(directory)
+            self.assertEqual([resonance.name, ramsey.name], ["resonances.auspex", "ramsey.auspex"])
+            with AuspexStore(resonance) as store:
+                self.assertEqual(set(store.list_datasets()),
+                                 {("traces", "three_lorentzians"), ("traces", "complex_s21")})
+                trace = store.read_dataset("traces", "complex_s21")
+                magnitude = store.read_dataset("traces", "three_lorentzians")
+                self.assertEqual(trace.data.dtype, np.dtype("complex128"))
+                self.assertGreater(np.std(trace.data.imag), 0.01)
+                self.assertGreater(np.std(np.diff(magnitude.data)), 0.001)
+                self.assertEqual(trace.axes[0].unit, "Hz")
+                saved = magnitude.data.copy()
+            with AuspexStore(ramsey) as store:
+                sequence = store.read_dataset("qubit", "ramsey_beating")
+                self.assertEqual(sequence.axes[0].name, "delay")
+                self.assertGreater(np.std(sequence.data), 0.01)
+            self.assertEqual(gen_test_data.generate_test_data(directory), (resonance, ramsey))
+            with AuspexStore(resonance) as store:
+                np.testing.assert_array_equal(store.read_dataset("traces", "three_lorentzians").data, saved)
+            (ramsey / "metadata.json").unlink()
+            with self.assertRaisesRegex(ValueError, "not the expected demo"):
+                gen_test_data.generate_test_data(directory)
+
+
 @unittest.skipUnless(importlib.util.find_spec("PySide6") and importlib.util.find_spec("pyqtgraph"),
                      "install auspex-v2[gui] for browser UI tests")
 class BrowserGuiTest(unittest.TestCase):
     """Verify folder discovery, real coordinates, tab lifetime and manual refresh."""
+
+    def test_visual_demo_entry_point_generates_both_runs(self):
+        """Exercise the moved visual script's generator and utility import paths."""
+        os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+        script = Path(__file__).with_name("visual_data_browser.py")
+        spec = importlib.util.spec_from_file_location("visual_data_browser", script)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        with tempfile.TemporaryDirectory() as directory:
+            paths = module.generate_test_data(directory)
+            self.assertEqual([path.name for path in paths], ["resonances.auspex", "ramsey.auspex"])
+            self.assertEqual(module.generate_test_data(directory), paths)
 
     def test_multiple_folders_tabs_and_metadata(self):
         """Closing plots must not close their store or erase published inventory."""

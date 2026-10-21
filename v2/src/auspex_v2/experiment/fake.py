@@ -32,13 +32,13 @@ class FakeExecutor:
     returned values are copied at this boundary, like serialized instrument IPC.
     Returned payloads are never logged. PUBLISH validates and copies a window,
     optionally forwarding it to an injected publisher. Without a publisher this
-    harness runs no filters/storage and cannot imply publication success. Legacy
-    ACQUIRE records only a fake window.
+    harness runs no filters/storage and cannot imply publication success.
     """
-    def __init__(self, command=None, *, max_steps=100000, publisher=None):
+    def __init__(self, command=None, *, max_steps=100000, publisher=None, retain_windows=True):
         self.command = command or (lambda *args: None)
         self.max_steps = max_steps
         self.publisher = publisher
+        self.retain_windows = retain_windows
 
     def run(self, plan):
         self.doc = plan.document
@@ -112,7 +112,7 @@ class FakeExecutor:
         for node in nodes:
             self._tick()
             op = node["op"]
-            if op in ("GET", "SET", "CALL", "ACQUIRE"):
+            if op in ("GET", "SET", "CALL"):
                 self._command(node)
             elif op == "PUBLISH":
                 self._publish(node)
@@ -159,11 +159,6 @@ class FakeExecutor:
             self._log(node, f"{op} failed (command outcome may be uncertain)")
             raise
         self._log(node, f"{op} completed")
-        if op == "ACQUIRE":
-            window = {"window": len(self.windows), "output": node["output"],
-                      "coordinates": dict(self.coordinates)}
-            self.windows.append(window)
-            self._log(node, f"WINDOW_END {window['window']}")
 
     def _scan_end(self, node):
         self.scan_complete = True
@@ -186,8 +181,10 @@ class FakeExecutor:
         self._log(node, f"PUBLISH {name} window={window} dispatch")
         if self.publisher is not None:
             self.publisher(name, data.copy(), copy.deepcopy(axes), coordinates.copy())
-        self.windows.append({"window": window, "output": name, "coordinates": coordinates,
-                             "data": data, "axes": axes})
+        record = {"window": window, "output": name, "coordinates": coordinates}
+        if self.retain_windows:
+            record.update(data=data, axes=axes)
+        self.windows.append(record)
         self._log(node, f"PUBLISH {name} window={window} submitted (not publication acknowledgment)")
 
     def _wait(self, node):

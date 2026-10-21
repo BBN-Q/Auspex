@@ -48,7 +48,7 @@ class InstrumentGuiTest(unittest.TestCase):
                     type(self).present = False
                 if op == "STATUS":
                     return {"run": None, "instruments": {"src": {
-                        "driver": "simulated_source", "physical": "SIM::SRC",
+                        "driver": "SimulatedSource", "physical": "SIM::SRC",
                         "state": self.state, "worker_running": self.state == "CONNECTED",
                         "live_sessions": 0, "locked": False}} if self.present else {}}
                 return None

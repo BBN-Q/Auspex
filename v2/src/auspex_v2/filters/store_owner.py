@@ -8,11 +8,12 @@ from .scan import ScanAssembler
 from .transport import _send
 
 
-def store_owner(path, writers, schemas, edges, status, stop, run_metadata, input_name):
-    """Multiplex bounded writer edges, acknowledging only published datasets."""
+def store_owner(path, writers, schemas, edges, status, stop, run_metadata, input_name,
+                existing_store=False):
+    """Multiplex writers; append only to explicitly preallocated server run stores."""
     assemblers = {}
     try:
-        with AuspexStore(path, mode="w") as store:
+        with AuspexStore(path, mode="a" if existing_store else "w") as store:
             if run_metadata is not None:
                 store.write_run_metadata(run_metadata)
             assemblers = {name: ScanAssembler(schemas[name], max_scan_bytes=spec.max_scan_bytes,

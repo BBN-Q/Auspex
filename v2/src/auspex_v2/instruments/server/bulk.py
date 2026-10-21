@@ -63,8 +63,11 @@ def encode_result(value):
             return {"kind": "tuple", "items": [encode(x, depth + 1) for x in item]}
         if isinstance(item, list):
             return {"kind": "list", "items": [encode(x, depth + 1) for x in item]}
-        if isinstance(item, dict) and all(isinstance(key, str) for key in item):
-            return {"kind": "dict", "items": {key: encode(val, depth + 1) for key, val in item.items()}}
+        if isinstance(item, dict):
+            if any(key is not None and type(key) not in (bool, int, float, str) for key in item):
+                raise ResultEncodingError("Dictionary keys must be scalar JSON values")
+            return {"kind": "dict", "items": [[encode(key, depth + 1), encode(val, depth + 1)]
+                                                   for key, val in item.items()]}
         raise ResultEncodingError(f"Unsupported result type: {type(item).__name__}")
 
     return encode(value, 0), arrays, chunks
@@ -108,7 +111,18 @@ def decode_result(tree, metadata, read_exact):
             result = [decode(item, depth + 1) for item in node["items"]]
             return tuple(result) if kind == "tuple" else result
         if kind == "dict":
-            return {key: decode(val, depth + 1) for key, val in node["items"].items()}
+            items = node.get("items")
+            if not isinstance(items, list) or any(not isinstance(pair, list) or len(pair) != 2 for pair in items):
+                raise ResultEncodingError("Invalid dictionary items")
+            result = {}
+            for key_node, value_node in items:
+                key = decode(key_node, depth + 1)
+                if key is not None and type(key) not in (bool, int, float, str):
+                    raise ResultEncodingError("Invalid dictionary key")
+                if key in result:
+                    raise ResultEncodingError("Duplicate dictionary key")
+                result[key] = decode(value_node, depth + 1)
+            return result
         raise ResultEncodingError("Unknown result kind")
 
     return decode(tree, 0)

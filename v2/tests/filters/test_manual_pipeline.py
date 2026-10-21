@@ -131,6 +131,28 @@ class ManualPipelineTest(unittest.TestCase):
         with self.assertRaises(EOFError): pipe.buffers["average"].receive()
         with self.assertRaises(RuntimeError): pipe.submit(DATA, axes=AXES)
 
+    def test_explicit_existing_store_handoff_preserves_server_metadata(self):
+        """An append-only owner publishes into a preallocated store without replacing metadata."""
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "claimed.auspex"
+            with AuspexStore(path, mode="w") as store:
+                store.write_run_metadata({"name": "server-owned"})
+            with ManualPipeline(SCHEMA, NODES, EDGES,
+                                writers={"disk": WriterSpec("pass", "out")},
+                                store_path=path, existing_store=True) as pipe:
+                pipe.submit(DATA, axes=AXES)
+            with AuspexStore(path) as store:
+                self.assertEqual(store.read_run_metadata(), {"name": "server-owned"})
+                self.assertEqual(store.list_datasets(), [("data", "sweep_000")])
+            with self.assertRaises(PipelineError):
+                ManualPipeline(SCHEMA, NODES, EDGES,
+                               writers={"disk": WriterSpec("pass", "out")},
+                               store_path=Path(directory) / "missing.auspex", existing_store=True)
+            with self.assertRaises(ValueError):
+                ManualPipeline(SCHEMA, NODES, EDGES,
+                               writers={"disk": WriterSpec("pass", "out")},
+                               store_path=path, existing_store=True, run_metadata={"wrong": True})
+
     def test_writer_and_buffer_multiple_scans(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "run.auspex"

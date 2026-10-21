@@ -1,0 +1,316 @@
+"""Real local-service/runner tests with simulated instruments, never hardware."""
+from datetime import datetime
+import json
+import runpy
+import signal
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+import threading
+import time
+import unittest
+from unittest.mock import patch
+
+from auspex_v2.data import AuspexStore
+from auspex_v2.experiment import Experiment, OutputConnector, InstrumentRef, ExperimentServerClient
+from auspex_v2.experiment.service import ExperimentServer
+from auspex_v2.filters.definitions import PipelineInput, PipelineDefinition, WriteToFile
+from auspex_v2.instruments.drivers.simulated import SimulatedSource
+from auspex_v2.instruments.server import InstrumentServerClient
+
+
+class Measurement(Experiment):
+    source = InstrumentRef(kind="MICROWAVE_SOURCE", driver=SimulatedSource)
+    signal = OutputConnector(dtype="float64", max_bytes=1024)
+
+    def setup_pipeline(self):
+        source = PipelineInput("input")
+        PipelineDefinition(inputs=[source], edges=[(source, WriteToFile(name="disk", dataset="signal").sink)])
+        self.connect(self.signal, source)
+
+    def sequence(self, seq):
+        self.source.frequency = 5e9
+        seq.wait(0.3)
+        seq.publish(self.signal, data=1.0)
+
+    def teardown(self, seq):
+        self.source.output = False
+
+
+def plan(cls=Measurement):
+    experiment = cls()
+    experiment.bind_instrument("source", "source")
+    return experiment.compile()
+
+
+class ExperimentServerTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        self.instrument_socket = self.root / "instruments.sock"
+        self.socket = self.root / "experiments.sock"
+        self.instrument_process = subprocess.Popen(
+            [sys.executable, "-B", "-m", "auspex_v2.instruments.server", "--socket", str(self.instrument_socket), "--quiet"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        deadline = time.monotonic() + 10
+        while True:
+            try:
+                with InstrumentServerClient(self.instrument_socket) as client:
+                    client.register("source", "SimulatedSource", "SIM::SOURCE")
+                break
+            except (OSError, ConnectionError):
+                if time.monotonic() > deadline:
+                    raise
+                time.sleep(0.02)
+        self.server = ExperimentServer(self.socket, instrument_socket=self.instrument_socket)
+        self.thread = threading.Thread(target=self.server.serve_forever)
+        self.thread.start()
+        self.client = ExperimentServerClient(self.socket)
+        self.data = self.root / "data"
+        self.data.mkdir()
+
+    def tearDown(self):
+        self.server.shutdown()
+        self.thread.join()
+        self.server.server_close()
+        self.instrument_process.terminate()
+        try:
+            _, errors = self.instrument_process.communicate(timeout=10)
+        except subprocess.TimeoutExpired:
+            self.instrument_process.kill()
+            _, errors = self.instrument_process.communicate()
+        self.tmp.cleanup()
+
+    def test_saved_plan_submit_disconnect_reconnect_and_date_folder(self):
+        saved = self.root / "plan.json"
+        original = plan()
+        original.save(saved)
+        # This authoring-independent process exits immediately after submission.
+        code = """
+import json, sys
+from auspex_v2.experiment import CompiledPlan, ExperimentServerClient
+run = ExperimentServerClient(sys.argv[1]).submit(CompiledPlan.load(sys.argv[2]), name='demo', dir=sys.argv[3], date=True)
+print(json.dumps({'id':run.run_id, 'path':str(run.path)}))
+"""
+        response = json.loads(subprocess.check_output([sys.executable, "-B", "-c", code,
+                                                      str(self.socket), str(saved), str(self.data)], text=True))
+        run = ExperimentServerClient(self.socket).run(response["id"])
+        result = run.wait(timeout=20)
+        self.assertEqual(result["state"], "SUCCEEDED", result)
+        self.assertTrue(result["lease_released"])
+        self.assertEqual(run.path.parent.name, datetime.now().strftime("%Y-%m-%d"))
+        self.assertEqual(run.path.name, "demo_000.auspex")
+        self.assertEqual(run.plan().identity, original.identity)
+        self.assertIn("RUN_FINISHED SUCCEEDED", run.log())
+        with AuspexStore(run.path) as store:
+            self.assertEqual(store.list_datasets(), [("data", "signal")])
+        with InstrumentServerClient(self.instrument_socket) as client:
+            self.assertIsNone(client.status()["run"])
+        run.cleanup()
+        self.assertEqual(run.wait()["state"], "SUCCEEDED")
+        self.assertTrue(run.path.exists())
+        self.assertEqual(self.client.list_runs(), [])
+
+    def test_busy_and_invalid_preflight_do_not_allocate(self):
+        run = self.client.submit(plan(), name="one", dir=self.data)
+        with self.assertRaisesRegex(RuntimeError, "busy"):
+            self.client.submit(plan(), name="two", dir=self.data)
+        self.assertEqual([p.name for p in self.data.iterdir()], ["one_000.auspex"])
+        run.wait(timeout=20)
+        with self.assertRaisesRegex(RuntimeError, "absolute"):
+            self.client.submit(plan(), name="bad", dir="relative")
+        self.assertEqual(len(list(self.data.iterdir())), 1)
+
+    def test_instrument_domain_blockers_reject_before_folder_allocation(self):
+        with InstrumentServerClient(self.instrument_socket) as instruments:
+            instruments.connect("source")
+            live = instruments.live("source")
+            with self.assertRaisesRegex(RuntimeError, "live sessions"):
+                self.client.submit(plan(), name="blocked", dir=self.data)
+            live.session.close()
+            with instruments.begin_run("other"):
+                with self.assertRaisesRegex(RuntimeError, "owned by run other"):
+                    self.client.submit(plan(), name="blocked", dir=self.data)
+            instruments.register("spare", "SimulatedSource", "SIM::SPARE")
+            instruments.terminate("spare")
+            with self.assertRaisesRegex(RuntimeError, "explicit recovery"):
+                self.client.submit(plan(), name="blocked", dir=self.data)
+        self.assertEqual(list(self.data.iterdir()), [])
+
+    def test_buffer_submission_rejected_before_date_directory_creation(self):
+        from auspex_v2.filters.definitions import DataBuffer
+        class Buffered(Measurement):
+            def setup_pipeline(self):
+                source = PipelineInput("input")
+                PipelineDefinition(inputs=[source], edges=[(source, DataBuffer(name="memory").sink)])
+                self.connect(self.signal, source)
+        with self.assertRaisesRegex(RuntimeError, "writer-only"):
+            self.client.submit(plan(Buffered), name="buffer", dir=self.data, date=True)
+        self.assertEqual(list(self.data.iterdir()), [])
+
+    def test_cooperative_cancellation_discards_partial_scan(self):
+        class Slow(Measurement):
+            def sequence(self, seq):
+                seq.publish(self.signal, data=1.0)
+                seq.wait(5)
+        run = self.client.submit(plan(Slow), name="cancel", dir=self.data)
+        deadline = time.monotonic() + 10
+        while "WAIT 5" not in run.log():
+            self.assertLess(time.monotonic(), deadline)
+            time.sleep(0.03)
+        run.cancel()
+        result = run.wait(timeout=20)
+        self.assertEqual(result["state"], "CANCELLED", result)
+        self.assertTrue(result["lease_released"])
+        self.assertIn("SET source.output", run.log())
+        with AuspexStore(run.path) as store:
+            self.assertEqual(store.list_datasets(), [])
+
+    def test_teardown_failure_orphans_and_preserves_completed_scan(self):
+        class BadTeardown(Measurement):
+            def teardown(self, seq):
+                self.source.frequency = -1.0
+        run = self.client.submit(plan(BadTeardown), name="failed", dir=self.data)
+        result = run.wait(timeout=20)
+        self.assertEqual(result["state"], "FAILED", result)
+        self.assertIn("safe state not established", result["reason"])
+        with InstrumentServerClient(self.instrument_socket) as client:
+            self.assertTrue(client.status()["run"]["orphaned"])
+        with AuspexStore(run.path) as store:
+            self.assertEqual(store.list_datasets(), [("data", "signal")])
+
+    def test_measurement_failure_with_successful_teardown_releases_lease(self):
+        class BadMeasurement(Measurement):
+            def sequence(self, seq):
+                self.source.frequency = -1.0
+            def teardown(self, seq):
+                # The instrument server quarantines this device on driver failure;
+                # do not claim further commands to that device could succeed.
+                seq.wait(0)
+        run = self.client.submit(plan(BadMeasurement), name="failed_main", dir=self.data)
+        result = run.wait(timeout=20)
+        self.assertEqual(result["state"], "FAILED")
+        self.assertTrue(result["lease_released"])
+        with InstrumentServerClient(self.instrument_socket) as client:
+            self.assertIsNone(client.status()["run"])
+
+    def test_connection_failure_releases_lease_before_setup(self):
+        with InstrumentServerClient(self.instrument_socket) as client:
+            client.deregister("source")
+            client.register("source", "SimulatedSource", "SIM::FAIL_CONNECT")
+        run = self.client.submit(plan(), name="connect", dir=self.data)
+        result = run.wait(timeout=20)
+        self.assertEqual(result["state"], "FAILED")
+        self.assertTrue(result["lease_released"])
+        self.assertNotIn("SET source.output", run.log())
+        with InstrumentServerClient(self.instrument_socket) as client:
+            status = client.status()
+            self.assertIsNone(status["run"])
+            self.assertEqual(status["instruments"]["source"]["state"], "UNKNOWN")
+
+    def test_runner_death_orphans_instruments(self):
+        class Slow(Measurement):
+            def sequence(self, seq):
+                seq.wait(5)
+        run = self.client.submit(plan(Slow), name="crash", dir=self.data)
+        deadline = time.monotonic() + 10
+        while "WAIT 5" not in run.log():
+            self.assertLess(time.monotonic(), deadline)
+            time.sleep(0.03)
+        process = self.server.registry.runs[run.run_id]["process"]
+        process.terminate()
+        result = run.wait(timeout=20)
+        self.assertEqual(result["state"], "FAILED")
+        with InstrumentServerClient(self.instrument_socket) as client:
+            self.assertTrue(client.status()["run"]["orphaned"])
+
+    def test_vna_saved_sweep_through_separate_service_process(self):
+        namespace = runpy.run_path(str(Path(__file__).resolve().parents[2] / "examples" / "server_vna_sweep.py"))
+        experiment = namespace["Sweep"]()
+        experiment.bind_instrument("source", "source")
+        experiment.bind_instrument("vna", "vna")
+        experiment.source_frequency.bind(experiment.source, "frequency")
+        experiment.add_sweep(experiment.source_frequency, [5e9, 5.1e9])
+        with InstrumentServerClient(self.instrument_socket) as client:
+            client.register("vna", "SimulatedVNA", "SIM::VNA")
+        socket_path = self.root / "separate.sock"
+        process = subprocess.Popen([sys.executable, "-B", "-m", "auspex_v2.experiment.service",
+                                    "--socket", str(socket_path), "--instrument-socket", str(self.instrument_socket)],
+                                   stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        try:
+            client = ExperimentServerClient(socket_path)
+            deadline = time.monotonic() + 10
+            while not socket_path.exists():
+                self.assertLess(time.monotonic(), deadline)
+                time.sleep(0.02)
+            run = client.submit(experiment.compile(), name="vna", dir=self.data)
+            del client
+            reconnect = ExperimentServerClient(socket_path).run(run.run_id)
+            result = reconnect.wait(timeout=20)
+            self.assertEqual(result["state"], "SUCCEEDED", result)
+            with AuspexStore(reconnect.path) as store:
+                self.assertEqual(store.list_datasets(), [("data", "response")])
+                self.assertEqual(store.read_dataset("data", "response").data.shape, (2, 201))
+        finally:
+            process.send_signal(signal.SIGINT)
+            _, errors = process.communicate(timeout=20)
+        self.assertEqual(process.returncode, 0, errors.decode())
+
+    def test_log_write_failure_is_nonfatal(self):
+        def unavailable(entry, text):
+            entry["diagnostic"] = "Best-effort execution log unavailable"
+        with patch.object(self.server.registry, "_log", unavailable):
+            run = self.client.submit(plan(), name="no_log", dir=self.data)
+            self.assertEqual(run.wait(timeout=20)["state"], "SUCCEEDED")
+
+    def test_running_status_write_failure_prevents_setup(self):
+        from auspex_v2.experiment import service
+        original = service._atomic_json
+        def fail_running(path, value):
+            if value["state"] == "RUNNING":
+                raise OSError("RUNNING write failed")
+            return original(path, value)
+        with patch.object(service, "_atomic_json", fail_running):
+            run = self.client.submit(plan(), name="no_setup", dir=self.data)
+            # The diagnostic can appear before the runner reports terminal failure.
+            deadline = time.monotonic() + 15
+            while self.client.status()["active"] is not None:
+                self.assertLess(time.monotonic(), deadline)
+                time.sleep(0.03)
+            status = run.status()
+            self.assertEqual(status["state"], "FAILED")
+            self.assertTrue(status["lease_released"])
+            self.assertNotIn("SET source", run.log())
+
+    def test_loss_of_supervision_skips_teardown_and_orphans(self):
+        class Slow(Measurement):
+            def sequence(self, seq):
+                seq.wait(5)
+        run = self.client.submit(plan(Slow), name="lost", dir=self.data)
+        deadline = time.monotonic() + 10
+        while "WAIT 5" not in run.log():
+            self.assertLess(time.monotonic(), deadline)
+            time.sleep(0.03)
+        # Stop is the service-shutdown equivalent of EOF on the control connection.
+        self.server.registry.close()
+        self.assertEqual(run.wait(timeout=20)["state"], "FAILED")
+        self.assertNotIn("SET source.output", run.log())
+        with InstrumentServerClient(self.instrument_socket) as client:
+            self.assertTrue(client.status()["run"]["orphaned"])
+
+    def test_terminal_status_write_failure_disables_admission(self):
+        from auspex_v2.experiment import service
+        original = service._atomic_json
+        def fail_terminal(path, value):
+            if value["state"] == "SUCCEEDED":
+                raise OSError("disk unavailable")
+            return original(path, value)
+        with patch.object(service, "_atomic_json", fail_terminal):
+            run = self.client.submit(plan(), name="status", dir=self.data)
+            with self.assertRaisesRegex(RuntimeError, "Durable status is unresolved"):
+                run.wait(timeout=20)
+            self.assertIn("disk unavailable", self.client.status()["degraded"])
+            with self.assertRaisesRegex(RuntimeError, "disabled"):
+                self.client.submit(plan(), name="next", dir=self.data)
+        self.assertEqual(len(list(self.data.iterdir())), 1)

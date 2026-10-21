@@ -21,6 +21,7 @@ class Instrument:
     opens or probes hardware until ``connect`` is called.
     """
 
+    KIND = None
     commands = MappingProxyType({})
     properties = MappingProxyType({})
     operations = MappingProxyType({})
@@ -306,9 +307,11 @@ class RampCommand(FloatCommand):
 class SCPIInstrument(Instrument):
     """Open a VISA transport lazily while preserving direct driver access."""
 
-    def __init__(self, resource_name=None, name=None, *, interface=None, visa_backend=None):
+    def __init__(self, resource_name=None, name=None, *, interface=None, io_timeout=None):
         super().__init__(resource_name, name, interface=interface)
-        self.visa_backend = visa_backend
+        if io_timeout is not None and (not isinstance(io_timeout, (int, float)) or io_timeout <= 0):
+            raise ValueError("io_timeout must be positive seconds or None")
+        self.io_timeout = io_timeout
 
     def connect(self, resource_name=None, *, visa_resource=None):
         if resource_name is not None:
@@ -317,7 +320,22 @@ class SCPIInstrument(Instrument):
             raise InstrumentError(f"{self.name} is already connected")
         if not self.resource_name:
             raise ValueError("A VISA resource name is required")
-        if self.interface is None:
-            from .visa import VisaTransport
-            self.interface = VisaTransport(visa_resource or self.resource_name, backend=self.visa_backend)
-        super().connect()
+        opened_here = self.interface is None
+        try:
+            if opened_here:
+                from .visa import VisaTransport
+                self.interface = VisaTransport(visa_resource or self.resource_name)
+            if self.io_timeout is not None:
+                self.interface.timeout = self.io_timeout * 1000
+            super().connect()
+        except BaseException:
+            self.connected = False
+            if self.interface is not None:
+                try:
+                    self.interface.close()
+                except Exception:
+                    pass  # Preserve the connection/configuration error.
+                finally:
+                    if opened_here:
+                        self.interface = None
+            raise

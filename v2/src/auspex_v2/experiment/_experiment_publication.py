@@ -50,6 +50,8 @@ def validate_attachments(document):
     connected = set()
     destinations = set()
     for attachment in attachments:
+        if not isinstance(attachment, dict) or set(attachment) != {"pipeline", "connections"}:
+            raise PipelineError("Incompatible pipeline attachment fields")
         compiled = CompiledPipeline.from_document(attachment["pipeline"])
         definition = PipelineDefinition.from_document(compiled.document["definition"])
         connections = attachment["connections"]

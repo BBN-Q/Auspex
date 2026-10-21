@@ -3,9 +3,9 @@
 From the repository root, with the optional V2 GUI dependencies installed:
     python v2/tests/data/visual_data_browser.py
 
-Generates the ignored fixture files in test/test_data/ if absent, then opens three
+Generates the ignored fixture files in v2/tests/data/test_data/ if absent, then opens three
 independently closable 1D tabs across two .auspex folders. No lab hardware or
-services are accessed. Run test/gen_test_data.py explicitly to generate only data.
+services are accessed. Run v2/tests/data/gen_test_data.py to generate only data.
 """
 
 from __future__ import annotations
@@ -15,12 +15,17 @@ import sys
 
 from PySide6 import QtWidgets
 
-ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "test"))
+ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(ROOT / "v2" / "utils"))
 
-from gen_test_data import generate_test_data
+from gen_test_data import generate_test_data as _generate_test_data
 from data_browser import DataBrowser, dark_theme, ROLE_KEY
+
+
+def generate_test_data(directory=None):
+    """Create the two deterministic noisy runs without overwriting existing data."""
+    return _generate_test_data() if directory is None else _generate_test_data(directory)
 
 
 def make_demo_window():

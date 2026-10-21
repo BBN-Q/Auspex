@@ -153,6 +153,7 @@ class FilterServer:
 
     def __init__(self, schema, nodes, edges, results, *, writers=None, buffer_sinks=None, store_path=None,
                  run_metadata=None, input_name=None, inspect_socket=None,
+                 existing_store=False, buffer_full="block",
                  backpressure=True, slots=2, result_capacity=2, max_windows=8,
                  startup_timeout=10, memory_budget_bytes=64 * 1024 * 1024,
                  store_scan_budget_bytes=256 * 1024 * 1024):
@@ -165,12 +166,19 @@ class FilterServer:
         self.edges = list(edges)
         self.results = dict(results)
         self.buffer_specs = dict(buffer_sinks or {})
+        if buffer_full not in ("block", "fail"):
+            raise ValueError("buffer_full must be 'block' or 'fail'")
         if self.results.keys() & self.buffer_specs.keys():
             raise PipelineError("Buffer and result names must be distinct")
-        self.buffer_sinks = {name: BufferSink(name, spec.capacity) for name, spec in self.buffer_specs.items()}
+        self.buffer_sinks = {name: BufferSink(name, spec.capacity, warn_on_full=buffer_full == "block")
+                             for name, spec in self.buffer_specs.items()}
         self.results.update({name: ResultSpec(spec.node, spec.port) for name, spec in self.buffer_specs.items()})
         self.writers = dict(writers or {})
         self.store_path = store_path
+        if type(existing_store) is not bool or (existing_store and (not self.writers or run_metadata is not None)):
+            raise ValueError("Existing run stores require writers and server-owned metadata")
+        self.existing_store = existing_store
+        self.buffer_full = buffer_full
         self.run_metadata = (json.loads(json.dumps(run_metadata, allow_nan=False))
                              if run_metadata is not None else None)
         if self.run_metadata is not None and (not isinstance(self.run_metadata, dict) or not self.writers):
@@ -179,17 +187,10 @@ class FilterServer:
             raise ValueError("Writers require a store path, and vice versa")
         if min(slots, result_capacity, max_windows) < 1 or type(backpressure) is not bool:
             raise ValueError("Positive capacities and boolean backpressure are required")
-        self._validate()
-        if store_scan_budget_bytes < 1 or sum(w.max_scan_bytes for w in self.writers.values()) > store_scan_budget_bytes:
-            raise PipelineError("Writer staging exceeds scan budget")
-        edge_bytes = sum(self.nodes[c].schema.max_bytes * slots for _, _, c in self.edges)
-        edge_bytes += sum(self.nodes[r.node].schema.max_bytes * slots for r in self.results.values())
-        edge_bytes += sum(self.nodes[w.node].schema.max_bytes * slots for w in self.writers.values())
-        retained_bytes = sum(self.nodes[r.node].schema.max_bytes *
-                             (self.buffer_specs[name].capacity + 1 if name in self.buffer_specs else result_capacity)
-                             for name, r in self.results.items())
-        if edge_bytes + retained_bytes > memory_budget_bytes:
-            raise PipelineError("Graph transport and result retention exceed memory budget")
+        self.validate_graph(schema, self.nodes, self.edges, self.results, self.writers,
+                            self.buffer_specs, slots=slots, result_capacity=result_capacity,
+                            memory_budget_bytes=memory_budget_bytes,
+                            store_scan_budget_bytes=store_scan_budget_bytes)
         self.backpressure = backpressure
         self.slots = slots
         self.max_windows = max_windows
@@ -257,25 +258,31 @@ class FilterServer:
                 "writers": {name: asdict(spec) for name, spec in sorted(self.writers.items())},
                 "buffers": {name: asdict(spec) for name, spec in sorted(self.buffer_specs.items())}}
 
-    def _validate(self):
-        """Reject unsupported topology before allocating memory or spawning children."""
-        if not self.nodes or not (self.writers or any(not r.preview for r in self.results.values())):
+    @staticmethod
+    def validate_graph(schema, nodes, edges, results, writers, buffer_specs, *, slots=2,
+                       result_capacity=2, memory_budget_bytes=64 * 1024 * 1024,
+                       store_scan_budget_bytes=256 * 1024 * 1024):
+        """Check topology and declared budgets without allocating or starting workers."""
+        if any(type(value) is not int or value < 1 for value in
+               (slots, result_capacity, memory_budget_bytes, store_scan_budget_bytes)):
+            raise PipelineError("Graph capacities and budgets must be positive integers")
+        if not nodes or not (writers or any(not r.preview for r in results.values())):
             raise PipelineError("Graph needs workers and at least one required result or writer")
         ports = {}
-        for name, spec in self.nodes.items():
+        for name, spec in nodes.items():
             if name == "$input" or spec.kind not in FILTER_TYPES:
                 raise PipelineError("Unknown filter kind or reserved node name")
             ports[name] = ("out",) if spec.kind == "passthrough" else ("partial", "final")
-        incoming = {name: 0 for name in self.nodes}
+        incoming = {name: 0 for name in nodes}
         used = set()
-        for producer, port, consumer in self.edges:
-            if consumer not in self.nodes:
+        for producer, port, consumer in edges:
+            if consumer not in nodes:
                 raise PipelineError("Unknown consumer")
-            source = self.schema if producer == "$input" else self.nodes.get(producer)
+            source = schema if producer == "$input" else nodes.get(producer)
             if source is None or port not in (("out",) if producer == "$input" else ports[producer]):
                 raise PipelineError("Unknown producer port")
             source_schema = source if producer == "$input" else source.schema
-            if source_schema != self.nodes[consumer].schema:
+            if source_schema != nodes[consumer].schema:
                 raise PipelineError("Incompatible port schemas")
             if port == "partial":
                 raise PipelineError("Partial outputs support preview sinks only")
@@ -284,19 +291,19 @@ class FilterServer:
         if any(count != 1 for count in incoming.values()):
             raise PipelineError("Every worker needs exactly one input")
         visited = {"$input"}
-        while len(visited) <= len(self.nodes):
-            available = {c for p, _, c in self.edges if p in visited and c not in visited}
+        while len(visited) <= len(nodes):
+            available = {c for p, _, c in edges if p in visited and c not in visited}
             if not available:
                 raise PipelineError("Cycle or unreachable worker")
             visited.update(available)
-        for result in self.results.values():
+        for result in results.values():
             if result.node not in ports or result.port not in ports[result.node]:
                 raise PipelineError("Unknown result port")
             if (result.port == "partial") != result.preview:
                 raise PipelineError("Only partial outputs may be preview sinks")
             used.add((result.node, result.port))
         destinations = set()
-        for writer in self.writers.values():
+        for writer in writers.values():
             if writer.node not in ports or writer.port not in ports[writer.node] or writer.port == "partial":
                 raise PipelineError("Writer needs a declared required output port")
             if (not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", writer.group)
@@ -313,10 +320,20 @@ class FilterServer:
                 raise PipelineError("Writer destinations may collide")
             destinations.add(destination)
             used.add((writer.node, writer.port))
-        for name, spec in self.nodes.items():
+        for name, spec in nodes.items():
             required = "out" if spec.kind == "passthrough" else "final"
             if (name, required) not in used:
                 raise PipelineError(f"Unconnected required output: {name}.{required}")
+        if store_scan_budget_bytes < 1 or sum(w.max_scan_bytes for w in writers.values()) > store_scan_budget_bytes:
+            raise PipelineError("Writer staging exceeds scan budget")
+        edge_bytes = sum(nodes[c].schema.max_bytes * slots for _, _, c in edges)
+        edge_bytes += sum(nodes[r.node].schema.max_bytes * slots for r in results.values())
+        edge_bytes += sum(nodes[w.node].schema.max_bytes * slots for w in writers.values())
+        retained_bytes = sum(nodes[r.node].schema.max_bytes *
+                             (buffer_specs[name].capacity + 1 if name in buffer_specs else result_capacity)
+                             for name, r in results.items())
+        if edge_bytes + retained_bytes > memory_budget_bytes:
+            raise PipelineError("Graph transport and result retention exceed memory budget")
 
     def _fail(self, message):
         with self.condition:
@@ -370,7 +387,8 @@ class FilterServer:
                 process = self.context.Process(target=store_owner, name="auspex-store-owner",
                     args=(self.store_path, self.writers,
                           {n: self.nodes[w.node].schema for n, w in self.writers.items()},
-                          writer_edges, child_status, self.stop, self.run_metadata, self.input_name))
+                          writer_edges, child_status, self.stop, self.run_metadata, self.input_name,
+                          self.existing_store))
                 process.start()
                 self.processes["$store"] = process
                 child_status.close()
@@ -439,6 +457,8 @@ class FilterServer:
                     preview = self.results[name].preview
                     is_batch = json.loads(edge.reader_connection.pending)["type"] == "batch"
                     if is_batch and self.buffers[name].full() and not preview:
+                        if name in self.buffer_sinks and self.buffer_full == "fail":
+                            raise PipelineError(f"Buffer {name!r} capacity exceeded; no data discarded")
                         if not self.backpressure:
                             raise PipelineError(f"Capacity exhausted: result:{name} retention")
                         continue
@@ -465,7 +485,10 @@ class FilterServer:
                             batch = pending_buffers.pop(name)
                             if batch.window != payload["window"]:
                                 raise PipelineError(f"Buffer {name} window mismatch")
-                            self.buffer_sinks[name]._put_completed(batch)
+                            try:
+                                self.buffer_sinks[name]._put_completed(batch)
+                            except queue.Full as exc:
+                                raise PipelineError(f"Buffer {name!r} capacity exceeded; no data discarded") from exc
                         windows[name] = payload["window"]
                     elif event == "scan_end" and not preview:
                         self._ack_scan(payload["group"])

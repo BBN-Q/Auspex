@@ -1,11 +1,13 @@
 """Yokogawa GS200 source and sense meter."""
 
 from .core import BoolCommand, FloatCommand, IntCommand, RampCommand, SCPIInstrument, StringCommand
+from ..kinds import InstrumentKind
 
 
 class YokogawaGS200(SCPIInstrument):
     """Control GS200 sourcing, sensing and bounded level ramps over VISA."""
 
+    KIND = InstrumentKind.DC_SOURCE
     instrument_type = "Current source"
 
     mode = StringCommand(scpi_string=":source:function",

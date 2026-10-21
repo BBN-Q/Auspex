@@ -3,7 +3,7 @@
 Definitions are mutable. compile() takes a detached snapshot; edits thereafter
 only affect future compilations. Runtime processors live in core/averager, not here.
 """
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, fields
 import json
 from pathlib import Path
 import re
@@ -20,10 +20,12 @@ def _name(value):
 def _schema(document):
     if document is None:
         return None
-    fields = dict(document)
-    fields["axis_names"] = tuple(fields["axis_names"])
-    fields["axis_units"] = tuple(fields["axis_units"])
-    return PortSchema(**fields)
+    values = dict(document)
+    if set(values) != {field.name for field in fields(PortSchema)}:
+        raise PipelineError("Incompatible pipeline schema fields")
+    values["axis_names"] = tuple(values["axis_names"])
+    values["axis_units"] = tuple(values["axis_units"])
+    return PortSchema(**values)
 
 
 def _plain(document):
@@ -132,9 +134,9 @@ class PipelineDefinition:
         self.inputs = list(inputs)
         self.edges = list(edges)
         self._structure()
+        if any(getattr(source, "_pipeline", None) is not None for source in self.inputs):
+            raise PipelineError("A PipelineInput belongs to one definition; create a new input for another pipeline")
         for source in self.inputs:
-            if getattr(source, "_pipeline", None) is not None:
-                raise PipelineError("A PipelineInput belongs to one definition; create a new input for another pipeline")
             source._pipeline = self
 
     def _structure(self):
@@ -222,6 +224,15 @@ class PipelineDefinition:
             doc = _plain(document)
             if doc["version"] != 1:
                 raise PipelineError("Unsupported pipeline definition version")
+            if set(doc) != {"version", "inputs", "nodes", "edges"}:
+                raise PipelineError("Incompatible pipeline definition fields")
+            if any(set(item) != {"name", "schema"} for item in doc["inputs"]):
+                raise PipelineError("Incompatible pipeline input fields")
+            if any(set(item) != {"name", "kind", "config"} or
+                   set(item["config"]) != set(_TYPES[item["kind"]].fields) for item in doc["nodes"]):
+                raise PipelineError("Incompatible pipeline node fields")
+            if any(not isinstance(edge, list) or len(edge) != 4 for edge in doc["edges"]):
+                raise PipelineError("Pipeline edges need four fields")
             inputs = [PipelineInput(item["name"], _schema(item["schema"])) for item in doc["inputs"]]
             nodes = [_TYPES[item["kind"]](name=item["name"], **item["config"]) for item in doc["nodes"]]
             owners = {}
@@ -326,8 +337,13 @@ class CompiledPipeline:
     def from_document(cls, document):
         """Revalidate a saved compiled recipe without starting runtime resources."""
         doc = _plain(document)
+        if not isinstance(doc, dict) or set(doc) != {"definition", "empty_inputs"}:
+            raise PipelineError("Incompatible compiled pipeline fields")
+        empty = doc["empty_inputs"]
+        if not isinstance(empty, list) or any(not isinstance(name, str) for name in empty) or len(empty) != len(set(empty)):
+            raise PipelineError("Invalid empty pipeline inputs")
         return PipelineDefinition.from_document(doc["definition"]).compile(
-            inputs={name: EmptySource() for name in doc["empty_inputs"]})
+            inputs={name: EmptySource() for name in empty})
 
     def runtime(self):
         """Lower supported definitions to existing FilterServer recipes, without I/O."""

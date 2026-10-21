@@ -4,12 +4,12 @@
 class VisaTransport:
     """Adapt a lazily opened PyVISA resource to the V2 SCPI interface."""
 
-    def __init__(self, resource_name, *, backend=None):
+    def __init__(self, resource_name):
         try:
             import pyvisa
         except ImportError as exc:
             raise ImportError("PyVISA is required for real VISA instruments; install auspex-v2[visa]") from exc
-        self._manager = pyvisa.ResourceManager(backend) if backend else pyvisa.ResourceManager()
+        self._manager = pyvisa.ResourceManager("@py")
         try:
             self._resource = self._manager.open_resource(resource_name)
         except BaseException:

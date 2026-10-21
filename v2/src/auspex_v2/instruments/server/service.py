@@ -1,4 +1,4 @@
-"""Local-only instrument server for simulated devices and bounded results.
+"""Local instrument server for explicitly allowed V2 drivers and bounded results.
 
 Run explicitly: python -m auspex_v2.instruments.server [--socket PATH]
 This is not the experiment coordinator. It owns registrations, live sessions,
@@ -23,14 +23,13 @@ import threading
 import numpy as np
 
 from .bulk import encode_result, ResultEncodingError
-from ..drivers.simulated import SimulatedSource, SimulatedVNA
 from ..drivers.capabilities import describe_driver as _capabilities
-
-DRIVERS = {"simulated_source": SimulatedSource, "simulated_vna": SimulatedVNA}
+from ..drivers.core import SCPIInstrument
+from ..drivers.registry import DRIVERS
 
 MAX_MESSAGE = 64 * 1024
-PROTOCOL_VERSION = 2  # Prototype protocol; clients and service are updated together.
-WORKER_TIMEOUT = 5.0
+PROTOCOL_VERSION = 4  # Prototype protocol; clients and service are updated together.
+TERMINATION_TIMEOUT = 5.0
 
 # Persisted connection states. Ownership (live/run) is tracked separately.
 DISCONNECTED = "DISCONNECTED"
@@ -68,11 +67,12 @@ def _result_summary(value, depth=0):
     return text[:256] + "..." if len(text) > 256 else text
 
 
-def _worker_main(pipe, driver_type, resource):
+def _worker_main(pipe, driver_type, resource, io_timeout):
     """Construct the driver inside its worker, never in a client process."""
     driver = None
     try:
-        driver = DRIVERS[driver_type](resource)
+        options = {"io_timeout": io_timeout} if issubclass(DRIVERS[driver_type], SCPIInstrument) else {}
+        driver = DRIVERS[driver_type](resource, **options)
         driver.connect()
         pipe.send({"ok": True})
         while True:
@@ -130,12 +130,13 @@ def _worker_main(pipe, driver_type, resource):
 class Worker:
     """Own one spawned driver process and exchange bounded control requests with it."""
 
-    def __init__(self, driver_type, resource):
-        """Start a driver process and wait for its connection handshake."""
+    def __init__(self, driver_type, resource, *, command_timeout=None, io_timeout=None):
+        """Start a driver process; wait_connected() completes the handshake separately."""
+        self.command_timeout = command_timeout
         parent, child = mp.get_context("spawn").Pipe()
         self.pipe = parent
         self.process = mp.get_context("spawn").Process(
-            target=_worker_main, args=(child, driver_type, resource), daemon=True)
+            target=_worker_main, args=(child, driver_type, resource, io_timeout), daemon=True)
         try:
             self.process.start()
         except Exception:
@@ -143,6 +144,9 @@ class Worker:
             raise
         finally:
             child.close()
+
+    def wait_connected(self):
+        """Wait after the registry has made this worker available for termination."""
         try:
             reply = self._receive()
             if not reply.get("ok"):
@@ -152,8 +156,8 @@ class Worker:
             raise
 
     def _receive(self):
-        if not self.pipe.poll(WORKER_TIMEOUT):
-            raise InstrumentServerError("Worker timed out")
+        if self.command_timeout is not None and not self.pipe.poll(self.command_timeout):
+            raise InstrumentServerError(f"Worker command timed out after {self.command_timeout} seconds")
         try:
             return self.pipe.recv()
         except EOFError as exc:
@@ -180,10 +184,10 @@ class Worker:
     def kill(self):
         if self.process.is_alive():
             self.process.terminate()
-            self.process.join(timeout=WORKER_TIMEOUT)
+            self.process.join(timeout=TERMINATION_TIMEOUT)
             if self.process.is_alive():
                 self.process.kill()
-                self.process.join(timeout=WORKER_TIMEOUT)
+                self.process.join(timeout=TERMINATION_TIMEOUT)
         else:
             self.process.join(timeout=0)
         self.pipe.close()
@@ -193,12 +197,15 @@ class Registry:
     """Serialize registration, session ownership, and worker-state transitions."""
 
     def __init__(self, state_path, *, quiet=False, clean=False):
-        """Restore uncertain registrations, or explicitly discard simulator state."""
+        """Restore uncertain registrations, or explicitly discard all saved state."""
         self.quiet = quiet
         self.path = Path(state_path)
         self.lock = threading.RLock()
         self.instruments = {}
         self.workers = {}
+        self.busy = set()  # instrument names with one worker request in flight
+        self.operations = {}  # name -> connecting/executing/disconnecting
+        self.closing = False
         self.live = {}  # token -> (connection ID, registered name)
         self.run = None  # {run_id, owner, token, orphaned}
         if clean:
@@ -209,7 +216,7 @@ class Registry:
                 saved = json.load(stream)
             for name, spec in saved.get("instruments", {}).items():
                 if spec["driver"] not in DRIVERS:
-                    raise InstrumentServerError(f"Unknown persisted driver: {spec['driver']}")
+                    raise InstrumentServerError(f"Unknown persisted driver {spec['driver']!r}; use --clean for a forced reset and re-register by canonical class name")
                 state = (spec["state"] if spec["state"] in (DISCONNECTED, TERMINATED)
                          else UNKNOWN)
                 self.instruments[name] = dict(spec, state=state)
@@ -239,9 +246,10 @@ class Registry:
     def _check_workers(self):
         """Latch unexpectedly exited workers as terminated before answering requests."""
         for name, worker in list(self.workers.items()):
-            if not worker.process.is_alive():
+            if name not in self.busy and not worker.process.is_alive():
                 worker.kill()
                 del self.workers[name]
+                self.busy.discard(name)
                 previous = self.instruments[name]["state"]
                 self.instruments[name]["state"] = TERMINATED
                 self._save()
@@ -268,19 +276,29 @@ class Registry:
                     self.announce(f"{name}: {previous} -> UNKNOWN (run orphaned)")
 
     def dispatch(self, request, connection):
-        """Validate and execute one request under the domain-wide ownership lock."""
+        """Serialize state transitions, but never hold the registry lock while waiting on I/O."""
+        op = request.get("op")
+        if op in ("GET", "SET", "CALL"):
+            return self._command(request, connection, op)
+        if op == "CONNECT":
+            return self._connect(request, connection)
+        if op == "DISCONNECT":
+            return self._disconnect_one(request["name"])
+        if op == "DISCONNECT_ALL":
+            return self._disconnect_all()
         with self.lock:
             self._check_workers()
-            op = request.get("op")
             if op == "HELLO":
                 if request.get("version") != PROTOCOL_VERSION:
                     raise InstrumentServerError(f"Expected protocol version {PROTOCOL_VERSION}")
                 return {"version": PROTOCOL_VERSION, "operations": ["GET", "SET", "CALL"],
-                        "features": ["inline_arrays", "terminate_all", "optional_termination_reason"]}
+                        "features": ["inline_arrays", "typed_dict_keys", "real_drivers", "instrument_timeouts",
+                                     "terminate_all", "optional_termination_reason"]}
             if op == "STATUS":
                 return {"instruments": {name: {**spec, "locked": self.run is not None,
                         "live_sessions": sum(v[1] == name for v in self.live.values()),
-                        "worker_running": name in self.workers}
+                        "worker_running": name in self.workers, "busy": name in self.busy,
+                        "operation": self.operations.get(name) if name in self.busy else None}
                         for name, spec in self.instruments.items()},
                         "run": ({"run_id": self.run["run_id"], "orphaned": self.run["orphaned"]}
                                 if self.run else None)}
@@ -288,12 +306,10 @@ class Registry:
                 return self._register(request)
             if op == "DEREGISTER":
                 return self._deregister(request)
-            if op == "CONNECT":
-                return self._connect(request, connection)
-            if op == "DISCONNECT":
-                return self._disconnect(request)
-            if op == "DISCONNECT_ALL":
-                return self._disconnect_all()
+            if op == "SET_COMMAND_TIMEOUT":
+                return self._set_command_timeout(request)
+            if op == "SET_IO_TIMEOUT":
+                return self._set_io_timeout(request)
             if op == "CLEAR_INSTRUMENTS":
                 return self._clear_instruments()
             if op == "SHUTDOWN":
@@ -322,61 +338,82 @@ class Registry:
                 return self._terminate_all()
             if op == "RECOVER":
                 return self._recover(request)
-            if op in ("GET", "SET", "CALL"):
-                return self._command(request, connection, op)
             raise InstrumentServerError(f"Unknown operation: {op}")
 
     def _connect(self, request, connection):
         """Connect explicitly, under the run lease if the domain is locked."""
         name = request["name"]
-        spec = self._instrument(name)
-        if self.run:
-            self._run_owner(request["session"], connection)
-        if self._has_live(name) or spec["state"] != DISCONNECTED:
-            raise InstrumentServerError("Connect requires a disconnected instrument with no live session")
-        previous = spec["state"]
-        spec["state"] = UNKNOWN  # a crash mid-connect cannot imply a safe device
-        self._save()
-        self._start_worker(name)
-        spec["state"] = CONNECTED
-        self._save()
-        self.announce(f"{name}: {previous} -> CONNECTED")
-        return None
-
-    def _disconnect_one(self, name):
-        """Stop a worker, retaining uncertainty if the driver cannot disconnect."""
-        spec = self._instrument(name)
-        if spec["state"] != CONNECTED:
-            raise InstrumentServerError(f"{name} is not connected")
-        if name not in self.workers:
-            spec["state"] = UNKNOWN
+        with self.lock:
+            self._idle(name)
+            spec = self._instrument(name)
+            if self.run:
+                self._run_owner(request["session"], connection)
+            if self._has_live(name) or spec["state"] != DISCONNECTED:
+                raise InstrumentServerError("Connect requires a disconnected instrument with no live session")
+            spec["state"] = UNKNOWN  # Never persist certainty before the handshake.
             self._save()
-            raise InstrumentServerError(f"{name} has no connected worker")
-        self._stop_worker(name)
-        spec["state"] = DISCONNECTED
-        self._save()
-        self.announce(f"{name}: CONNECTED -> DISCONNECTED")
+            worker = Worker(spec["driver"], spec["resource"],
+                            command_timeout=spec.get("command_timeout"), io_timeout=spec.get("io_timeout"))
+            self.workers[name] = worker
+            self.busy.add(name)
+            self.operations[name] = "connecting"
+        self._lifecycle_wait(name, worker, worker.wait_connected, CONNECTED)
 
-    def _disconnect(self, request):
-        """Reject leased instruments before graceful physical disconnection."""
-        name = request["name"]
-        self._instrument(name)
-        self._require_unowned("disconnect", name)
-        self._disconnect_one(name)
-        return None
+    def _disconnect_one(self, name, *, shutdown=False):
+        """Reserve a worker, then wait for graceful disconnection without the lock."""
+        with self.lock:
+            self._idle(name, shutdown=shutdown)
+            spec = self._instrument(name)
+            if not shutdown:
+                self._require_unowned("disconnect", name)
+            if spec["state"] != CONNECTED:
+                raise InstrumentServerError(f"{name} is not connected")
+            worker = self.workers.get(name)
+            if worker is None:
+                spec["state"] = UNKNOWN
+                self._save()
+                raise InstrumentServerError(f"{name} has no connected worker")
+            self.busy.add(name)
+            self.operations[name] = "disconnecting"
+        self._lifecycle_wait(name, worker, worker.stop, DISCONNECTED)
+
+    def _lifecycle_wait(self, name, worker, wait, success):
+        """Reconcile only our reserved worker; termination/recovery may supersede it."""
+        try:
+            wait()
+        except Exception:
+            with self.lock:
+                if self.workers.get(name) is worker:
+                    worker.kill()
+                    del self.workers[name]
+                    self.busy.discard(name)
+                    self.instruments[name]["state"] = UNKNOWN
+                    self._save()
+                    self.announce(f"{name}: {self.operations[name]} failed -> UNKNOWN")
+            raise
+        with self.lock:
+            if self.workers.get(name) is not worker:
+                raise InstrumentServerError(f"{name} was terminated during connection/disconnection")
+            self.busy.discard(name)
+            if success == DISCONNECTED:
+                del self.workers[name]
+            self.instruments[name]["state"] = success
+            self._save()
+            self.announce(f"{name}: {self.operations[name]} -> {success}")
 
     def _disconnect_all(self):
         """Try every connected worker and report all failures without clearing inventory."""
-        self._require_unowned("Disconnect All")
+        with self.lock:
+            self._require_unowned("Disconnect All")
+            names = [name for name, spec in self.instruments.items() if spec["state"] == CONNECTED]
         failures = {}
         disconnected = []
-        for name, spec in list(self.instruments.items()):
-            if spec["state"] == CONNECTED:
-                try:
-                    self._disconnect_one(name)
-                    disconnected.append(name)
-                except Exception as exc:
-                    failures[name] = str(exc)
+        for name in names:
+            try:
+                self._disconnect_one(name)
+                disconnected.append(name)
+            except Exception as exc:
+                failures[name] = str(exc)
         return {"disconnected": disconnected, "failures": failures}
 
     def _clear_instruments(self):
@@ -418,6 +455,8 @@ class Registry:
 
     def _begin_run(self, request, connection):
         """Lock the entire domain atomically if no live use or recovery blocks it."""
+        if self.closing or self.busy:
+            raise InstrumentServerError("Cannot begin run while busy or shutting down")
         if self.run:
             raise InstrumentServerError(f"Run {self.run['run_id']} already owns the registered domain")
         if self.live:
@@ -475,6 +514,7 @@ class Registry:
         if name in self.workers:
             self.workers[name].kill()
             del self.workers[name]
+        self.busy.discard(name)
         self.announce(f"{name}: {previous} -> TERMINATED{note}")
         return None
 
@@ -492,6 +532,7 @@ class Registry:
                 failures[name] = str(exc)
             else:
                 del self.workers[name]
+            self.busy.discard(name)
         for name, state in previous.items():
             self.announce(f"{name}: {state} -> TERMINATED (Terminate All)")
         if failures:
@@ -508,7 +549,7 @@ class Registry:
             raise InstrumentServerError("Instrument does not need recovery")
         previous = spec["state"]
         if name in self.workers:
-            self._stop_worker(name)  # recovery must not leave a worker attached
+            self.workers.pop(name).kill()  # Recovery never performs hardware I/O.
         spec["state"] = DISCONNECTED
         self._save()
         self.announce(f"{name}: {previous} -> DISCONNECTED{note}")
@@ -521,16 +562,51 @@ class Registry:
         name, driver_type, resource = request["name"], request["driver"], request["resource"]
         if not all(isinstance(v, str) and v for v in (name, driver_type, resource)):
             raise InstrumentServerError("Name, driver and resource must be nonempty strings")
+        command_timeout = self._timeout(request.get("command_timeout"), "command_timeout")
+        io_timeout = self._timeout(request.get("io_timeout"), "io_timeout")
         if name in self.instruments or driver_type not in DRIVERS:
-            raise InstrumentServerError("Instrument name exists or driver is not registered")
-        physical = DRIVERS[driver_type](resource).physical_resource
+            raise InstrumentServerError("Instrument name exists or driver is not registered by canonical class name")
+        driver = DRIVERS[driver_type]
+        if io_timeout is not None and not issubclass(driver, SCPIInstrument):
+            raise InstrumentServerError("io_timeout applies only to VISA/SCPI drivers")
+        options = {"io_timeout": io_timeout} if issubclass(driver, SCPIInstrument) else {}
+        physical = driver(resource, **options).physical_resource
         if any(s["physical"] == physical for s in self.instruments.values()):
             raise InstrumentServerError(f"Physical device already registered: {physical}")
         self.instruments[name] = {"driver": driver_type, "resource": resource,
-                                  "physical": physical, "state": DISCONNECTED}
+                                  "physical": physical, "command_timeout": command_timeout,
+                                  "io_timeout": io_timeout, "state": DISCONNECTED}
         self._save()
         self.announce(f"{name}: UNREGISTERED -> DISCONNECTED (registered {driver_type} at {physical})")
         return {"physical": physical}
+
+    def _set_command_timeout(self, request):
+        name = request["name"]
+        self._require_unowned("Changing command timeout", name)
+        spec = self._instrument(name)
+        spec["command_timeout"] = self._timeout(request.get("timeout"), "command timeout")
+        if name in self.workers:
+            self.workers[name].command_timeout = spec["command_timeout"]
+        self._save()
+        return spec["command_timeout"]
+
+    def _set_io_timeout(self, request):
+        name = request["name"]
+        self._require_unowned("Changing I/O timeout", name)
+        spec = self._instrument(name)
+        if spec["state"] != DISCONNECTED or name in self.workers:
+            raise InstrumentServerError("I/O timeout can change only while disconnected")
+        if not issubclass(DRIVERS[spec["driver"]], SCPIInstrument):
+            raise InstrumentServerError("io_timeout applies only to VISA/SCPI drivers")
+        spec["io_timeout"] = self._timeout(request.get("timeout"), "I/O timeout")
+        self._save()
+        return spec["io_timeout"]
+
+    @staticmethod
+    def _timeout(value, label):
+        if value is not None and (type(value) not in (int, float) or value <= 0):
+            raise InstrumentServerError(f"{label} must be positive seconds or null")
+        return value
 
     def _deregister(self, request):
         """Remove a disconnected, unowned instrument from the inventory."""
@@ -584,29 +660,45 @@ class Registry:
         return name, member
 
     def _command(self, request, connection, op):
-        """Dispatch a validated command and quarantine uncertain worker failures."""
-        name, member = self._validate_command(request, connection, op)
-        command = {"op": op, "name": member}
-        if op in ("GET", "SET"):
-            command["kwargs"] = request.get("kwargs", {})
-        if op == "SET":
-            command["value"] = request["value"]
-        if op == "CALL":
-            command["args"] = request.get("args", [])
-            command["kwargs"] = request.get("kwargs", {})
-        detail = (f" value={command['value']!r}" if op == "SET" else
-                  f" args={command['args']!r} kwargs={command['kwargs']!r}" if op == "CALL" else "")
-        self.announce(f"{name}: {op} {member}{detail}")
+        """Wait outside the registry lock so status and forced termination remain available."""
+        with self.lock:
+            self._check_workers()
+            name, member = self._validate_command(request, connection, op)
+            if name in self.busy:
+                raise InstrumentServerError(f"{name} already has a command in progress")
+            command = {"op": op, "name": member}
+            if op in ("GET", "SET"):
+                command["kwargs"] = request.get("kwargs", {})
+            if op == "SET":
+                command["value"] = request["value"]
+            if op == "CALL":
+                command["args"] = request.get("args", [])
+                command["kwargs"] = request.get("kwargs", {})
+            detail = (f" value={command['value']!r}" if op == "SET" else
+                      f" args={command['args']!r} kwargs={command['kwargs']!r}" if op == "CALL" else "")
+            worker = self.workers[name]
+            self.busy.add(name)
+            self.operations[name] = "executing"
+            self.announce(f"{name}: {op} {member}{detail}")
         try:
-            result = self.workers[name].request(command)
+            result = worker.request(command)
         except Exception as exc:
-            self.workers.pop(name).kill()
-            self.instruments[name]["state"] = TERMINATED
-            self._save()
-            self.announce(f"{name}: CONNECTED -> TERMINATED ({op} {member} failed: {exc})")
+            with self.lock:
+                if self.workers.get(name) is worker:
+                    self.busy.discard(name)
+                    del self.workers[name]
+                    worker.kill()
+                    previous = self.instruments[name]["state"]
+                    self.instruments[name]["state"] = TERMINATED
+                    self._save()
+                    self.announce(f"{name}: {previous} -> TERMINATED ({op} {member} failed: {exc})")
             raise
-        self.announce(f"{name}: {op} {member} -> {_result_summary(result)}")
-        return result
+        with self.lock:
+            if self.workers.get(name) is not worker or self.instruments[name]["state"] != CONNECTED:
+                raise InstrumentServerError(f"{name} was terminated while {op} {member} was in progress")
+            self.busy.discard(name)
+            self.announce(f"{name}: {op} {member} -> {_result_summary(result)}")
+            return result
 
     @staticmethod
     def _optional_note(request):
@@ -627,10 +719,18 @@ class Registry:
 
     def _require_unowned(self, action, name=None):
         """Keep operator actions from disrupting live sessions or runs."""
+        if self.closing or (bool(self.busy) if name is None else name in self.busy):
+            raise InstrumentServerError(f"{action} unavailable while busy or shutting down")
         if self.run or self._has_live(name):
             if action in ("disconnect", "recover"):
                 raise InstrumentServerError(f"Cannot {action} during run or live use")
             raise InstrumentServerError(f"{action} requires no run or live sessions")
+
+    def _idle(self, name, *, shutdown=False):
+        if self.closing and not shutdown:
+            raise InstrumentServerError("InstrumentServer is shutting down")
+        if name in self.busy:
+            raise InstrumentServerError(f"{name} has an operation in progress")
 
     def _instrument(self, name):
         if name not in self.instruments:
@@ -638,6 +738,7 @@ class Registry:
         return self.instruments[name]
 
     def _available(self, name, *, allow_run=False):
+        self._idle(name)
         spec = self._instrument(name)
         if self.run and not allow_run:
             raise InstrumentServerError(f"Run {self.run['run_id']} locks all registered instruments")
@@ -653,50 +754,26 @@ class Registry:
         if not self.run or self.run["orphaned"] or self.run["owner"] != connection or self.run["token"] != token:
             raise InstrumentServerError("No active run session for this connection")
 
-    def _start_worker(self, name):
-        """Connect on demand and quarantine the instrument if startup fails."""
-        if name not in self.workers:
-            spec = self._instrument(name)
-            try:
-                self.workers[name] = Worker(spec["driver"], spec["resource"])
-                self.announce(f"{name}: worker CONNECTED")
-            except Exception as exc:
-                previous = spec["state"]
-                spec["state"] = UNKNOWN
-                self._save()
-                self.announce(f"{name}: {previous} -> UNKNOWN (connection failed: {exc})")
-                raise
-
-    def _stop_worker(self, name):
-        """Close a worker or mark its physical state uncertain on failure."""
-        try:
-            self.workers[name].stop()
-        except Exception as exc:
-            previous = self.instruments[name]["state"]
-            self.instruments[name]["state"] = UNKNOWN
-            self._save()
-            self.announce(f"{name}: {previous} -> UNKNOWN (disconnect failed: {exc})")
-            raise
-        finally:
-            del self.workers[name]
-            self.announce(f"{name}: worker DISCONNECTED")
-
     def shutdown(self):
-        """Stop owned workers and persist any shutdown failures before exit."""
+        """Kill occupied workers; gracefully disconnect idle ones outside the lock."""
         with self.lock:
+            self.closing = True
+            idle = []
             for name, worker in list(self.workers.items()):
-                try:
-                    worker.stop()
-                    self.announce(f"{name}: worker DISCONNECTED (server shutdown)")
-                except Exception as exc:
-                    previous = self.instruments[name]["state"]
+                if name in self.busy or self.instruments[name]["state"] != CONNECTED:
+                    worker.kill()
+                    del self.workers[name]
+                    self.busy.discard(name)
                     self.instruments[name]["state"] = UNKNOWN
-                    self.announce(f"{name}: {previous} -> UNKNOWN (shutdown failed: {exc})")
+                    self.announce(f"{name}: UNKNOWN (worker killed during shutdown)")
                 else:
-                    if self.instruments[name]["state"] == CONNECTED:
-                        self.instruments[name]["state"] = DISCONNECTED
-                del self.workers[name]
+                    idle.append(name)
             self._save()
+        for name in idle:
+            try:
+                self._disconnect_one(name, shutdown=True)
+            except Exception as exc:
+                self.announce(f"{name}: shutdown disconnect failed: {exc}")
 
 
 class Handler(socketserver.StreamRequestHandler):
@@ -791,7 +868,7 @@ def argument_parser():
     parser.add_argument("--socket", type=Path, default=default_socket())
     parser.add_argument("-q", "--quiet", action="store_true", help="suppress command/state output")
     parser.add_argument("-c", "--clean", action="store_true",
-                        help="discard saved simulated instruments and orphaned run lockout on startup")
+                        help="forcibly discard saved registrations and orphaned run lockout without hardware I/O")
     return parser
 
 

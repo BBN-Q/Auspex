@@ -1,16 +1,18 @@
 # Experiment compiler and explicit pipeline publication
 
 `compiler.py` implements trusted Python authoring, a structured instruction
-compiler, detached version-2 JSON execution units, `save`/`load`, and `explain()`.
-Version-1 saved plans remain loadable for offline compatibility. New compilation
-requires an attached pipeline. No saved source, pickle, or `eval` is used.
+compiler, detached version-4 JSON execution units, `save`/`load`, and `explain()`.
+Only version 4 is accepted; older plans must be recompiled from their experiment
+authoring code. New compilation requires an attached pipeline. No saved source, pickle, or `eval` is used.
 
 `FakeExecutor` interprets commands and publications without workers or storage.
 `PipelineExecutor` in `pipeline.py` is a separate **offline integration
 harness**: injected fake command results feed real filter workers/writers, while
 WAIT remains virtual. Neither executor connects hardware, owns instrument leases,
 implements cancellation/supervision, or starts ExperimentServer. Do not use these
-harnesses as real-hardware runners.
+harnesses as live runners. A separate [ExperimentServer](server.md) runs saved
+writer-only plans against the explicit simulated/real driver registry under an
+instrument lease, with real waits, cooperative cancellation, and reconnectable handles.
 
 ## Example
 
@@ -20,7 +22,7 @@ from auspex_v2.experiment.fake import FakeExecutor
 from auspex_v2.filters.definitions import PipelineInput, PipelineDefinition, DataBuffer
 
 class Measurement(Experiment):
-    source = InstrumentRef(kind="SOURCE")
+    source = InstrumentRef(kind="DC_SOURCE")
     voltage = FloatParameter(default=0.0, unit="V", bounds=(-1, 1))
     settling = FloatParameter(default=0.1, unit="s")
     signal = OutputConnector(dtype="float64")
@@ -61,10 +63,14 @@ run = FakeExecutor(lambda op, device, member, args, kwargs: 20.0).run(plan)
 assert run.outcome == "SUCCEEDED"
 ```
 
-Instrument role KIND strings are explicit and case-sensitive, not inferred from
-members. This slice records the requirement; comparing it to live driver KINDs
-belongs to service integration. The fake callback is deliberately supplied
-separately, never saved in the plan.
+Instrument roles use the fixed, case-sensitive `InstrumentKind` vocabulary. An
+abstract role supplies `kind=`. Supplying `driver=` infers KIND and enables its
+shorthand API; `InstrumentRef().bind(Driver)` is the equivalent class-body form.
+If both are supplied they must agree. `kind` and `driver` are read-only after
+construction; use `.bind()` before compilation to select another same-KIND
+authoring driver. ExperimentServer compares the role KIND to
+the registered driver's KIND; unsupported driver members fail at dispatch. The
+fake callback is deliberately supplied separately, never saved in the plan.
 
 ## Pipeline attachment and publication
 
@@ -112,8 +118,10 @@ pipeline with one nonempty input**. Multiple inputs/empty execution remain defer
 Compiled plans contain resolved schemas, named input/output connections, filter
 configuration and sink destinations. Later changes to definitions or experiment
 configuration cannot alter a saved plan. Schema/connection validation also runs on
-load. The old `outputs` dictionary and `set_graph()` are legacy configuration;
-they do not substitute for declared connectors and attached executable pipelines.
+load. `Experiment.outputs` and `Experiment.graph` are not authoring APIs:
+output schemas derive from declared `OutputConnector`s, and the processing graph
+from attached `PipelineDefinition`s. Assigning either legacy attribute or calling
+`set_graph()` fails with guidance rather than saving inert configuration.
 
 ## Offline pipeline execution
 
@@ -132,11 +140,17 @@ completed scan can still publish if teardown failed; a failed partial scan is
 cancelled. Successful early termination closes the admitted prefix, but incomplete
 required filter groups fail finalization. Buffers remain accessible on `run.buffers`.
 
-The harness does not promise bounded hardware command time or safe hardware state,
+The offline pipeline harness fails on a full required buffer instead of waiting
+for an absent consumer; an ordinary `ManualPipeline` still defaults to blocking
+so scripts can drain buffers concurrently. The harness stores only window metadata,
+not all published payload arrays in its trace; `FakeExecutor` retains payloads by
+default for tests. The harness does not promise bounded hardware command time or safe hardware state,
 and does not implement leases, crash recovery or durable execution logs. Its
 `PROGRAM_FINISHED` trace precedes `PIPELINE_FINISHED`; only the latter and the final
 `outcome` include required processing completion. The saved plan is independent of
-the injected command callback. For a runnable example that also saves the plan with
+the injected command callback. Existing import paths `auspex_v2.experiment_fake`
+and `auspex_v2.experiment_pipeline` remain compatibility re-exports; new code can
+import `FakeExecutor` and `PipelineExecutor` from `auspex_v2.experiment`. For a runnable example that also saves the plan with
 data, see `v2/examples/compiled_publication.py`.
 
 ## Driver-shaped shorthand
@@ -170,9 +184,8 @@ from this argument mapping in both live and recording backends. Explicit proxy
 `get`/`set`/`call` take their member (and set value) positionally. Use `seq.wait(...)` after shorthand, or retain
 `seq.set(self.vna, "frequency_center", center, wait=0.5)`. Proxy CALLs do **not**
 emit output data or create acquisition windows: use `seq.publish` explicitly.
-The legacy `seq.acquire` instruction is retained for older offline tests, but has
-no adapter in `PipelineExecutor` and is rejected before that harness starts.
-Use a CALL followed by explicit values/coordinate selection instead.
+`seq.acquire` has been removed; use CALL followed by explicit values/coordinate
+selection and `seq.publish`.
 
 Instrument access outside compilation raises an error. Retained proxy helpers are
 invalidated when compilation ends, including on authoring errors. `kind` and
@@ -184,8 +197,8 @@ signatures or physical limits yet.
 
 Only plain capability descriptions and instructions are saved—not driver classes,
 module references, or live proxy objects. Supplying an authoring driver does not
-require that exact class at runtime; future admission must check KIND and the
-commands used. Shared description/proxy code lives under `instruments/drivers/`;
+require that exact class at runtime. Admission checks the registered driver's
+KIND; InstrumentServer reports an error if a dispatched member is unsupported. Shared description/proxy code lives under `instruments/drivers/`;
 the server's previous proxy import remains compatible.
 
 ## Configuration, runtime parameters, and instrument settings
@@ -201,7 +214,7 @@ These are intentionally different operations:
 
 Replacing a declared parameter (`exp.bias = 0.2`) or instrument role is rejected,
 with guidance to `.value` or `bind_instrument()`. Parameter declarations/bindings,
-instrument metadata, sweeps, outputs, graph configuration and run metadata are
+instrument metadata, sweeps, output declarations, pipeline configuration and run metadata are
 frozen during recording. Attribute writes are rejected immediately; in-place edits
 to nested configuration are checked when a hook returns. Ordinary Python locals
 and symbolic temporary attributes remain usable for building the program. These
@@ -211,7 +224,7 @@ For example:
 
 ```python
 class BiasMeasurement(Experiment):
-    source = InstrumentRef(kind="SOURCE")
+    source = InstrumentRef(kind="DC_SOURCE")
     bias = FloatParameter(default=0.2, unit="V", bounds=(-1., 1.))
 
     def sequence(self, seq):
@@ -278,13 +291,12 @@ nonnegative duration when executed. Binding delays can use that same mechanism.
 - No sweeps means one measurement and no axis hooks. The main program carries one
   default `SCAN_BEGIN`/`SCAN_END` pair around the complete traversal. These are
   trace markers in the fake interpreter, not persistence acknowledgements.
-- `get`, `set`, `call`, and `acquire` accept runner `wait=`. It lowers to an explicit
+- `get`, `set`, and `call` accept runner `wait=`. It lowers to an explicit
   `WAIT` following successful command completion. `seq.wait(seconds)` is also
   available. Durations are finite nonnegative literals or unswept parameters.
   Driver keyword arguments go in `kwargs={...}` so driver `wait` cannot collide.
 - Every `publish` submits one complete window with current sweep coordinates.
-  The legacy `acquire` only records a fake window and is not supported by the
-  pipeline integration harness.
+  No instrument command publishes implicitly.
 - Python `if`, `and`, `or`, `not` cannot consume symbolic values. Use `seq.if_`,
   `seq.else_`, `seq.all`, `seq.any`, and `seq.not_`. Both branch bodies are built.
   Comparisons and basic arithmetic produce expression trees; field selection is
@@ -338,6 +350,8 @@ readbacks used by later iterations.
 Validation targets authoring mistakes, not hostile inputs. Authoring methods are
 trusted ordinary Python; compilation is not a sandbox. The builder itself performs
 no instrument I/O. `CompiledPlan.load()` uses the same basic validator as compilation.
+The deferred-contract list above describes the offline compiler/harness scope;
+see [server.md](server.md) for the implemented writer-only service lifecycle.
 
 ## Compiler organization
 
@@ -352,10 +366,10 @@ without rewriting the document; a final pass assigns stable instruction IDs.
 `FlowState` records available references, mutable variables, and initialized
 parameters at each point. Branches intersect availability and general loops do not
 export possibly uninitialized declarations. Compile/load share these passes.
-Version-1 plans remain readable, but new compilation emits version 2, including
-validated `pipelines` attachments and explicit `PUBLISH` instructions. Older
-executors cannot execute these plans. Previously accepted invalid authoring patterns
-now fail with guidance or an instruction path.
+Only version-4 plans are accepted. Versions 1–3 fail immediately with guidance
+to recompile; there is no silent plan upgrade. Plans contain validated `pipelines`
+attachments and explicit `PUBLISH` instructions. Unknown top-level fields and
+obsolete `ACQUIRE` instructions are rejected rather than ignored.
 
 The fake executor has separate handlers for commands, conditionals, REPEAT, WHILE,
 and SWEEP. Publication validation/attachment lives in `_experiment_publication.py`;

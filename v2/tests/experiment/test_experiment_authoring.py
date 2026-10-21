@@ -8,14 +8,16 @@ from auspex_v2.experiment import (
 )
 from auspex_v2.experiment.fake import FakeExecutor
 from .experiment_test_support import Experiment
+from auspex_v2.instruments import InstrumentKind
 from auspex_v2.instruments.drivers import Instrument, operation
+from auspex_v2.instruments.drivers.simulated import SimulatedVNA
 from auspex_v2.instruments.drivers.proxy import InstrumentProxy
 from auspex_v2.instruments.server.client import Session
 from auspex_v2.filters.buffer import BufferSink
 
 
 class Settings(Experiment):
-    device = InstrumentRef(kind="TEST")
+    device = InstrumentRef(kind="SENSOR")
     bias = FloatParameter(default=1., bounds=[0., 3.], unit="V")
     count = IntParameter(default=1, bounds=(0, 4))
 
@@ -28,13 +30,30 @@ def configured(cls=Settings):
 
 
 class AuthoringTest(unittest.TestCase):
+    def test_fixed_kinds_and_driver_binding_forms(self):
+        direct = InstrumentRef(driver=SimulatedVNA)
+        self.assertEqual(direct.kind, InstrumentKind.VNA)
+        separate = InstrumentRef()
+        self.assertIs(separate.bind(SimulatedVNA), separate)
+        self.assertEqual(separate.kind, InstrumentKind.VNA)
+        chained = InstrumentRef().bind(SimulatedVNA)
+        self.assertEqual(chained.kind, InstrumentKind.VNA)
+        with self.assertRaisesRegex(CompileError, "disagrees"):
+            InstrumentRef(kind=InstrumentKind.DC_SOURCE, driver=SimulatedVNA)
+        with self.assertRaisesRegex(CompileError, "Unknown instrument KIND"):
+            InstrumentRef(kind="OTHER")
+        with self.assertRaisesRegex(CompileError, "read-only"):
+            direct.kind = InstrumentKind.DC_SOURCE
+        with self.assertRaisesRegex(CompileError, "read-only"):
+            direct.driver = None
+
     def test_declarations_cannot_be_shadowed_or_deleted(self):
         experiment = configured()
         experiment.add_sweep(experiment.bias, [1., 2.])
         with self.assertRaisesRegex(CompileError, r"bias.value"):
             experiment.bias = 9.
         with self.assertRaisesRegex(CompileError, "bind_instrument"):
-            experiment.device = InstrumentRef(kind="OTHER")
+            experiment.device = InstrumentRef(kind="VNA")
         with self.assertRaises(CompileError):
             del experiment.bias
         with self.assertRaises(CompileError):
@@ -50,7 +69,6 @@ class AuthoringTest(unittest.TestCase):
             lambda e: e.bias.declaration.bounds.__setitem__(1, 5.),
             lambda e: e.bias.binding.kwargs.update(channel=2),
             lambda e: setattr(e.device, "kind", "OTHER"),
-            lambda e: setattr(e, "graph", {"new": True}),
             lambda e: e.metadata.update(changed=True),
         ]
         for change in changes:
@@ -261,16 +279,14 @@ class AuthoringTest(unittest.TestCase):
         experiment = configured()
         experiment.add_sweep(experiment.bias, [1., 2.])
         experiment.add_sweep(experiment.count, [1, 2])
-        experiment.outputs = {"trace": {"dtype": "float64"}}
-        experiment.set_graph({"writer": "disk"})
         explanation = experiment.compile().explain()
-        self.assertIn("device -> lab_device (KIND=TEST)", explanation)
+        self.assertIn("device -> lab_device (KIND=SENSOR)", explanation)
         self.assertIn("$bias: float = 1.0 unit='V'", explanation)
         self.assertIn("binding=device.voltage", explanation)
         self.assertIn("wait=0.5", explanation)
         self.assertLess(explanation.index("count: parameters="), explanation.index("bias: parameters="))
         self.assertIn("runtime schema validation deferred", explanation)
-        self.assertIn('"writer": "disk"', explanation)
+        self.assertIn("test_memory: buffer", explanation)
 
     def test_buffer_public_api_is_consumer_only(self):
         sink = BufferSink("test", 1)
@@ -281,6 +297,9 @@ class AuthoringTest(unittest.TestCase):
 
 
 class KeywordDevice(Instrument):
+    from auspex_v2.instruments import InstrumentKind
+    KIND = InstrumentKind.SENSOR
+
     @operation
     def save(self, **kwargs):
         pass
@@ -289,7 +308,7 @@ class KeywordDevice(Instrument):
 class ProxyKeywordTest(unittest.TestCase):
     def test_recording_proxy_keeps_routing_keywords_in_driver_mapping(self):
         class Save(Experiment):
-            device = InstrumentRef(kind="TEST", driver=KeywordDevice)
+            device = InstrumentRef(driver=KeywordDevice)
             def sequence(self, seq):
                 self.device.save(name="trace", member="channel", args=[1], kwargs={"nested": 2},
                                  value=3, wait=True)

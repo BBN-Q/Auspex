@@ -13,7 +13,7 @@ from .experiment_test_support import Experiment
 
 
 class SweepExperiment(Experiment):
-    device = InstrumentRef(kind="TEST")
+    device = InstrumentRef(kind="SENSOR")
     x = FloatParameter()
     y = FloatParameter()
 
@@ -128,7 +128,7 @@ class CompilerReviewTest(unittest.TestCase):
 
     def test_numeric_string_and_unknown_comparisons(self):
         class Comparison(Experiment):
-            device = InstrumentRef(kind="TEST")
+            device = InstrumentRef(kind="SENSOR")
             integer = IntParameter(default=1)
             text = Parameter(default="abc", type=str)
 
@@ -147,7 +147,7 @@ class CompilerReviewTest(unittest.TestCase):
 
     def test_command_arguments_are_detached_each_invocation(self):
         class MutableArguments(Experiment):
-            device = InstrumentRef(kind="TEST")
+            device = InstrumentRef(kind="SENSOR")
 
             def sequence(self, seq):
                 result = seq.call(self.device, "read")
@@ -191,23 +191,21 @@ class CompilerReviewTest(unittest.TestCase):
         self.assertEqual(document["main"][0]["id"], "main.000")
         self.assertEqual(document["main"][1]["body"][0]["id"], "main.001.body.000")
 
-    def test_existing_version_one_plan_normalization_and_roundtrip(self):
-        document = {
-            "version": 1, "instruments": {},
-            "parameters": {"count": {"type": "int", "value": 2, "unit": None, "bounds": None}},
-            "setup": [], "teardown": [], "outputs": {}, "graph": {}, "metadata": {},
-            "main": [{"op": "REPEAT", "count": {"op": "parameter", "name": "count"},
-                      "max_iterations": {"op": "parameter", "name": "count"},
-                      "body": [{"op": "WAIT", "duration": {"op": "literal", "value": 0.5}}]}],
-        }
-        plan = CompiledPlan(document)
-        loop = plan.document["main"][0]
+    def test_current_plan_normalization_and_roundtrip(self):
+        class Counts(Experiment):
+            count = IntParameter(default=2)
+
+            def sequence(self, seq):
+                with seq.repeat(self.count, max_iterations=self.count):
+                    seq.wait(0.5)
+
+        plan = Counts().compile()
+        loop = plan.document["main"][1]
         self.assertEqual(loop["count"], {"op": "literal", "value": 2})
         self.assertEqual(loop["max_iterations"], 2)
-        self.assertEqual(loop["body"][0]["id"], "main.000.body.000")
+        self.assertEqual(loop["body"][0]["id"], "main.001.body.000")
         self.assertEqual(FakeExecutor().run(plan).time, 1.)
         self.assertEqual(CompiledPlan(plan.document).identity, plan.identity)
-        self.assertEqual(document["main"][0]["count"]["op"], "parameter")
 
     def test_explain_uses_readable_symbolic_expressions(self):
         class Explanation(Experiment):

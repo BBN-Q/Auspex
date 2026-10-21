@@ -13,7 +13,7 @@ from auspex_v2.instruments.drivers.simulated import SimulatedSource, SimulatedVN
 
 
 class ProxyExperiment(Experiment):
-    source = InstrumentRef(kind="SOURCE", driver=SimulatedSource)
+    source = InstrumentRef(kind="MICROWAVE_SOURCE", driver=SimulatedSource)
     vna = InstrumentRef(kind="VNA", driver=SimulatedVNA)
 
     def setup(self, seq):
@@ -29,7 +29,8 @@ class ProxyExperiment(Experiment):
         self.vna.get_trace(measurement="S21")  # CALL, not GET or automatic acquisition
         seq.wait(0.5)
         seq.set(self.source, "output", False, wait=0.25)
-        seq.acquire(self.vna, "get_trace", output="s21", kwargs={"measurement": "S21"})
+        seq.call(self.vna, "get_trace", kwargs={"measurement": "S21"})
+        seq.publish(self.signal, data=1.0)
 
     def teardown(self, seq):
         self.source.output = False
@@ -39,7 +40,6 @@ def configured(cls=ProxyExperiment):
     exp = cls()
     exp.bind_instrument("source", "lab_source")
     exp.bind_instrument("vna", "lab_vna")
-    exp.outputs = {"s21": {}}
     return exp
 
 
@@ -54,7 +54,7 @@ class ProxyCompilerTest(TestCase):
         run = FakeExecutor(command).run(plan)
         self.assertEqual(run.outcome, "SUCCEEDED")
         self.assertEqual([c[0] for c in commands],
-                         ["SET", "SET", "GET", "SET", "GET", "SET", "CALL", "SET", "ACQUIRE", "SET"])
+                         ["SET", "SET", "GET", "SET", "GET", "SET", "CALL", "SET", "CALL", "SET"])
         self.assertEqual(commands[3], ("SET", "lab_source", "channel_frequency", [5e9], {"channel": 2}))
         self.assertEqual(commands[6], ("CALL", "lab_vna", "get_trace", [], {"measurement": "S21"}))
         self.assertEqual(len(run.windows), 1)
@@ -72,7 +72,8 @@ class ProxyCompilerTest(TestCase):
                 seq.call(self.vna, "get_trace", kwargs={"measurement": "S21"})
                 seq.wait(0.5)
                 seq.set(self.source, "output", False, wait=0.25)
-                seq.acquire(self.vna, "get_trace", output="s21", kwargs={"measurement": "S21"})
+                seq.call(self.vna, "get_trace", kwargs={"measurement": "S21"})
+                seq.publish(self.signal, data=1.0)
             def teardown(self, seq): seq.set(self.source, "output", False)
         self.assertEqual(configured().compile().identity, configured(Explicit).compile().identity)
 
@@ -104,12 +105,15 @@ class ProxyCompilerTest(TestCase):
 
     def test_driver_wait_keyword_is_not_runner_wait(self):
         class Device(Instrument):
+            from auspex_v2.instruments import InstrumentKind
+            KIND = InstrumentKind.SENSOR
+
             @operation
             def perform(self, *, wait=False): pass
             @managed_property
             def readonly(self): return 1
         class Job(Experiment):
-            device = InstrumentRef(kind="TEST", driver=Device)
+            device = InstrumentRef(driver=Device)
             def sequence(self, seq): self.device.perform(wait=True)
         exp = Job()
         exp.bind_instrument("device", "test")

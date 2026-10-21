@@ -7,6 +7,7 @@ import socket
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 
@@ -72,7 +73,7 @@ class InstrumentServerTest(unittest.TestCase):
 
     def register_connected(self, client, name="src", resource="SIM::SRC"):
         """Register and explicitly connect a simulator for tests that need live use."""
-        result = client.register(name, "simulated_source", resource)
+        result = client.register(name, "SimulatedSource", resource)
         client.connect(name)
         return result
 
@@ -115,7 +116,7 @@ class InstrumentServerTest(unittest.TestCase):
     def test_vna_inline_arrays_and_size_limit(self):
         """Transfer complex VNA traces without desynchronizing subsequent requests."""
         with InstrumentServerClient(self.socket) as c:
-            c.register("vna", "simulated_vna", "SIM::VNA")
+            c.register("vna", "SimulatedVNA", "SIM::VNA")
             c.connect("vna")
             with c.live("vna") as vna:
                 vna.set("frequency_center", 6.1e9)
@@ -139,7 +140,7 @@ class InstrumentServerTest(unittest.TestCase):
     def test_disconnect_mid_bulk_result_releases_live_session(self):
         """Discard an abandoned array reply without retaining live ownership."""
         with InstrumentServerClient(self.socket) as observer:
-            observer.register("vna", "simulated_vna", "SIM::VNA")
+            observer.register("vna", "SimulatedVNA", "SIM::VNA")
             observer.connect("vna")
             sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
             sock.settimeout(5)
@@ -153,7 +154,8 @@ class InstrumentServerTest(unittest.TestCase):
             try:
                 request("HELLO", version=PROTOCOL_VERSION)
                 response = request("OPEN_LIVE", name="vna")
-                token = response["result"]["items"]["session"]["value"]
+                token = next(value["value"] for key, value in response["result"]["items"]
+                             if key["value"] == "session")
                 response = request("CALL", name="vna", session=token, member="get_trace", args=[], kwargs={})
                 self.assertEqual(len(response["arrays"]), 2)
                 # Close before reading the array body; server must release the live lease.
@@ -194,7 +196,7 @@ class InstrumentServerTest(unittest.TestCase):
                 run.set("frequency", 6e9, name="src")
                 self.assertEqual(run.get("frequency", name="src"), 6e9)
                 with self.assertRaises(RemoteError):
-                    client.register("new", "simulated_source", "SIM::NEW")
+                    client.register("new", "SimulatedSource", "SIM::NEW")
             self.assertIsNone(client.status()["run"])
             with client.live("spare") as spare:
                 self.assertEqual(spare.get("frequency"), 1e9)
@@ -236,7 +238,7 @@ class InstrumentServerTest(unittest.TestCase):
         """Bind run device views to one exclusive session and return array results."""
         with InstrumentServerClient(self.socket) as c:
             self.register_connected(c)
-            c.register("vna", "simulated_vna", "SIM::VNA")
+            c.register("vna", "SimulatedVNA", "SIM::VNA")
             with c.begin_run("proxy-run") as run:
                 run.connect("vna")
                 source = run.instrument("src")
@@ -354,10 +356,65 @@ class InstrumentServerTest(unittest.TestCase):
             with c.live("src") as source:
                 self.assertEqual(source.get("frequency"), 1e9)
 
+    def test_real_driver_registration_is_no_io_and_timeouts_are_configurable(self):
+        """Persist canonical real classes without importing VISA until explicit connect."""
+        with InstrumentServerClient(self.socket) as c:
+            c.register("vna", "AgilentE8363C", "TCPIP0::192.0.2.1::INSTR",
+                       command_timeout=None, io_timeout=30)
+            spec = c.status()["instruments"]["vna"]
+            self.assertEqual(spec["driver"], "AgilentE8363C")
+            self.assertIsNone(spec["command_timeout"])
+            self.assertEqual(spec["io_timeout"], 30)
+            self.assertEqual(c.set_command_timeout("vna", 180), 180)
+            self.assertIsNone(c.set_command_timeout("vna", None))
+            self.assertEqual(c.set_io_timeout("vna", 45), 45)
+            self.assertIsNone(c.set_io_timeout("vna", None))
+            with self.assertRaisesRegex(RemoteError, "positive seconds"):
+                c.set_command_timeout("vna", 0)
+            with self.assertRaisesRegex(RemoteError, "not registered"):
+                c.register("old", "simulated_source", "SIM::OLD")
+            c.deregister("vna")
+
+    def test_command_timeout_is_optional_and_quarantines_a_timed_out_worker(self):
+        with InstrumentServerClient(self.socket) as c:
+            c.register("src", "SimulatedSource", "SIM::SRC")
+            c.connect("src")
+            c.set_command_timeout("src", 0.05)
+            with c.live("src") as source:
+                with self.assertRaisesRegex(RemoteError, "timed out"):
+                    source.wait_for_test(0.2)
+            self.assertEqual(c.status()["instruments"]["src"]["state"], "TERMINATED")
+
+    def test_status_and_termination_remain_available_during_a_command(self):
+        with InstrumentServerClient(self.socket) as owner, InstrumentServerClient(self.socket) as observer:
+            owner.register("src", "SimulatedSource", "SIM::SRC")
+            owner.connect("src")
+            source = owner.live("src")
+            outcome = []
+            def invoke():
+                try:
+                    source.wait_for_test(5)
+                except BaseException as exc:
+                    outcome.append(exc)
+            thread = threading.Thread(target=invoke)
+            thread.start()
+            deadline = time.monotonic() + 5
+            while not observer.status()["instruments"]["src"]["busy"]:
+                self.assertLess(time.monotonic(), deadline)
+                time.sleep(0.01)
+            observer.terminate("src", "stop in-flight simulator command")
+            thread.join(timeout=5)
+            self.assertFalse(thread.is_alive())
+            self.assertIsInstance(outcome[0], RemoteError)
+            status = observer.status()["instruments"]["src"]
+            self.assertFalse(status["busy"])
+            self.assertEqual(status["state"], "TERMINATED")
+            source.session.close()
+
     def test_explicit_connection_and_clean_inventory(self):
         """Require connect before live use and clearing only after disconnection."""
         with InstrumentServerClient(self.socket) as c:
-            c.register("src", "simulated_source", "SIM::SRC")
+            c.register("src", "SimulatedSource", "SIM::SRC")
             self.assertEqual(c.status()["instruments"]["src"]["state"], "DISCONNECTED")
             with self.assertRaisesRegex(RemoteError, "explicit connect"):
                 c.live("src")
@@ -381,7 +438,7 @@ class InstrumentServerTest(unittest.TestCase):
     def test_failed_connect_and_disconnect_require_recovery(self):
         """Latch uncertainty and prevent clear or retry after a worker I/O failure."""
         with InstrumentServerClient(self.socket) as c:
-            c.register("bad", "simulated_source", "SIM::FAIL_CONNECT")
+            c.register("bad", "SimulatedSource", "SIM::FAIL_CONNECT")
             with self.assertRaisesRegex(RemoteError, "Simulated connect failure"):
                 c.connect("bad")
             self.assertEqual(c.status()["instruments"]["bad"]["state"], "UNKNOWN")
@@ -391,7 +448,7 @@ class InstrumentServerTest(unittest.TestCase):
                 c.clear_instruments()
             c.recover("bad", "Operator checked simulated failure")
             c.deregister("bad")
-            c.register("src", "simulated_source", "SIM::FAIL_DISCONNECT")
+            c.register("src", "SimulatedSource", "SIM::FAIL_DISCONNECT")
             c.connect("src")
             outcome = c.disconnect_all()
             self.assertIn("src", outcome["failures"])
@@ -404,7 +461,7 @@ class InstrumentServerTest(unittest.TestCase):
     def test_terminate_disconnected_and_run_connect(self):
         """Allow quarantine without a worker and explicit connection under a run lock."""
         with InstrumentServerClient(self.socket) as c:
-            c.register("src", "simulated_source", "SIM::SRC")
+            c.register("src", "SimulatedSource", "SIM::SRC")
             c.terminate("src")
             self.assertEqual(c.status()["instruments"]["src"]["state"], "TERMINATED")
             self.assertFalse(c.status()["instruments"]["src"]["worker_running"])
@@ -424,7 +481,7 @@ class InstrumentServerTest(unittest.TestCase):
     def test_shutdown_requires_cleared_inventory(self):
         """Keep the headless service alive until all registrations are cleared."""
         with InstrumentServerClient(self.socket) as c:
-            c.register("src", "simulated_source", "SIM::SRC")
+            c.register("src", "SimulatedSource", "SIM::SRC")
             with self.assertRaisesRegex(RemoteError, "empty inventory"):
                 c.request("SHUTDOWN")
             c.clear_instruments()
@@ -450,7 +507,7 @@ class InstrumentServerTest(unittest.TestCase):
         self.start_server(clean=True)
         with InstrumentServerClient(self.socket) as c:
             self.assertEqual(c.status(), {"instruments": {}, "run": None})
-            c.register("src", "simulated_source", "SIM::SRC")
+            c.register("src", "SimulatedSource", "SIM::SRC")
         self.stop_server()
         self.start_server()
         with InstrumentServerClient(self.socket) as c:
@@ -461,7 +518,7 @@ class InstrumentServerTest(unittest.TestCase):
         with InstrumentServerClient(self.socket) as c:
             self.register_connected(c)
             with self.assertRaisesRegex(RemoteError, "Physical device already registered"):
-                c.register("duplicate", "simulated_source", "SIM::SRC")
+                c.register("duplicate", "SimulatedSource", "SIM::SRC")
         self.stop_server()
         self.start_server()
         with InstrumentServerClient(self.socket) as c:
