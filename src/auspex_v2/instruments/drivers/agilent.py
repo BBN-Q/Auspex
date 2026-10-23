@@ -200,7 +200,7 @@ class _AgilentNetworkAnalyzer(SCPIInstrument):
                 self.reaverage(timeout=timeout)
             io.write("FORM REAL,32")
             raw = np.asarray(io.query_binary_values(":CALC:DATA? SDATA", datatype="f",
-                             is_big_endian=True, expect_termination=False), dtype=np.float32)
+                             is_big_endian=True, expect_termination=True), dtype=np.float32)
         finally:
             if restart_measurement:
                 io.write("SENS:SWE:MODE CONT")
