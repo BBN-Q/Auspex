@@ -8,7 +8,6 @@ exclusive run lockout and instrument worker processes, never notebook kernels.
 from __future__ import annotations
 
 import argparse
-from datetime import datetime
 import fcntl
 import json
 import multiprocessing as mp
@@ -22,6 +21,7 @@ import threading
 
 import numpy as np
 
+from ...paths import auspex_directory, DiagnosticLog, home_note
 from .bulk import encode_result, ResultEncodingError
 from ..drivers.capabilities import describe_driver as _capabilities
 from ..drivers.core import SCPIInstrument
@@ -46,7 +46,7 @@ class InstrumentServerError(Exception):
 
 
 def default_socket():
-    return Path.home() / ".auspex" / "instruments.sock"
+    return auspex_directory() / "instruments.sock"
 
 
 def _result_summary(value, depth=0):
@@ -196,9 +196,10 @@ class Worker:
 class Registry:
     """Serialize registration, session ownership, and worker-state transitions."""
 
-    def __init__(self, state_path, *, quiet=False, clean=False):
+    def __init__(self, state_path, *, quiet=False, clean=False, log=None):
         """Restore uncertain registrations, or explicitly discard all saved state."""
         self.quiet = quiet
+        self.log = log
         self.path = Path(state_path)
         self.lock = threading.RLock()
         self.instruments = {}
@@ -229,8 +230,10 @@ class Registry:
 
     def announce(self, message):
         """Print an operator-facing command or transition unless quiet mode is active."""
+        if self.log is not None:
+            self.log.write(f"[InstrumentServer] {message}")
         if not self.quiet:
-            print(f"[InstrumentServer] [{datetime.now().astimezone().isoformat(timespec='seconds')}] {message}", flush=True)
+            print(f"[InstrumentServer] {message}", flush=True)
 
     def _save(self):
         payload = {"instruments": self.instruments,
@@ -848,9 +851,14 @@ class Server(socketserver.ThreadingUnixStreamServer):
             raise InstrumentServerError(f"Not a server socket: {self.path}")
         if self.path.exists():
             self.path.unlink()  # stale socket: the single-instance lock is held
-        self.registry = Registry(str(self.path) + ".state.json", quiet=quiet, clean=clean)
-        super().__init__(str(self.path), Handler)
-        os.chmod(self.path, 0o600)
+        self.log = DiagnosticLog("instruments.log")
+        try:
+            self.registry = Registry(str(self.path) + ".state.json", quiet=quiet, clean=clean, log=self.log)
+            super().__init__(str(self.path), Handler)
+            os.chmod(self.path, 0o600)
+        except BaseException:
+            self.log.close()
+            raise
 
     def server_close(self):
         try:
@@ -859,6 +867,7 @@ class Server(socketserver.ThreadingUnixStreamServer):
             if self.path.exists():
                 self.path.unlink()
         finally:
+            self.log.close()
             self._lockfile.close()
 
 
@@ -875,6 +884,8 @@ def argument_parser():
 def main(argv=None, *, on_start=None, on_bound=None):
     """Run the service and notify optional clients once its socket is bound."""
     args = argument_parser().parse_args(argv)
+    if not args.quiet and (note := home_note()):
+        print(f"[InstrumentServer] {note}", flush=True)
     with Server(args.socket, quiet=args.quiet, clean=args.clean) as server:
         def stop_on_term(*_):
             raise KeyboardInterrupt
@@ -882,10 +893,9 @@ def main(argv=None, *, on_start=None, on_bound=None):
         try:
             if on_bound is not None:
                 on_bound(args.socket)
-            if not args.quiet:
-                if on_start is not None:
-                    on_start()
-                print(f"[InstrumentServer] Listening on {args.socket}", flush=True)
+            if not args.quiet and on_start is not None:
+                on_start()
+            server.registry.announce(f"Listening on {args.socket}; diagnostic log: {server.log.path}")
             server.serve_forever(poll_interval=0.2)
         except KeyboardInterrupt:
             pass

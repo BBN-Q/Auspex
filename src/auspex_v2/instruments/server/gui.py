@@ -9,6 +9,7 @@ os.environ.setdefault("PYQTGRAPH_QT_LIB", "PySide6")
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets, QT_LIB
 
 from .client import InstrumentServerClient
+from ...paths import home_note
 
 if QT_LIB != "PySide6":
     raise RuntimeError("The instrument GUI requires PySide6 (install auspex-v2[gui])")
@@ -43,8 +44,9 @@ class InstrumentWindow(QtWidgets.QWidget):
         """Build a status-only window and start its serialized background client."""
         super().__init__()
         self.setWindowTitle("Auspex V2 — Instrument Server")
-        self.resize(900, 420)
+        self.resize(1050, 420)
         self.pending = False
+        self.pending_action = None
         self.status = None
 
         self.connection = QtWidgets.QLabel("Connecting…")
@@ -63,6 +65,7 @@ class InstrumentWindow(QtWidgets.QWidget):
         self.table.setAlternatingRowColors(True)
         self.table.setEditTriggers(QtWidgets.QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.ResizeMode.Stretch)
+        self.table.horizontalHeader().setSectionResizeMode(5, QtWidgets.QHeaderView.ResizeMode.ResizeToContents)
 
         self.terminate_all = QtWidgets.QPushButton("Terminate All")
         self.terminate_all.setStyleSheet("font-weight: bold; color: #ff8c95")
@@ -72,7 +75,7 @@ class InstrumentWindow(QtWidgets.QWidget):
         self.disconnect_all.clicked.connect(lambda: self._request("DISCONNECT_ALL"))
         self.clear_instruments = QtWidgets.QPushButton("Clear Instruments")
         self.clear_instruments.clicked.connect(lambda: self._confirm("CLEAR_INSTRUMENTS",
-            "Deregister all disconnected instruments and clear saved inventory?"))
+            "Deregister all instruments? All must be disconnected and unowned."))
         actions = QtWidgets.QHBoxLayout()
         for button in (self.terminate_all, self.disconnect_all, self.clear_instruments):
             actions.addWidget(button)
@@ -110,9 +113,10 @@ class InstrumentWindow(QtWidgets.QWidget):
     def _request(self, op, **kwargs):
         """Serialize inventory actions without opening live instrument sessions."""
         if self.pending or op not in ("STATUS", "CONNECT", "DISCONNECT", "DISCONNECT_ALL",
-                                       "CLEAR_INSTRUMENTS", "TERMINATE", "RECOVER", "TERMINATE_ALL"):
+                                       "CLEAR_INSTRUMENTS", "DEREGISTER", "TERMINATE", "RECOVER", "TERMINATE_ALL"):
             return
         self.pending = True
+        self.pending_action = (op, kwargs)
         self._update_actions()
         self.requested.emit(op, kwargs)
 
@@ -163,13 +167,15 @@ class InstrumentWindow(QtWidgets.QWidget):
             free = not run and not spec["live_sessions"]
             if spec["state"] == "DISCONNECTED":
                 self._add_row_action(buttons, name, "Connect", "CONNECT", allowed=free)
-            elif spec["state"] == "CONNECTED":
-                self._add_row_action(buttons, name, "Disconnect", "DISCONNECT", allowed=free)
-            elif spec["state"] in ("TERMINATED", "UNKNOWN"):
-                self._add_row_action(buttons, name, "Recover", "RECOVER", allowed=free,
-                                     confirm="Confirm operator inspection. Recovery marks this device disconnected, not safe or connected.")
-            self._add_row_action(buttons, name, "Terminate", "TERMINATE",
-                                 confirm="Kill the worker if running and quarantine this instrument? Hardware may remain active.")
+            else:
+                self._add_row_action(buttons, name, "Disconnect", "DISCONNECT",
+                                     allowed=free and spec["state"] == "CONNECTED")
+            if spec["state"] in ("TERMINATED", "UNKNOWN"):
+                self._add_row_action(buttons, name, "Recover", "RECOVER", allowed=free)
+            self._add_row_action(buttons, name, "Terminate", "TERMINATE")
+            self._add_row_action(buttons, name, "Clear", "DEREGISTER",
+                                 allowed=free and spec["state"] == "DISCONNECTED",
+                                 confirm=f"Deregister {name}? This removes it from saved inventory.")
             self.table.setCellWidget(row, 5, panel)
         self._update_actions()
 
@@ -178,18 +184,22 @@ class InstrumentWindow(QtWidgets.QWidget):
         """Show the result and refresh after actions without blocking Qt."""
         self.pending = False
         ok, value = outcome
+        action = self.pending_action
+        self.pending_action = None
         if op == "STATUS":
             if ok:
                 self._show_status(value)
-                self.message.setText("Status snapshot; no physical settings have been read.")
             else:
                 self.status = None
                 self.table.setRowCount(0)
-                self.connection.setText("Disconnected — status unknown")
+                self.connection.setText(f"Disconnected — status failed: {value}")
                 self.domain.setText("Domain: unknown")
-                self.message.setText(f"Status failed: {value}")
         else:
-            self.message.setText(f"{op}: {value if ok else 'failed: ' + value}")
+            name = action[1].get("name") if action else None
+            label = f"{op} {name}" if name else op
+            failures = value.get("failures") if ok and isinstance(value, dict) else None
+            detail = f"partial failure: {failures}" if failures else "request completed" if ok else f"failed: {value}"
+            self.message.setText(f"Last action: {label} — {detail}")
             self._request("STATUS")
         self._update_actions()
 
@@ -228,6 +238,8 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description="Auspex V2 instrument status and termination GUI")
     parser.add_argument("--socket", help="Path to an explicitly started instrument server")
     args = parser.parse_args(argv)
+    if note := home_note():
+        print(f"[Instrument GUI] {note}", flush=True)
     app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
     dark_theme(app)
     window = InstrumentWindow(args.socket)

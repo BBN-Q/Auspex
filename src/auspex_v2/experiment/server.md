@@ -15,10 +15,33 @@ Start both services together on the acquisition host:
 python utils/launch_auspex.py
 # Optional InstrumentServer operator GUI:
 python utils/launch_auspex.py --gui
+# Optional full-screen terminal console (install auspex-v2[tui]):
+python utils/launch_auspex.py --tui
 ```
 
 The foreground launcher waits for InstrumentServer readiness before starting
-ExperimentServer, and prints both endpoints. Use `--instrument-socket PATH` and
+ExperimentServer, and prints both endpoints. By default both sockets and two
+best-effort diagnostic files (`instruments.log`, `experiment.log`) live under
+`$AUSPEX_HOME/.auspex/`, or `$HOME/.auspex/` if `AUSPEX_HOME` is unset (announced
+at startup). Logs are truncated when their respective services successfully
+start, after the service lock is claimed; custom socket paths do not relocate
+logs. Entries carry local `[YYYY-MM-DD HH:MM:SS]` timestamps; interactive
+instrument output remains untimestamped. These files are for debugging, not
+durable run history or safety auditing.
+Experiment execution logs remain in each run folder. `--tui` requires an interactive
+terminal and the optional Textual dependency. It captures service output in one
+chronological scrolling pane, with differently colored service labels and
+Instruments/Experiment prompts (plain labels when `NO_COLOR` is set). Type
+`experiment` or `instruments` to change modes. Instrument mode supports `list`,
+`connect <id|all>`, `disconnect <id|all>`, `recover <id>`, `terminate <id|all>`,
+`clear <id|all>`, and `help`; clear and terminate-all require `y` confirmation.
+Experiment mode supports `status`, `runs`, `cancel <run-id>`, and `help`. Ctrl+C
+exits the console and requests the launcher's usual cooperative cancellation
+and ordered service shutdown. The plain launcher remains the default; when its
+stdin is interactive it also offers the same modal commands (service output may
+interrupt a prompt). Headless/redirected plain launches do not read commands.
+The combined launcher does not expose the standalone instrument `shutdown`
+command: use Ctrl+C for ordered shutdown. Use `--instrument-socket PATH` and
 `--experiment-socket PATH` for custom endpoints. It refuses existing services,
 never uses `--clean`, and preserves saved registrations. Individual service
 scripts remain available.

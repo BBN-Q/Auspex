@@ -95,6 +95,25 @@ Target existing `AgilentE8363C` (`src/auspex/instruments/agilent.py`), whose dri
 - What schema/chunk limits and pipeline buffering will be needed for the eventual digitizer target? Determine these from an actual hardware workload rather than the VNA's small trace.
 - What run-level plan/status/event layout and log granularity should extend the V2 `.auspex` manifest? V1 file compatibility is not required.
 
+## Operator usability slice (implemented)
+
+- The standalone InstrumentServer GUI switches Connect/Disconnect by state, offers per-row Recover, Terminate, and confirmed Clear (deregister), and retains confirmed Clear Instruments and Terminate All. Per-row Recover and Terminate no longer open confirmation dialogs; disabled actions remain subject to server validation.
+- The standalone interactive instrument terminal works with or without `--gui`. `list` assigns snapshot IDs; `help`, `connect <id|all>`, `disconnect <id|all>`, `recover <id>` (no bulk recovery), `terminate <id|all>`, `clear <id|all>`, and `shutdown` are supported. Clear, Terminate All and shutdown require `y` confirmation; clear all remains an all-or-nothing inventory wipe. The combined launcher still starts its child with no stdin and does not provide these commands in its shared terminal.
+
+## Optional combined operator TUI (implemented; awaiting attended validation)
+
+- The interactive plain launcher and opt-in `launch_auspex.py --tui` share a Textual-independent operator command dispatcher with modal Instruments/Experiment commands. The plain launcher keeps its normal service output and accepts interrupted prompts; redirected/headless launches remain non-interactive. The opt-in Textual console keeps one bounded chronological scrollback for both services above a fixed mode prompt. Service labels and Instruments/Experiment prompts have distinct colors, omitted for `NO_COLOR`/dumb terminals. The default plain launcher remains unchanged. This runs only in an interactive terminal; children remain independent and commands use their existing IPC clients.
+- Both launcher modes expose the standalone inventory commands (excluding standalone `shutdown`, since the launcher owns ordered shutdown), with confirmations for Clear and Terminate All. Experiment mode has `status`, `runs`, `cancel <run-id>` and `help`. Switch with `experiment`/`instruments`; Ctrl+C returns to the launcher's cooperative shutdown policy. Offline headless widget and plain-prompt tests cover mode switching and confirmation; an attended terminal session is still needed before making the TUI the default.
+
+## Operator feedback and diagnostic logs (implemented)
+
+- The instrument GUI's message bar retains the last action result through status refreshes; failed status polls instead make the connection banner explicitly unknown. The bar reports completed requests, not physical readback.
+- `AUSPEX_HOME` (or `HOME` if unset, announced when utilities start) is the base for default sockets and state under `.auspex/`. Independent service diagnostic logs `instruments.log` and `experiment.log` live there even when sockets are overridden. Each is truncated after that service claims its lock, not when a duplicate launcher starts. Logs have local `[YYYY-MM-DD HH:MM:SS]` timestamps; instrument CLI/TUI output omits them. Logs are best-effort debugging traces, not durable operator history; run execution logs remain separate.
+
+## Utility entry points (implemented)
+
+- `utils/` keeps only executable entry points at its top level. Private shared launcher code lives in `utils/src/` (`operator_commands.py`, `auspex_tui.py`), with a short utility map in `utils/README.md`. Existing entry-point paths remain unchanged.
+
 ## Code readability and documentation convention
 
 - **Human maintainability is a design constraint.** Code must be explainable, concise in purpose, and clear enough for an unassisted human to modify safely. Prefer explicit names, straightforward control flow, small cohesive components, and visible state transitions over clever compression or abstraction. Reasonable verbosity is welcome when it makes behavior, failure modes, or ownership easier to understand. Review new interfaces and non-obvious code paths from the perspective of someone reading them without the original author; do not trade clarity for fewer lines.

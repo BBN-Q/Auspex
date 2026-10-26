@@ -20,10 +20,27 @@ python utils/instrument_server.py -q
 python utils/instrument_server.py --clean
 ```
 
-The default socket is `~/.auspex/instruments.sock` (mode `0600`); `--socket PATH`
-selects another. This is trusted local IPC. Only one service owns a socket.
-Closing the optional GUI leaves the service running. The interactive headless CLI
-accepts `shutdown`, which disconnects and clears only on success.
+The default socket is `$AUSPEX_HOME/.auspex/instruments.sock` (mode `0600`),
+using `$HOME` as the base when `AUSPEX_HOME` is unset; startup prints a note on
+this fallback. `--socket PATH` selects another socket, but does not change the
+log directory. The server truncates `$AUSPEX_HOME/.auspex/instruments.log` at
+each successful launch, after claiming the socket lock. This best-effort debug
+log contains command/state transitions and may include command arguments; each
+entry carries a local `[YYYY-MM-DD HH:MM:SS]` timestamp. The instrument CLI/TUI
+output omits these timestamps. The log is not an audit record or physical readback. This is trusted local IPC. Only one
+service owns a socket.
+Closing the optional GUI leaves the service running. With an interactive stdin,
+the terminal commands remain available even with `--gui`: `list`, `help`,
+`connect <id|all>`, `disconnect <id|all>`, `recover <id>`,
+`terminate <id|all>`, `clear <id|all>`, and `shutdown`.
+`list` numbers instruments by name; IDs refer to that snapshot until the next
+`list`. `recover all` is intentionally unavailable. `clear <id>` deregisters a
+single disconnected, unowned instrument; `clear all` requires the entire inventory
+to be disconnected and unowned, then wipes it. Clear, Terminate All and shutdown
+require `y` confirmation; shutdown disconnects and clears only on success. Bulk
+connect attempts every disconnected instrument and reports individual failures.
+The combined `utils/launch_auspex.py` starts its instrument child without stdin;
+use its GUI or a standalone interactive server for these terminal commands.
 
 ```python
 from auspex_v2.instruments.server import InstrumentServerClient

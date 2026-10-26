@@ -25,6 +25,107 @@ def print_splash():
     print(SPLASH, flush=True)
 
 
+COMMANDS = ("list", "connect <id|all>", "disconnect <id|all>", "recover <id>",
+            "terminate <id|all>", "clear <id|all>", "shutdown", "help")
+
+
+def terminal_commands(socket_path, lines):
+    """Serve an operator prompt; numeric IDs remain tied to the last listed names."""
+    names = []
+    identities = {}
+    print("[InstrumentServer] Commands: " + "; ".join(COMMANDS), flush=True)
+    for line in lines:
+        parts = line.strip().lower().split()
+        if not parts:
+            continue
+        command, *args = parts
+        if command == "help" and not args:
+            print("[InstrumentServer] Commands: " + "; ".join(COMMANDS), flush=True)
+            continue
+        if command not in ("list", "connect", "disconnect", "recover", "terminate", "clear", "shutdown"):
+            print("[InstrumentServer] Unknown command; type help", flush=True)
+            continue
+        if (command in ("list", "shutdown") and args) or (command not in ("list", "shutdown") and len(args) != 1):
+            print("[InstrumentServer] Invalid arguments; type help", flush=True)
+            continue
+        if args and args[0] == "all" and command == "recover":
+            print("[InstrumentServer] Recover each instrument individually after inspection", flush=True)
+            continue
+        if command in ("terminate", "clear") and args == ["all"] or command == "shutdown" or command == "clear":
+            if input_confirmation(lines, f"{command} {args[0] if args else ''}".strip()) is not True:
+                print("[InstrumentServer] Cancelled", flush=True)
+                continue
+        try:
+            with InstrumentServerClient(socket_path) as client:
+                if command == "list":
+                    status = client.status()
+                    names = sorted(status["instruments"])
+                    identities = {name: (spec["driver"], spec["physical"])
+                                  for name, spec in status["instruments"].items()}
+                    run = status["run"]
+                    print(f"[InstrumentServer] Run: {run or 'none'}", flush=True)
+                    for index, name in enumerate(names, 1):
+                        spec = status["instruments"][name]
+                        print(f"  {index}. {name} — {spec['state']} — "
+                              f"{'run locked' if run else 'live session' if spec['live_sessions'] else 'free'} "
+                              f"({spec['driver']}, {spec['physical']})", flush=True)
+                    if not names:
+                        print("[InstrumentServer] No registered instruments", flush=True)
+                    continue
+                if command == "shutdown":
+                    outcome = client.disconnect_all()
+                    if outcome["failures"]:
+                        raise RuntimeError(f"Disconnect failures: {outcome['failures']}")
+                    client.clear_instruments()
+                    client.request("SHUTDOWN")
+                    print("[InstrumentServer] All instruments disconnected; inventory cleared; server stopped.", flush=True)
+                    return
+                target = args[0]
+                if target == "all":
+                    if command == "disconnect":
+                        result = client.disconnect_all()
+                    elif command == "clear":
+                        result = client.clear_instruments()
+                        names = []
+                    elif command == "terminate":
+                        result = client.terminate_all()
+                    elif command == "connect":
+                        status = client.status()
+                        connected, failures = [], {}
+                        for name, spec in sorted(status["instruments"].items()):
+                            if spec["state"] == "DISCONNECTED":
+                                try:
+                                    client.connect(name)
+                                    connected.append(name)
+                                except Exception as exc:
+                                    failures[name] = str(exc)
+                        result = {"connected": connected, "failures": failures}
+                else:
+                    if not target.isdecimal() or not 1 <= int(target) <= len(names):
+                        raise ValueError("Unknown ID; run list first")
+                    name = names[int(target) - 1]
+                    # Revalidate before acting: a removed/replaced registration must not inherit an old ID.
+                    status = client.status()
+                    spec = status["instruments"].get(name)
+                    if spec is None or (spec["driver"], spec["physical"]) != identities[name]:
+                        raise ValueError("Inventory changed; run list again")
+                    result = {"connect": client.connect, "disconnect": client.disconnect,
+                              "recover": client.recover, "terminate": client.terminate,
+                              "clear": client.deregister}[command](name)
+                    if command == "clear":
+                        names = []  # renumber only after an explicit new list
+                print(f"[InstrumentServer] {command} {target}: {result if result is not None else 'done'}", flush=True)
+        except Exception as exc:
+            print(f"[InstrumentServer] {command} failed: {exc}", flush=True)
+
+
+def input_confirmation(lines, action):
+    """Require an explicit yes before destructive inventory or bulk termination."""
+    print(f"[InstrumentServer] Confirm {action}? (y/n): ", end="", flush=True)
+    answer = next(lines, "").strip().lower()
+    return answer == "y"
+
+
 def main(argv=None):
     """Launch the service and optionally manage a separate GUI client process."""
     parser = argument_parser()
@@ -45,29 +146,9 @@ def main(argv=None):
     gui_process = None
 
     def start_terminal(socket_path):
-        """Offer an explicit clean shutdown command only on an interactive terminal."""
-        if not sys.stdin.isatty():
-            return
-
-        def read_commands():
-            print("[InstrumentServer] Type 'shutdown' to disconnect, clear instruments, and exit.", flush=True)
-            for line in sys.stdin:
-                if line.strip().lower() != "shutdown":
-                    print("[InstrumentServer] Available command: shutdown", flush=True)
-                    continue
-                try:
-                    with InstrumentServerClient(socket_path) as client:
-                        outcome = client.disconnect_all()
-                        if outcome["failures"]:
-                            raise RuntimeError(f"Disconnect failures: {outcome['failures']}")
-                        client.clear_instruments()
-                        client.request("SHUTDOWN")
-                    print("[InstrumentServer] All instruments disconnected; inventory cleared; server stopped.", flush=True)
-                    return
-                except Exception as exc:
-                    print(f"[InstrumentServer] Shutdown refused: {exc}", flush=True)
-
-        threading.Thread(target=read_commands, daemon=True).start()
+        """Offer commands on an interactive terminal, whether or not Qt is running."""
+        if sys.stdin.isatty():
+            threading.Thread(target=terminal_commands, args=(socket_path, sys.stdin), daemon=True).start()
 
     def launch_gui(socket_path):
         """Start the client after the service has claimed and bound its socket."""
@@ -77,7 +158,7 @@ def main(argv=None):
 
     try:
         return run_service(service_args, on_start=None if options.no_splash else print_splash,
-                           on_bound=launch_gui if options.gui else start_terminal)
+                           on_bound=lambda socket: (start_terminal(socket), launch_gui(socket) if options.gui else None))
     finally:
         if gui_process is not None and gui_process.poll() is None:
             gui_process.terminate()

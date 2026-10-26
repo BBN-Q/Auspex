@@ -10,12 +10,14 @@ import signal
 import socket
 import subprocess
 import sys
+import threading
 import time
 
 from auspex_v2.instruments.server.service import default_socket as instrument_socket, PROTOCOL_VERSION as INSTRUMENT_VERSION
 from auspex_v2.experiment.protocol import default_socket as experiment_socket, PROTOCOL_VERSION as EXPERIMENT_VERSION, TERMINAL
 from auspex_v2.experiment.client import ExperimentServerClient
 from auspex_v2.status import inspect_services, format_status
+from auspex_v2.paths import home_note
 
 
 SPLASH = r"""
@@ -105,6 +107,38 @@ def stop(process, name):
         process.wait()
 
 
+def plain_operator_prompt(instruments, experiments):
+    """Offer the same IPC commands as the TUI without owning either service's stdin."""
+    from src.operator_commands import OperatorCommands
+
+    commands = OperatorCommands(instruments, experiments)
+    announce("Operator commands: " + commands.execute(["help"]))
+    color = "NO_COLOR" not in os.environ and os.environ.get("TERM") != "dumb"
+    while True:
+        mode = commands.mode
+        style = "\033[1;36m" if mode == "Instruments" else "\033[1;35m"
+        prompt = f"{style}{mode} >> \033[0m" if color else f"{mode} >> "
+        try:
+            line = input(prompt).strip()
+        except EOFError:
+            return
+        if not line:
+            continue
+        try:
+            parts = commands.parse(line)
+            if commands.confirmation(parts):
+                try:
+                    answer = input(f"Confirm {line}? (y/n): ").strip().lower()
+                except EOFError:
+                    return
+                if answer != "y":
+                    announce("Cancelled")
+                    continue
+            announce(commands.execute(parts))
+        except (OSError, RuntimeError, ValueError) as exc:
+            announce(f"Command failed: {exc}")
+
+
 def cancel_and_wait(path, children):
     """First Ctrl+C: allow cooperative teardown; a second interrupt escapes this wait."""
     client = ExperimentServerClient(path, timeout=1)
@@ -135,6 +169,7 @@ def main(argv=None):
     parser.add_argument("--instrument-socket", default=str(instrument_socket()))
     parser.add_argument("--experiment-socket", default=str(experiment_socket()))
     parser.add_argument("--gui", action="store_true", help="open the optional InstrumentServer GUI")
+    parser.add_argument("--tui", action="store_true", help="open an optional two-mode terminal console (auspex-v2[tui])")
     args = parser.parse_args(argv)
     instruments = Path(args.instrument_socket).expanduser().absolute()
     experiments = Path(args.experiment_socket).expanduser().absolute()
@@ -144,6 +179,10 @@ def main(argv=None):
         parser.error("Services require distinct socket and lock paths")
     if args.gui and any(importlib.util.find_spec(name) is None for name in ("PySide6", "pyqtgraph")):
         parser.error("--gui requires auspex-v2[gui]")
+    if args.tui and (not sys.stdin.isatty() or not sys.stdout.isatty()):
+        parser.error("--tui requires an interactive terminal")
+    if args.tui and importlib.util.find_spec("textual") is None:
+        parser.error("--tui requires auspex-v2[tui]")
 
     children = []
     terminated = False
@@ -156,10 +195,16 @@ def main(argv=None):
         refuse_existing(instruments, instrument_lock)
         refuse_existing(experiments, experiment_lock)
         print_splash()
+        if note := home_note():
+            announce(note)
         utility = Path(__file__).resolve().parent
         def start(name, command):
             process = subprocess.Popen([sys.executable, "-u", *command],
                                        stdin=subprocess.DEVNULL, start_new_session=True,
+                                       stdout=(subprocess.PIPE if name != "Instrument GUI" else subprocess.DEVNULL)
+                                              if args.tui else None,
+                                       stderr=subprocess.STDOUT if args.tui else None,
+                                       text=args.tui, bufsize=1 if args.tui else -1,
                                        env={**os.environ, "AUSPEX_SHARED_TERMINAL": "1"})
             children.append((process, name))
             return process
@@ -175,6 +220,15 @@ def main(argv=None):
         for line in format_status(inspect_services(instruments, experiments)).splitlines():
             announce(line)
         announce("Ctrl+C cancels an active run and waits; Ctrl+C again stops supervision. Registrations are preserved.")
+        if args.tui:
+            from src.auspex_tui import OperatorConsole
+            OperatorConsole(instruments, experiments, children).run()
+            for process, name in children[:2]:
+                if process.poll() is not None:
+                    raise RuntimeError(f"{name} exited unexpectedly ({process.returncode})")
+            raise KeyboardInterrupt  # The TUI's quit binding follows the plain launcher's cancellation policy.
+        if sys.stdin.isatty():
+            threading.Thread(target=plain_operator_prompt, args=(instruments, experiments), daemon=True).start()
         while True:
             for process, name in children[:2]:
                 if process.poll() is not None:

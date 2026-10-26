@@ -24,6 +24,7 @@ class InstrumentGuiTest(unittest.TestCase):
             calls = []
             state = "DISCONNECTED"
             present = True
+            status_error = False
 
             def __init__(self, socket_path):
                 pass
@@ -44,9 +45,11 @@ class InstrumentGuiTest(unittest.TestCase):
                     type(self).state = "TERMINATED"
                 elif op == "RECOVER":
                     type(self).state = "DISCONNECTED"
-                elif op == "CLEAR_INSTRUMENTS":
+                elif op in ("CLEAR_INSTRUMENTS", "DEREGISTER"):
                     type(self).present = False
                 if op == "STATUS":
+                    if self.status_error:
+                        raise ConnectionError("offline")
                     return {"run": None, "instruments": {"src": {
                         "driver": "SimulatedSource", "physical": "SIM::SRC",
                         "state": self.state, "worker_running": self.state == "CONNECTED",
@@ -74,7 +77,7 @@ class InstrumentGuiTest(unittest.TestCase):
 
         with patch.object(gui, "InstrumentServerClient", FakeClient), \
              patch.object(gui.QtWidgets.QMessageBox, "question",
-                          return_value=QtWidgets.QMessageBox.StandardButton.Yes):
+                          return_value=QtWidgets.QMessageBox.StandardButton.Yes) as confirm:
             window = gui.InstrumentWindow()
             try:
                 self.assertEqual(window.windowTitle(), "Auspex V2 — Instrument Server")
@@ -84,18 +87,34 @@ class InstrumentGuiTest(unittest.TestCase):
                 self.assertTrue(window.clear_instruments.isEnabled())
                 button(window, "Connect").click()
                 until(lambda: FakeClient.state == "CONNECTED" and not window.pending)
+                self.assertIn("Last action: CONNECT src", window.message.text())
+                window._request("STATUS")
+                until(lambda: not window.pending)
+                self.assertIn("Last action: CONNECT src", window.message.text())
+                FakeClient.status_error = True
+                window._request("STATUS")
+                until(lambda: not window.pending)
+                self.assertIn("status failed: offline", window.connection.text())
+                self.assertIn("Last action: CONNECT src", window.message.text())
+                FakeClient.status_error = False
+                window._request("STATUS")
+                until(lambda: not window.pending)
                 self.assertFalse(window.clear_instruments.isEnabled())
+                self.assertFalse(button(window, "Clear").isEnabled())
                 button(window, "Disconnect").click()
                 until(lambda: FakeClient.state == "DISCONNECTED" and not window.pending)
                 button(window, "Terminate").click()  # disconnected devices can be quarantined
                 until(lambda: FakeClient.state == "TERMINATED" and not window.pending)
                 self.assertFalse(window.clear_instruments.isEnabled())
+                self.assertFalse(button(window, "Disconnect").isEnabled())
                 button(window, "Recover").click()
                 until(lambda: FakeClient.state == "DISCONNECTED" and not window.pending)
-                window.clear_instruments.click()
+                self.assertEqual(confirm.call_count, 0)  # no per-row recover/terminate prompts
+                button(window, "Clear").click()
                 until(lambda: not FakeClient.present and not window.pending)
                 self.assertEqual(window.table.rowCount(), 0)
+                self.assertEqual(confirm.call_count, 1)
                 self.assertEqual(set(FakeClient.calls), {"STATUS", "CONNECT", "DISCONNECT",
-                                                        "TERMINATE", "RECOVER", "CLEAR_INSTRUMENTS"})
+                                                        "TERMINATE", "RECOVER", "DEREGISTER"})
             finally:
                 window.close()

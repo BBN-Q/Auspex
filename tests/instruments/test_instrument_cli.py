@@ -37,6 +37,28 @@ class InstrumentServerCliTest(unittest.TestCase):
         process.terminate.assert_called_once()
         process.wait.assert_called_once_with(timeout=5)
 
+    def test_gui_and_terminal_can_run_together(self):
+        """Starting Qt must not suppress the interactive operator prompt."""
+        class Terminal(io.StringIO):
+            """Expose an interactive stdin that ends immediately."""
+
+            def isatty(self):
+                return True
+
+        def run_service(args, *, on_start, on_bound):
+            on_bound(Path("/tmp/test.sock"))
+
+        with patch.object(cli.sys, "stdin", Terminal()), \
+             patch.object(cli.importlib.util, "find_spec", return_value=object()), \
+             patch.object(cli.subprocess, "Popen", return_value=Mock(poll=lambda: 0)) as popen, \
+             patch.object(cli, "terminal_commands") as terminal, \
+             patch.object(cli.threading, "Thread") as thread, \
+             patch.object(cli, "run_service", side_effect=run_service):
+            cli.main(["--gui"])
+        popen.assert_called_once()
+        thread.assert_called_once()
+        self.assertIs(thread.call_args.kwargs["target"], terminal)
+
     def test_closed_gui_does_not_end_service(self):
         """Do not treat a client window's normal exit as a service shutdown."""
         process = Mock()
@@ -102,12 +124,78 @@ class InstrumentServerCliTest(unittest.TestCase):
         def run_service(args, *, on_start, on_bound):
             on_bound(Path("/tmp/test.sock"))
 
-        with patch.object(cli.sys, "stdin", Terminal("shutdown\n")), \
+        with patch.object(cli.sys, "stdin", Terminal("shutdown\ny\n")), \
              patch.object(cli, "InstrumentServerClient", FakeClient), \
              patch.object(cli, "run_service", side_effect=run_service):
             cli.main([])
             self.assertTrue(done.wait(2))
         self.assertEqual(calls, ["disconnect", "clear", "SHUTDOWN"])
+
+    def test_terminal_inventory_actions_and_confirmations(self):
+        """Resolve numbered IDs, reject bulk recovery, and confirm destructive actions."""
+        from contextlib import redirect_stdout
+
+        class FakeClient:
+            """Exercise the operator parser against a changing inventory."""
+
+            state = {"a": "DISCONNECTED", "b": "TERMINATED"}
+            calls = []
+
+            def __init__(self, path):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                pass
+
+            def status(self):
+                return {"run": None, "instruments": {
+                    name: {"driver": "SimulatedSource", "physical": name,
+                           "state": state, "live_sessions": 0}
+                    for name, state in self.state.items()}}
+
+            def connect(self, name):
+                self.calls.append(("connect", name))
+                self.state[name] = "CONNECTED"
+
+            def disconnect(self, name):
+                self.calls.append(("disconnect", name))
+                self.state[name] = "DISCONNECTED"
+
+            def recover(self, name):
+                self.calls.append(("recover", name))
+                self.state[name] = "DISCONNECTED"
+
+            def terminate(self, name):
+                self.calls.append(("terminate", name))
+                self.state[name] = "TERMINATED"
+
+            def deregister(self, name):
+                self.calls.append(("clear", name))
+                del self.state[name]
+
+            def terminate_all(self):
+                self.calls.append(("terminate", "all"))
+
+            def clear_instruments(self):
+                self.calls.append(("clear", "all"))
+                if any(state != "DISCONNECTED" for state in self.state.values()):
+                    raise RuntimeError("not all disconnected")
+                self.state.clear()
+
+        output = io.StringIO()
+        with patch.object(cli, "InstrumentServerClient", FakeClient), redirect_stdout(output):
+            cli.terminal_commands("socket", iter(("help\n", "list\n", "recover all\n",
+                                                  "connect all\n", "disconnect 1\n", "recover 2\n",
+                                                  "clear 1\n", "n\n", "clear 1\n", "y\n",
+                                                  "list\n", "terminate all\n", "n\n",
+                                                  "clear all\n", "y\n")))
+        self.assertEqual(FakeClient.calls, [("connect", "a"), ("disconnect", "a"),
+                                            ("recover", "b"), ("clear", "a"), ("clear", "all")])
+        self.assertIn("Recover each instrument individually", output.getvalue())
+        self.assertIn("1. a", output.getvalue())
 
     def test_gui_dependency_failure_prevents_service_startup(self):
         """Fail before claiming a socket when GUI dependencies are missing."""

@@ -95,6 +95,7 @@ class InstrumentServerTest(unittest.TestCase):
         output, _ = self.stop_server()
         text = output.decode()
         self.assertIn("INSTRUMENT SERVER", text)
+        self.assertNotRegex(text, r"\[InstrumentServer\] \[\d{4}-\d{2}-\d{2}")
         self.assertIn("UNREGISTERED -> DISCONNECTED", text)
         self.assertIn("SET frequency value=5000000000.0", text)
         self.assertIn("GET frequency -> 5000000000.0", text)

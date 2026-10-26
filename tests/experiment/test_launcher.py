@@ -24,7 +24,8 @@ class LauncherTest(unittest.TestCase):
         self.command = [sys.executable, "-B", str(root / "utils" / "launch_auspex.py"),
                         "--instrument-socket", str(self.instrument),
                         "--experiment-socket", str(self.experiment)]
-        self.env = dict(os.environ, PYTHONPATH=str(root / "src") + os.pathsep + os.environ.get("PYTHONPATH", ""))
+        self.env = dict(os.environ, AUSPEX_HOME=self.tmp.name,
+                        PYTHONPATH=str(root / "src") + os.pathsep + os.environ.get("PYTHONPATH", ""))
         self.output = (root / "terminal.log").open("w+")
         self.addCleanup(self.output.close)
         self.process = subprocess.Popen(self.command, env=self.env, stdout=self.output,
@@ -66,6 +67,39 @@ class LauncherTest(unittest.TestCase):
         self.assertNotIn("\033[", self.text())
         self.assertIn("Stopping ExperimentServer", self.text())
         self.assertLess(self.text().index("Stopping ExperimentServer"), self.text().index("Stopping InstrumentServer"))
+
+    def test_service_logs_and_duplicate_launch(self):
+        """Store both service traces under AUSPEX_HOME without wiping the active log."""
+        with InstrumentServerClient(self.instrument) as client:
+            client.register("source", "SimulatedSource", "SIM::SRC")
+        folder = Path(self.tmp.name) / ".auspex"
+        instrument_log = folder / "instruments.log"
+        experiment_log = folder / "experiment.log"
+        deadline = time.monotonic() + 5
+        while not instrument_log.exists() or not experiment_log.exists():
+            self.assertLess(time.monotonic(), deadline)
+            time.sleep(.02)
+        before = instrument_log.read_text()
+        self.assertIn("registered SimulatedSource", before)
+        self.assertRegex(before, r"(?m)^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\] \[InstrumentServer\]")
+        self.assertRegex(experiment_log.read_text(),
+                         r"(?m)^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\] \[ExperimentServer\]")
+        duplicate = subprocess.run(self.command, env=self.env, capture_output=True, text=True, timeout=10)
+        self.assertEqual(duplicate.returncode, 1)
+        self.assertIn("registered SimulatedSource", instrument_log.read_text())
+        self.assertIn("Listening on", experiment_log.read_text())
+        self.stop()
+        restarted = subprocess.Popen(self.command, env=self.env, stdout=self.output, stderr=subprocess.STDOUT)
+        try:
+            deadline = time.monotonic() + 10
+            while "registered SimulatedSource" in instrument_log.read_text() or "Listening on" not in instrument_log.read_text():
+                self.assertIsNone(restarted.poll())
+                self.assertLess(time.monotonic(), deadline)
+                time.sleep(.02)
+            self.assertIn("Listening on", instrument_log.read_text())
+        finally:
+            restarted.terminate()
+            restarted.wait(timeout=35)
 
     def start_run(self, *, blocking=False):
         from .test_experiment_server import Measurement, plan

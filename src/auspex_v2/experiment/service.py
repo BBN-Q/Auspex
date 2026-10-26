@@ -16,6 +16,7 @@ import socketserver
 import threading
 import uuid
 
+from ..paths import DiagnosticLog, home_note
 from .compiler import CompiledPlan
 from .resources import RunFolder, _atomic_json, preflight_run
 from .runner import check_inventory, receive, send
@@ -37,6 +38,7 @@ SPLASH = r"""
 
 
 _progress_line = False
+_diagnostic_log = None
 
 
 def announce(message):
@@ -46,7 +48,10 @@ def announce(message):
         if _progress_line:
             print(flush=True)
             _progress_line = False
-        print(f"[ExperimentServer] {message}", flush=True)
+        line = f"[ExperimentServer] {message}"
+        if _diagnostic_log is not None:
+            _diagnostic_log.write(line)
+        print(line, flush=True)
     except (OSError, UnicodeError):
         pass
 
@@ -99,6 +104,8 @@ class Registry:
             announce(text)
         else:
             try:
+                if _diagnostic_log is not None:
+                    _diagnostic_log.write("[ExperimentServer] " + text)
                 print("\r\033[2K[ExperimentServer] " + text, end="", flush=True)
                 _progress_line = True
             except (OSError, UnicodeError):
@@ -324,19 +331,27 @@ def main(argv=None):
     parser.add_argument("--instrument-socket")
     parser.add_argument("--no-splash", action="store_true", help="hide the startup banner")
     args = parser.parse_args(argv)
+    if note := home_note():
+        print(f"[ExperimentServer] {note}", flush=True)
     def stop_on_term(*_):
         raise KeyboardInterrupt
     previous = signal.signal(signal.SIGTERM, stop_on_term)
+    global _diagnostic_log
     try:
         with ExperimentServer(args.socket, instrument_socket=args.instrument_socket) as server:
-            if not args.no_splash:
-                print(SPLASH, flush=True)
-            announce(f"Listening on {server.path}")
+            _diagnostic_log = DiagnosticLog("experiment.log")
             try:
-                server.serve_forever()
-            except KeyboardInterrupt:
-                pass
-        announce("Stopped")
+                if not args.no_splash:
+                    print(SPLASH, flush=True)
+                announce(f"Listening on {server.path}; diagnostic log: {_diagnostic_log.path}")
+                try:
+                    server.serve_forever()
+                except KeyboardInterrupt:
+                    pass
+                announce("Stopped")
+            finally:
+                _diagnostic_log.close()
+                _diagnostic_log = None
     finally:
         signal.signal(signal.SIGTERM, previous)
 
