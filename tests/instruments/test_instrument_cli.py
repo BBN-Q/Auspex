@@ -2,6 +2,7 @@
 
 import importlib.util
 import io
+import sys
 import threading
 from pathlib import Path
 import unittest
@@ -11,7 +12,9 @@ from unittest.mock import Mock, patch
 CLI_PATH = Path(__file__).resolve().parents[2] / "utils" / "instrument_server.py"
 spec = importlib.util.spec_from_file_location("instrument_server_cli", CLI_PATH)
 cli = importlib.util.module_from_spec(spec)
+sys.path.insert(0, str(CLI_PATH.parent))
 spec.loader.exec_module(cli)
+sys.path.remove(str(CLI_PATH.parent))
 
 
 class InstrumentServerCliTest(unittest.TestCase):

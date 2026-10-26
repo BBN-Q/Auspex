@@ -29,6 +29,7 @@ def _validate_sweep_timeout(timeout):
 class AgilentN5183A(SCPIInstrument):
     """Agilent N5183A microwave source."""
 
+    IDN_STRING = "N5183A"
     KIND = InstrumentKind.MICROWAVE_SOURCE
     instrument_type = "Microwave Source"
     frequency = FloatCommand(scpi_string=":freq")
@@ -214,9 +215,11 @@ class _AgilentNetworkAnalyzer(SCPIInstrument):
 
 class AgilentN5230A(_AgilentNetworkAnalyzer):
     """Agilent N5230A four-port VNA."""
+    IDN_STRING = "N5230A"
     ports = (1, 2, 3, 4)
 
 
 class AgilentE8363C(_AgilentNetworkAnalyzer):
     """Agilent E8363C two-port VNA."""
+    IDN_STRING = "E8363C"
     ports = (1, 2)

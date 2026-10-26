@@ -9,7 +9,7 @@ workers. It admits the explicit class-name registry:
 
 Real drivers use PyVISA-py (`@py`) consistently in direct and server use. Install
 with `python -m pip install -e '.[visa]'`. Registration performs no VISA import,
-connection, probing, or hardware I/O; a missing backend fails only on `connect()`.
+connection, probing, or hardware I/O; a missing backend fails on `connect()` or explicit discovery.
 
 ## Start and register
 
@@ -39,8 +39,9 @@ single disconnected, unowned instrument; `clear all` requires the entire invento
 to be disconnected and unowned, then wipes it. Clear, Terminate All and shutdown
 require `y` confirmation; shutdown disconnects and clears only on success. Bulk
 connect attempts every disconnected instrument and reports individual failures.
-The combined `utils/launch_auspex.py` starts its instrument child without stdin;
-use its GUI or a standalone interactive server for these terminal commands.
+The combined `utils/launch_auspex.py` starts its instrument child without stdin,
+but its own interactive prompt (or optional `--tui`) provides these inventory
+commands in Instruments mode, excluding standalone `shutdown`.
 
 ```python
 from auspex_v2.instruments.server import InstrumentServerClient
@@ -56,6 +57,57 @@ with InstrumentServerClient() as server:
 Driver IDs are canonical Python class names; old lowercase simulator IDs are not
 aliases. Registration is declarative. Explicit `connect(name)` starts a worker and
 opens hardware. Already-connected workers can be used through a live or run lease.
+
+## Discover and register from the terminal
+
+Both launcher consoles and the standalone instrument terminal support:
+
+```text
+enumerate visa
+identify b
+identify all
+register b AgilentN5230A
+```
+
+`enumerate visa` lists potential VISA resources, including serial/socket resources
+when the backend exposes them. It does not open them or construct drivers. Each
+candidate gets a letter ID (`a`…`z`, `aa`…), separate from the numeric registered
+inventory IDs. The output shows its resource, candidate driver(s), identity/error,
+and serial/registered status. Before identification the driver is `unknown`.
+Re-enumeration replaces the snapshot; other discovery actions do not renumber it.
+
+`identify <letter>` temporarily opens that address, sends only `*IDN?`, and closes
+it. Open and I/O timeouts are one second each; backend discovery/connection work
+can take longer, so this is not a hard whole-command deadline. Probing uses LF
+terminations and default serial settings; some devices need different settings
+and cannot be identified this way. `identify all` requires explicit `y`
+confirmation, runs sequentially, and skips serial resources. Selecting a serial
+candidate explicitly allows a probe. Registered resources are never probed.
+Timeouts/errors mean **not identified**, not necessarily absent or unsupported.
+
+Real VISA drivers declare `IDN_STRING`, a case-sensitive literal substring matched
+against the identity response. Every match is shown; no match or several matches
+never causes an automatic selection. Non-VISA drivers inherit `None`.
+`register <letter> <driver>` always requires a canonical admitted driver name,
+then prompts for an inventory name (blank cancels). Identification is optional;
+the explicit driver need not match the suggestion. Registration records
+**DISCONNECTED** without hardware I/O. Run `list`, then `connect <numeric-id>`
+when ready. The GUI's **Add instruments…** window offers the same enumeration,
+identification and explicit-driver registration workflow; see the
+[GUI guide](instrument_server_gui.md).
+
+Discovery runs in the instrument server and is rejected during a run, live session,
+or busy worker operation. Temporary probing excludes new leases/registration;
+status remains available. Common TCPIP INSTR aliases and bare IPv4 shorthand are
+recognized as registered addresses, but DNS aliases and all physical-device aliases
+cannot be detected. Never probe an alternate address for a device already in use.
+Enumeration is backend-dependent and may miss actual instruments; manual-address
+registration through the Python client remains available. No subnet scan, reset,
+configuration, automatic registration, or automatic connection is performed.
+
+Python clients can use `server.enumerate("visa")` and
+`server.identify(resource)`; the latter returns identity, driver suggestions and
+an error field. Letter IDs belong only to the operator's local candidate snapshot.
 
 ## Timeouts
 

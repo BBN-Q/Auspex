@@ -4,7 +4,7 @@ from auspex_v2.experiment.client import ExperimentServerClient
 from auspex_v2.instruments.server import InstrumentServerClient
 
 
-INSTRUMENT_HELP = "list; connect <id|all>; disconnect <id|all>; recover <id>; terminate <id|all>; clear <id|all>; help; experiment"
+INSTRUMENT_HELP = "enumerate visa; identify <letter|all>; register <letter> <driver>; list; connect <id|all>; disconnect <id|all>; recover <id>; terminate <id|all>; clear <id|all>; help; experiment"
 EXPERIMENT_HELP = "status; runs; cancel <run-id>; help; instruments"
 
 
@@ -17,6 +17,7 @@ class OperatorCommands:
         self.mode = "Instruments"
         self.names = []
         self.identities = {}
+        self.candidates = {}
 
     def parse(self, line):
         """Validate syntax before confirmation so invalid actions cannot be acknowledged."""
@@ -27,7 +28,10 @@ class OperatorCommands:
         if command in ("instruments", "experiment", "help") and len(parts) == 1:
             return parts
         if self.mode == "Instruments":
-            valid = (command == "list" and len(parts) == 1 or
+            valid = (command == "enumerate" and len(parts) == 2 and parts[1] == "visa" or
+                     command == "identify" and len(parts) == 2 or
+                     command == "register" and len(parts) == 3 or
+                     command == "list" and len(parts) == 1 or
                      command in ("connect", "disconnect", "recover", "terminate", "clear") and len(parts) == 2)
             if not valid or command == "recover" and parts[1].lower() == "all":
                 raise ValueError("Invalid command; type help. Recovery must be individual.")
@@ -40,7 +44,57 @@ class OperatorCommands:
         """Bulk termination and inventory removal require an explicit operator yes."""
         return (self.mode == "Instruments" and
                 (parts[0].lower() == "clear" or
-                 parts[0].lower() == "terminate" and parts[1].lower() == "all"))
+                 parts[0].lower() in ("terminate", "identify") and parts[1].lower() == "all"))
+
+    def registration_prompt(self, parts):
+        """Collect a name separately so both consoles keep the public three-word syntax."""
+        candidate = self._candidate(parts[1])
+        if candidate["registered"]:
+            raise ValueError("Resource already registered; enumerate visa again")
+        return f"Register {candidate['resource']} with {parts[2]}. Inventory name (blank cancels): "
+
+    def _candidate(self, letter):
+        if letter.lower() not in self.candidates:
+            raise ValueError("Unknown candidate letter; run enumerate visa first")
+        return self.candidates[letter.lower()]
+
+    def _discovery(self, client, parts):
+        """Keep candidate letters stable until the operator explicitly enumerates again."""
+        command = parts[0].lower()
+        if command == "enumerate":
+            self.candidates = {}  # a failed refresh must not leave stale addresses actionable
+            for index, candidate in enumerate(client.enumerate(parts[1]), 1):
+                letter = ""
+                while index:
+                    index, digit = divmod(index - 1, 26)
+                    letter = chr(97 + digit) + letter
+                self.candidates[letter] = candidate
+        elif command == "register":
+            candidate = self._candidate(parts[1])
+            if candidate["registered"]:
+                raise ValueError("Resource already registered")
+            if len(parts) != 4 or not parts[3].strip():
+                raise ValueError("Inventory name required")
+            client.register(parts[3], parts[2], candidate["resource"])
+            candidate["registered"] = True
+            return f"Registered {parts[3]} as DISCONNECTED; run list for its numeric ID"
+        else:
+            targets = (self.candidates.items() if parts[1].lower() == "all"
+                       else [(parts[1].lower(), self._candidate(parts[1]))])
+            if not self.candidates:
+                raise ValueError("Run enumerate visa first")
+            for letter, candidate in targets:
+                if candidate["registered"] or parts[1].lower() == "all" and candidate["serial"]:
+                    continue
+                candidate.update(client.identify(candidate["resource"]))
+        lines = ["VISA candidates (letters are separate from numeric inventory IDs):"]
+        for letter, candidate in self.candidates.items():
+            driver = ", ".join(candidate["drivers"]) or "unknown"
+            detail = ("already registered" if candidate["registered"] else
+                      candidate["error"] or candidate["identity"] or "not identified")
+            serial = " [serial; skipped by identify all]" if candidate["serial"] else ""
+            lines.append(f"{letter}. {candidate['resource']} — {driver} — {detail}{serial}")
+        return "\n".join(lines + (["No VISA candidates"] if not self.candidates else []))
 
     def execute(self, parts):
         """Issue one validated request; callers run blocking IPC off their UI event loop."""
@@ -59,6 +113,8 @@ class OperatorCommands:
             run = client.run(parts[1])
             return f"Cancel requested for {run.run_id}: {run.cancel()}"
         with InstrumentServerClient(self.instrument_socket) as client:
+            if command in ("enumerate", "identify", "register"):
+                return self._discovery(client, parts)
             if command == "list":
                 status = client.status()
                 self.names = sorted(status["instruments"])

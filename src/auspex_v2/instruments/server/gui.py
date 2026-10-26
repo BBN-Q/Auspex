@@ -1,4 +1,4 @@
-"""Optional, status-only Qt client for the local instrument server."""
+"""Optional Qt inventory, discovery and connection client for the instrument server."""
 
 from __future__ import annotations
 
@@ -9,6 +9,8 @@ os.environ.setdefault("PYQTGRAPH_QT_LIB", "PySide6")
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets, QT_LIB
 
 from .client import InstrumentServerClient
+from ..drivers.registry import DRIVERS
+from .discovery import resource_key
 from ...paths import home_note
 
 if QT_LIB != "PySide6":
@@ -35,19 +37,221 @@ class RequestWorker(QtCore.QObject):
             self.finished.emit(op, (False, str(exc)))
 
 
+class DiscoveryWindow(QtWidgets.QWidget):
+    """Discover VISA candidates and explicitly register them without connecting drivers."""
+
+    requested = QtCore.Signal(str, object)
+    registered = QtCore.Signal()
+
+    def __init__(self, socket_path, parent):
+        """Keep discovery requests and messages independent of the main inventory window."""
+        super().__init__(parent, QtCore.Qt.WindowType.Window)
+        self.setWindowTitle("Auspex V2 — Add instruments")
+        self.resize(1150, 450)
+        self.candidates = []
+        self.pending_action = None
+        self.queue = []
+        self.available = False
+        self.closed = False
+        self.enumerate = QtWidgets.QPushButton("Enumerate VISA")
+        self.enumerate.clicked.connect(self._enumerate)
+        self.identify_all = QtWidgets.QPushButton("Identify all")
+        self.identify_all.clicked.connect(self._identify_all)
+        header = QtWidgets.QHBoxLayout()
+        header.addWidget(self.enumerate)
+        header.addWidget(self.identify_all)
+        header.addStretch()
+        self.table = QtWidgets.QTableWidget(0, 4)
+        self.table.setHorizontalHeaderLabels(["VISA resource", "Identity / result", "Driver", "Actions"])
+        self.table.verticalHeader().setVisible(False)
+        self.table.setAlternatingRowColors(True)
+        self.table.setEditTriggers(QtWidgets.QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.table.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.ResizeMode.Stretch)
+        self.table.horizontalHeader().setSectionResizeMode(3, QtWidgets.QHeaderView.ResizeMode.ResizeToContents)
+        self.message = QtWidgets.QLabel("Enumerate candidates, then identify or choose a driver to register.")
+        self.message.setWordWrap(True)
+        warning = QtWidgets.QLabel("Identify sends *IDN?; Identify all skips serial resources. Registration does not connect.")
+        warning.setStyleSheet("color: #ffd18a")
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.addLayout(header)
+        layout.addWidget(self.table)
+        layout.addWidget(warning)
+        layout.addWidget(self.message)
+        self.thread = QtCore.QThread(self)
+        self.worker = RequestWorker(socket_path)
+        self.worker.moveToThread(self.thread)
+        self.requested.connect(self.worker.perform)
+        self.worker.finished.connect(self._completed)
+        self.thread.finished.connect(self.worker.deleteLater)
+        self.thread.start()
+        self._update_actions()
+
+    def set_status(self, status):
+        """Use inventory polling for advisory gating; the server still validates every action."""
+        instruments = status["instruments"] if status else {}
+        self.available = status is not None and status["run"] is None and all(
+            not spec["live_sessions"] and not spec.get("busy") for spec in instruments.values())
+        registered = {resource_key(spec["physical"]) for spec in instruments.values()}
+        for row, candidate in enumerate(self.candidates):
+            if resource_key(candidate["resource"]) in registered:
+                candidate["registered"] = True
+                self.table.item(row, 1).setText("Already registered")
+        self._update_actions()
+
+    def _update_actions(self):
+        """Disable edits during requests and require an explicit driver before registration."""
+        enabled = self.available and self.pending_action is None
+        self.enumerate.setEnabled(enabled)
+        self.identify_all.setEnabled(enabled and any(
+            not c["registered"] and not c["serial"] for c in self.candidates))
+        for row, candidate in enumerate(self.candidates):
+            available = enabled and not candidate["registered"]
+            combo = self.table.cellWidget(row, 2)
+            combo.setEnabled(available)
+            panel = self.table.cellWidget(row, 3)
+            panel.findChild(QtWidgets.QPushButton, "identify").setEnabled(available)
+            panel.findChild(QtWidgets.QPushButton, "register").setEnabled(
+                available and combo.currentData() is not None)
+
+    def _render(self):
+        """Preserve explicit driver choices across probe results and table refreshes."""
+        self.table.setRowCount(0)
+        self.table.setRowCount(len(self.candidates))
+        for row, candidate in enumerate(self.candidates):
+            resource = candidate["resource"] + (" [serial]" if candidate["serial"] else "")
+            detail = ("Already registered" if candidate["registered"] else
+                      candidate["error"] or candidate["identity"] or "Not identified")
+            for col, text in enumerate((resource, detail)):
+                item = QtWidgets.QTableWidgetItem(text)
+                item.setToolTip(text)
+                self.table.setItem(row, col, item)
+            combo = QtWidgets.QComboBox()
+            combo.addItem("— unknown —", None)
+            for name in sorted(DRIVERS):
+                combo.addItem(name, name)
+            combo.setCurrentIndex(max(0, combo.findData(candidate.get("selected_driver"))))
+            combo.setToolTip("Suggestions: " + (", ".join(candidate["drivers"]) or "unknown"))
+            combo.currentIndexChanged.connect(lambda _index, r=row: self._select_driver(r))
+            self.table.setCellWidget(row, 2, combo)
+            panel = QtWidgets.QWidget()
+            buttons = QtWidgets.QHBoxLayout(panel)
+            buttons.setContentsMargins(0, 0, 0, 0)
+            identify = QtWidgets.QPushButton("Identify")
+            identify.setObjectName("identify")
+            identify.clicked.connect(lambda _checked=False, r=row: self._identify(r))
+            register = QtWidgets.QPushButton("Register")
+            register.setObjectName("register")
+            register.clicked.connect(lambda _checked=False, r=row: self._register(r))
+            buttons.addWidget(identify)
+            buttons.addWidget(register)
+            self.table.setCellWidget(row, 3, panel)
+        self._update_actions()
+
+    def _select_driver(self, row):
+        self.candidates[row]["selected_driver"] = self.table.cellWidget(row, 2).currentData()
+        self.candidates[row]["manual_driver"] = True
+        self._update_actions()
+
+    def _request(self, op, row=None, **kwargs):
+        if self.pending_action is not None or not self.available or self.closed:
+            return
+        self.pending_action = (op, row)
+        self.message.setText(f"{op}: {kwargs.get('resource', kwargs.get('name', 'VISA candidates'))}…")
+        self._update_actions()
+        self.requested.emit(op, kwargs)
+
+    def _enumerate(self):
+        # Invalidate the old snapshot even if a refresh fails.
+        self.candidates = []
+        self._render()
+        self._request("ENUMERATE", interface="visa")
+
+    def _identify(self, row):
+        self._request("IDENTIFY", row, interface="visa", resource=self.candidates[row]["resource"])
+
+    def _identify_all(self):
+        """Confirm once, then send one background probe at a time with visible progress."""
+        if QtWidgets.QMessageBox.question(self, "Confirm identification",
+                "Send *IDN? to all unregistered, non-serial candidates?",
+                QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No,
+                QtWidgets.QMessageBox.StandardButton.No) != QtWidgets.QMessageBox.StandardButton.Yes:
+            return
+        self.queue = [row for row, c in enumerate(self.candidates) if not c["registered"] and not c["serial"]]
+        self._next_probe()
+
+    def _next_probe(self):
+        if self.queue and self.available and not self.closed:
+            self._identify(self.queue.pop(0))
+        else:
+            self.queue = []
+
+    def _register(self, row):
+        """Require a name for an explicit driver choice; never identify or connect implicitly."""
+        driver = self.table.cellWidget(row, 2).currentData()
+        if driver is None:
+            return
+        name, accepted = QtWidgets.QInputDialog.getText(
+            self, "Register instrument", "Inventory name:", text=driver)
+        if not accepted or not name.strip():
+            return
+        self._request("REGISTER", row, name=name.strip(), driver=driver,
+                      resource=self.candidates[row]["resource"])
+
+    @QtCore.Slot(str, object)
+    def _completed(self, op, outcome):
+        """Update only discovery feedback, and stop a bulk probe on transport/ownership errors."""
+        _, row = self.pending_action
+        self.pending_action = None
+        ok, value = outcome
+        if not ok:
+            self.queue = []
+            self.message.setText(f"{op} failed: {value}")
+        elif op == "ENUMERATE":
+            self.candidates = value
+            self.message.setText(f"Enumerated {len(value)} VISA candidates.")
+        elif op == "IDENTIFY":
+            candidate = self.candidates[row]
+            candidate.update(value)
+            if not candidate.get("manual_driver"):
+                candidate["selected_driver"] = value["drivers"][0] if len(value["drivers"]) == 1 else None
+            self.message.setText(f"Identify {candidate['resource']}: {value['error'] or value['identity']}")
+        elif op == "REGISTER":
+            self.candidates[row]["registered"] = True
+            self.message.setText("Registered as DISCONNECTED. Connect from the main inventory window.")
+            self.registered.emit()
+        self._render()
+        self._next_probe()
+
+    def closeEvent(self, event):
+        """Hide immediately and stop further bulk probes; an already dispatched request may finish."""
+        self.closed = True
+        self.queue = []
+        super().closeEvent(event)
+
+    def shutdown(self):
+        """Let the owning main window join the worker before destroying Qt objects."""
+        self.close()
+        self.thread.quit()
+        self.thread.wait()
+
+
 class InstrumentWindow(QtWidgets.QWidget):
     """Show inventory, connection and ownership without instrument data access."""
 
     requested = QtCore.Signal(str, object)
 
     def __init__(self, socket_path=None):
-        """Build a status-only window and start its serialized background client."""
+        """Build the inventory window and start its serialized background client."""
         super().__init__()
         self.setWindowTitle("Auspex V2 — Instrument Server")
         self.resize(1050, 420)
         self.pending = False
         self.pending_action = None
         self.status = None
+        self.socket_path = socket_path
+        self.discovery = None
+        self.refresh_after_pending = False
+        self.closing = False
 
         self.connection = QtWidgets.QLabel("Connecting…")
         self.domain = QtWidgets.QLabel("Domain: unknown")
@@ -58,6 +262,9 @@ class InstrumentWindow(QtWidgets.QWidget):
         header.addStretch()
         header.addWidget(self.domain)
         header.addWidget(self.refresh)
+        self.add_instruments = QtWidgets.QPushButton("Add instruments…")
+        self.add_instruments.clicked.connect(self._open_discovery)
+        header.addWidget(self.add_instruments)
 
         self.table = QtWidgets.QTableWidget(0, 6)
         self.table.setHorizontalHeaderLabels(["Name", "Driver", "Physical resource", "Connection", "Ownership", "Actions"])
@@ -81,7 +288,7 @@ class InstrumentWindow(QtWidgets.QWidget):
             actions.addWidget(button)
         self.warning = QtWidgets.QLabel("Terminate kills software workers only; disconnect does not switch off hardware.")
         self.warning.setStyleSheet("color: #ffd18a")
-        self.message = QtWidgets.QLabel("Status only: no instrument settings or data access.")
+        self.message = QtWidgets.QLabel("Inventory only: no instrument settings or measurement data access.")
         layout = QtWidgets.QVBoxLayout(self)
         layout.addLayout(header)
         layout.addWidget(self.table)
@@ -103,6 +310,23 @@ class InstrumentWindow(QtWidgets.QWidget):
         self._update_actions()
         self._request("STATUS")
 
+    def _open_discovery(self):
+        """Reuse one non-modal discovery window without affecting inventory action feedback."""
+        if self.discovery is None:
+            self.discovery = DiscoveryWindow(self.socket_path, self)
+            self.discovery.registered.connect(self._refresh_inventory)
+        self.discovery.closed = False
+        self.discovery.set_status(self.status)
+        self.discovery.show()
+        self.discovery.raise_()
+        self.discovery.activateWindow()
+
+    def _refresh_inventory(self):
+        if self.pending:
+            self.refresh_after_pending = True
+        else:
+            self._request("STATUS")
+
     def _confirm(self, op, question, **kwargs):
         """Require acknowledgement for destructive inventory or worker operations."""
         if QtWidgets.QMessageBox.question(self, "Confirm instrument action", question,
@@ -112,7 +336,7 @@ class InstrumentWindow(QtWidgets.QWidget):
 
     def _request(self, op, **kwargs):
         """Serialize inventory actions without opening live instrument sessions."""
-        if self.pending or op not in ("STATUS", "CONNECT", "DISCONNECT", "DISCONNECT_ALL",
+        if self.closing or self.pending or op not in ("STATUS", "CONNECT", "DISCONNECT", "DISCONNECT_ALL",
                                        "CLEAR_INSTRUMENTS", "DEREGISTER", "TERMINATE", "RECOVER", "TERMINATE_ALL"):
             return
         self.pending = True
@@ -121,6 +345,7 @@ class InstrumentWindow(QtWidgets.QWidget):
         self.requested.emit(op, kwargs)
 
     def _update_actions(self):
+        """Gate inventory actions and propagate the latest ownership snapshot to discovery."""
         self.refresh.setEnabled(not self.pending)
         status = self.status
         instruments = status["instruments"] if status else {}
@@ -131,6 +356,8 @@ class InstrumentWindow(QtWidgets.QWidget):
             spec["state"] == "CONNECTED" for spec in instruments.values()))
         self.clear_instruments.setEnabled(not self.pending and free and bool(instruments) and all(
             spec["state"] == "DISCONNECTED" for spec in instruments.values()))
+        if self.discovery is not None:
+            self.discovery.set_status(status)
         for row in range(self.table.rowCount()):
             panel = self.table.cellWidget(row, 5)
             if panel is not None:
@@ -202,10 +429,16 @@ class InstrumentWindow(QtWidgets.QWidget):
             self.message.setText(f"Last action: {label} — {detail}")
             self._request("STATUS")
         self._update_actions()
+        if self.refresh_after_pending:
+            self.refresh_after_pending = False
+            self._refresh_inventory()
 
     def closeEvent(self, event):
         """Finish the in-flight socket request before destroying its Qt thread."""
+        self.closing = True
         self.timer.stop()
+        if self.discovery is not None:
+            self.discovery.shutdown()
         self.thread.quit()
         self.thread.wait()
         super().closeEvent(event)
@@ -235,7 +468,7 @@ def dark_theme(app):
 
 def main(argv=None):
     """Launch the optional GUI without starting or owning the server."""
-    parser = argparse.ArgumentParser(description="Auspex V2 instrument status and termination GUI")
+    parser = argparse.ArgumentParser(description="Auspex V2 instrument inventory and discovery GUI")
     parser.add_argument("--socket", help="Path to an explicitly started instrument server")
     args = parser.parse_args(argv)
     if note := home_note():

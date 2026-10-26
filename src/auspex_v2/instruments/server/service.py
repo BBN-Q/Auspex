@@ -207,6 +207,7 @@ class Registry:
         self.busy = set()  # instrument names with one worker request in flight
         self.operations = {}  # name -> connecting/executing/disconnecting
         self.closing = False
+        self.discovering = False
         self.live = {}  # token -> (connection ID, registered name)
         self.run = None  # {run_id, owner, token, orphaned}
         if clean:
@@ -281,6 +282,8 @@ class Registry:
     def dispatch(self, request, connection):
         """Serialize state transitions, but never hold the registry lock while waiting on I/O."""
         op = request.get("op")
+        if op in ("ENUMERATE", "IDENTIFY"):
+            return self._discover(request)
         if op in ("GET", "SET", "CALL"):
             return self._command(request, connection, op)
         if op == "CONNECT":
@@ -342,6 +345,43 @@ class Registry:
             if op == "RECOVER":
                 return self._recover(request)
             raise InstrumentServerError(f"Unknown operation: {op}")
+
+    def _discover(self, request):
+        """Reserve probing against new leases/registration without blocking status requests."""
+        from .discovery import enumerate_visa, identify_visa, resource_key
+
+        with self.lock:
+            if self.run or self.live or self.busy or self.closing or self.discovering:
+                raise InstrumentServerError("Discovery requires an idle server with no run or live sessions")
+            if request.get("interface") != "visa":
+                raise InstrumentServerError("Only interface visa is supported")
+            registered = {resource_key(s[key]) for s in self.instruments.values()
+                          for key in ("resource", "physical")}
+            resource = request.get("resource")
+            if request["op"] == "IDENTIFY":
+                if not isinstance(resource, str) or not resource:
+                    raise InstrumentServerError("A VISA resource is required")
+                if resource_key(resource) in registered:
+                    raise InstrumentServerError("Resource already registered; use its existing connection")
+            self.discovering = True
+        try:
+            if request["op"] == "ENUMERATE":
+                try:
+                    candidates = enumerate_visa()
+                except Exception as exc:
+                    raise InstrumentServerError(f"VISA enumeration failed: {exc}") from exc
+                for candidate in candidates:
+                    candidate["registered"] = resource_key(candidate["resource"]) in registered
+                return candidates
+            try:
+                result = identify_visa(resource)
+            except Exception as exc:
+                result = {"identity": None, "drivers": [], "error": str(exc)}
+            self.announce(f"VISA identify {resource}: {result}")
+            return result
+        finally:
+            with self.lock:
+                self.discovering = False
 
     def _connect(self, request, connection):
         """Connect explicitly, under the run lease if the domain is locked."""
@@ -438,6 +478,8 @@ class Registry:
 
     def _open_live(self, request, connection):
         """Lease a connected device without starting or reconnecting a worker."""
+        if self.discovering:
+            raise InstrumentServerError("VISA discovery in progress")
         name = request["name"]
         self._available(name)
         if any(v[1] == name for v in self.live.values()):
@@ -458,7 +500,7 @@ class Registry:
 
     def _begin_run(self, request, connection):
         """Lock the entire domain atomically if no live use or recovery blocks it."""
-        if self.closing or self.busy:
+        if self.closing or self.busy or self.discovering:
             raise InstrumentServerError("Cannot begin run while busy or shutting down")
         if self.run:
             raise InstrumentServerError(f"Run {self.run['run_id']} already owns the registered domain")
@@ -560,8 +602,8 @@ class Registry:
 
     def _register(self, request):
         """Add a logical instrument after checking domain and physical identity."""
-        if self.run or self.live:
-            raise InstrumentServerError("Cannot register during a run or while live sessions are open")
+        if self.run or self.live or self.discovering:
+            raise InstrumentServerError("Cannot register during discovery, a run or while live sessions are open")
         name, driver_type, resource = request["name"], request["driver"], request["resource"]
         if not all(isinstance(v, str) and v for v in (name, driver_type, resource)):
             raise InstrumentServerError("Name, driver and resource must be nonempty strings")
@@ -574,7 +616,8 @@ class Registry:
             raise InstrumentServerError("io_timeout applies only to VISA/SCPI drivers")
         options = {"io_timeout": io_timeout} if issubclass(driver, SCPIInstrument) else {}
         physical = driver(resource, **options).physical_resource
-        if any(s["physical"] == physical for s in self.instruments.values()):
+        from .discovery import resource_key
+        if any(resource_key(s["physical"]) == resource_key(physical) for s in self.instruments.values()):
             raise InstrumentServerError(f"Physical device already registered: {physical}")
         self.instruments[name] = {"driver": driver_type, "resource": resource,
                                   "physical": physical, "command_timeout": command_timeout,

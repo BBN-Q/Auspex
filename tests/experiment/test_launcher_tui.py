@@ -102,6 +102,44 @@ class OperatorConsoleTest(unittest.IsolatedAsyncioTestCase):
             with self.assertRaisesRegex(ValueError, "Recovery must be individual"):
                 app.commands.parse("recover all")
 
+    async def test_discovery_confirmation_and_registration_name(self):
+        """Identification needs yes; registration collects a name without blocking the UI."""
+        root = Path(__file__).resolve().parents[2]
+        sys.path.insert(0, str(root / "utils"))
+        try:
+            from src.auspex_tui import OperatorConsole
+            from textual.widgets import Input
+        finally:
+            sys.path.remove(str(root / "utils"))
+        child = Mock(stdout=io.StringIO())
+        child.poll.return_value = None
+        app = OperatorConsole("i", "e", [(child, "i"), (child, "e")])
+        with patch.object(app.commands, "execute", return_value="done") as execute, \
+             patch.object(app.commands, "registration_prompt", return_value="Inventory name:"):
+            async with app.run_test() as pilot:
+                async def submit(text):
+                    app.query_one(Input).value = text
+                    await pilot.press("enter")
+                    await pilot.pause(.1)
+
+                await submit("identify all")
+                execute.assert_not_called()
+                await submit("n")
+                execute.assert_not_called()
+                await submit("identify all")
+                await submit("y")
+                execute.assert_called_once_with(["identify", "all"])
+                execute.reset_mock()
+                await submit("register a AgilentN5230A")
+                self.assertIsNotNone(app.pending_registration)
+                execute.assert_not_called()
+                await submit("")
+                execute.assert_not_called()
+                await submit("register a AgilentN5230A")
+                await submit("bench_vna")
+                execute.assert_called_once_with(["register", "a", "AgilentN5230A", "bench_vna"])
+                self.assertFalse(app.busy)
+
     async def test_clear_requires_confirmation(self):
         root = Path(__file__).resolve().parents[2]
         sys.path.insert(0, str(root / "utils"))

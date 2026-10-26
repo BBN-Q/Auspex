@@ -22,6 +22,7 @@ class Instrument:
     """
 
     KIND = None
+    IDN_STRING = None  # Literal *IDN? substring; None for non-VISA drivers.
     commands = MappingProxyType({})
     properties = MappingProxyType({})
     operations = MappingProxyType({})

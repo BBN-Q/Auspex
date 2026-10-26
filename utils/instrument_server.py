@@ -8,6 +8,7 @@ import threading
 
 from auspex_v2.instruments.server import InstrumentServerClient, main as run_service
 from auspex_v2.instruments.server.service import argument_parser
+from src.operator_commands import OperatorCommands
 
 
 SPLASH = r"""
@@ -26,15 +27,35 @@ def print_splash():
 
 
 COMMANDS = ("list", "connect <id|all>", "disconnect <id|all>", "recover <id>",
-            "terminate <id|all>", "clear <id|all>", "shutdown", "help")
+            "terminate <id|all>", "clear <id|all>", "enumerate visa",
+            "identify <letter|all>", "register <letter> <driver>", "shutdown", "help")
 
 
 def terminal_commands(socket_path, lines):
     """Serve an operator prompt; numeric IDs remain tied to the last listed names."""
     names = []
     identities = {}
+    discovery = OperatorCommands(socket_path, None)
     print("[InstrumentServer] Commands: " + "; ".join(COMMANDS), flush=True)
     for line in lines:
+        raw_parts = line.strip().split()
+        if raw_parts and raw_parts[0].lower() in ("enumerate", "identify", "register"):
+            try:
+                parts = discovery.parse(line)
+                if discovery.confirmation(parts) and not input_confirmation(lines, line.strip()):
+                    print("[InstrumentServer] Cancelled", flush=True)
+                    continue
+                if parts[0].lower() == "register":
+                    print(discovery.registration_prompt(parts), end="", flush=True)
+                    name = next(lines, "").strip()
+                    if not name:
+                        print("[InstrumentServer] Cancelled", flush=True)
+                        continue
+                    parts = [*parts, name]
+                print(f"[InstrumentServer] {discovery.execute(parts)}", flush=True)
+            except Exception as exc:
+                print(f"[InstrumentServer] Discovery command failed: {exc}", flush=True)
+            continue
         parts = line.strip().lower().split()
         if not parts:
             continue

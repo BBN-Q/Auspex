@@ -19,13 +19,18 @@ class OperatorConsole(App):
     #mode { height: 1; }
     #command { dock: bottom; }
     """
-    BINDINGS = [("ctrl+c", "quit", "Stop launcher (cooperative cancellation)")]
+    BINDINGS = [("ctrl+c", "shutdown", "Cancel run, wait, then stop services; press again to skip wait")]
 
-    def __init__(self, instrument_socket, experiment_socket, children):
+    def __init__(self, instrument_socket, experiment_socket, children, *, shutdown=None):
         super().__init__()
         self.commands = OperatorCommands(instrument_socket, experiment_socket)
         self.services = children
+        self.shutdown_callback = shutdown
+        self.shutting_down = False
+        self.stop_wait = threading.Event()
+        self.readers = []
         self.pending_confirmation = None
+        self.pending_registration = None
         self.busy = False
         self.color = "NO_COLOR" not in os.environ and os.environ.get("TERM") != "dumb"
 
@@ -37,9 +42,13 @@ class OperatorConsole(App):
 
     def on_mount(self):
         self._prompt()
-        self._log("[Auspex] Both services ready. Type help; Ctrl+C cancels a run and stops supervision.")
+        self._log("[Auspex] Both services ready. Type help. Ctrl+C shuts down the launcher: cancels an active run, "
+                  "waits for teardown, then stops services. Press again to skip the wait. "
+                  "The console stays visible until services stop; Ctrl+C does not just clear the prompt.")
         for process, name in self.services[:2]:
-            threading.Thread(target=self._read_output, args=(process,), daemon=True).start()
+            reader = threading.Thread(target=self._read_output, args=(process,), daemon=True)
+            self.readers.append(reader)
+            reader.start()
         self.set_interval(0.2, self._check_children)
         self.query_one(Input).focus()
 
@@ -52,8 +61,46 @@ class OperatorConsole(App):
                 return  # Console closed; the launcher still owns service shutdown.
 
     def _check_children(self):
-        if any(process.poll() is not None for process, _ in self.services[:2]):
+        if not self.shutting_down and any(process.poll() is not None for process, _ in self.services[:2]):
             self.exit()
+
+    def action_shutdown(self):
+        """First Ctrl+C starts visible shutdown; a second only skips the cooperative wait."""
+        if self.shutting_down:
+            if not self.stop_wait.is_set():
+                self.stop_wait.set()
+                self._log("[Auspex] Second interrupt: skipping cooperative wait and stopping supervision. "
+                          "Hardware may remain active; leases may need reconciliation.")
+            return
+        if self.shutdown_callback is None:
+            self.exit()  # Standalone embedding may leave shutdown to its caller.
+            return
+        self.shutting_down = True
+        self.pending_confirmation = None
+        self.pending_registration = None
+        field = self.query_one(Input)
+        field.value = ""
+        field.disabled = True
+        self.query_one("#mode", Static).update("Shutting down — Ctrl+C again skips the cooperative wait")
+        self._log("[Auspex] Shutdown requested: cancelling any active run and waiting for teardown. "
+                  "Ctrl+C again skips the wait; neither action guarantees hardware outputs are off.")
+        threading.Thread(target=self._shutdown_services, daemon=True).start()
+
+    def _shutdown_services(self):
+        """Run launcher cleanup off the event loop and drain service output before exiting."""
+        def report(message):
+            self.call_from_thread(self._log, f"[Auspex] {message}")
+
+        result = 0
+        try:
+            self.shutdown_callback(self.stop_wait, report)
+            for reader in self.readers:
+                reader.join()
+            report("Services stopped. Exiting console.")
+        except Exception as exc:
+            result = 1
+            report(f"Shutdown failed: {exc}. Inspect hardware and leases; launcher cleanup will follow.")
+        self.call_from_thread(self.exit, result)
 
     def _log(self, message):
         if message.startswith("[InstrumentServer]"):
@@ -73,6 +120,16 @@ class OperatorConsole(App):
     def on_input_submitted(self, event: Input.Submitted):
         line = event.value.strip()
         event.input.value = ""
+        if self.shutting_down:
+            return
+        if self.pending_registration is not None:
+            parts = self.pending_registration
+            self.pending_registration = None
+            if line:
+                self._dispatch([*parts, line])
+            else:
+                self._log("[Auspex] Cancelled")
+            return
         if not line:
             return
         self._log(f"{self.commands.mode} >> {line}")
@@ -91,6 +148,15 @@ class OperatorConsole(App):
             parts = self.commands.parse(line)
         except ValueError as exc:
             self._log(f"[Auspex] {exc}")
+            return
+        if parts[0].lower() == "register":
+            try:
+                prompt = self.commands.registration_prompt(parts)
+            except ValueError as exc:
+                self._log(f"[Auspex] {exc}")
+                return
+            self.pending_registration = parts
+            self._log(f"[Auspex] {prompt}")
             return
         if self.commands.confirmation(parts):
             self.pending_confirmation = parts
@@ -122,5 +188,6 @@ class OperatorConsole(App):
     def _command_finished(self):
         self.busy = False
         field = self.query_one(Input)
-        field.disabled = False
-        field.focus()
+        field.disabled = self.shutting_down
+        if not self.shutting_down:
+            field.focus()

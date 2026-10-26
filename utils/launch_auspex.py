@@ -13,6 +13,7 @@ import sys
 import threading
 import time
 
+from auspex_v2.instruments.server import RemoteError
 from auspex_v2.instruments.server.service import default_socket as instrument_socket, PROTOCOL_VERSION as INSTRUMENT_VERSION
 from auspex_v2.experiment.protocol import default_socket as experiment_socket, PROTOCOL_VERSION as EXPERIMENT_VERSION, TERMINAL
 from auspex_v2.experiment.client import ExperimentServerClient
@@ -90,15 +91,16 @@ def wait_ready(process, path, request, *, timeout=15):
     raise RuntimeError(f"Service did not become ready: {path}")
 
 
-def stop(process, name):
+def stop(process, name, *, report=announce):
+    """Stop one owned child, escalating to its process group if graceful exit times out."""
     if process is None or process.poll() is not None:
         return
-    announce(f"Stopping {name}")
+    report(f"Stopping {name}")
     process.terminate()
     try:
         process.wait(timeout=25)
     except subprocess.TimeoutExpired:
-        announce(f"{name} did not stop; forcing exit. Inspect hardware and reconcile leases before reuse.")
+        report(f"{name} did not stop; forcing exit. Inspect hardware and reconcile leases before reuse.")
         # Each child owns its process group; include its worker descendants.
         try:
             os.killpg(process.pid, signal.SIGKILL)
@@ -134,34 +136,58 @@ def plain_operator_prompt(instruments, experiments):
                 if answer != "y":
                     announce("Cancelled")
                     continue
+            if parts[0].lower() == "register":
+                try:
+                    name = input(commands.registration_prompt(parts)).strip()
+                except EOFError:
+                    return
+                if not name:
+                    announce("Cancelled")
+                    continue
+                parts = [*parts, name]
             announce(commands.execute(parts))
-        except (OSError, RuntimeError, ValueError) as exc:
+        except (OSError, RuntimeError, ValueError, RemoteError) as exc:
             announce(f"Command failed: {exc}")
 
 
-def cancel_and_wait(path, children):
-    """First Ctrl+C: allow cooperative teardown; a second interrupt escapes this wait."""
+def cancel_and_wait(path, children, *, report=announce, stop_wait=None):
+    """Wait for cooperative teardown, interruptible by SIGINT or a TUI stop-wait event."""
+    if stop_wait is not None and stop_wait.is_set():
+        return
     client = ExperimentServerClient(path, timeout=1)
     try:
         status = client.status()
         if not status["active"]:
             return
         handle = client.run(status["active"])
-        announce(f"Run {handle.run_id} is active. Requesting cooperative cancellation.")
-        announce("Waiting for teardown/finalization. Ctrl+C again stops supervision; neither action guarantees outputs are off.")
+        report(f"Run {handle.run_id} is active. Requesting cooperative cancellation.")
+        report("Waiting for teardown/finalization. Ctrl+C again skips this wait and stops supervision; neither action guarantees outputs are off.")
         handle.cancel()
         while True:
+            if stop_wait is not None and stop_wait.is_set():
+                return
             if any(process.poll() is not None for process, _ in children[:2]):
                 raise RuntimeError("A service exited while waiting for cancellation")
             status = handle.status()
             if status["state"] in TERMINAL:
-                announce(f"Run {handle.run_id}: {status['state']}; proceeding with shutdown")
+                report(f"Run {handle.run_id}: {status['state']}; proceeding with shutdown")
                 return
             if client.status().get("degraded"):
                 raise RuntimeError("Durable run status is unresolved")
-            time.sleep(.2)
+            if stop_wait is None:
+                time.sleep(.2)
+            else:
+                stop_wait.wait(.2)
     except (OSError, RuntimeError, ValueError) as exc:
-        announce(f"Could not confirm cooperative completion: {exc}. Stopping supervision; inspect hardware and leases.")
+        report(f"Could not confirm cooperative completion: {exc}. Stopping supervision; inspect hardware and leases.")
+
+
+def shutdown_tui(path, children, stop_wait, report):
+    """Keep the console alive while the launcher cancels and stops its owned services."""
+    cancel_and_wait(path, children, report=report, stop_wait=stop_wait)
+    report("Shutdown requested; stopping services. Registrations are preserved.")
+    for process, name in reversed(children):
+        stop(process, name, report=report)
 
 
 def main(argv=None):
@@ -222,11 +248,14 @@ def main(argv=None):
         announce("Ctrl+C cancels an active run and waits; Ctrl+C again stops supervision. Registrations are preserved.")
         if args.tui:
             from src.auspex_tui import OperatorConsole
-            OperatorConsole(instruments, experiments, children).run()
+            result = OperatorConsole(instruments, experiments, children,
+                shutdown=lambda stop_wait, report: shutdown_tui(experiments, children, stop_wait, report)).run()
+            if result is not None:
+                return result  # The console stayed alive through cancellation and ordered cleanup.
             for process, name in children[:2]:
                 if process.poll() is not None:
                     raise RuntimeError(f"{name} exited unexpectedly ({process.returncode})")
-            raise KeyboardInterrupt  # The TUI's quit binding follows the plain launcher's cancellation policy.
+            raise KeyboardInterrupt  # Other console exits still use cooperative launcher cleanup.
         if sys.stdin.isatty():
             threading.Thread(target=plain_operator_prompt, args=(instruments, experiments), daemon=True).start()
         while True:

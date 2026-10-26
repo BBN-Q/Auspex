@@ -54,6 +54,14 @@ class InstrumentServerClient:
     def status(self):
         return self.request("STATUS")
 
+    def enumerate(self, interface="visa"):
+        """List candidate addresses without constructing or connecting drivers."""
+        return self.request("ENUMERATE", interface=interface)
+
+    def identify(self, resource, interface="visa"):
+        """Explicitly probe an unregistered address with *IDN?; failures are reported as data."""
+        return self.request("IDENTIFY", interface=interface, resource=resource)
+
     def register(self, name, driver, resource, *, command_timeout=None, io_timeout=None):
         return self.request("REGISTER", name=name, driver=driver, resource=resource,
                             command_timeout=command_timeout, io_timeout=io_timeout)
