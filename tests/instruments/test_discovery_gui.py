@@ -9,7 +9,7 @@ import time
 import unittest
 from unittest.mock import patch
 
-from .test_discovery import VisaManager, VNA, SERIAL, UNKNOWN
+from .test_discovery import VisaManager, VNA, SERIAL, UNKNOWN, PROLOGIX, DENIED
 
 
 @unittest.skipUnless(importlib.util.find_spec("PySide6"), "install auspex-v2[gui] to test Qt")
@@ -130,6 +130,7 @@ class DiscoveryGuiTest(unittest.TestCase):
         self.assertFalse(self.button(UNKNOWN, "register").isEnabled())
         self.combo(UNKNOWN).setCurrentText("YokogawaGS200")
         self.assertTrue(self.button(UNKNOWN, "register").isEnabled())
+        self.discovery.show_serial.setChecked(True)
         self.button(SERIAL, "identify").click()
         self.until(lambda: self.discovery.pending_action is None)
         self.assertEqual(self.manager.queries[-1], (SERIAL, "*IDN?"))
@@ -195,6 +196,71 @@ class DiscoveryGuiTest(unittest.TestCase):
             self.enumerate()
         self.assertEqual(self.discovery.table.rowCount(), 0)
         self.assertIn("enumeration unavailable", self.discovery.message.text())
+        self.assertEqual(self.window.message.text(), "Previous main action")
+
+    def test_filter_checkboxes_are_independent_and_bulk_probes_only_visible_eligible_rows(self):
+        """Toggling display filters preserves rows and manual driver selection without performing I/O."""
+        self.manager.resources = (VNA, SERIAL, PROLOGIX)
+        self.enumerate()
+        self.assertFalse(self.discovery.show_serial.isChecked())
+        self.assertFalse(self.discovery.show_prologix.isChecked())
+        self.assertTrue(self.discovery.hide_permission_denied.isChecked())
+        self.assertTrue(self.discovery.table.isRowHidden(self.row(SERIAL)))
+        self.assertTrue(self.discovery.table.isRowHidden(self.row(PROLOGIX)))
+        self.assertIn("1 serial, 1 Prologix", self.discovery.summary.text())
+        self.combo(SERIAL).setCurrentText("YokogawaGS200")
+        self.discovery.show_prologix.setChecked(True)
+        self.assertFalse(self.discovery.table.isRowHidden(self.row(PROLOGIX)))
+        self.assertTrue(self.discovery.table.isRowHidden(self.row(SERIAL)))
+        self.discovery.show_serial.setChecked(True)
+        self.assertFalse(self.discovery.table.isRowHidden(self.row(SERIAL)))
+        self.assertEqual(self.combo(SERIAL).currentData(), "YokogawaGS200")
+        self.assertEqual(self.manager.opened, [])
+        with patch.object(self.qt.QMessageBox, "question", return_value=self.qt.QMessageBox.StandardButton.Yes):
+            self.discovery.identify_all.click()
+        self.until(lambda: self.discovery.pending_action is None and not self.discovery.queue)
+        self.assertEqual(self.manager.opened, [VNA])
+        self.button(PROLOGIX, "identify").click()
+        self.until(lambda: self.discovery.pending_action is None)
+        self.assertEqual(self.manager.opened, [VNA, PROLOGIX])
+
+    def test_permission_filter_and_whitelist_override_keep_known_denials_revealable(self):
+        """Access failures hide rows without losing them; whitelist reload overrides every checkbox."""
+        self.manager.resources = (DENIED, SERIAL, PROLOGIX)
+        self.manager.denied.add(DENIED)
+        self.enumerate()
+        self.button(DENIED, "identify").click()
+        self.until(lambda: self.discovery.pending_action is None)
+        self.assertTrue(self.discovery.table.isRowHidden(self.row(DENIED)))
+        self.assertIn("1 permission denied", self.discovery.summary.text())
+        self.assertFalse(self.discovery.identify_all.isEnabled())
+        self.discovery.hide_permission_denied.setChecked(False)
+        self.assertFalse(self.discovery.table.isRowHidden(self.row(DENIED)))
+        self.assertIn("Permission denied", self.discovery.table.item(self.row(DENIED), 1).text())
+        self.discovery.hide_permission_denied.setChecked(True)
+        path = Path(self.tmp.name) / "instrument_whitelist.txt"
+        path.write_text(f"{SERIAL}\n{PROLOGIX}\n{DENIED}\n", encoding="utf-8")
+        self.enumerate()
+        for resource in self.manager.resources:
+            self.assertFalse(self.discovery.table.isRowHidden(self.row(resource)))
+            self.assertIn("whitelisted", self.discovery.table.item(self.row(resource), 0).text())
+        self.assertIn("3 matching resources shown", self.discovery.summary.text())
+        self.assertIn(str(path), self.discovery.summary.toolTip())
+        self.assertTrue(self.discovery.identify_all.isEnabled())  # Denied USB is visible; controllers still skipped.
+        path.write_text("", encoding="utf-8")
+        self.enumerate()
+        self.assertTrue(all(self.discovery.table.isRowHidden(self.row(r)) for r in self.manager.resources))
+        self.assertEqual(self.manager.opened, [DENIED])
+        self.assertEqual(self.window.message.text(), "Previous main action")
+
+    def test_unreadable_whitelist_warning_is_visible_with_no_candidates(self):
+        """An invalid whitelist path is visible in the discovery summary, even for an empty scan."""
+        path = Path(self.tmp.name) / "instrument_whitelist.txt"
+        path.mkdir()
+        self.manager.resources = ()
+        self.enumerate()
+        self.assertIn("Cannot read whitelist", self.discovery.summary.text())
+        self.assertIn(str(path), self.discovery.summary.text())
         self.assertEqual(self.window.message.text(), "Previous main action")
 
     def test_run_lock_gates_discovery(self):

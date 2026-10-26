@@ -11,18 +11,39 @@ Per-device actions follow the current state: **Connect** on disconnected devices
 **Add instruments…** opens a non-modal window with the same dark palette, alternating
 rows and per-row buttons as the inventory. Opening it performs no discovery or I/O.
 
+Three checkboxes control display only:
+
+- **Show Serial Resources** — unchecked by default; reveals `ASRL…` candidates.
+- **Show Prologix GPIB Resources** — unchecked by default; reveals `PRLGX…`
+  candidates, including `PRLGX-ASRL…`, independently of the Serial checkbox.
+- **Hide permission denied resources** — checked by default; hides last-observed
+  per-resource access denials, not timeouts or other failures.
+
+The summary counts hidden resources and matching whitelist entries. Toggling filters
+does not probe or discard candidates, identities or manual driver choices.
+The server reloads `$AUSPEX_HOME/instrument_whitelist.txt` (HOME fallback, directly
+in the base directory rather than `.auspex/`) on each enumeration. One address per
+line, with blank lines and `#` comment lines ignored. Matching enumerated resources
+stay visible regardless of all three checkboxes. The summary tooltip shows the
+server-side path; unreadable-file warnings appear in the summary. Missing files
+are normal. See the [operator guide](instrument_server.md#discovery-whitelist-and-permission-errors)
+for matching and retry details. Whitelisting never adds probes or changes ownership.
+
 - **Enumerate VISA** replaces the candidate list without opening resources. Rows
-  show the VISA resource (serial resources are labeled), identity/probe result,
+  show the VISA resource (serial/Prologix and whitelisted resources are labeled), identity/probe result,
   driver dropdown and separate **Identify** / **Register** buttons.
 - **Identify** probes that row through the server with `*IDN?`. A sole suggested
   driver is selected automatically unless the operator has explicitly chosen a
   driver. No match or multiple matches leaves **— unknown —**; the dropdown tooltip
   lists all suggestions. The dropdown includes every admitted driver, and manual
   selection is authoritative. Identification is optional.
-- **Identify all** requires Yes/No confirmation, probes sequentially and skips
-  serial and registered resources. Progress/results appear in this window, not in
-  the main window's last-action message. Individual failed probes remain visible;
-  transport/ownership errors stop the remaining bulk requests.
+- **Identify all** requires Yes/No confirmation and probes visible candidates
+  sequentially, always skipping serial, Prologix and registered resources—even when
+  whitelisted. Progress/results appear in this window, not in the main window's
+  last-action message. Permission-denied rows hide according to the checkbox;
+  unchecking it reveals them for an explicit per-row retry. Other failed probes
+  remain visible; transport/ownership errors stop remaining bulk requests. Changing
+  filters during a bulk operation also excludes newly hidden rows not yet probed.
 - **Register** is disabled for **— unknown —**. It prompts for an editable inventory
   name defaulting to the selected driver name. Cancel or a blank name changes
   nothing. Successful registration leaves **DISCONNECTED**, disables the row's

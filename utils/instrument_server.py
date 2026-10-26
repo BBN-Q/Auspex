@@ -8,7 +8,7 @@ import threading
 
 from auspex_v2.instruments.server import InstrumentServerClient, main as run_service
 from auspex_v2.instruments.server.service import argument_parser
-from src.operator_commands import OperatorCommands
+from src.operator_commands import OperatorCommands, ENUMERATE_HELP, INSTRUMENT_HELP
 
 
 SPLASH = r"""
@@ -27,7 +27,7 @@ def print_splash():
 
 
 COMMANDS = ("list", "connect <id|all>", "disconnect <id|all>", "recover <id>",
-            "terminate <id|all>", "clear <id|all>", "enumerate visa",
+            "terminate <id|all>", "clear <id|all>", ENUMERATE_HELP,
             "identify <letter|all>", "register <letter> <driver>", "shutdown", "help")
 
 
@@ -62,6 +62,7 @@ def terminal_commands(socket_path, lines):
         command, *args = parts
         if command == "help" and not args:
             print("[InstrumentServer] Commands: " + "; ".join(COMMANDS), flush=True)
+            print(INSTRUMENT_HELP.split("\n", 1)[1], flush=True)
             continue
         if command not in ("list", "connect", "disconnect", "recover", "terminate", "clear", "shutdown"):
             print("[InstrumentServer] Unknown command; type help", flush=True)

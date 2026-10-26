@@ -208,6 +208,7 @@ class Registry:
         self.operations = {}  # name -> connecting/executing/disconnecting
         self.closing = False
         self.discovering = False
+        self.discovery_denied = {}  # last observed access denial, cleared by an explicit retry
         self.live = {}  # token -> (connection ID, registered name)
         self.run = None  # {run_id, owner, token, orphaned}
         if clean:
@@ -348,7 +349,7 @@ class Registry:
 
     def _discover(self, request):
         """Reserve probing against new leases/registration without blocking status requests."""
-        from .discovery import enumerate_visa, identify_visa, resource_key
+        from .discovery import enumerate_visa, identify_visa, resource_key, read_whitelist, permission_denied
 
         with self.lock:
             if self.run or self.live or self.busy or self.closing or self.discovering:
@@ -370,13 +371,25 @@ class Registry:
                     candidates = enumerate_visa()
                 except Exception as exc:
                     raise InstrumentServerError(f"VISA enumeration failed: {exc}") from exc
+                whitelist, path, warning = read_whitelist()
                 for candidate in candidates:
-                    candidate["registered"] = resource_key(candidate["resource"]) in registered
+                    key = resource_key(candidate["resource"])
+                    candidate["registered"] = key in registered
+                    candidate["whitelisted"] = key in whitelist
+                    candidate.update(self.discovery_denied.get(key, {}))
+                if request.get("include_metadata"):
+                    return {"candidates": candidates, "whitelist_path": path, "whitelist_warning": warning}
                 return candidates
             try:
                 result = identify_visa(resource)
             except Exception as exc:
-                result = {"identity": None, "drivers": [], "error": str(exc)}
+                result = {"identity": None, "drivers": [], "error": str(exc),
+                          "permission_denied": permission_denied(exc)}
+            key = resource_key(resource)
+            if result["permission_denied"]:
+                self.discovery_denied[key] = result
+            else:
+                self.discovery_denied.pop(key, None)
             self.announce(f"VISA identify {resource}: {result}")
             return result
         finally:

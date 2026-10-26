@@ -2,9 +2,16 @@
 
 from auspex_v2.experiment.client import ExperimentServerClient
 from auspex_v2.instruments.server import InstrumentServerClient
+from auspex_v2.instruments.server.discovery import hidden_reason, bulk_identifiable, filter_summary
 
 
-INSTRUMENT_HELP = "enumerate visa; identify <letter|all>; register <letter> <driver>; list; connect <id|all>; disconnect <id|all>; recover <id>; terminate <id|all>; clear <id|all>; help; experiment"
+ENUMERATE_HELP = "enumerate visa [--serial] [--prologix] [--show-permission-denied]"
+INSTRUMENT_HELP = (ENUMERATE_HELP + "; identify <letter|all>; register <letter> <driver>; list; "
+                   "connect <id|all>; disconnect <id|all>; recover <id>; terminate <id|all>; clear <id|all>; help; experiment\n"
+                   "Discovery defaults: serial/Prologix hidden; permission-denied hidden. "
+                   "Server $AUSPEX_HOME/instrument_whitelist.txt (HOME fallback) overrides visibility. "
+                   "identify all confirms and probes visible non-serial/non-Prologix candidates only; "
+                   "identify <letter> can retry a hidden candidate. Letters stay stable until enumeration.")
 EXPERIMENT_HELP = "status; runs; cancel <run-id>; help; instruments"
 
 
@@ -18,6 +25,8 @@ class OperatorCommands:
         self.names = []
         self.identities = {}
         self.candidates = {}
+        self.filters = {}
+        self.whitelist_warning = None
 
     def parse(self, line):
         """Validate syntax before confirmation so invalid actions cannot be acknowledged."""
@@ -28,7 +37,8 @@ class OperatorCommands:
         if command in ("instruments", "experiment", "help") and len(parts) == 1:
             return parts
         if self.mode == "Instruments":
-            valid = (command == "enumerate" and len(parts) == 2 and parts[1] == "visa" or
+            valid = (command == "enumerate" and len(parts) >= 2 and parts[1] == "visa" and
+                     all(option in ("--serial", "--prologix", "--show-permission-denied") for option in parts[2:]) or
                      command == "identify" and len(parts) == 2 or
                      command == "register" and len(parts) == 3 or
                      command == "list" and len(parts) == 1 or
@@ -61,9 +71,14 @@ class OperatorCommands:
     def _discovery(self, client, parts):
         """Keep candidate letters stable until the operator explicitly enumerates again."""
         command = parts[0].lower()
+        results = []
         if command == "enumerate":
             self.candidates = {}  # a failed refresh must not leave stale addresses actionable
-            for index, candidate in enumerate(client.enumerate(parts[1]), 1):
+            self.filters = {"show_serial": "--serial" in parts, "show_prologix": "--prologix" in parts,
+                            "hide_permission_denied": "--show-permission-denied" not in parts}
+            snapshot = client.enumerate(parts[1], include_metadata=True)
+            self.whitelist_warning = snapshot["whitelist_warning"]
+            for index, candidate in enumerate(snapshot["candidates"], 1):
                 letter = ""
                 while index:
                     index, digit = divmod(index - 1, 26)
@@ -84,16 +99,26 @@ class OperatorCommands:
             if not self.candidates:
                 raise ValueError("Run enumerate visa first")
             for letter, candidate in targets:
-                if candidate["registered"] or parts[1].lower() == "all" and candidate["serial"]:
+                if candidate["registered"] or (parts[1].lower() == "all" and
+                        (not bulk_identifiable(candidate) or hidden_reason(candidate, **self.filters))):
                     continue
                 candidate.update(client.identify(candidate["resource"]))
-        lines = ["VISA candidates (letters are separate from numeric inventory IDs):"]
+                results.append(f"Identify {letter}: {candidate['error'] or candidate['identity']}")
+        lines = results + ["VISA candidates (letters are separate from numeric inventory IDs):"]
         for letter, candidate in self.candidates.items():
+            if hidden_reason(candidate, **self.filters):
+                continue
             driver = ", ".join(candidate["drivers"]) or "unknown"
             detail = ("already registered" if candidate["registered"] else
                       candidate["error"] or candidate["identity"] or "not identified")
-            serial = " [serial; skipped by identify all]" if candidate["serial"] else ""
-            lines.append(f"{letter}. {candidate['resource']} — {driver} — {detail}{serial}")
+            kind = "Prologix" if candidate.get("prologix") else "serial" if candidate["serial"] else None
+            note = f" [{kind}; skipped by identify all]" if kind else ""
+            if candidate.get("whitelisted"):
+                note += " [whitelisted]"
+            lines.append(f"{letter}. {candidate['resource']} — {driver} — {detail}{note}")
+        lines.append(filter_summary(self.candidates.values(), **self.filters))
+        if self.whitelist_warning:
+            lines.append("Warning: " + self.whitelist_warning)
         return "\n".join(lines + (["No VISA candidates"] if not self.candidates else []))
 
     def execute(self, parts):

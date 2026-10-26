@@ -54,9 +54,9 @@ class InstrumentServerClient:
     def status(self):
         return self.request("STATUS")
 
-    def enumerate(self, interface="visa"):
-        """List candidate addresses without constructing or connecting drivers."""
-        return self.request("ENUMERATE", interface=interface)
+    def enumerate(self, interface="visa", *, include_metadata=False):
+        """List unfiltered candidates; include_metadata adds whitelist path/warnings in an envelope."""
+        return self.request("ENUMERATE", interface=interface, include_metadata=include_metadata)
 
     def identify(self, resource, interface="visa"):
         """Explicitly probe an unregistered address with *IDN?; failures are reported as data."""

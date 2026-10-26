@@ -64,25 +64,39 @@ Both launcher consoles and the standalone instrument terminal support:
 
 ```text
 enumerate visa
+enumerate visa --serial
+enumerate visa --prologix
+enumerate visa --serial --prologix --show-permission-denied
 identify b
 identify all
 register b AgilentN5230A
 ```
 
-`enumerate visa` lists potential VISA resources, including serial/socket resources
-when the backend exposes them. It does not open them or construct drivers. Each
-candidate gets a letter ID (`a`…`z`, `aa`…), separate from the numeric registered
-inventory IDs. The output shows its resource, candidate driver(s), identity/error,
-and serial/registered status. Before identification the driver is `unknown`.
-Re-enumeration replaces the snapshot; other discovery actions do not renumber it.
+Enumeration collects potential VISA resources without opening them or constructing
+drivers. Display defaults hide serial (`ASRL…`) and Prologix GPIB (`PRLGX…`)
+resources, plus resources with a known permission-denied outcome. `--serial` and
+`--prologix` independently reveal their categories; `PRLGX-ASRL…` is controlled
+solely by `--prologix`. `--show-permission-denied` disables access-denial hiding,
+but serial/Prologix filters still apply unless enabled or whitelisted. Options
+apply to that snapshot; a new enumeration starts from defaults plus its options.
+Hidden counts and matching whitelist counts are printed after each result list.
+
+Each candidate, including hidden ones, gets a letter ID (`a`…`z`, `aa`…), separate
+from numeric registered inventory IDs. Visible letters may therefore have gaps.
+The output shows resource, suggested driver(s), identity/error, category and
+registered/whitelisted status. Before identification the driver is `unknown`.
+Re-enumeration replaces the snapshot; identification never renumbers candidates.
+`identify <letter>` can explicitly retry a hidden candidate from that snapshot.
 
 `identify <letter>` temporarily opens that address, sends only `*IDN?`, and closes
 it. Open and I/O timeouts are one second each; backend discovery/connection work
 can take longer, so this is not a hard whole-command deadline. Probing uses LF
 terminations and default serial settings; some devices need different settings
 and cannot be identified this way. `identify all` requires explicit `y`
-confirmation, runs sequentially, and skips serial resources. Selecting a serial
-candidate explicitly allows a probe. Registered resources are never probed.
+confirmation and runs sequentially over **visible** candidates only, always skipping
+serial, Prologix and registered resources, even if whitelisted or shown by options.
+Selecting a serial/Prologix candidate explicitly allows a probe. Registered
+resources are never probed.
 Timeouts/errors mean **not identified**, not necessarily absent or unsupported.
 
 Real VISA drivers declare `IDN_STRING`, a case-sensitive literal substring matched
@@ -105,9 +119,43 @@ Enumeration is backend-dependent and may miss actual instruments; manual-address
 registration through the Python client remains available. No subnet scan, reset,
 configuration, automatic registration, or automatic connection is performed.
 
-Python clients can use `server.enumerate("visa")` and
-`server.identify(resource)`; the latter returns identity, driver suggestions and
-an error field. Letter IDs belong only to the operator's local candidate snapshot.
+### Discovery whitelist and permission errors
+
+The **instrument server** reloads `$AUSPEX_HOME/instrument_whitelist.txt` on every
+enumeration, using `$HOME/instrument_whitelist.txt` when `AUSPEX_HOME` is unset.
+This file lives directly in that base directory, **not** in `.auspex/`. It contains
+one VISA address per line; blank lines and lines starting with `#` are ignored:
+
+```text
+# Always show these candidates
+ASRL/dev/ttyUSB0::INSTR
+PRLGX-ASRL/dev/ttyUSB1::1::INSTR
+TCPIP0::192.0.2.11::inst0::INSTR
+```
+
+Matching uses the same address normalization as registration (including common
+TCPIP INSTR aliases and bare IPv4). A whitelist match overrides all display filters,
+not ownership checks, registration validation or bulk-probing restrictions. It does
+not add undiscovered addresses, open connections or trigger probes. Missing files
+are normal; unreadable files produce a warning in terminal output/GUI discovery.
+Edit the file directly and enumerate again; no whitelist-editing command is needed.
+
+Permission-denied status comes only from an error attributable to an explicit
+identification attempt (OS permission errors, VISA access-denied status or a wrapped
+backend permission-denied error). Backend diagnostic logs are **not** scraped, and
+no extra opens or filesystem access tests are performed just to filter candidates.
+The server retains last-observed permission denials across enumerations until an
+explicit retry returns another outcome or the server restarts. Use
+`--show-permission-denied` or a whitelist entry to reveal them; an explicit letter
+retry also works while hidden. Other failures such as timeouts remain visible.
+
+Python clients can use `server.enumerate("visa")` for the **unfiltered** candidate
+list, with `serial`, `prologix`, `permission_denied`, `whitelisted` and `registered`
+fields. `server.enumerate("visa", include_metadata=True)` instead returns an envelope
+with `candidates`, `whitelist_path` and `whitelist_warning`; operator interfaces use
+this form to show warnings even when no resources were found.
+`server.identify(resource)` returns identity, suggestions, an error field and
+`permission_denied`. Letter IDs belong only to the operator's local snapshot.
 
 ## Timeouts
 

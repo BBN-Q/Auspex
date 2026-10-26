@@ -10,7 +10,7 @@ from pyqtgraph.Qt import QtCore, QtGui, QtWidgets, QT_LIB
 
 from .client import InstrumentServerClient
 from ..drivers.registry import DRIVERS
-from .discovery import resource_key
+from .discovery import resource_key, hidden_reason, bulk_identifiable, filter_summary
 from ...paths import home_note
 
 if QT_LIB != "PySide6":
@@ -61,6 +61,17 @@ class DiscoveryWindow(QtWidgets.QWidget):
         header.addWidget(self.enumerate)
         header.addWidget(self.identify_all)
         header.addStretch()
+        self.show_serial = QtWidgets.QCheckBox("Show Serial Resources")
+        self.show_prologix = QtWidgets.QCheckBox("Show Prologix GPIB Resources")
+        self.hide_permission_denied = QtWidgets.QCheckBox("Hide permission denied resources")
+        self.hide_permission_denied.setChecked(True)
+        filters = QtWidgets.QHBoxLayout()
+        for checkbox in (self.show_serial, self.show_prologix, self.hide_permission_denied):
+            checkbox.toggled.connect(self._apply_filters)
+            filters.addWidget(checkbox)
+        self.whitelist_warning = None
+        self.summary = QtWidgets.QLabel()
+        self.summary.setWordWrap(True)
         self.table = QtWidgets.QTableWidget(0, 4)
         self.table.setHorizontalHeaderLabels(["VISA resource", "Identity / result", "Driver", "Actions"])
         self.table.verticalHeader().setVisible(False)
@@ -70,11 +81,13 @@ class DiscoveryWindow(QtWidgets.QWidget):
         self.table.horizontalHeader().setSectionResizeMode(3, QtWidgets.QHeaderView.ResizeMode.ResizeToContents)
         self.message = QtWidgets.QLabel("Enumerate candidates, then identify or choose a driver to register.")
         self.message.setWordWrap(True)
-        warning = QtWidgets.QLabel("Identify sends *IDN?; Identify all skips serial resources. Registration does not connect.")
+        warning = QtWidgets.QLabel("Identify sends *IDN?; Identify all probes visible rows, skipping serial/Prologix. Registration does not connect.")
         warning.setStyleSheet("color: #ffd18a")
         layout = QtWidgets.QVBoxLayout(self)
         layout.addLayout(header)
+        layout.addLayout(filters)
         layout.addWidget(self.table)
+        layout.addWidget(self.summary)
         layout.addWidget(warning)
         layout.addWidget(self.message)
         self.thread = QtCore.QThread(self)
@@ -84,6 +97,20 @@ class DiscoveryWindow(QtWidgets.QWidget):
         self.worker.finished.connect(self._completed)
         self.thread.finished.connect(self.worker.deleteLater)
         self.thread.start()
+        self._apply_filters()
+
+    def _filters(self):
+        return {"show_serial": self.show_serial.isChecked(), "show_prologix": self.show_prologix.isChecked(),
+                "hide_permission_denied": self.hide_permission_denied.isChecked()}
+
+    def _apply_filters(self):
+        """Hide rows without discarding their identities, driver choices or in-flight row indices."""
+        for row, candidate in enumerate(self.candidates):
+            self.table.setRowHidden(row, hidden_reason(candidate, **self._filters()) is not None)
+        text = filter_summary(self.candidates, **self._filters())
+        if self.whitelist_warning:
+            text += " Warning: " + self.whitelist_warning
+        self.summary.setText(text)
         self._update_actions()
 
     def set_status(self, status):
@@ -103,7 +130,7 @@ class DiscoveryWindow(QtWidgets.QWidget):
         enabled = self.available and self.pending_action is None
         self.enumerate.setEnabled(enabled)
         self.identify_all.setEnabled(enabled and any(
-            not c["registered"] and not c["serial"] for c in self.candidates))
+            bulk_identifiable(c) and not hidden_reason(c, **self._filters()) for c in self.candidates))
         for row, candidate in enumerate(self.candidates):
             available = enabled and not candidate["registered"]
             combo = self.table.cellWidget(row, 2)
@@ -118,7 +145,8 @@ class DiscoveryWindow(QtWidgets.QWidget):
         self.table.setRowCount(0)
         self.table.setRowCount(len(self.candidates))
         for row, candidate in enumerate(self.candidates):
-            resource = candidate["resource"] + (" [serial]" if candidate["serial"] else "")
+            kind = " [Prologix]" if candidate.get("prologix") else " [serial]" if candidate["serial"] else ""
+            resource = candidate["resource"] + kind + (" [whitelisted]" if candidate.get("whitelisted") else "")
             detail = ("Already registered" if candidate["registered"] else
                       candidate["error"] or candidate["identity"] or "Not identified")
             for col, text in enumerate((resource, detail)):
@@ -145,7 +173,7 @@ class DiscoveryWindow(QtWidgets.QWidget):
             buttons.addWidget(identify)
             buttons.addWidget(register)
             self.table.setCellWidget(row, 3, panel)
-        self._update_actions()
+        self._apply_filters()
 
     def _select_driver(self, row):
         self.candidates[row]["selected_driver"] = self.table.cellWidget(row, 2).currentData()
@@ -164,7 +192,7 @@ class DiscoveryWindow(QtWidgets.QWidget):
         # Invalidate the old snapshot even if a refresh fails.
         self.candidates = []
         self._render()
-        self._request("ENUMERATE", interface="visa")
+        self._request("ENUMERATE", interface="visa", include_metadata=True)
 
     def _identify(self, row):
         self._request("IDENTIFY", row, interface="visa", resource=self.candidates[row]["resource"])
@@ -172,18 +200,22 @@ class DiscoveryWindow(QtWidgets.QWidget):
     def _identify_all(self):
         """Confirm once, then send one background probe at a time with visible progress."""
         if QtWidgets.QMessageBox.question(self, "Confirm identification",
-                "Send *IDN? to all unregistered, non-serial candidates?",
+                "Send *IDN? to visible, unregistered candidates? Serial and Prologix resources are skipped.",
                 QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No,
                 QtWidgets.QMessageBox.StandardButton.No) != QtWidgets.QMessageBox.StandardButton.Yes:
             return
-        self.queue = [row for row, c in enumerate(self.candidates) if not c["registered"] and not c["serial"]]
+        self.queue = [row for row, c in enumerate(self.candidates)
+                      if bulk_identifiable(c) and not hidden_reason(c, **self._filters())]
         self._next_probe()
 
     def _next_probe(self):
-        if self.queue and self.available and not self.closed:
-            self._identify(self.queue.pop(0))
-        else:
-            self.queue = []
+        while self.queue and self.available and not self.closed:
+            row = self.queue.pop(0)
+            candidate = self.candidates[row]
+            if bulk_identifiable(candidate) and not hidden_reason(candidate, **self._filters()):
+                self._identify(row)
+                return
+        self.queue = []
 
     def _register(self, row):
         """Require a name for an explicit driver choice; never identify or connect implicitly."""
@@ -207,8 +239,10 @@ class DiscoveryWindow(QtWidgets.QWidget):
             self.queue = []
             self.message.setText(f"{op} failed: {value}")
         elif op == "ENUMERATE":
-            self.candidates = value
-            self.message.setText(f"Enumerated {len(value)} VISA candidates.")
+            self.candidates = value["candidates"]
+            self.whitelist_warning = value["whitelist_warning"]
+            self.summary.setToolTip("Server whitelist: " + value["whitelist_path"])
+            self.message.setText(f"Enumerated {len(self.candidates)} VISA candidates.")
         elif op == "IDENTIFY":
             candidate = self.candidates[row]
             candidate.update(value)

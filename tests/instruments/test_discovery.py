@@ -18,6 +18,8 @@ from auspex_v2.instruments.server.service import Server
 VNA = "TCPIP0::192.0.2.1::inst0::INSTR"
 SERIAL = "ASRL1::INSTR"
 UNKNOWN = "USB0::unknown::INSTR"
+PROLOGIX = "PRLGX-ASRL/dev/ttyUSB0::1::INSTR"
+DENIED = "USB0::denied::INSTR"
 
 
 class VisaDevice:
@@ -52,6 +54,8 @@ class VisaManager:
         self.entered = None
         self.release = threading.Event()
         self.resources = (VNA, SERIAL, UNKNOWN)
+        self.denied = set()
+        self.opened = []
 
     def list_resources(self, expression):
         assert expression == "?*"
@@ -59,6 +63,9 @@ class VisaManager:
 
     def open_resource(self, resource, **kwargs):
         assert kwargs == {"open_timeout": 1000}
+        self.opened.append(resource)
+        if resource in self.denied:
+            raise PermissionError(13, "Permission denied", resource)
         device = VisaDevice(self, resource)
         self.devices.append(device)
         return device
@@ -163,7 +170,8 @@ class DiscoveryTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "enumerate visa first"):
             commands.execute(["identify", "a"])
         output = commands.execute(commands.parse("enumerate visa"))
-        self.assertIn("a. ASRL1::INSTR", output)
+        self.assertNotIn("a. ASRL1::INSTR", output)
+        self.assertIn("1 serial", output)
         self.assertIn("unknown", output)
         self.assertTrue(commands.confirmation(commands.parse("identify all")))
         self.assertFalse(commands.confirmation(commands.parse("identify b")))
@@ -230,6 +238,125 @@ class DiscoveryTest(unittest.TestCase):
             self.assertEqual(self.client.status()["instruments"]["bench_vna"]["state"], "DISCONNECTED")
         finally:
             sys.path.remove(str(root / "utils"))
+
+    def test_display_options_and_bulk_probe_exclude_serial_and_prologix(self):
+        """Serial/Prologix are independent display categories, never implicit bulk probe targets."""
+        from utils.src.operator_commands import OperatorCommands
+
+        self.manager.resources = (SERIAL, PROLOGIX, VNA)
+        commands = OperatorCommands(self.server.path, None)
+        output = commands.execute(commands.parse("enumerate visa"))
+        self.assertNotIn(SERIAL, output)
+        self.assertNotIn(PROLOGIX, output)
+        self.assertIn(VNA, output)
+        self.assertIn("1 serial, 1 Prologix", output)
+        self.assertEqual(self.manager.opened, [])
+        output = commands.execute(commands.parse("enumerate visa --serial"))
+        self.assertIn(SERIAL, output)
+        self.assertNotIn(PROLOGIX, output)
+        output = commands.execute(commands.parse("enumerate visa --prologix"))
+        self.assertIn(PROLOGIX, output)
+        self.assertNotIn(SERIAL, output)
+        output = commands.execute(commands.parse("enumerate visa --serial --prologix --show-permission-denied"))
+        self.assertIn(PROLOGIX, output)
+        self.assertIn(SERIAL, output)
+        commands.execute(["identify", "all"])
+        self.assertEqual(self.manager.queries, [(VNA, "*IDN?")])
+        letter = next(k for k, c in commands.candidates.items() if c["resource"] == PROLOGIX)
+        commands.execute(["identify", letter])
+        self.assertEqual(self.manager.queries[-1], (PROLOGIX, "*IDN?"))
+        for line in ("enumerate visa --other", "enumerate visa serial", "enumerate other --serial"):
+            with self.assertRaises(ValueError):
+                commands.parse(line)
+        self.assertIn("--show-permission-denied", commands.execute(["help"]))
+
+    def test_permission_denial_is_retained_until_retry_and_does_not_renumber(self):
+        """Denied rows hide after a probe, survive enumeration as known denied, and can be retried."""
+        from utils.src.operator_commands import OperatorCommands
+
+        self.manager.resources = (DENIED, VNA)
+        self.manager.denied.add(DENIED)
+        commands = OperatorCommands(self.server.path, None)
+        commands.execute(["enumerate", "visa"])
+        letter = next(k for k, c in commands.candidates.items() if c["resource"] == DENIED)
+        labels = list(commands.candidates)
+        commands.execute(["identify", letter])
+        self.assertTrue(commands.candidates[letter]["permission_denied"])
+        self.assertEqual(list(commands.candidates), labels)
+        opened = list(self.manager.opened)
+        output = commands.execute(["enumerate", "visa"])
+        self.assertNotIn(DENIED, output)
+        self.assertIn("1 permission denied", output)
+        self.assertEqual(self.manager.opened, opened)
+        commands.execute(["identify", "all"])
+        self.assertEqual(self.manager.opened, opened + [VNA])
+        output = commands.execute(commands.parse("enumerate visa --show-permission-denied"))
+        self.assertIn(DENIED, output)
+        self.manager.denied.clear()
+        commands.execute(["enumerate", "visa"])
+        output = commands.execute(["identify", letter])  # Explicit retry works even while hidden.
+        self.assertIn(DENIED, output)
+        self.assertFalse(commands.candidates[letter]["permission_denied"])
+        candidate = next(c for c in self.client.enumerate() if c["resource"] == DENIED)
+        self.assertFalse(candidate["permission_denied"])
+
+    def test_server_whitelist_reloads_and_overrides_visibility_not_probe_eligibility(self):
+        """A server-local file overrides all filters without adding resources or probing them."""
+        from utils.src.operator_commands import OperatorCommands
+
+        self.manager.resources = (SERIAL, PROLOGIX, DENIED, VNA)
+        self.manager.denied.add(DENIED)
+        self.client.identify(DENIED)
+        path = Path(self.tmp.name) / "instrument_whitelist.txt"
+        path.write_text(f"# Display overrides\n\n{SERIAL}\n{PROLOGIX}\n{DENIED}\n192.0.2.1\n"
+                        "TCPIP0::not-enumerated::INSTR\n", encoding="utf-8")
+        commands = OperatorCommands(self.server.path, None)
+        output = commands.execute(["enumerate", "visa"])
+        self.assertIn(SERIAL, output)
+        self.assertIn(PROLOGIX, output)
+        self.assertIn(DENIED, output)
+        self.assertNotIn("not-enumerated", output)
+        self.assertIn("4 matching resources shown", output)
+        self.assertEqual(self.manager.opened, [DENIED])
+        commands.execute(["identify", "all"])
+        self.assertEqual(self.manager.opened, [DENIED, VNA, DENIED])
+        path.write_text("# now empty\n", encoding="utf-8")
+        output = commands.execute(["enumerate", "visa"])
+        self.assertNotIn(SERIAL, output)
+        self.assertNotIn(PROLOGIX, output)
+        self.assertNotIn(DENIED, output)
+        self.assertIn("0 matching resources shown", output)
+
+    def test_whitelist_missing_unreadable_and_home_fallback(self):
+        """Missing whitelist is normal; unreadable content warns clients even without any candidates."""
+        from utils.src.operator_commands import OperatorCommands
+
+        snapshot = self.client.enumerate(include_metadata=True)
+        self.assertIsNone(snapshot["whitelist_warning"])
+        path = Path(self.tmp.name) / "instrument_whitelist.txt"
+        path.write_text(SERIAL + "\n", encoding="utf-8")
+        with patch.dict(os.environ, {"AUSPEX_HOME": "", "HOME": self.tmp.name}):
+            snapshot = self.client.enumerate(include_metadata=True)
+        self.assertEqual(snapshot["whitelist_path"], str(path))
+        self.assertTrue(next(c for c in snapshot["candidates"] if c["resource"] == SERIAL)["whitelisted"])
+        path.unlink()
+        path.mkdir()  # Reliable unreadability even when tests run as root.
+        self.manager.resources = ()
+        output = OperatorCommands(self.server.path, None).execute(["enumerate", "visa"])
+        self.assertIn("Warning: Cannot read whitelist", output)
+        self.assertIn(str(path), output)
+        self.assertIn("No VISA candidates", output)
+
+    def test_access_error_classification_does_not_hide_other_failures(self):
+        """Only attributable access-denial errors trigger filtering, including wrapped backend errors."""
+        wrapped = RuntimeError("serial port open failed")
+        wrapped.__cause__ = PermissionError(13, "access failed")
+        for error in (wrapped, OSError(1, "operation not permitted"),
+                      RuntimeError("could not open port: Permission denied"),
+                      RuntimeError("VI_ERROR_NPERMISSION")):
+            self.assertTrue(discovery.permission_denied(error))
+        for error in (TimeoutError("no response"), OSError("device not found"), RuntimeError("resource locked")):
+            self.assertFalse(discovery.permission_denied(error))
 
     def test_matching_is_literal_and_reports_multiple_suggestions(self):
         """A driver hint is not a choice, and unknown identities remain registerable."""
