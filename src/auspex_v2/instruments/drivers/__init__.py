@@ -1,11 +1,12 @@
 """Direct-use declarations and bundled driver exports; imports never open hardware."""
 
 from .core import (BoolCommand, Command, FloatCommand, Instrument, InstrumentError,
-                   IntCommand, RampCommand, SCPIInstrument, StringCommand, managed_property, operation)
+                   IntCommand, RampCommand, SCPIInstrument, StringCommand, experimental,
+                   managed_property, operation)
 
 __all__ = ["Instrument", "InstrumentError", "SCPIInstrument", "Command",
            "BoolCommand", "StringCommand", "FloatCommand", "IntCommand",
-           "RampCommand", "managed_property", "operation"]
+           "RampCommand", "managed_property", "operation", "experimental"]
 
 from .registry import DRIVERS as _drivers
 

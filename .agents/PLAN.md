@@ -345,5 +345,75 @@ separate manual registry. Imports are deterministic and fail on broken exports;
 newly installed drivers require fresh Python/service processes, not hot reload.
 No further implementation slice is authorized.
 
+## Authorized slice — remaining V1 VISA drivers
+
+Revised user-approved scope: retain the 11 completed experimental V1 VISA ports
+(including VISA serial); create unavailable stubs for **all 16 remaining models**.
+Those models require manual porting and hardware validation, not automatic repair.
+Stubs raise NotImplementedError on construction and are absent from module
+__all__, top-level exports and server admission. Exclude native USB/DLL, HTTP,
+direct-socket-only and Prologix-specific backends. Do not recreate V1 metaclasses,
+proxy configuration or dummy backends. Existing four lab-validated V2 drivers
+remain unchanged.
+
+- [x] Export `@experimental`: inherited class metadata, normal imports/admission,
+  UserWarning on connection, no import-time warning or GUI distinction.
+- [x] Verify decorator behavior, imports/catalog and real simulator/server admission;
+  no mocked or hardware-driver behavior tests for these ports.
+- [x] Port Rohde & Schwarz: SMB100B (`rs.py`).
+- [x] Stubs only — Agilent: HP33120A, Agilent33220A, Agilent33500B, Agilent34970A,
+  AgilentN9010A. Preserve existing N5183A/E8363C/N5230A unchanged.
+- [x] American Magnetics: AMI430.
+- [x] BBN: RelayDriver, DigitalAttenuator (not APS/APS2/TDM).
+- [x] Stub only — BBN: SpectrumAnalyzer.
+- [x] Berkeley Nucleonics: BNC845.
+- [x] DS Instruments: DSInstrumentsSG12000, DSInstrumentsSG12000Pro, DAT64H;
+  DSInstruments remains an implementation base, not a separate admitted model.
+- [x] Keithley: Keithley2400.
+- [x] Kepco: BOP2020M.
+- [x] Stubs only — Keysight: KeysightM8190A (no waveform/sequence helper port).
+- [x] Stubs only — Lake Shore: LakeShore370, LakeShore335.
+- [x] Stub only — LeCroy: HDO6104.
+- [x] Picosecond: Picosecond10070A.
+- [x] Stubs only — Stanford: SR830, SR865.
+- [x] Stubs only — Tektronix: DPO72004C, DPO2024, DPO2014, RSA3308A.
+- [x] Document implemented ports versus unavailable stubs; check all 16 stub
+  constructors and exclusion from exports/catalog, without hardware or mocks.
+
+No Yokogawa work: GS200 is already ported and lab-validated. The inventory above
+contains 27 model names: 11 implemented experimental ports and 16 unavailable
+stubs. Stub classes are not usable experimental drivers.
+
+**Resolved connection policy:** user approved transport/protocol-only connect;
+no output enabling, reference/source-mode/unit/trigger-source changes. BNC845's
+active-low pulse/mod/alc mappings are confirmed model limitations and preserved.
+BNC845.configure_external_reference selects external 10 MHz and polls lock without
+enabling RF; BOP2020M.configure_current_mode selects current mode and VOLT MAX
+without enabling output. Existing settings cover explicit Tesla/GPIB selection.
+Keithley sweep remains an explicit output-changing operation; restore its I/O
+timeout on failure without issuing additional hardware recovery commands.
+DS Pro invalid reference now raises instead of silently selecting EXT; DAT64H
+uses one numeric attenuation declaration rather than V1's shadowing text property.
+
+The authorized slice is complete; no further automatic porting is authorized.
+Known concerns retained for future **manual** work (not an implementation queue):
+
+- Agilent33500B.upload_waveform_binary explicitly says NOT YET WORKING/DO NOT USE;
+  Tektronix.get_math_curve is a pass stub. Omit/raise NotImplementedError until
+  separately reviewed, or attempt a repair within this port?
+- LeCroy fetch_waveform writes COMM_ORDER HI (comment says MSB first) but decodes
+  is_big_endian=False. Which wire order should the port use?
+- LakeShore335.check_hconf_msg accepts heater-resistance codes 1/2 but documents
+  0/1, and applies the 50-ohm limit based on vals[2] (current code), not vals[1]
+  (resistance code). Need reviewed model limits rather than guessing protection.
+- Agilent33220A.output_sync maps True to OFF and False to ON. Confirm whether this
+  is another intentional model quirk (as with BNC) or should be corrected.
+- BBN SpectrumAnalyzer.get_voltage retries ValueError/VisaIOError ten times and
+  returns None after exhaustion. Decide whether to retain this explicit read-only
+  retry behavior or use V2's ordinary single-attempt/propagated-error behavior.
+
+All 16 remaining models are deliberately stubbed, including models without a
+specific identified defect. These notes do not authorize repairing or admitting them.
+
 Runner lifecycle refactoring remains deferred. Keep current evidence in STATUS.md,
 not a growing chronological test-count/change diary here.

@@ -11,9 +11,42 @@ An experiment declares a fixed `KIND`, optionally inferred from an authoring dri
 An instance binds that role to an inventory name. The actual registered driver must
 match KIND, but model-specific member support is still checked separately.
 
-The current admitted drivers are SimulatedSource, SimulatedVNA, AgilentN5183A,
-AgilentE8363C, AgilentN5230A, and YokogawaGS200. Real ports are targeted subsets of
-V1, not a complete driver migration. Registration uses these canonical class names.
+SimulatedSource and SimulatedVNA provide offline operation. AgilentN5183A,
+AgilentE8363C, AgilentN5230A and YokogawaGS200 have been validated in the lab.
+The following V1 VISA ports are **experimental**, not hardware-validated:
+
+| Vendor | Admitted class names |
+| --- | --- |
+| Rohde & Schwarz | SMB100B |
+| American Magnetics | AMI430 |
+| BBN | RelayDriver, DigitalAttenuator |
+| Berkeley Nucleonics | BNC845 |
+| DS Instruments | DSInstrumentsSG12000, DSInstrumentsSG12000Pro, DAT64H |
+| Keithley | Keithley2400 |
+| Kepco | BOP2020M |
+| Picosecond | Picosecond10070A |
+
+Registration uses these canonical names. Implemented hardware-unvalidated classes
+carry `@experimental`, setting inherited `EXPERIMENTAL = True` metadata. They
+import and register normally, but emit a Python `UserWarning` on connection
+(in the worker's output when server-managed). Standard warning filters apply;
+the marker does not impose an admission gate or change GUI presentation.
+
+The remaining 16 models are **unavailable stubs**, deferred to manual porting and
+hardware validation. They can be imported only from their vendor modules under
+`auspex_v2.instruments.drivers`; construction raises `NotImplementedError` before
+any I/O. They are absent from module `__all__`, top-level exports and server
+admission. Their docstrings identify V1 references and known review concerns.
+
+| Module | Unavailable class stubs |
+| --- | --- |
+| `agilent` | HP33120A, Agilent33220A, Agilent33500B, Agilent34970A, AgilentN9010A |
+| `bbn` | SpectrumAnalyzer |
+| `keysight` | KeysightM8190A |
+| `lakeshore` | LakeShore370, LakeShore335 |
+| `lecroy` | HDO6104 |
+| `stanford` | SR830, SR865 |
+| `tektronix` | DPO72004C, DPO2024, DPO2014, RSA3308A |
 
 Each bundled vendor/simulator module declares intended drivers in `__all__`.
 Those classes are automatically exposed by `auspex_v2.instruments` (including
@@ -47,6 +80,31 @@ running. Normal service shutdown attempts disconnection but preserves inventory.
 Real VISA operation uses PyVISA-py (`@py`), installed through the `visa` extra.
 Addresses are normalized consistently for I/O and ownership. Endpoint normalization
 does not prove physical identity across aliases or distinct interfaces.
+
+### Explicit initialization for newly ported drivers
+
+Connections configure transport/protocol only: no automatic output enabling,
+reference selection, source-mode selection, field-unit change or trigger-source
+change. Construction also performs no I/O. In particular:
+
+- BNC845: call `configure_external_reference()` to select external 10 MHz and
+  poll lock; set `output = True` separately when appropriate. A false lock result
+  warns but does not fail. The model's pulse/mod/ALC settings intentionally encode
+  `True` as wire `0`; RF output encodes `True` as `1`.
+- BOP2020M: `configure_current_mode()` selects current mode and writes `VOLT MAX`,
+  leaving output unchanged. Enable output separately. `shutdown()` issues ramps
+  and an output-off command; it is not independent safety confirmation.
+- AMI430: select `field_units = "T"` explicitly if Tesla is intended. V1's fixed
+  current/field bounds remain; they do not identify or protect the attached magnet.
+  `set_field()` blocks until HOLDING without a total timeout.
+- Picosecond10070A: select `trigger_source = "GPIB"` explicitly if bus triggering
+  is intended. Response headers are disabled on connection for parsing only.
+- Keithley2400: `sweep()` explicitly configures reporting/trigger count, enables
+  output, and disables it on success. It retains V1's twelve-hour read timeout;
+  failures can leave output enabled. There is no automatic retry.
+
+These are hardware ports, not hardware validation: automated checks cover only
+imports, declarations/admission and the experimental marker, not device behavior.
 
 ## Interactive name completion
 

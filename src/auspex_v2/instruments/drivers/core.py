@@ -7,6 +7,7 @@ both direct Python access and server-facing metadata use one definition.
 from __future__ import annotations
 
 import time
+import warnings
 from types import MappingProxyType
 
 
@@ -22,6 +23,7 @@ class Instrument:
     """
 
     KIND = None
+    EXPERIMENTAL = False
     IDN_STRING = None  # Literal *IDN? substring; None for non-VISA drivers.
     commands = MappingProxyType({})
     properties = MappingProxyType({})
@@ -97,6 +99,11 @@ class Instrument:
             raise InstrumentError(f"{self.name} is already connected")
         if self.interface is None:
             raise InstrumentError(f"{self.name} has no transport; override connect()")
+        if self.EXPERIMENTAL:
+            warnings.warn(
+                f"{type(self).__name__} driver has not yet been validated with hardware.",
+                UserWarning, stacklevel=2,
+            )
         self.connected = True
 
     def disconnect(self):
@@ -119,6 +126,19 @@ class Instrument:
         if not self.connected or self.interface is None:
             raise InstrumentError(f"{self.name} is not connected")
         return self.interface
+
+
+def experimental(cls):
+    """Mark an unvalidated driver without changing its class identity or admission.
+
+    Subclasses inherit the designation. Normal connection emits a UserWarning;
+    imports, construction and server registration remain silent and unrestricted.
+    Remove the decorator after attended hardware validation.
+    """
+    if not isinstance(cls, type) or not issubclass(cls, Instrument):
+        raise TypeError("@experimental requires an Instrument subclass")
+    cls.EXPERIMENTAL = True
+    return cls
 
 
 class ManagedProperty(property):

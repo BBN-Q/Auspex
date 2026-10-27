@@ -10,6 +10,33 @@ replaces the historical discussion; it is not authorization to implement the bac
 
 ## Resume here
 
+- **V1 VISA port slice complete under revised scope:** 11 implemented ports plus
+  16 unavailable stubs, deferred by the user to manual porting/hardware validation.
+  Stub classes live in their vendor modules, raise NotImplementedError on
+  construction and are excluded from module __all__, top-level exports and
+  server admission. The main instrument guide lists all models.
+  Current ports: SMB100B, AMI430, BNC845, BOP2020M, Picosecond10070A,
+  DSInstrumentsSG12000/SG12000Pro, DAT64H, RelayDriver, DigitalAttenuator and
+  Keithley2400. All use ordinary V2 declarations and automatic admission.
+  `@experimental` preserves class identity, sets inherited `EXPERIMENTAL` metadata
+  and emits a standard UserWarning during normal connection; no GUI/admission
+  gates. Existing four lab-validated models remain unchanged.
+  User approved transport/protocol-only connect and confirmed BNC active-low
+  pulse/mod/ALC mappings. BNC reference setup and Kepco current-mode/VOLT MAX
+  configuration are explicit operations, without enabling output. AMI Tesla
+  units/Picosecond GPIB triggering are explicit settings. See the main instrument
+  guide for initialization differences and retained blocking/output behavior.
+  Twelve stub/decorator/export tests passed, including all sixteen constructor
+  failures and export/catalog exclusions, a real experimental simulator server
+  worker, all eleven ports' import/catalog metadata, lazy backend imports and
+  completion. `git diff --check` passed. No ported hardware commands tested.
+  Strict MkDocs build was blocked because `.venv-docs/bin/python` resolves outside
+  the repository, forbidden by this session's filesystem restriction; no bypass
+  attempted. The full test-suite evidence below predates this port slice.
+  PLAN.md retains known V1 review concerns for manual work, not an automatic
+  backlog. All 16 remaining models are stubbed, including ones without specific
+  identified defects. No further implementation slice is authorized.
+
 - The 2D offline DataBrowser was visually reviewed by the user; CET/PAL colormaps
   are excluded. Run `python tests/data/visual_data_browser.py` for the complex map.
   Standalone `save_data` and `open_data` are implemented and documented in the
@@ -24,7 +51,7 @@ replaces the historical discussion; it is not authorization to implement the bac
   further implementation slice is authorized; runner lifecycle refactoring remains deferred.
   Bundled driver-module `__all__` exports now control top-level imports/completion
   and automatic service admission; no separate registry list. Actual V1 driver
-  ports beyond the existing four real models remain a separately selected task.
+  ports beyond the existing four real models follow the completed revised slice above.
 - Inspect `git status` and preserve accumulated uncommitted work; these notes do not
   imply that implementation changes have been committed.
 - Start with the [manual](../docs/index.md),
@@ -61,7 +88,9 @@ replaces the historical discussion; it is not authorization to implement the bac
   GET/SET/CALL, domain-wide run lockout, live/run proxies, quarantine and explicit
   reconciliation. Admission includes SimulatedSource/SimulatedVNA and real
   AgilentN5183A, YokogawaGS200, AgilentE8363C and AgilentN5230A. VISA is lazy/optional;
-  real VISA connections use PyVISA-py `@py`. Whole-command deadline defaults to none.
+  real VISA connections use PyVISA-py `@py`. Eleven additional experimental VISA
+  ports are now admitted; see Resume here and the main instrument guide for models
+  and initialization differences. Whole-command deadline defaults to none.
   Each bundled vendor/simulator module's explicit `__all__` supplies intended
   concrete driver classes to the shared catalog and both Python export levels.
   Duplicate/invalid/abstract/nonlocal exports and public-name collisions fail

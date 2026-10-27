@@ -45,6 +45,39 @@ optional backend libraries eagerly. Put backend imports and I/O in `connect()`.
 The catalog is built without constructing any driver. Unexported helpers remain
 accessible through their module but are not top-level drivers or service choices.
 
+## Hardware-validation designation
+
+Mark newly ported, hardware-unvalidated drivers with `@experimental`:
+
+```python
+from auspex_v2.instruments import SCPIInstrument, experimental
+
+@experimental
+class UnvalidatedSource(SCPIInstrument):
+    """Driver awaiting attended hardware validation."""
+```
+
+The decorator preserves class identity and sets `Driver.EXPERIMENTAL = True`;
+subclasses inherit the designation. Imports, construction, capability inspection
+and registration remain silent. Normal connection emits a Python `UserWarning`
+that the named driver has not yet been validated with hardware (in the owning
+worker's output when server-managed). Standard Python warning filters apply.
+The marker does not change admission, commands or GUI presentation. Remove the
+decorator after attended validation; absence of the marker is not a safety claim.
+Existing lab-validated drivers retain their behavior. The currently ported models
+and explicit initialization differences are listed in the
+[main instrument guide](../../../../docs/components/instruments.md).
+The remaining inventory is tracked in `.agents/PLAN.md`.
+
+The sixteen remaining V1 models are deliberately unavailable stubs, not
+experimental implementations. They remain accessible only in their vendor modules,
+raise `NotImplementedError` on construction and are excluded from module `__all__`
+and server admission. Manual porting and hardware review must precede enabling them.
+
+For these V1 ports, automated checks cover imports, exports/admission and marker
+behavior only, not hardware command correctness. No mocked instrument tests are
+used; command/data/connection validation awaits attended hardware work.
+
 ## The model
 
 `InstrumentKind` in `auspex_v2.instruments.kinds` is the fixed role vocabulary used

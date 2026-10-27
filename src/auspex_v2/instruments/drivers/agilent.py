@@ -212,3 +212,49 @@ class AgilentE8363C(_AgilentNetworkAnalyzer):
     """Agilent E8363C two-port VNA."""
     IDN_STRING = "E8363C"
     ports = (1, 2)
+
+
+# Deliberately absent from __all__: manual porting and hardware review remain.
+class HP33120A(SCPIInstrument):
+    """Unavailable HP33120A stub; reference: v1/src/auspex/instruments/agilent.py."""
+
+    KIND = InstrumentKind.FUNCTION_GENERATOR
+
+    def __init__(self, *args, **kwargs):
+        raise NotImplementedError("HP33120A requires manual V2 porting and hardware validation")
+
+
+class Agilent33220A(SCPIInstrument):
+    """Unavailable 33220A; review V1 agilent.py's inverted output_sync mapping."""
+
+    KIND = InstrumentKind.FUNCTION_GENERATOR
+
+    def __init__(self, *args, **kwargs):
+        raise NotImplementedError("Agilent33220A requires manual V2 porting and hardware validation")
+
+
+class Agilent33500B(SCPIInstrument):
+    """Unavailable 33500B; V1 agilent.py marks binary upload NOT YET WORKING."""
+
+    KIND = InstrumentKind.AWG
+
+    def __init__(self, *args, **kwargs):
+        raise NotImplementedError("Agilent33500B requires manual V2 porting and hardware validation")
+
+
+class Agilent34970A(SCPIInstrument):
+    """Unavailable 34970A stub; reference: v1/src/auspex/instruments/agilent.py."""
+
+    KIND = InstrumentKind.DAQ
+
+    def __init__(self, *args, **kwargs):
+        raise NotImplementedError("Agilent34970A requires manual V2 porting and hardware validation")
+
+
+class AgilentN9010A(SCPIInstrument):
+    """Unavailable N9010A stub; reference: v1/src/auspex/instruments/agilent.py."""
+
+    KIND = InstrumentKind.SPECTRUM_ANALYZER
+
+    def __init__(self, *args, **kwargs):
+        raise NotImplementedError("AgilentN9010A requires manual V2 porting and hardware validation")

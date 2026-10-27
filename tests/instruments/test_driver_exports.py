@@ -111,7 +111,9 @@ class DriverExportsTest(unittest.TestCase):
                             ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
             (destination / "instruments" / "drivers" / "new_vendor.py").write_text('''
 from .simulated import SimulatedSource
+from .core import experimental
 __all__ = ["CatalogSource"]
+@experimental
 class CatalogSource(SimulatedSource):
     """Synthetic exported vendor driver for the isolated integration fixture."""
 class HiddenSource(SimulatedSource):
@@ -123,6 +125,7 @@ class HiddenSource(SimulatedSource):
 from auspex_v2.instruments.drivers.registry import DRIVERS
 import auspex_v2.instruments as instruments
 assert DRIVERS["CatalogSource"] is CatalogSource
+assert CatalogSource.EXPERIMENTAL
 assert "CatalogSource" in instruments.__all__
 assert not hasattr(instruments, "HiddenSource")
 assert "HiddenSource" not in DRIVERS
@@ -162,6 +165,7 @@ assert "HiddenSource" not in DRIVERS
                     process.communicate()
                     self.fail("InstrumentServer did not terminate")
             self.assertEqual(process.returncode, 0, errors.decode())
+            self.assertIn("CatalogSource driver has not yet been validated with hardware", errors.decode())
             # A valid driver class must also not overwrite a public declaration/enum name.
             (destination / "instruments" / "drivers" / "collision.py").write_text('''
 from .simulated import SimulatedSource
