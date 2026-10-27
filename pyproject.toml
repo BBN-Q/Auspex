@@ -12,6 +12,8 @@ dependencies = ["numpy>=2.1"]
 license = { text = "Apache-2.0" }
 
 [project.optional-dependencies]
+all = ["auspex-v2[analysis,visa,gui,tui]"]
+analysis = ["scipy>=1.14", "matplotlib>=3.9"]
 visa = ["PyVISA>=1.14", "PyVISA-py>=0.7"]
 gui = ["PySide6>=6.8", "pyqtgraph>=0.13.7"]
 tui = ["textual>=1.0"]

@@ -17,8 +17,11 @@ replaces the historical discussion; it is not authorization to implement the bac
   overwrite contracts. Strict MkDocs build and example round-trip checks passed.
   Live plotting is implemented; attended review starts with
   `python tests/visual_plot_client.py` (two real simulated pipelines, no hardware).
-  No further implementation slice is authorized; runner lifecycle refactoring
-  remains deferred.
+  Core offline fitting and hanger S21 extraction are implemented; see the
+  [analysis guide](../docs/components/analysis.md) and
+  [hanger guide](../docs/components/resonator-fits.md). Real-trace resonator
+  validation remains an attended lab step. Qubit fitting remains deferred. No
+  further implementation slice is authorized; runner lifecycle refactoring remains deferred.
 - Inspect `git status` and preserve accumulated uncommitted work; these notes do not
   imply that implementation changes have been committed.
 - Start with the [manual](../docs/index.md),
@@ -122,6 +125,35 @@ replaces the historical discussion; it is not authorization to implement the bac
   fixed sweep and identical actual trace grids; repeated finalized positions or
   changed grids disable only the map. No TCP broker or automatic GUI launch.
 
+### Offline analysis
+
+- `auspex_v2.analysis` exports V1-style AuspexFit/Auspex2DFit, LorentzFit,
+  GaussianFit, MultiGaussianFit and QuadraticFit. Optional `analysis` extra adds
+  SciPy/Matplotlib only; core acquisition dependencies remain unchanged.
+- Inputs are explicit finite real arrays; callers select complex components and
+  dataset slices. Results expose named parameters/errors, full physical-unit
+  covariance, residuals/RSS and degrees of freedom. The unjustified V1 Nsigma
+  statistic is not retained. Bounds and explicit p0 are supported; Matplotlib
+  plots are opt-in/lazy, without backend/style changes or automatic show().
+- Multi-Gaussian initialization uses resolved positive peaks and physical-coordinate
+  half-prominence widths; unresolved/negative components need explicit guesses.
+  Optional multistart requires an explicit seed/Generator and selects lowest RSS;
+  result components and full covariance are consistently sorted by center. No
+  scikit-learn, synthetic sampling, automatic component count, weighted fitting,
+  GUI fitter or qubit port. Covariance errors remain conditional local
+  least-squares estimates, not proof of identifiability or model validity.
+- `ResonatorCircleFit` fits one hanger/notch S21 with constant complex gain and
+  linear delay (Hz/s), using circle geometry for initialization and full original
+  complex-data refinement. Background phase is at the reported span midpoint.
+  Qc = Qc_mag exp(-i phi); Qc_eff = 1/Re(1/Qc); 1/Qi = 1/Ql - 1/Qc_eff.
+  It exposes primary covariance and correlated derived-Q covariance, including
+  the real/imaginary coupling-Q covariance. Invalid Q/out-of-span/nonconvergence
+  fails explicitly; sampling, coverage and covariance limitations warn and remain
+  in diagnostics. Local delay initialization is not global alias resolution;
+  wrong geometry, variable backgrounds and multiple modes are outside scope.
+  `circle_fit` is a separate geometric helper, not Q inference. No V1 list-return
+  compatibility or manual post-fit Q override; no absolute-value repair of Qi.
+
 ## Compatibility and recent regression guardrails
 
 - **Plan format 6; dataset format 2; InstrumentServer protocol 4.** They version
@@ -143,11 +175,24 @@ replaces the historical discussion; it is not authorization to implement the bac
 
 ## Evidence and limits
 
-Latest full implementation validation (including live plotting and manual helpers):
+Latest full implementation validation (including hanger resonator fitting):
 
 ```sh
-QT_QPA_PLATFORM=offscreen python -B -m unittest discover -s tests -q  # 364 passed
+MPLBACKEND=Agg QT_QPA_PLATFORM=offscreen python -B -m unittest discover -s tests -q  # 384 passed
 ```
+
+The 20 analysis tests cover independent hanger loss/coupling equations across
+coupling regimes, mismatch/delay/reference conventions, analytic primary and
+independently propagated derived covariance, sparse/short-span diagnostics,
+unphysical/out-of-span failures, storage and plotting. The documented hanger
+example also passed. These are synthetic tests, not real-resonator validation.
+Core-fit coverage includes independent peak/dip models, GHz/sub-nanosecond
+scales, nonuniform coordinates, analytic polynomial/mixture covariance references,
+seeded multistart, unresolved-mixture errors, stored-data fitting, rectangular
+2D extension and real Matplotlib rendering. Documented Lorentzian/custom-2D
+examples passed; acquisition imports were smoke-tested with SciPy/Matplotlib
+unavailable. Numerical evidence does not validate a physical model or calibrate
+its error bars for arbitrary lab data. Strict MkDocs build and diff checks passed.
 
 Manual-helper coverage includes complex arrays/units/comments, validation before
 overwrite, whole-store replacement, writer locks, dated numbered lookup, dataset
@@ -183,7 +228,7 @@ or shared-buffer digitizer path. Direct non-server instrument access bypasses lo
 
 ## Documentation and code navigation
 
-The local-first MkDocs/Material manual has 17 narrative pages; snippets include the
+The local-first MkDocs/Material manual has 19 narrative pages; snippets include the
 canonical example as text, never execute it. Workflow is `workflow_dispatch` only;
 Pages has not been enabled/published remotely. API navigation and attended prose/visual
 review remain deferred. Material 9.8.0 announces EOL **May 5, 2027**; notice is documented,
@@ -198,9 +243,10 @@ not suppressed. Local commands and deployment prerequisites:
 | Drivers/proxies | [driver guide](../src/auspex_v2/instruments/drivers/instrument_drivers.md); `instruments/drivers/` |
 | Pipeline runtime/definitions | [filter guide](../src/auspex_v2/filters/README.md); [manual use](../src/auspex_v2/filters/manual.md); `filters/` |
 | Dataset store/browser | [data guide](../src/auspex_v2/data/data.md); `data/` |
+| Offline fits | [analysis guide](../docs/components/analysis.md), [hanger guide](../docs/components/resonator-fits.md); `analysis/{fits,resonator_fits}.py`, `tests/analysis/` |
 | Live plots | [live plot guide](../docs/utilities/live-plots.md); `filters/{preview,preview_client}.py`, `utils/plot_client.py`, `utils/src/{data_trace,data_heatmap,plot_client_model}.py` |
 | Console commands/output/TUI | [utility map](../utils/README.md); `utils/src/{operator_commands,service_output,auspex_tui}.py` |
 
 Module paths above are relative to `src/auspex_v2/`, except `utils/`. Tests mirror
-subsystems under `tests/{experiment,data,filters,instruments}/`. Examples are
+subsystems under `tests/{experiment,data,filters,instruments,analysis}/`. Examples are
 trusted authoring templates, not safe-to-run bench configurations without review.

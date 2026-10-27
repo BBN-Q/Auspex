@@ -18,6 +18,9 @@ V2 does not promise compatibility with V1 experiments or data files.
   from declarations to cleanup.
 - [Components](components/experiments.md): learn the responsibilities and limits
   of experiments, instruments, filters, and storage.
+- [Offline fitting](components/analysis.md): fit arrays or saved data with explicit
+  model and uncertainty conventions, independently of acquisition. Complex
+  hanger S21 has a dedicated [resonator fitting guide](components/resonator-fits.md).
 - [Utilities](utilities/index.md): choose a service, console, or inspection tool.
 
 ## The measurement path

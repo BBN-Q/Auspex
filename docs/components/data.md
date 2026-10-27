@@ -164,6 +164,10 @@ this is not a transaction across a whole run or protection against disk failure.
 Readers retain their opened manifest snapshot; reopen to see later publications.
 There is no append-to-published-array API.
 
+For model fitting, pass loaded coordinate/value arrays to the optional
+[offline analysis fits](analysis.md). Choose any complex component or trace slice
+explicitly; loading data does not perform analysis.
+
 ## Inspect and recover cautiously
 
 [DataBrowser](../utilities/data-browser.md) reads published datasets and metadata.

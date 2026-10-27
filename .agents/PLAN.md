@@ -275,5 +275,57 @@ fixed sweep per map; unsupported maps disable themselves, never required storage
 Documentation is complete; the save/open and comment-reading examples were also
 executed successfully in a temporary store. No further slice is authorized.
 
+## Authorized slice — core numerical fits
+
+- [x] Port V1 fits.py's AuspexFit/Auspex2DFit, LorentzFit, GaussianFit,
+  MultiGaussianFit and QuadraticFit to auspex_v2.analysis. Preserve familiar
+  fit_params/fit_errors/model interfaces; correct initializer/default-model bugs.
+- [x] Expose covariance, residuals, squared error and degrees of freedom instead
+  of unjustified Nsigma. Add explicit guesses/bounds; keep plotting opt-in with
+  lazy Matplotlib imports and no global style changes. SciPy/Matplotlib only in
+  an optional analysis extra; no acquisition dependency changes.
+- [x] Use deterministic positive-peak multi-Gaussian seeding on actual coordinates,
+  explicit guesses when unresolved, optional seeded multistart, center ordering
+  with consistently reordered covariance. No scikit-learn.
+- [x] Add independent numerical/integration tests and MkDocs usage/contracts.
+  Resonator-circle and qubit fits are not part of this slice.
+
+Core fits are implemented. Automatic single-peak seeds now use peak/dip geometry
+rather than V1's defective Gaussian regression; explicit p0 bypasses seeding.
+Optimizer parameter coordinates are centered/scaled internally for mixed physical
+units; returned covariance/parameters remain in caller units. No Nsigma, silent
+complex projection, weighted fitting, scikit-learn, or automatic model selection.
+Resonator-circle fitting needs a separate scientific review before implementation;
+qubit fits remain deferred. No further implementation slice is authorized.
+
+## Authorized slice — aggregate installation extra
+
+- [x] Add `auspex-v2[all]` / `pip install -e ".[all]"` to enable analysis, VISA,
+  GUI and TUI extras, without changing base dependencies. README updated;
+  requirement syntax and inclusion of every optional extra validated.
+
+## Authorized slice — hanger resonator circle fitting
+
+- [x] Add ResonatorCircleFit(frequency_hz, s21_complex): one hanger/notch S21,
+  constant complex gain plus linear cable delay (seconds), phase at a reported
+  reference frequency. Circle geometry initializes full original-complex-data
+  refinement; no reflection/peak/general-background/qubit expansion.
+- [x] Expose fr, loaded/internal Q, complex coupling Q, its magnitude and effective
+  dissipative Q, gain/phase/delay, model/residuals and propagated uncertainties.
+- [x] Raise on invalid input, failed convergence, out-of-span resonance and
+  nonpositive/nonfinite Q. Warn, without repairing results, about weak constraints,
+  sparse linewidth sampling and unreliable covariance; no unweighted chi-square.
+- [x] Add independent synthetic/correctness and storage/plot integration tests,
+  document conventions and operating limits in MkDocs. Real-trace validation is
+  a separate attended lab step.
+
+Hanger fitting is implemented. The convention is Qc = Qc_mag exp(-i phi),
+Qc_eff = Qc_mag/cos(phi), 1/Qi = 1/Ql - Re(1/Qc); alpha refers to the measured
+span midpoint. Seven-parameter covariance and derived real-valued Q covariance
+are exposed; complex Qc has a two-component covariance, not a scalar +/- error.
+Circle fitting replaces V1's determinant/Newton approach; final inference uses
+original complex data. Delay initialization is local, not an alias-resolution
+guarantee. No further implementation slice is authorized; qubit fits remain deferred.
+
 Runner lifecycle refactoring remains deferred. Keep current evidence in STATUS.md,
 not a growing chronological test-count/change diary here.

@@ -41,6 +41,8 @@ nav:
       - Instruments: components/instruments.md
       - Filters and pipelines: components/filters.md
       - Data and storage: components/data.md
+      - Offline fitting: components/analysis.md
+      - Hanger resonators: components/resonator-fits.md
   - Utilities:
       - Overview: utilities/index.md
       - Combined launcher: utilities/launch-auspex.md

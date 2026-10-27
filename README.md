@@ -36,12 +36,15 @@ Optional dependencies can be installed individually or together:
 python -m pip install -e ".[visa]"         # VISA instrument communication
 python -m pip install -e ".[gui]"          # Graphical tools
 python -m pip install -e ".[tui]"          # Terminal interface
-python -m pip install -e ".[visa,gui,tui]" # All three
+python -m pip install -e ".[analysis]"     # Offline fits and Matplotlib plots
+python -m pip install -e ".[all]"          # All optional dependencies
 ```
 
 The `visa` extra includes PyVISA and PyVISA-py; `gui` includes PySide6 and
-pyqtgraph; `tui` includes Textual. Hardware interfaces may require additional
-system libraries or permissions.
+pyqtgraph; `tui` includes Textual; `analysis` includes SciPy and Matplotlib.
+The `all` extra enables all four; the base install remains NumPy-only.
+See [offline fitting](docs/components/analysis.md) for models and uncertainty
+conventions. Hardware interfaces may require additional system libraries or permissions.
 
 ## Documentation
 
