@@ -43,6 +43,23 @@ The `visa` extra includes PyVISA and PyVISA-py; `gui` includes PySide6 and
 pyqtgraph; `tui` includes Textual. Hardware interfaces may require additional
 system libraries or permissions.
 
+## Documentation
+
+The [draft V2 manual](docs/index.md) includes a simulated quickstart, an annotated
+experiment, and component and utility guides. Install and preview it locally from
+the repository root:
+
+```sh
+python3.13 -m venv .venv-docs
+. .venv-docs/bin/activate
+python -m pip install -r docs/requirements.txt
+python -m mkdocs serve
+```
+
+Open the address printed by MkDocs, normally `http://127.0.0.1:8000/Auspex/`.
+The documentation workflow runs only when manually triggered; pushes and pull
+requests do not build or deploy the site. See [maintenance and deployment instructions](docs/maintaining.md).
+
 ## Funding
 
 This software is based in part upon work supported by the Office of the Director

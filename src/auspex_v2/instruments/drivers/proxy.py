@@ -1,6 +1,17 @@
 """Driver-shaped, session-bound views of server-registered instruments."""
 
 
+def _setting_property(member, readable, writable):
+    """Expose a descriptor so completion engines need not evaluate a remote GET."""
+    def get_setting(proxy):
+        return proxy.get(member)
+
+    def set_setting(proxy, value):
+        proxy.set(member, value)
+
+    return property(get_setting if readable else None, set_setting if writable else None)
+
+
 class InstrumentProxy:
     """Expose declared settings and operations without constructing a local driver."""
 
@@ -21,6 +32,25 @@ class InstrumentProxy:
         object.__setattr__(self, "_name", name)
         object.__setattr__(self, "_settings", settings)
         object.__setattr__(self, "_operations", operations)
+        # Jedi inspects dynamic attributes with getattr(), which would query hardware.
+        # Real property descriptors let it list scalar settings without reading them.
+        properties = {key: _setting_property(key, spec["read"], spec["write"])
+                      for key, spec in settings.items() if not spec["args"]}
+        if properties:
+            # Keep the slot layout unchanged; only this instance gets these descriptors.
+            view = type("InstrumentProxyView", (type(self),),
+                        {"__slots__": (), "__module__": __name__, **properties})
+            object.__setattr__(self, "__class__", view)
+
+    def __dir__(self):
+        """List declared members for completion without reading instrument settings."""
+        names = set(dir(type(self))) | set(self._settings) | self._operations
+        for name, spec in self._settings.items():
+            if spec["read"]:
+                names.add(f"get_{name}")
+            if spec["write"]:
+                names.add(f"set_{name}")
+        return sorted(names)
 
     @property
     def session(self):

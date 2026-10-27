@@ -1,4 +1,7 @@
 """Minimize-surprise contracts for configuration, runtime state and proxies."""
+import importlib.util
+import subprocess
+import sys
 import tempfile
 from pathlib import Path
 import unittest
@@ -305,6 +308,38 @@ class KeywordDevice(Instrument):
 
 
 class ProxyKeywordTest(unittest.TestCase):
+    def test_ipython_completes_proxy_members_without_server_requests(self):
+        """Real IPython completion lists metadata names without evaluating remote properties."""
+        if importlib.util.find_spec("IPython") is None:
+            self.skipTest("IPython is optional")
+        # InteractiveShell changes __main__ and other process globals. Keep that
+        # separate from the suite's multiprocessing-based service/worker tests.
+        script = '''import sys
+from unittest.mock import Mock
+from IPython.core.completer import IPCompleter, provisionalcompleter
+from IPython.core.interactiveshell import InteractiveShell
+from traitlets.config import Config
+from auspex_v2.instruments.server.client import Session
+from auspex_v2.instruments.drivers.capabilities import describe_driver
+from auspex_v2.instruments.drivers.simulated import SimulatedVNA
+client = Mock()
+client.request.side_effect = AssertionError("Completion must not query the server")
+session = Session(client, "vna", "token", run=False, capabilities=describe_driver(SimulatedVNA))
+shell = InteractiveShell(ipython_dir=sys.argv[1], user_ns={},
+                         config=Config({"HistoryManager": {"hist_file": ":memory:"}}))
+completer = IPCompleter(shell=shell, namespace={"vna": session.device})
+with provisionalcompleter():
+    names = {match.text.rsplit(".", 1)[-1]
+             for match in completer.completions("vna.", len("vna."))}
+expected = {"frequency_center", "get_frequency_center", "set_frequency_center", "get_trace", "session"}
+assert expected <= names, expected - names
+client.request.assert_not_called()
+'''
+        with tempfile.TemporaryDirectory(dir=".agents") as directory:
+            result = subprocess.run([sys.executable, "-B", "-c", script, directory],
+                                    capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_recording_proxy_keeps_routing_keywords_in_driver_mapping(self):
         class Save(Experiment):
             device = InstrumentRef(driver=KeywordDevice)

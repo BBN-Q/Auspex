@@ -11,6 +11,8 @@ import threading
 import time
 import unittest
 import warnings
+
+import numpy as np
 from unittest.mock import patch
 
 from auspex_v2.data import AuspexStore
@@ -175,6 +177,39 @@ print(json.dumps({'id':run.run_id, 'path':str(run.path)}))
         self.assertIn("SET source.output", run.log())
         with AuspexStore(run.path) as store:
             self.assertEqual(store.list_datasets(), [])
+
+    def test_documented_vna_example_publishes_named_coordinates_and_computation(self):
+        """Exercise the manual's canonical example through real services and simulated workers."""
+        namespace = runpy.run_path(str(Path(__file__).resolve().parents[2] / "examples" / "documented_vna_sweep.py"))
+        experiment = namespace["SourceVnaSweep"]()
+        experiment.bind_instrument("source", "source")
+        experiment.bind_instrument("vna", "vna")
+        frequencies = [5e9, 5.1e9, 5.2e9]
+        experiment.add_sweep(experiment.source_frequency, frequencies)
+        with InstrumentServerClient(self.instrument_socket) as instruments:
+            instruments.register("vna", "SimulatedVNA", "SIM::VNA")
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            compiled = experiment.compile()
+        run = self.client.submit(compiled, name="documented_vna", dir=self.data)
+        result = run.wait(timeout=20)
+        self.assertEqual(result["state"], "SUCCEEDED", result)
+        self.assertTrue(result["lease_released"])
+        self.assertIn("COMPUTE numpy.min completed", run.log())
+        self.assertIn("SET_PARAMETER minimum_magnitude requested=", run.log())
+        with AuspexStore(run.path) as store:
+            self.assertEqual(store.list_datasets(), [("measurement", "s21")])
+            dataset = store.read_dataset("measurement", "s21")
+        self.assertEqual(dataset.data.shape, (3, 201))
+        self.assertEqual(dataset.data.dtype, np.dtype("complex64"))
+        self.assertEqual(dataset.axes["source_frequency"].points, frequencies)
+        self.assertEqual(dataset.axes["source_frequency"].unit, "Hz")
+        np.testing.assert_allclose(dataset.coordinates["frequency"].values, np.linspace(6.09e9, 6.11e9, 201))
+        np.testing.assert_array_equal(dataset.data[0], dataset.data[1])
+        self.assertAlmostEqual(float(abs(dataset.data[0, 100])), 0.3, places=6)
+        with InstrumentServerClient(self.instrument_socket) as instruments:
+            with instruments.live("source") as source:
+                self.assertFalse(source.output)
 
     def test_recorded_fft_executes_in_runner_and_publishes_analytical_result(self):
         """A real runner resolves the saved NumPy dependency and publishes its scalar update."""

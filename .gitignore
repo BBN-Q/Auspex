@@ -19,3 +19,9 @@ config/config.json
 *.prof
 *.bak
 .DS*
+
+# Local documentation builds/environments and simulated quickstart state.
+/site/
+/.venv/
+/.venv-docs/
+/.auspex-demo/
