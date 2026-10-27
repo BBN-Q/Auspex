@@ -7,6 +7,19 @@ from pathlib import Path
 import unittest
 from unittest.mock import Mock, patch
 
+from utils.src.service_output import ServiceOutput
+
+
+def capture(children):
+    """Start launcher-style capture without involving Textual or reading a mock pipe twice."""
+    output = ServiceOutput()
+    seen = set()
+    for process, name in children:
+        if id(process.stdout) not in seen:
+            output.attach(process, name)
+            seen.add(id(process.stdout))
+    return output
+
 
 @unittest.skipUnless(importlib.util.find_spec("textual"), "install auspex-v2[tui] to test the terminal console")
 class OperatorConsoleTest(unittest.IsolatedAsyncioTestCase):
@@ -26,7 +39,8 @@ class OperatorConsoleTest(unittest.IsolatedAsyncioTestCase):
         experiment = Mock(stdout=io.StringIO("[ExperimentServer] running\n"))
         experiment.poll.return_value = None
         app = OperatorConsole("instrument.sock", "experiment.sock",
-                              [(instrument, "InstrumentServer"), (experiment, "ExperimentServer")])
+                              [(instrument, "InstrumentServer"), (experiment, "ExperimentServer")],
+                              output=capture([(instrument, "InstrumentServer"), (experiment, "ExperimentServer")]))
         def fake_execute(parts):
             if parts[0] in ("experiment", "instruments"):
                 app.commands.mode = parts[0].title()
@@ -87,7 +101,7 @@ class OperatorConsoleTest(unittest.IsolatedAsyncioTestCase):
             def list_runs(self):
                 return [{"run_id": "run-1"}]
 
-        app = auspex_tui.OperatorConsole("i", "e", [])
+        app = auspex_tui.OperatorConsole("i", "e", [], output=ServiceOutput())
         from src import operator_commands
         with patch.object(operator_commands, "InstrumentServerClient", Instruments), \
              patch.object(operator_commands, "ExperimentServerClient", Experiments):
@@ -113,7 +127,7 @@ class OperatorConsoleTest(unittest.IsolatedAsyncioTestCase):
             sys.path.remove(str(root / "utils"))
         child = Mock(stdout=io.StringIO())
         child.poll.return_value = None
-        app = OperatorConsole("i", "e", [(child, "i"), (child, "e")])
+        app = OperatorConsole("i", "e", [(child, "i"), (child, "e")], output=capture([(child, "i")]))
         with patch.object(app.commands, "execute", return_value="done") as execute, \
              patch.object(app.commands, "registration_prompt", return_value="Inventory name:"):
             async with app.run_test() as pilot:
@@ -150,7 +164,8 @@ class OperatorConsoleTest(unittest.IsolatedAsyncioTestCase):
         child = Mock(stdout=io.StringIO())
         child.poll.return_value = None
         app = OperatorConsole("instruments.sock", "experiments.sock",
-                              [(child, "InstrumentServer"), (child, "ExperimentServer")])
+                              [(child, "InstrumentServer"), (child, "ExperimentServer")],
+                              output=capture([(child, "InstrumentServer")]))
         with patch.object(app.commands, "execute", return_value="cleared") as command:
             async with app.run_test() as pilot:
                 await pilot.press("c", "l", "e", "a", "r", "space", "a", "l", "l", "enter")

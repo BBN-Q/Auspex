@@ -61,6 +61,21 @@ registration may finish. It never implicitly registers or connects anything. The
 main inventory window owns its worker lifetime and joins in-flight requests on
 application close. Closing either window does not stop the instrument server.
 
+## Saved registration errors
+
+The server normalizes saved definitions before restoring inventory. If multiple
+entries resolve to one connection endpoint, all entries in that conflicting group
+are skipped, without connecting hardware. The main window shows a **Saved
+instruments not restored** popup with names/drivers/addresses and a rejected count
+in the connection banner. Unchanged errors do not reopen the popup on each poll.
+Unrelated instruments remain available. Original rejected definitions are retained
+in the server state for inspection; explicitly register a corrected definition to
+resolve its record, or confirm Clear Instruments to discard the records along with
+the disconnected inventory. See the [operator guide](instrument_server.md#saved-inventory-normalization-and-conflicts).
+
+Whitelist entries also require complete VISA addresses; ambiguous bare IP entries
+warn in the discovery summary rather than guessing an endpoint.
+
 ## Inventory actions
 
 Global actions:

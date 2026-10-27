@@ -26,6 +26,7 @@ from .bulk import encode_result, ResultEncodingError
 from ..drivers.capabilities import describe_driver as _capabilities
 from ..drivers.core import SCPIInstrument
 from ..drivers.registry import DRIVERS
+from ..drivers.addresses import normalize_visa_address
 
 MAX_MESSAGE = 64 * 1024
 PROTOCOL_VERSION = 4  # Prototype protocol; clients and service are updated together.
@@ -203,6 +204,7 @@ class Registry:
         self.path = Path(state_path)
         self.lock = threading.RLock()
         self.instruments = {}
+        self.rejected_instruments = {}  # skipped saved definitions and their errors, retained for inspection
         self.workers = {}
         self.busy = set()  # instrument names with one worker request in flight
         self.operations = {}  # name -> connecting/executing/disconnecting
@@ -217,18 +219,56 @@ class Registry:
         elif self.path.exists():
             with self.path.open(encoding="utf8") as stream:
                 saved = json.load(stream)
-            for name, spec in saved.get("instruments", {}).items():
-                if spec["driver"] not in DRIVERS:
-                    raise InstrumentServerError(f"Unknown persisted driver {spec['driver']!r}; use --clean for a forced reset and re-register by canonical class name")
-                state = (spec["state"] if spec["state"] in (DISCONNECTED, TERMINATED)
-                         else UNKNOWN)
-                self.instruments[name] = dict(spec, state=state)
-                self.announce(f"{name}: {spec['state']} -> {state} on server restart")
+            self._restore_inventory(saved)
             if saved.get("run") is not None:
                 self.run = {"run_id": saved["run"]["run_id"], "owner": None,
                             "token": None, "orphaned": True}
                 self.announce(f"run {self.run['run_id']}: ORPHANED on server restart")
             self._save()  # after restart, prior worker state is not trusted
+
+    @staticmethod
+    def _physical_resource(driver_type, resource, io_timeout=None):
+        if driver_type not in DRIVERS:
+            raise ValueError(f"Driver {driver_type!r} is not admitted by this server")
+        driver = DRIVERS[driver_type]
+        options = {"io_timeout": io_timeout} if issubclass(driver, SCPIInstrument) else {}
+        return driver(resource, **options).physical_resource
+
+    def registration_errors(self):
+        return {name: entry["error"] for name, entry in self.rejected_instruments.items()}
+
+    def _restore_inventory(self, saved):
+        """Restore only unambiguous definitions; never choose one member of a duplicate group."""
+        self.rejected_instruments = dict(saved.get("rejected_instruments", {}))
+        definitions = saved.get("instruments", {})
+        endpoints = {}
+        normalized = {}
+        for name, spec in definitions.items():
+            try:
+                physical = self._physical_resource(spec["driver"], spec["resource"], spec.get("io_timeout"))
+            except Exception as exc:
+                self.rejected_instruments[name] = {"spec": spec, "error":
+                    f"Not restored {spec.get('driver')} at {spec.get('resource')}: {exc}. Re-register a corrected definition."}
+                continue
+            normalized[name] = dict(spec, physical=physical)
+            endpoints.setdefault(physical, []).append(name)
+        for physical, names in endpoints.items():
+            if len(names) > 1:
+                details = ", ".join(f"{name} ({definitions[name]['driver']}, {definitions[name]['resource']})"
+                                    for name in sorted(names))
+                error = (f"Duplicate canonical address {physical}: {details}. None of these entries was restored. "
+                         "Re-register corrected definitions; originals are retained in rejected_instruments.")
+                for name in names:
+                    self.rejected_instruments[name] = {"spec": definitions[name], "error": error}
+                continue
+            name = names[0]
+            spec = normalized[name]
+            state = spec["state"] if spec["state"] in (DISCONNECTED, TERMINATED) else UNKNOWN
+            self.instruments[name] = dict(spec, state=state)
+            self.rejected_instruments.pop(name, None)
+            self.announce(f"{name}: {spec['state']} -> {state} on server restart")
+        for name, error in self.registration_errors().items():
+            self.announce(f"REGISTRATION ERROR — {name}: {error}")
 
     def announce(self, message):
         """Print an operator-facing command or transition unless quiet mode is active."""
@@ -238,7 +278,7 @@ class Registry:
             print(f"[InstrumentServer] {message}", flush=True)
 
     def _save(self):
-        payload = {"instruments": self.instruments,
+        payload = {"instruments": self.instruments, "rejected_instruments": self.rejected_instruments,
                    "run": {"run_id": self.run["run_id"]} if self.run else None}
         tmp = self.path.with_suffix(".tmp")
         fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
@@ -302,7 +342,8 @@ class Registry:
                         "features": ["inline_arrays", "typed_dict_keys", "real_drivers", "instrument_timeouts",
                                      "terminate_all", "optional_termination_reason"]}
             if op == "STATUS":
-                return {"instruments": {name: {**spec, "locked": self.run is not None,
+                return {"registration_errors": self.registration_errors(),
+                        "instruments": {name: {**spec, "locked": self.run is not None,
                         "live_sessions": sum(v[1] == name for v in self.live.values()),
                         "worker_running": name in self.workers, "busy": name in self.busy,
                         "operation": self.operations.get(name) if name in self.busy else None}
@@ -349,20 +390,19 @@ class Registry:
 
     def _discover(self, request):
         """Reserve probing against new leases/registration without blocking status requests."""
-        from .discovery import enumerate_visa, identify_visa, resource_key, read_whitelist, permission_denied
+        from .discovery import enumerate_visa, identify_visa, read_whitelist, permission_denied
 
         with self.lock:
             if self.run or self.live or self.busy or self.closing or self.discovering:
                 raise InstrumentServerError("Discovery requires an idle server with no run or live sessions")
             if request.get("interface") != "visa":
                 raise InstrumentServerError("Only interface visa is supported")
-            registered = {resource_key(s[key]) for s in self.instruments.values()
-                          for key in ("resource", "physical")}
+            registered = {s["physical"] for s in self.instruments.values()}
             resource = request.get("resource")
             if request["op"] == "IDENTIFY":
                 if not isinstance(resource, str) or not resource:
                     raise InstrumentServerError("A VISA resource is required")
-                if resource_key(resource) in registered:
+                if normalize_visa_address(resource) in registered:
                     raise InstrumentServerError("Resource already registered; use its existing connection")
             self.discovering = True
         try:
@@ -373,7 +413,7 @@ class Registry:
                     raise InstrumentServerError(f"VISA enumeration failed: {exc}") from exc
                 whitelist, path, warning = read_whitelist()
                 for candidate in candidates:
-                    key = resource_key(candidate["resource"])
+                    key = normalize_visa_address(candidate["resource"])
                     candidate["registered"] = key in registered
                     candidate["whitelisted"] = key in whitelist
                     candidate.update(self.discovery_denied.get(key, {}))
@@ -385,7 +425,7 @@ class Registry:
             except Exception as exc:
                 result = {"identity": None, "drivers": [], "error": str(exc),
                           "permission_denied": permission_denied(exc)}
-            key = resource_key(resource)
+            key = normalize_visa_address(resource)
             if result["permission_denied"]:
                 self.discovery_denied[key] = result
             else:
@@ -480,11 +520,14 @@ class Registry:
         if self.workers:
             raise InstrumentServerError("Cannot clear inventory while workers remain")
         previous = self.instruments
+        rejected = self.rejected_instruments
         self.instruments = {}
+        self.rejected_instruments = {}
         try:
             self._save()
         except Exception:
             self.instruments = previous
+            self.rejected_instruments = rejected
             raise
         self.announce("server: cleared registered instruments")
         return {"cleared": sorted(previous)}
@@ -627,15 +670,21 @@ class Registry:
         driver = DRIVERS[driver_type]
         if io_timeout is not None and not issubclass(driver, SCPIInstrument):
             raise InstrumentServerError("io_timeout applies only to VISA/SCPI drivers")
-        options = {"io_timeout": io_timeout} if issubclass(driver, SCPIInstrument) else {}
-        physical = driver(resource, **options).physical_resource
-        from .discovery import resource_key
-        if any(resource_key(s["physical"]) == resource_key(physical) for s in self.instruments.values()):
-            raise InstrumentServerError(f"Physical device already registered: {physical}")
+        physical = self._physical_resource(driver_type, resource, io_timeout)
+        for existing, spec in self.instruments.items():
+            if spec["physical"] == physical:
+                raise InstrumentServerError(f"Physical device already registered as {existing} ({spec['driver']}): {physical}")
         self.instruments[name] = {"driver": driver_type, "resource": resource,
                                   "physical": physical, "command_timeout": command_timeout,
                                   "io_timeout": io_timeout, "state": DISCONNECTED}
-        self._save()
+        rejected = self.rejected_instruments.pop(name, None)
+        try:
+            self._save()
+        except Exception:
+            del self.instruments[name]
+            if rejected is not None:
+                self.rejected_instruments[name] = rejected
+            raise
         self.announce(f"{name}: UNREGISTERED -> DISCONNECTED (registered {driver_type} at {physical})")
         return {"physical": physical}
 

@@ -13,6 +13,7 @@ import unittest
 from auspex_v2.experiment.client import ExperimentServerClient
 from auspex_v2.instruments.server import InstrumentServerClient
 from .test_experiment_server import Measurement, plan
+from utils.src.service_output import ServiceOutput
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -32,6 +33,7 @@ class TuiShutdownTest(unittest.IsolatedAsyncioTestCase):
         self.instrument = Path(self.tmp.name) / "instrument.sock"
         self.experiment = Path(self.tmp.name) / "experiment.sock"
         self.children = []
+        self.output = ServiceOutput()
         self.addCleanup(self.stop_children)
         env = dict(os.environ, AUSPEX_HOME=self.tmp.name,
                    PYTHONPATH=str(ROOT / "src") + os.pathsep + os.environ.get("PYTHONPATH", ""))
@@ -48,6 +50,7 @@ class TuiShutdownTest(unittest.IsolatedAsyncioTestCase):
                                        stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                                        stderr=subprocess.STDOUT, text=True, start_new_session=True)
             self.children.append((process, name))
+            self.output.attach(process, name)
             launcher.wait_ready(process, path, hello)
 
         sys.path.insert(0, str(ROOT / "utils"))
@@ -63,15 +66,15 @@ class TuiShutdownTest(unittest.IsolatedAsyncioTestCase):
                 self.messages.append(message)
                 super()._log(message)
 
-        self.app = RecordingConsole(self.instrument, self.experiment, self.children,
+        self.app = RecordingConsole(self.instrument, self.experiment, self.children, output=self.output,
             shutdown=lambda stop_wait, report: launcher.shutdown_tui(
-                self.experiment, self.children, stop_wait, report))
+                self.experiment, self.children, stop_wait, report, output=self.output))
         self.app.messages = []
 
     def stop_children(self):
         for process, name in reversed(self.children):
             launcher.stop(process, name)
-            process.stdout.close()
+        self.output.finish()
 
     async def until(self, pilot, predicate):
         """Allow both the Textual loop and actual service processes to make progress."""
@@ -156,6 +159,45 @@ class TuiShutdownTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(text.count("Requesting cooperative cancellation"), 1)
         self.assertTrue(all(process.poll() is not None for process, _ in self.children))
         self.assertEqual(self.app.return_value, 0)
+
+    async def test_inherited_stdout_does_not_hold_console_open_after_services_stop(self):
+        """The UI exits with a warning while a surviving descendant still owns a captured pipe."""
+        gate = Path(self.tmp.name) / "release-descendant"
+        ready = Path(self.tmp.name) / "descendant-ready"
+        child = ("from pathlib import Path; import sys,time; "
+                 "Path(sys.argv[2]).touch(); gate=Path(sys.argv[1]); "
+                 "exec('while not gate.exists(): time.sleep(.01)'); "
+                 "print('descendant released', flush=True)")
+        parent = ("import subprocess,sys,time; "
+                  "subprocess.Popen([sys.executable,'-u','-c',sys.argv[1],sys.argv[2],sys.argv[3]]); "
+                  "time.sleep(30)")
+        process = subprocess.Popen([sys.executable, "-u", "-c", parent, child, str(gate), str(ready)],
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, start_new_session=True)
+        self.children.append((process, "pipe-holder"))
+        self.output.attach(process, "pipe-holder")
+        try:
+            deadline = time.monotonic() + 5
+            while not ready.exists():
+                self.assertLess(time.monotonic(), deadline)
+                time.sleep(.01)
+            async with self.app.run_test() as pilot:
+                await pilot.press("ctrl+c")
+                await self.until(pilot, lambda: not self.app.is_running)
+            text = "\n".join(self.app.messages)
+            self.assertIn("pipe-holder: service exited, but output remains open", text)
+            self.assertIn("Inspect hardware and leases", text)
+            self.assertIn("Services stopped. Exiting console.", text)
+            self.assertTrue(all(p.poll() is not None for p, _ in self.children))
+            self.assertTrue(any(reader.is_alive() for _, reader in self.output.readers))
+            self.assertEqual(self.app.return_value, 0)
+        finally:
+            gate.touch()
+            if process.poll() is None:
+                process.terminate()
+                process.wait(timeout=5)
+            for _, reader in self.output.readers:
+                reader.join(5)
+        self.assertFalse(any(reader.is_alive() for _, reader in self.output.readers))
 
     async def test_ctrl_c_without_active_run_still_stops_both_services(self):
         """Idle shutdown uses the same ordered cleanup without issuing a run cancellation."""

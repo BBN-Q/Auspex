@@ -21,14 +21,14 @@ class OperatorConsole(App):
     """
     BINDINGS = [("ctrl+c", "shutdown", "Cancel run, wait, then stop services; press again to skip wait")]
 
-    def __init__(self, instrument_socket, experiment_socket, children, *, shutdown=None):
+    def __init__(self, instrument_socket, experiment_socket, children, *, output, shutdown=None):
         super().__init__()
         self.commands = OperatorCommands(instrument_socket, experiment_socket)
         self.services = children
         self.shutdown_callback = shutdown
         self.shutting_down = False
         self.stop_wait = threading.Event()
-        self.readers = []
+        self.output = output
         self.pending_confirmation = None
         self.pending_registration = None
         self.busy = False
@@ -42,23 +42,18 @@ class OperatorConsole(App):
 
     def on_mount(self):
         self._prompt()
+        self._drain_output()
         self._log("[Auspex] Both services ready. Type help. Ctrl+C shuts down the launcher: cancels an active run, "
                   "waits for teardown, then stops services. Press again to skip the wait. "
                   "The console stays visible until services stop; Ctrl+C does not just clear the prompt.")
-        for process, name in self.services[:2]:
-            reader = threading.Thread(target=self._read_output, args=(process,), daemon=True)
-            self.readers.append(reader)
-            reader.start()
+        self.set_interval(0.05, self._drain_output)
         self.set_interval(0.2, self._check_children)
         self.query_one(Input).focus()
 
-    def _read_output(self, process):
-        """Drain each child continuously so a chatty service never blocks on its pipe."""
-        for line in process.stdout:
-            try:
-                self.call_from_thread(self._log, line.rstrip("\n"))
-            except RuntimeError:
-                return  # Console closed; the launcher still owns service shutdown.
+    def _drain_output(self):
+        """Display buffered service output; pipe readers never depend on the UI event loop."""
+        for line in self.output.drain():
+            self._log(line)
 
     def _check_children(self):
         if not self.shutting_down and any(process.poll() is not None for process, _ in self.services[:2]):
@@ -94,8 +89,7 @@ class OperatorConsole(App):
         result = 0
         try:
             self.shutdown_callback(self.stop_wait, report)
-            for reader in self.readers:
-                reader.join()
+            self.call_from_thread(self._drain_output)
             report("Services stopped. Exiting console.")
         except Exception as exc:
             result = 1

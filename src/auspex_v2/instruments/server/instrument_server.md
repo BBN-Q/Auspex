@@ -112,9 +112,13 @@ identification and explicit-driver registration workflow; see the
 
 Discovery runs in the instrument server and is rejected during a run, live session,
 or busy worker operation. Temporary probing excludes new leases/registration;
-status remains available. Common TCPIP INSTR aliases and bare IPv4 shorthand are
-recognized as registered addresses, but DNS aliases and all physical-device aliases
-cannot be detected. Never probe an alternate address for a device already in use.
+status remains available. One shared VISA normalizer supplies both the actual
+connection endpoint and the registration identity. Driver-specific bare IPv4
+shorthand expands to `5025::SOCKET` for N5183A and `hpib7,16::INSTR` for the current
+VNA drivers; discovery recognizes those endpoints as already registered. Common
+VISA spellings/default fields are standardized without changing case-sensitive
+serial paths or USB serial numbers. DNS aliases and all physical-device aliases
+cannot be detected; different endpoints on the same IP are not automatically equated. Never probe an alternate address for a device already in use.
 Enumeration is backend-dependent and may miss actual instruments; manual-address
 registration through the Python client remains available. No subnet scan, reset,
 configuration, automatic registration, or automatic connection is performed.
@@ -134,7 +138,10 @@ TCPIP0::192.0.2.11::inst0::INSTR
 ```
 
 Matching uses the same address normalization as registration (including common
-TCPIP INSTR aliases and bare IPv4). A whitelist match overrides all display filters,
+TCPIP INSTR aliases). **Whitelist entries must be complete VISA addresses**: bare
+IPs/aliases are skipped with a line-numbered warning, since the whitelist has no
+driver from which to infer an endpoint. Valid entries are still used. A whitelist
+match overrides all display filters,
 not ownership checks, registration validation or bulk-probing restrictions. It does
 not add undiscovered addresses, open connections or trigger probes. Missing files
 are normal; unreadable files produce a warning in terminal output/GUI discovery.
@@ -156,6 +163,29 @@ with `candidates`, `whitelist_path` and `whitelist_warning`; operator interfaces
 this form to show warnings even when no resources were found.
 `server.identify(resource)` returns identity, suggestions, an error field and
 `permission_denied`. Letter IDs belong only to the operator's local snapshot.
+
+### Saved inventory normalization and conflicts
+
+At startup the server recomputes each saved definition's canonical endpoint without
+connecting hardware, preserving its connection/recovery state under the normal
+restart rules. If several saved entries resolve to the same endpoint, **none of
+that conflicting group is restored**; unrelated entries remain available. Invalid
+or unavailable saved drivers are also skipped with a clear error.
+
+Errors appear in service logs, terminal `list`/startup status and `status()` under
+`registration_errors`. The GUI shows a popup once per changed set of errors and
+labels the connection banner with the rejected-registration count. Polling does
+not repeatedly reopen the same popup.
+
+The original skipped definitions and error messages are retained under
+`rejected_instruments` in the server's state JSON, not silently merged or deleted.
+They remain excluded on later restarts. After inspecting hardware, explicitly
+re-register a corrected definition (the original inventory name is available);
+that removes its rejection record. Normal registration still rejects an endpoint
+already registered under another name. Confirmed Clear Instruments/`clear all`
+discards the rejection records along with the disconnected inventory. Forced
+`--clean` also discards them. Neither action verifies physical safety, and skipped
+entries are not connected or included in the registered domain.
 
 ## Timeouts
 

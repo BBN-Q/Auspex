@@ -507,7 +507,7 @@ class InstrumentServerTest(unittest.TestCase):
         self.stop_server()
         self.start_server(clean=True)
         with InstrumentServerClient(self.socket) as c:
-            self.assertEqual(c.status(), {"instruments": {}, "run": None})
+            self.assertEqual(c.status(), {"instruments": {}, "registration_errors": {}, "run": None})
             c.register("src", "SimulatedSource", "SIM::SRC")
         self.stop_server()
         self.start_server()

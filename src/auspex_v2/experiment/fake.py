@@ -2,6 +2,10 @@
 import copy
 import operator
 
+import numpy as np
+
+from .computations import normalize_scalar, resolve_operation, snapshot_value
+
 from ._experiment_plan import check_type, check_parameter
 
 
@@ -91,7 +95,25 @@ class FakeExecutor:
         if op == "parameter":
             return self.params[expr["name"]]
         if op == "field":
-            return self._eval(expr["value"])[expr["name"]]
+            return normalize_scalar(self._eval(expr["value"])[expr["name"]])
+        if op == "index":
+            return normalize_scalar(self._eval(expr["value"])[self._eval(expr["index"])])
+        if op == "component":
+            value = self._eval(expr["value"])
+            if not isinstance(value, (bool, int, float, complex, np.ndarray, np.number)):
+                raise TypeError(".real/.imag require numerical values")
+            return normalize_scalar(getattr(value, expr["name"]))
+        if op in ("list", "tuple"):
+            values = [self._eval(item) for item in expr["items"]]
+            return tuple(values) if op == "tuple" else values
+        if op == "dict":
+            return {key: self._eval(item) for key, item in expr["items"]}
+        if op == "array":
+            return np.asarray(self._eval(expr["value"]), dtype=expr["dtype"]).reshape(expr["shape"])
+        if op == "complex":
+            return complex(expr["real"], expr["imag"])
+        if op == "slice":
+            return slice(*(self._eval(expr[key]) for key in ("start", "stop", "step")))
         if op == "neg":
             return -self._eval(expr["args"][0])
         if op == "not":
@@ -114,6 +136,8 @@ class FakeExecutor:
             op = node["op"]
             if op in ("GET", "SET", "CALL"):
                 self._command(node)
+            elif op == "COMPUTE":
+                self._compute(node)
             elif op == "PUBLISH":
                 self._publish(node)
             elif op == "WAIT":
@@ -164,6 +188,21 @@ class FakeExecutor:
             self._log(node, f"{op} failed (command outcome may be uncertain)")
             raise
         self._log(node, f"{op} completed")
+
+    def _compute(self, node):
+        """Run one trusted call synchronously with detached inputs and numerical results."""
+        spec = self.doc["operations"][node["operation"]]
+        path = f"{spec['module']}.{spec['attribute']}"
+        self._log(node, f"COMPUTE {path} started")
+        try:
+            function = resolve_operation(spec)
+            args = snapshot_value([self._eval(arg) for arg in node["args"]])
+            kwargs = snapshot_value({key: self._eval(value) for key, value in node["kwargs"]})
+            self.values[node["result"]] = snapshot_value(function(*args, **kwargs))
+        except Exception:
+            self._log(node, f"COMPUTE {path} failed")
+            raise
+        self._log(node, f"COMPUTE {path} completed")
 
     def _scan_end(self, node):
         self.scan_complete = True

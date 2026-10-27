@@ -15,7 +15,7 @@ from auspex_v2.instruments import AgilentE8363C, YokogawaGS200
 class BiasVnaSweep(Experiment):
     bias_source = InstrumentRef(driver=YokogawaGS200)
     vna = InstrumentRef(driver=AgilentE8363C)
-    bias = FloatParameter(default=0.0, unit="V", bounds=(-0.1, 0.1))
+    bias = FloatParameter(default=0.0, unit="V", bounds=(-0.1, 0.1)).bind(bias_source, "ramp")
     trace = OutputConnector(dtype="complex64", dimensions=("frequency",),
                             axis_units={"frequency": "Hz"}, max_bytes=8 * 1024 * 1024)
 
@@ -55,7 +55,6 @@ def main():
     experiment = BiasVnaSweep()
     experiment.bind_instrument("bias_source", args.bias_source)
     experiment.bind_instrument("vna", args.vna)
-    experiment.bias.bind(experiment.bias_source, "ramp")
     experiment.add_sweep(experiment.bias, [-0.01, -0.005, 0.0, 0.005, 0.01])
     run = ExperimentServerClient(args.socket).submit(
         experiment.compile(), name="bias_vna_sweep", dir=args.directory, date=True)

@@ -51,11 +51,14 @@ def preflight_run(plan, *, slots=2, result_capacity=2,
                   store_scan_budget_bytes=256 * 1024 * 1024):
     """Check supported saved topology and graph budgets before claiming a folder.
 
-    No workers, store, instrument session, or filesystem writes are created here.
-    Runtime failures (worker startup, disk I/O, instrument connection) remain possible.
+    No workers, store or instrument session are created here. Recorded Python
+    imports are trusted code and may have side effects. Runtime failures remain possible.
     """
     if not isinstance(plan, CompiledPlan) or plan.document["version"] != PLAN_VERSION:
         raise ValueError("Preflight requires a validated current-version plan")
+    from .computations import resolve_operation
+    for spec in plan.document["operations"].values():
+        resolve_operation(spec)
     attachments = plan.document["pipelines"]
     if len(attachments) != 1:
         raise PipelineError("Current runner requires one attached pipeline")

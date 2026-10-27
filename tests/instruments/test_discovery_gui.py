@@ -263,6 +263,34 @@ class DiscoveryGuiTest(unittest.TestCase):
         self.assertIn(str(path), self.discovery.summary.text())
         self.assertEqual(self.window.message.text(), "Previous main action")
 
+    def test_saved_duplicates_show_one_popup_and_remain_out_of_inventory(self):
+        """Rejected startup definitions are visible without repeated polling dialogs or worker creation."""
+        from .test_visa_addresses import definition
+        from auspex_v2.instruments.server import InstrumentServerClient
+
+        with self.server.registry.lock:
+            self.server.registry._restore_inventory({"instruments": {
+                "source": definition("AgilentN5183A", "192.0.2.5"),
+                "alias": definition("AgilentN5183A", "TCPIP0::192.0.2.5::5025::SOCKET")}})
+            self.server.registry._save()
+        with patch.object(self.qt.QMessageBox, "warning") as popup:
+            self.window._request("STATUS")
+            self.until(lambda: not self.window.pending and popup.call_count == 1)
+            self.assertIn("source", popup.call_args.args[2])
+            self.assertIn("None of these entries was restored", popup.call_args.args[2])
+            self.assertIn("saved registrations rejected", self.window.connection.text())
+            self.assertEqual(self.window.table.rowCount(), 0)
+            self.assertTrue(self.window.clear_instruments.isEnabled())
+            self.window._request("STATUS")
+            self.until(lambda: not self.window.pending)
+            self.assertEqual(popup.call_count, 1)
+            with InstrumentServerClient(self.server.path) as client:
+                client.clear_instruments()
+            self.window._request("STATUS")
+            self.until(lambda: not self.window.pending)
+            self.assertNotIn("rejected", self.window.connection.text())
+        self.assertEqual(self.window.message.text(), "Previous main action")
+
     def test_run_lock_gates_discovery(self):
         """Polling ownership disables all discovery actions during a run and restores them afterward."""
         from auspex_v2.instruments.server import InstrumentServerClient

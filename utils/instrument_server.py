@@ -86,6 +86,8 @@ def terminal_commands(socket_path, lines):
                                   for name, spec in status["instruments"].items()}
                     run = status["run"]
                     print(f"[InstrumentServer] Run: {run or 'none'}", flush=True)
+                    for name, error in sorted(status.get("registration_errors", {}).items()):
+                        print(f"[InstrumentServer] REGISTRATION ERROR — {name}: {error}", flush=True)
                     for index, name in enumerate(names, 1):
                         spec = status["instruments"][name]
                         print(f"  {index}. {name} — {spec['state']} — "

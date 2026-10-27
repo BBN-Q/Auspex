@@ -22,4 +22,32 @@ Three layouts use the **same** envelope:
 
 `Axis` and `write_dataset(group, name, data, axes)` still support writing one completed regular array. For dependent/ragged data pass `dimensions`, `coordinates` (`Coordinate(name, values, dimensions, unit)`), and optionally `offsets`. `Dataset.coordinates` includes all coordinate arrays; `Dataset.axes` is a compatibility convenience for separable dimension coordinates only. An irregularly spaced 1D axis is a normal coordinate. No data is interpolated or padded.
 
+## Access axes and coordinates by position or name
+
+Both collections are read-only sequences of metadata objects, with additional
+case-sensitive string lookup:
+
+```python
+dataset = AuspexStore.read_file("run.auspex/data/trace.dat")
+axis = dataset.axes["frequency"]          # Axis, not its numeric points
+points = axis.points
+coordinate = dataset.coordinates["frequency"]  # Coordinate, not its numeric values
+values = coordinate.values
+assert dataset.axes["frequency"] is dataset.axes[0]  # For a single frequency axis
+```
+
+Integer and negative indices, length, iteration, tuple equality and slicing retain
+their sequence behavior. Slices return ordinary tuples, as before. Iteration yields
+objects, not dictionary keys. Name lookup returns the same object as positional
+access, without copying its numerical payload. Collections cannot be appended to or
+assigned into; this does not make their contained lists/NumPy arrays read-only.
+Missing names raise `KeyError`; invalid positions raise `IndexError`. Duplicate
+names within either collection are rejected, including for directly constructed
+`Dataset` objects. An axis and its corresponding coordinate may share a name.
+
+`axes` still contains only separable dimension coordinates. A dependent frequency
+grid or ragged sample coordinate is accessible through
+`dataset.coordinates["frequency"]`, but is not invented as an independent axis.
+This is an in-memory convenience; the version-2 file format is unchanged.
+
 The optional JSON-compatible settings snapshot is written once through `write_run_metadata()` / read with `read_run_metadata()`; a future runner must supply it. Dynamic settings changes and events are not logged yet. Only the single writer holding an exclusive advisory lock can publish. Publication writes and syncs a temporary file, renames it, then atomically publishes the manifest; interrupted writes may leave an unlisted file, which is never silently overwritten. This is **not** an all-or-nothing transaction across a whole run, or a guarantee against disk failure. Readers opened before a new publication see their existing manifest snapshot. A lost manifest can be reconstructed by examining individual `.dat` files; automated repair is not yet provided. There is no streaming append to a published file, V1 import, automatic run settings capture or events, checksums, or digitizer-scale throughput guarantee.

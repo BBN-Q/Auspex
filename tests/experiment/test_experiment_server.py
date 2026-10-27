@@ -10,10 +10,12 @@ import tempfile
 import threading
 import time
 import unittest
+import warnings
 from unittest.mock import patch
 
 from auspex_v2.data import AuspexStore
-from auspex_v2.experiment import Experiment, OutputConnector, InstrumentRef, ExperimentServerClient
+from auspex_v2.experiment import (Experiment, OutputConnector, InstrumentRef, ExperimentServerClient,
+                                  RecordedPythonWarning)
 from auspex_v2.experiment.service import ExperimentServer
 from auspex_v2.filters.definitions import PipelineInput, PipelineDefinition, WriteToFile
 from auspex_v2.instruments.drivers.simulated import SimulatedSource
@@ -174,6 +176,51 @@ print(json.dumps({'id':run.run_id, 'path':str(run.path)}))
         with AuspexStore(run.path) as store:
             self.assertEqual(store.list_datasets(), [])
 
+    def test_recorded_fft_executes_in_runner_and_publishes_analytical_result(self):
+        """A real runner resolves the saved NumPy dependency and publishes its scalar update."""
+        namespace = runpy.run_path(str(Path(__file__).resolve().parents[2] / "examples" / "recorded_fft.py"))
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RecordedPythonWarning)
+            compiled = namespace["RecordedFFT"]().compile()
+        run = self.client.submit(compiled, name="fft", dir=self.data)
+        result = run.wait(timeout=20)
+        self.assertEqual(result["state"], "SUCCEEDED", result)
+        self.assertTrue(result["lease_released"])
+        self.assertIn("COMPUTE numpy.fft.fft completed", run.log())
+        with AuspexStore(run.path) as store:
+            self.assertAlmostEqual(float(store.read_dataset("data", "fft_component").data.item()), 0.5)
+        self.assertEqual(run.plan().identity, compiled.identity)
+
+    def test_recorded_python_cancellation_waits_for_call_then_attempts_teardown(self):
+        """A gated real function cannot be interrupted; cancellation prevents its following hardware command."""
+        entered, release = self.root / "entered", self.root / "release"
+        class Computing(Measurement):
+            def sequence(self, seq):
+                seq.module("tests.experiment.computation_functions").wait_for_release(str(entered), str(release))
+                self.source.frequency = -1.0  # Must not execute after cancellation.
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RecordedPythonWarning)
+            compiled = plan(Computing)
+        run = self.client.submit(compiled, name="compute_cancel", dir=self.data)
+        try:
+            deadline = time.monotonic() + 10
+            while not entered.exists():
+                self.assertLess(time.monotonic(), deadline)
+                time.sleep(0.02)
+            run.cancel()
+            self.assertEqual(run.status()["state"], "RUNNING")
+            self.assertNotIn("COMPUTE tests.experiment.computation_functions.wait_for_release completed", run.log())
+        finally:
+            release.touch()
+        result = run.wait(timeout=20)
+        self.assertEqual(result["state"], "CANCELLED", result)
+        self.assertTrue(result["lease_released"])
+        self.assertIn("COMPUTE tests.experiment.computation_functions.wait_for_release completed", run.log())
+        self.assertIn("SET source.output", run.log())
+        self.assertNotIn("SET source.frequency", run.log())
+        with AuspexStore(run.path) as store:
+            self.assertEqual(store.list_datasets(), [])
+
     def test_teardown_failure_orphans_and_preserves_completed_scan(self):
         class BadTeardown(Measurement):
             def teardown(self, seq):
@@ -237,7 +284,6 @@ print(json.dumps({'id':run.run_id, 'path':str(run.path)}))
         experiment = namespace["Sweep"]()
         experiment.bind_instrument("source", "source")
         experiment.bind_instrument("vna", "vna")
-        experiment.source_frequency.bind(experiment.source, "frequency")
         experiment.add_sweep(experiment.source_frequency, [5e9, 5.1e9])
         with InstrumentServerClient(self.instrument_socket) as client:
             client.register("vna", "SimulatedVNA", "SIM::VNA")
@@ -256,6 +302,8 @@ print(json.dumps({'id':run.run_id, 'path':str(run.path)}))
             reconnect = ExperimentServerClient(socket_path).run(run.run_id)
             result = reconnect.wait(timeout=20)
             self.assertEqual(result["state"], "SUCCEEDED", result)
+            self.assertIn("SET_PARAMETER source_frequency", reconnect.log())
+            self.assertIn("WAIT 0.01", reconnect.log())
             with AuspexStore(reconnect.path) as store:
                 self.assertEqual(store.list_datasets(), [("data", "response")])
                 self.assertEqual(store.read_dataset("data", "response").data.shape, (2, 201))

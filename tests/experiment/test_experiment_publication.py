@@ -84,7 +84,7 @@ class PublicationCompilerTest(unittest.TestCase):
         experiment = configured(External)
         experiment.connect(experiment.trace, buffer_input())
         plan = experiment.compile()
-        self.assertEqual(plan.document["version"], 5)
+        self.assertEqual(plan.document["version"], 6)
         self.assertEqual(plan.document["pipelines"][0]["connections"], {"input": "trace"})
 
     def test_internal_setup_uses_config_and_runs_only_on_detached_copy(self):

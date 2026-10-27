@@ -13,6 +13,33 @@ the same experiment role. Unsupported members still fail at command dispatch.
 
 An `Instrument` represents a logical instrument. Construction and import must **not** open, enumerate, or reset hardware. `connect()` opens the connection; `disconnect()` closes it. Drivers can be used with `with`, which connects and disconnects automatically. A driver has a `resource_name` and a `physical_resource` identity; override the latter when several logical channels share one physical device. Do not open independent workers for channels that share a USB connection.
 
+### VISA addresses and identity
+
+`auspex_v2.instruments.drivers.addresses.normalize_visa_address()` is a pure,
+PyVISA-independent function shared by connections, registration and discovery.
+It standardizes common TCPIP, GPIB, USB and serial spellings without probing or
+DNS lookup. Case-sensitive serial paths, USB serial numbers and LAN device names
+are preserved; unknown aliases are left untouched, not guessed.
+
+`SCPIInstrument.physical_resource` returns this canonical connection endpoint.
+`SCPIInstrument.connect()` opens that same endpoint. A driver supporting bare
+IPv4 shorthand declares `VISA_IPV4_DEVICE`: `"5025::SOCKET"` for N5183A, or
+`"hpib7,16::INSTR"` for the current VNA drivers. Do not expand addresses separately
+inside a driver override of `connect()`. A bare IP without a driver-specific
+default is rejected; explicit addresses never inherit that default.
+
+```python
+from auspex_v2.instruments.drivers.addresses import normalize_visa_address
+
+normalize_visa_address("gpib::05::00::instr")  # GPIB0::5::INSTR
+normalize_visa_address("192.0.2.5", ipv4_device="5025::SOCKET")
+# TCPIP0::192.0.2.5::5025::SOCKET
+```
+
+This is endpoint identity, not a hardware fingerprint: different endpoints on the
+same IP are not automatically treated as the same physical instrument. Custom
+multi-channel drivers must still declare their shared physical ownership identity.
+
 The server uses three instrument operations:
 
 | Protocol | Driver declaration | Direct Python usage |

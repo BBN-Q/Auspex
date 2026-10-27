@@ -1,5 +1,7 @@
 """Optional PyVISA adapter; importing drivers never opens a VISA resource."""
 
+from .addresses import normalize_visa_address
+
 
 class VisaTransport:
     """Adapt a lazily opened PyVISA resource to the V2 SCPI interface."""
@@ -11,7 +13,7 @@ class VisaTransport:
             raise ImportError("PyVISA is required for real VISA instruments; install auspex-v2[visa]") from exc
         self._manager = pyvisa.ResourceManager("@py")
         try:
-            self._resource = self._manager.open_resource(resource_name)
+            self._resource = self._manager.open_resource(normalize_visa_address(resource_name))
         except BaseException:
             self._manager.close()
             raise

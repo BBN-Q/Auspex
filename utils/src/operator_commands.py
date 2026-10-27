@@ -147,6 +147,8 @@ class OperatorCommands:
                                    for name, spec in status["instruments"].items()}
                 run = status["run"]
                 lines = [f"Run: {run or 'none'}"]
+                lines.extend(f"REGISTRATION ERROR — {name}: {error}"
+                             for name, error in sorted(status.get("registration_errors", {}).items()))
                 for index, name in enumerate(self.names, 1):
                     spec = status["instruments"][name]
                     owner = "run locked" if run else "live session" if spec["live_sessions"] else "free"

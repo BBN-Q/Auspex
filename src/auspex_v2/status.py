@@ -76,6 +76,8 @@ def format_status(snapshot):
             if spec["state"] in ("UNKNOWN", "TERMINATED"):
                 extra.append("explicit recovery required")
             lines.append(f"  {name}  {spec['driver']}  {spec['state']}" + (" — " + ", ".join(extra) if extra else ""))
+        for name, error in sorted(instruments.get("registration_errors", {}).items()):
+            lines.append(f"REGISTRATION ERROR — {name}: {error}")
         lease = instruments.get("run")
         if lease:
             lines.append(f"Instrument lease: {lease['run_id']}" + (" ORPHANED; inspect hardware, then reconcile explicitly" if lease["orphaned"] else " (domain locked)"))

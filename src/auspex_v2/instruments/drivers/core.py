@@ -308,13 +308,23 @@ class RampCommand(FloatCommand):
 class SCPIInstrument(Instrument):
     """Open a VISA transport lazily while preserving direct driver access."""
 
+    VISA_IPV4_DEVICE = None
+
+    @property
+    def physical_resource(self):
+        """Use exactly the endpoint opened by connect for server ownership and discovery matching."""
+        from .addresses import normalize_visa_address
+        if self.resource_name is None:
+            return None
+        return normalize_visa_address(self.resource_name, ipv4_device=self.VISA_IPV4_DEVICE)
+
     def __init__(self, resource_name=None, name=None, *, interface=None, io_timeout=None):
         super().__init__(resource_name, name, interface=interface)
         if io_timeout is not None and (not isinstance(io_timeout, (int, float)) or io_timeout <= 0):
             raise ValueError("io_timeout must be positive seconds or None")
         self.io_timeout = io_timeout
 
-    def connect(self, resource_name=None, *, visa_resource=None):
+    def connect(self, resource_name=None):
         if resource_name is not None:
             self.resource_name = resource_name
         if self.connected:
@@ -325,7 +335,7 @@ class SCPIInstrument(Instrument):
         try:
             if opened_here:
                 from .visa import VisaTransport
-                self.interface = VisaTransport(visa_resource or self.resource_name)
+                self.interface = VisaTransport(self.physical_resource)
             if self.io_timeout is not None:
                 self.interface.timeout = self.io_timeout * 1000
             super().connect()

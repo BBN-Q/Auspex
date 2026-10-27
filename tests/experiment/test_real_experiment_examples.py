@@ -14,7 +14,6 @@ class RealExampleTest(unittest.TestCase):
         cls = runpy.run_path(str(EXAMPLES / "real_vna_sweep.py"))["VnaSweep"]
         experiment = cls()
         experiment.bind_instrument("vna", "lab_vna")
-        experiment.center.bind(experiment.vna, "frequency_center")
         experiment.add_sweep(experiment.center, [5.99e9, 6.01e9])
         plan = experiment.compile()
         self.assertEqual(plan.document["instruments"]["vna"]["kind"], InstrumentKind.VNA.value)
@@ -33,10 +32,9 @@ class RealExampleTest(unittest.TestCase):
                 for instrument_role, registered_name in bindings.items():
                     experiment.bind_instrument(instrument_role, registered_name)
                 parameter = getattr(experiment, parameter_name)
-                parameter.bind(getattr(experiment, role), "ramp" if parameter_name == "bias" else "frequency")
                 experiment.add_sweep(parameter, points)
                 plan = experiment.compile()
-                self.assertEqual(plan.document["version"], 5)
+                self.assertEqual(plan.document["version"], 6)
                 setup = plan.document["setup"][:4]
                 self.assertEqual([node["member"] for node in setup],
                                  ["output", "mode", "level", "output"] if role == "bias_source"

@@ -189,7 +189,7 @@ class TestDrivers(unittest.TestCase):
         with patch.dict(sys.modules, {"pyvisa": module}):
             transport = VisaTransport("TCPIP0::host::INSTR")
         module.ResourceManager.assert_called_once_with("@py")
-        manager.open_resource.assert_called_once_with("TCPIP0::host::INSTR")
+        manager.open_resource.assert_called_once_with("TCPIP0::host::inst0::INSTR")
         transport.close()
 
     def test_visa_resource_normalization_and_failure(self):
@@ -200,7 +200,7 @@ class TestDrivers(unittest.TestCase):
             device = AgilentN5183A("192.0.2.5")
             device.connect()
             transport.assert_called_once_with("TCPIP0::192.0.2.5::5025::SOCKET")
-            self.assertEqual(device.physical_resource, "192.0.2.5")
+            self.assertEqual(device.physical_resource, "TCPIP0::192.0.2.5::5025::SOCKET")
             device.disconnect()
         with patch("auspex_v2.instruments.drivers.visa.VisaTransport", side_effect=OSError("offline")):
             device = AgilentN5183A("192.0.2.5")

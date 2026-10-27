@@ -12,7 +12,7 @@ class CompileError(ValueError):
     """An experiment cannot be represented as a valid executable plan."""
 
 
-PLAN_VERSION = 5  # Plan versions are not silently upgraded during WIP development.
+PLAN_VERSION = 6  # Plan versions are not silently upgraded during WIP development.
 
 
 def plain(value):
@@ -144,6 +144,21 @@ def explain_value(value):
     if op in symbols:
         left, right = value["args"]
         return f"({explain_value(left)} {symbols[op]} {explain_value(right)})"
+    if op == "component":
+        return explain_value(value["value"]) + "." + value["name"]
+    if op == "index":
+        return explain_value(value["value"]) + "[" + explain_value(value["index"]) + "]"
+    if op == "slice":
+        return ":".join(explain_value(value[key]) for key in ("start", "stop", "step"))
+    if op in ("list", "tuple"):
+        contents = ", ".join(explain_value(item) for item in value["items"])
+        return "[" + contents + "]" if op == "list" else "(" + contents + ",)"
+    if op == "dict":
+        return "{" + ", ".join(f"{key!r}: {explain_value(item)}" for key, item in value["items"]) + "}"
+    if op == "array":
+        return f"array(dtype={value['dtype']!r}, shape={value['shape']})"
+    if op == "complex":
+        return repr(complex(value["real"], value["imag"]))
     if op == "neg":
         return "(-" + explain_value(value["args"][0]) + ")"
     if op in BOOLEAN_OPERATORS:
@@ -184,9 +199,11 @@ class PlanValidator:
         if self.document["version"] != PLAN_VERSION:
             raise CompileError(f"Unsupported experiment plan version: expected {PLAN_VERSION}")
         expected = {"version", "pipelines", "instruments", "parameters", "setup", "main",
-                    "teardown", "outputs", "metadata"}
+                    "teardown", "outputs", "metadata", "operations"}
         if set(self.document) != expected:
             raise CompileError(f"Incompatible experiment plan fields: {sorted(set(self.document) ^ expected)}")
+        from .computations import validate_operations
+        validate_operations(self.document["operations"])
         from ._experiment_publication import validate_attachments
         from ..filters.core import PipelineError
         try:
@@ -243,6 +260,40 @@ class PlanValidator:
                 raise CompileError("Result selection requires a field name or integer index")
             self.expression_type(expr["value"], state)
             return "unknown"
+        if op == "dict":
+            self.validate_keyed_expressions(expr["items"], state)
+            return "dict"
+        if op in ("list", "tuple"):
+            if not isinstance(expr["items"], list):
+                raise CompileError("Computation sequences require a list of expressions")
+            for item in expr["items"]:
+                self.expression_type(item, state)
+            return op
+        if op == "array":
+            import numpy as np
+            if not isinstance(expr["dtype"], str) or np.dtype(expr["dtype"]).kind not in "biufc":
+                raise CompileError("Computation arrays require numeric dtype")
+            if not isinstance(expr["shape"], list) or any(type(n) is not int or n < 0 for n in expr["shape"]):
+                raise CompileError("Invalid computation array shape")
+            self.expression_type(expr["value"], state)
+            return "unknown"
+        if op == "complex":
+            if any(type(expr[key]) not in (int, float) for key in ("real", "imag")):
+                raise CompileError("Complex literals require real numerical components")
+            return "complex"
+        if op == "slice":
+            for key in ("start", "stop", "step"):
+                self.check_expression(expr[key], state, ("int", "NoneType"))
+            return "slice"
+        if op == "index":
+            self.expression_type(expr["value"], state)
+            self.check_expression(expr["index"], state, ("int", "str", "slice", "tuple", "NoneType", "bool"))
+            return "unknown"
+        if op == "component":
+            if expr["name"] not in ("real", "imag"):
+                raise CompileError("Only .real and .imag numerical attributes are supported")
+            self.expression_type(expr["value"], state)
+            return "unknown"
         if op == "neg":
             if len(expr["args"]) != 1:
                 raise CompileError("Negation requires one operand")
@@ -292,6 +343,17 @@ class PlanValidator:
             raise CompileError(f"Expected {allowed}, got {kind}")
         return kind
 
+    def validate_keyed_expressions(self, items, state):
+        """Validate ordered string-keyed values without losing Python insertion order."""
+        if not isinstance(items, list):
+            raise CompileError("Computation dictionaries/keywords require ordered pairs")
+        names = set()
+        for pair in items:
+            if not isinstance(pair, list) or len(pair) != 2 or type(pair[0]) is not str or pair[0] in names:
+                raise CompileError("Computation dictionaries/keywords require unique string keys")
+            names.add(pair[0])
+            self.check_expression(pair[1], state)
+
     def check_assignment(self, expr, state, kind):
         allowed = ("float", "int") if kind == "float" else (kind,)
         self.check_expression(expr, state, allowed)
@@ -322,6 +384,18 @@ class PlanValidator:
         op = node["op"]
         if op in ("GET", "SET", "CALL"):
             self.validate_command(node, state, teardown)
+        elif op == "COMPUTE":
+            if node["operation"] not in self.document["operations"]:
+                raise CompileError("Unknown recorded Python operation")
+            if not isinstance(node["args"], list):
+                raise CompileError("Invalid computation arguments")
+            for expr in node["args"]:
+                self.check_expression(expr, state)
+            self.validate_keyed_expressions(node["kwargs"], state)
+            result = node["result"]
+            if not isinstance(result, str) or not result or result in state.references:
+                raise CompileError("Invalid or duplicate computation result name")
+            state.references[result] = "unknown"
         elif op == "PUBLISH":
             if not path.startswith("main.") or teardown:
                 raise CompileError("Publication is allowed only inside the main scan")
@@ -340,8 +414,8 @@ class PlanValidator:
             if duration["op"] == "parameter" and duration["name"] in self.updated:
                 # Its current value is checked for finiteness/nonnegativity by WAIT.
                 # A SET_PARAMETER may also have validated stricter declared bounds.
-                if duration["name"] in self.swept:
-                    raise CompileError("WAIT parameter must not be swept")
+                if duration["name"] in self.swept and path.startswith("main."):
+                    raise CompileError("WAIT parameter must not be swept during main")
             else:
                 value = frozen_value(duration, self.parameters, self.swept)
                 check_type(value, "float")
@@ -351,8 +425,8 @@ class PlanValidator:
             name = node["name"]
             if name not in self.parameters:
                 raise CompileError(f"Unknown parameter: {name}")
-            if name in self.swept:
-                raise CompileError("Runtime updates to swept parameters are not supported yet")
+            if name in self.swept and path.startswith("main."):
+                raise CompileError("Runtime updates to swept parameters are allowed only in setup/teardown")
             spec = self.parameters[name]
             self.check_assignment(node["value"], state, spec["type"])
             if node["value"]["op"] == "literal":

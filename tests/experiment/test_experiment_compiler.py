@@ -62,12 +62,12 @@ class CompilerTest(unittest.TestCase):
         self.assertEqual(run.time, 2)
         self.assertEqual(len([s for s in run.trace if "WAIT " in s]), 4)
 
-    def test_no_sweeps_static_parameters_and_one_window(self):
+    def test_no_sweeps_defaults_issue_no_commands_and_one_window(self):
         calls = []
         run = FakeExecutor(lambda op, name, member, args, kwargs: calls.append(member)).run(configured().compile())
-        self.assertEqual(calls, ["setup", "x", "y", "measure", "cleanup"])
+        self.assertEqual(calls, ["setup", "measure", "cleanup"])
         self.assertEqual(len(run.windows), 1)
-        self.assertEqual(run.time, 0.5)
+        self.assertEqual(run.time, 0.)
 
     def test_joint_path_and_repeated_settings(self):
         exp = configured()
@@ -126,7 +126,7 @@ print(json.dumps([p.identity, r.time, [w["coordinates"] for w in r.windows], r.o
         self.assertEqual(run.outcome, "SUCCEEDED")
         self.assertIn(("yes", {"wait": True}), calls)
         self.assertNotIn(("no", {}), calls)
-        self.assertEqual(run.time, 0.75)
+        self.assertEqual(run.time, 0.25)
 
     def test_runtime_reads_and_no_payload_in_trace(self):
         class Read(Measurement):
@@ -149,7 +149,7 @@ print(json.dumps([p.identity, r.time, [w["coordinates"] for w in r.windows], r.o
             if member == "bad": raise RuntimeError("failed")
         run = FakeExecutor(command).run(configured(Bad).compile())
         self.assertEqual(run.outcome, "FAILED")
-        self.assertEqual(run.time, 0.5)
+        self.assertEqual(run.time, 0.)
         self.assertIn("cleanup", "\n".join(run.trace))
 
     def test_bounded_while_and_early_success(self):
@@ -183,7 +183,7 @@ print(json.dumps([p.identity, r.time, [w["coordinates"] for w in r.windows], r.o
                     seq.wait(0.1)
         run = FakeExecutor(lambda *args: 2).run(configured(Loops).compile())
         self.assertEqual(run.outcome, "SUCCEEDED")
-        self.assertAlmostEqual(run.time, 0.9)
+        self.assertAlmostEqual(run.time, 0.4)
         run = FakeExecutor(lambda *args: 4).run(configured(Loops).compile())
         self.assertEqual(run.outcome, "FAILED")
 

@@ -125,6 +125,14 @@ class LiveInterpreter(FakeExecutor):
         self.command = command
         super()._command(node)
 
+    def _compute(self, node):
+        """Cancellation is cooperative at call boundaries, never inside arbitrary Python."""
+        self.poll()
+        if not self.cleaning:
+            self.pipeline._graph.check()
+        super()._compute(node)
+        self.poll()
+
     def _wait(self, node):
         from ._experiment_plan import check_type
         duration = self._eval(node["duration"])

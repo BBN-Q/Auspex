@@ -18,7 +18,7 @@ class VnaSweep(Experiment):
     """Publish a complete complex trace at each requested bias."""
     vna = InstrumentRef(kind="VNA", driver=SimulatedVNA)
     source = InstrumentRef(kind="MICROWAVE_SOURCE")
-    bias = FloatParameter(default=0., unit="V")
+    bias = FloatParameter(default=0., unit="V").bind(source, "voltage", wait=0.01)
     trace = OutputConnector(dtype="complex128", dimensions=("frequency",),
                             axis_units={"frequency": "Hz"})
 
@@ -37,7 +37,7 @@ class VnaSweep(Experiment):
         seq.publish(self.trace, data=result[1], axes={"frequency": result[0]})
 
     def teardown(self, seq):
-        seq.set(self.source, "voltage", 0.)
+        seq.set_parameter(self.bias, 0.)
 
 
 def main():
@@ -47,7 +47,6 @@ def main():
     experiment = VnaSweep()
     experiment.bind_instrument("vna", "lab_vna")
     experiment.bind_instrument("source", "lab_source")
-    experiment.bias.bind(experiment.source, "voltage", wait=0.01)
     experiment.add_sweep(experiment.bias, [0., 0.1, 0.2])
     plan = experiment.compile()
     bias = 0.

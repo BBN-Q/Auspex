@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import ipaddress
 import time
 
 import numpy as np
@@ -10,14 +9,6 @@ import numpy as np
 from .core import (BoolCommand, FloatCommand, InstrumentError, IntCommand,
                    SCPIInstrument, StringCommand, managed_property, operation)
 from ..kinds import InstrumentKind
-
-
-def _ipv4(resource):
-    try:
-        ipaddress.IPv4Address(resource)
-        return True
-    except (ValueError, TypeError):
-        return False
 
 
 def _validate_sweep_timeout(timeout):
@@ -30,6 +21,7 @@ class AgilentN5183A(SCPIInstrument):
     """Agilent N5183A microwave source."""
 
     IDN_STRING = "N5183A"
+    VISA_IPV4_DEVICE = "5025::SOCKET"
     KIND = InstrumentKind.MICROWAVE_SOURCE
     instrument_type = "Microwave Source"
     frequency = FloatCommand(scpi_string=":freq")
@@ -41,10 +33,7 @@ class AgilentN5183A(SCPIInstrument):
 
     def connect(self, resource_name=None):
         """Normalize bare IPv4 addresses and configure VISA I/O on connection."""
-        resource = resource_name or self.resource_name
-        if _ipv4(resource):
-            resource = f"TCPIP0::{resource}::5025::SOCKET"
-        super().connect(resource_name, visa_resource=resource)
+        super().connect(resource_name)
         try:
             self.interface.read_termination = "\n"
             self.interface.write_termination = "\n"
@@ -64,6 +53,7 @@ class _AgilentNetworkAnalyzer(SCPIInstrument):
     are assumed; logarithmic and segmented stimulus readback is not implemented.
     """
 
+    VISA_IPV4_DEVICE = "hpib7,16::INSTR"
     KIND = InstrumentKind.VNA
     instrument_type = "Vector Network Analyzer"
     ports = ()
@@ -82,10 +72,7 @@ class _AgilentNetworkAnalyzer(SCPIInstrument):
 
     def connect(self, resource_name=None):
         """Open VNA I/O without selecting measurements or changing RF output."""
-        resource = resource_name or self.resource_name
-        if _ipv4(resource):
-            resource = f"TCPIP0::{resource}::hpib7,16::INSTR"
-        super().connect(resource_name, visa_resource=resource)
+        super().connect(resource_name)
         try:
             self.interface.read_termination = "\n"
             self.interface.write_termination = "\n"

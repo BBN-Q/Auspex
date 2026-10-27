@@ -7,7 +7,7 @@ from ..kinds import InstrumentKind
 class YokogawaGS200(SCPIInstrument):
     """Control GS200 sourcing, sensing and bounded level ramps over VISA."""
 
-    IDN_STRING = "GS200"
+    IDN_STRING = "GS210"
     KIND = InstrumentKind.DC_SOURCE
     instrument_type = "Current source"
 

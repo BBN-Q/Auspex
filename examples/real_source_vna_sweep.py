@@ -14,7 +14,7 @@ from auspex_v2.instruments import AgilentE8363C, AgilentN5183A
 class SourceVnaSweep(Experiment):
     source = InstrumentRef(driver=AgilentN5183A)
     vna = InstrumentRef(driver=AgilentE8363C)
-    source_frequency = FloatParameter(default=5e9, unit="Hz")
+    source_frequency = FloatParameter(default=5e9, unit="Hz").bind(source, "frequency")
     trace = OutputConnector(dtype="complex64", dimensions=("frequency",),
                             axis_units={"frequency": "Hz"}, max_bytes=8 * 1024 * 1024)
 
@@ -53,7 +53,6 @@ def main():
     experiment = SourceVnaSweep()
     experiment.bind_instrument("source", args.source)
     experiment.bind_instrument("vna", args.vna)
-    experiment.source_frequency.bind(experiment.source, "frequency")
     experiment.add_sweep(experiment.source_frequency, [4.98e9, 4.99e9, 5.00e9, 5.01e9, 5.02e9])
     run = ExperimentServerClient(args.socket).submit(
         experiment.compile(), name="source_vna_sweep", dir=args.directory, date=True)

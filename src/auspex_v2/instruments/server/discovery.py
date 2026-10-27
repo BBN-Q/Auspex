@@ -1,41 +1,34 @@
 """VISA candidates and explicit SCPI identity probes, without driver construction."""
 
 import errno
-import ipaddress
-import re
 
 from ...paths import auspex_directory
 
 from ..drivers.registry import DRIVERS
-
-
-def resource_key(resource):
-    """Recognize common TCPIP INSTR aliases, including drivers' bare IPv4 shorthand.
-
-    This does not resolve DNS or claim to detect every physical-device alias.
-    """
-    value = resource.upper()
-    try:
-        return f"TCPIP::{ipaddress.IPv4Address(resource)}::INST0::INSTR"
-    except ValueError:
-        pass
-    match = re.fullmatch(r"TCPIP(?:0)?::([^:]+)(?:::(.*))?::INSTR", value)
-    if match:
-        return f"TCPIP::{match[1]}::{match[2] or 'INST0'}::INSTR"
-    return value
+from ..drivers.addresses import normalize_visa_address
 
 
 def read_whitelist():
     """Reload server-local display overrides; a missing file is normal, other failures are visible."""
     path = auspex_directory().parent / "instrument_whitelist.txt"
     try:
-        addresses = {resource_key(line.strip()) for line in path.read_text(encoding="utf-8").splitlines()
-                     if line.strip() and not line.lstrip().startswith("#")}
+        lines = path.read_text(encoding="utf-8").splitlines()
     except FileNotFoundError:
-        addresses = set()
+        lines = []
     except (OSError, UnicodeError) as exc:
         return set(), str(path), f"Cannot read whitelist {path}: {exc}"
-    return addresses, str(path), None
+    addresses, warnings = set(), []
+    for number, line in enumerate(lines, 1):
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        try:
+            if "::" not in line:
+                raise ValueError("use a complete VISA address, not a bare IP or alias")
+            addresses.add(normalize_visa_address(line))
+        except ValueError as exc:
+            warnings.append(f"{path}:{number}: {exc}")
+    return addresses, str(path), "; ".join(warnings) or None
 
 
 def permission_denied(error):
@@ -98,13 +91,14 @@ def enumerate_visa():
         return [{"resource": resource, "serial": resource.upper().startswith("ASRL"),
                  "prologix": resource.upper().startswith("PRLGX"), "permission_denied": False,
                  "identity": None, "drivers": [], "error": None}
-                for resource in sorted(set(manager.list_resources("?*")))]
+                for resource in sorted({normalize_visa_address(r) for r in manager.list_resources("?*")})]
     finally:
         manager.close()
 
 
 def identify_visa(resource):
     """Send only *IDN?, with bounded open/I/O waits, and always close the resource."""
+    resource = normalize_visa_address(resource)
     manager = resource_manager()
     try:
         device = manager.open_resource(resource, open_timeout=1000)

@@ -118,8 +118,8 @@ class AuthoringTest(unittest.TestCase):
         run = FakeExecutor(lambda *args: calls.append(args)).run(plan)
         self.assertEqual(run.outcome, "SUCCEEDED")
         self.assertEqual([(c[2], c[3]) for c in calls],
-                         [("voltage", [1.]), ("voltage", [2.]), ("observe", [2.]), ("voltage", [0.])])
-        self.assertEqual(run.time, 1.5)
+                         [("voltage", [2.]), ("observe", [2.]), ("voltage", [0.])])
+        self.assertEqual(run.time, 1.)
         self.assertEqual(run.params["bias"], 0.)
         self.assertEqual(experiment.bias.value, 1.)
         self.assertIn("SET_PARAMETER bias requested=2.0", "\n".join(run.trace))
@@ -130,16 +130,15 @@ class AuthoringTest(unittest.TestCase):
             self.assertEqual(loaded.identity, plan.identity)
             self.assertEqual(FakeExecutor().run(loaded).params["bias"], 0.)
 
-    def test_setup_update_is_not_reset_by_automatic_parameter_application(self):
+    def test_setup_update_is_not_implicitly_reapplied(self):
         class SetupUpdate(Settings):
             def setup(self, seq):
                 seq.set_parameter(self.bias, 2.)
         calls = []
         run = FakeExecutor(lambda *args: calls.append(args)).run(configured(SetupUpdate).compile())
         self.assertEqual(run.outcome, "SUCCEEDED")
-        # Static application follows setup and reapplies the current requested value.
-        self.assertEqual([c[3] for c in calls], [[2.], [2.]])
-        self.assertEqual(run.time, 1.)
+        self.assertEqual([c[3] for c in calls], [[2.]])
+        self.assertEqual(run.time, 0.5)
 
     def test_dynamic_wait_rejects_negative_duration(self):
         class Delay(Settings):
@@ -150,7 +149,7 @@ class AuthoringTest(unittest.TestCase):
         run = FakeExecutor().run(configured(Delay).compile())
         self.assertEqual(run.outcome, "FAILED")
         self.assertIn("Negative wait", run.reason)
-        self.assertEqual(run.time, 0.5)
+        self.assertEqual(run.time, 0.)
 
     def test_direct_setting_does_not_change_parameter_state(self):
         class Direct(Settings):
@@ -174,9 +173,9 @@ class AuthoringTest(unittest.TestCase):
         run = FakeExecutor(command).run(configured(Dynamic).compile())
         self.assertEqual(run.outcome, "FAILED")
         self.assertIn("outside bounds", run.reason)
-        self.assertEqual([c[3] for c in calls if c[0] == "SET"], [[1.]])
+        self.assertEqual([c[3] for c in calls if c[0] == "SET"], [])
         self.assertEqual(run.params["bias"], 1.)
-        self.assertEqual(run.time, 0.5)
+        self.assertEqual(run.time, 0.)
 
     def test_invalid_literals_and_foreign_parameters_rejected(self):
         foreign = Settings().bias
@@ -220,9 +219,9 @@ class AuthoringTest(unittest.TestCase):
         with self.assertRaisesRegex(CompileError, "not initialized"):
             configured(Conditional).compile()
 
-    def test_swept_runtime_updates_rejected_including_loaded_plans(self):
+    def test_main_swept_runtime_updates_rejected_including_loaded_plans(self):
         class Swept(Settings):
-            def teardown(self, seq):
+            def sequence(self, seq):
                 seq.set_parameter(self.bias, 0.)
         experiment = configured(Swept)
         experiment.add_sweep(experiment.bias, [1., 2.])
@@ -231,7 +230,7 @@ class AuthoringTest(unittest.TestCase):
         experiment = configured()
         experiment.add_sweep(experiment.bias, [1., 2.])
         document = experiment.compile().document
-        document["teardown"] = [{"op": "SET_PARAMETER", "name": "bias", "value": {"op": "literal", "value": 0.}}]
+        document["main"].insert(1, {"op": "SET_PARAMETER", "name": "bias", "value": {"op": "literal", "value": 0.}})
         with self.assertRaisesRegex(CompileError, "swept"):
             CompiledPlan(document)
 
@@ -243,7 +242,7 @@ class AuthoringTest(unittest.TestCase):
                     seq.wait(0.25)
         run = FakeExecutor().run(configured(Repetitions).compile())
         self.assertEqual(run.outcome, "SUCCEEDED")
-        self.assertEqual(run.time, 1.25)  # Initial bias settling plus three repeats.
+        self.assertEqual(run.time, 0.75)  # Three repeats; defaults have no settling effect.
         self.assertEqual(run.params["count"], 3)
 
     def test_changed_parameter_waits_use_current_value_but_limits_stay_frozen(self):
@@ -253,7 +252,7 @@ class AuthoringTest(unittest.TestCase):
                 seq.wait(self.bias)
         run = FakeExecutor().run(configured(Delay).compile())
         self.assertEqual(run.outcome, "SUCCEEDED")
-        self.assertEqual(run.time, 3.)  # Two binding waits plus the updated duration.
+        self.assertEqual(run.time, 2.5)  # Explicit binding wait plus the updated duration.
         class Limit(Settings):
             def sequence(self, seq):
                 seq.set_parameter(self.count, 2)

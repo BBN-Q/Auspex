@@ -30,4 +30,17 @@ Prologix and registered resources. `identify <letter>` can explicitly retry a hi
 candidate; letters stay stable until enumeration. See the
 [operator guide](../src/auspex_v2/instruments/server/instrument_server.md#discovery-whitelist-and-permission-errors).
 
-`src/` contains the non-executable launcher helpers: `operator_commands.py` shares IPC command parsing between plain and Textual modes; `auspex_tui.py` implements the optional Textual display. Service, driver, and data-library code lives in `../src/auspex_v2/`.
+For `--tui`, the launcher starts service-output readers immediately after spawning
+each service, before readiness checks. A shared buffer retains the newest **5,000
+pending lines** independently of the UI; overflow is reported with a dropped-line
+count. The TUI displays buffered startup output and polls for new lines. Service
+log files remain independent of this best-effort terminal display.
+
+After ordered service shutdown, output readers get **one second total** to reach
+EOF. If output remains open (for example, inherited by a surviving descendant),
+the TUI warns to inspect hardware/leases and exits without waiting indefinitely.
+No descendant is killed merely for keeping stdout open. Existing service-stop
+timeouts/escalation still apply. Startup failures also print retained output even
+if the TUI never mounted. The plain CLI output path is unchanged.
+
+`src/` contains the non-executable launcher helpers: `operator_commands.py` shares IPC command parsing between plain and Textual modes; `auspex_tui.py` implements the optional Textual display; `service_output.py` owns bounded service-pipe capture without depending on Textual. Service, driver, and data-library code lives in `../src/auspex_v2/`.

@@ -38,6 +38,29 @@ class Coordinate:
     unit: str | None = None
 
 
+class _NamedSequence(tuple):
+    """An immutable metadata sequence with unambiguous, case-sensitive name lookup."""
+
+    __slots__ = ()
+
+    def __new__(cls, items):
+        result = super().__new__(cls, items)
+        names = set()
+        for item in result:
+            if item.name in names:
+                raise ValueError(f"Duplicate metadata name: {item.name!r}")
+            names.add(item.name)
+        return result
+
+    def __getitem__(self, key):
+        if isinstance(key, str):
+            for item in self:
+                if item.name == key:
+                    return item
+            raise KeyError(key)
+        return super().__getitem__(key)
+
+
 @dataclass(frozen=True)
 class Dataset:
     """A complete value array, its coordinates and optional ragged offsets."""
@@ -52,6 +75,10 @@ class Dataset:
     label: str | None = None
     source: str | None = None
     input_name: str | None = None
+
+    def __post_init__(self):
+        object.__setattr__(self, "axes", _NamedSequence(self.axes))
+        object.__setattr__(self, "coordinates", _NamedSequence(self.coordinates))
 
     def trace(self, index: int):
         """Return one row of a ragged scan without constructing object arrays."""

@@ -15,7 +15,7 @@ from auspex_v2.instruments.server import discovery
 from auspex_v2.instruments.server.service import Server
 
 
-VNA = "TCPIP0::192.0.2.1::inst0::INSTR"
+VNA = "TCPIP0::192.0.2.1::hpib7,16::INSTR"
 SERIAL = "ASRL1::INSTR"
 UNKNOWN = "USB0::unknown::INSTR"
 PROLOGIX = "PRLGX-ASRL/dev/ttyUSB0::1::INSTR"
@@ -308,7 +308,7 @@ class DiscoveryTest(unittest.TestCase):
         self.manager.denied.add(DENIED)
         self.client.identify(DENIED)
         path = Path(self.tmp.name) / "instrument_whitelist.txt"
-        path.write_text(f"# Display overrides\n\n{SERIAL}\n{PROLOGIX}\n{DENIED}\n192.0.2.1\n"
+        path.write_text(f"# Display overrides\n\n{SERIAL}\n{PROLOGIX}\n{DENIED}\ntcpip::192.0.2.1::hpib7,16::instr\n"
                         "TCPIP0::not-enumerated::INSTR\n", encoding="utf-8")
         commands = OperatorCommands(self.server.path, None)
         output = commands.execute(["enumerate", "visa"])

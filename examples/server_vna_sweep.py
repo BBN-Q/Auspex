@@ -13,6 +13,8 @@ from auspex_v2.instruments.drivers.simulated import SimulatedSource, SimulatedVN
 
 
 class Sweep(Experiment):
+    """Record frequency changes in a reusable setter; the server executes only its instructions."""
+
     source = InstrumentRef(kind="MICROWAVE_SOURCE", driver=SimulatedSource)
     vna = InstrumentRef(kind="VNA", driver=SimulatedVNA)
     source_frequency = FloatParameter(default=5e9, unit="Hz")
@@ -25,7 +27,14 @@ class Sweep(Experiment):
             (source, WriteToFile(name="disk", dataset="response").sink)])
         self.connect(self.trace, source)
 
+    @source_frequency.setter
+    def set_source_frequency(self, seq, value):
+        self.source.frequency = value
+        seq.wait(0.01)
+
     def setup(self, seq):
+        self.source.output = False
+        seq.set_parameter(self.source_frequency, self.source_frequency)
         self.source.output = True
         self.vna.num_points = 201
 
@@ -46,7 +55,6 @@ def main():
     experiment = Sweep()
     experiment.bind_instrument("source", "lab_source")
     experiment.bind_instrument("vna", "lab_vna")
-    experiment.source_frequency.bind(experiment.source, "frequency")
     experiment.add_sweep(experiment.source_frequency, [5e9, 5.1e9, 5.2e9, 5.3e9])
     plan = experiment.compile()
     run = ExperimentServerClient(args.socket).submit(plan, name="vna", dir=args.directory, date=True)

@@ -1,7 +1,7 @@
 # ExperimentServer: writer-only laboratory slice
 
 ExperimentServer is an explicitly started local service. It admits **one active
-writer-only run, no queue**, and executes a saved version-5 plan in a separate
+writer-only run, no queue**, and executes a saved version-6 plan in a separate
 runner process. A client can disconnect or exit without cancelling its run. The
 runner accepts every driver in the instrument server's explicit registry when its
 fixed KIND matches the experiment role. Real-hardware use is trusted, attended
@@ -53,6 +53,11 @@ active lease may need reconciliation. SIGTERM uses non-interactive ordered shutd
 and warns about the active run. If status/cancellation is unavailable, the launcher
 reports that it cannot confirm completion before stopping supervision.
 **Neither cancellation nor service shutdown guarantees hardware outputs are off.**
+Recorded Python calculations execute synchronously in the runner. Cancellation is
+checked before/after calls, not inside them: a hung function blocks cooperative
+cancellation and teardown. These calls have no separate worker isolation. Preflight
+imports recorded dependencies before allocating a run folder/acquiring instruments;
+imports and functions are trusted Python, not sandboxed. See [recorded calculations](experiment.md#recorded-python-calculations).
 If either service exits unexpectedly, the launcher stops the other and returns a
 failure status. Unresponsive service shutdown is force-killed after 25 seconds
 with an operator warning. Closing the optional GUI does not stop the services.
@@ -87,8 +92,8 @@ are the product of axis lengths; joint axes count their shared points once.
 No sweeps means one sequence execution. Internal conditions/loops/acquisitions do
 not inflate the point count. Early termination, failure, and cancellation retain
 the actual completed count; the bar is never forced to 100%. Unknown totals use
-count-only display. Recompile older plans: version 5 introduces explicit point
-boundaries.
+count-only display. Version 5 introduced explicit point boundaries; current plans
+use version 6, which also records Python computation dependencies. Recompile older plans.
 
 `run.status()['progress']` contains `phase`, `completed`, `total` (or null),
 `coordinates`, `coordinate_units`, `windows_submitted`, and `updated_at`.

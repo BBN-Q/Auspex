@@ -10,7 +10,8 @@ from pyqtgraph.Qt import QtCore, QtGui, QtWidgets, QT_LIB
 
 from .client import InstrumentServerClient
 from ..drivers.registry import DRIVERS
-from .discovery import resource_key, hidden_reason, bulk_identifiable, filter_summary
+from ..drivers.addresses import normalize_visa_address
+from .discovery import hidden_reason, bulk_identifiable, filter_summary
 from ...paths import home_note
 
 if QT_LIB != "PySide6":
@@ -47,7 +48,7 @@ class DiscoveryWindow(QtWidgets.QWidget):
         """Keep discovery requests and messages independent of the main inventory window."""
         super().__init__(parent, QtCore.Qt.WindowType.Window)
         self.setWindowTitle("Auspex V2 — Add instruments")
-        self.resize(1150, 450)
+        self.resize(1600, 600)
         self.candidates = []
         self.pending_action = None
         self.queue = []
@@ -118,9 +119,9 @@ class DiscoveryWindow(QtWidgets.QWidget):
         instruments = status["instruments"] if status else {}
         self.available = status is not None and status["run"] is None and all(
             not spec["live_sessions"] and not spec.get("busy") for spec in instruments.values())
-        registered = {resource_key(spec["physical"]) for spec in instruments.values()}
+        registered = {spec["physical"] for spec in instruments.values()}
         for row, candidate in enumerate(self.candidates):
-            if resource_key(candidate["resource"]) in registered:
+            if normalize_visa_address(candidate["resource"]) in registered:
                 candidate["registered"] = True
                 self.table.item(row, 1).setText("Already registered")
         self._update_actions()
@@ -278,7 +279,7 @@ class InstrumentWindow(QtWidgets.QWidget):
         """Build the inventory window and start its serialized background client."""
         super().__init__()
         self.setWindowTitle("Auspex V2 — Instrument Server")
-        self.resize(1050, 420)
+        self.resize(1400, 520)
         self.pending = False
         self.pending_action = None
         self.status = None
@@ -286,6 +287,7 @@ class InstrumentWindow(QtWidgets.QWidget):
         self.discovery = None
         self.refresh_after_pending = False
         self.closing = False
+        self.reported_registration_errors = {}
 
         self.connection = QtWidgets.QLabel("Connecting…")
         self.domain = QtWidgets.QLabel("Domain: unknown")
@@ -388,7 +390,8 @@ class InstrumentWindow(QtWidgets.QWidget):
         self.terminate_all.setEnabled(not self.pending and bool(instruments))
         self.disconnect_all.setEnabled(not self.pending and free and any(
             spec["state"] == "CONNECTED" for spec in instruments.values()))
-        self.clear_instruments.setEnabled(not self.pending and free and bool(instruments) and all(
+        self.clear_instruments.setEnabled(not self.pending and free and
+            bool(instruments or status.get("registration_errors")) and all(
             spec["state"] == "DISCONNECTED" for spec in instruments.values()))
         if self.discovery is not None:
             self.discovery.set_status(status)
@@ -411,7 +414,14 @@ class InstrumentWindow(QtWidgets.QWidget):
     def _show_status(self, status):
         """Render a snapshot, never treating worker state as physical readback."""
         self.status = status
-        self.connection.setText("Connected to Instrument Server")
+        errors = status.get("registration_errors", {})
+        self.connection.setText("Connected to Instrument Server" +
+                                (f" — {len(errors)} saved registrations rejected" if errors else ""))
+        if errors != self.reported_registration_errors:
+            self.reported_registration_errors = dict(errors)
+            if errors:
+                text = "\n\n".join(f"{name}: {error}" for name, error in sorted(errors.items()))
+                QtCore.QTimer.singleShot(0, lambda: self._registration_error_popup(text))
         run = status["run"]
         self.domain.setText("Domain: " + (f"ORPHANED — {run['run_id']}" if run and run["orphaned"] else
                                            f"RUN LOCKED — {run['run_id']}" if run else "NO RUN LOCK"))
@@ -439,6 +449,10 @@ class InstrumentWindow(QtWidgets.QWidget):
                                  confirm=f"Deregister {name}? This removes it from saved inventory.")
             self.table.setCellWidget(row, 5, panel)
         self._update_actions()
+
+    def _registration_error_popup(self, text):
+        if not self.closing:
+            QtWidgets.QMessageBox.warning(self, "Saved instruments not restored", text)
 
     @QtCore.Slot(str, object)
     def _completed(self, op, outcome):

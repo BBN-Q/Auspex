@@ -6,11 +6,13 @@ The first writer-only [ExperimentServer](server.md) uses these helpers through
 There is deliberately no `plan.run()` API. Buffer transfer and `run.release_buffers()`
 remain deferred.
 
-## Read-only admission preflight
+## Admission preflight
 
 `preflight_run(plan, memory_budget_bytes=..., store_scan_budget_bytes=...)`
 checks the single nonempty pipeline, its graph topology and declared transport and
-writer staging budgets **without** starting workers or writing files. Server-run
+writer staging budgets without starting workers. It also resolves recorded Python
+callables before folder/instrument acquisition. Those imports are trusted code and
+may themselves write files or have other side effects; preflight is not a sandbox. Server-run
 buffers must fit the existing 8 MiB inline array transport; larger digitizer
 transports are deferred. The service validates pipeline budgets and claims its
 single-run slot **before** allocating a folder. Buffers are currently rejected;
@@ -21,7 +23,7 @@ server's inline buffer-transfer limit.
 ## Folder handoff
 
 `RunFolder.allocate(plan, name="experiment", directory=existing_directory)`
-requires a validated version-5 compiled plan. It claims an unused
+requires a validated version-6 compiled plan. It claims an unused
 `experiment_NNN.auspex` folder starting at `000`, advancing beyond the highest
 existing number. `AuspexStore(mode="w")` initializes an empty manifest and an
 atomic `UNINITIALIZED` status stub. The helper atomically writes `plan.json`,

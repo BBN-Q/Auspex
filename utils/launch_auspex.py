@@ -182,12 +182,13 @@ def cancel_and_wait(path, children, *, report=announce, stop_wait=None):
         report(f"Could not confirm cooperative completion: {exc}. Stopping supervision; inspect hardware and leases.")
 
 
-def shutdown_tui(path, children, stop_wait, report):
+def shutdown_tui(path, children, stop_wait, report, *, output):
     """Keep the console alive while the launcher cancels and stops its owned services."""
     cancel_and_wait(path, children, report=report, stop_wait=stop_wait)
     report("Shutdown requested; stopping services. Registrations are preserved.")
     for process, name in reversed(children):
         stop(process, name, report=report)
+    output.finish()
 
 
 def main(argv=None):
@@ -211,6 +212,10 @@ def main(argv=None):
         parser.error("--tui requires auspex-v2[tui]")
 
     children = []
+    output = None
+    if args.tui:
+        from src.service_output import ServiceOutput
+        output = ServiceOutput()
     terminated = False
     def interrupted(*_):
         nonlocal terminated
@@ -233,6 +238,8 @@ def main(argv=None):
                                        text=args.tui, bufsize=1 if args.tui else -1,
                                        env={**os.environ, "AUSPEX_SHARED_TERMINAL": "1"})
             children.append((process, name))
+            if output is not None and process.stdout is not None:
+                output.attach(process, name)
             return process
         instrument = start("InstrumentServer", [str(utility / "instrument_server.py"), "--no-splash", "--socket", str(instruments)])
         wait_ready(instrument, instruments, {"op": "HELLO", "version": INSTRUMENT_VERSION})
@@ -248,8 +255,9 @@ def main(argv=None):
         announce("Ctrl+C cancels an active run and waits; Ctrl+C again stops supervision. Registrations are preserved.")
         if args.tui:
             from src.auspex_tui import OperatorConsole
-            result = OperatorConsole(instruments, experiments, children,
-                shutdown=lambda stop_wait, report: shutdown_tui(experiments, children, stop_wait, report)).run()
+            result = OperatorConsole(instruments, experiments, children, output=output,
+                shutdown=lambda stop_wait, report: shutdown_tui(
+                    experiments, children, stop_wait, report, output=output)).run()
             if result is not None:
                 return result  # The console stayed alive through cancellation and ordered cleanup.
             for process, name in children[:2]:
@@ -287,6 +295,10 @@ def main(argv=None):
         try:
             for process, name in reversed(children):
                 stop(process, name)
+            if output is not None:
+                output.finish()  # Idempotent if normal TUI shutdown already drained its EOF budget.
+                for line in output.drain():
+                    print(line, flush=True)  # Preserve startup/failure diagnostics if no console is running.
         finally:
             signal.signal(signal.SIGINT, old_int)
             signal.signal(signal.SIGTERM, previous)

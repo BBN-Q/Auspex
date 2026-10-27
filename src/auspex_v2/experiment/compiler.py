@@ -6,6 +6,7 @@ Plain-plan normalization and validation live in _experiment_plan.py.
 from __future__ import annotations
 
 import copy
+import inspect
 from dataclasses import asdict, dataclass
 import warnings
 import hashlib
@@ -78,9 +79,18 @@ class Expr:
         return Expr({"op": "neg", "args": [expression(self)]})
 
     def __getitem__(self, name):
-        if type(name) not in (str, int):
-            raise CompileError("Result selection requires a field name or integer index")
-        return Expr({"op": "field", "value": expression(self), "name": name})
+        if type(name) in (str, int):
+            return Expr({"op": "field", "value": expression(self), "name": name})
+        from .computations import encode_argument
+        return Expr({"op": "index", "value": expression(self), "index": encode_argument(name)})
+
+    @property
+    def real(self):
+        return Expr({"op": "component", "value": expression(self), "name": "real"})
+
+    @property
+    def imag(self):
+        return Expr({"op": "component", "value": expression(self), "name": "imag"})
 
     def __iter__(self):
         raise CompileError("Symbolic results cannot be unpacked or iterated; use result[field] or result[index]")
@@ -220,7 +230,28 @@ class _RecordingSession:
         self.closed = True
 
 
-class Parameter:
+class _ParameterAssociation:
+    """Configure one replaceable instrument binding or sequence recorder."""
+
+    def bind(self, instrument, member, *, kwargs=None, wait=0):
+        self.binding = ParameterBinding(instrument, member, kwargs or {}, wait)
+        return self
+
+    def setter(self, function):
+        """Register a synchronous recorder, returning the function for decorator use."""
+        if (not inspect.isfunction(function) or inspect.iscoroutinefunction(function)
+                or inspect.isgeneratorfunction(function) or inspect.isasyncgenfunction(function)):
+            raise CompileError("Parameter setter must be an ordinary synchronous function")
+        try:
+            inspect.signature(function).bind(None, None, None)
+        except TypeError as exc:
+            raise CompileError("Parameter setter must accept (experiment, seq, value)") from exc
+        self.binding = function
+        return function
+
+
+class Parameter(_ParameterAssociation):
+    """A class-level declaration of requested state and its optional association."""
     def __setattr__(self, name, value):
         if name != "_recording" and self.__dict__.get("_recording", False):
             raise CompileError("Parameter declarations are frozen during recording")
@@ -233,6 +264,7 @@ class Parameter:
         self.unit = unit
         self.bounds = bounds
         self.type = type
+        self.binding = None
 
 
 class IntParameter(Parameter):
@@ -246,13 +278,16 @@ class FloatParameter(Parameter):
 
 @dataclass
 class ParameterBinding:
+    """A single-setting association expanded to explicit SET and optional WAIT."""
+
     instrument: InstrumentRef
     member: str
     kwargs: dict
     wait: object
 
 
-class BoundParameter(Expr):
+class BoundParameter(Expr, _ParameterAssociation):
+    """An instance-local symbolic parameter with detached declaration metadata."""
     def __setattr__(self, name, value):
         if name != "_recording" and self.__dict__.get("_recording", False):
             raise CompileError(
@@ -264,13 +299,9 @@ class BoundParameter(Expr):
     def __init__(self, name, declaration):
         super().__init__({"op": "parameter", "name": name})
         self.name = name
-        self.declaration = copy.deepcopy(declaration)
+        self.declaration = declaration
         self.value = copy.deepcopy(self.declaration.default)
-        self.binding = None
-
-    def bind(self, instrument, member, *, kwargs=None, wait=0):
-        self.binding = ParameterBinding(instrument, member, kwargs or {}, wait)
-        return self
+        self.binding = declaration.binding
 
 
 class _Block:
@@ -288,7 +319,7 @@ class _Block:
 
 class SequenceBuilder:
     """Record a structured program; returned expressions are future values."""
-    def __init__(self, instruments, parameters=None, swept=(), outputs=None):
+    def __init__(self, instruments, parameters=None, swept=(), outputs=None, *, experiment=None):
         self.outputs = outputs or {}
         self.instruments = instruments
         self.parameters = parameters or {}
@@ -296,6 +327,12 @@ class SequenceBuilder:
         self.body = []
         self.stack = [self.body]
         self.counter = 0
+        self.experiment = experiment
+        self.phase = "main"
+        self._active_setters = []
+        self.operations = {}
+        self._operation_ids = {}
+        self._warned_functions = set()
 
     def _emit(self, op, **fields):
         node = {"op": op, **fields}
@@ -330,6 +367,30 @@ class SequenceBuilder:
         arguments = [expression(arg) for arg in args]
         return self._command("CALL", instrument, member, args=arguments, kwargs=kwargs, wait=wait)
 
+    def module(self, name):
+        """Import a trusted module for recording, never eager numerical execution."""
+        from .computations import ModuleProxy
+        return ModuleProxy(self, name)
+
+    def _compute(self, module, name, function, args, kwargs):
+        """Register a dependency and emit one ordered call with detached symbolic arguments."""
+        from .computations import encode_argument, operation_spec, warn_unreviewed
+        arguments = [encode_argument(arg) for arg in args]
+        keywords = [[key, encode_argument(value)] for key, value in kwargs.items()]
+        path = (module, name)
+        if path not in self._operation_ids:
+            operation = f"python_{len(self.operations) + 1}"
+            spec = operation_spec(module, name, function)
+            self.operations[operation] = spec
+            self._operation_ids[path] = operation
+            if not spec["safe_for_recording"] and id(function) not in self._warned_functions:
+                self._warned_functions.add(id(function))
+                warn_unreviewed(spec)
+        self.counter += 1
+        result = f"result_{self.counter}"
+        self._emit("COMPUTE", operation=self._operation_ids[path], args=arguments, kwargs=keywords, result=result)
+        return Expr({"op": "ref", "name": result})
+
     def publish(self, output, *, data, axes=None):
         """Record one complete window with explicit data and coordinate expressions."""
         name = next((key for key, port in self.outputs.items() if port is output), None)
@@ -345,8 +406,11 @@ class SequenceBuilder:
         """Update requested runtime state, then apply its binding and settling wait."""
         if not isinstance(parameter, BoundParameter) or self.parameters.get(parameter.name) is not parameter:
             raise CompileError("Runtime parameter must belong to this experiment")
-        if parameter.name in self.swept:
-            raise CompileError("Runtime updates to swept parameters are not supported yet")
+        if parameter.name in self._active_setters:
+            chain = " → ".join([*self._active_setters, parameter.name])
+            raise CompileError(f"Recursive parameter setter: {chain}")
+        if parameter.name in self.swept and self.phase == "main":
+            raise CompileError("Runtime updates to swept parameters are allowed only in setup/teardown")
         self._emit("SET_PARAMETER", name=parameter.name, value=expression(value))
         self._apply_binding(parameter)
 
@@ -410,10 +474,18 @@ class SequenceBuilder:
         return body
 
     def _apply_binding(self, parameter):
+        """Expand the association into this phase, tracking nested setter updates."""
         binding = parameter.binding
-        if binding is not None:
+        if isinstance(binding, ParameterBinding):
             self.set(binding.instrument, binding.member, parameter,
                      kwargs=binding.kwargs, wait=binding.wait)
+        elif binding is not None:
+            self._active_setters.append(parameter.name)
+            try:
+                binding(self.experiment, self, parameter)
+                self.experiment._check_recorded_configuration(self, binding.__name__)
+            finally:
+                self._active_setters.pop()
 
 
 class Sweep:
@@ -451,6 +523,7 @@ class Experiment:
         object.__delattr__(self, name)
 
     def __init__(self):
+        """Detach class declarations together so their internal references stay instance-local."""
         self.parameters = {}
         self.instruments = {}
         self.output_connectors = {}
@@ -458,16 +531,26 @@ class Experiment:
         declarations = {}
         for cls in reversed(type(self).__mro__):
             declarations.update(vars(cls))
+        # Copy as one graph: class-level bindings must point to this instance's
+        # instrument references, not independently copied or class-owned objects.
+        declarations = copy.deepcopy({name: value for name, value in declarations.items()
+                                      if isinstance(value, (Parameter, InstrumentRef, OutputConnector))})
         for name, declaration in declarations.items():
             if isinstance(declaration, Parameter):
                 self.parameters[name] = BoundParameter(name, declaration)
                 object.__setattr__(self, name, self.parameters[name])
             elif isinstance(declaration, InstrumentRef):
-                self.instruments[name] = copy.copy(declaration)
+                self.instruments[name] = declaration
                 object.__setattr__(self, name, self.instruments[name])
             elif isinstance(declaration, OutputConnector):
-                self.output_connectors[name] = copy.deepcopy(declaration)
+                self.output_connectors[name] = declaration
                 object.__setattr__(self, name, self.output_connectors[name])
+        # Binding waits/kwargs may refer to other class-level parameter declarations.
+        parameter_refs = {id(p.declaration): p for p in self.parameters.values()}
+        for parameter in self.parameters.values():
+            if isinstance(parameter.binding, ParameterBinding):
+                parameter.binding.kwargs = copy.deepcopy(parameter.binding.kwargs, parameter_refs)
+                parameter.binding.wait = copy.deepcopy(parameter.binding.wait, parameter_refs)
         self.bindings = {}
         self.sweeps = []
         self.metadata = {}
@@ -505,7 +588,7 @@ class Experiment:
         raise CompileError("set_graph() is unsupported; use PipelineDefinition and connect()")
 
     def setup(self, seq):
-        """Record commands before automatic static parameter application."""
+        """Record explicit initialization; configured defaults alone issue no commands."""
 
     def sweep_begin(self, seq, axis):
         """Record commands before each traversal of an axis."""
@@ -543,24 +626,23 @@ class Experiment:
                 check_parameter(name, spec, spec["value"])
         instruments = experiment._instrument_specs()
 
-        builder = SequenceBuilder(experiment.instruments, experiment.parameters, swept, experiment.output_connectors)
+        builder = SequenceBuilder(experiment.instruments, experiment.parameters, swept,
+                                  experiment.output_connectors, experiment=experiment)
         for name, parameter in experiment.parameters.items():
-            if parameter.binding is not None:
+            if isinstance(parameter.binding, ParameterBinding):
                 parameters[name]["binding"] = experiment._binding_spec(parameter, builder)
         session = _RecordingSession(builder)
         try:
             experiment._attach_proxies(session, instruments)
             experiment._set_recording(True)
             experiment._recorded_configuration = experiment._configuration_snapshot(builder)
+            builder.phase = "setup"
             setup = builder._record(experiment._setup_hook)
-            with _Block(builder, setup):
-                for name, parameter in experiment.parameters.items():
-                    if name not in swept and parameter.value is not None:
-                        builder._apply_binding(parameter)
-
+            builder.phase = "main"
             builder._emit("SCAN_BEGIN", name="sweep_000")
             experiment._record_sweeps(builder, len(experiment.sweeps) - 1)
             builder._emit("SCAN_END", name="sweep_000")
+            builder.phase = "teardown"
             teardown = builder._record(experiment._teardown_hook)
         finally:
             experiment._set_recording(False)
@@ -570,6 +652,7 @@ class Experiment:
 
         document = {
             "version": PLAN_VERSION,
+            "operations": builder.operations,
             "pipelines": pipelines,
             "instruments": instruments,
             "parameters": parameters,
@@ -604,7 +687,7 @@ class Experiment:
                                 "type": declaration.type.__name__, "unit": declaration.unit,
                                 "bounds": declaration.bounds,
                                 "binding": self._binding_spec(parameter, builder)
-                                if parameter.binding is not None else None}
+                                if isinstance(parameter.binding, ParameterBinding) else None}
         sweeps = [{"name": axis.name, "parameters": [p.name for p in axis.parameters],
                    "points": axis.points} for axis in self.sweeps]
         return _plain({"parameters": parameters, "instruments": self._instrument_specs(),
@@ -619,13 +702,17 @@ class Experiment:
 
     def _invoke_hook(self, builder, method, *args):
         method(builder, *args)
+        self._check_recorded_configuration(builder, method.__name__)
+
+    def _check_recorded_configuration(self, builder, recorder_name):
+        """Check nested configuration after hooks and parameter setter recorders."""
         from ..filters.core import PipelineError
         try:
             changed = self._configuration_snapshot(builder) != self._recorded_configuration
         except (PipelineError, ValueError, TypeError, KeyError) as exc:
-            raise CompileError(f"{method.__name__} changed frozen experiment configuration: {exc}") from exc
+            raise CompileError(f"{recorder_name} changed frozen experiment configuration: {exc}") from exc
         if changed:
-            raise CompileError(f"{method.__name__} changed frozen experiment configuration; "
+            raise CompileError(f"{recorder_name} changed frozen experiment configuration; "
                                "configure before compilation or use seq.set_parameter()")
 
     def _setup_hook(self, builder):
@@ -744,6 +831,10 @@ class CompiledPlan:
         lines = [f"Experiment plan v{document['version']} {self.identity[:12]}", "INSTRUMENTS"]
         for role, spec in document["instruments"].items():
             lines.append(f"  {role} -> {spec['name']} (KIND={spec['kind']})")
+        lines.append("OPERATIONS (trusted Python; implementations are not embedded)")
+        for name, spec in document["operations"].items():
+            lines.append(f"  {name}: {spec['module']}.{spec['attribute']} "
+                         f"version={spec['version']!r} author_asserted_safe={spec['safe_for_recording']}")
         lines.append("PARAMETERS (initial requested values, not readbacks)")
         for name, spec in document["parameters"].items():
             lines.append(f"  ${name}: {spec['type']} = {explain_value(spec['value'])} "

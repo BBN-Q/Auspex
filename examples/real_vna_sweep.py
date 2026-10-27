@@ -13,7 +13,7 @@ from auspex_v2.instruments import AgilentE8363C
 
 class VnaSweep(Experiment):
     vna = InstrumentRef().bind(AgilentE8363C)  # Any registered VNA KIND may fill this role.
-    center = FloatParameter(default=6e9, unit="Hz")
+    center = FloatParameter(default=6e9, unit="Hz").bind(vna, "frequency_center")
     trace = OutputConnector(dtype="complex64", dimensions=("frequency",),
                             axis_units={"frequency": "Hz"}, max_bytes=8 * 1024 * 1024)
 
@@ -27,6 +27,7 @@ class VnaSweep(Experiment):
         self.vna.set_measurements(["S21"])
         self.vna.num_points = 401
         self.vna.frequency_span = 20e6
+        seq.set_parameter(self.center, self.center)
         self.vna.output_enable = True
 
     def sequence(self, seq):
@@ -45,7 +46,6 @@ def main():
     args = parser.parse_args()
     experiment = VnaSweep()
     experiment.bind_instrument("vna", args.vna)
-    experiment.center.bind(experiment.vna, "frequency_center")
     experiment.add_sweep(experiment.center, [5.98e9, 5.99e9, 6.00e9, 6.01e9, 6.02e9])
     run = ExperimentServerClient(args.socket).submit(
         experiment.compile(), name="vna_sweep", dir=args.directory, date=True)
