@@ -1,11 +1,15 @@
-"""Deterministic compiler test interpreter, not a hardware runner or service."""
+"""Shared production instruction semantics, independent of service lifecycle or tests.
+
+Backends provide command dispatch, waits, publication and logging. The caller owns
+phase ordering and cleanup: this interpreter never acquires leases or finalizes a
+pipeline, and offers no implicit whole-run lifecycle.
+"""
 import copy
 import operator
 
 import numpy as np
 
 from .computations import normalize_scalar, resolve_operation, snapshot_value
-
 from ._experiment_plan import check_type, check_parameter
 
 
@@ -23,70 +27,46 @@ BINARY_OPERATORS = {
 }
 
 
-class _Terminate(Exception):
+class ProgramTermination(Exception):
+    """An explicit plan outcome or cooperative cancellation, handled by the caller."""
+
     def __init__(self, outcome, reason):
         self.outcome = outcome
         self.reason = reason
 
 
-class FakeExecutor:
-    """Execute against an injected callback; WAIT advances virtual time.
+class Interpreter:
+    """Evaluate a validated plan's instructions against explicit backend operations."""
 
-    command receives (op, registered_name, member, args, kwargs). Arguments and
-    returned values are copied at this boundary, like serialized instrument IPC.
-    Returned payloads are never logged. PUBLISH validates and copies a window,
-    optionally forwarding it to an injected publisher. Without a publisher this
-    harness runs no filters/storage and cannot imply publication success.
-    """
-    def __init__(self, command=None, *, max_steps=100000, publisher=None, retain_windows=True):
-        self.command = command or (lambda *args: None)
+    def __init__(self, document, *, max_steps=100000):
+        self.doc = document
         self.max_steps = max_steps
-        self.publisher = publisher
-        self.retain_windows = retain_windows
-
-    def run(self, plan):
-        self.doc = plan.document
         self.values = {}
-        self.params = {name: spec["value"] for name, spec in self.doc["parameters"].items()}
+        self.params = {name: spec["value"] for name, spec in document["parameters"].items()}
         self.variable_types = {}
-        self.trace = []
-        self.windows = []
         self.coordinates = {}
         self.scan_complete = False
-        self.time = 0.0
         self.steps = 0
-        self.outcome = "SUCCEEDED"
-        self.reason = ""
-        try:
-            self._body(self.doc["setup"])
-            self._body(self.doc["main"])
-        except _Terminate as exc:
-            self.outcome = exc.outcome
-            self.reason = exc.reason
-        except Exception as exc:
-            self.outcome = "FAILED"
-            self.reason = str(exc)
-        finally:
-            # Cleanup has its own budget, even if main execution exhausted its budget.
-            self.steps = 0
-            try:
-                self._body(self.doc["teardown"])
-            except Exception as exc:
-                self.outcome = "FAILED"
-                self.reason += (f"; teardown failed: {exc}; remaining cleanup skipped; "
-                                "safe state not established")
-        self.trace.append(f"{self.time:.6f} PROGRAM_FINISHED {self.outcome} {self.reason}")
-        return self
 
     def _tick(self):
         self.steps += 1
         if self.steps > self.max_steps:
-            raise RuntimeError("Fake executor instruction budget exceeded")
+            raise RuntimeError("Interpreter instruction budget exceeded")
 
     def _log(self, node, text):
-        self.trace.append(f"{self.time:.6f} {node['id']} {text}")
+        raise NotImplementedError("Interpreter backend must provide logging")
+
+    def _dispatch_command(self, op, name, member, args, kwargs):
+        raise NotImplementedError("Interpreter backend must provide instrument command dispatch")
+
+    def _wait(self, node):
+        raise NotImplementedError("Interpreter backend must provide waits")
+
+    def _publish(self, node):
+        raise NotImplementedError("Interpreter backend must provide publication")
 
     def _eval(self, expr):
+        """Evaluate detached expression nodes using current requested state and results."""
         op = expr["op"]
         if op == "literal":
             return expr["value"]
@@ -130,7 +110,8 @@ class FakeExecutor:
         check_type(value, "bool")
         return value
 
-    def _body(self, nodes):
+    def execute(self, nodes):
+        """Execute one instruction block; propagate failures/termination to its lifecycle owner."""
         for node in nodes:
             self._tick()
             op = node["op"]
@@ -156,7 +137,7 @@ class FakeExecutor:
                 self._sweep(node)
             elif op == "TERMINATE":
                 self._log(node, f"TERMINATE {node['outcome']} {node['reason']}")
-                raise _Terminate(node["outcome"], node["reason"])
+                raise ProgramTermination(node["outcome"], node["reason"])
             elif op == "SCAN_BEGIN":
                 self.scan_complete = False
                 self._log(node, op + " " + node["name"])
@@ -168,21 +149,21 @@ class FakeExecutor:
                 raise RuntimeError(f"Unknown instruction: {op}")
 
     def _point(self, node):
-        """Explicit sequence boundary; live execution supplies progress reporting."""
+        """Optional observation of point boundaries; no backend action is required."""
 
     def _command(self, node):
+        """Evaluate and detach command arguments/results, without logging returned payloads."""
         op = node["op"]
         args = [self._eval(arg) for arg in node.get("args", [])]
         if op == "SET":
             args = [self._eval(node["value"])]
         kwargs = {name: self._eval(value) for name, value in node["kwargs"].items()}
-        # A local fake callback must not mutate plan literals or earlier readbacks.
         args = copy.deepcopy(args)
         kwargs = copy.deepcopy(kwargs)
         name = self.doc["instruments"][node["instrument"]]["name"]
         self._log(node, f"{op} {name}.{node['member']} args={args!r} kwargs={kwargs!r}")
         try:
-            result = self.command(op, name, node["member"], args, kwargs)
+            result = self._dispatch_command(op, name, node["member"], args, kwargs)
             self.values[node["result"]] = copy.deepcopy(result)
         except Exception:
             self._log(node, f"{op} failed (command outcome may be uncertain)")
@@ -208,37 +189,6 @@ class FakeExecutor:
         self.scan_complete = True
         self._log(node, "SCAN_END " + node["name"])
 
-    def _publish(self, node):
-        """Validate and copy one explicit window, without logging payload arrays."""
-        import numpy as np
-        from ..data import Axis
-        from ..filters.core import Batch
-        from ._experiment_publication import output_schema
-        name = node["output"]
-        schema = output_schema(self.doc["outputs"][name])
-        data = np.array(self._eval(node["data"]), copy=True)
-        axes = tuple(Axis(axis, np.array(self._eval(node["axes"][axis]), copy=True), unit)
-                     for axis, unit in zip(schema.axis_names, schema.axis_units))
-        window = len(self.windows)
-        schema.check(Batch(None, window, 0, 0, data, axes))
-        coordinates = copy.deepcopy(self.coordinates)
-        self._log(node, f"PUBLISH {name} window={window} dispatch")
-        if self.publisher is not None:
-            self.publisher(name, data.copy(), copy.deepcopy(axes), coordinates.copy())
-        record = {"window": window, "output": name, "coordinates": coordinates}
-        if self.retain_windows:
-            record.update(data=data, axes=axes)
-        self.windows.append(record)
-        self._log(node, f"PUBLISH {name} window={window} submitted (not publication acknowledgment)")
-
-    def _wait(self, node):
-        seconds = self._eval(node["duration"])
-        check_type(seconds, "float")
-        if seconds < 0:
-            raise ValueError("Negative wait")
-        self._log(node, f"WAIT {seconds}")
-        self.time += seconds
-
     def _set_parameter(self, node):
         name = node["name"]
         value = self._eval(node["value"])
@@ -258,18 +208,19 @@ class FakeExecutor:
         condition = self._condition(node["condition"])
         self._log(node, f"IF -> {condition}")
         branch = node["then"] if condition else node["otherwise"]
-        self._body(branch)
+        self.execute(branch)
 
     def _repeat(self, node):
-        count = self._eval(node["count"])  # Evaluate exactly once on entry.
+        """Evaluate the count once on entry; empty bodies still consume budget."""
+        count = self._eval(node["count"])
         check_type(count, "int")
         limit = node["max_iterations"]
         if count < 0 or (limit is not None and count > limit):
             raise ValueError("Repeat count exceeds bounds")
         for iteration in range(count):
-            self._tick()  # Empty loop bodies must also consume the test budget.
+            self._tick()
             self._log(node, f"REPEAT iteration={iteration}")
-            self._body(node["body"])
+            self.execute(node["body"])
 
     def _while(self, node):
         iteration = 0
@@ -278,10 +229,11 @@ class FakeExecutor:
                 raise RuntimeError("WHILE iteration limit exceeded")
             self._tick()
             self._log(node, f"WHILE iteration={iteration}")
-            self._body(node["body"])
+            self.execute(node["body"])
             iteration += 1
 
     def _sweep(self, node):
+        """Assign all joint coordinates before applying the recorded point body."""
         names = node["parameters"]
         for iteration, point in enumerate(node["points"]):
             self._tick()
@@ -290,4 +242,4 @@ class FakeExecutor:
             for name, value in zip(names, values):
                 self.params[name] = value
                 self.coordinates[name] = value
-            self._body(node["body"])
+            self.execute(node["body"])

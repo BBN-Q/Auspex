@@ -6,6 +6,7 @@ from unittest.mock import Mock
 from auspex_v2.experiment import FloatParameter, CompiledPlan, CompileError
 from auspex_v2.experiment.progress import point_total
 from auspex_v2.experiment.runner import LiveInterpreter
+from auspex_v2.experiment.interpreter import ProgramTermination
 from .experiment_test_support import Experiment
 
 
@@ -22,11 +23,15 @@ class Points(Experiment):
 
 class ProgressTest(unittest.TestCase):
     def execute(self, experiment):
+        """Exercise live point observation directly, without a fake whole-run lifecycle."""
         plan = experiment.compile()
         channel = Mock()
         channel.poll.return_value = False
         runner = LiveInterpreter(channel, Mock(), Mock(), plan.document)
-        runner.run(plan)
+        try:
+            runner.execute(plan.document["main"])
+        except ProgramTermination:
+            pass
         messages = [json.loads(call.args[0]) for call in channel.send_bytes.call_args_list]
         return runner, [m["progress"] for m in messages if m["type"] == "progress"]
 

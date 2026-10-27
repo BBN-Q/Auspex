@@ -7,21 +7,19 @@ authoring code. New compilation requires an attached pipeline. The loader embeds
 function source and uses neither pickle nor `eval`; recorded Python functions are
 explicit external dependencies, not sandboxed code.
 
-`FakeExecutor` interprets commands and publications without workers or storage.
-`PipelineExecutor` in `pipeline.py` is a separate **offline integration
-harness**: injected fake command results feed real filter workers/writers, while
-WAIT remains virtual. Neither executor connects hardware, owns instrument leases,
-implements cancellation/supervision, or starts ExperimentServer. Do not use these
-harnesses as live runners. A separate [ExperimentServer](server.md) runs saved
-writer-only plans against the explicit simulated/real driver registry under an
-instrument lease, with real waits, cooperative cancellation, and reconnectable handles.
+[ExperimentServer](server.md) runs saved writer-only plans against the explicit
+simulated/real driver registry under an instrument lease, with real waits,
+cooperative cancellation and reconnectable handles. Its `LiveInterpreter` uses
+the production instruction semantics in `interpreter.py`; test executors are
+repository-only fixtures, not runtime dependencies or public execution APIs.
 
 ## Example
 
 ```python
-from auspex_v2.experiment import Experiment, InstrumentRef, FloatParameter, OutputConnector
-from auspex_v2.experiment.fake import FakeExecutor
-from auspex_v2.filters.definitions import PipelineInput, PipelineDefinition, DataBuffer
+from auspex_v2.experiment import (
+    Experiment, ExperimentServerClient, InstrumentRef, FloatParameter, OutputConnector,
+)
+from auspex_v2.filters.definitions import PipelineInput, PipelineDefinition, WriteToFile
 
 class Measurement(Experiment):
     source = InstrumentRef(kind="DC_SOURCE")
@@ -32,8 +30,8 @@ class Measurement(Experiment):
 
     def setup_pipeline(self):
         signal = PipelineInput("signal")
-        memory = DataBuffer(name="memory", capacity=16)
-        PipelineDefinition(inputs=[signal], edges=[(signal, memory.sink)])
+        writer = WriteToFile(name="disk", dataset="signal")
+        PipelineDefinition(inputs=[signal], edges=[(signal, writer.sink)])
         self.connect(self.signal, signal)
 
     def setup(self, seq):
@@ -63,8 +61,10 @@ exp.add_sweep(exp.voltage, [-0.5, 0.0, 0.5])
 plan = exp.compile()
 plan.save("measurement.plan.json")
 print(plan.explain())
-run = FakeExecutor(lambda op, device, member, args, kwargs: 20.0).run(plan)
-assert run.outcome == "SUCCEEDED"
+# Start the services and register a matching source first. These abstract
+# source commands illustrate the API; adapt them to your admitted driver.
+run = ExperimentServerClient().submit(plan, name="measurement", dir="/path/to/data")
+print(run.run_id, run.path)
 ```
 
 Instrument roles use the fixed, case-sensitive `InstrumentKind` vocabulary. An
@@ -90,9 +90,9 @@ seq.set_parameter(self.component, spectrum[self.bin_index].real / 32)
 ```
 
 See [`examples/recorded_fft.py`](../../../examples/recorded_fft.py) for a complete
-runnable example with no hardware/services. It publishes the independently known
-coefficient 0.5 through the offline pipeline; its saved plan can also run through
-ExperimentServer. Arrays live in runtime results; parameters remain scalar.
+submission example requiring no instruments. Start the services first; the plan
+publishes the independently known coefficient 0.5 through ExperimentServer.
+Arrays live in runtime results; parameters remain scalar.
 
 The proxy traverses modules and records function/ufunc calls generically, without
 individual NumPy/SciPy adapters. Supported arguments/results are numerical arrays
@@ -116,6 +116,16 @@ simply raise errors. SciPy is not installed automatically by this feature.
 
 ### Trust and dependencies
 
+Every successful `Experiment.compile()` containing a COMPUTE instruction emits
+`RuntimePythonWarning`: **"This compiled experiment executes runtime Python code.
+Auspex cannot guarantee repeatability"**. This whole-experiment notice also applies
+to reviewed functions and nested instructions in setup/main/teardown. It is saved
+in the plan's top-level `warnings` list and displayed prominently by `explain()`;
+plans without COMPUTE have an empty list. Notices are derived from instructions
+when constructing/loading a plan, without changing execution semantics. Ordinary
+Python warning filters remain under user control; the saved notice is independent
+of those filters. Loading a plan does not re-emit the compile-time warning.
+
 Unmarked callables emit `RecordedPythonWarning` during compilation, once per
 callable (not once per point). There is no implicit trust for NumPy, SciPy or an
 Auspex namespace. A reviewed wrapper can carry an **author assertion**:
@@ -134,7 +144,8 @@ fit = seq.module("lab_analysis").fit_response(frequency, response)
 seq.set_parameter(self.center, fit["center"])
 ```
 
-The decorator suppresses the warning; it does not prove purity. The author asserts
+The decorator suppresses only the callable-level warning, never the whole-plan
+repeatability notice; it does not prove purity. The author asserts
 no external side effects, input mutation, or dependence on persistent hidden state,
 including in transitive dependencies. The runner never injects an Experiment,
 sequence builder or instrument handle into the function, but **this is trusted
@@ -152,7 +163,7 @@ folder allocation/instrument acquisition. Imports themselves may have side effec
 ### Ordering, failure and cancellation
 
 Calls run synchronously in instruction order, once per executed COMPUTE, in both
-offline and live interpreters. Reusing a result reference does not repeat the call.
+the live interpreter and test backends. Reusing a result reference does not repeat the call.
 There is no helper thread/process or automatic parallelism. Exceptions and
 unsupported results fail the run and attempt the usual teardown.
 
@@ -213,35 +224,27 @@ output schemas derive from declared `OutputConnector`s, and the processing graph
 from attached `PipelineDefinition`s. Assigning either legacy attribute or calling
 `set_graph()` fails with guidance rather than saving inert configuration.
 
-## Offline pipeline execution
+## Saved-plan execution
 
 ```python
-from auspex_v2.experiment.pipeline import PipelineExecutor
+from auspex_v2.experiment import CompiledPlan, ExperimentServerClient
 
-run = PipelineExecutor(fake_command).run(plan, store_path="run.auspex")
-# Omit store_path for buffer-only pipelines.
-print(run.outcome, run.reason)
+plan = CompiledPlan.load("measurement.plan.json")
+run = ExperimentServerClient().submit(plan, name="measurement", dir="/path/to/data")
+print(run.run_id, run.path)
+# Optional: result = run.wait(timeout=60)
 ```
 
-The harness starts the pipeline before executing setup. It attempts teardown once
-setup begins, stopping on the first teardown error and preserving any earlier
-failure. Only after teardown does it wait for final processing/publication. A
-completed scan can still publish if teardown failed; a failed partial scan is
-cancelled. Successful early termination closes the admitted prefix, but incomplete
-required filter groups fail finalization. Buffers remain accessible on `run.buffers`.
+The server owns the run folder, saves the submitted plan and manages instrument
+leases, processing and cleanup. Disconnecting the submitting client does not
+cancel the run. Only writer-backed plans are admitted in the current service.
+See [the lifecycle contract](server.md) and `examples/compiled_publication.py`.
+For direct processing without a saved experiment plan, use
+[ManualPipeline](../filters/manual.md), not a test executor.
 
-The offline pipeline harness fails on a full required buffer instead of waiting
-for an absent consumer; an ordinary `ManualPipeline` still defaults to blocking
-so scripts can drain buffers concurrently. The harness stores only window metadata,
-not all published payload arrays in its trace; `FakeExecutor` retains payloads by
-default for tests. The harness does not promise bounded hardware command time or safe hardware state,
-and does not implement leases, crash recovery or durable execution logs. Its
-`PROGRAM_FINISHED` trace precedes `PIPELINE_FINISHED`; only the latter and the final
-`outcome` include required processing completion. The saved plan is independent of
-the injected command callback. Existing import paths `auspex_v2.experiment_fake`
-and `auspex_v2.experiment_pipeline` remain compatibility re-exports; new code can
-import `FakeExecutor` and `PipelineExecutor` from `auspex_v2.experiment`. For a runnable example that also saves the plan with
-data, see `examples/compiled_publication.py`.
+The former FakeExecutor/PipelineExecutor APIs and compatibility shims have been
+removed from the installed package. Their virtual-time/callback-based counterparts
+live only under `tests/experiment/` to verify shared production semantics.
 
 ## Driver-shaped shorthand
 
@@ -455,41 +458,32 @@ nonnegative duration when executed. Binding delays can use that same mechanism.
   which cannot depend on potentially failed setup/main reads. Teardown loops,
   acquisitions, and termination are disallowed in this initial slice.
 
-## Fake executor and trace
+## Runtime and test boundaries
 
-`FakeExecutor(command, max_steps=100000).run(plan)` returns the executor with
-`outcome`, `reason`, `trace`, `windows`, and virtual `time`. It logs command
-arguments before dispatch, acknowledgment/failure afterward, and control-flow
-outcomes. Returned payloads are not logged. WAIT advances virtual time without
-sleeping. An instruction/iteration budget also bounds empty loops. Failed commands
-skip the normal post-command wait and attempt teardown. This is a test harness,
-not a safety mechanism, cancellation implementation, or processing/publication
-completion guarantee. Its successful outcome means only that fake execution
-completed. Trace timestamps are virtual elapsed seconds, not wall-clock times.
-Command arguments and returned values are copied at the fake-command boundary,
-modeling serialized IPC: callback mutation cannot change plan literals or earlier
-readbacks used by later iterations.
+The production Interpreter owns expression evaluation, typed state updates,
+control flow, computations and instruction budgets. LiveInterpreter supplies
+instrument dispatch, real waits, pipeline publication, logging and supervision.
+Required backend operations raise if unimplemented; there is no production
+no-op command callback or virtual clock. The runner, not the shared interpreter,
+owns phase ordering, teardown, leases and publication finalization.
+
+Test-only FakeExecutor and PipelineExecutor inherit those same production
+semantics, adding injected responses, virtual time, window/trace capture and a
+convenient test lifecycle. They are not distributed, re-exported or imported by
+ExperimentServer. Tests with these fixtures do not establish hardware behavior;
+real-service/simulated tests exercise the actual supervised lifecycle.
 
 ## Deferred deliberately
 
-- Persistent ExperimentServer, admission, run IDs, leases, typed live driver command
-  schemas/KIND matching, cancellation, orphan reconciliation, and real execution.
-- Live acquisition integration, filter-result policy waits, filter updates, and
-  durable run orchestration. Explicit publication into the existing pipeline is
-  available only through the offline harness. Arbitrary multidimensional ragged
-  windows and multi-input pipeline execution are not implemented.
-- Adaptive policies and scan segmentation. The structured condition/loop IR is
-  the foundation, not an implementation of adaptive analysis.
-- Run folders, durable status, and wall-clock `execution.log` writing. The agreed
-  future policy is one `.auspex` folder per run, immutable submissions, no run
-  queue, completed scans retained on cancellation, and connected instruments
-  retained after success unless explicit cleanup says otherwise.
+Arbitrary multidimensional ragged windows, multi-input pipeline execution,
+adaptive sweep updates and multi-scan segmentation remain unsupported. The current
+writer-only server, its ownership/recovery limits and durable run artifacts are
+documented in [server.md](server.md).
 
 Validation targets authoring mistakes, not hostile inputs. Authoring methods are
 trusted ordinary Python; compilation is not a sandbox. The builder itself performs
 no instrument I/O. `CompiledPlan.load()` uses the same basic validator as compilation.
-The deferred-contract list above describes the offline compiler/harness scope;
-see [server.md](server.md) for the implemented writer-only service lifecycle.
+See [server.md](server.md) for the implemented writer-only service lifecycle.
 
 ## Compiler organization
 
@@ -514,9 +508,11 @@ Versions 1–5 fail immediately with recompile guidance; there is no silent upgr
 attachments and explicit `PUBLISH` instructions. Unknown top-level fields and
 obsolete `ACQUIRE` instructions are rejected rather than ignored.
 
-The fake executor has separate handlers for commands, conditionals, REPEAT, WHILE,
-and SWEEP. Publication validation/attachment lives in `_experiment_publication.py`;
-`pipeline.py` adds the offline single-pipeline execution harness.
+`interpreter.py` supplies shared expression and instruction handlers;
+`runner.py` supplies the live backend and supervised lifecycle. Publication
+validation/attachment lives in `_experiment_publication.py`. Virtual-time test
+backends live in `tests/experiment/fake_executor.py` and `pipeline_executor.py`,
+with no reverse dependency from production code.
 `plan.explain()` renders symbolic expressions with `$parameter` and
 `%runtime_reference` names instead of raw expression-tree JSON. Its summary includes
 registered instrument targets/KINDs, recorded Python dependencies and author safety

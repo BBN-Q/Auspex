@@ -1,16 +1,14 @@
 """Record an FFT, select a symbolic bin, and publish a scalar parameter update.
 
-Run: python examples/recorded_fft.py /path/to/new_fft.auspex
-No instruments or services are needed. NumPy outside seq.module runs during
-compilation; recorded NumPy runs synchronously in the offline interpreter.
-The same saved plan can be submitted to ExperimentServer for writer-only execution.
+Start the Auspex services, then submit to an existing server-host data directory:
+python examples/recorded_fft.py /path/to/data
+No instruments are used. NumPy outside seq.module runs during compilation;
+recorded NumPy executes synchronously in the ExperimentServer runner.
 """
 import argparse
-from pathlib import Path
-
 import numpy as np
 
-from auspex_v2.experiment import Experiment, FloatParameter, IntParameter, OutputConnector, PipelineExecutor
+from auspex_v2.experiment import Experiment, ExperimentServerClient, FloatParameter, IntParameter, OutputConnector
 from auspex_v2.filters.definitions import PipelineDefinition, PipelineInput, WriteToFile
 
 
@@ -37,15 +35,15 @@ class RecordedFFT(Experiment):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("path", help="New .auspex directory")
+    parser.add_argument("directory", help="Existing absolute data directory on the server host")
+    parser.add_argument("--socket")
     args = parser.parse_args()
     plan = RecordedFFT().compile()  # Warns: NumPy has no author purity assertion.
     print(plan.explain())
-    run = PipelineExecutor().run(plan, store_path=args.path)
-    plan.save(Path(args.path) / "plan.json")
-    if run.outcome != "SUCCEEDED":
-        raise RuntimeError(run.reason)
-    print(f"FFT bin 3 real coefficient: {run.params['component']:.6f} (expected 0.5)")
+    run = ExperimentServerClient(args.socket).submit(
+        plan, name="fft", dir=args.directory, date=False)
+    print(f"Submitted {run.run_id}\nFolder: {run.path}")
+    print("Dataset data/fft_component should contain 0.5 after successful execution.")
 
 
 if __name__ == "__main__":

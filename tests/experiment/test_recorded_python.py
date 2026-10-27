@@ -12,11 +12,12 @@ import warnings
 import numpy as np
 
 from auspex_v2.experiment import (
-    CompileError, CompiledPlan, FakeExecutor, FloatParameter, InstrumentRef, IntParameter,
-    RecordedPythonWarning,
+    CompileError, CompiledPlan, FloatParameter, InstrumentRef, IntParameter,
+    RecordedPythonWarning, RuntimePythonWarning,
 )
 from auspex_v2.experiment.resources import preflight_run
 from .experiment_test_support import Experiment
+from tests.experiment.fake_executor import FakeExecutor
 MODULE = "tests.experiment.computation_functions"
 # unittest discovery also imports this suite as experiment.*. Use the exact
 # recorded module path so state probes observe the same fixture module.
@@ -26,11 +27,57 @@ functions = importlib.import_module(MODULE)
 def compile_quiet(experiment):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", RecordedPythonWarning)
+        warnings.simplefilter("ignore", RuntimePythonWarning)
         return experiment.compile()
 
 
 class RecordedPythonTest(unittest.TestCase):
     """Verify ordered execution, detached data, narrow expressions and trusted dependencies."""
+
+    def test_whole_plan_warning_survives_review_markers_and_saved_round_trips(self):
+        """Warn on every compile for nested COMPUTE in any phase, even with only reviewed functions."""
+        message = "This compiled experiment executes runtime Python code. Auspex cannot guarantee repeatability"
+        def recorded(self, seq):
+            with seq.if_(False):
+                seq.module(MODULE).ordered_keys({})  # Reviewed, but still runtime Python.
+        for phase in ("setup", "sequence", "teardown"):
+            with self.subTest(phase=phase):
+                class Analysis(Experiment):
+                    """Install a reviewed computation in one recording phase."""
+                setattr(Analysis, phase, recorded)
+                experiment = Analysis()
+                with warnings.catch_warnings(record=True) as caught:
+                    warnings.simplefilter("always")
+                    plan = experiment.compile()
+                    experiment.compile()
+                self.assertEqual([(w.category, str(w.message)) for w in caught],
+                                 [(RuntimePythonWarning, message)] * 2)
+                self.assertEqual(plan.document["warnings"], [message])
+                self.assertEqual(plan.explain().splitlines()[1], "WARNING: " + message)
+                with tempfile.TemporaryDirectory() as directory:
+                    path = Path(directory) / "plan.json"
+                    plan.save(path)
+                    self.assertEqual(json.loads(path.read_text())["warnings"], [message])
+                    loaded = CompiledPlan.load(path)
+                self.assertEqual(loaded.identity, plan.identity)
+                self.assertIn(message, loaded.explain())
+                document = plan.document
+                document.pop("warnings")
+                self.assertEqual(CompiledPlan(document).document["warnings"], [message])
+
+    def test_no_whole_plan_warning_without_compute_instructions(self):
+        """Importing/looking up a numerical function alone is not runtime Python execution."""
+        class Analysis(Experiment):
+            """Resolve a callable without recording its execution."""
+
+            def sequence(self, seq):
+                seq.module(MODULE).ordered_keys  # No call recorded.
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            plan = Analysis().compile()
+        self.assertEqual(caught, [])
+        self.assertEqual(plan.document["warnings"], [])
+        self.assertNotIn("cannot guarantee repeatability", plan.explain())
 
     def test_concrete_and_zero_argument_calls_always_record_and_warn_once(self):
         """No eager execution is hidden behind concrete inputs; aliases share warning deduplication."""
@@ -86,7 +133,8 @@ class RecordedPythonTest(unittest.TestCase):
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always", RecordedPythonWarning)
             plan = Analysis().compile()
-        self.assertEqual(len(caught), 1)  # arange warns; the explicitly reviewed wrapper does not.
+        notices = [w for w in caught if issubclass(w.category, RecordedPythonWarning)]
+        self.assertEqual(len(notices), 1)  # arange warns; the reviewed wrapper does not.
         reviewed = [spec for spec in plan.document["operations"].values() if spec["attribute"] == "nested"][0]
         self.assertTrue(reviewed["safe_for_recording"])
         run = FakeExecutor().run(plan)
@@ -231,7 +279,8 @@ class RecordedPythonTest(unittest.TestCase):
             path = Path(directory) / "plan.json"
             plan.save(path)
             script = '''import json, sys
-from auspex_v2.experiment import CompiledPlan, FakeExecutor
+from auspex_v2.experiment import CompiledPlan
+from tests.experiment.fake_executor import FakeExecutor
 plan = CompiledPlan.load(sys.argv[1])
 run = FakeExecutor().run(plan)
 print(json.dumps([plan.identity, run.outcome, run.params['component']]))

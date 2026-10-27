@@ -6,7 +6,7 @@ import unittest
 from auspex_v2.experiment import (
     CompileError, CompiledPlan, FloatParameter, InstrumentRef, IntParameter,
 )
-from auspex_v2.experiment.fake import FakeExecutor
+from tests.experiment.fake_executor import FakeExecutor
 from .experiment_test_support import Experiment
 from auspex_v2.instruments import InstrumentKind
 from auspex_v2.instruments.drivers import Instrument, operation

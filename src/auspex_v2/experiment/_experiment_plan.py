@@ -52,6 +52,9 @@ def check_parameter(name, spec, value):
 
 CHILD_BLOCKS = ("body", "then", "otherwise")
 PHASES = ("setup", "main", "teardown")
+RUNTIME_PYTHON_WARNING = (
+    "This compiled experiment executes runtime Python code. Auspex cannot guarantee repeatability"
+)
 NUMERIC_TYPES = {"int", "float"}
 ARITHMETIC = {"add", "sub", "mul", "div"}
 COMPARISONS = {"lt", "le", "gt", "ge", "eq", "ne"}
@@ -63,6 +66,13 @@ def walk_instructions(nodes):
         yield node
         for block in CHILD_BLOCKS:
             yield from walk_instructions(node.get(block, []))
+
+
+def runtime_python_warnings(document):
+    """Derive the whole-plan notice from actual instructions, including nested blocks."""
+    uses_python = any(node["op"] == "COMPUTE" for phase in PHASES
+                      for node in walk_instructions(document[phase]))
+    return [RUNTIME_PYTHON_WARNING] if uses_python else []
 
 
 def swept_parameters(document):
@@ -95,7 +105,8 @@ def frozen_value(expr, parameters, swept):
 
 
 def normalize_plan(document):
-    """Resolve frozen loop bounds, leaving runtime expressions symbolic."""
+    """Derive execution notices and resolve frozen bounds, leaving runtime expressions symbolic."""
+    document["warnings"] = runtime_python_warnings(document)
     dynamic = swept_parameters(document) | updated_parameters(document)
     parameters = document["parameters"]
     for phase in PHASES:
@@ -199,9 +210,11 @@ class PlanValidator:
         if self.document["version"] != PLAN_VERSION:
             raise CompileError(f"Unsupported experiment plan version: expected {PLAN_VERSION}")
         expected = {"version", "pipelines", "instruments", "parameters", "setup", "main",
-                    "teardown", "outputs", "metadata", "operations"}
+                    "teardown", "outputs", "metadata", "operations", "warnings"}
         if set(self.document) != expected:
             raise CompileError(f"Incompatible experiment plan fields: {sorted(set(self.document) ^ expected)}")
+        if self.document["warnings"] != runtime_python_warnings(self.document):
+            raise CompileError("Plan warnings do not match its runtime Python instructions")
         from .computations import validate_operations
         validate_operations(self.document["operations"])
         from ._experiment_publication import validate_attachments

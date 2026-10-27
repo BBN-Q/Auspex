@@ -662,7 +662,11 @@ class Experiment:
             "outputs": outputs,
             "metadata": _plain(experiment.metadata),
         }
-        return CompiledPlan(document)
+        plan = CompiledPlan(document)
+        from .computations import RuntimePythonWarning
+        for message in plan.document["warnings"]:
+            warnings.warn(message, RuntimePythonWarning, stacklevel=2)
+        return plan
 
     def _set_recording(self, active):
         self._recording = active
@@ -828,7 +832,9 @@ class CompiledPlan:
 
     def explain(self):
         document = self.document
-        lines = [f"Experiment plan v{document['version']} {self.identity[:12]}", "INSTRUMENTS"]
+        lines = [f"Experiment plan v{document['version']} {self.identity[:12]}"]
+        lines.extend(f"WARNING: {message}" for message in document["warnings"])
+        lines.append("INSTRUMENTS")
         for role, spec in document["instruments"].items():
             lines.append(f"  {role} -> {spec['name']} (KIND={spec['kind']})")
         lines.append("OPERATIONS (trusted Python; implementations are not embedded)")

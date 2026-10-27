@@ -13,8 +13,8 @@ from auspex_v2.experiment import (
     Experiment, OutputConnector, InstrumentRef, FloatParameter, IntParameter,
     CompileError, CompiledPlan, PipelineOverrideWarning,
 )
-from auspex_v2.experiment.fake import FakeExecutor
-from auspex_v2.experiment.pipeline import PipelineExecutor
+from tests.experiment.fake_executor import FakeExecutor
+from tests.experiment.pipeline_executor import PipelineExecutor
 from auspex_v2.filters import PipelineError, PortSchema, ManualPipeline, FilterServer
 from auspex_v2.filters.definitions import (
     PipelineInput, PipelineDefinition, Passthrough, DataBuffer, WriteToFile,
@@ -131,7 +131,7 @@ class PublicationCompilerTest(unittest.TestCase):
         experiment.connect(EmptySource(), b)
         plan = experiment.compile()
         self.assertEqual(plan.document["pipelines"][0]["connections"], {"a": "trace", "b": None})
-        with patch("auspex_v2.experiment.pipeline.ManualPipeline") as runtime:
+        with patch("tests.experiment.pipeline_executor.ManualPipeline") as runtime:
             with self.assertRaisesRegex(PipelineError, "API-only"):
                 PipelineExecutor(command).run(plan)
             runtime.assert_not_called()
@@ -232,9 +232,11 @@ class PublicationExecutionTest(unittest.TestCase):
             experiment.add_sweep(experiment.bias, [0., 1.])
             plan = experiment.compile()
             plan.save(plan_path)
-            code = f'''import numpy as np
+            code = f'''import sys
+sys.path.insert(0, {str(Path(__file__).resolve().parents[2])!r})
+import numpy as np
 from auspex_v2.experiment import CompiledPlan
-from auspex_v2.experiment.pipeline import PipelineExecutor
+from tests.experiment.pipeline_executor import PipelineExecutor
 
 def command(op, instrument, member, args, kwargs):
     if member == "get_trace":

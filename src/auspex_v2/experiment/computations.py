@@ -12,6 +12,10 @@ import numpy as np
 from ._experiment_plan import CompileError
 
 
+class RuntimePythonWarning(UserWarning):
+    """Runtime Python prevents Auspex from guaranteeing whole-experiment repeatability."""
+
+
 class RecordedPythonWarning(UserWarning):
     """A recorded callable has no author assertion about external side effects."""
 

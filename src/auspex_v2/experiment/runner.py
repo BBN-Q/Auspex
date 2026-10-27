@@ -1,7 +1,8 @@
 """Supervised runner for explicitly registered V2 instrument drivers. The runner, never the client notebook, owns the lease.
 
-The expression/control-flow interpreter is shared with the offline harness; waits,
-commands, publication and lifecycle here are real. Hardware behavior remains the responsibility of the selected trusted driver and operator.
+The production interpreter supplies expression/control-flow semantics. This module
+owns real I/O, supervision and lifecycle; no test harness is imported. Hardware
+behavior remains the responsibility of the selected trusted driver and operator.
 """
 import json
 import time
@@ -9,7 +10,7 @@ from datetime import datetime
 from .progress import point_total
 
 from .compiler import CompiledPlan
-from .fake import FakeExecutor, _Terminate
+from .interpreter import Interpreter, ProgramTermination
 from .resources import preflight_run
 from ..filters import ManualPipeline
 from ..instruments.server.client import InstrumentServerClient
@@ -58,18 +59,18 @@ class SupervisionLost(BaseException):
     """Bypass ordinary cleanup: no further commands without service supervision."""
 
 
-class LiveInterpreter(FakeExecutor):
+class LiveInterpreter(Interpreter):
+    """Supervised real-I/O backend; the runner owns phase execution and cleanup."""
+
     def __init__(self, channel, session, pipeline, document):
-        super().__init__(retain_windows=False)
+        super().__init__(document)
         self.channel, self.session, self.pipeline = channel, session, pipeline
-        self.doc = document
         self.cleaning = False
         self.cancelled = False
         self.started = time.monotonic()
         self.publications = 0
         self.completed = 0
         self.total = point_total(document)
-        self.coordinates = {}
         self.phase = "connecting"
 
     def progress(self, phase=None):
@@ -100,18 +101,18 @@ class LiveInterpreter(FakeExecutor):
         except (EOFError, OSError):
             raise SupervisionLost() from None
         if self.cancelled and not self.cleaning:
-            raise _Terminate("CANCELLED", "Cancellation requested")
+            raise ProgramTermination("CANCELLED", "Cancellation requested")
 
     def _tick(self):
         self.poll()
         super()._tick()
 
     def _log(self, node, text):
-        self.time = time.monotonic() - self.started
+        elapsed = time.monotonic() - self.started
         if len(text) > 32768:
             text = text[:32768] + " [truncated]"
         try:
-            send(self.channel, {"type": "log", "text": f"{self.time:.6f} {node['id']} {text}"})
+            send(self.channel, {"type": "log", "text": f"{elapsed:.6f} {node['id']} {text}"})
         except (OSError, EOFError):
             raise SupervisionLost() from None
 
@@ -119,11 +120,11 @@ class LiveInterpreter(FakeExecutor):
         self.poll()
         if not self.cleaning:
             self.pipeline._graph.check()
-        def command(op, name, member, args, kwargs):
-            return self.session._dispatch(op, name, member, args=args,
-                                          value=args[0] if op == "SET" else None, kwargs=kwargs)
-        self.command = command
         super()._command(node)
+
+    def _dispatch_command(self, op, name, member, args, kwargs):
+        return self.session._dispatch(op, name, member, args=args,
+                                      value=args[0] if op == "SET" else None, kwargs=kwargs)
 
     def _compute(self, node):
         """Cancellation is cooperative at call boundaries, never inside arbitrary Python."""
@@ -199,22 +200,15 @@ def run(channel, document, path, run_id, instrument_socket):
                 break
             else:
                 raise RuntimeError(reply.get("reason", "RUNNING status was not persisted"))
-        interpreter.values = {}
-        interpreter.params = {name: spec["value"] for name, spec in document["parameters"].items()}
-        interpreter.variable_types = {}
-        interpreter.trace, interpreter.windows = [], []
-        interpreter.coordinates = {}
-        interpreter.scan_complete = False
-        interpreter.steps = 0
         interpreter.poll()
         setup_started = True
         try:
             interpreter.progress("setup")
-            interpreter._body(document["setup"])
+            interpreter.execute(document["setup"])
             interpreter.progress("acquisition")
-            interpreter._body(document["main"])
+            interpreter.execute(document["main"])
             outcome, reason = "SUCCEEDED", ""
-        except _Terminate as exc:
+        except ProgramTermination as exc:
             outcome, reason = exc.outcome, exc.reason
         except Exception as exc:
             outcome, reason = "FAILED", str(exc)
@@ -223,7 +217,7 @@ def run(channel, document, path, run_id, instrument_socket):
         interpreter.progress("teardown")
         interpreter.steps = 0
         try:
-            interpreter._body(document["teardown"])
+            interpreter.execute(document["teardown"])
             teardown_ok = True
         except Exception as exc:
             outcome = "FAILED"
@@ -243,7 +237,7 @@ def run(channel, document, path, run_id, instrument_socket):
     except SupervisionLost:
         supervised = False
         return
-    except _Terminate as exc:
+    except ProgramTermination as exc:
         outcome, reason = exc.outcome, exc.reason
     except (EOFError, BrokenPipeError):
         supervised = False

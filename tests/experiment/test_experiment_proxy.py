@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest import TestCase, mock
 
 from auspex_v2.experiment import CompileError, CompiledPlan, InstrumentRef
-from auspex_v2.experiment.fake import FakeExecutor
+from tests.experiment.fake_executor import FakeExecutor
 from .experiment_test_support import Experiment
 from auspex_v2.instruments.drivers import Instrument, managed_property, operation
 from auspex_v2.instruments.drivers.simulated import SimulatedSource, SimulatedVNA
@@ -136,7 +136,7 @@ class ProxyCompilerTest(TestCase):
             self.assertEqual(plan.identity, CompiledPlan.load(path).identity)
             script = '''import sys
 from auspex_v2.experiment import CompiledPlan
-from auspex_v2.experiment.fake import FakeExecutor
+from tests.experiment.fake_executor import FakeExecutor
 assert "auspex_v2.instruments.server.service" not in sys.modules
 p = CompiledPlan.load(sys.argv[1])
 r = FakeExecutor(lambda *args: 5e9).run(p)

@@ -8,7 +8,7 @@ import numpy as np
 
 from auspex_v2.data import AuspexStore
 from auspex_v2.experiment import Experiment, OutputConnector
-from auspex_v2.experiment.pipeline import PipelineExecutor
+from tests.experiment.pipeline_executor import PipelineExecutor
 from auspex_v2.experiment.resources import RunFolder, RetainedRunBuffers, preflight_run
 from auspex_v2.experiment import resources
 from auspex_v2.filters import Batch, PipelineError
@@ -31,17 +31,11 @@ class Buffered(Experiment):
 
 class RunResourceTest(unittest.TestCase):
     """Test preallocated directories and bounded terminal buffer retention."""
-    def test_compatibility_imports_remain_available(self):
-        """Old documented module paths forward to organized public packages."""
+    def test_browser_compatibility_import_remains_available(self):
+        """Browser compatibility is independent of the removed execution-test shims."""
         from auspex_v2.browser import inspect_folder
         from auspex_v2.data.browser import inspect_folder as current_browser
-        from auspex_v2.experiment_fake import FakeExecutor
-        from auspex_v2.experiment.fake import FakeExecutor as current_fake
-        from auspex_v2.experiment_pipeline import PipelineExecutor
-        from auspex_v2.experiment.pipeline import PipelineExecutor as current_pipeline
         self.assertIs(inspect_folder, current_browser)
-        self.assertIs(FakeExecutor, current_fake)
-        self.assertIs(PipelineExecutor, current_pipeline)
 
     def test_preflight_is_read_only_and_rejects_unsupported_budgets(self):
         """Admission can reject deterministic recipe errors before claiming a folder."""

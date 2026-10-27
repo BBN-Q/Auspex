@@ -8,7 +8,7 @@ import tempfile
 import unittest
 
 from auspex_v2.experiment import CompileError, CompiledPlan, FloatParameter, InstrumentRef
-from auspex_v2.experiment.fake import FakeExecutor
+from tests.experiment.fake_executor import FakeExecutor
 from .experiment_test_support import Experiment
 
 
@@ -231,7 +231,7 @@ class ParameterSetterTest(unittest.TestCase):
             plan.save(path)
             script = '''import json, sys
 from auspex_v2.experiment import CompiledPlan
-from auspex_v2.experiment.fake import FakeExecutor
+from tests.experiment.fake_executor import FakeExecutor
 plan = CompiledPlan.load(sys.argv[1])
 calls = []
 run = FakeExecutor(lambda *args: calls.append(args)).run(plan)

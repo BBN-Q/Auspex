@@ -9,7 +9,7 @@ import unittest
 
 from auspex_v2.experiment import (CompileError, CompiledPlan, FloatParameter,
                                   InstrumentRef, IntParameter)
-from auspex_v2.experiment.fake import FakeExecutor
+from tests.experiment.fake_executor import FakeExecutor
 from .experiment_test_support import Experiment
 
 
@@ -96,7 +96,7 @@ class CompilerTest(unittest.TestCase):
             self.assertEqual(loaded.identity, before)
             script = '''import json, sys
 from auspex_v2.experiment import CompiledPlan
-from auspex_v2.experiment.fake import FakeExecutor
+from tests.experiment.fake_executor import FakeExecutor
 p = CompiledPlan.load(sys.argv[1])
 r = FakeExecutor().run(p)
 print(json.dumps([p.identity, r.time, [w["coordinates"] for w in r.windows], r.outcome]))

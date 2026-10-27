@@ -64,6 +64,7 @@ Dataset publication, metadata and status files remain independent of volatile
 buffers. `run.wait()` must read durable terminal status by folder path if an
 auto-cleaned handle is no longer in the live catalog.
 
-Compatibility modules keep prior `auspex_v2.browser`,
-`auspex_v2.experiment_fake`, and `auspex_v2.experiment_pipeline` imports usable.
-Prefer `auspex_v2.data.browser` and `auspex_v2.experiment` in new code.
+The `auspex_v2.browser` compatibility module remains available; prefer
+`auspex_v2.data.browser` in new code. Execution-test compatibility shims have been
+removed. Virtual-time executors live only under `tests/experiment/`; saved plans
+execute through ExperimentServer, not through a public offline harness.

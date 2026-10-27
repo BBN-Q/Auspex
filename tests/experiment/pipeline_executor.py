@@ -3,10 +3,10 @@
 Commands are injected Python callbacks and WAIT is virtual. There is no instrument
 lease, service supervision, cancellation API, or durable execution log here.
 """
-from .fake import FakeExecutor
-from ._experiment_plan import PLAN_VERSION
-from ..filters import ManualPipeline, PipelineError
-from ..filters.definitions import CompiledPipeline
+from tests.experiment.fake_executor import FakeExecutor
+from auspex_v2.experiment._experiment_plan import PLAN_VERSION
+from auspex_v2.filters import ManualPipeline, PipelineError
+from auspex_v2.filters.definitions import CompiledPipeline
 
 
 class PipelineExecutor(FakeExecutor):
