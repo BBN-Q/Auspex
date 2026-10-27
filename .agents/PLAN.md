@@ -327,5 +327,23 @@ Circle fitting replaces V1's determinant/Newton approach; final inference uses
 original complex data. Delay initialization is local, not an alias-resolution
 guarantee. No further implementation slice is authorized; qubit fits remain deferred.
 
+## Authorized slice — driver exports and automatic admission
+
+- [x] Each bundled vendor/simulator module declares intended driver classes in
+  __all__. Discover those exports once at import, expose them through
+  auspex_v2.instruments.drivers and auspex_v2.instruments for completion, and use
+  the same catalog for InstrumentServer/ExperimentServer admission.
+- [x] Reject duplicate/colliding names and invalid/base/abstract driver exports;
+  no driver construction, hardware probing or eager optional backend loading.
+  Discovery stays inside the bundled flat driver package, not a plugin system.
+- [x] Test actual import completion, catalog validation and a new exported
+  simulator through real server/worker use; document the single export contract.
+  Actual V1 driver ports are not part of this slice.
+
+Module exports now define both Python visibility and service admission, with no
+separate manual registry. Imports are deterministic and fail on broken exports;
+newly installed drivers require fresh Python/service processes, not hot reload.
+No further implementation slice is authorized.
+
 Runner lifecycle refactoring remains deferred. Keep current evidence in STATUS.md,
 not a growing chronological test-count/change diary here.

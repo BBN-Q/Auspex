@@ -3,6 +3,8 @@
 from .core import BoolCommand, FloatCommand, IntCommand, RampCommand, SCPIInstrument, StringCommand
 from ..kinds import InstrumentKind
 
+__all__ = ["YokogawaGS200"]
+
 
 class YokogawaGS200(SCPIInstrument):
     """Control GS200 sourcing, sensing and bounded level ramps over VISA."""

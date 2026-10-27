@@ -1,7 +1,10 @@
 # Instrument Server
 
 The persistent local service owns registered instrument connections in spawned
-workers. It admits the explicit class-name registry:
+workers. Admission comes from the bundled driver modules' explicit `__all__`
+exports, shared with top-level Python imports; there is no second allowlist to
+edit. See the [export contract](../drivers/instrument_drivers.md#exporting-a-bundled-driver).
+The current catalog contains:
 
 - `SimulatedSource`, `SimulatedVNA`
 - `AgilentN5183A`, `AgilentE8363C`, `AgilentN5230A`

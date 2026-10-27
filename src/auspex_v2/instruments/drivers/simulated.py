@@ -7,6 +7,8 @@ import numpy as np
 from .core import Command, Instrument, managed_property, operation
 from ..kinds import InstrumentKind
 
+__all__ = ["SimulatedSource", "SimulatedVNA"]
+
 
 class _MemoryBackend:
     """Hold scalar source settings in memory for offline server tests."""

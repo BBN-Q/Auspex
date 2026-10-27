@@ -1,12 +1,9 @@
-"""Instrument API; direct-use drivers remain available at this import path."""
+"""Instrument declarations and every explicitly exported bundled driver."""
 
-from .drivers import (AgilentE8363C, AgilentN5183A, AgilentN5230A, BoolCommand,
-                      Command, FloatCommand, Instrument, InstrumentError, IntCommand,
-                      RampCommand, SCPIInstrument, StringCommand, YokogawaGS200,
-                      managed_property, operation)
+from . import drivers as _drivers
 from .kinds import InstrumentKind
 
-__all__ = ["Instrument", "InstrumentError", "SCPIInstrument", "Command",
-           "BoolCommand", "StringCommand", "FloatCommand", "IntCommand",
-           "RampCommand", "managed_property", "operation", "AgilentN5183A", "AgilentE8363C",
-           "AgilentN5230A", "YokogawaGS200", "InstrumentKind"]
+# Concrete module attributes support normal import completion without a server,
+# constructing a driver, or maintaining a second list of vendor exports.
+__all__ = [*_drivers.__all__, "InstrumentKind"]
+globals().update({name: getattr(_drivers, name) for name in _drivers.__all__})

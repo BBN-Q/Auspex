@@ -15,6 +15,18 @@ The current admitted drivers are SimulatedSource, SimulatedVNA, AgilentN5183A,
 AgilentE8363C, AgilentN5230A, and YokogawaGS200. Real ports are targeted subsets of
 V1, not a complete driver migration. Registration uses these canonical class names.
 
+Each bundled vendor/simulator module declares intended drivers in `__all__`.
+Those classes are automatically exposed by `auspex_v2.instruments` (including
+`from ... import` tab completion) and admitted by the server. There are no separate
+package-level export or admission lists. Imports do not construct or connect
+instruments, and do not require optional VISA backends.
+
+To add a driver, see the [bundled export contract](https://github.com/BBN-Q/Auspex/blob/auspex-v2/src/auspex_v2/instruments/drivers/instrument_drivers.md#exporting-a-bundled-driver).
+Exporting is explicit service-admission intent: only concrete, locally defined
+driver classes with valid `KIND` belong in the list. Helpers/base classes stay
+unexported. Duplicate/invalid exports fail visibly; restart Python/services to
+load newly installed drivers. No third-party plugin scan or hot reload is performed.
+
 Drivers expose readable/writable settings and explicitly declared operations.
 `GET`/`SET` address settings; `CALL` invokes an operation. A name such as `get_trace`
 does not imply a side-effect-free query: acquisition may trigger a sweep.

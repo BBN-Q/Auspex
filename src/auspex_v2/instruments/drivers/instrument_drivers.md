@@ -1,6 +1,49 @@
 # Writing V2 instrument drivers (preliminary)
 
-V2 instruments work directly from Python or through the local instrument server. The server explicitly admits the currently ported real and simulated drivers by canonical class name and owns each connection in a worker process. See `core.py`, `agilent.py`, `yokogawa.py`, and the offline tests in `tests/test_instruments.py`.
+V2 instruments work directly from Python or through the local instrument server.
+Each bundled driver module explicitly exports its intended classes; that one list
+controls top-level Python imports and service admission by canonical class name.
+The server owns each connection in a worker process. See `core.py`, `agilent.py`,
+`yokogawa.py` and the offline tests in `tests/instruments/`.
+
+## Exporting a bundled driver
+
+Add a flat vendor module under `src/auspex_v2/instruments/drivers/`, for example
+`bench.py`, and declare its intended drivers in `__all__`:
+
+```python
+from .core import SCPIInstrument, FloatCommand
+from ..kinds import InstrumentKind
+
+__all__ = ["BenchSource"]
+
+class BenchSource(SCPIInstrument):
+    """Example declarations only; review commands/limits for the actual device."""
+    KIND = InstrumentKind.MICROWAVE_SOURCE
+    frequency = FloatCommand(scpi_string=":FREQ", value_range=(1e6, 10e9))
+```
+
+No changes to either package initializer or `registry.py` are needed. On a fresh
+import this makes `from auspex_v2.instruments import BenchSource` available,
+including import-name tab completion. The same class is automatically admitted
+by InstrumentServer and available to experiment driver lookup. Simulators follow
+the same export contract. Restart Python/service processes after adding drivers;
+there is no hot reload or hardware discovery during import.
+
+Discovery visits non-private, non-package modules in the bundled driver package
+in deterministic module-name order. A module without `__all__` exports no drivers.
+Export lists must contain only locally defined, concrete `Instrument` subclasses
+with valid `KIND`, using their canonical class names. Helpers, base classes and
+aliases must not be listed. Duplicate names, public-API collisions, invalid
+exports and broken imports fail visibly rather than silently producing a partial
+catalog. This is not a third-party plugin/entry-point loader.
+
+**Exporting is service-admission intent**, not merely Python visibility. Driver
+modules must use relative imports from `.core`/`..kinds` while the packages are
+initializing. They must not construct instruments, probe hardware, or import
+optional backend libraries eagerly. Put backend imports and I/O in `connect()`.
+The catalog is built without constructing any driver. Unexported helpers remain
+accessible through their module but are not top-level drivers or service choices.
 
 ## The model
 
@@ -115,10 +158,11 @@ This illustrates the registration API, **not** a complete driver: the subclass m
 
 ## Testing without hardware
 
-Inject an interface implementing `write`, `query`, and `close` (plus `query_binary_values` for a VNA). Drive commands against a fake transcript and assert **both** emitted strings and converted results. Test validation before I/O, failed connections, resource identity, and binary shape/endianness where relevant. `tests/test_instruments.py` contains concrete examples and runs with:
+Inject an interface implementing `write`, `query`, and `close` (plus `query_binary_values` for a VNA). Drive commands against a fake transcript and assert **both** emitted strings and converted results. Test validation before I/O, failed connections, resource identity, and binary shape/endianness where relevant. `tests/instruments/test_instruments.py` contains concrete examples and runs with:
 
 ```sh
 python -m unittest discover -s tests -v
 ```
 
-These tests never touch lab hardware. Real-device smoke tests should be separate, opt-in, and reviewed for output and ramp safety. Direct-use drivers intentionally do not participate in server lockout. Server-managed use is available for the explicit registry documented in the instrument-server guide; real-device tests remain opt-in lab work.
+These tests never touch lab hardware. Real-device smoke tests should be separate, opt-in, and reviewed for output and ramp safety. Direct-use drivers intentionally do not participate in server lockout. Server-managed use is available for the explicitly exported bundled drivers;
+real-device tests remain opt-in lab work.

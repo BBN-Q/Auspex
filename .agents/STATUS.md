@@ -22,6 +22,9 @@ replaces the historical discussion; it is not authorization to implement the bac
   [hanger guide](../docs/components/resonator-fits.md). Real-trace resonator
   validation remains an attended lab step. Qubit fitting remains deferred. No
   further implementation slice is authorized; runner lifecycle refactoring remains deferred.
+  Bundled driver-module `__all__` exports now control top-level imports/completion
+  and automatic service admission; no separate registry list. Actual V1 driver
+  ports beyond the existing four real models remain a separately selected task.
 - Inspect `git status` and preserve accumulated uncommitted work; these notes do not
   imply that implementation changes have been committed.
 - Start with the [manual](../docs/index.md),
@@ -59,6 +62,11 @@ replaces the historical discussion; it is not authorization to implement the bac
   reconciliation. Admission includes SimulatedSource/SimulatedVNA and real
   AgilentN5183A, YokogawaGS200, AgilentE8363C and AgilentN5230A. VISA is lazy/optional;
   real VISA connections use PyVISA-py `@py`. Whole-command deadline defaults to none.
+  Each bundled vendor/simulator module's explicit `__all__` supplies intended
+  concrete driver classes to the shared catalog and both Python export levels.
+  Duplicate/invalid/abstract/nonlocal exports and public-name collisions fail
+  visibly. Catalog construction never constructs a driver or opens hardware;
+  optional backend imports stay lazy. No external plugin scan or hot reload.
 - Explicit VISA enumeration/identification/registration works in GUI and terminals,
   with visibility filters, whitelist reload, driver-specific endpoint normalization
   and retained conflicting saved registrations. Suggestions remain advisory (GUI
@@ -175,11 +183,17 @@ replaces the historical discussion; it is not authorization to implement the bac
 
 ## Evidence and limits
 
-Latest full implementation validation (including hanger resonator fitting):
+Latest full implementation validation (including automatic driver exports/admission):
 
 ```sh
-MPLBACKEND=Agg QT_QPA_PLATFORM=offscreen python -B -m unittest discover -s tests -q  # 384 passed
+MPLBACKEND=Agg QT_QPA_PLATFORM=offscreen python -B -m unittest discover -s tests -q  # 390 passed
 ```
+
+Six driver-export tests cover canonical export identity, deterministic explicit
+selection, invalid/duplicate exports, lazy VISA imports, real IPython from-import
+completion (Jedi and non-Jedi), and an isolated new vendor simulator used through
+real InstrumentServer/worker IPC without editing initializers or a registry list.
+Strict MkDocs build and diff checks passed. No additional V1 drivers were ported.
 
 The 20 analysis tests cover independent hanger loss/coupling equations across
 coupling regimes, mismatch/delay/reference conventions, analytic primary and
