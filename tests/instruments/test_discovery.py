@@ -169,13 +169,13 @@ class DiscoveryTest(unittest.TestCase):
         commands = OperatorCommands(self.server.path, None)
         with self.assertRaisesRegex(ValueError, "enumerate visa first"):
             commands.execute(["identify", "a"])
-        output = commands.execute(commands.parse("enumerate visa"))
+        output = commands.execute(commands.parse("enumerate visa")).text
         self.assertNotIn("a. ASRL1::INSTR", output)
         self.assertIn("1 serial", output)
         self.assertIn("unknown", output)
         self.assertTrue(commands.confirmation(commands.parse("identify all")))
         self.assertFalse(commands.confirmation(commands.parse("identify b")))
-        output = commands.execute(["identify", "all"])
+        output = commands.execute(["identify", "all"]).text
         self.assertEqual(self.manager.queries, [(VNA, "*IDN?"), (UNKNOWN, "*IDN?")])
         self.assertIn("AgilentN5230A", output)
         self.assertIn("no response", output)
@@ -204,7 +204,7 @@ class DiscoveryTest(unittest.TestCase):
         self.assertEqual(list(commands.candidates)[-3:], ["z", "aa", "ab"])
         self.assertEqual(commands.candidates["aa"]["resource"], "USB0::26::INSTR")
         self.manager.resources = ()
-        self.assertIn("No VISA candidates", commands.execute(["enumerate", "visa"]))
+        self.assertIn("No VISA candidates", commands.execute(["enumerate", "visa"]).text)
         with self.assertRaisesRegex(ValueError, "enumerate visa first"):
             commands.registration_prompt(["register", "aa", "AgilentN5230A"])
 
@@ -245,19 +245,19 @@ class DiscoveryTest(unittest.TestCase):
 
         self.manager.resources = (SERIAL, PROLOGIX, VNA)
         commands = OperatorCommands(self.server.path, None)
-        output = commands.execute(commands.parse("enumerate visa"))
+        output = commands.execute(commands.parse("enumerate visa")).text
         self.assertNotIn(SERIAL, output)
         self.assertNotIn(PROLOGIX, output)
         self.assertIn(VNA, output)
         self.assertIn("1 serial, 1 Prologix", output)
         self.assertEqual(self.manager.opened, [])
-        output = commands.execute(commands.parse("enumerate visa --serial"))
+        output = commands.execute(commands.parse("enumerate visa --serial")).text
         self.assertIn(SERIAL, output)
         self.assertNotIn(PROLOGIX, output)
-        output = commands.execute(commands.parse("enumerate visa --prologix"))
+        output = commands.execute(commands.parse("enumerate visa --prologix")).text
         self.assertIn(PROLOGIX, output)
         self.assertNotIn(SERIAL, output)
-        output = commands.execute(commands.parse("enumerate visa --serial --prologix --show-permission-denied"))
+        output = commands.execute(commands.parse("enumerate visa --serial --prologix --show-permission-denied")).text
         self.assertIn(PROLOGIX, output)
         self.assertIn(SERIAL, output)
         commands.execute(["identify", "all"])
@@ -268,7 +268,7 @@ class DiscoveryTest(unittest.TestCase):
         for line in ("enumerate visa --other", "enumerate visa serial", "enumerate other --serial"):
             with self.assertRaises(ValueError):
                 commands.parse(line)
-        self.assertIn("--show-permission-denied", commands.execute(["help"]))
+        self.assertIn("--show-permission-denied", commands.execute(["help"]).text)
 
     def test_permission_denial_is_retained_until_retry_and_does_not_renumber(self):
         """Denied rows hide after a probe, survive enumeration as known denied, and can be retried."""
@@ -284,17 +284,17 @@ class DiscoveryTest(unittest.TestCase):
         self.assertTrue(commands.candidates[letter]["permission_denied"])
         self.assertEqual(list(commands.candidates), labels)
         opened = list(self.manager.opened)
-        output = commands.execute(["enumerate", "visa"])
+        output = commands.execute(["enumerate", "visa"]).text
         self.assertNotIn(DENIED, output)
         self.assertIn("1 permission denied", output)
         self.assertEqual(self.manager.opened, opened)
         commands.execute(["identify", "all"])
         self.assertEqual(self.manager.opened, opened + [VNA])
-        output = commands.execute(commands.parse("enumerate visa --show-permission-denied"))
+        output = commands.execute(commands.parse("enumerate visa --show-permission-denied")).text
         self.assertIn(DENIED, output)
         self.manager.denied.clear()
         commands.execute(["enumerate", "visa"])
-        output = commands.execute(["identify", letter])  # Explicit retry works even while hidden.
+        output = commands.execute(["identify", letter]).text  # Explicit retry works even while hidden.
         self.assertIn(DENIED, output)
         self.assertFalse(commands.candidates[letter]["permission_denied"])
         candidate = next(c for c in self.client.enumerate() if c["resource"] == DENIED)
@@ -311,7 +311,7 @@ class DiscoveryTest(unittest.TestCase):
         path.write_text(f"# Display overrides\n\n{SERIAL}\n{PROLOGIX}\n{DENIED}\ntcpip::192.0.2.1::hpib7,16::instr\n"
                         "TCPIP0::not-enumerated::INSTR\n", encoding="utf-8")
         commands = OperatorCommands(self.server.path, None)
-        output = commands.execute(["enumerate", "visa"])
+        output = commands.execute(["enumerate", "visa"]).text
         self.assertIn(SERIAL, output)
         self.assertIn(PROLOGIX, output)
         self.assertIn(DENIED, output)
@@ -321,7 +321,7 @@ class DiscoveryTest(unittest.TestCase):
         commands.execute(["identify", "all"])
         self.assertEqual(self.manager.opened, [DENIED, VNA, DENIED])
         path.write_text("# now empty\n", encoding="utf-8")
-        output = commands.execute(["enumerate", "visa"])
+        output = commands.execute(["enumerate", "visa"]).text
         self.assertNotIn(SERIAL, output)
         self.assertNotIn(PROLOGIX, output)
         self.assertNotIn(DENIED, output)
@@ -342,7 +342,7 @@ class DiscoveryTest(unittest.TestCase):
         path.unlink()
         path.mkdir()  # Reliable unreadability even when tests run as root.
         self.manager.resources = ()
-        output = OperatorCommands(self.server.path, None).execute(["enumerate", "visa"])
+        output = OperatorCommands(self.server.path, None).execute(["enumerate", "visa"]).text
         self.assertIn("Warning: Cannot read whitelist", output)
         self.assertIn(str(path), output)
         self.assertIn("No VISA candidates", output)

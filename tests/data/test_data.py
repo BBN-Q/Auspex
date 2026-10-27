@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import numpy as np
 
@@ -39,6 +40,23 @@ class DataStoreTest(unittest.TestCase):
         manifest = json.loads((self.path / "manifest.json").read_text())
         self.assertEqual(manifest["format_version"], FORMAT_VERSION)
         self.assertTrue((self.path / "vna" / "s21.dat").exists())
+
+    def test_reading_does_not_serialize_or_create_temporary_files(self):
+        """Both readers validate existing data without invoking writer machinery."""
+        values = np.arange(4)
+        with AuspexStore(self.path, mode="w") as store:
+            store.write_dataset("g", "trace", values, axes=[Axis("time", [0, 1, 2, 3], "s")])
+        with (patch("auspex_v2.data.data._pack_dataset", side_effect=AssertionError("Reader called serializer")),
+              patch("auspex_v2.data.data.tempfile.TemporaryFile",
+                    side_effect=AssertionError("Reader created a temporary file"))):
+            with AuspexStore(self.path) as store:
+                loaded = store.read_dataset("g", "trace")
+            direct = AuspexStore.read_file(self.path / "g" / "trace.dat")
+        for dataset in (loaded, direct):
+            np.testing.assert_array_equal(dataset.data, values)
+            np.testing.assert_array_equal(dataset.coordinates["time"].values, [0, 1, 2, 3])
+            self.assertTrue(dataset.data.flags.writeable)
+            self.assertTrue(dataset.coordinates["time"].values.flags.writeable)
 
     def test_metadata_sequences_support_names_without_changing_tuple_behavior(self):
         """Names and positions return the same objects; collections retain ordinary read-only sequence behavior."""
@@ -133,6 +151,27 @@ class DataStoreTest(unittest.TestCase):
         self.assertEqual(ragged.coordinates["frequency"].dimensions, ("sample",))
         self.assertIs(ragged.axes["point"], ragged.axes[0])
         np.testing.assert_array_equal(ragged.trace(1), [2, 3, 4])
+
+    def test_unsigned_ragged_offsets_reject_decreases_and_preserve_empty_rows(self):
+        """Reject unsigned underflow before publication; retain valid empty ragged rows."""
+        data = np.arange(4)
+        coordinates = (Coordinate("point", np.arange(3), ("point",)),
+                       Coordinate("frequency", np.arange(4), ("sample",), "Hz"))
+        with AuspexStore(self.path, mode="w") as store:
+            with self.assertRaisesRegex(ValueError, "Invalid ragged offsets"):
+                store.write_dataset("g", "trace", data, coordinates=coordinates,
+                                    dimensions=("point",), offsets=np.array([0, 3, 2, 4], dtype=np.uint64))
+            self.assertEqual(store.list_datasets(), [])
+            self.assertFalse((self.path / "g" / "trace.dat").exists())
+            store.write_dataset("g", "trace", data, coordinates=coordinates,
+                                dimensions=("point",), offsets=np.array([0, 2, 2, 4], dtype=np.uint64))
+        with AuspexStore(self.path) as store:
+            loaded = store.read_dataset("g", "trace")
+        self.assertEqual(loaded.offsets.dtype, np.dtype("<i8"))
+        np.testing.assert_array_equal(loaded.offsets, [0, 2, 2, 4])
+        np.testing.assert_array_equal(loaded.trace(0), [0, 1])
+        np.testing.assert_array_equal(loaded.trace(1), [])
+        np.testing.assert_array_equal(loaded.trace(2), [2, 3])
 
     def test_reopen_append_and_exclusive_writer(self):
         """Allow sequential writes but reject concurrent writers and duplicates."""

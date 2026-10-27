@@ -1,67 +1,157 @@
-# Auspex V2 — current status
+# Auspex V2 — current handoff
 
-See [PLAN.md](PLAN.md) for design decisions and open questions. V2 now has a minimal trusted-laboratory path for the four ported real drivers; automated evidence remains fake/simulated and V1 source is preserved under `../v1/`. The user reports an attended hardware-in-the-loop test confirming the basic experiment, instrument server and filter pipeline path. The user also reports successful hardware-in-the-loop use of the discovery/usability workflow, including the display-filter and whitelist slice, with serial, GPIB, USB and Ethernet devices. This is attended operational validation, not exhaustive model-by-model, safety or throughput validation.
+V2 is a working **trusted-laboratory, writer-backed fixed-sweep** system, not a
+safety-certified or high-rate acquisition platform. Python **3.13+**; distribution
+`auspex-v2`, imports `auspex_v2`; V1 is preserved under `v1/`.
 
-## Implemented
-
-- IPython/Jupyter proxy name completion: cached metadata supplies settings, getter/setter helpers and operations. Instance-local property descriptors prevent Jedi from evaluating remote scalar GETs while discovering names; no runtime IPython dependency or kernel configuration change. One focused real-completer test asserts zero server requests; existing live/run tests cover dispatch. Signatures/docstrings and static-IDE inference remain out of scope. Direct driver exports are unchanged.
-
-- Draft documentation site: MkDocs/Material, 16 concise narrative pages under docs/, a source-included annotated source/VNA example, component guides and pages for every utility. Existing source Markdown/V1 docs remain unchanged. Strict local build and HTTP preview verified; GitHub Pages workflow is prepared with manual-only build/deployment (no push or PR triggers), but nothing is published or enabled remotely. See docs/maintaining.md for local commands, Pages setup, and the upstream Material EOL notice (May 5, 2027). API navigation remains deferred.
-
-- README refreshed as a general project introduction: existing logo, broad measurement goals, a concise V2 WIP/V1 note, Python 3.13+ installation with visa/gui/tui extras, and V1 funding acknowledgement retained verbatim. Detailed internals/status moved out of the introduction. The local draft MkDocs/Material manual is now available; hosted deployment remains pending.
-
-- Production/test interpreter separation: `experiment/interpreter.py` supplies shared instruction semantics and state; LiveInterpreter depends only on that core. Runner retains real I/O, leases, phase ordering and cleanup, with no virtual clock, fake callback default or captured test windows. FakeExecutor/PipelineExecutor moved into `tests/experiment/`; public exports and their four legacy module paths were removed. Examples now submit to ExperimentServer; ManualPipeline remains independently usable. Dependency tests forbid production imports of test infrastructure. Plan format stays version 6; real-service/simulated lifecycle regressions remain the execution proof points.
-
-- Whole-plan repeatability notice: every successful compile containing COMPUTE emits `RuntimePythonWarning` with "This compiled experiment executes runtime Python code. Auspex cannot guarantee repeatability", independent of callable safety markers. The notice is saved in `warnings` and shown by `explain()`, including for nested setup/teardown computations. Ordinary warning filters remain user-controlled; they do not erase the saved notice. Plan version remains 6.
-
-- Trusted recorded calculations: `seq.module("numpy")`/other importable modules emit synchronous COMPUTE instructions, never eager calls. Current plans are **version 6** with an inspectable operation manifest; earlier plans require recompilation. Unmarked functions warn once per callable; `@safe_for_recording` is an author assertion, not sandboxing or proven purity. Numerical/container snapshots, symbolic indexing/slicing and `.real`/`.imag` support explicit scalar parameter updates. Calls can block cancellation/teardown until they return; no helper thread/process is added. [`examples/recorded_fft.py`](../examples/recorded_fft.py) demonstrates the analytical coefficient 0.5. Tests include fresh-process execution and real-service publication/cancellation boundaries. See [recorded calculations](../src/auspex_v2/experiment/experiment.md#recorded-python-calculations). V1 analysis porting remains deferred.
-
-- Declarative parameter associations: class-level `.bind()` and `@parameter.setter` recorders, plus instance-level `.bind()`/`.setter()` replacement. Shared declaration copies preserve instance-local references; functions record ordinary instructions on the detached experiment, never become runtime callbacks. Defaults alone no longer issue commands. Explicit setup/teardown updates may target swept parameters; main-phase updates remain forbidden. Recursive setter chains and configuration mutation fail compilation. The separate-service simulated VNA example exercises a decorated setter; modified real examples still need attended validation. See [parameter setters](../src/auspex_v2/experiment/experiment.md#declared-and-external-parameter-setters).
-
-- Saved-data axes/coordinates now support both positional and case-sensitive name lookup (`dataset.axes["frequency"]`, `dataset.coordinates["frequency"]`), returning Axis/Coordinate objects while preserving read-only tuple sequence behavior. Names are unique per collection; dependent/ragged coordinates remain coordinates, not fictitious separable axes. Data format version 2 is unchanged. See the [data guide](../src/auspex_v2/data/data.md#access-axes-and-coordinates-by-position-or-name).
-
-- TUI stdout review fixes: launcher-owned readers now drain service pipes before readiness checks, independent of Textual, into a shared 5,000-line pending buffer with explicit overflow counts. After ordered service shutdown, EOF waits are bounded to one second total; inherited-open output warns about possible surviving descendants without hanging the console or killing descendants solely for stdout ownership. Startup/fallback errors retain diagnostic output. Real-pipe and headless TUI regressions cover startup floods and inherited stdout; plain CLI behavior is unchanged. Attended validation of this patch remains outstanding.
-
-- P1 review fix: driver-specific bare-IP expansion and shared VISA address normalization now produce the same endpoint for actual connections, ownership identity and discovery. Whitelist entries require complete VISA addresses; ambiguous lines warn instead of guessing. On saved-inventory conflicts, every duplicate entry is skipped and retained for inspection, while unrelated registrations restore normally. Errors appear in CLI/TUI logs/status and a deduplicated GUI popup. See the [restart/conflict policy](../src/auspex_v2/instruments/server/instrument_server.md#saved-inventory-normalization-and-conflicts). This patch has offline/fake-VISA coverage; its hardware validation remains outstanding. The stdout lifecycle fixes are described below.
-
-- Discovery display filters now hide Serial and Prologix candidates by default, independently revealable through GUI checkboxes or terminal `enumerate visa --serial/--prologix` options. Known permission denials are hidden by default (`--show-permission-denied` reveals them). The server reloads `$AUSPEX_HOME/instrument_whitelist.txt` (HOME fallback) each enumeration; matching addresses override visibility only. Shared filtering preserves candidate letters and driver choices; bulk Identify uses visible candidates while always skipping serial, Prologix and registered devices. Permission errors are attributed to explicit probes, not scraped from logs. See the [operator guide](../src/auspex_v2/instruments/server/instrument_server.md#discovery-whitelist-and-permission-errors).
-
-- Terminal VISA discovery/registration in both launcher modes and standalone instrument CLI: `enumerate visa`, letter-based `identify <letter|all>`, explicit `register <letter> <driver>` with inventory-name prompt. `identify all` requires y/n confirmation and skips serial/registered resources. Driver `IDN_STRING` metadata supplies literal substring suggestions, never automatic driver selection. Server-side probes respect run/live ownership, close temporary resources, and leave normal register/connect workflows separate. See the [operator guide](../src/auspex_v2/instruments/server/instrument_server.md). Discovery tests use fake VISA over real IPC, not physical instruments. Latest full suite, including IPython proxy completion and runtime regressions: `python -B -m unittest discover -s tests -q` — **336 tests passed**, with multiprocessing resource-tracker warnings during crash-path tests, offscreen Qt warnings and asyncio slow-task diagnostics.
-
-- V2 code and tests are grouped by subsystem: `auspex_v2/{experiment,data,filters,instruments}/` and matching `../tests/{experiment,data,filters,instruments}/`. Public package imports remain `auspex_v2.experiment` and `auspex_v2.data`; browser helpers live under `auspex_v2.data.browser`.
-
-- Independent Python 3.13 package (``) with direct-use, targeted ports for `AgilentN5183A`, `YokogawaGS200`, `AgilentE8363C`, and `AgilentN5230A`. Optional VISA is imported only when needed. Fake transports test commands and complex VNA trace decoding; automated tests remain fake/simulated; an attended basic end-to-end hardware test has now been reported.
-- Foreground `../utils/launch_auspex.py` starts both services in order, optionally opens the instrument GUI, refuses existing services, and preserves registrations on ordered shutdown. ASCII banners, startup inventory, point progress, and result-folder/browser hints provide terminal visibility; detailed traces remain in each run's `execution.log`. `auspex_status.py` offers bounded read-only inspection (including `--json`). First Ctrl+C requests cooperative cancellation and waits; second Ctrl+C stops supervision with a recovery warning.
-- An explicitly started, persistent **instrument server** (`../src/auspex_v2/instruments/server/`) with canonical class-name admission for `SimulatedSource`, `SimulatedVNA`, `AgilentN5183A`, `AgilentE8363C`, `AgilentN5230A`, and `YokogawaGS200`. It uses a permission-restricted Unix socket, a single-instance lock, saved inventory/run state, and one spawned process per connected device. Real VISA drivers consistently use PyVISA-py `@py`; optional per-registration VISA-I/O and whole-command timeouts default to driver policy and no server deadline respectively. Status and forced termination remain responsive during connection, GET/SET/CALL, and disconnection, with explicit busy-operation reporting. VNA acquisition retains V1's linear-axis assumption and trigger/polling sequence, with stale ESR clearing and early timeout validation.
-- Separate **connection and ownership**: registration does not connect (`DISCONNECTED`); `connect(name)` or `run.connect(name)` is explicit. Live use requires `CONNECTED`; ending a live lease leaves it connected. A run locks *all* registered devices against live access, regardless of connection. A lost live client releases its lease; a lost run client leaves an orphaned lockout requiring `reconcile_run(reason)`.
-- Failures of connect/disconnect latch `UNKNOWN`; worker deaths, command failures, and operator termination latch `TERMINATED`. `recover(name)` requires an explicit operator action and returns to `DISCONNECTED`, **not** to a connected worker or verified safe hardware. `disconnect_all()` attempts every connected worker and reports per-device failures. `terminate_all()` quarantines all registrations, including disconnected ones, and kills workers without freeing ownership. Kills are not hardware emergency-off commands.
-- Session-bound driver-shaped live proxies (`source.set_frequency(...)`, `source.frequency`, `vna.get_trace(...)`), with `source.session` retaining explicit GET/SET/CALL. Run sessions use `run.instrument(name)`. GET/SET support declared keyword arguments. Only declared settings/operations are callable; invalid names/argument names fail before worker dispatch. Protocol 4 uses 64 KiB JSON control envelopes, scalar-key-preserving result dictionaries, and up to 16 inline numeric NumPy arrays / 8 MiB per result, suitable for VNA traces **but not digitizer streaming**.
-- `clear_instruments()` persists a blank inventory only after all devices are disconnected, no workers remain, and no sessions/run exist. Normal service shutdown disconnects workers but retains registrations. Interactive headless CLI `shutdown` disconnects, clears, then exits only on success; Ctrl+C retains inventory. Forced startup `-c`/`--clean` bypasses reconciliation and discards saved inventory/run state after acquiring the single-instance lock; it performs no hardware I/O.
-- Optional pyqtgraph/PySide6 inventory GUI: connection and ownership status; state-relevant Connect, Disconnect, Recover and Terminate actions; Disconnect All, Clear Instruments and Terminate All. The Add instruments sub-window now offers VISA enumeration, confirmed bulk/per-row identification, driver selection and explicit disconnected registration with an inventory-name prompt. No instrument settings or measurement data access. Closing the GUI leaves the service running; headless operation needs no Qt. Successful status polls are silent on the operator console.
-- V2 `.auspex` dataset store (`../src/auspex_v2/data/`): **format version 2** uses self-describing `.dat` files with embedded value/coordinate arrays and names/units, including dependent grids and ragged offsets; direct file reads work without a manifest. A versioned manifest indexes published datasets; an optional JSON settings snapshot is separate. One exclusive writer owns atomic publication. Old V2 format version 1 and V1 files are not read. An optional dark [DataBrowser](../src/auspex_v2/data/data_browser.md) watches multiple OS folders for direct `.auspex` children (or adds individual runs), manually refreshes all inventories, plots published 1D datasets with pyqtgraph, and inspects nested metadata; multidimensional/ragged datasets remain visible but not plotted. See [data guide](../src/auspex_v2/data/data.md).
-- Filter slice (`../src/auspex_v2/filters/`): in-process DAG reference, single-worker harness, and a dedicated-thread `FilterServer` supervising multiple spawned passthrough/complex-average workers. The graph supports single-ingress fan-out, overlapping windows, direct shared-memory edges, bounded JSON notification queues, named bounded results, lossy preview sinks, graph-wide update barriers with filter-local revisions, and cancellation/failure cleanup. `backpressure=True` waits; `False` fails on required capacity exhaustion and exposes a latched error/failure event to the runner. The runner owns windows; each averager owns its groups and rejects incomplete run end. Tests include independent group sizes, blocked-producer cancellation/worker death, buffer overflow, local revisions, memory cleanup, and a multi-worker simulated-VNA smoke test. The runner can label batches with explicit scan IDs and sweep positions and close scans; groups cannot cross scan boundaries. Required named writer sinks feed a **single spawned store-owner process** that stages bounded scans and acknowledges self-describing dataset publication at scan end. Regular Cartesian sweeps become named axes; irregular/repeated paths retain a point axis, and changing-length rank-one traces use ragged offsets. Whole assembled scans cannot yet be sent back through graph filters; publication assembles in bounded memory and is not an out-of-core benchmark. An optional, standalone dark PySide6 [graph viewer](../src/auspex_v2/filters/inspection.md) can attach through an explicitly configured local, read-only Unix socket and manually refresh topology, schemas, and last-acknowledged filter configurations; it has no measurement plotting or editing. See [filter guide](../src/auspex_v2/filters/README.md).
-
-- Offline [experiment compiler](../src/auspex_v2/experiment/experiment.md): symbolic sequence builder, fixed/joint sweeps in V1 order, per-axis hooks, conditions and bounded loops, explicit WAIT lowering, detached versioned JSON plans, `explain()`, and a deterministic fake executor. Tests load and execute a saved plan in a fresh process. The review pass separates normalization, read-only validation, and instruction-ID assignment; tracks parameter availability across hooks/branches; detaches declaration metadata; accepts normalized NumPy settings; rejects incompatible known comparisons; and isolates fake command arguments/readbacks. Optional `InstrumentRef(driver=...)` enables driver-shaped assignment/getters/calls using the shared instrument proxy with a recording backend; explicit declared-member checks apply without constructing a driver. The minimize-surprise pass protects declared members/frozen recording configuration, adds explicit unswept runtime `seq.set_parameter()` updates with binding SET/WAIT and type/bounds checks, fixes proxy driver-keyword collisions, completes reflected arithmetic/unary negation, and expands `explain()` summaries. The publication bridge now compiles class-level `OutputConnector` declarations, explicit `seq.publish(data=..., axes=...)`, internal `setup_pipeline()` or warning-on-override external connections into detached version-6 plans with validated pipelines and explicit sequence point boundaries. Older compiled experiment plans are rejected with recompile guidance; legacy `ACQUIRE` and inert `set_graph()`/`outputs` authoring are removed. Test-only `tests/experiment/pipeline_executor.py` runs the saved unit through real filter workers/storage with injected responses and virtual waits; it is neither a public API nor a live runner. Tests execute a saved unit in a fresh process, verify scan sealing before teardown and finalization waits afterward, and preserve completed data despite teardown failure. Example: `../examples/compiled_publication.py`.
-
-- Standalone storage and [manual processing](../src/auspex_v2/filters/manual.md): documented direct `AuspexStore` writes, a whole-window `ManualPipeline` wrapper, and explicit bounded `BufferSpec` sinks with completed-output `receive`/`drain`/`view`. Buffers warn when full, preserve required backpressure/fail semantics, and retain independent arrays after graph shutdown. Synthetic example: `../examples/manual_data.py`. No instrument ownership or filter-state readback is added.
-
-- Reusable [pipeline definitions](../src/auspex_v2/filters/definitions.md): inert named inputs, V1-style connector-pair wiring, passthrough/complex-average definitions, writer/buffer sink definitions, schema propagation, basic structural checks, detached JSON snapshots and save/load. `ManualPipeline` consumes either a definition (with an input schema) or a compiled recipe; older recipe-based calls still work. Exact writer dataset names currently support one scan per execution. Multi-input and empty-source recipes are expressible/serializable but rejected by the current single-ingress runner before startup. Experiment publication/attachment now uses these same definitions. Example: `../examples/pipeline_definition.py`.
-
-- Reviewed ExperimentServer resource contracts have offline building blocks in [experiment/resources.md](../src/auspex_v2/experiment/resources.md): numbered run-folder allocation with `UNINITIALIZED` → `ACCEPTED` status, exact precreated-store append handoff, and a server-wide bounded volatile buffer registry with explicit release/cleanup primitives. The offline pipeline harness fails immediately on buffer overflow; manual buffering still blocks by default. The first service now supplies writer-only run handles/IPC and cooperative cancellation; auto-cleanup and cross-process buffer transfer remain deferred. Non-mutating pipeline construction, explicit rejection of legacy `set_graph()` on new compilation, and browser compatibility and the removal of fake/pipeline compatibility shims are tested. Read-only `preflight_run()` now checks the supported single-pipeline topology, graph budgets and 8 MiB inline server-buffer limit before a future service claims a folder; nested saved pipeline documents reject unknown fields.
-
-The standalone InstrumentServer operator interface now provides state-dependent GUI Connect/Disconnect, per-row confirmed Clear, and an interactive terminal command set (including numbered `list`, single/bulk connect/disconnect/terminate/clear, and individual recovery) even with `--gui`. The combined launcher still provides no interactive instrument prompt because its child stdin is disabled. Clear and bulk terminate require confirmation; bulk recovery is deliberately unavailable. The offline suite now passes **263 tests**.
-
-The regular interactive `launch_auspex.py` now provides modal Instruments/Experiment IPC commands in its existing single-terminal display; redirected/headless operation remains unchanged. An optional `--tui` Textual console uses the same command dispatcher and captures both service streams in a bounded combined scrollback, with color-coded service labels and mode prompts. The plain launcher remains the default. TUI Ctrl+C now keeps the console and service logs visible through cooperative cancellation, teardown and ordered service shutdown; a second Ctrl+C skips the cooperative wait without exiting the UI prematurely. Startup text clarifies that Ctrl+C shuts down the launcher rather than clearing a prompt. Real-service/simulated-hardware headless tests cover idle, cooperative and second-interrupt shutdown. Attended interactive usability remains to be checked before changing the default.
-
-The instrument GUI now retains the last action outcome across polling and shows status failures in the connection banner. Both services share the `AUSPEX_HOME` (fallback `HOME`)/`.auspex` default path policy and write independent, per-launch truncated best-effort debug logs; startup announces fallback to HOME. The logs are not durable audit records.
-
-## Not implemented / safety limits
-
-No physical-device readback or safety verification on recovery, hardware interlocks, operator authentication beyond socket permissions, durable lab-notebook audit trail, typed operation argument schemas, model-specific automated hardware validation, separate run events or settings-change logging, appendable datasets, plot subscriptions/reconnect, multi-input joins, custom graph-worker filter admission, or shared-buffer digitizer acquisition. Direct drivers used outside the server bypass its lockout. Console output is transient, not a durable or secret-safe audit trail.
+Read [PLAN.md](PLAN.md) for lifecycle invariants, collaboration rules and deferred
+contracts, and [principles.md](principles.md) before designing a slice. This handoff
+replaces the historical discussion; it is not authorization to implement the backlog.
 
 ## Resume here
 
-- [Server guide and CLI](../src/auspex_v2/instruments/server/instrument_server.md); [GUI guide](../src/auspex_v2/instruments/server/instrument_server_gui.md); [driver guide](../src/auspex_v2/instruments/drivers/instrument_drivers.md).
-- From the repository root: `python -B -m unittest discover -s tests -q` — **253 tests passed**; the offline suite is grouped into experiment, data, filters and instruments test packages. Tests use fake/simulated devices; the GUI smoke test runs offscreen if PySide6 is installed.
-- **First service slice implemented:** [ExperimentServer](../src/auspex_v2/experiment/server.md) accepts `client.submit(plan, name=..., dir=..., date=False)` for one writer-only run using any admitted matching-KIND driver, no queue. Absolute existing directories and optional local-date subfolders are supported. The runner owns its lease; status writes gate setup, logs are best effort, teardown failure or runner death orphans the lease, and successful teardown releases it before processing drain. Tests include saved-plan submission from an exiting client process, reconnect/data inspection, a separate-service VNA sweep, cancellation, startup/teardown failures, runner death, supervision loss and status-write degradation. No startup folder scanning. Bounded buffer IPC and incremental acquisition are next proof points. The offline harness is not the supervised live runner. Startup, teardown, cancellation and crash policies are recorded in PLAN.md. See the [compiler scope and deferred contracts](../src/auspex_v2/experiment/experiment.md). The TCP plot client/server replacement is deferred until the coordinator exists; the local graph inspector is not a plot/data service. Agree on interfaces and acceptance tests first. Keep high-rate digitizer buffers separate from VNA-sized inline results; benchmark/store large scans before claiming out-of-core performance.
-- Plan format 4 introduces the fixed `InstrumentKind` taxonomy and deliberately rejects previous WIP plans. `InstrumentRef(driver=...)` and class-body `.bind(Driver)` infer KIND. Reviewed lab templates cover VNA-only, N5183A+VNA, and GS200+VNA fixed sweeps. Execute them only after adapting resources/settings at the bench. Review `git status` before committing or changing scope.
+- No implementation slice is currently authorized. Handoff-note cleanup is complete;
+  choose the next proof point with the user. Runner lifecycle refactoring is deferred.
+- Inspect `git status` and preserve accumulated uncommitted work; these notes do not
+  imply that implementation changes have been committed.
+- Start with the [manual](../docs/index.md),
+  [annotated example](../examples/documented_vna_sweep.py), and
+  [utility map](../utils/README.md). Use subsystem guides/code below for detail,
+  rather than treating old conversation snippets as API contracts.
+
+## Implemented scope
+
+### Experiments and runtime
+
+- Python experiment classes compile to detached JSON plans with typed expressions,
+  fixed/joint sweeps, hooks, bounded control flow, explicit waits/publications and
+  attached pipeline definitions. `InstrumentRef` supports driver-shaped recording
+  without hardware I/O. Bindings/recording setters expand at compile time; defaults
+  alone do not issue commands. Explicit scalar runtime updates retain phase/bounds rules.
+- `seq.module(...)` records trusted synchronous calculations with dependency manifests,
+  numerical/container snapshots and symbolic indexing/slicing. Safety annotations
+  do not establish purity; every COMPUTE plan saves/displays the repeatability notice.
+  Calls/imports may have side effects; a running call cannot be cooperatively interrupted.
+- `Interpreter` owns production semantics, `LiveInterpreter` real I/O, and the runner
+  lifecycle/leases. FakeExecutor/PipelineExecutor live only in `tests/experiment/`;
+  obsolete production test modules/exports are removed and dependency-tested.
+- Persistent ExperimentServer accepts `client.submit(plan, name=..., dir=..., date=False)`:
+  **one active writer-only run, no queue**, unique numbered run folders, durable
+  status, best-effort `execution.log`, progress, reconnecting clients and cooperative
+  cancellation. No service buffer sinks, auto-cleanup, incremental acquisition or
+  startup catalog scanning. Terminal `cleanup()` removes catalog entries, never files.
+
+### Instruments and operator tools
+
+- Independent InstrumentServer: persistent inventory/run state, local socket/lock,
+  process-backed connected devices, separate connection/ownership states, declared
+  GET/SET/CALL, domain-wide run lockout, live/run proxies, quarantine and explicit
+  reconciliation. Admission includes SimulatedSource/SimulatedVNA and real
+  AgilentN5183A, YokogawaGS200, AgilentE8363C and AgilentN5230A. VISA is lazy/optional;
+  real VISA connections use PyVISA-py `@py`. Whole-command deadline defaults to none.
+- Explicit VISA enumeration/identification/registration works in GUI and terminals,
+  with visibility filters, whitelist reload, driver-specific endpoint normalization
+  and retained conflicting saved registrations. Suggestions remain advisory (GUI
+  may preselect a sole suggestion); registration needs operator approval and leaves
+  DISCONNECTED. Visibility controls never bypass ownership.
+- Plain launcher (default), optional Textual console and standalone instrument terminal
+  share `utils/src/operator_commands.py`: syntax/help, contextual availability,
+  confirmations, name prompts, snapshots/ID revalidation and IPC result text.
+  `CommandResult(text, exit_console)` separates policy from frontend lifetime.
+  Standalone shutdown disconnects/clears/stops only on success; launcher shutdown
+  preserves registrations and retains cooperative first/second Ctrl+C behavior.
+- Launcher capture starts before readiness, retains 5,000 pending lines with overflow
+  reporting and has a one-second total EOF budget. Optional inventory/discovery GUI
+  cannot read settings/acquire; closing it leaves services running. Cached proxy
+  name completion makes no server requests, including IPython/Jedi scalar discovery.
+- Default sockets/state/logs use `$AUSPEX_HOME/.auspex` (announced HOME fallback).
+  Whitelist is `$AUSPEX_HOME/instrument_whitelist.txt` (HOME fallback), not inside
+  `.auspex/`. Service debug logs are
+  per-launch, best effort and truncated; they are not durable operator history.
+
+### Processing, data and manual use
+
+- Shared inert pipeline definitions and ManualPipeline support independent whole-window
+  processing/storage without experiment ownership. FilterServer supervises spawned
+  passthrough/complex-average workers, single-ingress fan-out, bounded shared-memory
+  edges/results, overlapping windows, local configuration revisions and cleanup.
+  Required results backpressure or fail; only previews may drop. Filters own groups;
+  runner owns windows/scans. One store process multiplexes required writer sinks.
+- Complete Cartesian scans become named dimensions; irregular paths use point axes,
+  variable rank-one traces ragged offsets. Dataset files embed values/coordinates,
+  names/units and support manifest-independent reads. Axes/coordinates allow positional
+  and case-sensitive name lookup with tuple behavior; numerical payloads stay mutable.
+  Standalone AuspexStore writes and bounded completed-output buffers remain supported.
+- Optional DataBrowser lists regular/ragged datasets and plots non-ragged 1D data.
+  Separate read-only graph inspector shows topology/schemas/acknowledged configuration,
+  not measurement plots or editing. Scan assembly is bounded-memory, not out-of-core.
+
+## Compatibility and recent regression guardrails
+
+- **Plan format 6; dataset format 2; InstrumentServer protocol 4.** They version
+  independently. Old plans require recompilation; no V1/old-V2 dataset import or
+  automatic repair. Instrument replies use 64 KiB JSON control and bounded inline
+  numeric arrays (up to 16 arrays / 8 MiB), not digitizer transport.
+- Failed orphan-run reconciliation restores ownership and reports that the domain
+  remains locked until a persisted retry. See lifecycle tests in `tests/instruments/`.
+- Ragged offsets use unsigned-safe adjacent comparisons, preserving empty rows.
+  `_validated_dataset()` separates logical checks from serialization; both read paths
+  work with serializer/TemporaryFile disabled. Writers retain snapshots/canonical
+  encoding; readers retain envelope checks and owned mutable arrays.
+- Filter supervision and both service registries now use cohesive private helpers
+  with ownership/locking/ordering contracts. No common framework or lifecycle-policy
+  change; `runner.run()` was intentionally not refactored. Preserve these boundaries.
+- Real IPython completion regression runs in a subprocess: InteractiveShell mutates
+  `__main__` and otherwise interferes with spawned-worker tests. IPython is not a
+  runtime dependency; completion guarantees names, not signatures or arbitrary expressions.
+
+## Evidence and limits
+
+Latest full implementation validation (after terminal consolidation):
+
+```sh
+python -B -m unittest discover -s tests -q  # 339 passed
+```
+
+The 33 targeted command/CLI/TUI/discovery/address tests also passed; strict MkDocs
+build and `git diff --check` passed. No new test methods were added for command
+consolidation; existing context/shutdown checks were extended. This handoff-only
+edit does not rerun runtime tests. Crash-path resource-tracker, offscreen Qt and
+asyncio slow-task diagnostics are known test output, not failed assertions.
+
+Automated evidence uses fake transports, simulators and real local service/process
+integration. The user reports attended basic end-to-end hardware operation and
+successful serial/GPIB/USB/Ethernet discovery/filter/whitelist use. This is **not**
+exhaustive per-model, recovery/readback, safety, adaptive-fit or throughput validation.
+The endpoint-normalization patch had offline/fake-VISA coverage, not real-backend
+parser validation. Modified bench examples and TUI shutdown/capture still need
+attended review. VNA drivers retain the linear-frequency-axis assumption rather
+than actual stimulus-vector readback.
+
+Recovery, cancellation, process termination and teardown do not prove outputs are
+off. No hardware interlocks, durable lab timeline/settings history, stronger operator
+authentication, plot subscription service, multi-input joins/custom worker admission
+or shared-buffer digitizer path. Direct non-server instrument access bypasses lockout.
+
+## Documentation and code navigation
+
+The local-first MkDocs/Material manual has 16 narrative pages; snippets include the
+canonical example as text, never execute it. Workflow is `workflow_dispatch` only;
+Pages has not been enabled/published remotely. API navigation and attended prose/visual
+review remain deferred. Material 9.8.0 announces EOL **May 5, 2027**; notice is documented,
+not suppressed. Local commands and deployment prerequisites:
+[docs/maintaining.md](../docs/maintaining.md).
+
+| Area | Entry points / guides |
+| --- | --- |
+| Authoring, plans, calculations | [experiment guide](../src/auspex_v2/experiment/experiment.md); `experiment/{compiler,_experiment_plan,computations}.py` |
+| Service, runner, leases | [server guide](../src/auspex_v2/experiment/server.md); `experiment/{service,runner,interpreter,resources}.py` |
+| Instrument service/GUI | [operator guide](../src/auspex_v2/instruments/server/instrument_server.md); [GUI guide](../src/auspex_v2/instruments/server/instrument_server_gui.md); `instruments/server/` |
+| Drivers/proxies | [driver guide](../src/auspex_v2/instruments/drivers/instrument_drivers.md); `instruments/drivers/` |
+| Pipeline runtime/definitions | [filter guide](../src/auspex_v2/filters/README.md); [manual use](../src/auspex_v2/filters/manual.md); `filters/` |
+| Dataset store/browser | [data guide](../src/auspex_v2/data/data.md); `data/` |
+| Console commands/output/TUI | [utility map](../utils/README.md); `utils/src/{operator_commands,service_output,auspex_tui}.py` |
+
+Module paths above are relative to `src/auspex_v2/`, except `utils/`. Tests mirror
+subsystems under `tests/{experiment,data,filters,instruments}/`. Examples are
+trusted authoring templates, not safe-to-run bench configurations without review.

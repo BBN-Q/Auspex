@@ -72,12 +72,27 @@ class OperatorCommandsTest(unittest.TestCase):
         self.assertNotIn("\033[", output.getvalue())
 
     def test_parse_rejects_wrong_mode_and_unsupported_shutdown(self):
+        """Context gates help, parsing and execution independently of default socket paths."""
         commands = operator_commands.OperatorCommands("instruments", "experiments")
+        self.assertNotIn("; shutdown", commands.execute(["help"]).text)
         with self.assertRaises(ValueError):
             commands.parse("shutdown")
+        with self.assertRaises(ValueError):
+            commands.execute(["shutdown"])
         with self.assertRaises(ValueError):
             commands.parse("recover all")
         commands.execute(["experiment"])
         with self.assertRaises(ValueError):
             commands.parse("connect 1")
         self.assertEqual(commands.parse("cancel run-id"), ["cancel", "run-id"])
+        standalone = operator_commands.OperatorCommands(None, context="standalone")
+        help_result = standalone.execute(["help"])
+        self.assertIn("; shutdown", help_result.text)
+        self.assertNotIn("; experiment", help_result.text)
+        self.assertFalse(help_result.exit_console)
+        self.assertTrue(standalone.confirmation(standalone.parse("shutdown")))
+        for line in ("experiment", "instruments", "status", "runs", "cancel run-id"):
+            with self.subTest(line=line), self.assertRaises(ValueError):
+                standalone.parse(line)
+        with self.assertRaises(ValueError):
+            standalone.execute(["experiment"])

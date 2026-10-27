@@ -149,7 +149,7 @@ class VisaAddressTest(unittest.TestCase):
                 self.assertTrue(all("None of these entries was restored" in e for e in status["registration_errors"].values()))
                 self.assertFalse(any(s["worker_running"] for s in status["instruments"].values()))
                 from utils.src.operator_commands import OperatorCommands
-                self.assertIn("REGISTRATION ERROR", OperatorCommands(socket, None).execute(["list"]))
+                self.assertIn("REGISTRATION ERROR", OperatorCommands(socket, None).execute(["list"]).text)
                 text = format_status({"instruments": {"reachable": True, **status},
                                       "experiments": {"reachable": False, "error": "not started"}})
                 self.assertIn("source_alias", text)

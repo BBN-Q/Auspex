@@ -87,6 +87,28 @@ class RegistryLifecycleTest(unittest.TestCase):
                 self.assertIsNone(state["operation"])
                 self.assertEqual(state["state"], expected)
 
+    def test_failed_reconciliation_preserves_lock_until_successful_retry(self):
+        """A failed save must retain orphaned ownership and allow an explicit retry."""
+        with tempfile.TemporaryDirectory(dir=".agents") as directory:
+            path = Path(directory) / "state.json"
+            registry = Registry(path, quiet=True)
+            registry.dispatch({"op": "BEGIN_RUN", "run_id": "interrupted"}, "owner")
+            registry.disconnected("owner")
+            previous = registry.run
+            persisted = path.read_bytes()
+            request = {"op": "RECONCILE_RUN", "reason": "Operator inspected the instruments"}
+            with patch.object(registry, "_save", side_effect=OSError("Disk unavailable")):
+                with self.assertRaisesRegex(InstrumentServerError, "remains orphaned and locked"):
+                    registry.dispatch(request, "operator")
+            self.assertIs(registry.run, previous)
+            self.assertTrue(registry.dispatch({"op": "STATUS"}, "operator")["run"]["orphaned"])
+            self.assertEqual(path.read_bytes(), persisted)
+            with self.assertRaisesRegex(InstrumentServerError, "already owns"):
+                registry.dispatch({"op": "BEGIN_RUN", "run_id": "other"}, "operator")
+            registry.dispatch(request, "operator")
+            self.assertIsNone(registry.run)
+            self.assertIsNone(Registry(path, quiet=True).run)
+
     def test_blocked_connect_is_observable_and_terminable(self):
         self.exercise("connecting")
 

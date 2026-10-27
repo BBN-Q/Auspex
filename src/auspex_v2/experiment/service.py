@@ -57,6 +57,16 @@ def announce(message):
 
 
 class Registry:
+    """Own run admission, durable status and runner-process supervision.
+
+    The registry lock protects the catalog, active slot and runner control writes;
+    only the monitor thread reads the runner channel. Process waits run outside
+    the lock. Status/progress updates and terminal publication require the lock.
+    RUNNING must be persisted before acknowledging setup; terminal status follows
+    runner cleanup. Failed status writes disable new admission rather than claim
+    persistence. The runner, not this registry, owns the instrument lease/teardown.
+    """
+
     def __init__(self, instrument_socket):
         self.instrument_socket = str(instrument_socket) if instrument_socket else None
         self.lock = threading.RLock()
@@ -66,6 +76,7 @@ class Registry:
         self.closing = False
 
     def _status(self, entry, state, **details):
+        """Requires the lock: persist status before publishing it, or latch degradation."""
         status = {"run_id": entry["id"], "path": str(entry["folder"].path),
                   "state": state, "updated_at": datetime.now().isoformat(), **details}
         if "progress" in entry:
@@ -90,6 +101,7 @@ class Registry:
                     [sys.executable, str(browser), str(entry['folder'].path)]))
 
     def _progress(self, entry, progress):
+        """Requires the lock: retain current progress and throttle best-effort display."""
         global _progress_line
         previous = entry.get("progress", {})
         entry["progress"] = progress
@@ -119,6 +131,7 @@ class Registry:
             entry["diagnostic"] = f"Best-effort execution log unavailable: {exc}"
 
     def submit(self, request):
+        """Admit and persist one writer-backed run before launching its owned runner."""
         with self.lock:
             if self.closing or self.degraded or self.active is not None:
                 raise RuntimeError(self.degraded or "ExperimentServer is busy or stopping; no queue")
@@ -175,6 +188,7 @@ class Registry:
             return {"run_id": run_id, "path": str(folder.path)}
 
     def _monitor(self, entry):
+        """Receive runner events, close supervision, reap the runner, then finalize status."""
         channel, process = entry["channel"], entry["process"]
         terminal = None
         try:
@@ -182,23 +196,9 @@ class Registry:
                 if channel.poll(0.1):
                     message = receive(channel)
                     with self.lock:
-                        kind = message["type"]
-                        if kind == "running":
-                            try:
-                                self._status(entry, "RUNNING")
-                            except Exception as exc:
-                                send(channel, {"type": "error", "reason": str(exc)})
-                            else:
-                                send(channel, {"type": "ack"})
-                        elif kind == "progress":
-                            self._progress(entry, message["progress"])
-                        elif kind == "log":
-                            self._log(entry, message["text"])
-                        elif kind == "terminal":
-                            terminal = message
+                        terminal = self._handle_runner_message(entry, message)
+                        if terminal is not None:
                             break
-                        else:
-                            raise ValueError(f"Unexpected runner message: {kind}")
                 elif process.poll() is not None:
                     break
         except (EOFError, OSError, ValueError) as exc:
@@ -207,33 +207,63 @@ class Registry:
             # Closing supervision prevents further commands if a protocol failure occurs.
             with self.lock:
                 channel.close()
-            try:
-                process.wait(timeout=15)
-            except subprocess.TimeoutExpired:
-                process.terminate()
-                terminal = None
-            # A killed runner cannot reap its filter/store children. They share only
-            # its process group, never the independently owned instrument workers.
-            try:
-                os.killpg(process.pid, signal.SIGTERM)
-            except ProcessLookupError:
-                pass
-            try:
-                process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                os.killpg(process.pid, signal.SIGKILL)
-                process.wait()
+            terminal = self._reap_runner(process, terminal)
             with self.lock:
-                if terminal is None or process.returncode != 0:
-                    terminal = {"state": "FAILED", "reason": "Runner exited unexpectedly; instrument lease may be orphaned; inspect/reconcile explicitly",
-                                "lease_released": False}
-                try:
-                    self._status(entry, terminal["state"], reason=terminal["reason"],
-                                 lease_released=terminal["lease_released"])
-                    self._log(entry, f"RUN_FINISHED {terminal['state']} {terminal['reason']}")
-                except Exception:
-                    pass  # _status records a prominent degraded diagnostic; never claim persistence.
-                self.active = None
+                self._finalize_run(entry, process, terminal)
+
+    def _handle_runner_message(self, entry, message):
+        """Requires the lock: apply one event, returning a terminal report only at run end."""
+        kind = message["type"]
+        if kind == "running":
+            try:
+                self._status(entry, "RUNNING")
+            except Exception as exc:
+                send(entry["channel"], {"type": "error", "reason": str(exc)})
+            else:
+                send(entry["channel"], {"type": "ack"})
+        elif kind == "progress":
+            self._progress(entry, message["progress"])
+        elif kind == "log":
+            self._log(entry, message["text"])
+        elif kind == "terminal":
+            return message
+        else:
+            raise ValueError(f"Unexpected runner message: {kind}")
+        return None
+
+    @staticmethod
+    def _reap_runner(process, terminal):
+        """Wait/escalate outside the registry lock; signal only the runner's process group."""
+        try:
+            process.wait(timeout=15)
+        except subprocess.TimeoutExpired:
+            process.terminate()
+            terminal = None
+        # A killed runner cannot reap its filter/store children. They share only
+        # its process group, never the independently owned instrument workers.
+        try:
+            os.killpg(process.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            os.killpg(process.pid, signal.SIGKILL)
+            process.wait()
+        return terminal
+
+    def _finalize_run(self, entry, process, terminal):
+        """Requires the lock: publish the outcome and clear the active slot, never the instrument lease."""
+        if terminal is None or process.returncode != 0:
+            terminal = {"state": "FAILED", "reason": "Runner exited unexpectedly; instrument lease may be orphaned; inspect/reconcile explicitly",
+                        "lease_released": False}
+        try:
+            self._status(entry, terminal["state"], reason=terminal["reason"],
+                         lease_released=terminal["lease_released"])
+            self._log(entry, f"RUN_FINISHED {terminal['state']} {terminal['reason']}")
+        except Exception:
+            pass  # _status records a prominent degraded diagnostic; never claim persistence.
+        self.active = None
 
     def dispatch(self, request):
         if request.get("version") != PROTOCOL_VERSION:
@@ -272,6 +302,7 @@ class Registry:
             raise ValueError(f"Unknown operation: {op}")
 
     def close(self):
+        """Stop admission and signal supervision loss, joining the monitor outside the lock."""
         with self.lock:
             self.closing = True
             announce("Stopping; active runner supervision will close. An active instrument lease may require reconciliation.")
@@ -286,6 +317,8 @@ class Registry:
 
 
 class Handler(socketserver.StreamRequestHandler):
+    """Serve one bounded client request; disconnecting never cancels an accepted run."""
+
     def handle(self):
         raw = self.rfile.readline(MAX_MESSAGE + 1)
         if not raw or len(raw) > MAX_MESSAGE:
@@ -302,6 +335,8 @@ class Handler(socketserver.StreamRequestHandler):
 
 
 class ExperimentServer(socketserver.ThreadingUnixStreamServer):
+    """Own the local endpoint, instance lock and run registry, independently of notebooks."""
+
     daemon_threads = True
 
     def __init__(self, socket_path=None, *, instrument_socket=None):

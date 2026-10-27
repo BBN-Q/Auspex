@@ -91,7 +91,7 @@ class InstrumentServerCliTest(unittest.TestCase):
         self.assertEqual([call.args[0] for call in run_service.call_args_list], [["-c"], ["-c"]])
 
     def test_terminal_shutdown_disconnects_clears_and_stops(self):
-        """Drive the headless terminal command through the normal client protocol."""
+        """Require yes and complete disconnection before clearing/stopping or leaving the console."""
         done = threading.Event()
         calls = []
 
@@ -102,7 +102,9 @@ class InstrumentServerCliTest(unittest.TestCase):
                 return True
 
         class FakeClient:
-            """Record the order of server requests."""
+            """Record the order of server requests, with an optional disconnect failure."""
+
+            failures = {}
 
             def __init__(self, path):
                 self.path = path
@@ -115,7 +117,7 @@ class InstrumentServerCliTest(unittest.TestCase):
 
             def disconnect_all(self):
                 calls.append("disconnect")
-                return {"failures": {}}
+                return {"failures": self.failures}
 
             def clear_instruments(self):
                 calls.append("clear")
@@ -127,12 +129,21 @@ class InstrumentServerCliTest(unittest.TestCase):
         def run_service(args, *, on_start, on_bound):
             on_bound(Path("/tmp/test.sock"))
 
-        with patch.object(cli.sys, "stdin", Terminal("shutdown\ny\n")), \
-             patch.object(cli, "InstrumentServerClient", FakeClient), \
+        with patch.object(cli.sys, "stdin", Terminal("shutdown\nn\nshutdown\ny\nshutdown\ny\n")), \
+             patch.object(cli.operator_commands, "InstrumentServerClient", FakeClient), \
              patch.object(cli, "run_service", side_effect=run_service):
             cli.main([])
             self.assertTrue(done.wait(2))
         self.assertEqual(calls, ["disconnect", "clear", "SHUTDOWN"])
+        calls.clear()
+        FakeClient.failures = {"source": "Disconnect failed"}
+        output = io.StringIO()
+        from contextlib import redirect_stdout
+        with patch.object(cli.operator_commands, "InstrumentServerClient", FakeClient), redirect_stdout(output):
+            cli.terminal_commands("socket", iter(("shutdown", "y", "help")))
+        self.assertEqual(calls, ["disconnect"])
+        self.assertIn("Disconnect failures", output.getvalue())
+        self.assertIn("Letters stay stable", output.getvalue().split("Command failed:", 1)[1])
 
     def test_terminal_inventory_actions_and_confirmations(self):
         """Resolve numbered IDs, reject bulk recovery, and confirm destructive actions."""
@@ -189,7 +200,7 @@ class InstrumentServerCliTest(unittest.TestCase):
                 self.state.clear()
 
         output = io.StringIO()
-        with patch.object(cli, "InstrumentServerClient", FakeClient), redirect_stdout(output):
+        with patch.object(cli.operator_commands, "InstrumentServerClient", FakeClient), redirect_stdout(output):
             cli.terminal_commands("socket", iter(("help\n", "list\n", "recover all\n",
                                                   "connect all\n", "disconnect 1\n", "recover 2\n",
                                                   "clear 1\n", "n\n", "clear 1\n", "y\n",
@@ -197,7 +208,7 @@ class InstrumentServerCliTest(unittest.TestCase):
                                                   "clear all\n", "y\n")))
         self.assertEqual(FakeClient.calls, [("connect", "a"), ("disconnect", "a"),
                                             ("recover", "b"), ("clear", "a"), ("clear", "all")])
-        self.assertIn("Recover each instrument individually", output.getvalue())
+        self.assertIn("Recovery must be individual", output.getvalue())
         self.assertIn("1. a", output.getvalue())
 
     def test_gui_dependency_failure_prevents_service_startup(self):

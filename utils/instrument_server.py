@@ -6,9 +6,9 @@ import subprocess
 import sys
 import threading
 
-from auspex_v2.instruments.server import InstrumentServerClient, main as run_service
+from auspex_v2.instruments.server import main as run_service
 from auspex_v2.instruments.server.service import argument_parser
-from src.operator_commands import OperatorCommands, ENUMERATE_HELP, INSTRUMENT_HELP
+from src import operator_commands
 
 
 SPLASH = r"""
@@ -26,121 +26,32 @@ def print_splash():
     print(SPLASH, flush=True)
 
 
-COMMANDS = ("list", "connect <id|all>", "disconnect <id|all>", "recover <id>",
-            "terminate <id|all>", "clear <id|all>", ENUMERATE_HELP,
-            "identify <letter|all>", "register <letter> <driver>", "shutdown", "help")
-
-
 def terminal_commands(socket_path, lines):
-    """Serve an operator prompt; numeric IDs remain tied to the last listed names."""
-    names = []
-    identities = {}
-    discovery = OperatorCommands(socket_path, None)
-    print("[InstrumentServer] Commands: " + "; ".join(COMMANDS), flush=True)
+    """Adapt terminal input/output to the shared standalone command context."""
+    commands = operator_commands.OperatorCommands(socket_path, context="standalone")
+    print("[InstrumentServer] Commands: " + commands.execute(["help"]).text, flush=True)
     for line in lines:
-        raw_parts = line.strip().split()
-        if raw_parts and raw_parts[0].lower() in ("enumerate", "identify", "register"):
-            try:
-                parts = discovery.parse(line)
-                if discovery.confirmation(parts) and not input_confirmation(lines, line.strip()):
-                    print("[InstrumentServer] Cancelled", flush=True)
-                    continue
-                if parts[0].lower() == "register":
-                    print(discovery.registration_prompt(parts), end="", flush=True)
-                    name = next(lines, "").strip()
-                    if not name:
-                        print("[InstrumentServer] Cancelled", flush=True)
-                        continue
-                    parts = [*parts, name]
-                print(f"[InstrumentServer] {discovery.execute(parts)}", flush=True)
-            except Exception as exc:
-                print(f"[InstrumentServer] Discovery command failed: {exc}", flush=True)
-            continue
-        parts = line.strip().lower().split()
-        if not parts:
-            continue
-        command, *args = parts
-        if command == "help" and not args:
-            print("[InstrumentServer] Commands: " + "; ".join(COMMANDS), flush=True)
-            print(INSTRUMENT_HELP.split("\n", 1)[1], flush=True)
-            continue
-        if command not in ("list", "connect", "disconnect", "recover", "terminate", "clear", "shutdown"):
-            print("[InstrumentServer] Unknown command; type help", flush=True)
-            continue
-        if (command in ("list", "shutdown") and args) or (command not in ("list", "shutdown") and len(args) != 1):
-            print("[InstrumentServer] Invalid arguments; type help", flush=True)
-            continue
-        if args and args[0] == "all" and command == "recover":
-            print("[InstrumentServer] Recover each instrument individually after inspection", flush=True)
-            continue
-        if command in ("terminate", "clear") and args == ["all"] or command == "shutdown" or command == "clear":
-            if input_confirmation(lines, f"{command} {args[0] if args else ''}".strip()) is not True:
+        try:
+            parts = commands.parse(line)
+            if parts is None:
+                continue
+            if commands.confirmation(parts) and not input_confirmation(lines, line.strip()):
                 print("[InstrumentServer] Cancelled", flush=True)
                 continue
-        try:
-            with InstrumentServerClient(socket_path) as client:
-                if command == "list":
-                    status = client.status()
-                    names = sorted(status["instruments"])
-                    identities = {name: (spec["driver"], spec["physical"])
-                                  for name, spec in status["instruments"].items()}
-                    run = status["run"]
-                    print(f"[InstrumentServer] Run: {run or 'none'}", flush=True)
-                    for name, error in sorted(status.get("registration_errors", {}).items()):
-                        print(f"[InstrumentServer] REGISTRATION ERROR — {name}: {error}", flush=True)
-                    for index, name in enumerate(names, 1):
-                        spec = status["instruments"][name]
-                        print(f"  {index}. {name} — {spec['state']} — "
-                              f"{'run locked' if run else 'live session' if spec['live_sessions'] else 'free'} "
-                              f"({spec['driver']}, {spec['physical']})", flush=True)
-                    if not names:
-                        print("[InstrumentServer] No registered instruments", flush=True)
+            prompt = commands.registration_prompt(parts)
+            if prompt is not None:
+                print(prompt, end="", flush=True)
+                name = next(lines, "").strip()
+                if not name:
+                    print("[InstrumentServer] Cancelled", flush=True)
                     continue
-                if command == "shutdown":
-                    outcome = client.disconnect_all()
-                    if outcome["failures"]:
-                        raise RuntimeError(f"Disconnect failures: {outcome['failures']}")
-                    client.clear_instruments()
-                    client.request("SHUTDOWN")
-                    print("[InstrumentServer] All instruments disconnected; inventory cleared; server stopped.", flush=True)
-                    return
-                target = args[0]
-                if target == "all":
-                    if command == "disconnect":
-                        result = client.disconnect_all()
-                    elif command == "clear":
-                        result = client.clear_instruments()
-                        names = []
-                    elif command == "terminate":
-                        result = client.terminate_all()
-                    elif command == "connect":
-                        status = client.status()
-                        connected, failures = [], {}
-                        for name, spec in sorted(status["instruments"].items()):
-                            if spec["state"] == "DISCONNECTED":
-                                try:
-                                    client.connect(name)
-                                    connected.append(name)
-                                except Exception as exc:
-                                    failures[name] = str(exc)
-                        result = {"connected": connected, "failures": failures}
-                else:
-                    if not target.isdecimal() or not 1 <= int(target) <= len(names):
-                        raise ValueError("Unknown ID; run list first")
-                    name = names[int(target) - 1]
-                    # Revalidate before acting: a removed/replaced registration must not inherit an old ID.
-                    status = client.status()
-                    spec = status["instruments"].get(name)
-                    if spec is None or (spec["driver"], spec["physical"]) != identities[name]:
-                        raise ValueError("Inventory changed; run list again")
-                    result = {"connect": client.connect, "disconnect": client.disconnect,
-                              "recover": client.recover, "terminate": client.terminate,
-                              "clear": client.deregister}[command](name)
-                    if command == "clear":
-                        names = []  # renumber only after an explicit new list
-                print(f"[InstrumentServer] {command} {target}: {result if result is not None else 'done'}", flush=True)
+                parts = [*parts, name]
+            result = commands.execute(parts)
+            print(f"[InstrumentServer] {result.text}", flush=True)
+            if result.exit_console:
+                return
         except Exception as exc:
-            print(f"[InstrumentServer] {command} failed: {exc}", flush=True)
+            print(f"[InstrumentServer] Command failed: {exc}", flush=True)
 
 
 def input_confirmation(lines, action):

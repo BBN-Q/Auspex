@@ -17,7 +17,7 @@ import time
 import numpy as np
 
 from ..data import Axis
-from .core import GroupComplete, PipelineError, PortSchema, WindowState
+from .core import Batch, GroupComplete, PipelineError, PortSchema, WindowState
 from .graph_transport import GraphEdge
 from .transport import _receive, _send
 from .worker import FILTER_TYPES
@@ -143,8 +143,22 @@ def _graph_worker(name, spec, input_edge, outputs, status, control, stop):
                 edge.notifications.cancel_join_thread()
 
 
+@dataclass
+class _DrainState:
+    """Completion bookkeeping owned only by the supervisor thread, not admission callers."""
+
+    windows: dict[str, int]  # Last ordered window per required result/writer.
+    finished: set[str] = field(default_factory=set)
+    pending_buffers: dict[str, Batch] = field(default_factory=dict)  # Awaiting window end.
+
+
 class FilterServer:
     """Own a bounded DAG and supervise it independently of blocked callers.
+
+    The supervisor thread creates/reaps workers and closes their channels. Admission
+    is serialized separately: the supervisor takes the admission lock only during
+    final shared-memory reclamation, after workers stop using the slots. Progress
+    and waiter notifications use the condition lock.
 
     `finish()` submits run end; `wait_finished()` confirms drainage. Consumers must
     drain required results concurrently when they exceed `result_capacity`.
@@ -356,149 +370,26 @@ class FilterServer:
         return edge
 
     def _supervise(self):
-        """Spawn, drain terminals, detect errors, and always reclaim graph resources."""
+        """Own the graph lifecycle; reclaim registered resources even after partial startup."""
         statuses = {}
         child_handles = []
         try:
-            outputs = {name: {} for name in self.nodes}
-            inputs = {}
-            self.ingress = []
-            for producer, port, consumer in self.edges:
-                edge = self._new_edge(f"{producer}.{port}->{consumer}", self.nodes[consumer].schema)
-                inputs[consumer] = edge
-                if producer == "$input":
-                    self.ingress.append(edge)
-                else:
-                    outputs[producer].setdefault(port, []).append((edge, False))
-            terminals = {}
-            for name, spec in self.results.items():
-                edge = self._new_edge(f"result:{name}", self.nodes[spec.node].schema)
-                terminals[name] = edge
-                outputs[spec.node].setdefault(spec.port, []).append((edge, spec.preview))
-            writer_edges = {}
-            for name, spec in self.writers.items():
-                edge = self._new_edge(f"writer:{name}", self.nodes[spec.node].schema)
-                writer_edges[name] = edge
-                outputs[spec.node].setdefault(spec.port, []).append((edge, False))
-            if self.writers:
-                owner_status, child_status = self.context.Pipe(duplex=False)
-                statuses["$store"] = owner_status
-                child_handles.append(child_status)
-                process = self.context.Process(target=store_owner, name="auspex-store-owner",
-                    args=(self.store_path, self.writers,
-                          {n: self.nodes[w.node].schema for n, w in self.writers.items()},
-                          writer_edges, child_status, self.stop, self.run_metadata, self.input_name,
-                          self.existing_store))
-                process.start()
-                self.processes["$store"] = process
-                child_status.close()
-            for name, spec in self.nodes.items():
-                parent_status, child_status = self.context.Pipe(duplex=False)
-                parent_control, child_control = self.context.Pipe()
-                statuses[name] = parent_status
-                self.controls[name] = parent_control
-                child_handles.extend((child_status, child_control))
-                process = self.context.Process(target=_graph_worker, name=f"filter:{name}",
-                    args=(name, spec, inputs[name], outputs[name], child_status, child_control, self.stop))
-                process.start()
-                self.processes[name] = process
-                child_status.close()
-                child_control.close()
-            pending = set(statuses)
-            while pending and not self.stop.is_set():
-                for name in list(pending):
-                    if statuses[name].poll(0.01):
-                        try:
-                            response = _receive(statuses[name])
-                        except (EOFError, OSError) as exc:
-                            raise PipelineError(f"Worker status closed during startup: {name}") from exc
-                        if response["type"] != "ready":
-                            raise PipelineError(response.get("error", "Worker startup failed"))
-                        pending.remove(name)
-                    elif not self.processes[name].is_alive():
-                        raise PipelineError(f"Worker exited during startup: {name}")
+            terminals = self._start_workers(statuses, child_handles)
+            self._await_workers_ready(statuses)
             if self.stop.is_set():
                 return
             self.lifecycle = "RUNNING"
             self.ready.set()
             windows = {name: -1 for name, spec in self.results.items() if not spec.preview}
             windows.update({f"writer:{name}": -1 for name in self.writers})
-            finished = set()
-            pending_buffers = {}  # A batch is not readable until its ordered window end.
+            drain = _DrainState(windows)
             while not self.stop.is_set():
-                for name, connection in statuses.items():
-                    if connection.poll():
-                        try:
-                            response = _receive(connection)
-                        except (EOFError, OSError) as exc:
-                            raise PipelineError(f"Worker status channel closed: {name}") from exc
-                        if name == "$store" and response["type"] == "window":
-                            key = f"writer:{response['writer']}"
-                            if response["window"] != windows[key] + 1:
-                                raise PipelineError("Out-of-order store window")
-                            windows[key] = response["window"]
-                            with self.condition:
-                                self.completed_window = min(windows.values())
-                                self.condition.notify_all()
-                            continue
-                        if name == "$store" and response["type"] == "scan":
-                            self._ack_scan(response["scan"])
-                            self.published.append(response)
-                            continue
-                        if name == "$store" and response["type"] == "finished":
-                            finished.add("$store")
-                            continue
-                        raise PipelineError(response.get("error", f"Unexpected status: {name}"))
-                    if not self.processes[name].is_alive() and not (name == "$store" and name in finished):
-                        raise PipelineError(f"Worker exited: {name}")
-                for name, edge in terminals.items():
-                    if not edge.reader_connection.poll():
-                        continue
-                    preview = self.results[name].preview
-                    is_batch = json.loads(edge.reader_connection.pending)["type"] == "batch"
-                    if is_batch and self.buffers[name].full() and not preview:
-                        if name in self.buffer_sinks and self.buffer_full == "fail":
-                            raise PipelineError(f"Buffer {name!r} capacity exceeded; no data discarded")
-                        if not self.backpressure:
-                            raise PipelineError(f"Capacity exhausted: result:{name} retention")
-                        continue
-                    event, payload, slot = edge.receive()
-                    if event == "batch":
-                        try:
-                            if preview and self.buffers[name].full():
-                                try:
-                                    self.buffers[name].get_nowait()
-                                except queue.Empty:
-                                    pass  # A client consumed the snapshot concurrently.
-                            if name in self.buffer_sinks:
-                                if name in pending_buffers:
-                                    raise PipelineError(f"Buffer {name} expects one batch per output window")
-                                pending_buffers[name] = _snapshot(payload)
-                            else:
-                                self.buffers[name].put_nowait(_snapshot(payload))
-                        finally:
-                            edge.release(slot)
-                    elif event == "window_end":
-                        if payload["window"] != windows[name] + 1:
-                            raise PipelineError(f"Out-of-order terminal window: {name}")
-                        if name in pending_buffers:
-                            batch = pending_buffers.pop(name)
-                            if batch.window != payload["window"]:
-                                raise PipelineError(f"Buffer {name} window mismatch")
-                            try:
-                                self.buffer_sinks[name]._put_completed(batch)
-                            except queue.Full as exc:
-                                raise PipelineError(f"Buffer {name!r} capacity exceeded; no data discarded") from exc
-                        windows[name] = payload["window"]
-                    elif event == "scan_end" and not preview:
-                        self._ack_scan(payload["group"])
-                    elif event == "run_end":
-                        finished.add(name)
-                    with self.condition:
-                        self.completed_window = min(windows.values())
-                        self.condition.notify_all()
+                self._drain_worker_statuses(statuses, drain)
+                self._drain_terminal_results(terminals, drain)
+                # Success requires every required result and the store owner to drain.
+                # Scan acknowledgments separately include each writer's publication.
                 required = {name for name, spec in self.results.items() if not spec.preview}
-                if finished == required | ({"$store"} if self.writers else set()):
+                if drain.finished == required | ({"$store"} if self.writers else set()):
                     with self.condition:
                         self.lifecycle = "SUCCEEDED"
                         self.condition.notify_all()
@@ -507,29 +398,183 @@ class FilterServer:
         except Exception as exc:
             self._fail(f"Filter graph: {exc}")
         finally:
-            self.stop.set()
-            self.ready.set()
-            # A shared deadline bounds cooperative cleanup even with many workers.
-            deadline = time.monotonic() + 1
-            for process in self.processes.values():
-                process.join(max(0, deadline - time.monotonic()))
-            for process in self.processes.values():
-                if process.is_alive():
-                    process.terminate()
-                    process.join(1)
-                if process.is_alive():
-                    process.kill()
-                    process.join()
-            # A cancelled submission must finish touching shared memory first.
-            with self.admission:
-                for edge in self.channels:
-                    edge.close()
-            for connection in list(statuses.values()) + list(self.controls.values()) + child_handles:
-                connection.close()
-            for sink in self.buffer_sinks.values():
-                sink._finish(self.error)
-            with self.condition:
-                self.condition.notify_all()
+            self._cleanup_graph(statuses, child_handles)
+
+    def _start_workers(self, statuses, child_handles):
+        """Wire the graph and spawn its children, registering handles for failure cleanup."""
+        outputs = {name: {} for name in self.nodes}
+        inputs = {}
+        self.ingress = []
+        for producer, port, consumer in self.edges:
+            edge = self._new_edge(f"{producer}.{port}->{consumer}", self.nodes[consumer].schema)
+            inputs[consumer] = edge
+            if producer == "$input":
+                self.ingress.append(edge)
+            else:
+                outputs[producer].setdefault(port, []).append((edge, False))
+        terminals = {}
+        for name, spec in self.results.items():
+            edge = self._new_edge(f"result:{name}", self.nodes[spec.node].schema)
+            terminals[name] = edge
+            outputs[spec.node].setdefault(spec.port, []).append((edge, spec.preview))
+        writer_edges = {}
+        for name, spec in self.writers.items():
+            edge = self._new_edge(f"writer:{name}", self.nodes[spec.node].schema)
+            writer_edges[name] = edge
+            outputs[spec.node].setdefault(spec.port, []).append((edge, False))
+        if self.writers:
+            owner_status, child_status = self.context.Pipe(duplex=False)
+            statuses["$store"] = owner_status
+            child_handles.append(child_status)
+            process = self.context.Process(target=store_owner, name="auspex-store-owner",
+                args=(self.store_path, self.writers,
+                      {n: self.nodes[w.node].schema for n, w in self.writers.items()},
+                      writer_edges, child_status, self.stop, self.run_metadata, self.input_name,
+                      self.existing_store))
+            process.start()
+            self.processes["$store"] = process
+            child_status.close()
+        for name, spec in self.nodes.items():
+            parent_status, child_status = self.context.Pipe(duplex=False)
+            parent_control, child_control = self.context.Pipe()
+            statuses[name] = parent_status
+            self.controls[name] = parent_control
+            child_handles.extend((child_status, child_control))
+            process = self.context.Process(target=_graph_worker, name=f"filter:{name}",
+                args=(name, spec, inputs[name], outputs[name], child_status, child_control, self.stop))
+            process.start()
+            self.processes[name] = process
+            child_status.close()
+            child_control.close()
+        return terminals
+
+    def _await_workers_ready(self, statuses):
+        """Await every startup handshake, detecting early exits without blocking cancellation."""
+        pending = set(statuses)
+        while pending and not self.stop.is_set():
+            for name in list(pending):
+                if statuses[name].poll(0.01):
+                    try:
+                        response = _receive(statuses[name])
+                    except (EOFError, OSError) as exc:
+                        raise PipelineError(f"Worker status closed during startup: {name}") from exc
+                    if response["type"] != "ready":
+                        raise PipelineError(response.get("error", "Worker startup failed"))
+                    pending.remove(name)
+                elif not self.processes[name].is_alive():
+                    raise PipelineError(f"Worker exited during startup: {name}")
+
+    def _drain_worker_statuses(self, statuses, drain: _DrainState):
+        """Handle one pending status per child and detect failures independently of admission."""
+        for name, connection in statuses.items():
+            if connection.poll():
+                try:
+                    response = _receive(connection)
+                except (EOFError, OSError) as exc:
+                    raise PipelineError(f"Worker status channel closed: {name}") from exc
+                if name == "$store":
+                    self._handle_store_status(response, drain)
+                    continue
+                raise PipelineError(response.get("error", f"Unexpected status: {name}"))
+            if not self.processes[name].is_alive() and not (name == "$store" and name in drain.finished):
+                raise PipelineError(f"Worker exited: {name}")
+
+    def _handle_store_status(self, response, drain: _DrainState):
+        """Validate ordered writer acknowledgments and record durable scan publications."""
+        if response["type"] == "window":
+            key = f"writer:{response['writer']}"
+            if response["window"] != drain.windows[key] + 1:
+                raise PipelineError("Out-of-order store window")
+            drain.windows[key] = response["window"]
+            self._publish_window_progress(drain)
+        elif response["type"] == "scan":
+            self._ack_scan(response["scan"])
+            self.published.append(response)
+        elif response["type"] == "finished":
+            drain.finished.add("$store")
+        else:
+            raise PipelineError(response.get("error", "Unexpected status: $store"))
+
+    def _drain_terminal_results(self, terminals, drain: _DrainState):
+        """Drain available results; completed buffers expose batches only after ordered window end."""
+        for name, edge in terminals.items():
+            if not edge.reader_connection.poll():
+                continue
+            preview = self.results[name].preview
+            # Leave a required batch queued while retention is full; do not consume
+            # its shared slot or let later boundary events overtake it.
+            is_batch = json.loads(edge.reader_connection.pending)["type"] == "batch"
+            if is_batch and self.buffers[name].full() and not preview:
+                if name in self.buffer_sinks and self.buffer_full == "fail":
+                    raise PipelineError(f"Buffer {name!r} capacity exceeded; no data discarded")
+                if not self.backpressure:
+                    raise PipelineError(f"Capacity exhausted: result:{name} retention")
+                continue
+            event, payload, slot = edge.receive()
+            if event == "batch":
+                try:
+                    if preview and self.buffers[name].full():
+                        try:
+                            self.buffers[name].get_nowait()
+                        except queue.Empty:
+                            pass  # A client consumed the snapshot concurrently.
+                    if name in self.buffer_sinks:
+                        if name in drain.pending_buffers:
+                            raise PipelineError(f"Buffer {name} expects one batch per output window")
+                        drain.pending_buffers[name] = _snapshot(payload)
+                    else:
+                        self.buffers[name].put_nowait(_snapshot(payload))
+                finally:
+                    edge.release(slot)
+            elif event == "window_end":
+                if payload["window"] != drain.windows[name] + 1:
+                    raise PipelineError(f"Out-of-order terminal window: {name}")
+                if name in drain.pending_buffers:
+                    batch = drain.pending_buffers.pop(name)
+                    if batch.window != payload["window"]:
+                        raise PipelineError(f"Buffer {name} window mismatch")
+                    try:
+                        self.buffer_sinks[name]._put_completed(batch)
+                    except queue.Full as exc:
+                        raise PipelineError(f"Buffer {name!r} capacity exceeded; no data discarded") from exc
+                drain.windows[name] = payload["window"]
+            elif event == "scan_end" and not preview:
+                self._ack_scan(payload["group"])
+            elif event == "run_end":
+                drain.finished.add(name)
+            self._publish_window_progress(drain)
+
+    def _publish_window_progress(self, drain: _DrainState):
+        """Wake producers/waiters using the slowest required result or writer window."""
+        with self.condition:
+            self.completed_window = min(drain.windows.values())
+            self.condition.notify_all()
+
+    def _cleanup_graph(self, statuses, child_handles):
+        """Stop children before reclaiming shared slots, then finish sinks and wake waiters."""
+        self.stop.set()
+        self.ready.set()
+        # A shared deadline bounds cooperative cleanup even with many workers.
+        deadline = time.monotonic() + 1
+        for process in self.processes.values():
+            process.join(max(0, deadline - time.monotonic()))
+        for process in self.processes.values():
+            if process.is_alive():
+                process.terminate()
+                process.join(1)
+            if process.is_alive():
+                process.kill()
+                process.join()
+        # A cancelled submission must finish touching shared memory first.
+        with self.admission:
+            for edge in self.channels:
+                edge.close()
+        for connection in list(statuses.values()) + list(self.controls.values()) + child_handles:
+            connection.close()
+        for sink in self.buffer_sinks.values():
+            sink._finish(self.error)
+        with self.condition:
+            self.condition.notify_all()
 
     def _ack_scan(self, scan):
         """Count terminal drainage and durable writer publication for one scan."""

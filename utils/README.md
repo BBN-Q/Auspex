@@ -43,4 +43,15 @@ No descendant is killed merely for keeping stdout open. Existing service-stop
 timeouts/escalation still apply. Startup failures also print retained output even
 if the TUI never mounted. The plain CLI output path is unchanged.
 
-`src/` contains the non-executable launcher helpers: `operator_commands.py` shares IPC command parsing between plain and Textual modes; `auspex_tui.py` implements the optional Textual display; `service_output.py` owns bounded service-pipe capture without depending on Textual. Service, driver, and data-library code lives in `../src/auspex_v2/`.
+`src/` contains the non-executable console helpers. `operator_commands.py` owns
+operator syntax, contextual help, confirmations, registration prompts, inventory and
+discovery snapshots, IPC execution, and common result text for the standalone
+instrument terminal and both launcher consoles. Frontends read/display input and
+act on `CommandResult.text` / `exit_console`; the command module never reads stdin
+or controls UI threads. Explicit `launcher` / `standalone` contexts keep experiment
+mode and standalone inventory-clearing `shutdown` distinct. Launcher Ctrl+C still
+uses its separate cooperative, registration-preserving shutdown policy.
+
+`auspex_tui.py` implements the optional Textual display; `service_output.py` owns
+bounded service-pipe capture without depending on Textual. Service, driver, and
+data-library code lives in `../src/auspex_v2/`.

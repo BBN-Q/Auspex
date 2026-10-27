@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import fcntl
 import json
 import os
@@ -94,23 +94,26 @@ def _component(value):
 
 
 def _numeric(value):
+    """Inspect numeric data without copying existing arrays; writers own their snapshots."""
     array = np.asarray(value)
     if array.dtype.kind not in "biufc" or array.dtype.hasobject:
         raise TypeError("Only numeric and boolean arrays are supported")
-    return np.array(array, order="C", copy=True)
+    return array
 
 
-def _pack_dataset(stream, dataset: Dataset):
-    """Write a bounded JSON directory followed by numeric arrays, without pickle."""
+def _validated_dataset(dataset: Dataset):
+    """Resolve layout defaults and validate array views without mutation or filesystem I/O."""
     data = _numeric(dataset.data)
-    dimensions = dataset.dimensions or tuple(axis.name for axis in dataset.axes)
+    dimensions = tuple(dataset.dimensions) or tuple(axis.name for axis in dataset.axes)
+    coordinates = dataset.coordinates or tuple(
+        Coordinate(a.name, a.points, (a.name,), a.unit) for a in dataset.axes)
     if len(dimensions) != data.ndim or len(set(dimensions)) != len(dimensions):
         raise ValueError("Value dimensions do not match its rank")
     for name in dimensions:
         _component(name)
     if not isinstance(dataset.value_name, str) or not dataset.value_name:
         raise ValueError("Value needs a name")
-    for unit in (dataset.value_unit, *(c.unit for c in dataset.coordinates)):
+    for unit in (dataset.value_unit, *(c.unit for c in coordinates)):
         if unit is not None and not isinstance(unit, str):
             raise ValueError("Units must be strings or None")
     for text in (dataset.label, dataset.source, dataset.input_name):
@@ -122,18 +125,17 @@ def _pack_dataset(stream, dataset: Dataset):
         if data.ndim != 1 or len(dimensions) != 1:
             raise ValueError("Ragged values must be flat and have an outer axis")
         offsets = np.asarray(dataset.offsets)
-        if offsets.ndim != 1 or offsets.dtype.kind not in "iu" or len(offsets) < 1 or offsets[0] != 0 or offsets[-1] != len(data) or np.any(np.diff(offsets) < 0):
-            raise ValueError("Invalid ragged offsets")
-        offsets = np.asarray(offsets, dtype="<i8")
-    coordinates = dataset.coordinates
-    if not coordinates:
-        coordinates = tuple(Coordinate(a.name, a.points, (a.name,), a.unit) for a in dataset.axes)
-    arrays = {"value": data}
-    if ragged:
-        arrays["offsets"] = offsets
-    described = []
+        if offsets.ndim != 1 or offsets.dtype.kind not in "iu" or len(offsets) < 1:
+            raise ValueError("Invalid ragged offsets: expected a nonempty one-dimensional integer array")
+        if offsets[0] != 0 or offsets[-1] != len(data):
+            raise ValueError("Invalid ragged offsets: must start at zero and end at the data length")
+        # Direct comparison avoids unsigned underflow. Together with the endpoints,
+        # this bounds offsets for the writer's later conversion to int64.
+        if np.any(offsets[1:] < offsets[:-1]):
+            raise ValueError("Invalid ragged offsets: must be nondecreasing")
+    normalized_coordinates = []
     names = set()
-    for i, coordinate in enumerate(coordinates):
+    for coordinate in coordinates:
         _component(coordinate.name)
         if coordinate.name in names:
             raise ValueError("Duplicate coordinate name")
@@ -154,22 +156,37 @@ def _pack_dataset(stream, dataset: Dataset):
             expected = tuple(data.shape[dimensions.index(d)] for d in coordinate.dimensions)
         if arr.shape != expected:
             raise ValueError("Coordinate shape does not match its dimensions")
-        key = f"coordinate_{i}"
-        arrays[key] = arr
-        described.append({"name": coordinate.name, "dimensions": list(coordinate.dimensions),
-                          "unit": coordinate.unit, "array": key})
+        normalized_coordinates.append(Coordinate(coordinate.name, arr, tuple(coordinate.dimensions),
+                                                 coordinate.unit))
     if ragged:
         if not any(c.dimensions == (dimensions[0],) for c in coordinates) or not any(c.dimensions == ("sample",) for c in coordinates):
             raise ValueError("Ragged values need outer and sample coordinates")
     elif any(not any(c.name == dim and dim in c.dimensions for c in coordinates) for dim in dimensions):
         raise ValueError("Every value dimension needs a named coordinate")
+    return replace(dataset, data=data, dimensions=dimensions,
+                   coordinates=tuple(normalized_coordinates), offsets=offsets)
+
+
+def _pack_dataset(stream, dataset: Dataset):
+    """Validate and snapshot a dataset, then encode its bounded header and numeric payload."""
+    dataset = _validated_dataset(dataset)
+    ragged = dataset.offsets is not None
+    arrays = {"value": np.array(dataset.data, order="C", copy=True)}
+    if ragged:
+        arrays["offsets"] = np.asarray(dataset.offsets, dtype="<i8")
+    described = []
+    for i, coordinate in enumerate(dataset.coordinates):
+        key = f"coordinate_{i}"
+        arrays[key] = np.array(coordinate.values, order="C", copy=True)
+        described.append({"name": coordinate.name, "dimensions": list(coordinate.dimensions),
+                          "unit": coordinate.unit, "array": key})
     entries = {}
     position = 0
     for name, arr in arrays.items():
         entries[name] = {"dtype": arr.dtype.str, "shape": list(arr.shape),
                          "offset": position, "bytes": arr.nbytes}
         position += arr.nbytes
-    header = {"format_version": FORMAT_VERSION, "dimensions": list(dimensions),
+    header = {"format_version": FORMAT_VERSION, "dimensions": list(dataset.dimensions),
               "value_name": dataset.value_name, "value_unit": dataset.value_unit,
               "label": dataset.label, "source": dataset.source, "input_name": dataset.input_name,
               "coordinates": described,
@@ -236,9 +253,7 @@ def _unpack_dataset(path):
     result = Dataset(data, axes, coordinates, arrays.get("offsets"), dimensions,
                      header["value_name"], header["value_unit"], header["label"], header["source"],
                      header.get("input_name"))
-    # Apply the same structural validation to untrusted files as to new writes.
-    with tempfile.TemporaryFile() as discard:
-        _pack_dataset(discard, result)
+    result = _validated_dataset(result)
     if ragged != (result.offsets is not None):
         raise ValueError("Invalid ragged layout")
     return result

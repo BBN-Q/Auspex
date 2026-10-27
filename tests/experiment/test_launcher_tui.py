@@ -8,6 +8,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 from utils.src.service_output import ServiceOutput
+from utils.src.operator_commands import CommandResult
 
 
 def capture(children):
@@ -44,7 +45,7 @@ class OperatorConsoleTest(unittest.IsolatedAsyncioTestCase):
         def fake_execute(parts):
             if parts[0] in ("experiment", "instruments"):
                 app.commands.mode = parts[0].title()
-            return "ok"
+            return CommandResult("ok")
 
         with patch.object(app.commands, "execute", side_effect=fake_execute):
             async with app.run_test() as pilot:
@@ -107,11 +108,11 @@ class OperatorConsoleTest(unittest.IsolatedAsyncioTestCase):
              patch.object(operator_commands, "ExperimentServerClient", Experiments):
             with self.assertRaisesRegex(ValueError, "list first"):
                 app.commands.execute(["connect", "1"])
-            self.assertIn("1. vna", app.commands.execute(["list"]))
-            self.assertIn("connect vna", app.commands.execute(["connect", "1"]))
+            self.assertIn("1. vna", app.commands.execute(["list"]).text)
+            self.assertIn("connect vna", app.commands.execute(["connect", "1"]).text)
             app.commands.execute(["experiment"])
-            self.assertIn("run-1", app.commands.execute(["status"]))
-            self.assertIn("run-1", app.commands.execute(["runs"]))
+            self.assertIn("run-1", app.commands.execute(["status"]).text)
+            self.assertIn("run-1", app.commands.execute(["runs"]).text)
             app.commands.execute(["instruments"])
             with self.assertRaisesRegex(ValueError, "Recovery must be individual"):
                 app.commands.parse("recover all")
@@ -128,8 +129,9 @@ class OperatorConsoleTest(unittest.IsolatedAsyncioTestCase):
         child = Mock(stdout=io.StringIO())
         child.poll.return_value = None
         app = OperatorConsole("i", "e", [(child, "i"), (child, "e")], output=capture([(child, "i")]))
-        with patch.object(app.commands, "execute", return_value="done") as execute, \
-             patch.object(app.commands, "registration_prompt", return_value="Inventory name:"):
+        with patch.object(app.commands, "execute", return_value=CommandResult("done")) as execute, \
+             patch.object(app.commands, "registration_prompt", side_effect=lambda parts:
+                          "Inventory name:" if parts[0] == "register" else None):
             async with app.run_test() as pilot:
                 async def submit(text):
                     app.query_one(Input).value = text
@@ -166,7 +168,7 @@ class OperatorConsoleTest(unittest.IsolatedAsyncioTestCase):
         app = OperatorConsole("instruments.sock", "experiments.sock",
                               [(child, "InstrumentServer"), (child, "ExperimentServer")],
                               output=capture([(child, "InstrumentServer")]))
-        with patch.object(app.commands, "execute", return_value="cleared") as command:
+        with patch.object(app.commands, "execute", return_value=CommandResult("cleared")) as command:
             async with app.run_test() as pilot:
                 await pilot.press("c", "l", "e", "a", "r", "space", "a", "l", "l", "enter")
                 self.assertIsNotNone(app.pending_confirmation)

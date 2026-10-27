@@ -113,8 +113,8 @@ def plain_operator_prompt(instruments, experiments):
     """Offer the same IPC commands as the TUI without owning either service's stdin."""
     from src.operator_commands import OperatorCommands
 
-    commands = OperatorCommands(instruments, experiments)
-    announce("Operator commands: " + commands.execute(["help"]))
+    commands = OperatorCommands(instruments, experiments, context="launcher")
+    announce("Operator commands: " + commands.execute(["help"]).text)
     color = "NO_COLOR" not in os.environ and os.environ.get("TERM") != "dumb"
     while True:
         mode = commands.mode
@@ -136,16 +136,20 @@ def plain_operator_prompt(instruments, experiments):
                 if answer != "y":
                     announce("Cancelled")
                     continue
-            if parts[0].lower() == "register":
+            prompt = commands.registration_prompt(parts)
+            if prompt is not None:
                 try:
-                    name = input(commands.registration_prompt(parts)).strip()
+                    name = input(prompt).strip()
                 except EOFError:
                     return
                 if not name:
                     announce("Cancelled")
                     continue
                 parts = [*parts, name]
-            announce(commands.execute(parts))
+            result = commands.execute(parts)
+            announce(result.text)
+            if result.exit_console:
+                return
         except (OSError, RuntimeError, ValueError, RemoteError) as exc:
             announce(f"Command failed: {exc}")
 

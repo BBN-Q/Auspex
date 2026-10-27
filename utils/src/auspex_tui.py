@@ -23,7 +23,7 @@ class OperatorConsole(App):
 
     def __init__(self, instrument_socket, experiment_socket, children, *, output, shutdown=None):
         super().__init__()
-        self.commands = OperatorCommands(instrument_socket, experiment_socket)
+        self.commands = OperatorCommands(instrument_socket, experiment_socket, context="launcher")
         self.services = children
         self.shutdown_callback = shutdown
         self.shutting_down = False
@@ -143,12 +143,12 @@ class OperatorConsole(App):
         except ValueError as exc:
             self._log(f"[Auspex] {exc}")
             return
-        if parts[0].lower() == "register":
-            try:
-                prompt = self.commands.registration_prompt(parts)
-            except ValueError as exc:
-                self._log(f"[Auspex] {exc}")
-                return
+        try:
+            prompt = self.commands.registration_prompt(parts)
+        except ValueError as exc:
+            self._log(f"[Auspex] {exc}")
+            return
+        if prompt is not None:
             self.pending_registration = parts
             self._log(f"[Auspex] {prompt}")
             return
@@ -156,11 +156,17 @@ class OperatorConsole(App):
             self.pending_confirmation = parts
             self._log(f"[Auspex] Confirm {line}? Type y or n:")
             return
-        if parts[0].lower() in ("experiment", "instruments", "help"):
-            self._log(f"[Auspex] {self.commands.execute(parts)}")
+        if self.commands.is_local(parts):
+            self._show_result(self.commands.execute(parts))
             self._prompt()
             return
         self._dispatch(parts)
+
+    def _show_result(self, result):
+        """Render common command text; only the frontend decides how its console exits."""
+        self._log(f"[Auspex] {result.text}")
+        if result.exit_console:
+            self.exit(0)
 
     def _dispatch(self, parts):
         self.busy = True
@@ -171,10 +177,11 @@ class OperatorConsole(App):
         """Keep synchronous IPC off the Textual event loop, including slow connect/disconnect."""
         try:
             try:
-                message = f"[Auspex] {self.commands.execute(parts)}"
+                result = self.commands.execute(parts)
             except Exception as exc:
-                message = f"[Auspex] {parts[0]} failed: {exc}"
-            self.call_from_thread(self._log, message)
+                self.call_from_thread(self._log, f"[Auspex] Command failed: {exc}")
+            else:
+                self.call_from_thread(self._show_result, result)
             self.call_from_thread(self._command_finished)
         except RuntimeError:
             pass  # The operator closed the console while a request was in flight.

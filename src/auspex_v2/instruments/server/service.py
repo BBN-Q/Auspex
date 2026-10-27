@@ -195,7 +195,19 @@ class Worker:
 
 
 class Registry:
-    """Serialize registration, session ownership, and worker-state transitions."""
+    """Serialize registration, session ownership, and worker-state transitions.
+
+    Metadata/session helpers called by _dispatch_locked require the registry lock,
+    as do shared-state guards and worker-health checks. Construction restores state
+    before clients exist. dispatch selects self-locking worker/probe wrappers first;
+    do not hold an outer registry lock when calling those wrappers. disconnected()
+    and shutdown() also manage their own locking.
+
+    Command/connection/probe waits run unlocked after reservation; reconciliation
+    reacquires the lock and checks worker identity so late replies cannot overwrite
+    recovery. Persistence and some worker kill/reap paths still hold the lock.
+    _save only writes; each transition owns its rollback or failure-latching policy.
+    """
 
     def __init__(self, state_path, *, quiet=False, clean=False, log=None):
         """Restore uncertain registrations, or explicitly discard all saved state."""
@@ -278,6 +290,11 @@ class Registry:
             print(f"[InstrumentServer] {message}", flush=True)
 
     def _save(self):
+        """Persist inventory/run identity under the lock (or during initial construction).
+
+        This is not a transaction wrapper: callers retain their own rollback or
+        failure-latching policy. Keep save/kill ordering visible in each transition.
+        """
         payload = {"instruments": self.instruments, "rejected_instruments": self.rejected_instruments,
                    "run": {"run_id": self.run["run_id"]} if self.run else None}
         tmp = self.path.with_suffix(".tmp")
@@ -289,7 +306,7 @@ class Registry:
         os.replace(tmp, self.path)
 
     def _check_workers(self):
-        """Latch unexpectedly exited workers as terminated before answering requests."""
+        """Requires the lock: latch worker death without releasing live/run ownership."""
         for name, worker in list(self.workers.items()):
             if name not in self.busy and not worker.process.is_alive():
                 worker.kill()
@@ -321,7 +338,7 @@ class Registry:
                     self.announce(f"{name}: {previous} -> UNKNOWN (run orphaned)")
 
     def dispatch(self, request, connection):
-        """Serialize state transitions, but never hold the registry lock while waiting on I/O."""
+        """Route device/probe requests to self-locking wrappers; serialize metadata operations."""
         op = request.get("op")
         if op in ("ENUMERATE", "IDENTIFY"):
             return self._discover(request)
@@ -335,58 +352,66 @@ class Registry:
             return self._disconnect_all()
         with self.lock:
             self._check_workers()
-            if op == "HELLO":
-                if request.get("version") != PROTOCOL_VERSION:
-                    raise InstrumentServerError(f"Expected protocol version {PROTOCOL_VERSION}")
-                return {"version": PROTOCOL_VERSION, "operations": ["GET", "SET", "CALL"],
-                        "features": ["inline_arrays", "typed_dict_keys", "real_drivers", "instrument_timeouts",
-                                     "terminate_all", "optional_termination_reason"]}
-            if op == "STATUS":
-                return {"registration_errors": self.registration_errors(),
-                        "instruments": {name: {**spec, "locked": self.run is not None,
-                        "live_sessions": sum(v[1] == name for v in self.live.values()),
-                        "worker_running": name in self.workers, "busy": name in self.busy,
-                        "operation": self.operations.get(name) if name in self.busy else None}
-                        for name, spec in self.instruments.items()},
-                        "run": ({"run_id": self.run["run_id"], "orphaned": self.run["orphaned"]}
-                                if self.run else None)}
-            if op == "REGISTER":
-                return self._register(request)
-            if op == "DEREGISTER":
-                return self._deregister(request)
-            if op == "SET_COMMAND_TIMEOUT":
-                return self._set_command_timeout(request)
-            if op == "SET_IO_TIMEOUT":
-                return self._set_io_timeout(request)
-            if op == "CLEAR_INSTRUMENTS":
-                return self._clear_instruments()
-            if op == "SHUTDOWN":
-                if self.instruments or self.workers or self.live or self.run:
-                    raise InstrumentServerError("Shutdown requires an empty inventory and no sessions or run")
-                return None
-            if op == "OPEN_LIVE":
-                return self._open_live(request, connection)
-            if op == "CLOSE_LIVE":
-                return self._close_live(request, connection)
-            if op == "DESCRIBE":
-                name = request["name"]
-                self._instrument(name)
-                self._run_owner(request["session"], connection)
-                self._available(name, allow_run=True)
-                return _capabilities(DRIVERS[self.instruments[name]["driver"]])
-            if op == "BEGIN_RUN":
-                return self._begin_run(request, connection)
-            if op == "END_RUN":
-                return self._end_run(request, connection)
-            if op == "RECONCILE_RUN":
-                return self._reconcile_run(request)
-            if op == "TERMINATE":
-                return self._terminate(request)
-            if op == "TERMINATE_ALL":
-                return self._terminate_all()
-            if op == "RECOVER":
-                return self._recover(request)
-            raise InstrumentServerError(f"Unknown operation: {op}")
+            return self._dispatch_locked(request, connection, op)
+
+    def _dispatch_locked(self, request, connection, op):
+        """Requires the lock: route metadata/session transitions, including operator termination."""
+        if op == "HELLO":
+            if request.get("version") != PROTOCOL_VERSION:
+                raise InstrumentServerError(f"Expected protocol version {PROTOCOL_VERSION}")
+            return {"version": PROTOCOL_VERSION, "operations": ["GET", "SET", "CALL"],
+                    "features": ["inline_arrays", "typed_dict_keys", "real_drivers", "instrument_timeouts",
+                                 "terminate_all", "optional_termination_reason"]}
+        if op == "STATUS":
+            return self._status_snapshot_locked()
+        if op == "REGISTER":
+            return self._register(request)
+        if op == "DEREGISTER":
+            return self._deregister(request)
+        if op == "SET_COMMAND_TIMEOUT":
+            return self._set_command_timeout(request)
+        if op == "SET_IO_TIMEOUT":
+            return self._set_io_timeout(request)
+        if op == "CLEAR_INSTRUMENTS":
+            return self._clear_instruments()
+        if op == "SHUTDOWN":
+            if self.instruments or self.workers or self.live or self.run:
+                raise InstrumentServerError("Shutdown requires an empty inventory and no sessions or run")
+            return None
+        if op == "OPEN_LIVE":
+            return self._open_live(request, connection)
+        if op == "CLOSE_LIVE":
+            return self._close_live(request, connection)
+        if op == "DESCRIBE":
+            name = request["name"]
+            self._instrument(name)
+            self._run_owner(request["session"], connection)
+            self._available(name, allow_run=True)
+            return _capabilities(DRIVERS[self.instruments[name]["driver"]])
+        if op == "BEGIN_RUN":
+            return self._begin_run(request, connection)
+        if op == "END_RUN":
+            return self._end_run(request, connection)
+        if op == "RECONCILE_RUN":
+            return self._reconcile_run(request)
+        if op == "TERMINATE":
+            return self._terminate(request)
+        if op == "TERMINATE_ALL":
+            return self._terminate_all()
+        if op == "RECOVER":
+            return self._recover(request)
+        raise InstrumentServerError(f"Unknown operation: {op}")
+
+    def _status_snapshot_locked(self):
+        """Requires the lock: describe connection/ownership state, not physical readback."""
+        return {"registration_errors": self.registration_errors(),
+                "instruments": {name: {**spec, "locked": self.run is not None,
+                    "live_sessions": sum(v[1] == name for v in self.live.values()),
+                    "worker_running": name in self.workers, "busy": name in self.busy,
+                    "operation": self.operations.get(name) if name in self.busy else None}
+                    for name, spec in self.instruments.items()},
+                "run": ({"run_id": self.run["run_id"], "orphaned": self.run["orphaned"]}
+                        if self.run else None)}
 
     def _discover(self, request):
         """Reserve probing against new leases/registration without blocking status requests."""
@@ -437,7 +462,7 @@ class Registry:
                 self.discovering = False
 
     def _connect(self, request, connection):
-        """Connect explicitly, under the run lease if the domain is locked."""
+        """Enter unlocked: reserve under the run/live policy, then await connection outside the lock."""
         name = request["name"]
         with self.lock:
             self._idle(name)
@@ -474,7 +499,11 @@ class Registry:
         self._lifecycle_wait(name, worker, worker.stop, DISCONNECTED)
 
     def _lifecycle_wait(self, name, worker, wait, success):
-        """Reconcile only our reserved worker; termination/recovery may supersede it."""
+        """Enter unlocked: wait, then reconcile only our reserved worker under the lock.
+
+        Termination/recovery may replace that worker while we wait. Identity checks
+        prevent a late completion/failure from overwriting the replacement's state.
+        """
         try:
             wait()
         except Exception:
@@ -513,7 +542,7 @@ class Registry:
         return {"disconnected": disconnected, "failures": failures}
 
     def _clear_instruments(self):
-        """Forget only a fully disconnected, unowned inventory."""
+        """Requires the lock: clear disconnected/unowned inventory, rolling back if saving fails."""
         self._require_unowned("Clear Instruments")
         if any(spec["state"] != DISCONNECTED for spec in self.instruments.values()):
             raise InstrumentServerError("Clear Instruments requires all devices disconnected")
@@ -555,7 +584,7 @@ class Registry:
         return None
 
     def _begin_run(self, request, connection):
-        """Lock the entire domain atomically if no live use or recovery blocks it."""
+        """Requires the lock: claim an available domain, rolling back if saving fails."""
         if self.closing or self.busy or self.discovering:
             raise InstrumentServerError("Cannot begin run while busy or shutting down")
         if self.run:
@@ -581,7 +610,7 @@ class Registry:
         return {"session": token}
 
     def _end_run(self, request, connection):
-        """Release a healthy run owner's lock after persisting the transition."""
+        """Requires the lock: release a healthy owner only if the transition persists."""
         self._run_owner(request["session"], connection)
         previous = self.run
         self.run = None
@@ -594,18 +623,23 @@ class Registry:
         return None
 
     def _reconcile_run(self, request):
-        """Require operator acknowledgement before clearing an orphaned run."""
+        """Requires the lock: persist an acknowledged orphan release or restore ownership."""
         if not self.run or not self.run["orphaned"]:
             raise InstrumentServerError("No orphaned run to reconcile")
         self._reason(request)
-        run_id = self.run["run_id"]
+        previous = self.run
         self.run = None
-        self._save()
-        self.announce(f"domain: ORPHANED -> UNLOCKED (run {run_id}; {request['reason']})")
+        try:
+            self._save()
+        except Exception as exc:
+            self.run = previous
+            raise InstrumentServerError(
+                f"Reconciliation failed; run {previous['run_id']} remains orphaned and locked: {exc}") from exc
+        self.announce(f"domain: ORPHANED -> UNLOCKED (run {previous['run_id']}; {request['reason']})")
         return None
 
     def _terminate(self, request):
-        """Quarantine one instrument and kill its worker without requiring a note."""
+        """Requires the lock: persist quarantine before killing a worker; keep ownership."""
         name = request["name"]
         self._instrument(name)
         note = self._optional_note(request)
@@ -620,7 +654,7 @@ class Registry:
         return None
 
     def _terminate_all(self):
-        """Quarantine the entire domain before attempting every worker kill."""
+        """Requires the lock: persist domain quarantine before attempting every worker kill."""
         previous = {name: spec["state"] for name, spec in self.instruments.items()}
         for spec in self.instruments.values():
             spec["state"] = TERMINATED
@@ -641,7 +675,7 @@ class Registry:
         return {"terminated": sorted(previous)}
 
     def _recover(self, request):
-        """Acknowledge recovery and mark a quarantined instrument disconnected."""
+        """Requires the lock: kill any residual worker, mark disconnected, then save (no rollback)."""
         name = request["name"]
         spec = self._instrument(name)
         note = self._optional_note(request)
@@ -657,7 +691,7 @@ class Registry:
         return None
 
     def _register(self, request):
-        """Add a logical instrument after checking domain and physical identity."""
+        """Requires the lock: register a unique endpoint, restoring inventory if saving fails."""
         if self.run or self.live or self.discovering:
             raise InstrumentServerError("Cannot register during discovery, a run or while live sessions are open")
         name, driver_type, resource = request["name"], request["driver"], request["resource"]
@@ -689,6 +723,7 @@ class Registry:
         return {"physical": physical}
 
     def _set_command_timeout(self, request):
+        """Requires the lock: update worker/default timeout, then save without rollback."""
         name = request["name"]
         self._require_unowned("Changing command timeout", name)
         spec = self._instrument(name)
@@ -699,6 +734,7 @@ class Registry:
         return spec["command_timeout"]
 
     def _set_io_timeout(self, request):
+        """Requires the lock: update disconnected-device I/O policy, then save without rollback."""
         name = request["name"]
         self._require_unowned("Changing I/O timeout", name)
         spec = self._instrument(name)
@@ -717,7 +753,7 @@ class Registry:
         return value
 
     def _deregister(self, request):
-        """Remove a disconnected, unowned instrument from the inventory."""
+        """Requires the lock: remove a disconnected/unowned registration, then save without rollback."""
         name = request["name"]
         spec = self._instrument(name)
         self._require_unowned("Deregistration")
@@ -731,7 +767,7 @@ class Registry:
         return None
 
     def _validate_command(self, request, connection, op):
-        """Check session ownership and exposed driver members before worker access."""
+        """Requires the lock: validate ownership, availability and driver members before worker access."""
         name = request["name"]
         self._instrument(name)
         token = request["session"]
@@ -767,21 +803,27 @@ class Registry:
                 raise InstrumentServerError("SET requires a value")
         return name, member
 
+    @staticmethod
+    def _worker_request(request, op, member):
+        """Translate a validated client envelope: worker 'name' means member, not inventory name."""
+        command = {"op": op, "name": member}
+        if op in ("GET", "SET"):
+            command["kwargs"] = request.get("kwargs", {})
+        if op == "SET":
+            command["value"] = request["value"]
+        if op == "CALL":
+            command["args"] = request.get("args", [])
+            command["kwargs"] = request.get("kwargs", {})
+        return command
+
     def _command(self, request, connection, op):
-        """Wait outside the registry lock so status and forced termination remain available."""
+        """Enter unlocked: reserve a command, wait unlocked, then reconcile the same worker."""
         with self.lock:
             self._check_workers()
             name, member = self._validate_command(request, connection, op)
             if name in self.busy:
                 raise InstrumentServerError(f"{name} already has a command in progress")
-            command = {"op": op, "name": member}
-            if op in ("GET", "SET"):
-                command["kwargs"] = request.get("kwargs", {})
-            if op == "SET":
-                command["value"] = request["value"]
-            if op == "CALL":
-                command["args"] = request.get("args", [])
-                command["kwargs"] = request.get("kwargs", {})
+            command = self._worker_request(request, op, member)
             detail = (f" value={command['value']!r}" if op == "SET" else
                       f" args={command['args']!r} kwargs={command['kwargs']!r}" if op == "CALL" else "")
             worker = self.workers[name]
