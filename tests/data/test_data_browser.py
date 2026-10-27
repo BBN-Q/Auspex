@@ -35,7 +35,7 @@ class BrowserDiscoveryTest(unittest.TestCase):
     """Inspect published headers without loading the full numerical arrays."""
 
     def test_supported_versus_unplottable(self):
-        """Keep ragged and 2D files visible but refuse to represent them as 1D."""
+        """Admit regular 1D/2D files while leaving ragged files metadata-only."""
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "run.auspex"
             populate(path)
@@ -43,7 +43,7 @@ class BrowserDiscoveryTest(unittest.TestCase):
             self.assertEqual(contents.metadata["experiment"]["settings"]["power"], -30)
             entries = {e.name: e for e in contents.entries}
             self.assertTrue(entries["trace"].plottable)
-            self.assertFalse(entries["scan"].plottable)
+            self.assertTrue(entries["scan"].plottable)
             self.assertFalse(entries["ragged"].plottable)
             self.assertEqual(entries["trace"].header["value_name"], "S21")
             self.assertEqual(entries["trace"].header["arrays"]["value"]["shape"], [3])
@@ -55,8 +55,14 @@ class BrowserDemoGeneratorTest(unittest.TestCase):
     def test_two_noisy_runs_complex_and_ramsey_are_reusable(self):
         """The visual demo receives two real stores, not missing import paths."""
         with tempfile.TemporaryDirectory() as directory:
-            resonance, ramsey = gen_test_data.generate_test_data(directory)
-            self.assertEqual([resonance.name, ramsey.name], ["resonances.auspex", "ramsey.auspex"])
+            resonance, ramsey, map_path = gen_test_data.generate_test_data(directory)
+            self.assertEqual([resonance.name, ramsey.name, map_path.name],
+                             ["resonances.auspex", "ramsey.auspex", "complex_map.auspex"])
+            with AuspexStore(map_path) as store:
+                image = store.read_dataset("maps", "complex_resonance")
+                self.assertEqual(image.data.shape, (91, 181))
+                self.assertTrue(np.iscomplexobj(image.data))
+                self.assertGreater(np.ptp(np.angle(image.data)), 6)
             with AuspexStore(resonance) as store:
                 self.assertEqual(set(store.list_datasets()),
                                  {("traces", "three_lorentzians"), ("traces", "complex_s21")})
@@ -71,7 +77,7 @@ class BrowserDemoGeneratorTest(unittest.TestCase):
                 sequence = store.read_dataset("qubit", "ramsey_beating")
                 self.assertEqual(sequence.axes[0].name, "delay")
                 self.assertGreater(np.std(sequence.data), 0.01)
-            self.assertEqual(gen_test_data.generate_test_data(directory), (resonance, ramsey))
+            self.assertEqual(gen_test_data.generate_test_data(directory), (resonance, ramsey, map_path))
             with AuspexStore(resonance) as store:
                 np.testing.assert_array_equal(store.read_dataset("traces", "three_lorentzians").data, saved)
             (ramsey / "metadata.json").unlink()
@@ -93,8 +99,22 @@ class BrowserGuiTest(unittest.TestCase):
         spec.loader.exec_module(module)
         with tempfile.TemporaryDirectory() as directory:
             paths = module.generate_test_data(directory)
-            self.assertEqual([path.name for path in paths], ["resonances.auspex", "ramsey.auspex"])
+            self.assertEqual([path.name for path in paths],
+                             ["resonances.auspex", "ramsey.auspex", "complex_map.auspex"])
             self.assertEqual(module.generate_test_data(directory), paths)
+            from PySide6 import QtWidgets
+            app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+            window = module.make_demo_window(directory)
+            try:
+                window.show()
+                app.processEvents()
+                self.assertEqual(window.tabs.count(), 4)
+                tab = window.tabs.currentWidget()
+                self.assertEqual(tab.key[2], "complex_resonance")
+                self.assertEqual(tab.component.currentText(), "Magnitude / Phase")
+                self.assertEqual(len(tab.panels), 2)
+            finally:
+                window.close()
 
     def test_multiple_folders_tabs_and_metadata(self):
         """Closing plots must not close their store or erase published inventory."""
@@ -117,7 +137,7 @@ class BrowserGuiTest(unittest.TestCase):
                 root_a, root_b = window.tree.topLevelItem(0), window.tree.topLevelItem(1)
                 items_a = {root_a.child(0).child(i).data(0, browser.ROLE_KEY)[3]: root_a.child(0).child(i)
                            for i in range(root_a.child(0).childCount())}
-                for name in ("scan", "ragged"):
+                for name in ("ragged",):
                     self.assertIn("plotting not yet supported", items_a[name].text(0))
                     items_a[name].setSelected(True)  # still selectable for metadata inspection
                     window._open_item(items_a[name], 0)

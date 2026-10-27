@@ -167,7 +167,7 @@ class FilterServer:
 
     def __init__(self, schema, nodes, edges, results, *, writers=None, buffer_sinks=None, store_path=None,
                  run_metadata=None, input_name=None, inspect_socket=None,
-                 existing_store=False, buffer_full="block",
+                 existing_store=False, buffer_full="block", plots=None, preview_sweep=None,
                  backpressure=True, slots=2, result_capacity=2, max_windows=8,
                  startup_timeout=10, memory_budget_bytes=64 * 1024 * 1024,
                  store_scan_budget_bytes=256 * 1024 * 1024):
@@ -189,6 +189,19 @@ class FilterServer:
         self.results.update({name: ResultSpec(spec.node, spec.port) for name, spec in self.buffer_specs.items()})
         self.writers = dict(writers or {})
         self.store_path = store_path
+        self.plots = dict(plots or {})
+        self.preview_sweep = preview_sweep
+        if self.plots:
+            from .preview import validate_plots
+            if not self.writers:
+                raise ValueError("Live plotting requires a writer-backed pipeline")
+            validate_plots(self.plots, self.writers, {n: s.schema for n, s in self.nodes.items()})
+        self.plot_results = {f"$plot:{name}": name for name, spec in self.plots.items() if spec.kind == "trace"}
+        for result, name in self.plot_results.items():
+            if result in self.results:
+                raise ValueError("Reserved plot result name")
+            spec = self.plots[name]
+            self.results[result] = ResultSpec(spec.node, spec.port, preview=True)
         if type(existing_store) is not bool or (existing_store and (not self.writers or run_metadata is not None)):
             raise ValueError("Existing run stores require writers and server-owned metadata")
         self.existing_store = existing_store
@@ -220,7 +233,9 @@ class FilterServer:
         self.current_configs = {name: {**FILTER_DEFAULTS[spec.kind], **spec.config}
                                 for name, spec in self.nodes.items()}
         self.inspector = None
-        self.buffers = {name: queue.Queue(maxsize=result_capacity) for name in results}
+        self.buffers = {name: queue.Queue(maxsize=result_capacity) for name in self.results
+                        if name not in self.buffer_sinks}
+        self.plot_queues = {name: self.context.Queue(maxsize=1) for name in self.plot_results.values()}
         self.buffers.update(self.buffer_sinks)
         self.processes = {}
         self.controls = {}
@@ -313,8 +328,8 @@ class FilterServer:
         for result in results.values():
             if result.node not in ports or result.port not in ports[result.node]:
                 raise PipelineError("Unknown result port")
-            if (result.port == "partial") != result.preview:
-                raise PipelineError("Only partial outputs may be preview sinks")
+            if result.port == "partial" and not result.preview:
+                raise PipelineError("Partial outputs require preview sinks")
             used.add((result.node, result.port))
         destinations = set()
         for writer in writers.values():
@@ -430,7 +445,8 @@ class FilterServer:
                 args=(self.store_path, self.writers,
                       {n: self.nodes[w.node].schema for n, w in self.writers.items()},
                       writer_edges, child_status, self.stop, self.run_metadata, self.input_name,
-                      self.existing_store))
+                      self.existing_store, self.plots, self.plot_queues, self.preview_sweep,
+                      {n: s.schema for n, s in self.nodes.items()}))
             process.start()
             self.processes["$store"] = process
             child_status.close()
@@ -518,7 +534,12 @@ class FilterServer:
                             self.buffers[name].get_nowait()
                         except queue.Empty:
                             pass  # A client consumed the snapshot concurrently.
-                    if name in self.buffer_sinks:
+                    if name in self.plot_results:
+                        try:
+                            self.plot_queues[self.plot_results[name]].put_nowait(_snapshot(payload))
+                        except queue.Full:
+                            pass  # Trace previews are replaceable snapshots, never map-row delivery.
+                    elif name in self.buffer_sinks:
                         if name in drain.pending_buffers:
                             raise PipelineError(f"Buffer {name} expects one batch per output window")
                         drain.pending_buffers[name] = _snapshot(payload)
@@ -573,6 +594,9 @@ class FilterServer:
             connection.close()
         for sink in self.buffer_sinks.values():
             sink._finish(self.error)
+        for pending in self.plot_queues.values():
+            pending.cancel_join_thread()
+            pending.close()
         with self.condition:
             self.condition.notify_all()
 

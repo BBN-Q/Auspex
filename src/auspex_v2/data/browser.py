@@ -22,14 +22,14 @@ class DatasetEntry:
 
     @property
     def plottable(self):
-        """Only ordinary one-dimensional values are plotted in the first browser."""
+        """Admit ordinary numerical 1D/2D values; validate coordinates on opening."""
         if self.error or self.header is None or self.header.get("ragged") is not False:
             return False
         try:
             shape = self.header["arrays"]["value"]["shape"]
             dtype = np.dtype(self.header["arrays"]["value"]["dtype"])
-            return (isinstance(shape, list) and len(shape) == 1 and
-                    type(shape[0]) is int and shape[0] >= 0 and dtype.kind in "biufc")
+            return (isinstance(shape, list) and len(shape) in (1, 2) and
+                    all(type(n) is int and n >= 0 for n in shape) and dtype.kind in "biufc")
         except (KeyError, TypeError, ValueError):
             return False
 
@@ -37,7 +37,7 @@ class DatasetEntry:
     def reason(self):
         if self.error:
             return self.error
-        return "Plotting not yet supported (multidimensional or ragged dataset)"
+        return "Plotting not yet supported (rank > 2 or ragged dataset)"
 
 
 @dataclass(frozen=True)

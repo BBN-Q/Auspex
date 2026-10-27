@@ -201,6 +201,79 @@ inheritance hierarchies wholesale or promise compatibility with every V1 experim
    capability schemas, authentication and device-specific safety/readback are not
    prerequisites retroactively imposed on the trusted-lab slice.
 
-The handoff-note cleanup is complete. No implementation slice is currently authorized;
-runner lifecycle refactoring remains deferred. Keep current evidence in STATUS.md,
+## Authorized slice — 2D offline DataBrowser
+
+- [x] Support regular, non-ragged 2D heatmaps with monotonic nonuniform coordinates
+  (X last dimension, Y first); leave 1D behavior unchanged.
+- [x] Complex component modes: real, imaginary, magnitude, phase, stacked
+  real/imaginary, stacked magnitude/phase (default), and four panels. Real data
+  uses one heatmap. Shared colormap selector defaults to plasma; independent
+  scales: symmetric real/imaginary, zero-based magnitude, phase ±pi, no unwrap.
+- [x] Single-panel views have independent, initially disabled X/Y cuts with
+  draggable lines snapping to stored coordinates and corresponding plots below.
+- [x] Add correctness/integration tests and one complex 2D synthetic visual case.
+
+- [x] User-reviewed follow-up: exclude CET- and PAL-prefixed colormaps from the
+  dropdown, retaining plasma as default.
+
+Implementation complete; user reports successful visual review. No further
+implementation slice is authorized.
+
+## Authorized slice — manual save_data
+
+- [x] Export `save_data(filename, data, *, comments=None, force_write=False, **axes)`.
+  Create one browser-ready `.auspex` folder and return its Path; axes follow keyword
+  order, one per dimension. Accept numeric coordinates or Axis objects whose names
+  match their keywords, preserving units. Save free-form comments in run metadata.
+- [x] Reject existing destinations by default; explicit force replaces an existing
+  store. Validate inputs before replacing and respect the store writer lock.
+- [x] Document the helper and test round trips, validation and replacement.
+
+Manual save_data is complete. No further implementation slice is authorized.
+
+## Authorized slice — manual open_data
+
+- [x] Export `open_data(*, path=None, number=None, date=None, group=None, dataset=None)`
+  returning one loaded Dataset. With no path, show an optional-Qt OS folder picker;
+  cancellation returns None. Explicit paths require no GUI dependencies.
+- [x] Number lookup requires path and searches only immediate `<name>_N.auspex`
+  folders, ignoring zero-padding. Date is None, `today`, or strict YYYY-MM-DD.
+  Reject missing/ambiguous folders rather than guessing.
+- [x] Select one published dataset, optionally filtered by group/dataset; reject
+  missing or ambiguous matches. Document and test real-store loading and selection.
+
+Manual open_data is complete. No further implementation slice is authorized.
+
+## Authorized slice — live plotting
+
+- [x] Share 1D/2D rendering with DataBrowser; preserve view/component/cut state on updates.
+- [x] Add compiled trace/map plot endpoints, bounded per-run snapshots and local
+  discovery. Partial averages feed traces; completed writer rows feed maps. Late
+  clients receive complete acquired state. GUI loss never gates acquisition.
+- [x] One three-pane client: newest runs left, tabs center, metadata right. New
+  tabs do not steal focus. Closed tabs remain listed; Close plot removes/suppresses
+  for this session. Retain terminal plots with a 64-plot cap: oldest terminal
+  entries evicted first, reject new plots visibly if all retained entries active.
+- [x] Add process-backed integration/correctness coverage and a simulated-pipeline
+  visual demo. Document budgets, disconnection, publication and run status limits.
+
+Live plotting is implemented; attended desktop review remains. No further
+implementation slice is authorized. The writer owner retains bounded map state;
+its private Unix endpoint serves replaceable full frames. `preview.json` provides
+local discovery, with best-effort final `.preview/` caches for late viewing after
+ordinary closure. These are display artifacts, not dataset publications or run
+status. Initial execution is writer-backed, rank-one traces and one monotonic
+fixed sweep per map; unsupported maps disable themselves, never required storage.
+
+## Authorized slice — manual-helper MkDocs documentation
+
+- [x] Add save_data/open_data examples and API contracts to the main data guide,
+  including axis order/units, comments, destructive opt-in overwrite, GUI picker,
+  numbered/date lookup and dataset selection. Correct its stale 1D-only browser
+  description. Validate with a strict local MkDocs build.
+
+Documentation is complete; the save/open and comment-reading examples were also
+executed successfully in a temporary store. No further slice is authorized.
+
+Runner lifecycle refactoring remains deferred. Keep current evidence in STATUS.md,
 not a growing chronological test-count/change diary here.

@@ -4,7 +4,7 @@ From the repository root, with the optional V2 GUI dependencies installed:
     python tests/data/visual_data_browser.py
 
 Generates the ignored fixture files in tests/data/test_data/ if absent, then opens three
-independently closable 1D tabs across two .auspex folders. No lab hardware or
+1D tabs and one complex 2D tab across three .auspex folders. No lab hardware or
 services are accessed. Run tests/data/gen_test_data.py to generate only data.
 """
 
@@ -24,13 +24,13 @@ from data_browser import DataBrowser, dark_theme, ROLE_KEY
 
 
 def generate_test_data(directory=None):
-    """Create the two deterministic noisy runs without overwriting existing data."""
+    """Create deterministic 1D/2D runs without overwriting existing data."""
     return _generate_test_data() if directory is None else _generate_test_data(directory)
 
 
-def make_demo_window():
-    """Open generated run folders and select their noisy Lorentzian plot."""
-    folders = generate_test_data()
+def make_demo_window(directory=None):
+    """Open generated runs and select the complex 2D case for attended review."""
+    folders = generate_test_data(directory)
     window = DataBrowser()
     window.add_directory(folders[0].parent)
     window.setWindowTitle("Auspex V2 — DataBrowser visual demo (synthetic data)")
@@ -45,7 +45,7 @@ def make_demo_window():
                 key = item.data(0, ROLE_KEY)
                 if key[0] == "dataset" and window._entry(key).plottable:
                     window._open_item(item, 0)
-                    if key[3] == "three_lorentzians":
+                    if key[3] == "complex_resonance":
                         first = (item, (Path(key[1]), key[2], key[3]))
     if first is not None:
         window.tabs.setCurrentWidget(window.open_tabs[first[1]])
@@ -54,7 +54,7 @@ def make_demo_window():
 
 
 def main():
-    """Launch the real DataBrowser with two synthetic, independently browsable runs."""
+    """Launch the real DataBrowser with synthetic, independently browsable runs."""
     app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(sys.argv)
     dark_theme(app)
     window = make_demo_window()

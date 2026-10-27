@@ -124,7 +124,18 @@ class DataBuffer(_Node):
         self.capacity = capacity
 
 
-_TYPES = {cls.kind: cls for cls in (Passthrough, ComplexAverage, WriteToFile, DataBuffer)}
+class Plot(_Node):
+    """Optional live display: current trace or map of completed writer rows."""
+    kind = "plot"
+    fields = ("mode", "max_bytes")
+
+    def __init__(self, *, name, mode="trace", max_bytes=8 * 1024 * 1024):
+        super().__init__(name)
+        self.mode = mode
+        self.max_bytes = max_bytes
+
+
+_TYPES = {cls.kind: cls for cls in (Passthrough, ComplexAverage, WriteToFile, DataBuffer, Plot)}
 _PORTS = {"source": "out", "final_average": "final", "partial_average": "partial"}
 
 
@@ -293,7 +304,7 @@ class PipelineDefinition:
         for node in nodes:
             source = incoming[node]
             schema = schemas[source.owner]
-            if source.name == "partial_average":
+            if source.name == "partial_average" and not (node.kind == "plot" and node.mode == "trace"):
                 raise PipelineError(f"{node.name}: partial_average requires a preview sink, not a required path")
             try:
                 if node.kind == "complex_average":
@@ -310,9 +321,23 @@ class PipelineDefinition:
                 elif node.kind == "buffer":
                     if type(node.capacity) is not int or node.capacity < 1:
                         raise ValueError("Buffer capacity must be a positive integer")
+                elif node.kind == "plot":
+                    if (node.mode not in ("trace", "map") or schema.rank != 1
+                            or type(node.max_bytes) is not int or node.max_bytes < 1):
+                        raise ValueError("Plot needs a rank-one source, trace/map mode and positive budget")
+                    if node.mode == "map" and not any(
+                            n.kind == "writer" and incoming[n] == source for n in nodes):
+                        raise ValueError("Map plots need a writer on the same finalized output")
             except (ValueError, TypeError) as exc:
                 raise PipelineError(f"{node.name}: {exc}") from exc
             schemas[node] = schema  # Both current processors preserve the input schema.
+        plots = [n for n in nodes if n.kind == "plot"]
+        if plots:
+            from .preview import MAX_PREVIEW_BYTES
+            if not any(n.kind == "writer" for n in nodes):
+                raise PipelineError("Initial live plotting requires a writer-backed pipeline")
+            if len(plots) > 64 or sum(n.max_bytes for n in plots) > MAX_PREVIEW_BYTES:
+                raise PipelineError("Plots exceed the 64-endpoint / 64 MiB display budget")
         return CompiledPipeline(definition.document, empty)
 
 
@@ -360,7 +385,7 @@ class CompiledPipeline:
             source = incoming[node]
             producer = "$input" if source.owner is source_input else source.owner.name
             port = _PORTS[source.name]
-            if node.kind in ("writer", "buffer") and producer == "$input":
+            if node.kind in ("writer", "buffer", "plot") and producer == "$input":
                 # The runtime requires a worker before terminal sinks. An explicit
                 # internal passthrough supports the natural input -> sink graph.
                 producer = "$definition_input"
@@ -373,7 +398,23 @@ class CompiledPipeline:
                     max_scan_windows=node.max_scan_windows)
             elif node.kind == "buffer":
                 buffers[node.name] = BufferSpec(producer, port, capacity=node.capacity)
-            else:
+            elif node.kind != "plot":
                 workers[node.name] = NodeSpec(node.kind, schema, node.configuration())
                 edges.append((producer, port, node.name))
         return schema, workers, edges, writers, buffers, source_input.name
+
+    def plot_specs(self):
+        """Lower optional sinks separately, preserving the existing runtime tuple API."""
+        from .preview import PlotSpec
+        definition = PipelineDefinition.from_document(self._document)
+        nodes, _, incoming = definition._structure()
+        result = {}
+        for node in nodes:
+            if node.kind != "plot":
+                continue
+            source = incoming[node]
+            producer = ("$definition_input" if isinstance(source.owner, PipelineInput)
+                        else source.owner.name)
+            writer = next((n.name for n in nodes if n.kind == "writer" and incoming[n] == source), None)
+            result[node.name] = PlotSpec(producer, _PORTS[source.name], node.mode, writer, node.max_bytes)
+        return result

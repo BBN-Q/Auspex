@@ -46,6 +46,14 @@ Budgets describe declared array capacity, not total process memory or guaranteed
 digitizer throughput. In-memory scan assembly has its own bounds. A stopped filter
 does not stop hardware; the runner remains responsible for experiment cleanup.
 
+## Live display
+
+Optional `Plot` sinks declare a current 1D trace or a writer-backed growing 2D
+map. Partial averages can feed trace plots; finalized rows feed maps. A separate
+[plot client](../utilities/live-plots.md) follows new runs and can reconnect to
+complete acquired snapshots. Viewer loss never becomes required backpressure or
+a publication acknowledgment. Display data is bounded and explicitly non-authoritative.
+
 ## Manual processing
 
 Use `ManualPipeline` when your own code controls acquisition. It accepts one whole

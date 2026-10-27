@@ -85,12 +85,30 @@ def ramsey(path):
                             input_name="simulated_readout", source="reference_generator.ramsey")
 
 
+def complex_map(path):
+    """Create one nonuniform-grid complex resonance map for visual 2D checks."""
+    frequency = 5 + 0.12 * np.linspace(-1, 1, 181)**3
+    bias = 0.8 * np.linspace(-1, 1, 91)**3
+    detuning = (frequency[None, :] - (5 + 0.07 * bias[:, None])) / 0.008
+    response = (1 - 0.8 / (1 + 1j * detuning)) * np.exp(1j * 9 * bias[:, None])
+    with AuspexStore(path, mode="w") as store:
+        store.write_run_metadata({
+            "fixture_id": FIXTURE_ID, "synthetic": True,
+            "experiment": "Complex 2D resonance map",
+            "notes": "Nonuniform grid; diagonal resonance and wrapped phase. Not measured data.",
+        })
+        store.write_dataset("maps", "complex_resonance", response,
+                            [Axis("bias", bias, "V"), Axis("frequency", frequency, "GHz")],
+                            value_name="S21", value_unit="dimensionless")
+
+
 def generate_test_data(directory=DEFAULT_DIRECTORY):
     """Create missing demo folders; refuse to overwrite unrelated existing runs."""
     directory = Path(directory).expanduser().resolve()
     directory.mkdir(parents=True, exist_ok=True)
     folders = ((directory / "resonances.auspex", resonances, {"traces/three_lorentzians", "traces/complex_s21"}),
-               (directory / "ramsey.auspex", ramsey, {"qubit/ramsey_beating"}))
+               (directory / "ramsey.auspex", ramsey, {"qubit/ramsey_beating"}),
+               (directory / "complex_map.auspex", complex_map, {"maps/complex_resonance"}))
     for path, generate, expected in folders:
         if path.exists():
             # Never overwrite a run folder, including one somebody edited later.

@@ -9,7 +9,8 @@ Run these entry points from the repository root with `python utils/<name>.py`. G
 | `experiment_server.py` | Start only ExperimentServer for submitted experiment plans. |
 | `instrument_server_gui.py` | Attach the standalone instrument inventory/connection GUI to a running server. |
 | `auspex_status.py` | Read-only status of both services, optionally as JSON. |
-| `data_browser.py` | Browse `.auspex` run folders, inspect metadata, and plot supported 1D datasets. |
+| `data_browser.py` | Browse `.auspex` run folders, inspect metadata, and plot supported 1D/2D datasets. |
+| `plot_client.py` | Follow live trace/map endpoints in one read-only, three-pane window; see [live plots](../docs/utilities/live-plots.md). |
 | `filter_graph_viewer.py` | Attach a read-only graph/configuration viewer to an enabled filter inspection socket. |
 
 In either launcher mode, **Ctrl+C shuts down the launcher**, not just the current
@@ -54,4 +55,6 @@ uses its separate cooperative, registration-preserving shutdown policy.
 
 `auspex_tui.py` implements the optional Textual display; `service_output.py` owns
 bounded service-pipe capture without depending on Textual. Service, driver, and
-data-library code lives in `../src/auspex_v2/`.
+data-library code lives in `../src/auspex_v2/`. `data_trace.py` and
+`data_heatmap.py` share rendering between DataBrowser and the live plot client;
+`plot_client_model.py` owns the session-local 64-plot retention policy.

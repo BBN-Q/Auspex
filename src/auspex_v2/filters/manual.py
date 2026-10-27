@@ -27,6 +27,7 @@ class ManualPipeline:
                 schema = schema.compile(inputs=bindings)
             elif input_schema is not None:
                 raise ValueError("A compiled pipeline already has its input schemas")
+            options.setdefault("plots", schema.plot_specs())
             schema, nodes, edges, writers, buffers, input_name = schema.runtime()
             options.setdefault("input_name", input_name)
             self._single_scan = bool(writers)

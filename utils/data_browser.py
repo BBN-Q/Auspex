@@ -1,4 +1,4 @@
-"""Read-only V2 .auspex browser: 1D pyqtgraph plots and nested JSON metadata.
+"""Read-only V2 .auspex browser: 1D/2D pyqtgraph plots and nested JSON metadata.
 
 Run with: python utils/data_browser.py [OS_FOLDER | RUN.auspex ...]
 Requires the optional auspex-v2[gui] dependencies. No instrument or server access.
@@ -11,95 +11,18 @@ import json
 from pathlib import Path
 import sys
 
-import numpy as np
 from PySide6 import QtCore, QtGui, QtWidgets
 import pyqtgraph as pg
 
 from auspex_v2.data.browser import inspect_folder
 from auspex_v2.data import AuspexStore
+from src.data_heatmap import HeatmapTab
+from src.data_trace import DataTab
 
 BACKGROUND = "#171b24"
 INK = "#e7eef8"
 MUTED = QtGui.QColor("#8996a9")
 ROLE_KEY = QtCore.Qt.ItemDataRole.UserRole
-
-
-class DataTab(QtWidgets.QWidget):
-    """Hold one validated 1D dataset and plot against its actual coordinates."""
-
-    def __init__(self, key, dataset):
-        super().__init__()
-        if dataset.data.ndim != 1 or dataset.offsets is not None:
-            raise ValueError("Only non-ragged 1D datasets can be plotted")
-        self.key = key
-        self.dataset = dataset
-        axis = dataset.dimensions[0]
-        self.coordinates = [c for c in dataset.coordinates
-                            if c.dimensions == (axis,) and np.asarray(c.values).shape == dataset.data.shape]
-        if not self.coordinates:
-            raise ValueError("The 1D dataset has no matching numeric coordinate")
-        # Prefer a physical sweep coordinate over the synthetic 'point' index.
-        self.coordinates.sort(key=lambda c: c.name == "point")
-        self.x_axis = QtWidgets.QComboBox()
-        for coordinate in self.coordinates:
-            label = coordinate.name + (f" ({coordinate.unit})" if coordinate.unit else "")
-            self.x_axis.addItem(label)
-        self.x_axis.currentIndexChanged.connect(self.redraw)
-        self.component = QtWidgets.QComboBox()
-        if np.iscomplexobj(dataset.data):
-            self.component.addItems(["Magnitude", "Real", "Imaginary", "Phase"])
-        else:
-            self.component.addItem("Value")
-        self.component.currentIndexChanged.connect(self.redraw)
-        controls = QtWidgets.QHBoxLayout()
-        controls.addWidget(QtWidgets.QLabel("X coordinate:"))
-        controls.addWidget(self.x_axis)
-        controls.addSpacing(12)
-        controls.addWidget(QtWidgets.QLabel("Component:"))
-        controls.addWidget(self.component)
-        controls.addStretch()
-        self.plot = pg.PlotWidget(background=BACKGROUND)
-        self.plot.showGrid(x=True, y=True, alpha=0.2)
-        for side in ("left", "bottom"):
-            self.plot.getAxis(side).setPen(pg.mkPen(INK))
-            self.plot.getAxis(side).setTextPen(pg.mkPen(INK))
-        self.curve = self.plot.plot(pen=pg.mkPen("#79d4ff", width=2), connect="finite")
-        layout = QtWidgets.QVBoxLayout(self)
-        layout.addLayout(controls)
-        layout.addWidget(self.plot, 1)
-        self.redraw()
-
-    def redraw(self, *_):
-        """Select only a display component; never alter the loaded dataset."""
-        if self.dataset is None:
-            return
-        coordinate = self.coordinates[self.x_axis.currentIndex()]
-        component = self.component.currentText()
-        values = self.dataset.data
-        if component == "Magnitude":
-            values = np.abs(values)
-        elif component == "Real":
-            values = np.real(values)
-        elif component == "Imaginary":
-            values = np.imag(values)
-        elif component == "Phase":
-            values = np.angle(values)
-        label = self.dataset.value_name
-        if component == "Magnitude":
-            label = f"|{label}|"
-        elif component != "Value":
-            label = f"{component}({label})"
-        units = "rad" if component == "Phase" else self.dataset.value_unit or ""
-        self.plot.setLabel("bottom", coordinate.name, units=coordinate.unit or "")
-        self.plot.setLabel("left", label, units=units)
-        self.curve.setData(np.asarray(coordinate.values), np.asarray(values))
-
-    def release(self):
-        """Drop all plot and dataset references when the user closes this tab."""
-        self.curve.clear()
-        self.plot.clear()
-        self.dataset = None
-        self.coordinates = []
 
 
 class DataBrowser(QtWidgets.QMainWindow):
@@ -150,7 +73,7 @@ class DataBrowser(QtWidgets.QMainWindow):
         split.setSizes([310, 740, 350])
         self.setCentralWidget(split)
         self._menu()
-        self.statusBar().showMessage("Add an OS folder or a single .auspex run; double-click a 1D dataset to plot it.")
+        self.statusBar().showMessage("Add an OS folder or a single .auspex run; double-click a 1D/2D dataset to plot it.")
         for path in paths:
             try:
                 self.open_folder(path)
@@ -333,7 +256,7 @@ class DataBrowser(QtWidgets.QMainWindow):
                     if (entry.group, entry.name) == (key[2], key[3]))
 
     def _open_item(self, item, _column):
-        """Open a single validated 1D dataset once; unsupported datasets stay listed."""
+        """Open one validated 1D/2D dataset once; unsupported datasets stay listed."""
         key = self._key(item)
         if key is None or key[0] != "dataset":
             return
@@ -349,9 +272,10 @@ class DataBrowser(QtWidgets.QMainWindow):
         try:
             with AuspexStore(tab_key[0]) as store:
                 dataset = store.read_dataset(tab_key[1], tab_key[2])
-            if dataset.data.ndim != 1 or dataset.offsets is not None:
+            if dataset.data.ndim not in (1, 2) or dataset.offsets is not None:
                 raise ValueError("Plotting not yet supported for this dataset")
-            tab = DataTab(tab_key, dataset)
+            tab_type = HeatmapTab if dataset.data.ndim == 2 else DataTab
+            tab = tab_type(tab_key, dataset)
         except (ValueError, OSError, KeyError, TypeError) as exc:
             self.statusBar().showMessage(f"Could not open {entry.name}: {exc}", 10000)
             return
@@ -492,16 +416,21 @@ class DataBrowser(QtWidgets.QMainWindow):
 
     def _metadata_item(self, parent, name, value):
         """Show nested JSON as expandable nodes, not one hard-to-read text blob."""
-        item = QtWidgets.QTreeWidgetItem(parent, [str(name)])
-        if isinstance(value, dict):
-            for key, child in value.items():
-                self._metadata_item(item, key, child)
-        elif isinstance(value, list):
-            for index, child in enumerate(value):
-                self._metadata_item(item, f"[{index}]", child)
-        else:
-            item.setText(1, json.dumps(value, ensure_ascii=False))
-        return item
+        return add_json(parent, name, value)
+
+
+def add_json(parent, name, value):
+    """Render nested JSON metadata identically in offline and live viewers."""
+    item = QtWidgets.QTreeWidgetItem(parent, [str(name)])
+    if isinstance(value, dict):
+        for key, child in value.items():
+            add_json(item, key, child)
+    elif isinstance(value, list):
+        for index, child in enumerate(value):
+            add_json(item, f"[{index}]", child)
+    else:
+        item.setText(1, json.dumps(value, ensure_ascii=False))
+    return item
 
 
 def dark_theme(app):
@@ -523,7 +452,7 @@ def dark_theme(app):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description="Browse and plot 1D V2 .auspex datasets")
+    parser = argparse.ArgumentParser(description="Browse and plot 1D/2D V2 .auspex datasets")
     parser.add_argument("folders", nargs="*", help="OS folders to watch or individual V2 .auspex runs")
     args = parser.parse_args(argv)
     app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(sys.argv[:1])

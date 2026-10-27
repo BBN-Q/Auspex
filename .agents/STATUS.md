@@ -10,8 +10,15 @@ replaces the historical discussion; it is not authorization to implement the bac
 
 ## Resume here
 
-- No implementation slice is currently authorized. Handoff-note cleanup is complete;
-  choose the next proof point with the user. Runner lifecycle refactoring is deferred.
+- The 2D offline DataBrowser was visually reviewed by the user; CET/PAL colormaps
+  are excluded. Run `python tests/data/visual_data_browser.py` for the complex map.
+  Standalone `save_data` and `open_data` are implemented and documented in the
+  [main data guide](../docs/components/data.md), including examples, selection and
+  overwrite contracts. Strict MkDocs build and example round-trip checks passed.
+  Live plotting is implemented; attended review starts with
+  `python tests/visual_plot_client.py` (two real simulated pipelines, no hardware).
+  No further implementation slice is authorized; runner lifecycle refactoring
+  remains deferred.
 - Inspect `git status` and preserve accumulated uncommitted work; these notes do not
   imply that implementation changes have been committed.
 - Start with the [manual](../docs/index.md),
@@ -82,9 +89,38 @@ replaces the historical discussion; it is not authorization to implement the bac
   names/units and support manifest-independent reads. Axes/coordinates allow positional
   and case-sensitive name lookup with tuple behavior; numerical payloads stay mutable.
   Standalone AuspexStore writes and bounded completed-output buffers remain supported.
-- Optional DataBrowser lists regular/ragged datasets and plots non-ragged 1D data.
+  `from auspex_v2.data import save_data` writes one regular array to `data/data`
+  in a new `.auspex` folder and returns its Path. Keyword-ordered axes accept
+  arrays or matching-name Axis objects with units; optional comments are metadata.
+  Explicit `force_write=True` replaces an entire valid offline store, respecting
+  its writer lock; replacement is not atomic.
+  `open_data` returns one loaded Dataset, selected via optional group/dataset
+  filters. It accepts an exact store path, an optional-Qt folder picker (None on
+  cancel), or numbered immediate-folder lookup with optional YYYY-MM-DD/`today`
+  date subfolder. Numeric suffixes ignore zero-padding; missing/ambiguous matches
+  fail explicitly. Explicit paths require no GUI dependencies.
+- Optional DataBrowser lists regular/ragged datasets and plots non-ragged 1D and
+  rectilinear 2D data (including nonuniform monotonic axes). Complex heatmaps offer
+  seven component layouts, a shared plasma-default colormap selector, independent
+  color scales and optional draggable, coordinate-snapped X/Y cuts in single-panel
+  views. Phase is wrapped radians, never unwrapped. One additional synthetic 2D
+  map opens by default in the visual demo. Ragged/higher-rank plotting is deferred.
   Separate read-only graph inspector shows topology/schemas/acknowledged configuration,
   not measurement plots or editing. Scan assembly is bounded-memory, not out-of-core.
+- Optional compiled `Plot` sinks declare a current trace or growing writer-backed
+  map. The store owner retains complete acquired map state, serves private Unix
+  snapshots and writes best-effort final `.preview/` caches / `preview.json` for
+  late viewing. Trace delivery is lossy; map-row ingestion precedes coalescing.
+  Display budgets default to 8 MiB/plot, sum to at most 64 MiB/run; they are payload
+  limits, not RSS guarantees. Preview errors disable displays, not required files.
+  `utils/plot_client.py` discovers known ExperimentServer runs or explicit folders;
+  one three-pane window shares renderers with DataBrowser and preserves view/cuts.
+  New tabs do not steal focus; closed tabs remain listed; Close plot suppresses for
+  the session. The 64-plot cap evicts oldest terminal entries first and visibly
+  declines new entries when all retained plots are active. Run/publication status
+  remains separate from preview completeness. Initial maps require one monotonic
+  fixed sweep and identical actual trace grids; repeated finalized positions or
+  changed grids disable only the map. No TCP broker or automatic GUI launch.
 
 ## Compatibility and recent regression guardrails
 
@@ -107,17 +143,29 @@ replaces the historical discussion; it is not authorization to implement the bac
 
 ## Evidence and limits
 
-Latest full implementation validation (after terminal consolidation):
+Latest full implementation validation (including live plotting and manual helpers):
 
 ```sh
-python -B -m unittest discover -s tests -q  # 339 passed
+QT_QPA_PLATFORM=offscreen python -B -m unittest discover -s tests -q  # 364 passed
 ```
 
-The 33 targeted command/CLI/TUI/discovery/address tests also passed; strict MkDocs
-build and `git diff --check` passed. No new test methods were added for command
-consolidation; existing context/shutdown checks were extended. This handoff-only
-edit does not rerun runtime tests. Crash-path resource-tracker, offscreen Qt and
-asyncio slow-task diagnostics are known test output, not failed assertions.
+Manual-helper coverage includes complex arrays/units/comments, validation before
+overwrite, whole-store replacement, writer locks, dated numbered lookup, dataset
+selection, ambiguity, picker cancellation and lazy optional GUI dependencies.
+The picker adapter is tested offscreen with its dialog boundary replaced; actual
+native folder-picker interaction still needs desktop review. `git diff --check`
+passed, along with a strict MkDocs build. Live-plot integration covers actual
+spawned filters/writers and a real ExperimentServer/runner, partial/final averages,
+late attachment, coalesced frames after a pause, cancellation without publication,
+changed-grid/duplicate-position/budget failures isolated from saved data, cache
+fallback, GUI focus/close/reopen/suppression, cap policy and shared renderer state.
+The live desktop demo still needs attended review; offscreen tests are not that
+review. Heatmap regressions check stored non-square complex arrays,
+descending/nonuniform axes, component
+values/scales, cut snapping, real-only display and release. The user reports
+successful desktop visual review. Crash-path resource-tracker,
+offscreen Qt and asyncio slow-task diagnostics are known test output, not failed
+assertions.
 
 Automated evidence uses fake transports, simulators and real local service/process
 integration. The user reports attended basic end-to-end hardware operation and
@@ -130,12 +178,12 @@ than actual stimulus-vector readback.
 
 Recovery, cancellation, process termination and teardown do not prove outputs are
 off. No hardware interlocks, durable lab timeline/settings history, stronger operator
-authentication, plot subscription service, multi-input joins/custom worker admission
+authentication, remote plot service, multi-input joins/custom worker admission
 or shared-buffer digitizer path. Direct non-server instrument access bypasses lockout.
 
 ## Documentation and code navigation
 
-The local-first MkDocs/Material manual has 16 narrative pages; snippets include the
+The local-first MkDocs/Material manual has 17 narrative pages; snippets include the
 canonical example as text, never execute it. Workflow is `workflow_dispatch` only;
 Pages has not been enabled/published remotely. API navigation and attended prose/visual
 review remain deferred. Material 9.8.0 announces EOL **May 5, 2027**; notice is documented,
@@ -150,6 +198,7 @@ not suppressed. Local commands and deployment prerequisites:
 | Drivers/proxies | [driver guide](../src/auspex_v2/instruments/drivers/instrument_drivers.md); `instruments/drivers/` |
 | Pipeline runtime/definitions | [filter guide](../src/auspex_v2/filters/README.md); [manual use](../src/auspex_v2/filters/manual.md); `filters/` |
 | Dataset store/browser | [data guide](../src/auspex_v2/data/data.md); `data/` |
+| Live plots | [live plot guide](../docs/utilities/live-plots.md); `filters/{preview,preview_client}.py`, `utils/plot_client.py`, `utils/src/{data_trace,data_heatmap,plot_client_model}.py` |
 | Console commands/output/TUI | [utility map](../utils/README.md); `utils/src/{operator_commands,service_output,auspex_tui}.py` |
 
 Module paths above are relative to `src/auspex_v2/`, except `utils/`. Tests mirror

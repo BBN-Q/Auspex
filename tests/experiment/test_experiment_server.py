@@ -211,6 +211,55 @@ print(json.dumps({'id':run.run_id, 'path':str(run.path)}))
             with instruments.live("source") as source:
                 self.assertFalse(source.output)
 
+    def test_live_plot_plan_runs_and_remains_discoverable_after_completion(self):
+        """A real service/runner publishes optional trace/map snapshots alongside saved S21."""
+        from auspex_v2.filters.definitions import ComplexAverage, Plot
+        from auspex_v2.filters.preview_client import poll_run
+        namespace = runpy.run_path(str(Path(__file__).resolve().parents[2] / "examples" / "documented_vna_sweep.py"))
+
+        class Live(namespace["SourceVnaSweep"]):
+            """Exercise ordinary experiment authoring, not an injected test interpreter."""
+
+            def setup_pipeline(self):
+                trace = PipelineInput("trace")
+                average = ComplexAverage(name="average", repeats=2)
+                writer = WriteToFile(name="disk", group="measurement", dataset="s21")
+                current = Plot(name="current")
+                image = Plot(name="map", mode="map")
+                PipelineDefinition(inputs=[trace], edges=[(trace, average.sink),
+                    (average.final_average, writer.sink), (average.partial_average, current.sink),
+                    (average.final_average, image.sink)])
+                self.connect(self.trace, trace)
+
+            def sequence(self, seq):
+                for _ in range(2):
+                    result = self.vna.get_trace(measurement="S21")
+                    seq.publish(self.trace, data=result[1], axes={"frequency": result[0]})
+
+        experiment = Live()
+        experiment.minimum_magnitude.value = 0.0
+        experiment.bind_instrument("source", "source")
+        experiment.bind_instrument("vna", "vna")
+        experiment.add_sweep(experiment.source_frequency, [5e9, 5.1e9, 5.2e9])
+        with InstrumentServerClient(self.instrument_socket) as instruments:
+            instruments.register("vna", "SimulatedVNA", "SIM::VNA")
+        run = self.client.submit(experiment.compile(), name="live", dir=self.data)
+        self.assertEqual(run.wait(timeout=20)["state"], "SUCCEEDED")
+        discovered = self.client.list_runs()[0]
+        preview = poll_run(discovered["path"], wanted=["map", "current"])
+        self.assertEqual(preview["state"], "SUCCEEDED")
+        self.assertEqual(preview["id"], run.run_id)
+        image = preview["frames"]["map"][0]
+        self.assertEqual(image.data.shape, (3, 201))
+        np.testing.assert_array_equal(image.axes[0].points, [5e9, 5.1e9, 5.2e9])
+        with AuspexStore(run.path) as store:
+            np.testing.assert_array_equal(image.data, store.read_dataset("measurement", "s21").data)
+        experiment.sweeps.clear()
+        experiment.add_sweep(experiment.source_frequency, [5e9, 5e9])
+        with self.assertRaisesRegex(RuntimeError, "strictly monotonic"):
+            self.client.submit(experiment.compile(), name="invalid_map", dir=self.data)
+        self.assertEqual(len(list(self.data.iterdir())), 1)
+
     def test_recorded_fft_executes_in_runner_and_publishes_analytical_result(self):
         """A real runner resolves the saved NumPy dependency and publishes its scalar update."""
         namespace = runpy.run_path(str(Path(__file__).resolve().parents[2] / "examples" / "recorded_fft.py"))

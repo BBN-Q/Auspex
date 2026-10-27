@@ -16,10 +16,12 @@ Add directories containing runs, or individual run folders. Directory discovery
 covers immediate children only, not recursive date subdirectories. The tree shows
 folder → run → group → dataset. Double-click a supported dataset to open its tab.
 
-Only non-ragged **1D numerical arrays** are plotted. Complex arrays offer magnitude,
-real, imaginary, and phase display modes using stored coordinates. Higher-dimensional
-or ragged datasets remain listed for metadata inspection but are not plotted.
-The quickstart's `(3, 201)` trace dataset therefore requires Python selection.
+Non-ragged **1D arrays and rectilinear 2D maps** are plotted using stored
+coordinates, including nonuniform monotonic grids. Complex maps offer real,
+imaginary, magnitude, phase, stacked and four-panel modes; select a colormap or
+drag optional X/Y cuts in single-panel views. The quickstart's `(3, 201)` trace
+dataset opens as a heatmap. Ragged, dependent-coordinate and higher-rank datasets
+remain metadata-only. Rendering is shared with the detached [live plot client](live-plots.md).
 
 The metadata pane shows run metadata, manifest information, and the self-describing
 dataset header. Arrays are loaded for plotted tabs, not merely to populate the

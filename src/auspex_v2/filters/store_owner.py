@@ -1,7 +1,9 @@
 """Single spawned manifest owner for all required graph writer sinks."""
 
 import os
+import queue
 import time
+import warnings
 
 from ..data import AuspexStore
 from .scan import ScanAssembler
@@ -9,9 +11,10 @@ from .transport import _send
 
 
 def store_owner(path, writers, schemas, edges, status, stop, run_metadata, input_name,
-                existing_store=False):
+                existing_store=False, plots=None, plot_queues=None, preview_sweep=None, plot_schemas=None):
     """Multiplex writers; append only to explicitly preallocated server run stores."""
     assemblers = {}
+    preview = None
     try:
         with AuspexStore(path, mode="a" if existing_store else "w") as store:
             if run_metadata is not None:
@@ -20,6 +23,12 @@ def store_owner(path, writers, schemas, edges, status, stop, run_metadata, input
                                                max_scan_windows=spec.max_scan_windows,
                                                scratch_dir=store.path)
                           for name, spec in writers.items()}
+            if plots:
+                try:
+                    from .preview import PreviewHub
+                    preview = PreviewHub(path, plots, plot_schemas, preview_sweep)
+                except Exception as exc:
+                    warnings.warn(f"Live plotting unavailable: {exc}", RuntimeWarning)
             _send(status, {"type": "ready"})
             finished = set()
             supervisor_pid = os.getppid()
@@ -27,6 +36,13 @@ def store_owner(path, writers, schemas, edges, status, stop, run_metadata, input
                 if os.getppid() != supervisor_pid:
                     return  # Do not keep writing if supervision disappears.
                 progress = False
+                if preview is not None:
+                    for plot_name, pending in (plot_queues or {}).items():
+                        try:
+                            preview.update(plot_name, pending.get_nowait())
+                        except queue.Empty:
+                            pass
+                    preview.flush()
                 for name, edge in edges.items():
                     if name in finished or not edge.reader_connection.poll():
                         continue
@@ -37,7 +53,14 @@ def store_owner(path, writers, schemas, edges, status, stop, run_metadata, input
                         if event == "batch":
                             assembler.on_batch(payload)
                         elif event == "window_end":
+                            completed = assembler.pending
                             assembler.on_window_end(payload["window"])
+                            if preview is not None and completed is not None:
+                                for plot_name, plot in plots.items():
+                                    if plot.writer == name:
+                                        preview.update(plot_name, completed)
+                                    elif plot.kind == "trace" and plot.node == writers[name].node:
+                                        preview.update(plot_name, completed)
                             _send(status, {"type": "window", "writer": name, "window": payload["window"]})
                         elif event == "group_end":
                             pass  # Group boundaries are filter-owned; scans belong to the runner.
@@ -48,6 +71,8 @@ def store_owner(path, writers, schemas, edges, status, stop, run_metadata, input
                             assembler.publish(scan, store, spec.group, dataset_name,
                                               label=scan, source=f"{spec.node}.{spec.port}",
                                               input_name=input_name)
+                            if preview is not None:
+                                preview.published(name)
                             _send(status, {"type": "scan", "writer": name, "scan": scan,
                                            "group": spec.group, "dataset": dataset_name})
                         elif event == "run_end":
@@ -67,6 +92,8 @@ def store_owner(path, writers, schemas, edges, status, stop, run_metadata, input
         if not stop.is_set():
             _send(status, {"type": "error", "error": f"Store owner: {type(exc).__name__}: {exc}"})
     finally:
+        if preview is not None:
+            preview.close()
         for assembler in assemblers.values():
             assembler.close()
         status.close()

@@ -89,8 +89,12 @@ at execution; there is no exhaustive simulation of possible future traces.
 `ComplexAverage` averages a positive number of complete **1D complex windows**
 with matching grids and sweep positions. It is not V1's arbitrary axis-reduction
 averager. `.partial_average` is exposed as a named port, but the current required
-writer/buffer sinks cannot consume it; compilation reports that it needs a preview
-sink. Preview definitions are not part of this slice.
+writer/buffer sinks cannot consume it. A `Plot(name="current_trace")` sink can
+consume it as an optional current-trace display. `Plot(name="bias_map", mode="map")`
+consumes finalized rows alongside a writer on the same output. Plots are inert
+compiled declarations, never GUI objects or required results. See the
+[live plotting guide](../../../docs/utilities/live-plots.md) for budgets, client
+behavior and a real simulated-pipeline visual demo.
 
 The input contract permits changing trace lengths and nonuniform grids. The
 current runner handles rectangular NumPy windows with one coordinate vector per
@@ -150,7 +154,8 @@ across executions, or create fresh input objects for a different definition.
 Saved compiled pipeline recipes reject unknown fields at every schema, input,
 node, configuration, and definition level; incompatible fields are not silently
 dropped on load. The pipeline-definition format's version 1 is independent of
-the experiment-plan format's version 4.
+the experiment-plan format's version 6.
 
 The experiment's legacy opaque `set_graph()` is not executable pipeline wiring.
-Persistent ExperimentServer and live execution remain unimplemented.
+ExperimentServer executes writer-backed plans, including optional live plot
+endpoints; see the [server guide](../experiment/server.md).

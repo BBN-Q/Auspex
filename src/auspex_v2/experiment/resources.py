@@ -70,6 +70,17 @@ def preflight_run(plan, *, slots=2, result_capacity=2,
         if nodes[spec.node].schema.max_bytes > MAX_BULK_BYTES:
             raise PipelineError(f"Buffer {name!r} exceeds the inline transfer limit")
     results = {name: ResultSpec(spec.node, spec.port) for name, spec in buffers.items()}
+    plots = compiled.plot_specs()
+    if plots:
+        from ..filters.preview import validate_plots
+        validate_plots(plots, writers, {n: s.schema for n, s in nodes.items()})
+        if any(p.kind == "map" for p in plots.values()) and len(swept_parameters(plan.document)) != 1:
+            raise PipelineError("Live maps require exactly one swept parameter")
+        if any(p.kind == "map" for p in plots.values()):
+            from ..filters.preview import planned_sweep
+            planned_sweep(plan.document)
+        results.update({f"$plot:{name}": ResultSpec(p.node, p.port, preview=True)
+                        for name, p in plots.items() if p.kind == "trace"})
     FilterServer.validate_graph(schema, nodes, edges, results, writers, buffers,
                                 slots=slots, result_capacity=result_capacity,
                                 memory_budget_bytes=memory_budget_bytes,

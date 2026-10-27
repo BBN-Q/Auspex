@@ -1,5 +1,10 @@
 # Filter pipeline
 
+Optional compiled `Plot` sinks and the detached single-window client are described
+in the [live plotting guide](../../../docs/utilities/live-plots.md). Trace previews
+are lossy; growing maps retain finalized writer rows before coalescing snapshots.
+They never replace required storage or participate in run completion.
+
 For reusable **V1-style connector-pair definitions**, start with the [pipeline construction API](definitions.md). `filters.definitions` contains inert inputs, passthrough/complex-average definitions, writers and buffers. Compile/save a detached recipe or pass it to `ManualPipeline`; creating a definition starts nothing. Existing processor imports and low-level recipes below remain supported.
 
 For acquisition controlled by ordinary Python, see [standalone storage and manual pipelines](manual.md). `ManualPipeline` submits complete windows to writers and/or explicit bounded `BufferSpec` sinks. Buffers expose completed outputs with `receive()`, `drain()`, and non-consuming `view()`, retain data after shutdown, and warn when full. The low-level `FilterServer` accepts these via `buffer_sinks=`; existing `ResultSpec` behavior is unchanged.

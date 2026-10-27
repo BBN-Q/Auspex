@@ -49,5 +49,6 @@ nav:
       - Experiment server: utilities/experiment-server.md
       - Status inspection: utilities/auspex-status.md
       - Data browser: utilities/data-browser.md
+      - Live plots: utilities/live-plots.md
       - Filter graph viewer: utilities/filter-graph-viewer.md
   - Maintaining the docs: maintaining.md

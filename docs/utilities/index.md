@@ -11,7 +11,8 @@ Use each program's `--help` for its current options.
 | [instrument_server_gui.py](instrument-server-gui.md) | Attach an inventory/discovery window | `gui` |
 | [experiment_server.py](experiment-server.md) | Execute submitted plans | None for simulated runs |
 | [auspex_status.py](auspex-status.md) | Read-only service/ownership inspection | None |
-| [data_browser.py](data-browser.md) | Read saved data/metadata; plot supported 1D arrays | `gui` |
+| [data_browser.py](data-browser.md) | Read saved data/metadata; plot supported 1D/2D arrays | `gui` |
+| [plot_client.py](live-plots.md) | Follow optional live trace/map endpoints in one window | `gui` |
 | [filter_graph_viewer.py](filter-graph-viewer.md) | Inspect an explicitly enabled running graph | `gui` |
 
 ## Shared paths
