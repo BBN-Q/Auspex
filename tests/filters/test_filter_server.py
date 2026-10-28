@@ -46,9 +46,15 @@ class FilterServerTest(unittest.TestCase):
             twos = [graph.receive("two") for _ in range(3)]
             threes = [graph.receive("three") for _ in range(2)]
             self.assertEqual([b.group for b in twos], ["two-0", "two-1", "two-2"])
+            self.assertEqual([b.window for b in twos], [1, 3, 5])
+            self.assertEqual([b.group for b in threes], ["three-0", "three-1"])
             self.assertEqual([b.window for b in threes], [2, 5])
             np.testing.assert_allclose([b.data[0] for b in twos], [0.5, 2.5, 4.5])
             np.testing.assert_allclose([b.data[0] for b in threes], [1, 4])
+            for results, repeats in ((twos, 2), (threes, 3)):
+                for result in results:
+                    self.assertEqual((result.count, result.expected_count), (repeats, repeats))
+                    np.testing.assert_array_equal(result.axes[0].points, [1.])
             names = [slot.name for edge in graph.channels for slot in edge.slots]
         self.assertTrue(all(not p.is_alive() for p in graph.processes.values()))
         for name in names:
@@ -66,10 +72,19 @@ class FilterServerTest(unittest.TestCase):
             graph.push(batch(2))
             graph.end_window(2)
             self.assertEqual(graph.completed_window, 0)
-            for window in range(3):
-                self.assertEqual(graph.receive("raw").window, window)
+            received = [graph.receive("raw") for _ in range(3)]
             graph.finish()
             graph.wait_finished()
+            self.assertEqual([result.window for result in received], [0, 1, 2])
+            # Slot reuse must not overwrite copies already returned to the caller.
+            np.testing.assert_array_equal([result.data[0] for result in received], [0, 1, 2])
+
+    def test_ingress_rejects_premature_completion(self):
+        """Acquisition ordering belongs to ingress; internal edges allow sparse windows."""
+        with simple() as graph:
+            with self.assertRaisesRegex(PipelineError, "Wrong window completion"):
+                graph.end_window(0)
+            self.assertEqual(graph.completed_window, -1)
 
     def test_nonbackpressure_result_overflow(self):
         with simple(backpressure=False, slots=4, result_capacity=1) as graph:
@@ -222,7 +237,10 @@ class FilterServerTest(unittest.TestCase):
                     graph.end_window(window)
                 graph.finish()
                 graph.wait_finished()
-                np.testing.assert_array_equal(graph.receive("mean").data, expected)
+                result = graph.receive("mean")
+                np.testing.assert_array_equal(result.data, expected)
+                np.testing.assert_array_equal(result.axes[0].points, frequencies)
+                self.assertEqual((result.count, result.expected_count), (5, 5))
         finally:
             vna.disconnect()
 
@@ -232,6 +250,10 @@ class FilterServerTest(unittest.TestCase):
         with self.assertRaisesRegex(PipelineError, "exactly one input"):
             FilterServer(SCHEMA, {"pass": NodeSpec("passthrough", SCHEMA)}, [],
                          {"raw": ResultSpec("pass", "out")})
+        with self.assertRaisesRegex(PipelineError, "Incompatible port schemas"):
+            other = PortSchema("<f8", 1, ("frequency",), ("Hz",), 128)
+            FilterServer(SCHEMA, {"pass": NodeSpec("passthrough", other)},
+                         [("$input", "out", "pass")], {"raw": ResultSpec("pass", "out")})
         with self.assertRaisesRegex(PipelineError, "positive repeat count"):
             FilterServer(SCHEMA, {"avg": NodeSpec("complex_average", SCHEMA, {"repeats": 0})},
                          [("$input", "out", "avg")], {"final": ResultSpec("avg", "final")})

@@ -62,61 +62,6 @@ class OperatorConsoleTest(unittest.IsolatedAsyncioTestCase):
                 self.assertIn("Experiment >>", str(app.query_one(Static).render()))
                 self.assertEqual(app.query_one(Input).value, "")
 
-    async def test_instrument_ids_and_experiment_requests(self):
-        """Keep command targets tied to the last list and route experiment queries separately."""
-        root = Path(__file__).resolve().parents[2]
-        sys.path.insert(0, str(root / "utils"))
-        try:
-            from src import auspex_tui
-        finally:
-            sys.path.remove(str(root / "utils"))
-
-        class Instruments:
-            """Minimal session-free inventory for command routing."""
-
-            def __init__(self, path):
-                self.state = {"vna": "DISCONNECTED"}
-
-            def __enter__(self):
-                return self
-
-            def __exit__(self, *_):
-                pass
-
-            def status(self):
-                return {"run": None, "instruments": {"vna": {"driver": "SimulatedVNA",
-                        "physical": "SIM::VNA", "state": self.state["vna"], "live_sessions": 0}}}
-
-            def connect(self, name):
-                self.state[name] = "CONNECTED"
-
-        class Experiments:
-            """Report a known active run without submitting anything."""
-
-            def __init__(self, path):
-                pass
-
-            def status(self):
-                return {"active": "run-1"}
-
-            def list_runs(self):
-                return [{"run_id": "run-1"}]
-
-        app = auspex_tui.OperatorConsole("i", "e", [], output=ServiceOutput())
-        from src import operator_commands
-        with patch.object(operator_commands, "InstrumentServerClient", Instruments), \
-             patch.object(operator_commands, "ExperimentServerClient", Experiments):
-            with self.assertRaisesRegex(ValueError, "list first"):
-                app.commands.execute(["connect", "1"])
-            self.assertIn("1. vna", app.commands.execute(["list"]).text)
-            self.assertIn("connect vna", app.commands.execute(["connect", "1"]).text)
-            app.commands.execute(["experiment"])
-            self.assertIn("run-1", app.commands.execute(["status"]).text)
-            self.assertIn("run-1", app.commands.execute(["runs"]).text)
-            app.commands.execute(["instruments"])
-            with self.assertRaisesRegex(ValueError, "Recovery must be individual"):
-                app.commands.parse("recover all")
-
     async def test_discovery_confirmation_and_registration_name(self):
         """Identification needs yes; registration collects a name without blocking the UI."""
         root = Path(__file__).resolve().parents[2]

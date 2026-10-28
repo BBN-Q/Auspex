@@ -4,20 +4,22 @@ from __future__ import annotations
 
 from dataclasses import replace
 from itertools import product
+import math
 from pathlib import Path
 import tempfile
 
 import numpy as np
 
 from ..data import Axis, Coordinate
-from .core import PipelineError
+from ..data.data import _CoordinateLayout
+from .core import Batch, PipelineError
 
 
 class ScanAssembler:
-    """Stage window-complete batches; publish only at an explicit scan boundary."""
+    """Stage complete windows; inspect layout and copy bounded chunks at scan end."""
 
-    def __init__(self, schema, *, max_scan_bytes=64 * 1024 * 1024,
-                 max_scan_windows=8192, scratch_dir=None):
+    def __init__(self, schema, *, max_scan_bytes=512 * 1024 * 1024,
+                 max_scan_windows=16384, scratch_dir=None):
         self.schema = schema
         self.max_scan_bytes = max_scan_bytes
         self.max_scan_windows = max_scan_windows
@@ -61,65 +63,121 @@ class ScanAssembler:
         self.total_bytes += size
         self.pending = None
 
+    def _read_window(self, file):
+        """Load and validate one staged window, never an assembled scan."""
+        with np.load(file, allow_pickle=False) as loaded:
+            data = loaded["value"]
+            axes = tuple(Axis(name, loaded[f"axis_{i}"], unit)
+                         for i, (name, unit) in enumerate(zip(self.schema.axis_names, self.schema.axis_units)))
+        self.schema.check(Batch(None, 0, 0, 0, data, axes))
+        return data, tuple(a.points for a in axes)
+
+    def _inspect_windows(self):
+        """Retain shapes/dtypes and one reference grid; discard each inspected payload.
+
+        Coordinate equality deliberately ignores dtype as np.array_equal did in
+        whole-scan assembly. Shared axes keep the first dtype; dependent/ragged
+        axes use NumPy's common dtype across all observed coordinate dtypes.
+        """
+        shapes = []
+        reference = None
+        dtypes = [set() for _ in self.schema.axis_names]
+        shared = [True] * self.schema.rank
+        for file, _, _ in self.rows:
+            data, axes = self._read_window(file)
+            shapes.append(data.shape)
+            if reference is None:
+                reference = axes
+            for i, points in enumerate(axes):
+                dtypes[i].add(points.dtype)
+                shared[i] = shared[i] and np.array_equal(reference[i], points)
+            del data, axes
+        return shapes, reference, tuple(np.result_type(*types) for types in dtypes), shared
+
+    def _outer_layout(self, sweeps, *, allow_cartesian):
+        """Classify only acquired positions, without expanding a hypothetical grid."""
+        grids = [list(dict.fromkeys(s[i].value for s in sweeps))
+                 for i in range(len(sweeps[0]))] if allow_cartesian else []
+        rectangular = (bool(grids) and math.prod(map(len, grids)) == len(sweeps)
+                       and all(expected == tuple(p.value for p in actual)
+                               for expected, actual in zip(product(*grids), sweeps, strict=True)))
+        if rectangular:
+            dims = tuple(p.name for p in sweeps[0])
+            coords = [Coordinate(p.name, np.asarray(grid), (p.name,), p.unit)
+                      for p, grid in zip(sweeps[0], grids)]
+            return dims, tuple(map(len, grids)), coords
+        coords = [Coordinate("point", np.arange(len(sweeps)), ("point",))]
+        coords.extend(Coordinate(p.name, np.asarray([s[i].value for s in sweeps]), ("point",), p.unit)
+                      for i, p in enumerate(sweeps[0]))
+        return ("point",), (len(sweeps),), coords
+
     def publish(self, scan, store, group, name, *, label=None, source=None, input_name=None):
-        """Assemble actual coordinates without regridding and publish one dataset."""
+        """Inspect layout, then copy windows into a temporary final file before publication.
+
+        Numerical working memory is bounded by a few windows and a reference grid;
+        sweep coordinates, shapes and offsets are bounded per-row metadata. This
+        does not bound OS file caching or whole-dataset reads by later clients.
+        """
         if scan != self.scan or self.pending is not None or not self.rows:
             raise PipelineError("Incomplete or empty scan")
         sweeps = [s for _, s, _ in self.rows]
         if any(tuple((p.name, p.unit) for p in s) != tuple((p.name, p.unit) for p in sweeps[0]) for s in sweeps):
             raise PipelineError("Sweep parameters changed within a scan")
-        # One outer observation dimension preserves arbitrary sweep paths, repeats and adaptivity.
-        outer = "point"
-        if outer in self.schema.axis_names:
+        if "point" in self.schema.axis_names:
             raise PipelineError("Measurement axis conflicts with point dimension")
-        values = []
-        axes = [[] for _ in self.schema.axis_names]
-        for file, _, _ in self.rows:
-            with np.load(file, allow_pickle=False) as loaded:
-                values.append(loaded["value"])
-                for i, dest in enumerate(axes):
-                    dest.append(loaded[f"axis_{i}"])
-        shapes = {value.shape for value in values}
-        coords = [Coordinate(p.name, np.array([s[i].value for s in sweeps]), (outer,), p.unit)
-                  for i, p in enumerate(sweeps[0])]
-        if len({c.name for c in coords}) != len(coords) or any(c.name in self.schema.axis_names for c in coords):
+        names = [p.name for p in sweeps[0]]
+        if len(set(names)) != len(names) or set(names) & set(self.schema.axis_names):
             raise PipelineError("Sweep and data coordinate names collide")
-        kwargs = {"value_name": self.schema.value_name, "value_unit": self.schema.value_unit,
-                  "label": label, "source": source, "input_name": input_name}
-        if len(shapes) == 1:
-            # Only promote sweep settings to independent dimensions when every
-            # Cartesian combination occurs exactly once in acquisition order.
-            grids = [list(dict.fromkeys(s[i].value for s in sweeps))
-                     for i in range(len(sweeps[0]))]
-            rectangular = bool(grids) and list(product(*grids)) == [tuple(p.value for p in s) for s in sweeps]
-            if rectangular:
-                outer_dims = tuple(p.name for p in sweeps[0])
-                coords = [Coordinate(p.name, np.asarray(grid), (p.name,), p.unit)
-                          for p, grid in zip(sweeps[0], grids)]
-                leading_shape = tuple(map(len, grids))
-            else:
-                outer_dims = (outer,)
-                leading_shape = (len(values),)
-                coords.insert(0, Coordinate(outer, np.arange(len(values)), (outer,)))
-            result = np.stack(values).reshape(leading_shape + values[0].shape)
-            dims = outer_dims + self.schema.axis_names
-            for i, (axis_name, unit) in enumerate(zip(self.schema.axis_names, self.schema.axis_units)):
-                if all(np.array_equal(axes[i][0], a) for a in axes[i][1:]):
-                    coords.append(Coordinate(axis_name, axes[i][0], (axis_name,), unit))
-                else:
-                    points = np.stack(axes[i]).reshape(leading_shape + axes[i][0].shape)
-                    coords.append(Coordinate(axis_name, points, outer_dims + (axis_name,), unit))
-            store.write_dataset(group, name, result, coordinates=coords, dimensions=dims, **kwargs)
+        shapes, reference, axis_dtypes, shared = self._inspect_windows()
+        uniform = all(shape == shapes[0] for shape in shapes)
+        if not uniform and self.schema.rank != 1:
+            raise PipelineError("Variable-length measurements require rank-one input")
+        outer_dims, leading_shape, coords = self._outer_layout(sweeps, allow_cartesian=uniform)
+        offsets = None
+        if uniform:
+            dimensions = outer_dims + self.schema.axis_names
+            shape = leading_shape + shapes[0]
         else:
-            if self.schema.rank != 1:
-                raise PipelineError("Variable-length measurements require rank-one input")
-            sizes = [len(v) for v in values]
-            offsets = np.concatenate(([0], np.cumsum(sizes, dtype=np.int64)))
-            coords.insert(0, Coordinate(outer, np.arange(len(values)), (outer,)))
-            coords.append(Coordinate(self.schema.axis_names[0], np.concatenate(axes[0]),
-                                     ("sample",), self.schema.axis_units[0]))
-            store.write_dataset(group, name, np.concatenate(values), coordinates=coords,
-                                dimensions=(outer,), offsets=offsets, **kwargs)
+            offsets = np.empty(len(shapes) + 1, dtype="<i8")
+            offsets[0] = 0
+            np.cumsum([s[0] for s in shapes], out=offsets[1:])
+            shape, dimensions = (int(offsets[-1]),), outer_dims
+        layouts = [_CoordinateLayout(c.name, np.shape(c.values), np.asarray(c.values).dtype,
+                                     c.dimensions, c.unit) for c in coords]
+        for i, (axis_name, unit) in enumerate(zip(self.schema.axis_names, self.schema.axis_units)):
+            if not uniform:
+                layout = _CoordinateLayout(axis_name, shape, axis_dtypes[i], ("sample",), unit)
+            elif shared[i]:
+                layout = _CoordinateLayout(axis_name, reference[i].shape, reference[i].dtype, (axis_name,), unit)
+            else:
+                layout = _CoordinateLayout(axis_name, leading_shape + (shapes[0][i],),
+                                           axis_dtypes[i], outer_dims + (axis_name,), unit)
+            layouts.append(layout)
+
+        # np.stack/concatenate previously normalized non-native value byte order.
+        value_dtype = np.result_type(self.schema.dtype)
+
+        def chunks():
+            """Supply values and dependent coordinates together from each reloaded window."""
+            for coordinate in coords:
+                yield coordinate.name, coordinate.values
+            if uniform:
+                for i, axis_name in enumerate(self.schema.axis_names):
+                    if shared[i]:
+                        yield axis_name, reference[i]
+            for row, (file, _, _) in enumerate(self.rows):
+                data, axes = self._read_window(file)
+                if data.shape != shapes[row]:
+                    raise PipelineError("Staged window shape changed during publication")
+                yield None, data.astype(value_dtype, copy=False)
+                for i, axis_name in enumerate(self.schema.axis_names):
+                    if not uniform or not shared[i]:
+                        yield axis_name, axes[i].astype(axis_dtypes[i], copy=False)
+
+        store._write_dataset_chunks(group, name, shape=shape, dtype=value_dtype,
+            dimensions=dimensions, coordinates=layouts, chunks=chunks(), offsets=offsets,
+            value_name=self.schema.value_name, value_unit=self.schema.value_unit,
+            label=label, source=source, input_name=input_name)
         self.reset()
 
     def reset(self):

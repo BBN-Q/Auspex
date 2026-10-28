@@ -43,9 +43,10 @@ class DataStoreTest(unittest.TestCase):
 
     def test_reading_does_not_serialize_or_create_temporary_files(self):
         """Both readers validate existing data without invoking writer machinery."""
-        values = np.arange(4)
+        values = np.arange(6).reshape(2, 3)
         with AuspexStore(self.path, mode="w") as store:
-            store.write_dataset("g", "trace", values, axes=[Axis("time", [0, 1, 2, 3], "s")])
+            store.write_dataset("g", "trace", values,
+                                [Axis("bias", [0, 1], "V"), Axis("frequency", [4, 5, 6], "Hz")])
         with (patch("auspex_v2.data.data._pack_dataset", side_effect=AssertionError("Reader called serializer")),
               patch("auspex_v2.data.data.tempfile.TemporaryFile",
                     side_effect=AssertionError("Reader created a temporary file"))):
@@ -54,9 +55,15 @@ class DataStoreTest(unittest.TestCase):
             direct = AuspexStore.read_file(self.path / "g" / "trace.dat")
         for dataset in (loaded, direct):
             np.testing.assert_array_equal(dataset.data, values)
-            np.testing.assert_array_equal(dataset.coordinates["time"].values, [0, 1, 2, 3])
+            self.assertIsInstance(dataset.axes["frequency"], Axis)
+            self.assertIsInstance(dataset.coordinates["frequency"], Coordinate)
+            self.assertIs(dataset.axes["frequency"], dataset.axes[1])
+            self.assertIs(dataset.coordinates["frequency"], dataset.coordinates[1])
+            self.assertEqual(dataset.axes["frequency"].unit, "Hz")
+            np.testing.assert_array_equal(dataset.coordinates["frequency"].values, [4, 5, 6])
             self.assertTrue(dataset.data.flags.writeable)
-            self.assertTrue(dataset.coordinates["time"].values.flags.writeable)
+            self.assertTrue(dataset.coordinates["frequency"].values.flags.writeable)
+        self.assertEqual(AuspexStore.read_file_header(self.path / "g" / "trace.dat")["format_version"], 2)
 
     def test_metadata_sequences_support_names_without_changing_tuple_behavior(self):
         """Names and positions return the same objects; collections retain ordinary read-only sequence behavior."""
@@ -106,25 +113,6 @@ class DataStoreTest(unittest.TestCase):
         dataset = Dataset(np.zeros(2), (axis,), (coordinate,))
         self.assertIs(dataset.axes["frequency"], axis)  # Sharing a name across the two collections is normal.
         self.assertIs(dataset.coordinates["frequency"], coordinate)
-
-    def test_named_lookup_round_trips_regular_saved_data_and_standalone_files(self):
-        """Both file readers expose positional and named access without changing format version 2."""
-        values = np.arange(6).reshape(2, 3)
-        with AuspexStore(self.path, mode="w") as store:
-            store.write_dataset("g", "trace", values,
-                                [Axis("bias", [0, 1], "V"), Axis("frequency", [4, 5, 6], "Hz")])
-        with AuspexStore(self.path) as store:
-            loaded = store.read_dataset("g", "trace")
-        direct = AuspexStore.read_file(self.path / "g" / "trace.dat")
-        for dataset in (loaded, direct):
-            self.assertIsInstance(dataset.axes["frequency"], Axis)
-            self.assertIsInstance(dataset.coordinates["frequency"], Coordinate)
-            self.assertIs(dataset.axes["frequency"], dataset.axes[1])
-            self.assertIs(dataset.coordinates["frequency"], dataset.coordinates[1])
-            self.assertEqual(dataset.axes["frequency"].unit, "Hz")
-            np.testing.assert_array_equal(dataset.coordinates["frequency"].values, [4, 5, 6])
-            np.testing.assert_array_equal(dataset.data, values)
-        self.assertEqual(AuspexStore.read_file_header(self.path / "g" / "trace.dat")["format_version"], 2)
 
     def test_named_lookup_preserves_dependent_and_ragged_coordinate_semantics(self):
         """Dependent/sample coordinates stay available by name without becoming fictitious separable axes."""
@@ -213,13 +201,37 @@ class DataStoreTest(unittest.TestCase):
                     case()
             self.assertEqual(store.list_datasets(), [])
 
+    def test_scan_chunks_reject_incomplete_invalid_and_nonfinite_payloads(self):
+        """Private scan writes must validate chunks before publishing a file or manifest entry."""
+        from auspex_v2.data.data import _CoordinateLayout
+
+        values, points = np.asarray([1., 2.]), np.asarray([0., 1.])
+        cases = (
+            ([(None, values[:1]), ("x", points)], "Incomplete scan payload"),
+            ([(None, np.asarray([1., 2., 3.]))], "dtype or byte count"),
+            ([(None, values.astype("f4"))], "dtype or byte count"),
+            ([(None, values), ("x", np.asarray([0., np.nan]))], "finite real"),
+            ([(None, values), ("missing", points)], "Unknown scan chunk"),
+        )
+        with AuspexStore(self.path, mode="w") as store:
+            for chunks, message in cases:
+                with self.subTest(message=message), self.assertRaisesRegex(ValueError, message):
+                    store._write_dataset_chunks("g", "scan", shape=(2,), dtype="f8", dimensions=("x",),
+                        coordinates=[_CoordinateLayout("x", (2,), "f8", ("x",))], chunks=iter(chunks))
+                self.assertEqual(store.list_datasets(), [])
+                self.assertEqual(list((self.path / "g").iterdir()), [])
+
     def test_reject_version_and_truncated_array(self):
-        """Fail clearly on an unknown version or a damaged published array."""
+        """Reject a short numerical payload behind a valid header, and unknown versions."""
         with AuspexStore(self.path, mode="w") as store:
             store.write_dataset("g", "x", [1, 2], [Axis("n", [0, 1])])
-        (self.path / "g" / "x.dat").write_bytes(b"bad")
+        path = self.path / "g" / "x.dat"
+        header = AuspexStore.read_file_header(path)
+        with path.open("r+b") as stream:
+            stream.truncate(path.stat().st_size - 1)
+        self.assertEqual(AuspexStore.read_file_header(path), header)
         with AuspexStore(self.path) as store:
-            with self.assertRaises(ValueError):
+            with self.assertRaisesRegex(ValueError, "Truncated dataset array"):
                 store.read_dataset("g", "x")
         manifest = self.path / "manifest.json"
         content = json.loads(manifest.read_text())

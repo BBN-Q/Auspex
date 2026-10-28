@@ -107,7 +107,17 @@ may impose stricter requirements, such as matching grids for averaging.
 The running pipeline supplies the `.auspex` directory. Writers choose explicit
 `group` and `dataset` names within the shared store; defaults are `data/response`.
 All writers share one manifest owner. `max_scan_bytes` and `max_scan_windows`
-bound each writer's assembled scan (defaults: 64 MiB and 8192 windows).
+bound each writer's scan (defaults: 512 MiB and 16,384 completed output rows).
+One row is one emitted measurement window, such as a complete trace, not an
+individual trace sample. Byte accounting includes each row's coordinates. The
+default aggregate `store_scan_budget_bytes` is 2 GiB, allowing four default-sized
+writers. These are capacity ceilings, not upfront scan allocations or RSS bounds;
+publication inspects staged windows then copies bounded payload chunks, without
+loading or stacking the full scan. Numerical working memory scales with window
+size plus per-row layout metadata, not the Cartesian product of possible settings.
+Transport defaults, public save/read APIs and the dataset format are unchanged.
+Existing saved definitions/plans retain their explicit limits; recompile to adopt
+new defaults.
 
 For this first authoring slice, named writer definitions support **one scan per
 execution**. `end_scan()` publishes the exact named dataset; a subsequent

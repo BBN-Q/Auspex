@@ -42,9 +42,27 @@ never silently drop data: capacity either blocks upstream acquisition or fails t
 graph according to policy. Preview paths may be lossy and are not substitutes for
 required data.
 
-Budgets describe declared array capacity, not total process memory or guaranteed
-digitizer throughput. In-memory scan assembly has its own bounds. A stopped filter
-does not stop hardware; the runner remains responsible for experiment cleanup.
+Writer defaults are **512 MiB and 16,384 completed output rows per scan**, with
+**2 GiB aggregate declared writer capacity** per pipeline. A row is one emitted
+measurement window (for example, one complete VNA trace), not a sample within a
+trace or an input window suppressed by averaging. Byte accounting includes each
+row's coordinate arrays. These scan limits are ceilings, not upfront allocations;
+shared-memory transport slots and their defaults are unchanged. Existing saved
+plans/recipes retain their explicit limits; recompile to adopt new defaults.
+
+Writers spool completed windows to temporary disk files during acquisition. At
+scan end they inspect one window at a time to determine the actual layout, then
+copy bounded numerical chunks into the final file. Publication does not reload
+or stack the entire scan in RAM, or enumerate a hypothetical Cartesian grid.
+Numerical working memory scales with a few windows and a reference grid; sweep
+coordinates, shapes and ragged offsets are per-row metadata. This entails an extra
+disk pass. The final file and manifest are published only after writing completes;
+staging files are not datasets or an interrupted-run recovery mechanism.
+
+Budgets describe declared array capacity, not total process memory, OS file-cache
+usage or guaranteed digitizer throughput. Ordinary save/read APIs still use whole
+arrays; this is bounded writer assembly, not continuous acquisition streaming.
+A stopped filter does not stop hardware; the runner remains responsible for cleanup.
 
 ## Live display
 

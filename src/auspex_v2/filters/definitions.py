@@ -106,7 +106,7 @@ class WriteToFile(_Node):
     fields = ("group", "dataset", "max_scan_bytes", "max_scan_windows")
 
     def __init__(self, *, name, group="data", dataset="response",
-                 max_scan_bytes=64 * 1024 * 1024, max_scan_windows=8192):
+                 max_scan_bytes=512 * 1024 * 1024, max_scan_windows=16384):
         super().__init__(name)
         self.group = group
         self.dataset = dataset

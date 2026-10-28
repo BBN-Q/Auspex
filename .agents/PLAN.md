@@ -129,8 +129,11 @@ inheritance hierarchies wholesale or promise compatibility with every V1 experim
   acknowledged filter-local revisions and reject incompatible active groups;
   schema-changing updates remain deferred. Reap workers before reclaiming shared
   memory, respecting admission ownership.
-- Multiple logical writer sinks use one physical store owner. Complete scans assemble
-  within bounded memory; this is not an out-of-core or digitizer-throughput claim.
+- Multiple logical writer sinks use one physical store owner. Completed windows
+  are disk-staged; scan-end layout inspection and chunk copying retain only a few
+  numerical windows/reference axes plus per-row metadata. Never enumerate an
+  unacquired Cartesian product. Ordinary save/read APIs still use whole arrays;
+  this is not a process-RSS, continuous-acquisition or digitizer-throughput claim.
   Regular sweeps use named dimensions, irregular paths a point dimension, and
   variable rank-one traces ragged offsets. No general multidimensional ragged API.
 - Dataset format and plan format are independent. Validate logical data without
@@ -426,8 +429,134 @@ specific identified defect. These notes do not authorize repairing or admitting 
   check file/console sink independence separately.
 
 Complete. A connected but undrained output pipe can still block; changing that is
-outside this slice. Other review findings (Cartesian-product scan allocation and
-finished-store EOF handling) remain unfixed and require separate authorization.
+outside this slice. The other review findings are addressed by the separately
+authorized scan-publication and finished-store EOF slices below.
+
+## Authorized slice — larger writer capacity defaults
+
+- [x] Set per-writer scan defaults to 512 MiB and 16,384 completed output rows in
+  authoring, runtime WriterSpec and ScanAssembler.
+- [x] Set aggregate declared writer capacity to 2 GiB in runtime validation and
+  experiment preflight, preserving admission of four default-sized writers.
+- [x] Document row/byte accounting and unchanged transport/assembly behavior;
+  verify defaults, 10,000-trace VNA capacity arithmetic and four/five-writer admission.
+
+Complete. Limits are ceilings, not upfront scan allocations or process-RSS bounds.
+Existing saved plans/recipes retain explicit values; recompile for new defaults.
+This slice does not change slot sizes/counts, Cartesian classification, writer
+memory use, storage format, streaming, or finished-store EOF handling.
+
+## Authorized slice — bounded scan publication
+
+- [x] Classify Cartesian layouts by cardinality then lazy comparison against acquired
+  order; preserve point-indexed repeated/irregular paths and existing ragged rules.
+- [x] Keep window staging; inspect layout one window at a time, retaining reference
+  axes and per-row shape/dtype/sweep/offset metadata rather than full scan payloads.
+- [x] Copy bounded numerical chunks into the existing self-contained dataset format
+  through a private store path. Preserve public save snapshots and whole-array reads.
+- [x] Share temporary-file/manifest publication ordering with the ordinary writer;
+  validate metadata, coordinate chunks and exact payload completion before rename.
+- [x] Verify byte-compatible regular/dependent/irregular/ragged outputs, empty rows,
+  dtype promotion/byte order, bounded allocations and publication-failure cleanup;
+  exercise the full 100 × 100 × 2,001 complex64 offline VNA case.
+
+Complete. Numerical working memory scales with window size plus per-row metadata;
+OS caching and reader memory are not bounded by this claim. No pipeline topology,
+transport, capacity, file-format, continuous-streaming or recovery-policy changes.
+Finished-store EOF handling was outside this slice; see its follow-up below.
+
+## Authorized slice — normal EOF after store completion
+
+- [x] Stop polling/checking the physical store owner after its explicit finished
+  acknowledgment; normal EOF must not fail still-draining required result paths.
+- [x] Preserve failure detection for unacknowledged store loss and other workers;
+  preserve scan publication acknowledgments and all-required-endpoint completion.
+- [x] Reproduce the original failure with a real writer process exiting while a
+  required consumer is backpressured, then verify ordered drainage and success.
+
+Complete. No protocol, timeout, topology, capacity or hardware-lifecycle changes.
+No further implementation slice is authorized.
+
+## Authorized slice — server publication timeout
+
+- [x] Increase server-backed scan-publication and final graph-drain waits to 60
+  seconds through the runner's ManualPipeline configuration. Preserve standalone
+  defaults and client wait semantics; document the distinction.
+
+Complete. Publication directory durability and descendant termination findings
+remain outside this slice.
+
+## Authorized slice — durable dataset directory entries
+
+- [x] Sync the dataset's group directory after rename and before manifest
+  publication in the shared ordinary/chunked write path. Propagate sync failures
+  without publishing a manifest entry; retain the complete unlisted file.
+- [x] Document the ordering and failure behavior. No additional test, as requested.
+
+Complete. Descendant termination remains outside this slice.
+
+## Authorized slice — runner process-group escalation
+
+- [x] Preserve the initial 15-second runner wait, then send group SIGTERM and
+  probe group existence for up to five seconds before SIGKILL. Escalation must
+  not depend on whether the runner has already exited.
+- [x] Reap the direct runner child and tolerate group-disappearance races without
+  changing terminal-status or instrument-lease policies. No new test, as requested.
+
+Complete. This does not contain descendants that leave the process group or
+promise immediate termination of uninterruptible kernel I/O.
+
+## Authorized slice — first eight test consolidations
+
+- [x] Consolidate the eight candidates listed in TEST_REVIEW.md, moving unique
+  assertions into retained tests without changing production code or public APIs.
+- [x] Run the full headless suite and record its resulting count: 403 tests passed.
+  Lifecycle-harness retirement and the ineffective/misnamed tests remain deferred.
+
+Complete. No further test retirement is authorized.
+
+## Authorized slice — meaningful failure-test fixtures
+
+- [x] Revise the existing nonfatal execution-log test to cause a real filesystem
+  failure while retaining production logging, and check the exposed diagnostic.
+- [x] Truncate a valid dataset's numerical payload without damaging its header;
+  retain the incompatible-version check in the same test.
+- [x] Run the full suite without adding test methods or changing production code:
+  all 403 tests passed.
+
+Complete. Further lifecycle-harness/API retirement remains deferred.
+
+## Authorized slice — production runner lifecycle evidence
+
+- [x] Remove four test-only executor lifecycle tests; preserve their contracts in
+  two strengthened server tests and one direct production `runner.run()` test.
+- [x] Check seal/teardown/release/drain ordering for successful and failed drain
+  using mocked I/O boundaries, retaining real filter incomplete-average coverage.
+- [x] Run the full suite: all 400 tests passed. No production changes or
+  executor/harness rewrite.
+
+Complete. Further test/API retirement is not authorized.
+
+## Authorized slice — retire standalone FilterWorker
+
+- [x] Remove standalone FilterWorker and its private loop, exports and guide;
+  move FILTER_TYPES to its remaining consumer, server.py.
+- [x] Preserve SharedEdge and its direct test, migrate premature-completion
+  rejection to production graph ingress and retain unique data/metadata assertions.
+- [x] Run the full suite: 393 tests passed. Preserve the FilterServer worker
+  implementation and synchronous Pipeline/Collector/DatasetWriter APIs.
+
+Complete. Synchronous executor retirement is not authorized by this slice.
+
+## Authorized slice — retire synchronous filter pipeline
+
+- [x] Remove core.Pipeline, Collector/DatasetWriter and their exports/documentation.
+- [x] Replace synchronous tests with direct averaging, WindowState and schema
+  contracts; consolidate graph cases and migrate input-copy ownership to storage.
+- [x] Run the full suite: 388 tests passed. No production worker/numerical algorithm
+  or storage-format changes, and no replacement synchronous test executor.
+
+Complete. Further retirement is not authorized by this slice.
 
 Runner lifecycle refactoring remains deferred. Keep current evidence in STATUS.md,
 not a growing chronological test-count/change diary here.

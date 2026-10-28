@@ -237,19 +237,24 @@ class Registry:
         try:
             process.wait(timeout=15)
         except subprocess.TimeoutExpired:
-            process.terminate()
             terminal = None
         # A killed runner cannot reap its filter/store children. They share only
         # its process group, never the independently owned instrument workers.
         try:
             os.killpg(process.pid, signal.SIGTERM)
+            deadline = time.monotonic() + 5
+            while True:
+                process.poll()  # Reap our child so its zombie cannot keep the group alive.
+                os.killpg(process.pid, 0)
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    os.killpg(process.pid, signal.SIGKILL)
+                    break
+                time.sleep(min(0.05, remaining))
         except ProcessLookupError:
-            pass
-        try:
-            process.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            os.killpg(process.pid, signal.SIGKILL)
-            process.wait()
+            pass  # The group can disappear between any probe and signal.
+        # Only the runner is our direct child; group signalling cannot reap descendants.
+        process.wait()
         return terminal
 
     def _finalize_run(self, entry, process, terminal):

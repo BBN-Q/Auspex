@@ -176,6 +176,11 @@ scan encloses the entire fixed sweep: this first demonstration is **not incremen
 publication**. Temporary-buffer transfer, auto-cleanup, and incremental acquisition
 are deferred; plans containing buffer sinks are rejected before any folder write.
 
+Server-backed runs allow 60 seconds per scan-publication wait and for final graph
+drainage. This is independent of the client's `run.wait(timeout=...)`, which only
+limits how long that client waits. Standalone `ManualPipeline` retains its default
+10-second completion timeout.
+
 ## Ownership and failure rules
 
 - The service validates plans, topology, budgets and the InstrumentServer domain

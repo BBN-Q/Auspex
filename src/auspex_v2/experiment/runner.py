@@ -186,8 +186,9 @@ def run(channel, document, path, run_id, instrument_socket):
         from ..filters.preview import planned_sweep
         sweep = (planned_sweep(document)
                  if any(p.kind == "map" for p in compiled.plot_specs().values()) else None)
+        # Large disk-staged scans need a longer publication/drain deadline than manual use.
         pipeline = ManualPipeline(compiled, store_path=path, existing_store=True, buffer_full="fail",
-                                  preview_sweep=sweep)
+                                  preview_sweep=sweep, timeout=60)
         interpreter = LiveInterpreter(channel, session, pipeline, document)
         interpreter.progress("connecting")
         interpreter.poll()

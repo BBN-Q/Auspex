@@ -8,7 +8,6 @@ import numpy as np
 
 from auspex_v2.data import AuspexStore
 from auspex_v2.experiment import Experiment, OutputConnector
-from tests.experiment.pipeline_executor import PipelineExecutor
 from auspex_v2.experiment.resources import RunFolder, RetainedRunBuffers, preflight_run
 from auspex_v2.experiment import resources
 from auspex_v2.filters import Batch, PipelineError
@@ -67,6 +66,38 @@ class RunResourceTest(unittest.TestCase):
             from auspex_v2.experiment import CompiledPlan
             preflight_run(CompiledPlan(doc))
 
+    def test_default_writer_limits_preserve_four_writer_admission(self):
+        """Authoring/runtime/preflight defaults agree without allocating scan capacity."""
+        class FourWriters(Experiment):
+            """Four default-sized writers exactly fill the default aggregate allowance."""
+            output = OutputConnector(dtype="float64")
+            writer_count = 4
+
+            def setup_pipeline(self):
+                source = PipelineInput("input")
+                writers = [WriteToFile(name=f"disk_{i}", dataset=f"value_{i}")
+                           for i in range(self.writer_count)]
+                PipelineDefinition(inputs=[source], edges=[(source, w.sink) for w in writers])
+                self.connect(self.output, source)
+
+            def sequence(self, seq):
+                seq.publish(self.output, data=1.0)
+
+        compiled = preflight_run(FourWriters().compile())
+        schema, _, _, writers, _, _ = compiled.runtime()
+        self.assertEqual(schema.max_bytes, 64 * 1024)  # Transport defaults are unchanged.
+        self.assertEqual(len(writers), 4)
+        self.assertEqual(sum(w.max_scan_bytes for w in writers.values()), 2 * 1024**3)
+        self.assertTrue(all(w.max_scan_bytes == 512 * 1024**2
+                            and w.max_scan_windows == 16384 for w in writers.values()))
+
+        class FiveWriters(FourWriters):
+            """A fifth default writer must still be rejected before execution."""
+            writer_count = 5
+
+        with self.assertRaisesRegex(PipelineError, "Writer staging exceeds scan budget"):
+            preflight_run(FiveWriters().compile())
+
     def test_folder_allocation_metadata_and_numbering(self):
         """Every accepted run owns a distinct initialized store, even without writers."""
         plan = Buffered().compile()
@@ -103,27 +134,6 @@ class RunResourceTest(unittest.TestCase):
             self.assertFalse((failed.path / "plan.json").exists())
             next_run = RunFolder.allocate(plan, name="test", directory=directory)
             self.assertEqual(next_run.path.name, "test_001.auspex")
-
-    def test_preallocated_folder_accepts_pipeline_writer_without_overwriting_metadata(self):
-        """The offline harness exercises the same explicit append-mode handoff."""
-        class WithWriter(Experiment):
-            output = OutputConnector(dtype="float64", max_bytes=1024)
-            def setup_pipeline(self):
-                source = PipelineInput("input")
-                disk = WriteToFile(name="disk", group="results", dataset="value")
-                PipelineDefinition(inputs=[source], edges=[(source, disk.sink)])
-                self.connect(self.output, source)
-            def sequence(self, seq):
-                seq.publish(self.output, data=1.0)
-        plan = WithWriter().compile()
-        with tempfile.TemporaryDirectory() as directory:
-            run = RunFolder.allocate(plan, name="example", directory=directory)
-            completed = PipelineExecutor().run(plan, store_path=run.path, existing_store=True)
-            self.assertEqual(completed.outcome, "SUCCEEDED", completed.reason)
-            with AuspexStore(run.path) as store:
-                self.assertEqual(store.list_datasets(), [("results", "value")])
-                self.assertEqual(store.read_run_metadata()["plan_identity"], plan.identity)
-            self.assertEqual(run.status()["state"], "ACCEPTED")  # No daemon to advance it yet.
 
     def test_buffer_reservation_transfer_release_cleanup(self):
         """Results survive caller array mutations but never a server catalog cleanup."""

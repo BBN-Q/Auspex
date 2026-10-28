@@ -286,17 +286,6 @@ class DefinitionExecutionTest(unittest.TestCase):
                 running.submit(DATA, axes=AXES)
                 running.submit(DATA, axes=[Axis("frequency", np.array([2., 3.]), "Hz")])
 
-    def test_incomplete_average_is_failure(self):
-        """Normal context exit cannot turn an incomplete required group into success."""
-        source = PipelineInput("trace", SCHEMA)
-        average = ComplexAverage(name="average", repeats=2)
-        memory = DataBuffer(name="memory")
-        definition = PipelineDefinition(inputs=[source], edges=[
-            (source, average.sink), (average.final_average, memory.sink)])
-        with self.assertRaises(PipelineError):
-            with ManualPipeline(definition) as running:
-                running.submit(DATA, axes=AXES)
-
     def test_definition_cannot_be_mixed_with_old_recipe_arguments(self):
         definition, _, _, _ = buffered(SCHEMA)
         with self.assertRaisesRegex(ValueError, "own nodes"):

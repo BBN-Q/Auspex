@@ -22,7 +22,7 @@ class OperatorCommandsTest(unittest.TestCase):
     """Verify that plain-console controls use the same state and confirmations as the TUI."""
 
     def test_prompt_modes_ids_and_confirmations(self):
-        """Disallow bulk recovery and only dispatch clear after an explicit yes."""
+        """Resolve listed IDs, route experiment queries, and confirm destructive actions."""
         class InstrumentClient:
             """Record one registered device and one clear request."""
             calls = []
@@ -40,20 +40,29 @@ class OperatorCommandsTest(unittest.TestCase):
                 return {"run": None, "instruments": {"vna": {"driver": "SimulatedVNA",
                         "physical": "SIM::VNA", "state": "DISCONNECTED", "live_sessions": 0}}}
 
+            def connect(self, name):
+                self.calls.append(("connect", name))
+
             def deregister(self, name):
-                self.calls.append(name)
+                self.calls.append(("clear", name))
 
         class ExperimentClient:
-            """Return a recognizable server status."""
+            """Distinguish status from run-list dispatch without starting services."""
+            calls = []
 
             def __init__(self, path):
                 pass
 
             def status(self):
-                return {"active": None}
+                self.calls.append("status")
+                return {"active": "run-1"}
 
-        inputs = iter(("list", "clear 1", "n", "clear 1", "y", "experiment", "status",
-                       "instruments", "recover all"))
+            def list_runs(self):
+                self.calls.append("runs")
+                return [{"run_id": "run-1"}]
+
+        inputs = iter(("connect 1", "list", "connect 1", "clear 1", "n", "clear 1", "y",
+                       "experiment", "status", "runs", "instruments", "recover all"))
         output = io.StringIO()
 
         def read_input(prompt):
@@ -66,8 +75,13 @@ class OperatorCommandsTest(unittest.TestCase):
              patch("builtins.input", side_effect=read_input), \
              contextlib.redirect_stdout(output), patch.dict(launcher.os.environ, {"NO_COLOR": "1"}):
             launcher.plain_operator_prompt("instrument.sock", "experiment.sock")
-        self.assertEqual(InstrumentClient.calls, ["vna"])
-        self.assertIn("ExperimentServer: {'active': None}", output.getvalue())
+        self.assertEqual(InstrumentClient.calls, [("connect", "vna"), ("clear", "vna")])
+        self.assertEqual(ExperimentClient.calls, ["status", "runs"])
+        self.assertIn("list first", output.getvalue())
+        self.assertIn("1. vna", output.getvalue())
+        self.assertIn("connect vna", output.getvalue())
+        self.assertIn("ExperimentServer: {'active': 'run-1'}", output.getvalue())
+        self.assertIn("[{'run_id': 'run-1'}]", output.getvalue())
         self.assertIn("Recovery must be individual", output.getvalue())
         self.assertNotIn("\033[", output.getvalue())
 

@@ -17,13 +17,15 @@ import time
 import numpy as np
 
 from ..data import Axis
-from .core import Batch, GroupComplete, PipelineError, PortSchema, WindowState
+from .averager import ComplexAverager
+from .core import Batch, GroupComplete, Passthrough, PipelineError, PortSchema, WindowState
 from .graph_transport import GraphEdge
 from .transport import _receive, _send
-from .worker import FILTER_TYPES
 from .store_owner import store_owner
 from .inspection import GraphInspector
 from .buffer import BufferSink
+
+FILTER_TYPES = {"passthrough": Passthrough, "complex_average": ComplexAverager}
 
 # Keep these in sync with the supported worker constructors; the inspector must
 # show effective values even when NodeSpec omits optional constructor arguments.
@@ -48,8 +50,8 @@ class WriterSpec:
     port: str
     group: str = "data"
     prefix: str = ""
-    max_scan_bytes: int = 64 * 1024 * 1024
-    max_scan_windows: int = 8192
+    max_scan_bytes: int = 512 * 1024 * 1024
+    max_scan_windows: int = 16384
     dataset: str | None = None  # Exact name; None retains legacy prefix + scan naming.
 
 
@@ -170,7 +172,7 @@ class FilterServer:
                  existing_store=False, buffer_full="block", plots=None, preview_sweep=None,
                  backpressure=True, slots=2, result_capacity=2, max_windows=8,
                  startup_timeout=10, memory_budget_bytes=64 * 1024 * 1024,
-                 store_scan_budget_bytes=256 * 1024 * 1024):
+                 store_scan_budget_bytes=2 * 1024 * 1024 * 1024):
         self.schema = schema
         self.input_name = input_name if input_name is not None else schema.value_name
         if not isinstance(self.input_name, str) or not self.input_name:
@@ -290,7 +292,7 @@ class FilterServer:
     @staticmethod
     def validate_graph(schema, nodes, edges, results, writers, buffer_specs, *, slots=2,
                        result_capacity=2, memory_budget_bytes=64 * 1024 * 1024,
-                       store_scan_budget_bytes=256 * 1024 * 1024):
+                       store_scan_budget_bytes=2 * 1024 * 1024 * 1024):
         """Check topology and declared budgets without allocating or starting workers."""
         if any(type(value) is not int or value < 1 for value in
                (slots, result_capacity, memory_budget_bytes, store_scan_budget_bytes)):
@@ -483,6 +485,10 @@ class FilterServer:
     def _drain_worker_statuses(self, statuses, drain: _DrainState):
         """Handle one pending status per child and detect failures independently of admission."""
         for name, connection in statuses.items():
+            # The store exits after acknowledging completion. Other required
+            # results may still be backpressured; its subsequent EOF is normal.
+            if name == "$store" and name in drain.finished:
+                continue
             if connection.poll():
                 try:
                     response = _receive(connection)
@@ -492,7 +498,7 @@ class FilterServer:
                     self._handle_store_status(response, drain)
                     continue
                 raise PipelineError(response.get("error", f"Unexpected status: {name}"))
-            if not self.processes[name].is_alive() and not (name == "$store" and name in drain.finished):
+            if not self.processes[name].is_alive():
                 raise PipelineError(f"Worker exited: {name}")
 
     def _handle_store_status(self, response, drain: _DrainState):

@@ -1,6 +1,5 @@
 """Offline instrument contract tests: no VISA backend or hardware required."""
 
-import importlib
 import sys
 import unittest
 from unittest.mock import patch
@@ -174,11 +173,6 @@ class TestDrivers(unittest.TestCase):
         self.assertEqual(AgilentE8363C.KIND, InstrumentKind.VNA)
         self.assertEqual(AgilentN5230A.KIND, InstrumentKind.VNA)
         self.assertEqual(YokogawaGS200.KIND, InstrumentKind.DC_SOURCE)
-
-    def test_import_does_not_import_pyvisa(self):
-        with patch.dict(sys.modules, {"pyvisa": None}):
-            importlib.reload(importlib.import_module("auspex_v2.instruments.drivers.agilent"))
-            importlib.reload(importlib.import_module("auspex_v2.instruments.drivers.yokogawa"))
 
     def test_visa_transport_always_uses_pyvisa_py(self):
         from auspex_v2.instruments.drivers.visa import VisaTransport

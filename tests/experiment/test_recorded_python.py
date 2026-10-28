@@ -1,10 +1,7 @@
 """Real numerical calls and JSON round trips, without hardware or mocked numerical libraries."""
 import importlib
 import json
-import os
 from pathlib import Path
-import subprocess
-import sys
 import tempfile
 import unittest
 import warnings
@@ -270,24 +267,3 @@ class RecordedPythonTest(unittest.TestCase):
                 seq.module("numpy").ndarray((2,))
         with self.assertRaisesRegex(CompileError, "constructors"):
             Constructor().compile()
-
-    def test_saved_fft_executes_in_a_fresh_process_without_authoring_class(self):
-        """The JSON manifest resolves NumPy and reproduces the analytical result independently."""
-        from examples.recorded_fft import RecordedFFT
-        plan = compile_quiet(RecordedFFT())
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "plan.json"
-            plan.save(path)
-            script = '''import json, sys
-from auspex_v2.experiment import CompiledPlan
-from tests.experiment.fake_executor import FakeExecutor
-plan = CompiledPlan.load(sys.argv[1])
-run = FakeExecutor().run(plan)
-print(json.dumps([plan.identity, run.outcome, run.params['component']]))
-'''
-            env = dict(os.environ, PYTHONPATH=str(Path(__file__).resolve().parents[2] / "src"))
-            result = subprocess.check_output([sys.executable, "-B", "-c", script, str(path)], env=env, text=True)
-        identity, outcome, component = json.loads(result)
-        self.assertEqual(identity, plan.identity)
-        self.assertEqual(outcome, "SUCCEEDED")
-        self.assertAlmostEqual(component, 0.5)

@@ -10,6 +10,139 @@ replaces the historical discussion; it is not authorization to implement the bac
 
 ## Resume here
 
+- **Synchronous filter pipeline retired:** removed core.Pipeline and the
+  Collector/DatasetWriter module and exports. Five direct contract tests replace
+  the ten synchronous-executor tests: analytical partial/final averaging, unchanged
+  preview after grid rejection, acquisition groups/window order, group-boundary
+  configuration and coordinate-byte budgets. Graph fanout/schema checks gained
+  missing assertions; the two-writer store test now mutates submitted data and
+  coordinates before completion and verifies both saved originals. Production
+  workers, numerical implementations and storage formats are unchanged. All 388
+  tests passed headless in 85.145 seconds; `git diff --check` passed. Latest log:
+  `.agents/.full-tests.log`. Earlier notes retaining the synchronous APIs are
+  superseded by this authorized retirement; no further cleanup is authorized.
+
+- **Standalone FilterWorker retired:** removed filters/worker.py and its export;
+  FILTER_TYPES now lives in server.py alongside its sole remaining consumer.
+  Production `_graph_worker` and SharedEdge are unchanged. The direct slot test
+  moved to test_transport.py; redundant worker-only tests were removed and graph
+  tests strengthened for averaging metadata and detached results. Window-order
+  rejection is tested at graph ingress: internal edges permit sparse empty windows,
+  unlike the removed single-worker protocol. The first full run exposed that test
+  migration mismatch; after correcting the test, all 393 tests passed headless in
+  83.726 seconds. `git diff --check` passed. Log: `.agents/.full-tests.log`.
+  Synchronous Pipeline/Collector/DatasetWriter remain supported and unchanged.
+
+- **Lifecycle evidence migrated to production:** removed four PipelineExecutor
+  lifecycle tests. The real server measurement-failure test now also exercises
+  invalid publication, successful hardware teardown, empty storage and lease
+  release; its driver-quarantine case remains. The server teardown-failure test
+  checks that later cleanup is not attempted and the lease is not released while
+  preserving completed publication. One direct `runner.run()` test with mocked
+  I/O verifies seal → teardown → release → drain → terminal for successful and
+  failed drainage; real incomplete-average filter tests remain. Production code,
+  FakeExecutor and PipelineExecutor are unchanged. All 400 tests passed headless
+  in 84.355 seconds; `git diff --check` passed. Latest log:
+  `.agents/.full-tests.log`. No further retirement is authorized.
+
+- **Two failure-test fixtures corrected:** the nonfatal logging test now creates
+  an execution.log directory during real folder allocation, before runner spawn,
+  and checks successful completion, lease release and the real logging diagnostic.
+  The dataset test removes one numerical payload byte, confirms its header is
+  unchanged/readable and requires the truncated-array error, retaining version
+  rejection. No test methods added or production code changed. All 403 tests
+  passed headless in 88.934 seconds; `git diff --check` passed. Latest log:
+  `.agents/.full-tests.log`.
+
+- **First eight test consolidations complete:** suite reduced from 411 to 403
+  methods without production/API changes. Unique axis/count, named-lookup,
+  plan-identity metadata and command-routing assertions moved into retained
+  tests; one definition-backed incomplete-average context-exit test remains.
+  Removed the redundant in-process vendor reload and fake-backend FFT subprocess.
+  All 403 tests passed headless in 85.882 seconds; `git diff --check` passed.
+  Latest log: `.agents/.full-tests.log`. The review's other proposals remain
+  deferred; see TEST_REVIEW.md for the original audit and completed slice.
+
+- **Full validation after all three review fixes:** with user authorization to use
+  the available Python environment, all 411 tests passed headless in 88.681 seconds:
+  `MPLBACKEND=Agg QT_QPA_PLATFORM=offscreen python -B -m unittest discover -s tests -q`.
+  This includes the server timeout, dataset directory fsync and process-group
+  escalation changes. Log: `.agents/.full-tests.log`. Earlier notes about tests
+  not being rerun are superseded by this run.
+
+- **Runner process-group escalation fixed:** after the existing initial runner
+  wait, cleanup now gives the whole process group five seconds after SIGTERM,
+  then sends SIGKILL if the group still exists, even if the runner already exited.
+  The direct runner is reaped; group-disappearance races are normal completion.
+  Terminal-status and lease policies are unchanged. No new test per user request.
+  Static control-flow review and `git diff --check` passed; tests were not rerun
+  under the repository-only restriction (available Python resolves outside it).
+
+- **Dataset directory durability fixed:** the shared ordinary/chunked publication
+  path now fsyncs the group directory after dataset rename and before publishing
+  the manifest. Sync failures propagate, leaving the complete file unlisted.
+  No additional test per user request. Static ordering inspection and
+  `git diff --check` passed; tests were not rerun under the repository-only
+  restriction (available Python resolves outside the repository).
+
+- **Server publication timeout increased:** the runner now explicitly passes
+  `timeout=60` to ManualPipeline for scan-publication and final graph-drain waits.
+  Standalone completion defaults remain 10 seconds; client wait timeouts are
+  independent. Server documentation updated. Static call-path inspection and
+  `git diff --check` passed; tests were not rerun because available Python resolves
+  outside the repository, forbidden by the current session restriction.
+
+- **Finished-store EOF fix complete:** FilterServer stops polling the physical
+  store's status channel only after its finished acknowledgment. Normal store EOF
+  no longer fails other required endpoints still draining under backpressure.
+  Unacknowledged store loss and other-worker failures still fail the graph, and
+  success still requires all required endpoints. The new process-backed regression
+  failed on the original code, then passed: two windows, one retained-result slot,
+  writer exit before consumer resumes, no premature success, readable publication,
+  ordered result drainage and final success. Existing worker/store-death tests pass.
+  All 411 tests passed headless (139.6 seconds); git diff --check passed. No further
+  implementation slice is authorized.
+
+- **Bounded scan publication complete:** ScanAssembler now inspects staged windows
+  for layout, then copies values/dependent coordinates in window-sized chunks.
+  Cartesian classification checks observed-grid cardinality before lazy order
+  comparison; it never expands hypothetical combinations. Reference axes and
+  per-row shape/sweep/offset metadata replace whole-scan payload retention.
+  The store's private chunk path validates layout, finite coordinates and exact
+  byte counts, sharing temporary-file/fsync/rename/manifest publication with the
+  ordinary writer. Dataset format 2, public save snapshots and readers are unchanged.
+  Nine new scan-assembly tests and one chunk-validation test cover byte-identical
+  regular/dependent/irregular/ragged outputs, empty rows, coordinate promotion and
+  non-native byte order, no hypothetical-product enumeration, allocation bounds,
+  pre-rename cleanup/retry and post-rename manifest-failure/direct recovery.
+  Shared/dependent/ragged scans over 12 MiB each published with under 8 MiB of
+  tracked allocations while whole-array writing/stacking/concatenation was disabled.
+  The full offline high case staged 320,160,000 bytes (10,000 traces × 2,001 complex64
+  values plus float64 axes) and published shape (100, 100, 2001), a 160,098,329-byte
+  file. Peak tracked publication allocations were 1,587,227 bytes; publication took
+  19.69 seconds with tracemalloc enabled, staging 2.88 seconds on this machine.
+  Representative rows were checked from file offsets without loading the scan.
+  These are Python/NumPy allocation measurements, not process-RSS, OS-cache,
+  real-hardware or digitizer-throughput claims. All 410 tests passed headless;
+  the previously intermittent TUI shutdown test passed on this run. No further
+  implementation slice is authorized. Finished-store EOF is now fixed as noted above.
+
+- **Writer capacity default slice complete:** 512 MiB and 16,384 completed output
+  rows per writer scan, 2 GiB aggregate declared writer capacity in runtime and
+  experiment preflight. Four default writers remain admissible; five exceed the
+  aggregate budget. Byte accounting includes each emitted window's coordinates.
+  Transport slots, transport memory budget and saved formats are unchanged;
+  existing saved plans/recipes retain explicit values. The main filter guide and
+  source guides document the new ceilings and row meaning.
+  All 83 filter tests (headless Qt/Agg) and 8 experiment-resource tests passed;
+  git diff --check passed. Added checks use one 2,001-point complex64 trace to
+  verify the 10,000-row VNA capacity arithmetic, compare writer/assembler defaults,
+  and exercise real compiled four/five-writer preflight without large allocations.
+  An initial filter discovery run without the headless environment timed out;
+  rerunning with QT_QPA_PLATFORM=offscreen and MPLBACKEND=Agg passed.
+  Full-size offline publication evidence and the separately authorized finished-store
+  EOF fix are now recorded above.
+
 - **InstrumentServer announcement fix complete:** file/console output failures
   (OSError/UnicodeError) are independently best effort. A failed stdout descriptor
   is redirected to /dev/null because buffered bytes would otherwise fail again
@@ -20,9 +153,9 @@ replaces the historical discussion; it is not authorization to implement the bac
   expected worker-error quarantine and clean service exit. Separate sink checks
   cover file/console OSError and UnicodeError. All 26 instrument-server/registry
   lifecycle tests and git diff --check passed. No hardware commands tested.
-  Connected-but-undrained stdout may still block. The other review findings
-  (scan Cartesian-product allocation and completed-store EOF handling) remain
-  unfixed; no implementation of those is authorized yet.
+  Connected-but-undrained stdout may still block. Cartesian-product allocation
+  is now fixed by bounded scan publication; completed-store EOF handling is also
+  fixed by the separately authorized slice above.
 
 - **V1 VISA port slice complete under revised scope:** 11 implemented ports plus
   16 unavailable stubs, deferred by the user to manual porting/hardware validation.
@@ -160,7 +293,8 @@ replaces the historical discussion; it is not authorization to implement the bac
   views. Phase is wrapped radians, never unwrapped. One additional synthetic 2D
   map opens by default in the visual demo. Ragged/higher-rank plotting is deferred.
   Separate read-only graph inspector shows topology/schemas/acknowledged configuration,
-  not measurement plots or editing. Scan assembly is bounded-memory, not out-of-core.
+  not measurement plots or editing. Scan publication uses bounded numerical window
+  reads/copies plus per-row metadata; ordinary dataset reads still load whole arrays.
 - Optional compiled `Plot` sinks declare a current trace or growing writer-backed
   map. The store owner retains complete acquired map state, serves private Unix
   snapshots and writes best-effort final `.preview/` caches / `preview.json` for
@@ -226,10 +360,13 @@ replaces the historical discussion; it is not authorization to implement the bac
 
 ## Evidence and limits
 
-Latest full implementation validation (including automatic driver exports/admission):
+Latest full implementation validation (including bounded scan publication, normal store EOF,
+server publication timeout, dataset directory fsync, process-group escalation and
+the test consolidations, failure fixtures, lifecycle-test migration and standalone
+FilterWorker and synchronous pipeline retirement):
 
 ```sh
-MPLBACKEND=Agg QT_QPA_PLATFORM=offscreen python -B -m unittest discover -s tests -q  # 390 passed
+MPLBACKEND=Agg QT_QPA_PLATFORM=offscreen python -B -m unittest discover -s tests -q  # 388 passed
 ```
 
 Six driver-export tests cover canonical export identity, deterministic explicit

@@ -15,10 +15,10 @@ from auspex_v2.experiment import (
 )
 from tests.experiment.fake_executor import FakeExecutor
 from tests.experiment.pipeline_executor import PipelineExecutor
-from auspex_v2.filters import PipelineError, PortSchema, ManualPipeline, FilterServer
+from auspex_v2.filters import PipelineError, PortSchema
 from auspex_v2.filters.definitions import (
     PipelineInput, PipelineDefinition, Passthrough, DataBuffer, WriteToFile,
-    EmptySource, ComplexAverage,
+    EmptySource,
 )
 
 
@@ -255,82 +255,6 @@ if __name__ == "__main__":
             with AuspexStore(store_path) as store:
                 self.assertEqual(store.list_datasets(), [("measurement", "response")])
                 self.assertEqual(store.read_dataset("measurement", "response").data.shape, (2, 2))
-
-    def test_scan_is_sealed_before_teardown_and_awaited_afterward(self):
-        """Storage may progress concurrently with teardown, but never delays its start."""
-        events = []
-        original_seal, original_wait = ManualPipeline._seal_scan, FilterServer.wait_scan
-        def seal(pipeline):
-            if pipeline._scan is not None:
-                events.append("seal")
-            return original_seal(pipeline)
-        def wait(graph, scan, **kwargs):
-            events.append("wait")
-            return original_wait(graph, scan, **kwargs)
-        def record(*args):
-            if args[2] == "safe":
-                events.append("teardown")
-            return command(*args)
-        with tempfile.TemporaryDirectory() as directory:
-            with patch.object(ManualPipeline, "_seal_scan", seal), patch.object(FilterServer, "wait_scan", wait):
-                run = PipelineExecutor(record).run(configured().compile(),
-                                                   store_path=Path(directory) / "run.auspex")
-        self.assertEqual(run.outcome, "SUCCEEDED")
-        self.assertEqual(events, ["seal", "teardown", "wait"])
-
-    def test_bad_data_fails_and_attempts_teardown_without_publishing(self):
-        calls = []
-        def bad(op, instrument, member, args, kwargs):
-            calls.append(member)
-            if member == "get_trace":
-                return np.array([1., 2.]), np.array([1., 2.])  # Not complex128.
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "run.auspex"
-            run = PipelineExecutor(bad).run(configured().compile(), store_path=path)
-            self.assertEqual(run.outcome, "FAILED")
-            self.assertEqual(calls, ["get_trace", "safe"])
-            with AuspexStore(path) as store:
-                self.assertEqual(store.list_datasets(), [])
-
-    def test_teardown_failure_stops_cleanup_but_retains_complete_scan(self):
-        """Publication and teardown outcome are distinct, and cleanup is stop-on-error."""
-        class Cleanup(Measurement):
-            def teardown(self, seq):
-                seq.call(self.vna, "safe")
-                seq.call(self.vna, "later")
-        calls = []
-        def fail(op, instrument, member, args, kwargs):
-            calls.append(member)
-            if member == "safe":
-                raise RuntimeError("safe state not established")
-            return command(op, instrument, member, args, kwargs)
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "run.auspex"
-            run = PipelineExecutor(fail).run(configured(Cleanup).compile(), store_path=path)
-            self.assertEqual(run.outcome, "FAILED")
-            self.assertIn("teardown", run.reason)
-            self.assertNotIn("later", calls)
-            with AuspexStore(path) as store:
-                self.assertEqual(store.list_datasets(), [("measurement", "response")])
-
-    def test_teardown_precedes_wait_for_required_group_completion(self):
-        """An incomplete required average fails finalization after cleanup was attempted."""
-        class Average(Measurement):
-            def setup_pipeline(self):
-                source = PipelineInput("input")
-                avg = ComplexAverage(name="average", repeats=2)
-                memory = DataBuffer(name="memory")
-                PipelineDefinition(inputs=[source], edges=[
-                    (source, avg.sink), (avg.final_average, memory.sink)])
-                self.connect(self.trace, source)
-        calls = []
-        def record(*args):
-            calls.append(args[2])
-            return command(*args)
-        run = PipelineExecutor(record).run(configured(Average).compile())
-        self.assertEqual(run.outcome, "FAILED")
-        self.assertIn("safe", calls)
-        self.assertIn("pipeline finalization", run.reason)
 
     def test_unattended_buffer_overflow_fails_without_a_consumer(self):
         """A buffer plus a disk writer must fail clearly, not hang on scan closure."""

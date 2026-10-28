@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import dataclass, replace
 import fcntl
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -34,6 +36,17 @@ class Coordinate:
 
     name: str
     values: object
+    dimensions: tuple[str, ...]
+    unit: str | None = None
+
+
+@dataclass(frozen=True)
+class _CoordinateLayout:
+    """Private coordinate description for scan assembly without a full value array."""
+
+    name: str
+    shape: tuple[int, ...]
+    dtype: object
     dimensions: tuple[str, ...]
     unit: str | None = None
 
@@ -199,6 +212,121 @@ def _pack_dataset(stream, dataset: Dataset):
         stream.write(arr.tobytes(order="C"))
 
 
+def _scan_header(shape, dtype, dimensions, coordinates, offsets,
+                 value_name, value_unit, label, source, input_name):
+    """Validate scan layout metadata without allocating arrays of the final shape.
+
+    Numerical coordinates are checked as chunks arrive; offsets are bounded row
+    metadata. Keep these layout rules consistent with _validated_dataset.
+    """
+    shape, dimensions = tuple(shape), tuple(dimensions)
+    if (any(type(n) is not int or n < 0 for n in shape)
+            or len(dimensions) != len(shape) or len(set(dimensions)) != len(dimensions)):
+        raise ValueError("Value dimensions do not match its rank")
+    for dim in dimensions:
+        _component(dim)
+    if not isinstance(value_name, str) or not value_name:
+        raise ValueError("Value needs a name")
+    if value_unit is not None and not isinstance(value_unit, str):
+        raise ValueError("Units must be strings or None")
+    for text in (label, source, input_name):
+        if text is not None and not isinstance(text, str):
+            raise ValueError("Labels and sources must be strings or None")
+    arrays = {}
+    position = 0
+
+    def add_array(key, dtype, shape):
+        nonlocal position
+        dtype = np.dtype(dtype)
+        if dtype.kind not in "biufc" or dtype.hasobject:
+            raise TypeError("Only numeric and boolean arrays are supported")
+        size = math.prod(shape) * dtype.itemsize
+        arrays[key] = {"dtype": dtype.str, "shape": list(shape), "offset": position, "bytes": size}
+        position += size
+
+    add_array("value", dtype, shape)
+    ragged = offsets is not None
+    if ragged:
+        offsets = np.asarray(offsets)
+        if (len(shape) != 1 or offsets.ndim != 1 or offsets.dtype.kind not in "iu"
+                or len(offsets) < 1 or offsets[0] != 0 or offsets[-1] != shape[0]
+                or np.any(offsets[1:] < offsets[:-1]) or shape[0] > np.iinfo(np.int64).max):
+            raise ValueError("Invalid ragged offsets")
+        add_array("offsets", "<i8", offsets.shape)
+    described = []
+    names = set()
+    for i, c in enumerate(coordinates):
+        _component(c.name)
+        if c.name in names:
+            raise ValueError("Duplicate coordinate name")
+        names.add(c.name)
+        if c.unit is not None and not isinstance(c.unit, str):
+            raise ValueError("Units must be strings or None")
+        if (not c.dimensions or len(set(c.dimensions)) != len(c.dimensions)
+                or any(d not in dimensions and (not ragged or d != "sample") for d in c.dimensions)):
+            raise ValueError("Invalid coordinate dimensions")
+        if ragged:
+            if "sample" in c.dimensions and c.dimensions != ("sample",):
+                raise ValueError("Ragged sample coordinates must be flat")
+            expected = tuple(len(offsets) - 1 if d == dimensions[0] else shape[0] for d in c.dimensions)
+        else:
+            expected = tuple(shape[dimensions.index(d)] for d in c.dimensions)
+        if tuple(c.shape) != expected:
+            raise ValueError("Coordinate shape does not match its dimensions")
+        if np.dtype(c.dtype).kind not in "biuf":
+            raise ValueError("Coordinates must be finite real numbers")
+        key = f"coordinate_{i}"
+        add_array(key, c.dtype, expected)
+        described.append({"name": c.name, "dimensions": list(c.dimensions), "unit": c.unit, "array": key})
+    if ragged:
+        if not any(c.dimensions == (dimensions[0],) for c in coordinates) or not any(
+                c.dimensions == ("sample",) for c in coordinates):
+            raise ValueError("Ragged values need outer and sample coordinates")
+    elif any(not any(c.name == d and d in c.dimensions for c in coordinates) for d in dimensions):
+        raise ValueError("Every value dimension needs a named coordinate")
+    return {"format_version": FORMAT_VERSION, "dimensions": list(dimensions),
+            "value_name": value_name, "value_unit": value_unit, "label": label,
+            "source": source, "input_name": input_name, "coordinates": described,
+            "arrays": arrays, "ragged": ragged}
+
+
+def _pack_scan_chunks(stream, header, chunks, offsets):
+    """Fill declared payload sections from bounded, possibly interleaved chunks.
+
+    Seeking lets one staged window supply values and dependent coordinates in one
+    visit. Every section must be filled exactly before the file can be published.
+    """
+    encoded = json.dumps(header, allow_nan=False, separators=(",", ":")).encode("utf-8")
+    if len(encoded) > MAX_HEADER:
+        raise ValueError("Dataset header is too large")
+    stream.write(MAGIC + struct.pack("<Q", len(encoded)) + encoded)
+    start = stream.tell()
+    arrays = header["arrays"]
+    written = dict.fromkeys(arrays, 0)
+    keys = {None: "value", **{c["name"]: c["array"] for c in header["coordinates"]}}
+
+    def write(key, values):
+        array = _numeric(values)
+        spec = arrays[key]
+        if array.dtype != np.dtype(spec["dtype"]) or written[key] + array.nbytes > spec["bytes"]:
+            raise ValueError("Scan chunk dtype or byte count does not match its layout")
+        if key.startswith("coordinate_") and not np.all(np.isfinite(array)):
+            raise ValueError("Coordinates must be finite real numbers")
+        stream.seek(start + spec["offset"] + written[key])
+        stream.write(array.tobytes(order="C"))
+        written[key] += array.nbytes
+
+    if offsets is not None:
+        write("offsets", np.asarray(offsets, dtype="<i8"))
+    for name, values in chunks:
+        if name not in keys:
+            raise ValueError(f"Unknown scan chunk coordinate: {name!r}")
+        write(keys[name], values)
+    if any(written[key] != spec["bytes"] for key, spec in arrays.items()):
+        raise ValueError("Incomplete scan payload")
+    stream.truncate(start + sum(spec["bytes"] for spec in arrays.values()))
+
+
 def _read_header(stream):
     """Read the bounded file directory without loading the numerical arrays."""
     if stream.read(len(MAGIC)) != MAGIC:
@@ -321,14 +449,39 @@ class AuspexStore:
                       offsets=None, dimensions=None, value_name="value", value_unit=None,
                       label=None, source=None, input_name=None):
         """Publish a complete self-describing dataset and then its manifest entry."""
+        with self._dataset_file(group, name) as stream:
+            dataset = Dataset(np.asarray(data), tuple(axes), tuple(coordinates or ()), offsets,
+                              tuple(dimensions) if dimensions is not None else (),
+                              value_name, value_unit, label, source, input_name)
+            _pack_dataset(stream, dataset)
+
+    def _write_dataset_chunks(self, group, name, *, shape, dtype, dimensions,
+                              coordinates, chunks, offsets=None, value_name="value",
+                              value_unit=None, label=None, source=None, input_name=None):
+        """Publish a private scan layout from window-sized numerical chunks.
+
+        Chunk keys are None for values, or a coordinate name. Chunks may interleave
+        arrays, but must fill each array in C order with its declared dtype. Small
+        ragged offsets are supplied separately as row metadata. No payload snapshot
+        or scan-sized validation array is constructed here.
+        """
+        with self._dataset_file(group, name) as stream:
+            header = _scan_header(shape, dtype, dimensions, coordinates, offsets,
+                                  value_name, value_unit, label, source, input_name)
+            _pack_scan_chunks(stream, header, chunks, offsets)
+
+    @contextmanager
+    def _dataset_file(self, group, name):
+        """Share exclusive, temporary-file publication between ordinary and scan writes.
+
+        Sync file contents and the final directory entry before publishing the manifest.
+        A directory-sync or manifest failure can leave a complete but unlisted file.
+        """
         if self.mode == "r" or self._lock is None:
             raise PermissionError("Store is not open for writing")
         group, name = _component(group), _component(name)
         if name in self._manifest["datasets"].get(group, {}):
             raise FileExistsError(f"Dataset already exists: {group}/{name}")
-        dataset = Dataset(np.asarray(data), tuple(axes), tuple(coordinates or ()), offsets,
-                          tuple(dimensions) if dimensions is not None else (),
-                          value_name, value_unit, label, source, input_name)
         directory = self.path / group
         directory.mkdir(exist_ok=True)
         target = directory / f"{name}.dat"
@@ -338,11 +491,17 @@ class AuspexStore:
         try:
             with tempfile.NamedTemporaryFile(dir=directory, prefix=".array-", delete=False) as stream:
                 tmp = Path(stream.name)
-                _pack_dataset(stream, dataset)
+                yield stream
                 stream.flush()
                 os.fsync(stream.fileno())
             os.replace(tmp, target)
             tmp = None
+            # File fsync preserves bytes, not the rename in its parent directory.
+            fd = os.open(directory, os.O_RDONLY)
+            try:
+                os.fsync(fd)
+            finally:
+                os.close(fd)
             updated = {**self._manifest, "datasets": {**self._manifest["datasets"]}}
             updated["datasets"][group] = {**updated["datasets"].get(group, {}), name: {"file": f"{group}/{name}.dat"}}
             self._publish_manifest(updated)

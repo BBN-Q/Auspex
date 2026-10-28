@@ -64,6 +64,31 @@ class DatasetFileTest(unittest.TestCase):
 class StoreOwnerTest(unittest.TestCase):
     """Require durable publication from multiple logical writers before scan completion."""
 
+    def test_default_scan_limits_accommodate_ten_thousand_vna_traces(self):
+        """Check capacity arithmetic with one real window, not a scan-sized allocation."""
+        from auspex_v2.filters.scan import ScanAssembler
+
+        writer = WriterSpec("pass", "out")
+        self.assertEqual(writer.max_scan_bytes, 512 * 1024 * 1024)
+        self.assertEqual(writer.max_scan_windows, 16384)
+        frequencies = np.linspace(4e9, 5e9, 2001, dtype=np.float64)
+        batch = measurement("scan", 0, 0., frequencies)
+        schema = PortSchema("complex64", 1, ("frequency",), ("Hz",), 64 * 1024)
+        schema.check(batch)
+        row_bytes = batch.data.nbytes + frequencies.nbytes
+        self.assertEqual(row_bytes, 32016)
+        self.assertLessEqual(10000 * row_bytes, writer.max_scan_bytes)
+        self.assertLessEqual(10000, writer.max_scan_windows)
+        with tempfile.TemporaryDirectory() as directory:
+            assembler = ScanAssembler(schema, scratch_dir=directory)
+            try:
+                self.assertEqual(assembler.max_scan_bytes, writer.max_scan_bytes)
+                self.assertEqual(assembler.max_scan_windows, writer.max_scan_windows)
+                self.assertEqual(assembler.total_bytes, 0)
+                self.assertIsNone(assembler.pending)
+            finally:
+                assembler.close()
+
     def graph(self, path, **kwargs):
         return FilterServer(SCHEMA, {"pass": NodeSpec("passthrough", SCHEMA)},
                             [("$input", "out", "pass")], {},
@@ -78,7 +103,11 @@ class StoreOwnerTest(unittest.TestCase):
             with self.graph(path, input_name="vna_s21",
                             run_metadata={"settings": {"source_power_dBm": -30}}) as graph:
                 for window, bias, freq in ((0, 0., [1., 2.]), (1, .3, [1.1, 2.1])):
-                    graph.push(measurement("sweep_000", window, bias, freq))
+                    submitted = measurement("sweep_000", window, bias, freq)
+                    graph.push(submitted)
+                    # Submission owns both arrays before returning, long before publication.
+                    submitted.data[:] = 99j
+                    submitted.axes[0].points[:] = 99.
                     graph.end_window(window)
                 graph.end_scan("sweep_000")
                 graph.wait_scan("sweep_000")
@@ -96,6 +125,12 @@ class StoreOwnerTest(unittest.TestCase):
                 self.assertEqual(result.coordinates[-1].dimensions, ("bias", "frequency"))
                 np.testing.assert_array_equal(result.coordinates[0].values, [0., .3])
                 self.assertEqual(result.data.shape, (2, 2))
+                for group in ("data", "backup"):
+                    saved = store.read_dataset(group, "sweep_000")
+                    np.testing.assert_array_equal(saved.data,
+                        np.array([[1j, 2j], [1.1j, 2.1j]], dtype=np.complex64))
+                    np.testing.assert_array_equal(saved.coordinates["frequency"].values,
+                                                  [[1., 2.], [1.1, 2.1]])
                 reference = store.read_dataset("backup", "reference")
                 self.assertEqual(reference.label, "reference")
                 np.testing.assert_array_equal(reference.offsets, [0, 1, 4])
@@ -123,22 +158,40 @@ class StoreOwnerTest(unittest.TestCase):
                 self.assertEqual(store.list_datasets(), [("data", "sweep_000")])
                 np.testing.assert_array_equal(store.read_dataset("data", "sweep_000").data, [[1j, 2j]])
 
-    def test_writer_and_required_result_both_gate_scan_completion(self):
-        """An adaptive decision result can coexist with durable scan publication."""
+    def test_finished_writer_eof_allows_a_paused_required_consumer_to_drain(self):
+        """Normal store exit is not failure or completion of other required endpoints."""
         with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "result.auspex"
+            path = Path(directory) / "paused.auspex"
             with FilterServer(SCHEMA, {"pass": NodeSpec("passthrough", SCHEMA)},
                     [("$input", "out", "pass")], {"trace": ResultSpec("pass", "out")},
-                    writers={"raw": WriterSpec("pass", "out")}, store_path=path) as graph:
-                graph.push(measurement("reference", 0, 0., [1.]))
+                    writers={"raw": WriterSpec("pass", "out")}, store_path=path,
+                    result_capacity=1) as graph:
+                graph.push(measurement("scan", 0, 0., [1.]))
                 graph.end_window(0)
-                graph.end_scan("reference")
-                graph.wait_scan("reference")
-                self.assertEqual(graph.receive("trace").scan, "reference")
+                graph.wait_window(0)  # Occupy the sole retained-result slot before proceeding.
+                graph.push(measurement("scan", 1, 1., [2.]))
+                graph.end_window(1)
+                graph.end_scan("scan")
                 graph.finish()
+                writer = graph.processes["$store"]
+                writer.join(5)  # Force real EOF while the second required result is still blocked.
+                self.assertFalse(writer.is_alive())
+                self.assertEqual(writer.exitcode, 0)
+                with self.assertRaisesRegex(PipelineError, "Timed out waiting for graph progress"):
+                    graph.wait_finished(timeout=.2)
+                self.assertIsNone(graph.error)
+                self.assertEqual(graph.lifecycle, "DRAINING")
+                self.assertEqual(graph.completed_window, 0)
+                with AuspexStore(path) as store:
+                    np.testing.assert_array_equal(store.read_dataset("data", "scan").data, [[1j], [2j]])
+                for window, value in ((0, 1j), (1, 2j)):
+                    result = graph.receive("trace")
+                    self.assertEqual(result.window, window)
+                    self.assertEqual(result.scan, "scan")
+                    np.testing.assert_array_equal(result.data, [value])
+                graph.wait_scan("scan")
                 graph.wait_finished()
-            with AuspexStore(path) as store:
-                self.assertEqual(store.list_datasets(), [("data", "reference")])
+                self.assertEqual(graph.lifecycle, "SUCCEEDED")
 
     def test_two_sweep_parameters_form_named_dimensions(self):
         """Complete Cartesian scans yield N-dimensional named sweep coordinates."""

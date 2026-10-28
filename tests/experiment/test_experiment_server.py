@@ -13,7 +13,7 @@ import unittest
 import warnings
 
 import numpy as np
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from auspex_v2.data import AuspexStore
 from auspex_v2.experiment import (Experiment, OutputConnector, InstrumentRef, ExperimentServerClient,
@@ -46,6 +46,66 @@ def plan(cls=Measurement):
     experiment = cls()
     experiment.bind_instrument("source", "source")
     return experiment.compile()
+
+
+class RunnerLifecycleTest(unittest.TestCase):
+    """Observe production lifecycle ordering, not another executor's implementation."""
+
+    def test_seal_teardown_and_lease_release_precede_pipeline_drain(self):
+        from auspex_v2.experiment import runner
+        from auspex_v2.filters import PipelineError
+
+        class Immediate(Measurement):
+            def sequence(self, seq):
+                seq.publish(self.signal, data=1.0)
+
+        document = plan(Immediate).document
+        for drain_fails in (False, True):
+            with self.subTest(drain_fails=drain_fails):
+                events = []
+                channel, client, session, pipeline = Mock(), Mock(), Mock(), Mock()
+                channel.poll.return_value = False
+                channel.recv_bytes.return_value = b'{"type": "ack"}'
+                client.begin_run.return_value = session
+                client.status.return_value = {
+                    "run": {"run_id": "ordering", "orphaned": False},
+                    "instruments": {"source": {"driver": "SimulatedSource",
+                        "state": "CONNECTED", "live_sessions": 0}},
+                }
+                pipeline._seal_scan.side_effect = lambda: events.append("seal")
+                session._dispatch.side_effect = lambda *args, **kwargs: events.append("teardown")
+                session.close.side_effect = lambda: events.append("release")
+
+                def drain():
+                    events.append("drain")
+                    if drain_fails:
+                        raise PipelineError("incomplete required average")
+
+                def observe_message(payload):
+                    if json.loads(payload)["type"] == "terminal":
+                        events.append("terminal")
+
+                pipeline.close.side_effect = drain
+                channel.send_bytes.side_effect = observe_message
+                # Only I/O boundaries are replaced; compilation, admission, interpretation
+                # and phase/exception handling all execute their production implementations.
+                with patch.object(runner, "InstrumentServerClient", return_value=client), \
+                     patch.object(runner, "ManualPipeline", return_value=pipeline):
+                    runner.run(channel, document, "unused.auspex", "ordering", "unused.sock")
+
+                self.assertEqual(events, ["seal", "teardown", "release", "drain", "terminal"])
+                session._dispatch.assert_called_once_with(
+                    "SET", "source", "output", args=[False], value=False, kwargs={})
+                session.close.assert_called_once_with()
+                pipeline.cancel.assert_called_once_with()
+                channel.close.assert_called_once_with()
+                terminal = json.loads(channel.send_bytes.call_args.args[0])
+                self.assertEqual(terminal["state"], "FAILED" if drain_fails else "SUCCEEDED")
+                self.assertTrue(terminal["lease_released"])
+                if drain_fails:
+                    self.assertIn("incomplete required average", terminal["reason"])
+                else:
+                    self.assertEqual(terminal["reason"], "")
 
 
 class ExperimentServerTest(unittest.TestCase):
@@ -114,6 +174,7 @@ print(json.dumps({'id':run.run_id, 'path':str(run.path)}))
         self.assertIn("RUN_FINISHED SUCCEEDED", run.log())
         with AuspexStore(run.path) as store:
             self.assertEqual(store.list_datasets(), [("data", "signal")])
+            self.assertEqual(store.read_run_metadata()["plan_identity"], original.identity)
         with InstrumentServerClient(self.instrument_socket) as client:
             self.assertIsNone(client.status()["run"])
         run.cleanup()
@@ -309,16 +370,24 @@ print(json.dumps({'id':run.run_id, 'path':str(run.path)}))
         class BadTeardown(Measurement):
             def teardown(self, seq):
                 self.source.frequency = -1.0
+                self.source.output = False  # Must not be attempted after the first error.
         run = self.client.submit(plan(BadTeardown), name="failed", dir=self.data)
         result = run.wait(timeout=20)
         self.assertEqual(result["state"], "FAILED", result)
         self.assertIn("safe state not established", result["reason"])
+        self.assertFalse(result["lease_released"])
+        self.assertNotIn("SET source.output", run.log())
         with InstrumentServerClient(self.instrument_socket) as client:
             self.assertTrue(client.status()["run"]["orphaned"])
         with AuspexStore(run.path) as store:
             self.assertEqual(store.list_datasets(), [("data", "signal")])
 
     def test_measurement_failure_with_successful_teardown_releases_lease(self):
+        class BadPublication(Measurement):
+            def sequence(self, seq):
+                self.source.output = True
+                seq.publish(self.signal, data=1)  # Integer, not the declared float64.
+
         class BadMeasurement(Measurement):
             def sequence(self, seq):
                 self.source.frequency = -1.0
@@ -326,12 +395,25 @@ print(json.dumps({'id':run.run_id, 'path':str(run.path)}))
                 # The instrument server quarantines this device on driver failure;
                 # do not claim further commands to that device could succeed.
                 seq.wait(0)
-        run = self.client.submit(plan(BadMeasurement), name="failed_main", dir=self.data)
-        result = run.wait(timeout=20)
-        self.assertEqual(result["state"], "FAILED")
-        self.assertTrue(result["lease_released"])
-        with InstrumentServerClient(self.instrument_socket) as client:
-            self.assertIsNone(client.status()["run"])
+
+        # Run the publication case first: the driver-failure case quarantines source.
+        for cls in (BadPublication, BadMeasurement):
+            with self.subTest(failure=cls.__name__):
+                run = self.client.submit(plan(cls), name=cls.__name__, dir=self.data)
+                result = run.wait(timeout=20)
+                self.assertEqual(result["state"], "FAILED", result)
+                self.assertTrue(result["lease_released"])
+                with AuspexStore(run.path) as store:
+                    self.assertEqual(store.list_datasets(), [])
+                with InstrumentServerClient(self.instrument_socket) as client:
+                    self.assertIsNone(client.status()["run"])
+                    if cls is BadPublication:
+                        self.assertIn("dtype", result["reason"])
+                        self.assertIn("SET source.output args=[False]", run.log())
+                        with client.live("source") as source:
+                            self.assertFalse(source.output)
+                    else:
+                        self.assertIn("WAIT 0", run.log())
 
     def test_connection_failure_releases_lease_before_setup(self):
         with InstrumentServerClient(self.instrument_socket) as client:
@@ -397,11 +479,25 @@ print(json.dumps({'id':run.run_id, 'path':str(run.path)}))
         self.assertEqual(process.returncode, 0, errors.decode())
 
     def test_log_write_failure_is_nonfatal(self):
-        def unavailable(entry, text):
-            entry["diagnostic"] = "Best-effort execution log unavailable"
-        with patch.object(self.server.registry, "_log", unavailable):
+        """A real log-open failure must expose a diagnostic without failing the run."""
+        from auspex_v2.experiment.resources import RunFolder
+
+        allocate = RunFolder.allocate
+
+        def allocate_with_log_directory(*args, **kwargs):
+            # Install the collision before spawning, without replacing logging or I/O.
+            folder = allocate(*args, **kwargs)
+            (folder.path / "execution.log").mkdir()
+            return folder
+
+        with patch.object(RunFolder, "allocate", side_effect=allocate_with_log_directory):
             run = self.client.submit(plan(), name="no_log", dir=self.data)
-            self.assertEqual(run.wait(timeout=20)["state"], "SUCCEEDED")
+        result = run.wait(timeout=20)
+        self.assertEqual(result["state"], "SUCCEEDED", result)
+        self.assertTrue(result["lease_released"])
+        self.assertIn("Best-effort execution log unavailable:", result["diagnostic"])
+        self.assertIn(str(run.path / "execution.log"), result["diagnostic"])
+        self.assertTrue((run.path / "execution.log").is_dir())
 
     def test_running_status_write_failure_prevents_setup(self):
         from auspex_v2.experiment import service

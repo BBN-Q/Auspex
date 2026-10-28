@@ -48,7 +48,7 @@ def _atomic_json(path, value):
 
 def preflight_run(plan, *, slots=2, result_capacity=2,
                   memory_budget_bytes=64 * 1024 * 1024,
-                  store_scan_budget_bytes=256 * 1024 * 1024):
+                  store_scan_budget_bytes=2 * 1024 * 1024 * 1024):
     """Check supported saved topology and graph budgets before claiming a folder.
 
     No workers, store or instrument session are created here. Recorded Python

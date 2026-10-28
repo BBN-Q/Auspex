@@ -214,8 +214,16 @@ class ManualPipelineTest(unittest.TestCase):
             thread.join(5)
 
     def test_incomplete_group_fails_normal_exit(self):
-        with self.assertRaises(PipelineError):
-            with ManualPipeline(SCHEMA, {"avg": NodeSpec("complex_average", SCHEMA, {"repeats": 2})},
-                                [("$input", "out", "avg")],
-                                buffers={"average": BufferSpec("avg", "final")}) as pipe:
+        """Definition-backed context exit cannot publish an unfinished required average."""
+        from auspex_v2.filters.definitions import (
+            ComplexAverage, DataBuffer, PipelineDefinition, PipelineInput,
+        )
+
+        source = PipelineInput("trace", SCHEMA)
+        average = ComplexAverage(name="average", repeats=2)
+        memory = DataBuffer(name="memory")
+        definition = PipelineDefinition(inputs=[source], edges=[
+            (source, average.sink), (average.final_average, memory.sink)])
+        with self.assertRaisesRegex(PipelineError, "incomplete"):
+            with ManualPipeline(definition) as pipe:
                 pipe.submit(DATA, axes=AXES)
