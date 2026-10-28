@@ -156,5 +156,26 @@ class GraphViewerTest(unittest.TestCase):
                 time.sleep(.01)
             self.assertIn("Disconnected", window.status.text())
             self.assertIs(window.node_items["avg"], original)
+            multi = json.loads(json.dumps(second))
+            multi["inputs"] = {"$input:trace": multi["input"],
+                               "$input:temperature": {"name": "temperature", "schema": {"value_unit": "K"}}}
+            multi["input"] = None
+            multi["edges"][0]["source"] = "$input:trace"
+            multi["nodes"]["temperature"] = {"kind": "passthrough", "config": {}, "revision": 0,
+                                              "schema": {"value_unit": "K"},
+                                              "inputs": ["in"], "outputs": ["out"]}
+            multi["results"]["temperature"] = {"node": "temperature", "port": "out", "preview": False}
+            multi["edges"].extend([
+                {"source": "$input:temperature", "port": "out", "target": "temperature",
+                 "target_port": "in", "preview": False},
+                {"source": "temperature", "port": "out", "target": "result:temperature",
+                 "target_port": "in", "preview": False}])
+            window.show_snapshot(multi)
+            self.assertEqual(len(window.node_items), 7)
+            self.assertEqual(window.node_items["$input:trace"].pos().x(),
+                             window.node_items["$input:temperature"].pos().x())
+            window.node_items["$input:temperature"].setSelected(True)
+            window.show_details()
+            self.assertIn('"value_unit": "K"', window.details.toPlainText())
         finally:
             window.close()

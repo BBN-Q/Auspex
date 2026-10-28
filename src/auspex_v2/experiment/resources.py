@@ -59,12 +59,11 @@ def preflight_run(plan, *, slots=2, result_capacity=2,
     from .computations import resolve_operation
     for spec in plan.document["operations"].values():
         resolve_operation(spec)
-    attachments = plan.document["pipelines"]
-    if len(attachments) != 1:
-        raise PipelineError("Current runner requires one attached pipeline")
-    compiled = CompiledPipeline.from_document(attachments[0]["pipeline"])
+    from ._experiment_publication import runtime_pipeline
+    compiled = runtime_pipeline(plan.document)
     schema, nodes, edges, writers, buffers, _ = compiled.runtime()
-    if writers and (set(schema.axis_names) & swept_parameters(plan.document) or "point" in schema.axis_names):
+    if any(set(nodes[writer.node].schema.axis_names) & swept_parameters(plan.document)
+           or "point" in nodes[writer.node].schema.axis_names for writer in writers.values()):
         raise PipelineError("Writer sweep and measurement coordinate names must be distinct (point is reserved)")
     for name, spec in buffers.items():
         if nodes[spec.node].schema.max_bytes > MAX_BULK_BYTES:
@@ -170,16 +169,11 @@ class RetainedRunBuffers:
         specs = {}
         for attachment in plan.document["pipelines"]:
             compiled = CompiledPipeline.from_document(attachment["pipeline"])
-            definition = compiled.document["definition"]
-            if len(definition["inputs"]) != 1 or compiled.document["empty_inputs"]:
-                raise PipelineError("Current runner needs one nonempty pipeline input")
-            schema = definition["inputs"][0]["schema"]
-            for node in definition["nodes"]:
-                if node["kind"] != "buffer":
-                    continue
-                if node["name"] in specs:
-                    raise PipelineError(f"Ambiguous run buffer name: {node['name']}")
-                specs[node["name"]] = (node["config"]["capacity"], schema["max_bytes"])
+            _, nodes, _, _, buffers, _ = compiled.runtime()
+            for name, spec in buffers.items():
+                if name in specs:
+                    raise PipelineError(f"Ambiguous run buffer name: {name}")
+                specs[name] = (spec.capacity, nodes[spec.node].schema.max_bytes)
         required = sum(capacity * size for capacity, size in specs.values())
         with self._lock:
             if run_id in self._runs:

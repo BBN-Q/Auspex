@@ -58,7 +58,16 @@ with ManualPipeline(
 results = pipeline.buffers["memory"].drain()
 ```
 
-`submit()` copies input, assigns consecutive window IDs, and automatically emits
+With multiple named inputs, declare their schemas on the definition (or compile
+with an input-schema mapping) and call `submit(data, input="name", ...)`. Each
+input has independent window IDs; `end_scan()` closes all branches. An input may
+remain idle and creates no dataset. See [independent inputs](definitions.md#independent-named-inputs).
+For a low-level recipe, supply a `{name: PortSchema}` mapping as the first argument
+and use producer IDs `$input:name` in edges. `FilterServer.push`, `end_window`, and
+`wait_window` likewise accept `input="name"`. A single schema retains `$input` and
+the existing unnamed calls.
+
+`submit()` copies input, assigns consecutive window IDs per input, and automatically emits
 window end. It returns the window ID, not completion. There is no partial-window
 submission, filter-state readback, reconfiguration, or preview result API in this
 wrapper. `sweep` also accepts a tuple of `SweepPosition` objects. No implicit dtype

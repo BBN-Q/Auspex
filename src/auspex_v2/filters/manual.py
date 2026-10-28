@@ -39,21 +39,24 @@ class ManualPipeline:
                                    buffer_sinks=buffers, store_path=store_path, **options)
         self.buffers = self._graph.buffer_sinks
         self.timeout = timeout
-        self._window = 0
+        self._windows = {name: 0 for name in self._graph.input_names.values()}
         self._scan_number = 0
         self._scan = None
         self._pending_scans = []
         self._closed = False
 
-    def submit(self, data, *, axes=(), sweep=(), sweep_units=None):
+    def submit(self, data, *, input=None, axes=(), sweep=(), sweep_units=None):
         """Copy one complete window; return its ID, not processing completion.
 
         sweep accepts SweepPosition objects or a name/value mapping. Mapping units
         can be supplied as sweep_units={"bias": "V"}. Values/axes must match schema;
         no implicit dtype conversions or coordinate fabrication are performed.
+        Multiple inputs require input="name"; window IDs are local to that input.
         """
         if self._closed:
             raise RuntimeError("Manual pipeline is closed")
+        source = self._graph._input(input)
+        input = self._graph.input_names[source]
         if isinstance(sweep, Mapping):
             units = sweep_units or {}
             if set(units) - set(sweep):
@@ -65,11 +68,11 @@ class ManualPipeline:
             if self._single_scan and self._scan_number:
                 raise ValueError("Named datasets support one scan per execution; start a new run")
             self._scan = f"sweep_{self._scan_number:03d}"
-        window = self._window
+        window = self._windows[input]
         self._graph.push(Batch(group=None, window=window, sequence=0, revision=0,
-                               data=data, axes=tuple(axes), scan=self._scan, sweep=tuple(sweep)))
-        self._graph.end_window(window)
-        self._window += 1
+                               data=data, axes=tuple(axes), scan=self._scan, sweep=tuple(sweep)), input=input)
+        self._graph.end_window(window, input=input)
+        self._windows[input] += 1
         return window
 
     def _seal_scan(self):

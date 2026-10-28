@@ -78,7 +78,12 @@ a later storage failure still fails the run. A failed teardown or lost runner ca
 leave an orphaned domain. Notebook disconnection alone does not cancel a run.
 See [ownership and recovery](instruments.md#ownership-and-recovery).
 
-Current limits include a single nonempty pipeline ingress, no server-side buffer
+Outputs may feed independent named inputs in one or several attached pipelines,
+with distinct datasets in the same run store. For scalar measurements,
+`OutputConnector(dtype="float64", unit="K")` needs no measurement axis. See
+[independent acquisition inputs](filters.md#independent-acquisition-inputs).
+
+Current limits include no multi-input numerical joins, no server-side buffer
 transfer, no automatic interrupted-run resumption, and no general adaptive sweep
 mutation. Recorded calculations do not remove these limits.
 

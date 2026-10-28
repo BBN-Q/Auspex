@@ -1,4 +1,4 @@
-"""Shared inert graph authoring, snapshots, and the single-ingress adapter."""
+"""Shared inert graph authoring, snapshots, and the runtime adapter."""
 import copy
 from pathlib import Path
 import subprocess
@@ -204,8 +204,8 @@ class DefinitionTest(unittest.TestCase):
             with self.assertRaises(PipelineError):
                 PipelineDefinition.from_document(doc)
 
-    def test_multi_input_and_empty_source_are_serializable_but_not_runnable(self):
-        """API-only configurations survive persistence but fail before startup."""
+    def test_explicit_empty_sources_are_serializable_but_not_runnable(self):
+        """Explicit empty bindings survive persistence but fail before startup."""
         a, b = PipelineInput("a", SCHEMA), PipelineInput("b", SCHEMA)
         x, y = DataBuffer(name="x"), DataBuffer(name="y")
         definition = PipelineDefinition(inputs=[a, b], edges=[(a, x.sink), (b, y.sink)])

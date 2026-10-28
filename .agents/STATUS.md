@@ -10,6 +10,26 @@ replaces the historical discussion; it is not authorization to implement the bac
 
 ## Resume here
 
+- **Multiple acquisition inputs and attached pipelines implemented:** independent
+  named ingress routes retain their own schemas, window ordering, capacity progress
+  and filter groups. Manual submission uses `input="name"` when ambiguous; existing
+  single-input calls remain unchanged. Experiment publications route to every
+  explicitly connected input. Several attached definitions are combined into one
+  runtime graph with `pipeline0.`, `pipeline1.`, etc. name qualification, while
+  explicit writer group/dataset destinations remain unchanged. One physical store
+  owner writes them all to the same run folder. Shared scan/run boundaries close
+  idle branches without creating empty datasets. Scalar temperature units survive
+  storage without an artificial measurement axis. Required failures still fail the
+  run; already published datasets remain, and writer publication is not atomic.
+  Process-backed tests cover unequal rates, idle/all-empty runs, independent
+  backpressure, branch failure/reaping, multiple scans, real ExperimentServer
+  routing/fan-out and offscreen multi-input inspection. All **394 tests passed**
+  headless in 92.936 seconds; `git diff --check` passed. Strict MkDocs build could
+  not run: available `python` lacks MkDocs and `.venv-docs/bin/python` resolves
+  outside the repository, blocked by this session's restriction. No bypass used.
+  EmptySource execution and numerical joins remain deferred. No further slice
+  is authorized.
+
 - **Synchronous filter pipeline retired:** removed core.Pipeline and the
   Collector/DatasetWriter module and exports. Five direct contract tests replace
   the ten synchronous-executor tests: analytical partial/final averaging, unchanged
@@ -267,7 +287,7 @@ replaces the historical discussion; it is not authorization to implement the bac
 
 - Shared inert pipeline definitions and ManualPipeline support independent whole-window
   processing/storage without experiment ownership. FilterServer supervises spawned
-  passthrough/complex-average workers, single-ingress fan-out, bounded shared-memory
+  passthrough/complex-average workers, independent named ingress/fan-out, bounded shared-memory
   edges/results, overlapping windows, local configuration revisions and cleanup.
   Required results backpressure or fail; only previews may drop. Filters own groups;
   runner owns windows/scans. One store process multiplexes required writer sinks.
@@ -363,10 +383,11 @@ replaces the historical discussion; it is not authorization to implement the bac
 Latest full implementation validation (including bounded scan publication, normal store EOF,
 server publication timeout, dataset directory fsync, process-group escalation and
 the test consolidations, failure fixtures, lifecycle-test migration and standalone
-FilterWorker and synchronous pipeline retirement):
+FilterWorker and synchronous pipeline retirement, plus multiple acquisition inputs
+and attached pipelines):
 
 ```sh
-MPLBACKEND=Agg QT_QPA_PLATFORM=offscreen python -B -m unittest discover -s tests -q  # 388 passed
+MPLBACKEND=Agg QT_QPA_PLATFORM=offscreen python -B -m unittest discover -s tests -q  # 394 passed
 ```
 
 Six driver-export tests cover canonical export identity, deterministic explicit

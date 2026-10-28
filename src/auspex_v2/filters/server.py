@@ -1,4 +1,4 @@
-"""Per-run, thread-supervised spawned filter DAG (one acquisition ingress).
+"""Per-run, thread-supervised spawned filter DAG (independent acquisition inputs).
 
 Public submission is serialized, but does not wait for downstream completion.
 Arrays travel directly between workers. Only terminal results enter the supervisor.
@@ -174,9 +174,13 @@ class FilterServer:
                  startup_timeout=10, memory_budget_bytes=64 * 1024 * 1024,
                  store_scan_budget_bytes=2 * 1024 * 1024 * 1024):
         self.schema = schema
-        self.input_name = input_name if input_name is not None else schema.value_name
-        if not isinstance(self.input_name, str) or not self.input_name:
+        self.sources = self._sources(schema)
+        self.input_name = (input_name if input_name is not None else
+                           None if isinstance(schema, dict) else schema.value_name)
+        if not isinstance(schema, dict) and (not isinstance(self.input_name, str) or not self.input_name):
             raise ValueError("Pipeline input needs a name")
+        self.input_names = ({f"$input:{name}": name for name in schema} if isinstance(schema, dict)
+                            else {"$input": self.input_name})
         self.nodes = {name: replace(spec, config=json.loads(json.dumps(spec.config, allow_nan=False)))
                       for name, spec in nodes.items()}
         self.edges = list(edges)
@@ -227,7 +231,18 @@ class FilterServer:
         self.stop = self.context.Event()
         self.condition = threading.Condition()
         self.admission = threading.Lock()
-        self.state = WindowState()
+        self.states = {source: WindowState() for source in self.sources}
+        self.state = next(iter(self.states.values()))  # Single-input compatibility.
+        self.roots = {source: source for source in self.sources}
+        while any(name not in self.roots for name in self.nodes):
+            for producer, _, consumer in self.edges:
+                if producer in self.roots:
+                    self.roots[consumer] = self.roots[producer]
+        self.endpoint_inputs = {name: self.roots[spec.node] for name, spec in self.results.items()
+                                if not spec.preview}
+        self.endpoint_inputs.update({f"writer:{name}": self.roots[spec.node]
+                                     for name, spec in self.writers.items()})
+        self.completed_windows = dict.fromkeys(self.sources, -1)
         self.error = None
         self.lifecycle = "STARTING"
         self.completed_window = -1
@@ -283,11 +298,34 @@ class FilterServer:
             edges.append({"source": spec.node, "port": spec.port, "target": f"writer:{name}",
                           "target_port": "in", "preview": False})
         return {"snapshot_version": 1, "captured_at": datetime.now(timezone.utc).isoformat(),
-                "lifecycle": lifecycle, "input": {"name": self.input_name, "schema": asdict(self.schema)},
+                "lifecycle": lifecycle,
+                "input": ({"name": self.input_name, "schema": asdict(self.schema)}
+                          if not isinstance(self.schema, dict) else None),
+                "inputs": {source: {"name": self.input_names[source], "schema": asdict(schema)}
+                           for source, schema in self.sources.items()},
                 "nodes": nodes, "edges": edges,
                 "results": {name: asdict(spec) for name, spec in sorted(self.results.items())},
                 "writers": {name: asdict(spec) for name, spec in sorted(self.writers.items())},
                 "buffers": {name: asdict(spec) for name, spec in sorted(self.buffer_specs.items())}}
+
+    @staticmethod
+    def _sources(schema):
+        """Keep the legacy producer ID for one schema; name each mapped ingress."""
+        if not isinstance(schema, dict):
+            return {"$input": schema}
+        if not schema or any(not isinstance(name, str) or not name or not isinstance(value, PortSchema)
+                             for name, value in schema.items()):
+            raise PipelineError("Inputs require named port schemas")
+        return {f"$input:{name}": value for name, value in schema.items()}
+
+    def _input(self, name):
+        """Resolve explicit public input names; ambiguity must never broadcast data."""
+        if name is None and len(self.sources) == 1:
+            return next(iter(self.sources))
+        for source, public in self.input_names.items():
+            if name == public:
+                return source
+        raise ValueError(f"Name a pipeline input from {list(self.input_names.values())}")
 
     @staticmethod
     def validate_graph(schema, nodes, edges, results, writers, buffer_specs, *, slots=2,
@@ -299,9 +337,10 @@ class FilterServer:
             raise PipelineError("Graph capacities and budgets must be positive integers")
         if not nodes or not (writers or any(not r.preview for r in results.values())):
             raise PipelineError("Graph needs workers and at least one required result or writer")
+        sources = FilterServer._sources(schema)
         ports = {}
         for name, spec in nodes.items():
-            if name == "$input" or spec.kind not in FILTER_TYPES:
+            if name == "$input" or name.startswith("$input:") or spec.kind not in FILTER_TYPES:
                 raise PipelineError("Unknown filter kind or reserved node name")
             ports[name] = ("out",) if spec.kind == "passthrough" else ("partial", "final")
         incoming = {name: 0 for name in nodes}
@@ -309,10 +348,10 @@ class FilterServer:
         for producer, port, consumer in edges:
             if consumer not in nodes:
                 raise PipelineError("Unknown consumer")
-            source = schema if producer == "$input" else nodes.get(producer)
-            if source is None or port not in (("out",) if producer == "$input" else ports[producer]):
+            source = sources.get(producer) if producer in sources else nodes.get(producer)
+            if source is None or port not in (("out",) if producer in sources else ports[producer]):
                 raise PipelineError("Unknown producer port")
-            source_schema = source if producer == "$input" else source.schema
+            source_schema = source if producer in sources else source.schema
             if source_schema != nodes[consumer].schema:
                 raise PipelineError("Incompatible port schemas")
             if port == "partial":
@@ -321,8 +360,10 @@ class FilterServer:
             used.add((producer, port))
         if any(count != 1 for count in incoming.values()):
             raise PipelineError("Every worker needs exactly one input")
-        visited = {"$input"}
-        while len(visited) <= len(nodes):
+        if any(not any(p == source for p, _, _ in edges) for source in sources):
+            raise PipelineError("Every input needs an outgoing edge")
+        visited = set(sources)
+        while not set(nodes) <= visited:
             available = {c for p, _, c in edges if p in visited and c not in visited}
             if not available:
                 raise PipelineError("Cycle or unreachable worker")
@@ -421,12 +462,12 @@ class FilterServer:
         """Wire the graph and spawn its children, registering handles for failure cleanup."""
         outputs = {name: {} for name in self.nodes}
         inputs = {}
-        self.ingress = []
+        self.ingress = {source: [] for source in self.sources}
         for producer, port, consumer in self.edges:
             edge = self._new_edge(f"{producer}.{port}->{consumer}", self.nodes[consumer].schema)
             inputs[consumer] = edge
-            if producer == "$input":
-                self.ingress.append(edge)
+            if producer in self.sources:
+                self.ingress[producer].append(edge)
             else:
                 outputs[producer].setdefault(port, []).append((edge, False))
         terminals = {}
@@ -446,7 +487,8 @@ class FilterServer:
             process = self.context.Process(target=store_owner, name="auspex-store-owner",
                 args=(self.store_path, self.writers,
                       {n: self.nodes[w.node].schema for n, w in self.writers.items()},
-                      writer_edges, child_status, self.stop, self.run_metadata, self.input_name,
+                      writer_edges, child_status, self.stop, self.run_metadata,
+                      {n: self.input_names[self.roots[w.node]] for n, w in self.writers.items()},
                       self.existing_store, self.plots, self.plot_queues, self.preview_sweep,
                       {n: s.schema for n, s in self.nodes.items()}))
             process.start()
@@ -511,7 +553,8 @@ class FilterServer:
             self._publish_window_progress(drain)
         elif response["type"] == "scan":
             self._ack_scan(response["scan"])
-            self.published.append(response)
+            if response.get("published", True):
+                self.published.append(response)
         elif response["type"] == "finished":
             drain.finished.add("$store")
         else:
@@ -574,7 +617,12 @@ class FilterServer:
     def _publish_window_progress(self, drain: _DrainState):
         """Wake producers/waiters using the slowest required result or writer window."""
         with self.condition:
-            self.completed_window = min(drain.windows.values())
+            for source in self.sources:
+                windows = [window for endpoint, window in drain.windows.items()
+                           if self.endpoint_inputs[endpoint] == source]
+                # Preview-only branches have no required terminal to acknowledge.
+                self.completed_windows[source] = min(windows) if windows else self.states[source].last_window
+            self.completed_window = min(self.completed_windows.values())
             self.condition.notify_all()
 
     def _cleanup_graph(self, statuses, child_handles):
@@ -624,31 +672,38 @@ class FilterServer:
                 self.condition.wait(0.02)
             self.check()
 
-    def push(self, batch):
+    def push(self, batch, *, input=None):
         """Copy input before returning; capacity may block, but never the supervisor."""
+        source = self._input(input)
         with self.admission:
             self.check()
             try:
-                new_window = self.state.window is None
-                self.schema.check(batch)
-                self.state.admit(batch)
+                state = self.states[source]
+                if any(other.scan is not None and other.scan != batch.scan for other in self.states.values()):
+                    raise PipelineError("Finish the shared scan before starting another")
+                new_window = state.window is None
+                self.sources[source].check(batch)
+                state.admit(batch)
                 if new_window:
-                    available = lambda: batch.window <= self.completed_window + self.max_windows
+                    available = lambda: batch.window <= self.completed_windows[source] + self.max_windows
                     if not self.backpressure and not available():
                         raise PipelineError("Capacity exhausted: outstanding windows")
                     self._wait(available, None)
-                for edge in self.ingress:
+                for edge in self.ingress[source]:
                     edge.send_batch(batch)
             except Exception as exc:
                 self._fail(exc)
                 raise
 
-    def end_window(self, window):
+    def end_window(self, window, *, input=None):
+        source = self._input(input)
         with self.admission:
             self.check()
             try:
-                self.state.end_window(window)
-                for edge in self.ingress:
+                self.states[source].end_window(window)
+                if source not in self.endpoint_inputs.values():
+                    self.completed_windows[source] = window
+                for edge in self.ingress[source]:
                     edge.send_event("window_end", None, window)
             except Exception as exc:
                 self._fail(exc)
@@ -659,11 +714,16 @@ class FilterServer:
         with self.admission:
             self.check()
             try:
-                self.state.end_scan(scan)
+                for state in self.states.values():
+                    # Idle inputs still participate in the shared ordered boundary.
+                    if len(self.states) > 1 and state.scan is None and scan not in state.closed_scans:
+                        state.scan = scan
+                    state.end_scan(scan)
                 with self.condition:
                     self.scan_acks[scan] = sum(not spec.preview for spec in self.results.values()) + len(self.writers)
-                for edge in self.ingress:
-                    edge.send_event("scan_end", scan)
+                for edges in self.ingress.values():
+                    for edge in edges:
+                        edge.send_event("scan_end", scan)
             except Exception as exc:
                 self._fail(exc)
                 raise
@@ -677,16 +737,19 @@ class FilterServer:
         with self.admission:
             self.check()
             try:
-                self.state.finish()
+                for state in self.states.values():
+                    state.finish()
                 self.lifecycle = "DRAINING"
-                for edge in self.ingress:
-                    edge.send_event("run_end", None)
+                for edges in self.ingress.values():
+                    for edge in edges:
+                        edge.send_event("run_end", None)
             except Exception as exc:
                 self._fail(exc)
                 raise
 
-    def wait_window(self, window, *, timeout=10):
-        self._wait(lambda: self.completed_window >= window, timeout)
+    def wait_window(self, window, *, input=None, timeout=10):
+        source = self._input(input)
+        self._wait(lambda: self.completed_windows[source] >= window, timeout)
 
     def wait_finished(self, *, timeout=10):
         self._wait(lambda: self.lifecycle == "SUCCEEDED", timeout)
@@ -712,10 +775,12 @@ class FilterServer:
         """Pause admission, drain the admitted prefix, and update one local revision."""
         with self.admission:
             self.check()
-            self.state.can_update()
+            for state in self.states.values():
+                state.can_update()
             if node not in self.nodes:
                 raise PipelineError("Unknown filter node")
-            self.wait_window(self.state.last_window, timeout=timeout)
+            for source, state in self.states.items():
+                self.wait_window(state.last_window, input=self.input_names[source], timeout=timeout)
             connection = self.controls[node]
             changes = json.loads(json.dumps(changes, allow_nan=False))
             _send(connection, {"changes": changes})

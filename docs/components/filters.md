@@ -88,12 +88,49 @@ Run `examples/manual_data.py` or `examples/pipeline_definition.py` for independe
 processing examples. Ordinary scripts starting spawned workers need a guarded
 `if __name__ == "__main__":` entry point.
 
+## Independent acquisition inputs
+
+A definition may have several named inputs with different schemas. For example,
+route complex S21 traces and scalar temperature readings to independent branches
+ending in writers for `vna/s21` and `environment/temperature`. All writers use one
+physical owner and the same `.auspex` folder, not separate store handles.
+
+For manual processing, supply schemas on each `PipelineInput` (or compile with
+an input-schema mapping), then select the input explicitly:
+
+```python
+running.submit(response, input="trace", axes=[Axis("frequency", frequency, "Hz")],
+               sweep={"bias": bias})
+running.submit(np.array(temperature, dtype="float64"), input="temperature",
+               sweep={"bias": bias})
+```
+
+Here `running` is a `ManualPipeline`, `np` is NumPy and `Axis` comes from
+`auspex_v2.data`. A scalar uses `PortSchema("float64", 0, (), (), 8,
+value_name="temperature", value_unit="K")`. See the linked definition guide below
+for the complete wiring example. Single-input `submit()` calls need no input name.
+
+Experiments use `temperature = OutputConnector(dtype="float64", unit="K")` and
+ordinary `seq.publish(self.temperature, data=reading)`. Connect outputs to inputs
+of one or several definitions; the runner routes them into one graph/store.
+Different definitions may reuse local node names, but writer destinations must
+be distinct. With several attachments, runtime names gain `pipeline0.`,
+`pipeline1.`, etc.; stored group/dataset destinations remain unchanged.
+
+Inputs have independent window IDs and filter state. They need not publish equally
+often or alternate. Sweep coordinates associate the saved datasets, not unique
+point identities when positions repeat. Scan/run boundaries close every branch;
+an idle input is valid and its writer creates no dataset. Success requires every
+required branch to drain. A required failure fails the run, but does not remove
+already published datasets; publication across writers is not atomic.
+
 ## Scope
 
-Current execution has one nonempty ingress and built-in passthrough/complex-average
-processing. Named writer definitions support one scan per execution. Definitions
-can describe multiple inputs, but that does not imply runtime join support.
-ExperimentServer currently accepts writer-backed plans, not buffer sinks.
+Current execution supports multiple nonempty input bindings and built-in
+passthrough/complex-average processing. Filters still accept one input each;
+numerical joins and explicit `EmptySource` execution remain deferred. Named writer
+definitions support one scan per execution. ExperimentServer currently accepts
+writer-backed plans, not buffer sinks.
 
 Inspect an explicitly enabled running graph with the
 [filter graph viewer](../utilities/filter-graph-viewer.md). It shows topology and

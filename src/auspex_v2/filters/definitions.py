@@ -278,7 +278,7 @@ class PipelineDefinition:
         """Snapshot and propagate schemas. Bind names to PortSchema or EmptySource.
 
         Declared schemas supply defaults; supplied schemas must match an explicit
-        declaration. Multi-input/empty-source recipes can compile, but cannot yet run.
+        declaration. Empty-source recipes can compile, but cannot yet run.
         """
         definition = self.from_document(self.document)
         bindings = dict(inputs or {})
@@ -371,27 +371,35 @@ class CompiledPipeline:
             inputs={name: EmptySource() for name in empty})
 
     def runtime(self):
-        """Lower supported definitions to existing FilterServer recipes, without I/O."""
+        """Lower to FilterServer recipes without I/O.
+
+        Preserve the single-input tuple; multiple inputs return a name-to-schema
+        mapping as its first element and None as the legacy input-name element.
+        """
         from .server import NodeSpec, WriterSpec
         from .buffer import BufferSpec
         definition = PipelineDefinition.from_document(self._document)
-        if len(definition.inputs) != 1 or self._empty_inputs:
-            raise PipelineError("Current runner supports one nonempty input; multi-input/empty sources are API-only")
-        source_input = definition.inputs[0]
-        schema = source_input.schema
+        if self._empty_inputs:
+            raise PipelineError("Empty sources are API-only; execution requires nonempty input bindings")
+        single = len(definition.inputs) == 1
+        schemas = {source: source.schema for source in definition.inputs}
         nodes, _, incoming = definition._structure()
         workers, edges, writers, buffers = {}, [], {}, {}
         for node in nodes:
             source = incoming[node]
-            producer = "$input" if source.owner is source_input else source.owner.name
+            schema = schemas[source.owner]
+            schemas[node] = schema
+            is_input = isinstance(source.owner, PipelineInput)
+            producer = (("$input" if single else f"$input:{source.owner.name}")
+                        if is_input else source.owner.name)
             port = _PORTS[source.name]
-            if node.kind in ("writer", "buffer", "plot") and producer == "$input":
-                # The runtime requires a worker before terminal sinks. An explicit
-                # internal passthrough supports the natural input -> sink graph.
-                producer = "$definition_input"
+            if node.kind in ("writer", "buffer", "plot") and is_input:
+                # Each public input needs its own worker before terminal sinks.
+                ingress = producer
+                producer = "$definition_input" if single else f"$definition_input:{source.owner.name}"
                 if producer not in workers:
                     workers[producer] = NodeSpec("passthrough", schema)
-                    edges.append(("$input", "out", producer))
+                    edges.append((ingress, "out", producer))
             if node.kind == "writer":
                 writers[node.name] = WriterSpec(producer, port, group=node.group,
                     dataset=node.dataset, max_scan_bytes=node.max_scan_bytes,
@@ -401,7 +409,9 @@ class CompiledPipeline:
             elif node.kind != "plot":
                 workers[node.name] = NodeSpec(node.kind, schema, node.configuration())
                 edges.append((producer, port, node.name))
-        return schema, workers, edges, writers, buffers, source_input.name
+        schema = (definition.inputs[0].schema if single else
+                  {source.name: source.schema for source in definition.inputs})
+        return schema, workers, edges, writers, buffers, definition.inputs[0].name if single else None
 
     def plot_specs(self):
         """Lower optional sinks separately, preserving the existing runtime tuple API."""
@@ -413,8 +423,9 @@ class CompiledPipeline:
             if node.kind != "plot":
                 continue
             source = incoming[node]
-            producer = ("$definition_input" if isinstance(source.owner, PipelineInput)
-                        else source.owner.name)
+            producer = (("$definition_input" if len(definition.inputs) == 1 else
+                         f"$definition_input:{source.owner.name}")
+                        if isinstance(source.owner, PipelineInput) else source.owner.name)
             writer = next((n.name for n in nodes if n.kind == "writer" and incoming[n] == source), None)
             result[node.name] = PlotSpec(producer, _PORTS[source.name], node.mode, writer, node.max_bytes)
         return result

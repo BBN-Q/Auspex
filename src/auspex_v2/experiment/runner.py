@@ -152,14 +152,15 @@ class LiveInterpreter(Interpreter):
     def _publish(self, node):
         import numpy as np
         from ..data import Axis
-        from ._experiment_publication import output_schema
+        from ._experiment_publication import output_schema, publication_inputs
         self.pipeline._graph.check()
         schema = output_schema(self.doc["outputs"][node["output"]])
         data = np.asarray(self._eval(node["data"]))
         axes = tuple(Axis(name, np.asarray(self._eval(node["axes"][name])), unit)
                      for name, unit in zip(schema.axis_names, schema.axis_units))
         units = {key: self.doc["parameters"][key]["unit"] for key in self.coordinates}
-        self.pipeline.submit(data, axes=axes, sweep=self.coordinates, sweep_units=units)
+        for input_name in publication_inputs(self.doc)[node["output"]]:
+            self.pipeline.submit(data, input=input_name, axes=axes, sweep=self.coordinates, sweep_units=units)
         self._log(node, f"PUBLISH {node['output']} window={self.publications} submitted (not publication acknowledgment)")
         self.publications += 1
         self.progress()

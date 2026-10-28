@@ -59,12 +59,13 @@ class RunResourceTest(unittest.TestCase):
                 self.connect(self.output, source)
         with self.assertRaisesRegex(PipelineError, "Writer staging exceeds"):
             preflight_run(WithWriter().compile(), store_scan_budget_bytes=100)
-        with self.assertRaisesRegex(PipelineError, "one attached pipeline"):
-            doc = plan.document
-            doc["pipelines"].append(doc["pipelines"][0])
-            # Duplicate attachments are rejected by saved-plan validation itself.
-            from auspex_v2.experiment import CompiledPlan
-            preflight_run(CompiledPlan(doc))
+        doc = plan.document
+        doc["pipelines"].append(doc["pipelines"][0])
+        from auspex_v2.experiment import CompiledPlan
+        combined = preflight_run(CompiledPlan(doc))
+        self.assertEqual(set(combined.runtime()[4]), {"pipeline0.memory", "pipeline1.memory"})
+        with self.assertRaisesRegex(PipelineError, "memory budget"):
+            preflight_run(CompiledPlan(doc), memory_budget_bytes=10000)
 
     def test_default_writer_limits_preserve_four_writer_admission(self):
         """Authoring/runtime/preflight defaults agree without allocating scan capacity."""

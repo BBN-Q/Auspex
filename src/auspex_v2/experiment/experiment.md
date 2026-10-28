@@ -176,7 +176,9 @@ does not skip cleanup). Analysis memory/time are not bounded by pipeline budgets
 ## Pipeline attachment and publication
 
 An `OutputConnector` declares `dtype`, `dimensions`, `axis_units`, optional value
-`unit`, and `max_bytes` (default 64 KiB including coordinates). It does not fix a
+`unit`, and `max_bytes` (default 64 KiB including coordinates).
+`temperature = OutputConnector(dtype="float64", unit="K")` declares a scalar
+measurement with no measurement axis; value units are independent of axis units. It does not fix a
 shape or coordinate grid. Actual arrays are validated locally against this schema
 and downstream filter requirements, without dtype coercion or invented coordinates.
 
@@ -212,9 +214,20 @@ connections add to that external configuration; they do not replace each other.
 Every input of each attached pipeline must have exactly one source. An explicit
 `EmptySource()` can stand in for an intentionally unused input with a declared
 schema. Published outputs must be connected; unused declarations need not publish.
-Checks are syntactic, not exhaustive path/reachability analysis. Output fan-out to
-several pipelines can compile, but the current offline harness admits only **one
-pipeline with one nonempty input**. Multiple inputs/empty execution remain deferred.
+Checks are syntactic, not exhaustive path/reachability analysis. Execution supports
+multiple named inputs and multiple attached definitions, including output fan-out.
+The runner combines attachments into one graph and one physical store owner;
+writers choose distinct group/dataset destinations in the same run folder.
+Definition-local names are qualified as `pipeline0.name`, `pipeline1.name`, etc.
+when there are multiple attachments; explicit group/dataset names do not change.
+
+Each `seq.publish(output, ...)` routes only to that output's connected inputs.
+Window IDs and averaging state are independent per input. Counts need not match;
+there is no enforced point pairing or numerical join. All branches share scan/run
+boundaries, including inputs that never publish. An idle writer produces no dataset.
+Completion waits for all required paths, and a required branch failure fails the
+run without removing already published datasets. Explicit `EmptySource()` execution
+remains deferred: connect a real output and simply do not publish it when idle.
 
 Compiled plans contain resolved schemas, named input/output connections, filter
 configuration and sink destinations. Later changes to definitions or experiment
@@ -475,7 +488,7 @@ real-service/simulated tests exercise the actual supervised lifecycle.
 
 ## Deferred deliberately
 
-Arbitrary multidimensional ragged windows, multi-input pipeline execution,
+Arbitrary multidimensional ragged windows, multi-input numerical joins,
 adaptive sweep updates and multi-scan segmentation remain unsupported. The current
 writer-only server, its ownership/recovery limits and durable run artifacts are
 documented in [server.md](server.md).

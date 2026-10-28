@@ -68,13 +68,21 @@ def store_owner(path, writers, schemas, edges, status, stop, run_metadata, input
                             scan = payload["group"]
                             spec = writers[name]
                             dataset_name = spec.dataset if spec.dataset is not None else f"{spec.prefix}{scan}"
-                            assembler.publish(scan, store, spec.group, dataset_name,
-                                              label=scan, source=f"{spec.node}.{spec.port}",
-                                              input_name=input_name)
-                            if preview is not None:
-                                preview.published(name)
+                            # An idle branch acknowledges the boundary without
+                            # inventing an empty dataset or a successful publication.
+                            published = bool(assembler.rows)
+                            if assembler.pending is not None:
+                                raise ValueError(f"Incomplete window in writer {name}")
+                            if published:
+                                assembler.publish(scan, store, spec.group, dataset_name,
+                                                  label=scan, source=f"{spec.node}.{spec.port}",
+                                                  input_name=(input_name.get(name) if isinstance(input_name, dict)
+                                                              else input_name))
+                                if preview is not None:
+                                    preview.published(name)
                             _send(status, {"type": "scan", "writer": name, "scan": scan,
-                                           "group": spec.group, "dataset": dataset_name})
+                                           "group": spec.group, "dataset": dataset_name,
+                                           "published": published})
                         elif event == "run_end":
                             if assembler.pending is not None or assembler.rows:
                                 raise ValueError(f"Unpublished scan in writer {name}")

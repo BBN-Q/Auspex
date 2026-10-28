@@ -126,7 +126,46 @@ run creates no dataset. Buffer-only pipelines can still use multiple scans.
 The older explicit `WriterSpec(prefix=...)` API retains its per-scan naming and
 multiple-scan behavior. A broader explicit multiple-scan naming policy is deferred.
 
-## Serialization and future inputs
+## Independent named inputs
+
+Multiple acquisition inputs may feed separate branches in one definition. Each
+filter still has exactly one input: this is routing, not a numerical join.
+Inputs have independent schemas, consecutive window IDs and averaging groups.
+For example, a scalar temperature needs no artificial measurement axis:
+
+```python
+trace = PipelineInput("trace", PortSchema(
+    "complex128", 1, ("frequency",), ("Hz",), max_bytes=65536,
+    value_name="s21"))
+temperature = PipelineInput("temperature", PortSchema(
+    "float64", 0, (), (), max_bytes=8, value_name="temperature", value_unit="K"))
+pipeline = PipelineDefinition(inputs=[trace, temperature], edges=[
+    (trace, WriteToFile(name="vna", group="vna", dataset="s21").sink),
+    (temperature, WriteToFile(name="thermometer", group="environment",
+                              dataset="temperature").sink),
+])
+
+with ManualPipeline(pipeline, store_path="measurement.auspex") as running:
+    running.submit(response, input="trace", axes=[Axis("frequency", frequency, "Hz")],
+                   sweep={"bias": 0.1})
+    running.submit(np.array(295., dtype="float64"), input="temperature", sweep={"bias": 0.1})
+```
+
+Here `np` is NumPy and `Axis` comes from `auspex_v2.data`; response/frequency are
+actual acquisition arrays. Declare each input schema or compile with a mapping
+via `pipeline.compile(inputs={"trace": trace_schema, "temperature": temperature_schema})`.
+The `input_schema=` convenience argument remains single-input only.
+
+`submit(..., input="name")` selects one input; omitting the name is allowed only
+for a single-input pipeline. Publications need not alternate or have equal counts.
+Sweep coordinates associate datasets, but do not guarantee unique pairing at
+repeated positions. Scan/run boundaries close all branches, including idle ones;
+no output rows means no dataset for that writer. Required branch failures fail
+the graph. Success waits for all required branches and writer acknowledgments.
+One physical owner writes distinct datasets to the shared store; their publication
+is not an atomic transaction. Already published datasets survive later failures.
+
+## Serialization and empty sources
 
 A failed definition construction never claims any input: all inputs are checked
 before ownership is assigned. Each `PipelineInput` still belongs to only one
@@ -139,7 +178,8 @@ JSON, built-in kind identifiers, node configurations and named port connections;
 no pickles, Python source, module lookup, or custom filter registration is used.
 The `document` properties return independent copies.
 
-Multiple named inputs are expressible now. To deliberately leave one empty:
+A declared input may receive no publications during execution. This differs from
+binding it to an explicit `EmptySource`, whose execution remains deferred:
 
 ```python
 from auspex_v2.filters.definitions import EmptySource
@@ -151,10 +191,10 @@ Here `reference` must be a declared, wired input with an explicit schema, since 
 empty source cannot infer one. An empty source means no data windows—not zeros or
 an empty array. Its future execution contract includes normal scan/run completion.
 
-**Current execution accepts exactly one nonempty input.** Multi-input recipes and
-empty bindings can be serialized/compiled, but the manual adapter rejects them
-before starting workers or creating storage. Joins and empty-source event delivery
-are deferred, not emulated by dropping branches.
+**Execution accepts multiple inputs with nonempty bindings.** Explicit empty
+bindings can be serialized/compiled, but runtime rejects them before starting
+workers or creating storage. Joins and explicit empty-source execution are deferred,
+not emulated by dropping branches.
 
 Experiment `OutputConnector`, explicit `seq.publish`, external `connect`, and
 internal `setup_pipeline()` now consume these same definitions; see the

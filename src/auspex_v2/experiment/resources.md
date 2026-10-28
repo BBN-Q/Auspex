@@ -9,8 +9,8 @@ remain deferred.
 ## Admission preflight
 
 `preflight_run(plan, memory_budget_bytes=..., store_scan_budget_bytes=...)`
-checks the single nonempty pipeline, its graph topology and declared transport and
-writer staging budgets without starting workers. It also resolves recorded Python
+combines attached definitions into one graph, checks its nonempty input bindings,
+topology and aggregate declared transport/writer budgets without starting workers. It also resolves recorded Python
 callables before folder/instrument acquisition. Those imports are trusted code and
 may themselves write files or have other side effects; preflight is not a sandbox. Server-run
 buffers must fit the existing 8 MiB inline array transport; larger digitizer

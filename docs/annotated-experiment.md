@@ -55,9 +55,10 @@ A pipeline has an explicit named input and connector-pair edges. The writer
 selects `measurement/s21` within the eventual run store; it does not choose the
 run directory. `connect()` associates the experiment's output with that input.
 
-This is a single-input pipeline with a required file sink. ExperimentServer
-currently rejects buffer-backed or multi-input executions. Filter workers and the
-store owner are created during execution, not by defining this graph.
+This is a single-input pipeline with a required file sink. ExperimentServer also
+supports independent named inputs and multiple attached definitions sharing one
+store; buffer-backed runs remain unsupported. Filter workers and the store owner
+are created during execution, not by defining this graph.
 
 ## 4. Record initialization explicitly
 

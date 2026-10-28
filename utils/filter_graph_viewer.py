@@ -184,9 +184,14 @@ class SnapshotWorker(QtCore.QObject):
             self.finished.emit(None, str(exc))
 
 
+def acquisition_inputs(snapshot):
+    """Accept named ingress snapshots and older single-input snapshots."""
+    return snapshot.get("inputs", {"$input": snapshot.get("input")})
+
+
 def layout_positions(snapshot):
     """Place a DAG in stable topological columns with upstream-ordered rows."""
-    ids = ["$input", *snapshot["nodes"],
+    ids = [*acquisition_inputs(snapshot), *snapshot["nodes"],
            *(f"result:{key}" for key in snapshot["results"]),
            *(f"writer:{key}" for key in snapshot["writers"])]
     if len(ids) != len(set(ids)):
@@ -196,7 +201,7 @@ def layout_positions(snapshot):
         if edge["source"] not in parents or edge["target"] not in parents:
             raise ValueError("Unknown graph node")
         parents[edge["target"]].append(edge["source"])
-    depth = {"$input": 0}
+    depth = dict.fromkeys(acquisition_inputs(snapshot), 0)
     while len(depth) < len(ids):
         available = [key for key in ids if key not in depth and parents[key] and
                      all(parent in depth for parent in parents[key])]
@@ -309,7 +314,8 @@ class ViewerWindow(QtWidgets.QMainWindow):
         """Draw boxed ports and directed connections for a validated snapshot DAG."""
         self.scene.clear()
         self.node_items.clear()
-        defs = {"$input": (snapshot["input"]["name"], "Acquisition", "input", [], ["out"])}
+        defs = {key: (spec["name"], "Acquisition", "input", [], ["out"])
+                for key, spec in acquisition_inputs(snapshot).items()}
         for name, spec in snapshot["nodes"].items():
             defs[name] = (name, spec["kind"], "filter", spec["inputs"], spec["outputs"])
         for name, spec in snapshot["results"].items():
@@ -347,12 +353,14 @@ class ViewerWindow(QtWidgets.QMainWindow):
         if isinstance(item, EdgeItem):
             edge = item.key
             source = edge["source"]
-            schema = (self.snapshot["input"]["schema"] if source == "$input"
+            inputs = acquisition_inputs(self.snapshot)
+            schema = (inputs[source]["schema"] if source in inputs
                       else self.snapshot["nodes"][source]["schema"])
             info = {"connection": edge, "schema": schema}
         elif isinstance(item, NodeItem):
             key = item.key
-            info = (self.snapshot["input"] if key == "$input" else
+            inputs = acquisition_inputs(self.snapshot)
+            info = (inputs[key] if key in inputs else
                     self.snapshot["results"][key[7:]] if key.startswith("result:") else
                     self.snapshot["writers"][key[7:]] if key.startswith("writer:") else
                     self.snapshot["nodes"][key])

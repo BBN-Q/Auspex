@@ -114,9 +114,10 @@ inheritance hierarchies wholesale or promise compatibility with every V1 experim
 ### Processing and storage
 
 - Pipeline definitions are inert, detached configurations shared by experiments
-  and manual processing. Runtime currently requires one nonempty ingress and one
-  input per filter; expressible multi-input/empty definitions do not imply execution
-  support. Explicit external wiring replaces internal setup with a warning.
+  and manual processing. Runtime accepts independent named inputs and one input
+  per filter; joins and explicit EmptySource execution remain deferred. Multiple
+  attachments share one graph/store owner. Explicit external wiring replaces
+  internal setup with a warning.
 - Topology is fixed during execution. Spawn one worker per logical filter; bounded
   shared-memory slots belong to edges. Fan-out copies. No inferred process placement,
   global reference-counting scheme or multi-input join framework.
@@ -560,3 +561,15 @@ Complete. Further retirement is not authorized by this slice.
 
 Runner lifecycle refactoring remains deferred. Keep current evidence in STATUS.md,
 not a growing chronological test-count/change diary here.
+
+## Authorized slice — multiple acquisition inputs and attached pipelines
+
+- [x] Route independent named publications through single-input filter branches;
+  preserve existing single-input calls and one physical store owner.
+- [x] Execute multiple attached definitions in one graph/store, with distinct
+  datasets, independent window ordering and shared scan/run completion.
+- [x] Support idle inputs and scalar values/units; preserve required-branch failure
+  and already-published dataset policy. EmptySource execution and joins stay deferred.
+- [x] Add process-backed correctness/integration coverage and document the API.
+
+Complete. No further implementation slice is authorized.

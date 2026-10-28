@@ -17,9 +17,9 @@ from unittest.mock import Mock, patch
 
 from auspex_v2.data import AuspexStore
 from auspex_v2.experiment import (Experiment, OutputConnector, InstrumentRef, ExperimentServerClient,
-                                  RecordedPythonWarning)
+                                  RecordedPythonWarning, FloatParameter)
 from auspex_v2.experiment.service import ExperimentServer
-from auspex_v2.filters.definitions import PipelineInput, PipelineDefinition, WriteToFile
+from auspex_v2.filters.definitions import PipelineInput, PipelineDefinition, WriteToFile, ComplexAverage
 from auspex_v2.instruments.drivers.simulated import SimulatedSource
 from auspex_v2.instruments.server import InstrumentServerClient
 
@@ -145,6 +145,77 @@ class ExperimentServerTest(unittest.TestCase):
             self.instrument_process.kill()
             _, errors = self.instrument_process.communicate()
         self.tmp.cleanup()
+
+    def test_independent_trace_and_temperature_in_one_store(self):
+        """Saved plans route unequal streams through shared or separate definitions.
+
+        Separate definitions intentionally reuse local names; an output also feeds
+        a third definition to verify explicit fan-out across attachments.
+        """
+        class Multi(Measurement):
+            """Averaged traces and occasional scalar readings share sweep coordinates."""
+            signal = OutputConnector(dtype="complex128", dimensions=("frequency",),
+                                     axis_units={"frequency": "Hz"}, max_bytes=1024)
+            temperature = OutputConnector(dtype="float64", unit="K", max_bytes=8)
+            bias = FloatParameter(default=0., unit="V")
+            separate = False
+
+            def setup_pipeline(self):
+                """Keep independent definition-local names valid in a combined runtime."""
+                trace = PipelineInput("input")
+                temperature = PipelineInput("input" if self.separate else "temperature")
+                average = ComplexAverage(name="average", repeats=2)
+                disk = WriteToFile(name="disk", group="vna", dataset="s21")
+                readings = WriteToFile(name="disk" if self.separate else "readings",
+                                       group="environment", dataset="temperature")
+                trace_edges = [(trace, average.sink), (average.final_average, disk.sink)]
+                if self.separate:
+                    PipelineDefinition(inputs=[trace], edges=trace_edges)
+                    PipelineDefinition(inputs=[temperature], edges=[(temperature, readings.sink)])
+                    copy = PipelineInput("input")
+                    PipelineDefinition(inputs=[copy], edges=[
+                        (copy, WriteToFile(name="disk", group="vna", dataset="raw").sink)])
+                    self.connect(self.signal, copy)
+                else:
+                    PipelineDefinition(inputs=[trace, temperature],
+                                       edges=trace_edges + [(temperature, readings.sink)])
+                self.connect(self.signal, trace)
+                self.connect(self.temperature, temperature)
+
+            def sequence(self, seq):
+                trace = seq.module("numpy").array(np.array([1 + 2j, 3 + 4j]))
+                for _ in range(2):
+                    seq.publish(self.signal, data=trace, axes={"frequency": np.array([1., 2.])})
+                with seq.if_(self.bias < 2.):
+                    seq.publish(self.temperature, data=273. + self.bias)
+
+        for separate in (False, True):
+            with self.subTest(separate=separate):
+                experiment = Multi()
+                experiment.separate = separate
+                experiment.bind_instrument("source", "source")
+                experiment.add_sweep(experiment.bias, [0., 1., 2., 3.])
+                from auspex_v2.experiment import CompiledPlan
+                # Exercise the detached JSON route rather than live authoring objects.
+                with self.assertWarns(RecordedPythonWarning):
+                    compiled = CompiledPlan(experiment.compile().document)
+                run = self.client.submit(compiled, name=f"multi_{separate}", dir=self.data)
+                result = run.wait(timeout=20)
+                self.assertEqual(result["state"], "SUCCEEDED", result)
+                with AuspexStore(run.path) as store:
+                    self.assertEqual(len(store.list_datasets()), 3 if separate else 2)
+                    trace = store.read_dataset("vna", "s21")
+                    temperature = store.read_dataset("environment", "temperature")
+                    if separate:
+                        raw = store.read_dataset("vna", "raw")
+                        np.testing.assert_array_equal(raw.data, np.tile([1 + 2j, 3 + 4j], (8, 1)))
+                np.testing.assert_array_equal(trace.data, np.tile([1 + 2j, 3 + 4j], (4, 1)))
+                np.testing.assert_array_equal(temperature.data, [273., 274.])
+                np.testing.assert_array_equal(temperature.coordinates["bias"].values, [0., 1.])
+                self.assertEqual(temperature.value_unit, "K")
+                self.assertEqual(temperature.dimensions, ("bias",))
+                with InstrumentServerClient(self.instrument_socket) as client:
+                    self.assertIsNone(client.status()["run"])
 
     def test_saved_plan_submit_disconnect_reconnect_and_date_folder(self):
         saved = self.root / "plan.json"

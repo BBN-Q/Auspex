@@ -42,6 +42,43 @@ def compile_attachments(connections, outputs):
     return attachments
 
 
+def publication_inputs(document):
+    """Map outputs to ingress names, qualifying independent definitions on collision."""
+    attachments = document["pipelines"]
+    routes = {}
+    for index, attachment in enumerate(attachments):
+        prefix = f"pipeline{index}." if len(attachments) > 1 else ""
+        for name, output in attachment["connections"].items():
+            if output is not None:
+                routes.setdefault(output, []).append(prefix + name)
+    return routes
+
+
+def runtime_pipeline(document):
+    """Combine attached definitions into one graph so only one process owns the store.
+
+    Definition-local names remain independent; qualification is runtime-only and
+    does not change saved plans or explicit group/dataset destinations.
+    """
+    attachments = document["pipelines"]
+    if len(attachments) == 1:
+        return CompiledPipeline.from_document(attachments[0]["pipeline"])
+    merged = {"version": 1, "inputs": [], "nodes": [], "edges": []}
+    empty = []
+    for index, attachment in enumerate(attachments):
+        compiled = CompiledPipeline.from_document(attachment["pipeline"]).document
+        prefix = f"pipeline{index}."
+        definition = compiled["definition"]
+        for kind in ("inputs", "nodes"):
+            for item in definition[kind]:
+                item["name"] = prefix + item["name"]
+                merged[kind].append(item)
+        merged["edges"].extend([prefix + source, port, prefix + target, sink]
+                               for source, port, target, sink in definition["edges"])
+        empty.extend(prefix + name for name in compiled["empty_inputs"])
+    return CompiledPipeline.from_document({"definition": merged, "empty_inputs": empty})
+
+
 def validate_attachments(document):
     """Validate saved connections and schema agreements, without running filters."""
     attachments = document.get("pipelines", [])
