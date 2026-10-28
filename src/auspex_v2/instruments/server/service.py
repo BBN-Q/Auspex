@@ -17,6 +17,7 @@ import secrets
 import signal
 import socketserver
 import stat
+import sys
 import threading
 
 import numpy as np
@@ -283,11 +284,26 @@ class Registry:
             self.announce(f"REGISTRATION ERROR — {name}: {error}")
 
     def announce(self, message):
-        """Print an operator-facing command or transition unless quiet mode is active."""
+        """Keep diagnostic output failures independent of commands and state transitions."""
         if self.log is not None:
-            self.log.write(f"[InstrumentServer] {message}")
+            try:
+                self.log.write(f"[InstrumentServer] {message}")
+            except (OSError, UnicodeError):
+                pass  # File logging is best effort, not command acknowledgment.
         if not self.quiet:
-            print(f"[InstrumentServer] {message}", flush=True)
+            try:
+                print(f"[InstrumentServer] {message}", flush=True)
+            except OSError:
+                # Buffered bytes can fail again in multiprocessing's pre-spawn
+                # flush or interpreter shutdown. Retire the failed descriptor,
+                # not merely this print, while leaving file logging independent.
+                try:
+                    with open(os.devnull, "w") as sink:
+                        os.dup2(sink.fileno(), sys.stdout.fileno())
+                except (OSError, ValueError):
+                    pass  # Output recovery itself must remain best effort.
+            except UnicodeError:
+                pass  # An unrepresentable message must not affect the command.
 
     def _save(self):
         """Persist inventory/run identity under the lock (or during initial construction).

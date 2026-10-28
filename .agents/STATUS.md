@@ -10,6 +10,20 @@ replaces the historical discussion; it is not authorization to implement the bac
 
 ## Resume here
 
+- **InstrumentServer announcement fix complete:** file/console output failures
+  (OSError/UnicodeError) are independently best effort. A failed stdout descriptor
+  is redirected to /dev/null because buffered bytes would otherwise fail again
+  during multiprocessing spawn or interpreter shutdown. No dispatch, persistence,
+  ownership, retry or quarantine policy changes; no asynchronous logging.
+  The real server/simulator regression closes stdout's pipe reader and checks
+  command readback, retained live ownership, disconnect/reconnect, file logging,
+  expected worker-error quarantine and clean service exit. Separate sink checks
+  cover file/console OSError and UnicodeError. All 26 instrument-server/registry
+  lifecycle tests and git diff --check passed. No hardware commands tested.
+  Connected-but-undrained stdout may still block. The other review findings
+  (scan Cartesian-product allocation and completed-store EOF handling) remain
+  unfixed; no implementation of those is authorized yet.
+
 - **V1 VISA port slice complete under revised scope:** 11 implemented ports plus
   16 unavailable stubs, deferred by the user to manual porting/hardware validation.
   Stub classes live in their vendor modules, raise NotImplementedError on

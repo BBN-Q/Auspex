@@ -9,6 +9,32 @@ from auspex_v2.instruments.server.service import Registry, InstrumentServerError
 
 
 class RegistryLifecycleTest(unittest.TestCase):
+    """Verify registry transition contracts independently of hardware backends."""
+
+    def test_announcement_sinks_fail_independently(self):
+        """Expected output errors are nonfatal and must not suppress the other sink."""
+        errors = (OSError("Output unavailable"),
+                  UnicodeEncodeError("ascii", "μ", 0, 1, "Not representable"))
+        with tempfile.TemporaryDirectory(dir=".agents") as directory:
+            log = Mock()
+            registry = Registry(Path(directory) / "state.json", log=log)
+            for error in errors:
+                with self.subTest(error=type(error).__name__):
+                    log.write.side_effect = error
+                    with patch("builtins.print") as console:
+                        registry.announce("file unavailable")
+                    console.assert_called_once_with("[InstrumentServer] file unavailable", flush=True)
+                    log.reset_mock(side_effect=True)
+                    # Do not replace the test runner's own stdout descriptor.
+                    with patch("builtins.print", side_effect=error), patch(
+                            "auspex_v2.instruments.server.service.os.dup2") as retire:
+                        registry.announce("console unavailable")
+                    if isinstance(error, OSError):
+                        retire.assert_called_once()
+                    else:
+                        retire.assert_not_called()
+                    log.write.assert_called_once_with("[InstrumentServer] console unavailable")
+
     def exercise(self, operation, *, shutdown=False, reconnect=False):
         entered, release, answered = (threading.Event() for _ in range(3))
         errors = []

@@ -27,7 +27,7 @@ class InstrumentServerTest(unittest.TestCase):
 
     def start_server(self, *, cli=False, quiet=False, capture=False, clean=False):
         """Launch the service or operator CLI and wait for its handshake."""
-        env = dict(os.environ)
+        env = dict(os.environ, AUSPEX_HOME=self.tmp.name)
         source_dir = str(Path(__file__).resolve().parents[2] / "src")
         env["PYTHONPATH"] = source_dir + os.pathsep + env.get("PYTHONPATH", "")
         entrypoint = ([str(Path(__file__).resolve().parents[2] / "utils" / "instrument_server.py")]
@@ -113,6 +113,41 @@ class InstrumentServerTest(unittest.TestCase):
                 source.set("frequency", 6e9)
         output, _ = self.stop_server()
         self.assertEqual(output, b"")
+
+    def test_closed_stdout_does_not_interrupt_commands_or_ownership(self):
+        """Lost console output must not strand commands or mask real worker failure."""
+        self.stop_server()
+        self.start_server(capture=True)
+        with InstrumentServerClient(self.socket) as client, InstrumentServerClient(self.socket) as observer:
+            self.register_connected(client)
+            with client.live("src") as source:
+                self.server.stdout.close()  # Close a real pipe reader, not a mocked print call.
+                source.frequency = 5e9
+                self.assertEqual(source.frequency, 5e9)
+                state = observer.status()["instruments"]["src"]
+                self.assertEqual(state["state"], "CONNECTED")
+                self.assertFalse(state["busy"])
+                self.assertEqual(state["live_sessions"], 1)
+                with self.assertRaisesRegex(RemoteError, "already has a live session"):
+                    observer.live("src")
+                with self.assertRaisesRegex(RemoteError, "close live sessions"):
+                    observer.begin_run("must-not-steal-ownership")
+            self.assertEqual(observer.status()["instruments"]["src"]["live_sessions"], 0)
+            client.disconnect("src")
+            self.assertEqual(observer.status()["instruments"]["src"]["state"], "DISCONNECTED")
+            client.connect("src")
+            with client.live("src") as source:
+                with self.assertRaisesRegex(RemoteError, "Frequency must be between"):
+                    source.frequency = 0
+                state = observer.status()["instruments"]["src"]
+                self.assertEqual(state["state"], "TERMINATED")
+                self.assertFalse(state["busy"])
+                self.assertEqual(state["live_sessions"], 1)
+            client.recover("src", "Simulator inspected after expected command failure")
+        text = (Path(self.tmp.name) / ".auspex" / "instruments.log").read_text()
+        self.assertIn("SET frequency value=5000000000.0", text)
+        self.assertIn("GET frequency -> 5000000000.0", text)
+        self.assertIn("CONNECTED -> TERMINATED (SET frequency failed:", text)
 
     def test_vna_inline_arrays_and_size_limit(self):
         """Transfer complex VNA traces without desynchronizing subsequent requests."""

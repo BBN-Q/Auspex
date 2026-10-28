@@ -415,5 +415,19 @@ Known concerns retained for future **manual** work (not an implementation queue)
 All 16 remaining models are deliberately stubbed, including models without a
 specific identified defect. These notes do not authorize repairing or admitting them.
 
+## Authorized slice — nonfatal InstrumentServer announcements
+
+- [x] Make Registry.announce console/file output independently best effort for
+  OSError/UnicodeError, without changing dispatch, persistence or lease policy.
+- [x] Retire failed stdout to /dev/null so buffered output cannot break subsequent
+  worker spawning or interpreter shutdown. Do not introduce asynchronous logging.
+- [x] Verify lost stdout with a real simulator/server: commands/readback, live
+  ownership, disconnection/reconnection and ordinary worker-failure quarantine;
+  check file/console sink independence separately.
+
+Complete. A connected but undrained output pipe can still block; changing that is
+outside this slice. Other review findings (Cartesian-product scan allocation and
+finished-store EOF handling) remain unfixed and require separate authorization.
+
 Runner lifecycle refactoring remains deferred. Keep current evidence in STATUS.md,
 not a growing chronological test-count/change diary here.
