@@ -20,7 +20,7 @@ jobs:
       - name: Install documentation dependencies
         run: python -m pip install -r docs/requirements.txt
       - name: Build without executing examples
-        run: python -m mkdocs build --strict
+        run: python -m zensical build --strict
       - name: Upload Pages artifact for manual deployment
         if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-pages-artifact@v3

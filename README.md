@@ -49,17 +49,20 @@ conventions. Hardware interfaces may require additional system libraries or perm
 ## Documentation
 
 The [draft V2 manual](docs/index.md) includes a simulated quickstart, an annotated
-experiment, and component and utility guides. Install and preview it locally from
-the repository root:
+experiment, driver API references, and component and utility guides. It uses
+Zensical. Set up the repository-local environment once, then launch:
 
 ```sh
-python3.13 -m venv .venv-docs
-. .venv-docs/bin/activate
-python -m pip install -r docs/requirements.txt
-python -m mkdocs serve
+python3.13 -m venv .venv  # skip if .venv already exists
+.venv/bin/python -m pip install -e . -r docs/requirements.txt
+./start_docs.sh
 ```
 
-Open the address printed by MkDocs, normally `http://127.0.0.1:8000/Auspex/`.
+`start_docs.sh` regenerates the instrument API, builds the documentation in strict
+mode, and starts a local server at `http://127.0.0.1:8000/`. Stop it with Ctrl+C.
+It always uses the repository's `.venv`, installs nothing automatically, and
+reports setup instructions if dependencies are missing. It can be invoked by
+path from another directory. No instruments or hardware services are opened.
 The documentation workflow runs only when manually triggered; pushes and pull
 requests do not build or deploy the site. See [maintenance and deployment instructions](docs/maintaining.md).
 

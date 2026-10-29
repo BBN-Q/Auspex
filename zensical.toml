@@ -1,0 +1,77 @@
+[project]
+site_name = "Auspex V2"
+site_description = "Laboratory measurements with explicit instruments, processing, and data."
+site_url = "https://bbn-q.github.io/Auspex/"
+repo_url = "https://github.com/BBN-Q/Auspex"
+repo_name = "BBN-Q/Auspex"
+edit_uri = ""
+watch = ["examples/documented_vna_sweep.py"]
+
+nav = [
+  { "Introduction" = "index.md" },
+  { "Quickstart" = "quickstart.md" },
+  { "Annotated experiment" = "annotated-experiment.md" },
+  { "Components" = [
+    { "Experiments" = "components/experiments.md" },
+    { "Instruments" = "components/instruments.md" },
+    { "Filters and pipelines" = "components/filters.md" },
+    { "Data and storage" = "components/data.md" },
+    { "Offline fitting" = "components/analysis.md" },
+    { "Hanger resonators" = "components/resonator-fits.md" },
+  ] },
+  # BEGIN GENERATED INSTRUMENT API
+  { "Instrument driver API" = [
+    { "Overview" = "reference/instruments/index.md" },
+    { "AMI430" = "reference/instruments/AMI430.md" },
+    { "AgilentE8363C" = "reference/instruments/AgilentE8363C.md" },
+    { "AgilentN5183A" = "reference/instruments/AgilentN5183A.md" },
+    { "AgilentN5230A" = "reference/instruments/AgilentN5230A.md" },
+    { "BNC845" = "reference/instruments/BNC845.md" },
+    { "BOP2020M" = "reference/instruments/BOP2020M.md" },
+    { "DAT64H" = "reference/instruments/DAT64H.md" },
+    { "DSInstrumentsSG12000" = "reference/instruments/DSInstrumentsSG12000.md" },
+    { "DSInstrumentsSG12000Pro" = "reference/instruments/DSInstrumentsSG12000Pro.md" },
+    { "DigitalAttenuator" = "reference/instruments/DigitalAttenuator.md" },
+    { "Keithley2400" = "reference/instruments/Keithley2400.md" },
+    { "Picosecond10070A" = "reference/instruments/Picosecond10070A.md" },
+    { "RelayDriver" = "reference/instruments/RelayDriver.md" },
+    { "SMB100B" = "reference/instruments/SMB100B.md" },
+    { "SimulatedSource" = "reference/instruments/SimulatedSource.md" },
+    { "SimulatedVNA" = "reference/instruments/SimulatedVNA.md" },
+    { "YokogawaGS200" = "reference/instruments/YokogawaGS200.md" },
+  ] },
+  # END GENERATED INSTRUMENT API
+  { "Utilities" = [
+    { "Overview" = "utilities/index.md" },
+    { "Combined launcher" = "utilities/launch-auspex.md" },
+    { "Instrument server" = "utilities/instrument-server.md" },
+    { "Instrument server GUI" = "utilities/instrument-server-gui.md" },
+    { "Experiment server" = "utilities/experiment-server.md" },
+    { "Status inspection" = "utilities/auspex-status.md" },
+    { "Data browser" = "utilities/data-browser.md" },
+    { "Live plots" = "utilities/live-plots.md" },
+    { "Filter graph viewer" = "utilities/filter-graph-viewer.md" },
+  ] },
+  { "Maintaining the docs" = "maintaining.md" },
+]
+
+[project.validation.links]
+anchors = "warn"
+
+[project.theme]
+variant = "classic"
+logo = "assets/auspex.png"
+favicon = "assets/auspex.png"
+font = false
+features = ["navigation.sections", "content.code.copy"]
+
+[project.markdown_extensions]
+toc = {}
+tables = {}
+fenced_code = {}
+admonition = {}
+pymdownx.highlight = {}
+pymdownx.superfences = {}
+pymdownx.snippets.base_path = ["."]
+pymdownx.snippets.check_paths = true
+pymdownx.snippets.restrict_base_path = true

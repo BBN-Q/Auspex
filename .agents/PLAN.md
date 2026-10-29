@@ -617,6 +617,40 @@ output no longer emits automatic path/browser-command lines; explicit paths and
 raw JSON remain available. Logs: `.experiment-display-full-tests.log` and
 `.experiment-display-docs.log`.
 
+## Authorized slice — Zensical migration and local docs launcher
+
+- [x] Replace MkDocs/Material requirements/configuration with Zensical, retaining
+  navigation, classic appearance, snippets, local fonts and manual-only deployment.
+- [x] Add executable root start_docs.sh: use .venv, diagnose missing dependencies
+  without installing, regenerate API, strict-build, then serve 127.0.0.1:8000.
+- [x] Update README/manual/generator and validate build, generated references,
+  live local serving and launcher failure behavior. No application runtime changes.
+
+Complete with Zensical 0.0.73 and native zensical.toml (classic theme); removed
+mkdocs.yml and migrated generated navigation. Strict clean build, API freshness,
+8 reference/export tests, shell syntax, pip check and diff checks pass. Real
+launcher tested from another directory: HTTP index, driver reference, snippets
+and search succeed; Ctrl+C exits cleanly. Missing environment/dependencies and
+build failure paths behave as specified. Logs: `.zensical-build.log`,
+`.zensical-tests.log`, `.zensical-launcher-check.log`, `.zensical-server.log`.
+No hosted deployment or full runtime-suite rerun for this documentation slice.
+
+## Authorized slice — generated InstrumentServer driver reference
+
+- [x] Generate checked-in MkDocs pages/index from exported concrete drivers, with
+  effective inherited settings/operations, signatures, declaration details and
+  source provenance. No construction, hardware I/O or inferred safety/type claims.
+- [x] Include model details/experimental status and inherited class caveats; link
+  unavailable stubs separately. Exclude direct-use-only APIs.
+- [x] Provide deterministic regeneration/check commands and navigation. Keep tests
+  minimal: representative inheritance/declarations and freshness, plus strict docs.
+
+Complete: 17 driver pages plus index; regeneration maintains its marked MkDocs
+navigation block. Two new tests and six existing driver-export tests pass; the
+freshness check, strict MkDocs and diff checks pass. No runtime driver changes,
+API plugin, device construction or hardware I/O. Logs: `.driver-api-tests.log`,
+`.driver-api-docs.log`. Full runtime suite not rerun for this documentation slice.
+
 ## Authorized slice — readable plan explanations
 
 - [x] Limit changes to explain() display: omit empty instruction fields (None,

@@ -10,6 +10,33 @@ replaces the historical discussion; it is not authorization to implement the bac
 
 ## Resume here
 
+- **Zensical migration complete:** native `zensical.toml` replaces `mkdocs.yml`;
+  docs requirements now select Zensical (tested 0.0.73), with classic styling,
+  existing navigation/branding, built-in search, no Google fonts and preserved
+  example snippets. API generator maintains TOML navigation. Executable root
+  `start_docs.sh` uses `.venv` without installing automatically: regenerate API,
+  strict-build, serve 127.0.0.1:8000. README/manual give setup instructions.
+  Workflow remains manual-only and builds checked-in Markdown with Zensical.
+  Clean strict build, API freshness, 8 reference/export tests, shell syntax,
+  pip check and diff checks pass. Real HTTP smoke test from another directory
+  verifies index, driver page, snippets/search and clean Ctrl+C shutdown;
+  missing environment/dependencies and failed-build behavior also checked.
+  Logs: `.zensical-{build,tests,launcher-check,server}.log`. No hosted deployment
+  or full runtime-suite rerun. Attended visual review remains separate.
+
+- **Generated driver API reference complete:** MkDocs now has an instrument API
+  index and 17 admitted-driver pages under `docs/reference/instruments/`. Pages
+  include inherited GET/SET/CALL members, normalized command declarations,
+  signatures/docstrings, origins, model caveats and experimental status. Stubs
+  remain separately linked; direct-use-only APIs are excluded. Regenerate with
+  `python utils/generate_instrument_api.py`; `--check` detects stale pages/nav.
+  Generation uses installed base Auspex dependencies but constructs no instruments
+  and opens no hardware. Ordinary MkDocs builds still need no Auspex installation.
+  Minimal tests: two new reference checks plus six existing export checks pass;
+  strict MkDocs, freshness and diff checks pass. No runtime driver changes; full
+  suite not rerun for this docs-only slice. Logs: `.driver-api-tests.log` and
+  `.driver-api-docs.log`.
+
 - **Readable plan explanations complete:** explain() omits empty instruction fields
   and binding kwargs while retaining zero/false, uses qualified compute names,
   and aliases temporary results as x1/x2 across all phases and nested references.
@@ -512,11 +539,12 @@ or shared-buffer digitizer path. Direct non-server instrument access bypasses lo
 
 ## Documentation and code navigation
 
-The local-first MkDocs/Material manual has 19 narrative pages; snippets include the
-canonical example as text, never execute it. Workflow is `workflow_dispatch` only;
-Pages has not been enabled/published remotely. API navigation and attended prose/visual
-review remain deferred. Material 9.8.0 announces EOL **May 5, 2027**; notice is documented,
-not suppressed. Local commands and deployment prerequisites:
+The local-first Zensical manual includes narrative guides and generated driver
+references; snippets include the canonical example as text, never execute it.
+Run `./start_docs.sh` using the prepared repository `.venv` to regenerate, build
+and serve locally. Workflow remains `workflow_dispatch` only; Pages has not been
+enabled/published remotely. Attended prose/visual review remains separate.
+Local commands and deployment prerequisites:
 [docs/maintaining.md](../docs/maintaining.md).
 
 | Area | Entry points / guides |

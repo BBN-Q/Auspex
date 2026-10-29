@@ -5,6 +5,10 @@ It owns one spawned worker per connected device and serializes device commands.
 The [server utility](../utilities/instrument-server.md) and optional
 [GUI](../utilities/instrument-server-gui.md) expose operator actions.
 
+The [driver API reference](../reference/instruments/index.md) lists each admitted
+model's effective settings and operations, including inherited declarations,
+command constraints, signatures and available docstrings.
+
 ## Roles and drivers
 
 An experiment declares a fixed `KIND`, optionally inferred from an authoring driver.
