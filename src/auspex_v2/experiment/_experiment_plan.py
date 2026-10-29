@@ -134,10 +134,13 @@ def assign_instruction_ids(document):
         assign(document[phase], phase)
 
 
-def explain_value(value):
-    """Render plan values without making users read expression-tree JSON."""
+def explain_value(value, references=None):
+    """Render expressions with optional display-only aliases for temporary results."""
+    def render(item):
+        return explain_value(item, references)
+
     if isinstance(value, list):
-        return "[" + ", ".join(explain_value(item) for item in value) + "]"
+        return "[" + ", ".join(render(item) for item in value) + "]"
     if not isinstance(value, dict):
         return json.dumps(value)
 
@@ -147,35 +150,35 @@ def explain_value(value):
     if op == "parameter":
         return "$" + value["name"]
     if op == "ref":
-        return "%" + value["name"]
+        return (references or {}).get(value["name"], "%" + value["name"])
     if op == "field":
-        return explain_value(value["value"]) + "[" + json.dumps(value["name"]) + "]"
+        return render(value["value"]) + "[" + json.dumps(value["name"]) + "]"
     symbols = {"lt": "<", "le": "<=", "gt": ">", "ge": ">=", "eq": "==",
                "ne": "!=", "add": "+", "sub": "-", "mul": "*", "div": "/"}
     if op in symbols:
         left, right = value["args"]
-        return f"({explain_value(left)} {symbols[op]} {explain_value(right)})"
+        return f"({render(left)} {symbols[op]} {render(right)})"
     if op == "component":
-        return explain_value(value["value"]) + "." + value["name"]
+        return render(value["value"]) + "." + value["name"]
     if op == "index":
-        return explain_value(value["value"]) + "[" + explain_value(value["index"]) + "]"
+        return render(value["value"]) + "[" + render(value["index"]) + "]"
     if op == "slice":
-        return ":".join(explain_value(value[key]) for key in ("start", "stop", "step"))
+        return ":".join(render(value[key]) for key in ("start", "stop", "step"))
     if op in ("list", "tuple"):
-        contents = ", ".join(explain_value(item) for item in value["items"])
+        contents = ", ".join(render(item) for item in value["items"])
         return "[" + contents + "]" if op == "list" else "(" + contents + ",)"
     if op == "dict":
-        return "{" + ", ".join(f"{key!r}: {explain_value(item)}" for key, item in value["items"]) + "}"
+        return "{" + ", ".join(f"{key!r}: {render(item)}" for key, item in value["items"]) + "}"
     if op == "array":
         return f"array(dtype={value['dtype']!r}, shape={value['shape']})"
     if op == "complex":
         return repr(complex(value["real"], value["imag"]))
     if op == "neg":
-        return "(-" + explain_value(value["args"][0]) + ")"
+        return "(-" + render(value["args"][0]) + ")"
     if op in BOOLEAN_OPERATORS:
-        arguments = ", ".join(explain_value(arg) for arg in value["args"])
+        arguments = ", ".join(render(arg) for arg in value["args"])
         return f"{op}({arguments})"
-    fields = [f"{key}: {explain_value(item)}" for key, item in sorted(value.items())]
+    fields = [f"{key}: {render(item)}" for key, item in sorted(value.items())]
     return "{" + ", ".join(fields) + "}"
 
 

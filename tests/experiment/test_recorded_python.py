@@ -102,6 +102,60 @@ class RecordedPythonTest(unittest.TestCase):
         self.assertEqual(functions.CALLS, [1., 2.])
         self.assertEqual(run.params["answer"], 5.)  # Reusing a reference never repeats the call.
 
+    def test_explain_aliases_are_display_only_and_omit_empty_fields(self):
+        """Keep stored IDs/literals intact while rendering nested references across phases."""
+        class Analysis(Experiment):
+            answer = FloatParameter(default=0.)
+
+            def setup(self, seq):
+                seq.module(MODULE).counted()
+
+            def sequence(self, seq):
+                counter = seq.variable("x1", type=int, initial=0)
+                seq.variable("enabled", type=bool, initial=False)
+                seq.variable("empty", type=str, initial="")
+                seq.variable("label", type=str, initial="%result_1 python_1")
+                values = seq.module("numpy").arange(3)
+                with seq.if_(counter < 1):
+                    seq.set_parameter(self.answer, values[counter].real)
+
+            def teardown(self, seq):
+                seq.module(MODULE).counted(value=0.)
+                seq.module(MODULE).counted([None, "", {}, []])
+
+        plan = compile_quiet(Analysis())
+        original = json.dumps(plan.document, sort_keys=True)
+        identity = plan.identity
+        text = plan.explain()
+        calls = [line for line in text.splitlines() if " COMPUTE " in line]
+        self.assertEqual(len(calls), 4)
+        self.assertIn(f"operation={MODULE}.counted result=x1", calls[0])
+        self.assertNotIn("args=", calls[0])
+        self.assertNotIn("kwargs=", calls[0])
+        self.assertIn("operation=numpy.arange result=x2", calls[1])
+        self.assertIn('kwargs=[["value", 0.0]]', calls[2])
+        self.assertIn("result=x3", calls[2])
+        self.assertIn('args=[[null, "", {}, []]]', calls[3])
+        self.assertIn("result=x4", calls[3])
+        self.assertIn("value=x2[%x1].real", text)
+        self.assertIn('name="x1" type="int" value=0', text)
+        self.assertIn('name="enabled" type="bool" value=false', text)
+        empty = next(line for line in text.splitlines() if 'name="empty"' in line)
+        self.assertNotIn("value=", empty)
+        self.assertIn('value="%result_1 python_1"', text)  # Never substitute literal text.
+        self.assertNotIn("kwargs={}", text)
+        self.assertNotIn("kwargs=[]", text)
+        self.assertNotIn("operation=\"python_", text)
+        self.assertEqual(json.dumps(plan.document, sort_keys=True), original)
+        self.assertEqual(plan.identity, identity)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "plan.json"
+            plan.save(path)
+            loaded = CompiledPlan.load(path)
+        self.assertEqual(loaded.explain(), text)
+        self.assertEqual(loaded.identity, identity)
+        self.assertEqual(FakeExecutor().run(loaded).outcome, "SUCCEEDED")
+
     def test_fft_dynamic_index_updates_a_scalar_parameter(self):
         """Compare a known cosine coefficient with the independent analytical value 0.5."""
         from examples.recorded_fft import RecordedFFT
@@ -134,6 +188,11 @@ class RecordedPythonTest(unittest.TestCase):
         self.assertEqual(len(notices), 1)  # arange warns; the reviewed wrapper does not.
         reviewed = [spec for spec in plan.document["operations"].values() if spec["attribute"] == "nested"][0]
         self.assertTrue(reviewed["safe_for_recording"])
+        text = plan.explain()
+        self.assertIn("args=[[x1]]", text)
+        self.assertIn('x2["pair"][0]', text)
+        self.assertIn('x2["z"].imag', text)
+        self.assertNotIn("%result_", text)
         run = FakeExecutor().run(plan)
         self.assertEqual(run.outcome, "SUCCEEDED", run.reason)
         self.assertEqual(run.params["answer"], 13.)

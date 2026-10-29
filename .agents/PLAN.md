@@ -617,6 +617,20 @@ output no longer emits automatic path/browser-command lines; explicit paths and
 raw JSON remain available. Logs: `.experiment-display-full-tests.log` and
 `.experiment-display-docs.log`.
 
+## Authorized slice — readable plan explanations
+
+- [x] Limit changes to explain() display: omit empty instruction fields (None,
+  empty strings/collections), retaining zero and false; omit empty binding kwargs.
+- [x] Use qualified recorded function names instead of operation IDs and consistent
+  x1/x2 temporary aliases across phases/nested references; preserve named variables.
+- [x] Verify unchanged plan identity, saved round trips and execution; preserve
+  literal strings and empty elements inside nonempty argument lists.
+- [x] Complete headless suite and strict documentation validation: all 406 tests
+  pass in 97.489 s; strict MkDocs and diff checks pass.
+
+Complete. No saved format, identity, execution or operation registry changes.
+Logs: `.plan-explain-full-tests.log`, `.plan-explain-docs.log`.
+
 ## Authorized slice — kill-safe filter cancellation
 
 - [x] Replace the process-shared Event with a monotonic shared-byte stop flag;

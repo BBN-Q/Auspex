@@ -831,7 +831,22 @@ class CompiledPlan:
         return cls(json.loads(Path(path).read_text(encoding="utf8")))
 
     def explain(self):
+        """Describe the plan with readable aliases, without changing its stored identity."""
         document = self.document
+        references = {}
+        for phase in ("setup", "main", "teardown"):
+            for node in walk_instructions(document[phase]):
+                if "result" in node and node["result"] not in references:
+                    references[node["result"]] = f"x{len(references) + 1}"
+        operations = {name: f"{spec['module']}.{spec['attribute']}"
+                      for name, spec in document["operations"].items()}
+
+        def blank(value):
+            # Only omit whole fields, never meaningful empty elements in arguments.
+            if isinstance(value, dict) and value.get("op") == "literal":
+                value = value["value"]
+            return value is None or value == "" or value == [] or value == {}
+
         lines = [f"Experiment plan v{document['version']} {self.identity[:12]}"]
         lines.extend(f"WARNING: {message}" for message in document["warnings"])
         lines.append("INSTRUMENTS")
@@ -839,7 +854,7 @@ class CompiledPlan:
             lines.append(f"  {role} -> {spec['name']} (KIND={spec['kind']})")
         lines.append("OPERATIONS (trusted Python; implementations are not embedded)")
         for name, spec in document["operations"].items():
-            lines.append(f"  {name}: {spec['module']}.{spec['attribute']} "
+            lines.append(f"  {operations[name]} "
                          f"version={spec['version']!r} author_asserted_safe={spec['safe_for_recording']}")
         lines.append("PARAMETERS (initial requested values, not readbacks)")
         for name, spec in document["parameters"].items():
@@ -847,8 +862,10 @@ class CompiledPlan:
                          f"unit={spec['unit']!r} bounds={explain_value(spec['bounds'])}")
             binding = spec.get("binding")
             if binding is not None:
-                lines.append(f"    binding={binding['instrument']}.{binding['member']} "
-                             f"kwargs={explain_value(binding['kwargs'])} wait={explain_value(binding['wait'])}")
+                kwargs = (f" kwargs={explain_value(binding['kwargs'])}"
+                          if not blank(binding['kwargs']) else "")
+                lines.append(f"    binding={binding['instrument']}.{binding['member']}"
+                             f"{kwargs} wait={explain_value(binding['wait'])}")
         lines.append("SWEEPS (outermost first; first-added axis changes fastest)")
         for node in walk_instructions(document["main"]):
             if node["op"] == "SWEEP":
@@ -863,9 +880,17 @@ class CompiledPlan:
         def render(nodes, depth):
             for node in nodes:
                 fields = {key: value for key, value in node.items()
-                          if key not in ("body", "then", "otherwise", "id", "op")}
-                details = " ".join(f"{key}={explain_value(value)}" for key, value in sorted(fields.items()))
-                lines.append(f"{'  ' * depth}{node['id']} {node['op']} {details}")
+                          if key not in ("body", "then", "otherwise", "id", "op") and not blank(value)}
+                details = []
+                for key, value in sorted(fields.items()):
+                    if key == "result":
+                        text = references[value]
+                    elif key == "operation" and node["op"] == "COMPUTE":
+                        text = operations[value]
+                    else:
+                        text = explain_value(value, references)
+                    details.append(f"{key}={text}")
+                lines.append(f"{'  ' * depth}{node['id']} {node['op']} {' '.join(details)}".rstrip())
                 for block in ("then", "otherwise", "body"):
                     if block in node:
                         lines.append(f"{'  ' * (depth + 1)}{block.upper()}")

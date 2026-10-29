@@ -526,8 +526,13 @@ obsolete `ACQUIRE` instructions are rejected rather than ignored.
 validation/attachment lives in `_experiment_publication.py`. Virtual-time test
 backends live in `tests/experiment/fake_executor.py` and `pipeline_executor.py`,
 with no reverse dependency from production code.
-`plan.explain()` renders symbolic expressions with `$parameter` and
-`%runtime_reference` names instead of raw expression-tree JSON. Its summary includes
+`plan.explain()` renders symbolic expressions with `$parameter`, `%named_variable`,
+and `x1`, `x2`, … temporary-result aliases instead of raw expression-tree JSON.
+COMPUTE instructions and the dependency list use qualified function names such as
+`numpy.fft.fft`. Empty instruction fields (None, empty strings/collections) and
+empty binding kwargs are omitted; zero and false remain visible. Empty arguments
+inside a nonempty argument list remain visible as well. These are display-only
+changes: saved operation/result IDs, plan identity, and execution are unchanged. Its summary includes
 registered instrument targets/KINDs, recorded Python dependencies and author safety
 assertions, initial parameter values/units/bounds and bindings, outer-to-inner sweep
 order, and resolved pipeline connections/nodes/sinks.

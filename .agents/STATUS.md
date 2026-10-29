@@ -10,6 +10,14 @@ replaces the historical discussion; it is not authorization to implement the bac
 
 ## Resume here
 
+- **Readable plan explanations complete:** explain() omits empty instruction fields
+  and binding kwargs while retaining zero/false, uses qualified compute names,
+  and aliases temporary results as x1/x2 across all phases and nested references.
+  Named variables retain %name; literal text and empty elements within argument
+  lists are preserved. Saved IDs, plan identity, round trips and execution remain
+  unchanged. All **406 tests passed in 97.489 s**; strict MkDocs and diff checks
+  pass. Logs: `.plan-explain-full-tests.log`, `.plan-explain-docs.log`.
+
 - **Filter stop-event deadlock fixed:** deterministic worker-death injection
   confirmed that multiprocessing.Event.is_set() can strand its process-shared
   lock, blocking supervision and failure cleanup. FilterServer now uses a private
@@ -448,7 +456,7 @@ FilterWorker and synchronous pipeline retirement, plus multiple acquisition inpu
 and attached pipelines):
 
 ```sh
-MPLBACKEND=Agg QT_QPA_PLATFORM=offscreen .venv/bin/python -B -m unittest discover -s tests -q  # 405 passed
+MPLBACKEND=Agg QT_QPA_PLATFORM=offscreen .venv/bin/python -B -m unittest discover -s tests -q  # 406 passed
 ```
 
 Six driver-export tests cover canonical export identity, deterministic explicit
