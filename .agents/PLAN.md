@@ -573,3 +573,110 @@ not a growing chronological test-count/change diary here.
 - [x] Add process-backed correctness/integration coverage and document the API.
 
 Complete. No further implementation slice is authorized.
+
+## Authorized slice — notebook inventory and live ownership cleanup
+
+- [x] Add fresh filtered inventory queries and a readable notebook table.
+- [x] Retain/recover client live handles; list/release one or all; preserve closed
+  aliases, optional context managers and connected hardware after release.
+- [x] Add live groups with indexing, rejection of existing client leases and partial
+  acquisition rollback. Ordinary live access shares group handles; release_all
+  includes groups.
+- [x] Add optional client labels and unique seven-hex-character live IDs (full
+  random tokens remain private); expose ownership in notebook/operator inventory.
+- [x] Add confirmed individual operator release in CLI/TUI/GUI. Reject run release,
+  revoke old handles without reacquisition, retain locks until in-flight commands
+  finish; preserve termination/quarantine and disconnect cleanup.
+- [x] Add integration/correctness tests and notebook/operator documentation.
+- [x] Run targeted runtime tests in `.venv`: all 47 server/registry/CLI/GUI and
+  operator/TUI tests pass. Updated one stale CLI assertion for the new help wording.
+  Syntax validation, git diff --check and strict local MkDocs build pass.
+- [x] Complete a clean full-suite rerun: all 401 tests pass in 95.725 and 98.818
+  seconds. Logs: `.timeout-diagnosis-repeat.log` and `.timeout-diagnosis-standard.log`.
+  An intermittent filter failure-cleanup stall later recurred; see the investigation below.
+  Desktop validation remains attended work.
+
+Protocol 5 requires fresh client/service processes. Confirmed operator release
+checks the displayed session ID again server-side to reject changed ownership.
+No expiry, heartbeat, hardware-output, or run-recovery policy changes.
+
+## Authorized slice — readable experiment identities and summary
+
+- [x] Display allocated folder stem plus seven-character ID across notebook handles,
+  service/operator output, status utilities and GUI run labels. Preserve full IDs
+  and paths in programmatic/saved data; carry the allocated name with run leases.
+- [x] Resolve unambiguous ID prefixes for run lookup/actions; reject missing or
+  ambiguous prefixes and keep RunHandle.run_id canonical/full.
+- [x] Add ExperimentServerClient.summary() printing readable server/run state,
+  progress and relevant diagnostics without path fields; preserve status/list APIs.
+- [x] Add integration/correctness and GUI/operator coverage, document contracts,
+  and validate with headless tests and strict MkDocs: all 404 tests pass in 93.207 s.
+
+Complete. Lifecycle/ownership policies and canonical IDs remain unchanged. Terminal
+output no longer emits automatic path/browser-command lines; explicit paths and
+raw JSON remain available. Logs: `.experiment-display-full-tests.log` and
+`.experiment-display-docs.log`.
+
+## Authorized slice — kill-safe filter cancellation
+
+- [x] Replace the process-shared Event with a monotonic shared-byte stop flag;
+  preserve polling intervals, failure semantics and cleanup ordering.
+- [x] Add a bounded subprocess regression killing a worker during its stop check;
+  verify blocked-producer failure, worker reaping and shared-memory reclamation.
+- [x] Demonstrate the regression with the legacy Event, repeat failure tests and
+  run the full headless suite. No broader IPC or lifecycle refactoring.
+
+Complete: the legacy Event probe hits the external watchdog; the shared-byte
+version wakes producers, reports failure, reaps children and unlinks shared slots.
+84 filter tests pass (13.198 s), 120 repeated failure/cancellation tests pass
+(22.558 s), and all 405 full-suite tests pass (110.412 s, with stress running
+concurrently). Logs: `.filter-stop-legacy.log`, `.filter-stop-tests.log`,
+`.filter-stop-stress.log`, `.filter-stop-full-tests.log`. The flag relies only on
+single-byte access on supported Linux hosts, never clearing or publishing data.
+
+## Authorized investigation — full-suite timeout
+
+- [x] Repeat full runs with per-test progress and periodic thread dumps; obtain two
+  clean 401-test runs (95.725/98.818 seconds). Another run completed in 100.363 seconds
+  with one existing pipe-drain timing assertion failure (1.815 seconds vs 1.7 limit).
+- [x] Stress the suspected filter-inspection region: 40 repetitions of all three
+  tests, 120 passes in 30.976 seconds. Time the seven added tests: 4.187 seconds,
+  including an intentional three-second in-flight command.
+- [x] Capture a recurring full-suite stall during the later display slice: in
+  `test_worker_death_unblocks_producer`, main-thread failure cleanup blocks in
+  multiprocessing.Event.set (`FilterServer._fail`), while the supervisor waits
+  on that shared event. Stack evidence: `.experiment-display-tests.log`, at 120 s.
+  The preceding inspection configure wait at 60 s completed. This fits the original
+  quiet-log region, but its exact original stack was not captured. The likely race
+  is a forcibly terminated worker holding the shared event's condition lock; the
+  lock-holder cause was subsequently reproduced deterministically: even is_set()
+  holds that lock. The user-approved fix and regression are recorded above.
+
+The display slice made no filter or timeout changes; the separately approved
+kill-safe cancellation slice above fixes the reproduced deadlock. Do not conflate
+this hang with the separate short wall-clock assertion failure. Diagnostic logs:
+`.timeout-diagnosis.log`, `.timeout-diagnosis-repeat.log`,
+`.timeout-diagnosis-standard.log`, `.timeout-inspection-stress.log`, and
+`.timeout-new-tests-timing.log`. Capture per-test progress and periodic stacks if
+it recurs; the original quiet log has insufficient evidence for a root cause.
+
+## Authorized slice — local development environment
+
+- [x] Create repository-local `.venv` with Python 3.13 and install editable `.[all]`,
+  IPython for completion tests and MkDocs Material for documentation checks.
+- [x] Verify all dependency imports and `pip check`; no conflicts. `.venv` is already
+  gitignored. Activate with `source .venv/bin/activate`, or use `.venv/bin/python`.
+
+Complete. No dependency declarations or shell defaults changed.
+
+## Authorized slice — readable operator help
+
+- [x] Replace dense command lists with grouped, multiline CLI-style help and brief
+  descriptions, shared by plain CLI and TUI. Preserve context/mode availability,
+  discovery options and safety notes without changing command behavior.
+- [x] Update context assertions and add layout/description checks; exercise help
+  through the plain prompt. Operator/CLI/TUI tests pass in `.venv` as part of the
+  47-test targeted cleanup run. Static syntax validation and git diff --check
+  passed; desktop review remains attended work.
+
+Complete. No further implementation slice is authorized.

@@ -72,17 +72,18 @@ python utils/auspex_status.py --json
 
 The utility accepts the same socket options, checks each service independently
 with bounded waits, and reports unavailable services, recovery blockers, active
-run progress/folder, and degraded status. Exit status is nonzero if either service
+run labels/progress, and degraded status. Exit status is nonzero if either service
 is unavailable; ownership and recovery blockers remain visible in the snapshot.
 
 ExperimentServer prints its banner and concise `[ExperimentServer]` run lifecycle messages:
 accepted (ID/folder), running, cancellation requested, and terminal state/reason.
 Persistence failures and unexpected runner exits are prominent. Detailed command
 traces remain in `execution.log`; terminal output is diagnostic, not authoritative.
-Both services prefix their activity messages for a shared terminal. After durable
-terminal persistence, every outcome prints its result folder and, when the checkout's
-DataBrowser utility is available, a shell-quoted command to open it **on the server
-host** (GUI dependencies required). A failed run may have no published datasets.
+Both services prefix their activity messages for a shared terminal. Human-facing
+run identities use the allocated folder stem and seven ID characters, for example
+`measurement_003 [1abc4de]`, without automatic full-path/browser-command lines.
+Full IDs and paths remain in saved status and programmatic responses; use `run.path`
+when opening DataBrowser. A failed run may have no published datasets.
 
 ### Point progress
 
@@ -147,7 +148,7 @@ from auspex_v2.experiment import CompiledPlan, ExperimentServerClient
 client = ExperimentServerClient()
 run = client.submit(CompiledPlan.load("measurement.json"),
                     name="measurement", dir="/absolute/existing/data", date=True)
-print(run.run_id, run.path)
+print(run)  # measurement_000 [1abc4de]
 ```
 
 `dir` must be an absolute, existing server-host directory. With `date=True`, the
@@ -160,15 +161,22 @@ Reconnect from another process:
 
 ```python
 client = ExperimentServerClient()
-print(client.list_runs())
-run = client.run("the-run-id-printed-at-submission")
-print(run.status())
+client.summary()  # Readable service/active/known run state and progress, no path fields
+run = client.run("the-full-or-unambiguous-short-run-id")
+status = run.status()  # Unchanged programmatic metadata
 print(run.log())                 # Last 64 KiB; complete log remains in the folder.
 print(run.plan().explain())
 print(run.wait(timeout=60))
 # run.cancel()                  # Cooperative, not an emergency stop.
 # run.cleanup()                 # Terminal catalog entry only; never deletes files.
 ```
+
+`summary()` prints plain text and returns None; failed service queries print an
+unavailable diagnostic. `status()` and `list_runs()` retain raw dictionaries and
+full IDs/paths. Short prefixes resolve against the current catalog for status,
+plan, log, cancel and cleanup; missing/ambiguous prefixes reject before action.
+`client.run(prefix)` returns a handle with its canonical full ID. Display shortening
+is not identity truncation or old-folder discovery.
 
 Read published data with `AuspexStore(run.path)` or DataBrowser. Published datasets
 are visible before terminal status if a scan has already completed. The default

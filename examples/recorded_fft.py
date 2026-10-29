@@ -42,7 +42,7 @@ def main():
     print(plan.explain())
     run = ExperimentServerClient(args.socket).submit(
         plan, name="fft", dir=args.directory, date=False)
-    print(f"Submitted {run.run_id}\nFolder: {run.path}")
+    print(f"Submitted {run}")
     print("Dataset data/fft_component should contain 0.5 after successful execution.")
 
 

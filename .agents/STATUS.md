@@ -10,6 +10,67 @@ replaces the historical discussion; it is not authorization to implement the bac
 
 ## Resume here
 
+- **Filter stop-event deadlock fixed:** deterministic worker-death injection
+  confirmed that multiprocessing.Event.is_set() can strand its process-shared
+  lock, blocking supervision and failure cleanup. FilterServer now uses a private
+  monotonic shared byte (Linux single-byte loads/stores, no clear or publication
+  semantics); parent thread synchronization, polling intervals, error policy and
+  worker-before-slot cleanup ordering remain unchanged. The subprocess-isolated
+  regression has an external watchdog and checks producer failure, child reaping,
+  repeated close and shared-memory unlinking. Its legacy Event mode reproduced
+  the hang. All **84 filter tests**, **120 repeated failure/cancellation tests**,
+  and **405 full-suite tests** pass; the full run took 110.412 s with stress running
+  concurrently. Logs: `.filter-stop-{legacy,tests,stress,full-tests}.log`. This
+  addresses the demonstrated stop-lock deadlock, not arbitrary IPC/kernel hangs.
+
+- **Readable experiment identities/summary complete:** all human-facing run labels
+  use `allocated_folder_stem [seven_id_characters]` in notebook handles, service
+  messages, CLI/TUI, status tools, live plots and offline browser labels. Automatic
+  terminal full-path/browser-command announcements are removed. Full IDs/paths stay
+  in raw APIs, JSON and saved status. Instrument run leases carry/persist the
+  allocated name for orphan/restart display (older/manual leases may lack it).
+  `client.summary()` prints server/active/known run state, progress and diagnostics
+  without path fields. Short prefixes resolve server-side for status/log/plan/cancel/
+  cleanup; unknown/ambiguous matches reject before action. Returned handles retain
+  canonical full IDs, so known-folder wait fallback is unchanged. Examples/manual
+  updated. All **404 tests passed in 93.207 seconds**; strict MkDocs and diff checks
+  pass. Logs: `.experiment-display-full-tests.log`, `.experiment-display-docs.log`.
+  During the first full attempt, the earlier intermittent hang recurred with stacks:
+  `test_worker_death_unblocks_producer` blocks in `FilterServer._fail` → shared
+  `multiprocessing.Event.set()`, while the supervisor waits on that event. A killed
+  worker holding its condition lock was then confirmed by deterministic injection;
+  see the separately authorized fix above. The display slice itself made no filter
+  or timeout change. Evidence: `.experiment-display-tests.log` at 120 s.
+  This matches the original quiet-log region but does not recover its lost stack.
+
+- **Notebook inventory/live cleanup implemented; full runtime suite passes:**
+  `instruments(state=None)` returns fresh name-keyed metadata; `show_instruments()`
+  prints a table. Clients retain/recover live handles, expose `live_sessions()`,
+  `release(name)` / `release_all()` and indexable `live_group(*names)` cleanup.
+  Groups reject pre-existing leases and roll back partial acquisition; shared
+  handles stay closed after release/reacquisition. Optional owner labels accompany
+  active-unique seven-hex-character token prefixes. CLI/TUI `release <id>` and GUI
+  **Release live ownership…** confirm the displayed owner and reject changed
+  snapshots. Revocation denies new commands, retains ownership through in-flight
+  completion/failure and never releases run leases. Protocol **5** requires fresh
+  clients/services. Integration/GUI/TUI and collision/failure tests were added or
+  strengthened. Repository-local `.venv` now contains editable `.[all]`, IPython and
+  MkDocs Material; imports and pip check pass. All **47 targeted tests passed** in
+  24.064 seconds, including real server/worker use and offscreen GUI/TUI checks.
+  After correcting the stale CLI-help assertion, two full runs pass all **401 tests**
+  in **95.725/98.818 seconds**. The seven added tests take 4.187 seconds, largely
+  accounting for the modest increase over the prior ~90-second suite. The earlier
+  240-second stall initially did not reproduce: 40 repeats of the inspection module
+  (120 tests) pass in 30.976 seconds. New stack evidence is recorded above. One
+  diagnostic full run completed in 100.363 seconds with an independent existing
+  pipe-drain timing assertion failure (1.815 s vs 1.7 s); do not claim that caused
+  the original stall. No code/timeout changes made during investigation. Syntax,
+  git diff --check and strict local MkDocs build pass. Full-pass logs:
+  `.timeout-diagnosis-repeat.log`, `.timeout-diagnosis-standard.log`; other diagnostic
+  logs are listed in PLAN.md. Activate with `source .venv/bin/activate`.
+  Desktop review remains attended work. Shared-event deadlock remediation is now
+  complete in the separately approved slice above, preserving cancellation policy.
+
 - **Multiple acquisition inputs and attached pipelines implemented:** independent
   named ingress routes retain their own schemas, window ordering, capacity progress
   and filter groups. Manual submission uses `input="name"` when ambiguous; existing
@@ -361,7 +422,7 @@ replaces the historical discussion; it is not authorization to implement the bac
 
 ## Compatibility and recent regression guardrails
 
-- **Plan format 6; dataset format 2; InstrumentServer protocol 4.** They version
+- **Plan format 6; dataset format 2; InstrumentServer protocol 5.** They version
   independently. Old plans require recompilation; no V1/old-V2 dataset import or
   automatic repair. Instrument replies use 64 KiB JSON control and bounded inline
   numeric arrays (up to 16 arrays / 8 MiB), not digitizer transport.
@@ -387,7 +448,7 @@ FilterWorker and synchronous pipeline retirement, plus multiple acquisition inpu
 and attached pipelines):
 
 ```sh
-MPLBACKEND=Agg QT_QPA_PLATFORM=offscreen python -B -m unittest discover -s tests -q  # 394 passed
+MPLBACKEND=Agg QT_QPA_PLATFORM=offscreen .venv/bin/python -B -m unittest discover -s tests -q  # 405 passed
 ```
 
 Six driver-export tests cover canonical export identity, deterministic explicit

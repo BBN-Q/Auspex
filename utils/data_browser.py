@@ -16,6 +16,7 @@ import pyqtgraph as pg
 
 from auspex_v2.data.browser import inspect_folder
 from auspex_v2.data import AuspexStore
+from auspex_v2.run_display import run_label
 from src.data_heatmap import HeatmapTab
 from src.data_trace import DataTab
 
@@ -180,7 +181,7 @@ class DataBrowser(QtWidgets.QMainWindow):
 
         def add_run(parent, path):
             nonlocal target
-            root = self._item(parent, path.name, ("folder", str(path), None, None))
+            root = self._item(parent, folder_label(path), ("folder", str(path), None, None))
             root.setToolTip(0, str(path))
             contents = self.folders.get(path)
             if contents is None:
@@ -280,7 +281,7 @@ class DataBrowser(QtWidgets.QMainWindow):
             self.statusBar().showMessage(f"Could not open {entry.name}: {exc}", 10000)
             return
         self.open_tabs[tab_key] = tab
-        index = self.tabs.addTab(tab, f"{tab_key[0].name} / {tab_key[1]}/{tab_key[2]}")
+        index = self.tabs.addTab(tab, f"{folder_label(tab_key[0])} / {tab_key[1]}/{tab_key[2]}")
         self.tabs.setTabToolTip(index, f"{tab_key[0]}/{tab_key[1]}/{tab_key[2]}")
         self.tabs.setCurrentIndex(index)
         self.tree.setCurrentItem(item)
@@ -419,11 +420,27 @@ class DataBrowser(QtWidgets.QMainWindow):
         return add_json(parent, name, value)
 
 
+def folder_label(path):
+    """Use optional durable run identity; manual stores need no status file."""
+    path = Path(path)
+    try:
+        status_file = path / "status.json"
+        if status_file.stat().st_size > 1024 * 1024:
+            return path.stem
+        status = json.loads(status_file.read_text())
+        run_id = status.get("run_id") if isinstance(status, dict) else None
+    except (OSError, ValueError):
+        run_id = None
+    return run_label(run_id, path)
+
+
 def add_json(parent, name, value):
     """Render nested JSON metadata identically in offline and live viewers."""
     item = QtWidgets.QTreeWidgetItem(parent, [str(name)])
     if isinstance(value, dict):
         for key, child in value.items():
+            if key == "run_id" and isinstance(child, str):
+                child = run_label(child, value.get("path"), name=value.get("name"))
             add_json(item, key, child)
     elif isinstance(value, list):
         for index, child in enumerate(value):

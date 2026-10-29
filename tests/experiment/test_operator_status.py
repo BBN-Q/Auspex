@@ -47,6 +47,15 @@ class OperatorStatusTest(unittest.TestCase):
         self.assertIn("40%", progress_text(progress))
         progress["total"] = None
         self.assertNotIn("%", progress_text(progress))
+        run_id = "1abc4de" + "0" * 25
+        status["instruments"]["run"].update(run_id=run_id, name="vna_sweep_003")
+        status["experiments"]["run"] = {"run_id": run_id, "path": "/data/vna_sweep_003.auspex",
+                                         "state": "RUNNING", "progress": progress}
+        text = format_status(status)
+        self.assertIn("Instrument lease: vna_sweep_003 [1abc4de]", text)
+        self.assertIn("Experiment: vna_sweep_003 [1abc4de] RUNNING", text)
+        self.assertNotIn(run_id, text)
+        self.assertNotIn("/data/", text)
 
     def test_json_cli_reports_both_unreachable_services(self):
         utility = Path(__file__).resolve().parents[2] / "utils" / "auspex_status.py"

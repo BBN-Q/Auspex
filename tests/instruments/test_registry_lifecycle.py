@@ -11,6 +11,85 @@ from auspex_v2.instruments.server.service import Registry, InstrumentServerError
 class RegistryLifecycleTest(unittest.TestCase):
     """Verify registry transition contracts independently of hardware backends."""
 
+    def test_live_short_ids_retry_collisions_without_exposing_tokens(self):
+        """Public IDs must be unique among active leases, never full authorization tokens."""
+        with tempfile.TemporaryDirectory(dir=".agents") as directory:
+            registry = Registry(Path(directory) / "state.json", quiet=True)
+            for name in ("src", "spare"):
+                registry.dispatch({"op": "REGISTER", "name": name, "driver": "SimulatedSource",
+                                   "resource": "SIM::" + name}, "owner")
+                # This is a metadata contract test, not a hardware connection test.
+                registry.instruments[name]["state"] = "CONNECTED"
+            tokens = ["a" * 32, "a" * 7 + "b" * 25, "b" * 32]
+            with patch("auspex_v2.instruments.server.service.secrets.token_hex", side_effect=tokens):
+                first = registry.dispatch({"op": "OPEN_LIVE", "name": "src", "label": "notebook"}, "owner")
+                second = registry.dispatch({"op": "OPEN_LIVE", "name": "spare"}, "owner")
+            self.assertEqual(first["session"], tokens[0])
+            self.assertEqual(second["session"], tokens[2])
+            own = registry.dispatch({"op": "LIVE_SESSIONS"}, "owner")
+            self.assertEqual(own["src"], {"id": "aaaaaaa", "label": "notebook", "revoking": False})
+            self.assertEqual(own["spare"]["id"], "bbbbbbb")
+            self.assertEqual(registry.dispatch({"op": "LIVE_SESSIONS"}, "other"), {})
+            public = repr(registry.dispatch({"op": "STATUS"}, "other"))
+            self.assertNotIn(tokens[0], public)
+            self.assertNotIn(tokens[2], public)
+            with self.assertRaisesRegex(InstrumentServerError, "another connection"):
+                registry.dispatch({"op": "CLOSE_LIVE", "session": first["session"]}, "other")
+            registry.disconnected("owner")
+            self.assertEqual(registry.live, {})
+            self.assertEqual(registry.live_info, {})
+
+    def test_revoked_command_failure_and_termination_retire_pending_lease(self):
+        """Revocation rejects further commands and releases only after the admitted wait ends."""
+        for terminate in (False, True):
+            with self.subTest(terminate=terminate), tempfile.TemporaryDirectory(dir=".agents") as directory:
+                registry = Registry(Path(directory) / "state.json", quiet=True)
+                registry.dispatch({"op": "REGISTER", "name": "src", "driver": "SimulatedSource",
+                                   "resource": "SIM::SRC"}, "owner")
+                registry.instruments["src"]["state"] = "CONNECTED"
+                worker = Mock()
+                worker.process.is_alive.return_value = True
+                registry.workers["src"] = worker
+                entered, finish = threading.Event(), threading.Event()
+                errors = []
+
+                def wait(_request):
+                    entered.set()
+                    if not finish.wait(5):
+                        raise RuntimeError("Test did not finish worker wait")
+                    raise InstrumentServerError("Worker failed")
+
+                worker.request.side_effect = wait
+                opened = registry.dispatch({"op": "OPEN_LIVE", "name": "src"}, "owner")
+                request = {"op": "GET", "name": "src", "member": "frequency", "session": opened["session"]}
+
+                def invoke():
+                    try:
+                        registry.dispatch(request, "owner")
+                    except Exception as exc:
+                        errors.append(exc)
+
+                thread = threading.Thread(target=invoke)
+                thread.start()
+                try:
+                    self.assertTrue(entered.wait(2))
+                    self.assertEqual(registry.dispatch({"op": "RELEASE_LIVE", "name": "src"}, "operator"),
+                                     {"pending": True})
+                    with self.assertRaisesRegex(InstrumentServerError, "closed or revoked"):
+                        registry.dispatch(request, "owner")
+                    self.assertEqual(len(registry.live), 1)
+                    if terminate:
+                        registry.dispatch({"op": "TERMINATE", "name": "src"}, "operator")
+                finally:
+                    finish.set()
+                    thread.join(3)
+                self.assertFalse(thread.is_alive())
+                self.assertEqual(len(errors), 1)
+                self.assertEqual(registry.live, {})
+                self.assertEqual(registry.live_info, {})
+                self.assertEqual(registry.instruments["src"]["state"], "TERMINATED")
+                registry.dispatch({"op": "RECOVER", "name": "src"}, "operator")
+
     def test_announcement_sinks_fail_independently(self):
         """Expected output errors are nonfatal and must not suppress the other sink."""
         errors = (OSError("Output unavailable"),
@@ -118,7 +197,8 @@ class RegistryLifecycleTest(unittest.TestCase):
         with tempfile.TemporaryDirectory(dir=".agents") as directory:
             path = Path(directory) / "state.json"
             registry = Registry(path, quiet=True)
-            registry.dispatch({"op": "BEGIN_RUN", "run_id": "interrupted"}, "owner")
+            registry.dispatch({"op": "BEGIN_RUN", "run_id": "interrupted", "name": "vna_sweep_003"}, "owner")
+            self.assertEqual(Registry(path, quiet=True).run["name"], "vna_sweep_003")
             registry.disconnected("owner")
             previous = registry.run
             persisted = path.read_bytes()

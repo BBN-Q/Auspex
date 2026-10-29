@@ -1,5 +1,7 @@
 """Real local-service/runner tests with simulated instruments, never hardware."""
 from datetime import datetime
+import contextlib
+import io
 import json
 import runpy
 import signal
@@ -146,6 +148,62 @@ class ExperimentServerTest(unittest.TestCase):
             _, errors = self.instrument_process.communicate()
         self.tmp.cleanup()
 
+    def test_short_run_identity_summary_and_actions_over_real_service(self):
+        """Short IDs route real actions; human text omits paths without changing persisted data."""
+        class Slow(Measurement):
+            """Keep acquisition active long enough to inspect and cancel its real lease."""
+
+            def sequence(self, seq):
+                seq.wait(5)
+                seq.publish(self.signal, data=1.0)
+
+        compiled = plan(Slow)
+        run = self.client.submit(compiled, name="vna_sweep", dir=self.data)
+        short = run.run_id[:7]
+        label = f"vna_sweep_000 [{short}]"
+        self.assertEqual(str(run), label)
+        self.assertEqual(repr(run), f"<RunHandle {label}>")
+        self.assertNotIn(run.run_id, repr(run))
+        self.assertEqual(self.client.run(short).run_id, run.run_id)
+        self.assertEqual(self.client.request("plan", run_id=short), compiled.document)
+        deadline = time.monotonic() + 10
+        while run.status()["progress"]["phase"] != "acquisition":
+            self.assertLess(time.monotonic(), deadline)
+            time.sleep(.02)
+        with InstrumentServerClient(self.instrument_socket) as instruments:
+            lease = instruments.status()["run"]
+            self.assertEqual(lease["run_id"], run.run_id)
+            self.assertEqual(lease["name"], "vna_sweep_000")
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            self.client.summary()
+        self.assertIn("ExperimentServer: busy", output.getvalue())
+        self.assertIn("Active run: " + label, output.getvalue())
+        self.assertIn("acquisition:", output.getvalue())
+        self.assertNotIn(str(self.data), output.getvalue())
+        self.assertNotIn(run.run_id, output.getvalue())
+        from utils.src.operator_commands import OperatorCommands
+        commands = OperatorCommands(self.instrument_socket, self.socket)
+        commands.execute(["experiment"])
+        self.assertIn(label, commands.execute(["runs"]).text)
+        self.assertIn(label, commands.execute(["cancel", short]).text)
+        result = run.wait(timeout=20)
+        self.assertEqual(result["state"], "CANCELLED")
+        self.assertEqual(result["run_id"], run.run_id)
+        self.assertEqual(result["path"], str(run.path))
+        self.assertIn("RUN_FINISHED CANCELLED", self.client.request("log", run_id=short))
+        self.assertEqual(json.loads((run.path / "status.json").read_text())["run_id"], run.run_id)
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            self.client.summary()
+        self.assertIn("ExperimentServer: ready", output.getvalue())
+        self.assertIn(label + " — CANCELLED", output.getvalue())
+        self.client.request("cleanup", run_id=short)
+        with self.assertRaisesRegex(RuntimeError, "Unknown run ID"):
+            self.client.run(short)
+        self.assertTrue(run.path.is_dir())
+        self.assertEqual(run.wait()["state"], "CANCELLED")  # Known-folder fallback still uses the full ID.
+
     def test_independent_trace_and_temperature_in_one_store(self):
         """Saved plans route unequal streams through shared or separate definitions.
 
@@ -271,7 +329,7 @@ print(json.dumps({'id':run.run_id, 'path':str(run.path)}))
                 self.client.submit(plan(), name="blocked", dir=self.data)
             live.session.close()
             with instruments.begin_run("other"):
-                with self.assertRaisesRegex(RuntimeError, "owned by run other"):
+                with self.assertRaisesRegex(RuntimeError, r"owned by run \[other\]"):
                     self.client.submit(plan(), name="blocked", dir=self.data)
             instruments.register("spare", "SimulatedSource", "SIM::SPARE")
             instruments.terminate("spare")

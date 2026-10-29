@@ -106,6 +106,61 @@ change. Construction also performs no I/O. In particular:
 These are hardware ports, not hardware validation: automated checks cover only
 imports, declarations/admission and the experimental marker, not device behavior.
 
+## Notebook inventory and live sessions
+
+```python
+from auspex_v2.instruments.server import InstrumentServerClient
+
+client = InstrumentServerClient(label="calibration notebook")
+client.show_instruments()                         # Readable inventory table
+registered = client.instruments()                 # Name-keyed metadata dictionaries
+connected = client.instruments(state="CONNECTED")
+list(connected)                                   # Names, not device handles
+
+# Assumes these devices are already registered and explicitly connected.
+vna = client.live("vna")
+vna = client.live("vna")                          # Same open handle; no second lease
+client.live_sessions()                           # This client's names/IDs/labels
+client.release("vna")                            # Keep hardware connected
+
+bench = client.live_group("vna", "source")
+vna = bench["vna"]
+source = bench["source"]
+bench.close()                                    # Release both; invalidate aliases
+client.release_all()                             # Includes any other open groups
+client.close()                                   # Close this client connection
+```
+
+Inventory queries obtain fresh server metadata without reading hardware. State
+filters accept `CONNECTED`, `DISCONNECTED`, `UNKNOWN`, and `TERMINATED`; connected
+is not synonymous with unowned. `status()` retains the full diagnostic snapshot.
+`show_instruments()` prints a plain-text table without pandas or GUI dependencies.
+
+The client retains live handles, so an unassigned `client.live("vna")` can be
+recovered by assigning a later call. Closing a handle or calling `release(name)`
+is idempotent and never disconnects or switches off outputs. All aliases to that
+handle stay closed even after explicit reacquisition. Context managers remain
+optional for both individual proxies and groups.
+
+Groups reject duplicate names and instruments already leased by this client.
+Acquisition is sequential: failure releases newly acquired leases, not pre-existing
+ones. Groups are independent live leases, not run locks or simultaneous commands.
+`client.live(name)` shares a group's existing handle; closing either releases that
+instrument. `release_all()` affects only this client's live leases.
+
+Optional owner labels are 1–100 printable characters. Each live lease also has a
+seven-character hexadecimal ID, unique among active leases, derived from a full
+private random token. Labels and displayed IDs aid identification, not authorization.
+Closing a notebook tab need not stop its kernel or release its leases. Closing the
+client or stopping the kernel releases live ownership when the server detects the
+connection loss; it does not disconnect hardware. There is no idle expiry.
+
+If the owning notebook cannot be found, use confirmed terminal `release <id>` or
+GUI **Release live ownership…**. These revoke only the selected live lease, never
+run ownership. New commands from its old handle fail without automatic reacquisition.
+An admitted command may finish; ownership remains locked until completion. A stuck
+command requires the existing termination/quarantine procedure, not forced reuse.
+
 ## Interactive name completion
 
 Live and run-session proxies support IPython/Jupyter name completion, for example

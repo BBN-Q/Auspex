@@ -101,7 +101,8 @@ class OperatorConsoleTest(unittest.IsolatedAsyncioTestCase):
                 execute.assert_called_once_with(["register", "a", "AgilentN5230A", "bench_vna"])
                 self.assertFalse(app.busy)
 
-    async def test_clear_requires_confirmation(self):
+    async def test_clear_and_live_release_require_confirmation(self):
+        """Confirm revocation with cached owner identity without blocking on IPC."""
         root = Path(__file__).resolve().parents[2]
         sys.path.insert(0, str(root / "utils"))
         try:
@@ -124,3 +125,18 @@ class OperatorConsoleTest(unittest.IsolatedAsyncioTestCase):
                 await pilot.press("y", "enter")
                 await pilot.pause(.1)
                 command.assert_called_once()
+                command.reset_mock()
+                app.commands.names = ["vna"]
+                app.commands.owners = {"vna": {"id": "abc1234", "label": "notebook",
+                                               "revoking": False}}
+                with patch.object(app, "_log", wraps=app._log) as log:
+                    await pilot.press("r", "e", "l", "e", "a", "s", "e", "space", "1", "enter")
+                    self.assertIsNotNone(app.pending_confirmation)
+                    self.assertIn("vna: notebook [abc1234]", log.call_args.args[0])
+                    command.assert_not_called()
+                    await pilot.press("n", "enter")
+                    command.assert_not_called()
+                    await pilot.press("r", "e", "l", "e", "a", "s", "e", "space", "1", "enter")
+                    await pilot.press("y", "enter")
+                    await pilot.pause(.1)
+                    command.assert_called_once_with(["release", "1"])

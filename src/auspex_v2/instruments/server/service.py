@@ -23,6 +23,7 @@ import threading
 import numpy as np
 
 from ...paths import auspex_directory, DiagnosticLog, home_note
+from ...run_display import run_label
 from .bulk import encode_result, ResultEncodingError
 from ..drivers.capabilities import describe_driver as _capabilities
 from ..drivers.core import SCPIInstrument
@@ -30,7 +31,7 @@ from ..drivers.registry import DRIVERS
 from ..drivers.addresses import normalize_visa_address
 
 MAX_MESSAGE = 64 * 1024
-PROTOCOL_VERSION = 4  # Prototype protocol; clients and service are updated together.
+PROTOCOL_VERSION = 5  # Prototype protocol; clients and service are updated together.
 TERMINATION_TIMEOUT = 5.0
 
 # Persisted connection states. Ownership (live/run) is tracked separately.
@@ -225,6 +226,7 @@ class Registry:
         self.discovering = False
         self.discovery_denied = {}  # last observed access denial, cleared by an explicit retry
         self.live = {}  # token -> (connection ID, registered name)
+        self.live_info = {}  # token -> public ID, owner label and pending revocation
         self.run = None  # {run_id, owner, token, orphaned}
         if clean:
             self._save()  # persist the empty inventory before accepting clients
@@ -234,9 +236,9 @@ class Registry:
                 saved = json.load(stream)
             self._restore_inventory(saved)
             if saved.get("run") is not None:
-                self.run = {"run_id": saved["run"]["run_id"], "owner": None,
-                            "token": None, "orphaned": True}
-                self.announce(f"run {self.run['run_id']}: ORPHANED on server restart")
+                self.run = {"run_id": saved["run"]["run_id"], "name": saved["run"].get("name"),
+                            "owner": None, "token": None, "orphaned": True}
+                self.announce(f"run {run_label(self.run['run_id'], name=self.run.get('name'))}: ORPHANED on server restart")
             self._save()  # after restart, prior worker state is not trusted
 
     @staticmethod
@@ -312,7 +314,7 @@ class Registry:
         failure-latching policy. Keep save/kill ordering visible in each transition.
         """
         payload = {"instruments": self.instruments, "rejected_instruments": self.rejected_instruments,
-                   "run": {"run_id": self.run["run_id"]} if self.run else None}
+                   "run": {"run_id": self.run["run_id"], "name": self.run.get("name")} if self.run else None}
         tmp = self.path.with_suffix(".tmp")
         fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         with os.fdopen(fd, "w", encoding="utf8") as stream:
@@ -336,10 +338,9 @@ class Registry:
     def disconnected(self, connection):
         """Release live sessions but quarantine the domain if a run client vanishes."""
         with self.lock:
-            released = [name for owner, name in self.live.values() if owner == connection]
-            self.live = {k: v for k, v in self.live.items() if v[0] != connection}
-            for name in released:
-                self.announce(f"{name}: LIVE session closed (client disconnected)")
+            for token, (owner, _) in list(self.live.items()):
+                if owner == connection:
+                    self._release_live(token, note=" (client disconnected)")
             if self.run and self.run["owner"] == connection:
                 self.run["owner"] = None
                 self.run["orphaned"] = True
@@ -349,7 +350,7 @@ class Registry:
                         changed.append((name, spec["state"]))
                         spec["state"] = UNKNOWN
                 self._save()
-                self.announce(f"run {self.run['run_id']}: ACTIVE -> ORPHANED (client disconnected)")
+                self.announce(f"run {run_label(self.run['run_id'], name=self.run.get('name'))}: ACTIVE -> ORPHANED (client disconnected)")
                 for name, previous in changed:
                     self.announce(f"{name}: {previous} -> UNKNOWN (run orphaned)")
 
@@ -398,6 +399,11 @@ class Registry:
             return self._open_live(request, connection)
         if op == "CLOSE_LIVE":
             return self._close_live(request, connection)
+        if op == "RELEASE_LIVE":
+            return self._revoke_live(request)
+        if op == "LIVE_SESSIONS":
+            return {name: dict(self.live_info[token])
+                    for token, (owner, name) in self.live.items() if owner == connection}
         if op == "DESCRIBE":
             name = request["name"]
             self._instrument(name)
@@ -423,10 +429,12 @@ class Registry:
         return {"registration_errors": self.registration_errors(),
                 "instruments": {name: {**spec, "locked": self.run is not None,
                     "live_sessions": sum(v[1] == name for v in self.live.values()),
+                    "live_owner": next((dict(self.live_info[token])
+                                        for token, (_, device) in self.live.items() if device == name), None),
                     "worker_running": name in self.workers, "busy": name in self.busy,
                     "operation": self.operations.get(name) if name in self.busy else None}
                     for name, spec in self.instruments.items()},
-                "run": ({"run_id": self.run["run_id"], "orphaned": self.run["orphaned"]}
+                "run": ({"run_id": self.run["run_id"], "name": self.run.get("name"), "orphaned": self.run["orphaned"]}
                         if self.run else None)}
 
     def _discover(self, request):
@@ -585,26 +593,64 @@ class Registry:
         self._available(name)
         if any(v[1] == name for v in self.live.values()):
             raise InstrumentServerError(f"{name} already has a live session")
+        label = request.get("label")
+        if label is not None and (not isinstance(label, str) or not label.strip() or
+                                  len(label) > 100 or not label.isprintable()):
+            raise InstrumentServerError("Owner label must be 1–100 printable characters")
         token = secrets.token_hex(16)
+        while any(info["id"] == token[:7] for info in self.live_info.values()):
+            token = secrets.token_hex(16)
         self.live[token] = (connection, name)
-        self.announce(f"{name}: LIVE session opened")
+        self.live_info[token] = {"id": token[:7], "label": label, "revoking": False}
+        self.announce(f"{name}: LIVE session opened [{token[:7]}]")
         return {"session": token, "capabilities": _capabilities(DRIVERS[self.instruments[name]["driver"]])}
 
     def _close_live(self, request, connection):
         """Release a connection's live session without stopping its worker."""
         token = request["session"]
-        self._live_owner(token, connection)
-        name = self.live[token][1]
-        del self.live[token]
-        self.announce(f"{name}: LIVE session closed")
+        if token in self.live:
+            if self.live[token][0] != connection:
+                raise InstrumentServerError("Live session belongs to another connection")
+            self._release_live(token)
         return None
+
+    def _release_live(self, token, *, note=""):
+        """Requires the lock: keep ownership until any admitted command finishes."""
+        name = self.live[token][1]
+        self.live_info[token]["revoking"] = True
+        if name not in self.busy:
+            del self.live[token]
+            del self.live_info[token]
+            self.announce(f"{name}: LIVE session closed{note}")
+
+    def _finish_live_release(self, name):
+        """Requires the lock: retire revoked leases after worker completion or failure."""
+        for token, (_, device) in list(self.live.items()):
+            if device == name and self.live_info[token]["revoking"]:
+                self._release_live(token)
+
+    def _revoke_live(self, request):
+        """Operator action: revoke live access only, never release run ownership."""
+        name = request["name"]
+        self._instrument(name)
+        if self.run:
+            raise InstrumentServerError("Cannot release run ownership; use orphan-run reconciliation")
+        for token, (_, device) in list(self.live.items()):
+            if device == name:
+                expected = request.get("session_id")
+                if expected is not None and expected != self.live_info[token]["id"]:
+                    raise InstrumentServerError("Live owner changed; refresh inventory before releasing")
+                self._release_live(token)
+                self.announce(f"{name}: live ownership revoked by operator")
+                return {"pending": name in self.busy}
+        raise InstrumentServerError(f"{name} has no live session")
 
     def _begin_run(self, request, connection):
         """Requires the lock: claim an available domain, rolling back if saving fails."""
         if self.closing or self.busy or self.discovering:
             raise InstrumentServerError("Cannot begin run while busy or shutting down")
         if self.run:
-            raise InstrumentServerError(f"Run {self.run['run_id']} already owns the registered domain")
+            raise InstrumentServerError(f"Run {run_label(self.run['run_id'], name=self.run.get('name'))} already owns the registered domain")
         if self.live:
             names = sorted({name for _, name in self.live.values()})
             raise InstrumentServerError(f"Cannot begin run: close live sessions on {', '.join(names)}")
@@ -615,14 +661,17 @@ class Registry:
         run_id = request["run_id"]
         if not isinstance(run_id, str) or not run_id:
             raise InstrumentServerError("run_id must be a nonempty string")
+        name = request.get("name")
+        if name is not None and (not isinstance(name, str) or not name):
+            raise InstrumentServerError("Run display name must be a nonempty string")
         token = secrets.token_hex(16)
-        self.run = {"run_id": run_id, "token": token, "owner": connection, "orphaned": False}
+        self.run = {"run_id": run_id, "name": name, "token": token, "owner": connection, "orphaned": False}
         try:
             self._save()
         except Exception:
             self.run = None
             raise
-        self.announce(f"domain: UNLOCKED -> LOCKED (run {run_id})")
+        self.announce(f"domain: UNLOCKED -> LOCKED (run {run_label(run_id, name=name)})")
         return {"session": token}
 
     def _end_run(self, request, connection):
@@ -635,7 +684,7 @@ class Registry:
         except Exception:
             self.run = previous
             raise
-        self.announce(f"domain: LOCKED -> UNLOCKED (run {previous['run_id']} ended)")
+        self.announce(f"domain: LOCKED -> UNLOCKED (run {run_label(previous['run_id'], name=previous.get('name'))} ended)")
         return None
 
     def _reconcile_run(self, request):
@@ -650,8 +699,8 @@ class Registry:
         except Exception as exc:
             self.run = previous
             raise InstrumentServerError(
-                f"Reconciliation failed; run {previous['run_id']} remains orphaned and locked: {exc}") from exc
-        self.announce(f"domain: ORPHANED -> UNLOCKED (run {previous['run_id']}; {request['reason']})")
+                f"Reconciliation failed; run {run_label(previous['run_id'], name=previous.get('name'))} remains orphaned and locked: {exc}") from exc
+        self.announce(f"domain: ORPHANED -> UNLOCKED (run {run_label(previous['run_id'], name=previous.get('name'))}; {request['reason']})")
         return None
 
     def _terminate(self, request):
@@ -787,7 +836,8 @@ class Registry:
         name = request["name"]
         self._instrument(name)
         token = request["session"]
-        if self.run:
+        # Recognize a revoked live handle even if a run has since taken ownership.
+        if self.run and token == self.run["token"]:
             self._run_owner(token, connection)
         else:
             self._live_owner(token, connection, name)
@@ -847,24 +897,28 @@ class Registry:
             self.operations[name] = "executing"
             self.announce(f"{name}: {op} {member}{detail}")
         try:
-            result = worker.request(command)
-        except Exception as exc:
+            try:
+                result = worker.request(command)
+            except Exception as exc:
+                with self.lock:
+                    if self.workers.get(name) is worker:
+                        self.busy.discard(name)
+                        del self.workers[name]
+                        worker.kill()
+                        previous = self.instruments[name]["state"]
+                        self.instruments[name]["state"] = TERMINATED
+                        self._save()
+                        self.announce(f"{name}: {previous} -> TERMINATED ({op} {member} failed: {exc})")
+                raise
             with self.lock:
-                if self.workers.get(name) is worker:
-                    self.busy.discard(name)
-                    del self.workers[name]
-                    worker.kill()
-                    previous = self.instruments[name]["state"]
-                    self.instruments[name]["state"] = TERMINATED
-                    self._save()
-                    self.announce(f"{name}: {previous} -> TERMINATED ({op} {member} failed: {exc})")
-            raise
-        with self.lock:
-            if self.workers.get(name) is not worker or self.instruments[name]["state"] != CONNECTED:
-                raise InstrumentServerError(f"{name} was terminated while {op} {member} was in progress")
-            self.busy.discard(name)
-            self.announce(f"{name}: {op} {member} -> {_result_summary(result)}")
-            return result
+                if self.workers.get(name) is not worker or self.instruments[name]["state"] != CONNECTED:
+                    raise InstrumentServerError(f"{name} was terminated while {op} {member} was in progress")
+                self.busy.discard(name)
+                self.announce(f"{name}: {op} {member} -> {_result_summary(result)}")
+                return result
+        finally:
+            with self.lock:
+                self._finish_live_release(name)
 
     @staticmethod
     def _optional_note(request):
@@ -907,14 +961,15 @@ class Registry:
         self._idle(name)
         spec = self._instrument(name)
         if self.run and not allow_run:
-            raise InstrumentServerError(f"Run {self.run['run_id']} locks all registered instruments")
+            raise InstrumentServerError(f"Run {run_label(self.run['run_id'], name=self.run.get('name'))} locks all registered instruments")
         if spec["state"] != CONNECTED:
             raise InstrumentServerError(f"{name} state is {spec['state']}; explicit connect or recovery required")
 
     def _live_owner(self, token, connection, name=None):
         session = self.live.get(token)
-        if not session or session[0] != connection or (name is not None and session[1] != name):
-            raise InstrumentServerError("No live session for this connection and instrument")
+        if (not session or session[0] != connection or
+                (name is not None and session[1] != name) or self.live_info[token]["revoking"]):
+            raise InstrumentServerError("Live session closed or revoked; acquire a new live handle explicitly")
 
     def _run_owner(self, token, connection):
         if not self.run or self.run["orphaned"] or self.run["owner"] != connection or self.run["token"] != token:

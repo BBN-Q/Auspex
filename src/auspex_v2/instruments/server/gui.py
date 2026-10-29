@@ -13,6 +13,7 @@ from ..drivers.registry import DRIVERS
 from ..drivers.addresses import normalize_visa_address
 from .discovery import hidden_reason, bulk_identifiable, filter_summary
 from ...paths import home_note
+from ...run_display import run_label
 
 if QT_LIB != "PySide6":
     raise RuntimeError("The instrument GUI requires PySide6 (install auspex-v2[gui])")
@@ -373,7 +374,7 @@ class InstrumentWindow(QtWidgets.QWidget):
     def _request(self, op, **kwargs):
         """Serialize inventory actions without opening live instrument sessions."""
         if self.closing or self.pending or op not in ("STATUS", "CONNECT", "DISCONNECT", "DISCONNECT_ALL",
-                                       "CLEAR_INSTRUMENTS", "DEREGISTER", "TERMINATE", "RECOVER", "TERMINATE_ALL"):
+                                       "CLEAR_INSTRUMENTS", "DEREGISTER", "TERMINATE", "RECOVER", "TERMINATE_ALL", "RELEASE_LIVE"):
             return
         self.pending = True
         self.pending_action = (op, kwargs)
@@ -401,12 +402,15 @@ class InstrumentWindow(QtWidgets.QWidget):
                 for button in panel.findChildren(QtWidgets.QPushButton):
                     button.setEnabled(not self.pending and bool(button.property("allowed")))
 
-    def _add_row_action(self, layout, name, label, op, *, allowed=True, confirm=None):
+    def _add_row_action(self, layout, name, label, op, *, allowed=True, confirm=None, session_id=None):
         """Add one state-dependent action without granting a live session."""
         button = QtWidgets.QPushButton(label)
         button.setProperty("allowed", allowed)
         if confirm:
-            button.clicked.connect(lambda _checked=False: self._confirm(op, confirm, name=name))
+            kwargs = {"name": name}
+            if session_id is not None:
+                kwargs["session_id"] = session_id
+            button.clicked.connect(lambda _checked=False: self._confirm(op, confirm, **kwargs))
         else:
             button.clicked.connect(lambda _checked=False: self._request(op, name=name))
         layout.addWidget(button)
@@ -423,12 +427,17 @@ class InstrumentWindow(QtWidgets.QWidget):
                 text = "\n\n".join(f"{name}: {error}" for name, error in sorted(errors.items()))
                 QtCore.QTimer.singleShot(0, lambda: self._registration_error_popup(text))
         run = status["run"]
-        self.domain.setText("Domain: " + (f"ORPHANED — {run['run_id']}" if run and run["orphaned"] else
-                                           f"RUN LOCKED — {run['run_id']}" if run else "NO RUN LOCK"))
+        self.domain.setText("Domain: " + (f"ORPHANED — {run_label(run['run_id'], name=run.get('name'))}" if run and run["orphaned"] else
+                                           f"RUN LOCKED — {run_label(run['run_id'], name=run.get('name'))}" if run else "NO RUN LOCK"))
         instruments = sorted(status["instruments"].items())
         self.table.setRowCount(len(instruments))
         for row, (name, spec) in enumerate(instruments):
-            ownership = ("Run locked" if run else "Live session" if spec["live_sessions"] else "Free")
+            owner = spec.get("live_owner")
+            ownership = ("Run locked" if run else
+                         f"{owner['label'] or 'Live'} [{owner['id']}]" if owner else
+                         "Live session" if spec["live_sessions"] else "Free")
+            if owner and owner["revoking"]:
+                ownership += " (releasing)"
             connection = spec["state"] + (" (worker running)" if spec.get("worker_running") else "")
             for col, text in enumerate((name, spec["driver"], spec["physical"], connection, ownership)):
                 self.table.setItem(row, col, QtWidgets.QTableWidgetItem(text))
@@ -443,6 +452,13 @@ class InstrumentWindow(QtWidgets.QWidget):
                                      allowed=free and spec["state"] == "CONNECTED")
             if spec["state"] in ("TERMINATED", "UNKNOWN"):
                 self._add_row_action(buttons, name, "Recover", "RECOVER", allowed=free)
+            if owner:
+                self._add_row_action(buttons, name, "Release live ownership…", "RELEASE_LIVE",
+                                     allowed=not run and not owner["revoking"],
+                                     session_id=owner["id"],
+                                     confirm=f"Release live ownership of {name}: {ownership}? "
+                                             "Outputs stay unchanged. Any in-flight command may finish; "
+                                             "ownership remains locked until it does.")
             self._add_row_action(buttons, name, "Terminate", "TERMINATE")
             self._add_row_action(buttons, name, "Clear", "DEREGISTER",
                                  allowed=free and spec["state"] == "DISCONNECTED",

@@ -33,6 +33,25 @@ FILTER_DEFAULTS = {"passthrough": {},
                    "complex_average": {"repeats": 5, "group_name": "average"}}
 
 
+class _StopFlag:
+    """One-way cancellation without a lock a killed worker can strand.
+
+    On supported Linux hosts, this shared byte needs only single-byte loads/stores.
+    All writers store 1; never clear it or use read-modify-write operations. This
+    flag signals cancellation only, not publication of other shared memory.
+    Even multiprocessing.Event.is_set() takes a process-shared lock.
+    """
+
+    def __init__(self, context):
+        self._value = context.RawValue("b", 0)
+
+    def is_set(self):
+        return bool(self._value.value)
+
+    def set(self):
+        self._value.value = 1
+
+
 @dataclass(frozen=True)
 class NodeSpec:
     """Plain construction recipe; no live filter instance crosses a process boundary."""
@@ -228,7 +247,7 @@ class FilterServer:
         self.slots = slots
         self.max_windows = max_windows
         self.context = mp.get_context("spawn")
-        self.stop = self.context.Event()
+        self.stop = _StopFlag(self.context)
         self.condition = threading.Condition()
         self.admission = threading.Lock()
         self.states = {source: WindowState() for source in self.sources}
@@ -452,7 +471,7 @@ class FilterServer:
                         self.lifecycle = "SUCCEEDED"
                         self.condition.notify_all()
                     return
-                self.stop.wait(0.002)
+                time.sleep(0.002)
         except Exception as exc:
             self._fail(f"Filter graph: {exc}")
         finally:

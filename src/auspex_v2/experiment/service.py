@@ -6,7 +6,6 @@ import json
 from multiprocessing.connection import Connection
 import os
 import signal
-import shlex
 import time
 import socket
 import subprocess
@@ -24,7 +23,7 @@ from ..instruments.server.client import InstrumentServerClient
 
 from .protocol import MAX_MESSAGE, PROTOCOL_VERSION, TERMINAL, default_socket
 from .progress import point_total
-from ..status import progress_text
+from ..run_display import progress_text, run_label
 
 
 SPLASH = r"""
@@ -84,21 +83,14 @@ class Registry:
         try:
             _atomic_json(entry["folder"].path / "status.json", status)
         except Exception as exc:
-            self.degraded = (f"Cannot persist {state} status for {entry['id']} at {entry['folder'].path}: {exc}. "
+            self.degraded = (f"Cannot persist {state} status for {run_label(entry['id'], entry['folder'].path)}: {exc}. "
                              f"Details: {details}. Durable status is unresolved; new runs are disabled.")
             entry["diagnostic"] = self.degraded
             announce(self.degraded)
             raise
         entry["status"] = status
         detail = f" — {details['reason']}" if details.get("reason") else ""
-        location = f" — {entry['folder'].path}" if state == "ACCEPTED" else ""
-        announce(f"Run {entry['id']}: {state}{location}{detail}")
-        if state in TERMINAL:
-            announce(f"Results (server host): {entry['folder'].path}")
-            browser = Path(__file__).resolve().parents[3] / "utils" / "data_browser.py"
-            if browser.is_file():
-                announce("Browse on server host (GUI required): " + shlex.join(
-                    [sys.executable, str(browser), str(entry['folder'].path)]))
+        announce(f"Run {run_label(entry['id'], entry['folder'].path)}: {state}{detail}")
 
     def _progress(self, entry, progress):
         """Requires the lock: retain current progress and throttle best-effort display."""
@@ -110,7 +102,7 @@ class Registry:
                 and now - entry.get("progress_printed", 0) < 2):
             return
         entry["progress_printed"] = now
-        text = f"Run {entry['id']}: {progress_text(progress)}"
+        text = f"Run {run_label(entry['id'], entry['folder'].path)}: {progress_text(progress)}"
         if not sys.stdout.isatty() or os.environ.get("AUSPEX_SHARED_TERMINAL"):
             # Other service processes also write here: don't leave a partial line.
             announce(text)
@@ -270,6 +262,20 @@ class Registry:
             pass  # _status records a prominent degraded diagnostic; never claim persistence.
         self.active = None
 
+    def _resolve_run(self, run_id):
+        """Requires the lock: resolve current catalog prefixes before any run action."""
+        if not isinstance(run_id, str) or not run_id:
+            raise ValueError("Run ID or prefix must be a nonempty string")
+        if run_id in self.runs:
+            return self.runs[run_id]
+        matches = [entry for key, entry in self.runs.items() if key.startswith(run_id)]
+        if not matches:
+            raise ValueError("Unknown run ID or prefix")
+        if len(matches) > 1:
+            labels = ", ".join(run_label(entry["id"], entry["folder"].path) for entry in matches)
+            raise ValueError(f"Ambiguous run ID prefix; use a longer prefix or full ID: {labels}")
+        return matches[0]
+
     def dispatch(self, request):
         if request.get("version") != PROTOCOL_VERSION:
             raise ValueError(f"Expected ExperimentServer protocol version {PROTOCOL_VERSION}")
@@ -281,7 +287,7 @@ class Registry:
                 return [{**e["status"], "progress": e.get("progress"), "diagnostic": e.get("diagnostic")} for e in self.runs.values()]
             if op == "server_status":
                 return {"active": self.active, "degraded": self.degraded}
-            entry = self.runs[request["run_id"]]
+            entry = self._resolve_run(request["run_id"])
             if op == "status":
                 return {**entry["status"], "progress": entry.get("progress"), "diagnostic": entry.get("diagnostic")}
             if op == "plan":
@@ -297,7 +303,7 @@ class Registry:
             if op == "cancel":
                 if self.active == entry["id"] and not entry["channel"].closed:
                     send(entry["channel"], {"type": "cancel"})
-                    announce(f"Run {entry['id']}: cancellation requested (cooperative)")
+                    announce(f"Run {run_label(entry['id'], entry['folder'].path)}: cancellation requested (cooperative)")
                 return None
             if op == "cleanup":
                 if self.active == entry["id"]:

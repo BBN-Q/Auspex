@@ -35,7 +35,7 @@ def terminal_commands(socket_path, lines):
             parts = commands.parse(line)
             if parts is None:
                 continue
-            if commands.confirmation(parts) and not input_confirmation(lines, line.strip()):
+            if commands.confirmation(parts) and not input_confirmation(lines, commands.confirmation_text(parts)):
                 print("[InstrumentServer] Cancelled", flush=True)
                 continue
             prompt = commands.registration_prompt(parts)

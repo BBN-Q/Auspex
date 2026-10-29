@@ -15,8 +15,13 @@ class RemoteError(Exception):
 class InstrumentServerClient:
     """Connect notebooks or scripts to the persistent local instrument service."""
 
-    def __init__(self, socket_path=None):
-        """Open the Unix socket and verify the server protocol version."""
+    def __init__(self, socket_path=None, *, label=None):
+        """Open a local connection; label is an optional human hint, not authentication."""
+        if label is not None and (not isinstance(label, str) or not label.strip() or
+                                  len(label) > 100 or not label.isprintable()):
+            raise ValueError("Owner label must be 1–100 printable characters")
+        self.label = label
+        self._live = {}  # Keep notebook leases recoverable even without an assigned handle.
         self.socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         # Whole-command deadlines belong to each registered instrument. Do not
         # impose a shorter hidden client transport timeout.
@@ -53,6 +58,32 @@ class InstrumentServerClient:
 
     def status(self):
         return self.request("STATUS")
+
+    def instruments(self, state=None):
+        """Return a fresh name-keyed inventory snapshot, optionally filtered by connection state.
+
+        This queries server metadata, not hardware. CONNECTED does not imply unowned.
+        """
+        if state is not None and state not in ("CONNECTED", "DISCONNECTED", "UNKNOWN", "TERMINATED"):
+            raise ValueError("Unknown instrument state")
+        return {name: spec for name, spec in sorted(self.status()["instruments"].items())
+                if state is None or spec["state"] == state}
+
+    def show_instruments(self):
+        """Print a compact notebook-friendly table without optional display dependencies."""
+        rows = [("Name", "Driver", "State", "Owner")]
+        for name, spec in self.instruments().items():
+            owner = spec.get("live_owner")
+            text = (f"{owner['label']} [{owner['id']}]" if owner and owner["label"] else
+                    f"[{owner['id']}]" if owner else "free")
+            if owner and owner["revoking"]:
+                text += " (releasing)"
+            if spec["locked"]:
+                text = "run locked"
+            rows.append((name, spec["driver"], spec["state"], text))
+        widths = [max(len(row[col]) for row in rows) for col in range(4)]
+        print("\n".join("  ".join(value.ljust(width) for value, width in zip(row, widths)).rstrip()
+                        for row in rows))
 
     def enumerate(self, interface="visa", *, include_metadata=False):
         """List unfiltered candidates; include_metadata adds whitelist path/warnings in an envelope."""
@@ -91,16 +122,80 @@ class InstrumentServerClient:
         return self.request("CLEAR_INSTRUMENTS")
 
     def live(self, name):
-        opened = self.request("OPEN_LIVE", name=name)
+        """Acquire or recover this client's live handle; never connect hardware implicitly."""
+        if name in self._live:
+            self.live_sessions()  # Notice operator revocation before returning a cached handle.
+            if name in self._live:
+                return self._live[name].device
+        opened = self.request("OPEN_LIVE", name=name, label=self.label)
         try:
-            return Session(self, name, opened["session"], run=False,
-                           capabilities=opened["capabilities"]).device
+            session = Session(self, name, opened["session"], run=False,
+                              capabilities=opened["capabilities"])
+            self._live[name] = session
+            return session.device
         except Exception:
             self.request("CLOSE_LIVE", session=opened["session"])
             raise
 
-    def begin_run(self, run_id):
-        return Session(self, None, self.request("BEGIN_RUN", run_id=run_id)["session"], run=True)
+    def live_sessions(self):
+        """Return this connection's live names, short IDs, labels and revocation state."""
+        owned = self.request("LIVE_SESSIONS")
+        for name, session in list(self._live.items()):
+            info = owned.get(name)
+            if info is None or info["revoking"] or info["id"] != session.token[:7]:
+                session.closed = True
+                del self._live[name]
+        return owned
+
+    def release(self, name):
+        """Release this client's live ownership; leave the device connected. Idempotent."""
+        session = self._live.get(name)
+        if session is not None:
+            session.close()
+
+    def release_all(self):
+        """Release all this client's live handles, including group-owned handles."""
+        errors = []
+        for session in list(self._live.values()):
+            try:
+                session.close()
+            except Exception as exc:
+                errors.append(exc)
+        if errors:
+            raise ExceptionGroup("Could not release all live sessions", errors)
+
+    def live_group(self, *names):
+        """Acquire independent live leases together; roll back newly acquired leases on failure.
+
+        Existing client leases and duplicate names are rejected, so closing a group
+        cannot unexpectedly release a pre-existing handle. This is not a run lease.
+        """
+        if not names or len(set(names)) != len(names):
+            raise ValueError("A live group requires distinct instrument names")
+        owned = self.live_sessions()
+        if any(name in owned for name in names):
+            raise ValueError("Live group instruments must not already be leased by this client")
+        sessions = {}
+        try:
+            for name in names:
+                self.live(name)
+                sessions[name] = self._live[name]
+        except Exception:
+            LiveGroup(sessions).close()
+            raise
+        return LiveGroup(sessions)
+
+    def revoke_live(self, name, *, session_id=None):
+        """Operator revocation, including another client's lease; caller confirms first.
+
+        A pending result means access is revoked but ownership remains until the
+        current command finishes. Run ownership is never released by this action.
+        """
+        return self.request("RELEASE_LIVE", name=name, session_id=session_id)
+
+    def begin_run(self, run_id, *, name=None):
+        """Claim the run lease; an optional allocated folder stem is for operator display only."""
+        return Session(self, None, self.request("BEGIN_RUN", run_id=run_id, name=name)["session"], run=True)
 
     def reconcile_run(self, reason):
         return self.request("RECONCILE_RUN", reason=reason)
@@ -124,10 +219,43 @@ class InstrumentServerClient:
         return self.request("RECOVER", **kwargs)
 
     def close(self):
+        """Close transport; server disconnect cleanup releases this client's live leases."""
         try:
             self.file.close()
         finally:
             self.socket.close()
+            for session in self._live.values():
+                session.closed = True
+            self._live.clear()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        self.close()
+
+
+class LiveGroup:
+    """Named device handles sharing explicit cleanup, not atomic acquisition or execution."""
+
+    def __init__(self, sessions):
+        self._sessions = dict(sessions)
+
+    def __getitem__(self, name):
+        session = self._sessions[name]
+        session._name(name)
+        return session.device
+
+    def close(self):
+        """Attempt every release, including after individual handles were already closed."""
+        errors = []
+        for session in self._sessions.values():
+            try:
+                session.close()
+            except Exception as exc:
+                errors.append(exc)
+        if errors:
+            raise ExceptionGroup("Could not close live group", errors)
 
     def __enter__(self):
         return self
@@ -180,7 +308,14 @@ class Session:
             fields["args"] = args
         elif operation != "GET":
             raise ValueError(f"Unknown instrument operation: {operation}")
-        return self.client.request(operation, **fields)
+        try:
+            return self.client.request(operation, **fields)
+        except RemoteError as exc:
+            if not self.run and "Live session closed or revoked" in str(exc):
+                self.closed = True
+                if self.client._live.get(self.name) is self:
+                    del self.client._live[self.name]
+            raise
 
     def get(self, member, *, name=None, **kwargs):
         return self._dispatch("GET", name, member, kwargs=kwargs)
@@ -195,6 +330,8 @@ class Session:
         if not self.closed:
             self.client.request("END_RUN" if self.run else "CLOSE_LIVE", session=self.token)
             self.closed = True
+            if not self.run and self.client._live.get(self.name) is self:
+                del self.client._live[self.name]
 
     def __enter__(self):
         return self

@@ -145,6 +145,7 @@ class OperatorConsole(App):
             return
         try:
             prompt = self.commands.registration_prompt(parts)
+            confirmation_text = self.commands.confirmation_text(parts)
         except ValueError as exc:
             self._log(f"[Auspex] {exc}")
             return
@@ -154,7 +155,7 @@ class OperatorConsole(App):
             return
         if self.commands.confirmation(parts):
             self.pending_confirmation = parts
-            self._log(f"[Auspex] Confirm {line}? Type y or n:")
+            self._log(f"[Auspex] Confirm {confirmation_text}? Type y or n:")
             return
         if self.commands.is_local(parts):
             self._show_result(self.commands.execute(parts))

@@ -21,7 +21,7 @@ from auspex_v2.experiment import CompiledPlan, ExperimentServerClient
 client = ExperimentServerClient()
 run = client.submit(CompiledPlan.load("measurement.plan.json"),
                     name="measurement", dir="/absolute/existing/data", date=False)
-print(run.run_id, run.path)
+print(run)                  # measurement_000 [1abc4de]
 ```
 
 The directory belongs to the server host and must already exist. The server
@@ -30,8 +30,9 @@ allocates a new numbered `.auspex` run, never overwriting an existing folder.
 completion acknowledgement.
 
 ```python
-run = client.run("PASTE_RUN_ID_HERE")
-print(run.status())
+client.summary()            # Readable server state, known runs, progress/diagnostics
+run = client.run("1abc4de")  # Use your actual unambiguous short ID (or the full ID)
+status = run.status()        # Unchanged programmatic metadata
 print(run.log())             # Last 64 KiB; complete log remains in the folder.
 print(run.plan().explain())
 # run.cancel()               # Cooperative request, not an emergency stop.
@@ -42,6 +43,25 @@ print(run.plan().explain())
 The client can exit while the runner continues. The catalog is volatile: restart
 does not scan run folders or restore handles automatically. Known saved folders
 remain inspectable directly.
+
+## Readable identities and summaries
+
+Notebook handles, terminal/TUI output, and GUI run labels use the allocated folder
+stem plus seven ID characters, such as `measurement_003 [1abc4de]`. These are display
+abbreviations, not new identifiers. `run.run_id`, `status()`, `list_runs()`, saved
+status, and JSON inspection retain full IDs; `run.path` retains the full folder path.
+Terminal announcements omit automatic full-path/browser-command lines.
+
+`client.summary()` prints service availability, the active run, known runs, state,
+point progress, and failure/cancellation diagnostics without path fields. It returns
+None and needs no GUI or pandas. CLI/TUI `status` and `runs` use the same readable
+presentation. Diagnostic messages can still contain paths reported by failing I/O.
+
+`client.run(prefix)` and run actions accept any unambiguous prefix in the current
+server catalog. For example, terminal `cancel 1abc4de` requests cooperative
+cancellation. Unknown or ambiguous prefixes fail without taking action; use a
+longer prefix or a full ID if needed. Returned handles always retain the canonical
+full ID. Lookup does not search old folders after catalog cleanup or service restart.
 
 ## Interpret completion
 

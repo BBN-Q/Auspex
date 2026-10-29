@@ -20,6 +20,7 @@ An interactive terminal accepts:
 list
 connect 1
 disconnect 1
+release 1
 recover 1
 terminate 1
 clear 1
@@ -29,7 +30,16 @@ help
 Numeric IDs refer to the most recent `list` snapshot, not permanent identities.
 `connect`, `disconnect`, `terminate`, and `clear` accept `all` where appropriate;
 there is no bulk recovery. Inspect states before acting. Clear, terminate-all,
-and standalone `shutdown` require confirmation.
+live `release`, and standalone `shutdown` require confirmation.
+
+`list` shows live owner labels and short session IDs. Confirmed `release <id>`
+revokes live ownership even if the notebook holding it cannot be found. It is
+individual-only, leaves hardware connected and outputs unchanged, and refuses run
+ownership. Confirmation identifies the owner; a changed owner requires a fresh
+`list` before release. Old notebook handles cannot send further commands. An
+in-flight command may finish, with ownership retained until it does; terminate
+and inspect a stuck device rather than reusing it. The GUI offers the same action
+as **Release live ownership…**. Run reconciliation remains separate.
 
 `shutdown` disconnects devices, clears inventory, and exits only on success.
 Ctrl+C instead stops the service while retaining saved registrations. Neither is

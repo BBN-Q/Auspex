@@ -1,6 +1,6 @@
 """Operator messages follow durable state and cannot change run outcomes."""
 import tempfile
-import shlex
+import json
 from pathlib import Path
 from types import SimpleNamespace
 import unittest
@@ -11,20 +11,28 @@ from auspex_v2.experiment.service import Registry, announce
 
 class TerminalLoggingTest(unittest.TestCase):
     def test_status_messages_follow_persistence_and_include_identity(self):
+        """Human labels omit hashes/paths while durable status retains canonical identity."""
         with tempfile.TemporaryDirectory() as directory:
             directory = str(Path(directory) / "run with 'quotes'.auspex")
             Path(directory).mkdir()
             registry = Registry(None)
-            entry = {"id": "test-run", "folder": SimpleNamespace(path=Path(directory))}
+            run_id = "1abc4de" + "0" * 25
+            entry = {"id": run_id, "folder": SimpleNamespace(path=Path(directory))}
+            label = "run with 'quotes' [1abc4de]"
             with patch("auspex_v2.experiment.service.announce") as output:
                 registry._status(entry, "ACCEPTED")
-                self.assertIn(directory, output.call_args.args[0])
+                self.assertIn(label + ": ACCEPTED", output.call_args.args[0])
                 registry._status(entry, "RUNNING")
-                self.assertIn("test-run: RUNNING", output.call_args.args[0])
+                self.assertIn(label + ": RUNNING", output.call_args.args[0])
                 registry._status(entry, "FAILED", reason="example failure")
                 self.assertTrue(any("example failure" in call.args[0] for call in output.call_args_list))
-                self.assertIn("Browse on server host", output.call_args.args[0])
-                self.assertEqual(shlex.split(output.call_args.args[0].split(": ", 1)[1])[-1], directory)
+                self.assertIn(label + ": FAILED", output.call_args.args[0])
+                for call in output.call_args_list:
+                    self.assertNotIn(run_id, call.args[0])
+                    self.assertNotIn(directory, call.args[0])
+                saved = json.loads((Path(directory) / "status.json").read_text())
+                self.assertEqual(saved["run_id"], run_id)
+                self.assertEqual(saved["path"], directory)
                 with patch("auspex_v2.experiment.service._atomic_json", side_effect=OSError("disk full")):
                     with self.assertRaises(OSError):
                         registry._status(entry, "SUCCEEDED")

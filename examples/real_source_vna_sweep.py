@@ -56,7 +56,7 @@ def main():
     experiment.add_sweep(experiment.source_frequency, [4.98e9, 4.99e9, 5.00e9, 5.01e9, 5.02e9])
     run = ExperimentServerClient(args.socket).submit(
         experiment.compile(), name="source_vna_sweep", dir=args.directory, date=True)
-    print(run.run_id, run.path)
+    print(run)
 
 
 if __name__ == "__main__":

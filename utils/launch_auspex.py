@@ -130,7 +130,7 @@ def plain_operator_prompt(instruments, experiments):
             parts = commands.parse(line)
             if commands.confirmation(parts):
                 try:
-                    answer = input(f"Confirm {line}? (y/n): ").strip().lower()
+                    answer = input(f"Confirm {commands.confirmation_text(parts)}? (y/n): ").strip().lower()
                 except EOFError:
                     return
                 if answer != "y":
@@ -164,7 +164,7 @@ def cancel_and_wait(path, children, *, report=announce, stop_wait=None):
         if not status["active"]:
             return
         handle = client.run(status["active"])
-        report(f"Run {handle.run_id} is active. Requesting cooperative cancellation.")
+        report(f"Run {handle} is active. Requesting cooperative cancellation.")
         report("Waiting for teardown/finalization. Ctrl+C again skips this wait and stops supervision; neither action guarantees outputs are off.")
         handle.cancel()
         while True:
@@ -174,7 +174,7 @@ def cancel_and_wait(path, children, *, report=announce, stop_wait=None):
                 raise RuntimeError("A service exited while waiting for cancellation")
             status = handle.status()
             if status["state"] in TERMINAL:
-                report(f"Run {handle.run_id}: {status['state']}; proceeding with shutdown")
+                report(f"Run {handle}: {status['state']}; proceeding with shutdown")
                 return
             if client.status().get("degraded"):
                 raise RuntimeError("Durable run status is unresolved")

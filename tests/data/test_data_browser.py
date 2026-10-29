@@ -1,6 +1,7 @@
 """Read-only discovery and optional offscreen DataBrowser tests."""
 
 import importlib.util
+import json
 import os
 from pathlib import Path
 import tempfile
@@ -131,10 +132,18 @@ class BrowserGuiTest(unittest.TestCase):
             a, b = (Path(directory) / "one.auspex", Path(directory) / "two.auspex")
             populate(a)
             populate(b, extra=True)
+            run_id = "1abc4de" + "0" * 25
+            (a / "status.json").write_text(json.dumps({"run_id": run_id, "path": str(a)}))
             window = browser.DataBrowser([a, b])
             try:
                 self.assertEqual(window.tree.topLevelItemCount(), 2)
                 root_a, root_b = window.tree.topLevelItem(0), window.tree.topLevelItem(1)
+                self.assertEqual(root_a.text(0), "one [1abc4de]")
+                self.assertEqual(root_b.text(0), "two")
+                status_item = browser.add_json(window.metadata.invisibleRootItem(), "status",
+                                               {"run_id": run_id, "path": str(a)})
+                self.assertIn("one [1abc4de]", status_item.child(0).text(1))
+                self.assertNotIn(run_id, status_item.child(0).text(1))
                 items_a = {root_a.child(0).child(i).data(0, browser.ROLE_KEY)[3]: root_a.child(0).child(i)
                            for i in range(root_a.child(0).childCount())}
                 for name in ("ragged",):
@@ -144,6 +153,7 @@ class BrowserGuiTest(unittest.TestCase):
                     self.assertEqual(window.tabs.count(), 0)
                 window._open_item(items_a["trace"], 0)
                 self.assertEqual(window.tabs.count(), 1)
+                self.assertIn("one [1abc4de]", window.tabs.tabText(0))
                 tab = window.tabs.widget(0)
                 np.testing.assert_array_equal(tab.curve.xData, [4.1e9, 4.13e9, 4.3e9])
                 np.testing.assert_allclose(tab.curve.yData, np.abs([1+2j, 3+4j, 5+6j]), rtol=1e-6)

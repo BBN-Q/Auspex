@@ -58,7 +58,7 @@ def main():
     experiment.add_sweep(experiment.bias, [-0.01, -0.005, 0.0, 0.005, 0.01])
     run = ExperimentServerClient(args.socket).submit(
         experiment.compile(), name="bias_vna_sweep", dir=args.directory, date=True)
-    print(run.run_id, run.path)
+    print(run)
 
 
 if __name__ == "__main__":

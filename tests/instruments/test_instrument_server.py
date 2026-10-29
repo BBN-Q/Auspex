@@ -1,5 +1,7 @@
 """Local IPC integration tests using only the simulated instrument."""
 
+import contextlib
+import io
 import json
 import os
 from pathlib import Path
@@ -76,6 +78,173 @@ class InstrumentServerTest(unittest.TestCase):
         result = client.register(name, "SimulatedSource", resource)
         client.connect(name)
         return result
+
+    def test_notebook_inventory_and_recoverable_live_handles(self):
+        """Inspect fresh metadata and recover unassigned leases without acquiring duplicates."""
+        for label in ("", "  ", "bad\nlabel", "x" * 101, 123):
+            with self.subTest(label=label), self.assertRaises(ValueError):
+                InstrumentServerClient(self.socket, label=label)
+        with InstrumentServerClient(self.socket, label="calibration notebook") as c:
+            self.register_connected(c)
+            c.register("spare", "SimulatedSource", "SIM::SPARE")
+            self.assertEqual(list(c.instruments()), ["spare", "src"])
+            self.assertEqual(list(c.instruments(state="CONNECTED")), ["src"])
+            self.assertEqual(list(c.instruments(state="DISCONNECTED")), ["spare"])
+            with self.assertRaises(ValueError):
+                c.instruments(state="available")
+            c.live("src")  # Deliberately discard the return value, as in a notebook cell.
+            source = c.live("src")
+            self.assertIs(source, c.live("src"))
+            source.output = True
+            info = c.live_sessions()["src"]
+            self.assertRegex(info["id"], r"^[0-9a-f]{7}$")
+            self.assertEqual(info["label"], "calibration notebook")
+            snapshot = c.instruments()["src"]
+            self.assertEqual(snapshot["live_sessions"], 1)
+            self.assertEqual(snapshot["live_owner"], info)
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                c.show_instruments()
+            self.assertIn("Owner", output.getvalue())
+            self.assertIn(f"calibration notebook [{info['id']}]", output.getvalue())
+            c.release("src")
+            c.release("src")
+            self.assertEqual(c.live_sessions(), {})
+            self.assertEqual(c.instruments()["src"]["state"], "CONNECTED")
+            with self.assertRaisesRegex(RuntimeError, "closed"):
+                source.get("output")
+            replacement = c.live("src")
+            self.assertIsNot(replacement, source)
+            self.assertTrue(replacement.output)  # Release did not change physical outputs.
+            with self.assertRaisesRegex(RuntimeError, "closed"):
+                source.get("frequency")
+            replacement.close()
+            self.assertEqual(c.live_sessions(), {})
+
+    def test_live_groups_rollback_aliases_and_cleanup(self):
+        """Groups release only their leases and preserve explicit closed-handle semantics."""
+        with InstrumentServerClient(self.socket) as c, InstrumentServerClient(self.socket) as other:
+            for name in ("src", "spare", "third"):
+                self.register_connected(c, name, "SIM::" + name)
+            retained = c.live("third")
+            with self.assertRaisesRegex(ValueError, "already be leased"):
+                c.live_group("src", "third")
+            self.assertEqual(set(c.live_sessions()), {"third"})
+            with other.live("spare"):
+                with self.assertRaisesRegex(RemoteError, "already has a live session"):
+                    c.live_group("src", "spare")
+                self.assertEqual(set(c.live_sessions()), {"third"})
+                self.assertEqual(set(other.live_sessions()), {"spare"})
+            for names in ((), ("src", "src")):
+                with self.assertRaises(ValueError):
+                    c.live_group(*names)
+            group = c.live_group("src", "spare")
+            source = group["src"]
+            self.assertIs(source, c.live("src"))
+            ids = [info["id"] for info in c.live_sessions().values()]
+            self.assertEqual(len(set(ids)), 3)
+            with self.assertRaises(KeyError):
+                group["missing"]
+            group.close()
+            group.close()
+            self.assertEqual(set(c.live_sessions()), {"third"})
+            self.assertEqual(retained.frequency, 1e9)
+            with self.assertRaisesRegex(RuntimeError, "closed"):
+                source.get("frequency")
+            group = c.live_group("src", "spare")
+            c.release_all()
+            self.assertEqual(c.live_sessions(), {})
+            with self.assertRaisesRegex(RuntimeError, "closed"):
+                group["src"]
+            group.close()
+            with c.live_group("src", "spare") as group:
+                self.assertEqual(group["src"].frequency, 1e9)
+            self.assertEqual(c.live_sessions(), {})
+
+    def test_operator_revocation_invalidates_old_handles_and_checks_snapshot(self):
+        """Revoke another notebook, retain connected hardware, and never affect a run lease."""
+        with InstrumentServerClient(self.socket) as owner, InstrumentServerClient(self.socket) as operator:
+            self.register_connected(owner)
+            old = owner.live("src")
+            previous_id = operator.instruments()["src"]["live_owner"]["id"]
+            from utils.src.operator_commands import OperatorCommands
+            commands = OperatorCommands(self.socket, context="standalone")
+            self.assertIn(f"[{previous_id}]", commands.execute(["list"]).text)
+            parts = commands.parse("release 1")
+            self.assertTrue(commands.confirmation(parts))
+            self.assertIn(f"src: unlabelled [{previous_id}]", commands.confirmation_text(parts))
+            with self.assertRaises(ValueError):
+                commands.parse("release all")
+            with self.assertRaisesRegex(RemoteError, "owner changed"):
+                operator.revoke_live("src", session_id="wrongid")
+            self.assertIn("pending", commands.execute(parts).text)
+            self.assertEqual(operator.instruments()["src"]["state"], "CONNECTED")
+            with self.assertRaisesRegex(RemoteError, "closed or revoked"):
+                old.get("frequency")
+            self.assertEqual(owner.live_sessions(), {})
+            with owner.live("src") as new:
+                self.assertIsNot(new, old)
+                old.close()  # Must not close the newly acquired lease.
+                self.assertEqual(new.frequency, 1e9)
+                with self.assertRaisesRegex(RemoteError, "owner changed"):
+                    commands.execute(parts)
+                operator.revoke_live("src")
+                renewed = owner.live("src")  # Explicit access refreshes a revoked cached handle.
+                self.assertIsNot(renewed, new)
+                with self.assertRaisesRegex(RuntimeError, "closed"):
+                    new.get("frequency")
+                renewed.close()
+            abandoned = owner.live("src")
+            operator.revoke_live("src")
+            with owner.begin_run("protected"):
+                with self.assertRaisesRegex(RemoteError, "closed or revoked"):
+                    abandoned.get("frequency")
+                with self.assertRaisesRegex(RemoteError, "Cannot release run ownership"):
+                    operator.revoke_live("src")
+                self.assertEqual(operator.status()["run"]["run_id"], "protected")
+            with self.assertRaisesRegex(RemoteError, "no live session"):
+                operator.revoke_live("src")
+
+    def test_revocation_holds_ownership_until_inflight_completion(self):
+        """A real worker finishes admitted work; revocation blocks reuse until it returns."""
+        with InstrumentServerClient(self.socket) as owner, InstrumentServerClient(self.socket) as operator:
+            self.register_connected(owner)
+            source = owner.live("src")
+            outcome = []
+
+            def invoke():
+                try:
+                    source.wait_for_test(3.0)
+                    outcome.append("finished")
+                except BaseException as exc:
+                    outcome.append(exc)
+
+            thread = threading.Thread(target=invoke)
+            thread.start()
+            try:
+                deadline = time.monotonic() + 5
+                while not operator.instruments()["src"]["busy"]:
+                    self.assertLess(time.monotonic(), deadline)
+                    time.sleep(0.01)
+                self.assertEqual(operator.revoke_live("src"), {"pending": True})
+                state = operator.instruments()["src"]
+                self.assertEqual(state["live_sessions"], 1)
+                self.assertTrue(state["live_owner"]["revoking"])
+                with self.assertRaises(RemoteError):
+                    operator.live("src")
+                with self.assertRaises(RemoteError):
+                    operator.begin_run("too-early")
+                with self.assertRaises(RemoteError):
+                    operator.disconnect("src")
+            finally:
+                thread.join(timeout=5)
+            self.assertFalse(thread.is_alive())
+            self.assertEqual(outcome, ["finished"])
+            self.assertEqual(operator.instruments()["src"]["live_sessions"], 0)
+            with self.assertRaisesRegex(RemoteError, "closed or revoked"):
+                source.get("frequency")
+            with operator.live("src") as new:
+                self.assertEqual(new.frequency, 1e9)
 
     def test_cli_logs_commands_and_transitions_unless_quiet(self):
         """Show a splash and operator events by default but emit nothing in quiet mode."""

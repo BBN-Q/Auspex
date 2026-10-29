@@ -6,6 +6,8 @@ behavior remains the responsibility of the selected trusted driver and operator.
 """
 import json
 import time
+from pathlib import Path
+from ..run_display import run_label
 from datetime import datetime
 from .progress import point_total
 
@@ -31,7 +33,7 @@ def check_inventory(plan, client, *, owned_run_id=None):
     active = status["run"]
     if active is not None and (owned_run_id is None or active["run_id"] != owned_run_id
                                or active["orphaned"]):
-        raise ValueError(f"Instrument domain is owned by run {active['run_id']}")
+        raise ValueError(f"Instrument domain is owned by run {run_label(active['run_id'], name=active.get('name'))}")
     inventory = status["instruments"]
     live = sorted(name for name, actual in inventory.items() if actual["live_sessions"])
     blocked = sorted(name for name, actual in inventory.items()
@@ -182,7 +184,7 @@ def run(channel, document, path, run_id, instrument_socket):
         plan = CompiledPlan(document)
         compiled = preflight_run(plan)
         client = InstrumentServerClient(instrument_socket)
-        session = client.begin_run(run_id)
+        session = client.begin_run(run_id, name=Path(path).stem)
         inventory = check_inventory(plan, client, owned_run_id=run_id)
         from ..filters.preview import planned_sweep
         sweep = (planned_sweep(document)

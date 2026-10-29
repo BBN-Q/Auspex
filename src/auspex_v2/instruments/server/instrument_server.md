@@ -230,13 +230,42 @@ permissions and setting keyword names; unsupported commands fail before worker
 dispatch. Operation Python signatures are checked by the worker. Closing a live
 lease leaves hardware connected; disconnect explicitly when desired.
 
+For notebook use without context managers, `server.live(name)` retains and returns
+an existing open handle. `live_sessions()` lists this client's leases;
+`release(name)` / `release_all()` explicitly close them without disconnecting.
+`instruments(state=None)` returns fresh name-keyed inventory metadata and
+`show_instruments()` prints a compact table. Connection state and ownership are
+separate. `status()` remains the full diagnostic API.
+
+`server.live_group("source", "vna")` returns an indexable group (`bench["vna"]`)
+with `close()` and optional context-manager cleanup. Groups reject existing client
+leases and duplicates; partial failure releases newly acquired leases only.
+Ordinary `live(name)` shares group handles. Closing a group or `release_all()`
+invalidates its aliases, which never revive after reacquisition. Groups are not
+atomic acquisitions, simultaneous commands or run leases.
+
+Optional `InstrumentServerClient(label="notebook")` labels (1–100 printable
+characters) accompany seven-hex-character IDs in inventory. IDs are random-token
+prefixes, collision-checked among active leases, not credentials. Full tokens are
+not exposed in inventory. Closing a tab need not close its kernel/connection;
+connection loss releases live leases, without changing hardware connection/output.
+
+Confirmed CLI/TUI `release <id>` and GUI **Release live ownership…** call
+`revoke_live(name, session_id=shown_id)`. A changed owner rejects a stale confirmed
+snapshot. Run ownership is never released. Revocation rejects further commands
+from old handles, with no implicit reacquisition; an admitted command may finish
+while its ownership lock remains held. The API returns `pending=True` in that case.
+Stuck commands retain the termination/quarantine path. No automatic idle expiry.
+
 ## Ownership and recovery
 
 | Action | Result |
 | --- | --- |
 | `register(...)` | Persist `DISCONNECTED`; no hardware I/O. |
 | `connect(name)` / `run.connect(name)` | Spawn and connect a worker; failure → `UNKNOWN`. |
-| `live(name)` | Lease one connected instrument. |
+| `live(name)` | Acquire/recover this client's handle for a connected instrument. |
+| `release(name)` / `release_all()` | Release this client's live leases; keep hardware connected. |
+| `revoke_live(name, session_id=None)` | Operator revocation of a live lease; never a run lease. |
 | `disconnect(name)` / `disconnect_all()` | Gracefully close workers; failure → `UNKNOWN`. |
 | `recover(name, reason=None)` | Operator acknowledgement: `UNKNOWN`/`TERMINATED` → `DISCONNECTED`; no readback or reconnect. |
 | `terminate(name)` / `terminate_all()` | Kill workers and latch `TERMINATED`; not a hardware emergency-off. |
@@ -256,7 +285,7 @@ Saved registrations and run lockout survive restart. A normal stop attempts work
 disconnect. Previously connected state becomes `UNKNOWN` after an uncertain restart;
 interrupted runs become orphaned. Nothing resumes automatically.
 
-Protocol version 4 uses a 64 KiB JSON control envelope and up to 16 inline numeric
+Protocol version 5 uses a 64 KiB JSON control envelope and up to 16 inline numeric
 NumPy arrays totaling 8 MiB per result. Typed result dictionaries preserve scalar
 keys such as integer VNA port numbers. This suits VNA traces, not digitizer streaming. Console output and ExperimentServer's execution log are diagnostics,
 not a durable audit system. Direct drivers remain available and intentionally

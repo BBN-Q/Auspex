@@ -93,7 +93,7 @@ def store_owner(path, writers, schemas, edges, status, stop, run_metadata, input
                         if slot is not None:
                             edge.release(slot)
                 if not progress:
-                    time.sleep(0.01)  # never kill a child while it holds Event's condition lock
+                    time.sleep(0.01)  # Poll for work and cancellation without busy spinning.
             if not stop.is_set():
                 _send(status, {"type": "finished"})
     except Exception as exc:

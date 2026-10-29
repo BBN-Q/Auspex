@@ -25,6 +25,9 @@ class InstrumentGuiTest(unittest.TestCase):
             state = "DISCONNECTED"
             present = True
             status_error = False
+            live_owner = None
+            run = None
+            released = []
 
             def __init__(self, socket_path):
                 pass
@@ -37,7 +40,10 @@ class InstrumentGuiTest(unittest.TestCase):
 
             def request(self, op, **kwargs):
                 self.calls.append(op)
-                if op == "CONNECT":
+                if op == "RELEASE_LIVE":
+                    self.released.append(kwargs)
+                    type(self).live_owner = None
+                elif op == "CONNECT":
                     type(self).state = "CONNECTED"
                 elif op == "DISCONNECT" or op == "DISCONNECT_ALL":
                     type(self).state = "DISCONNECTED"
@@ -50,10 +56,11 @@ class InstrumentGuiTest(unittest.TestCase):
                 if op == "STATUS":
                     if self.status_error:
                         raise ConnectionError("offline")
-                    return {"run": None, "instruments": {"src": {
+                    return {"run": self.run, "instruments": {"src": {
                         "driver": "SimulatedSource", "physical": "SIM::SRC",
                         "state": self.state, "worker_running": self.state == "CONNECTED",
-                        "live_sessions": 0, "locked": False}} if self.present else {}}
+                        "live_sessions": int(self.live_owner is not None),
+                        "live_owner": self.live_owner, "locked": False}} if self.present else {}}
                 return None
 
         app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
@@ -85,17 +92,40 @@ class InstrumentGuiTest(unittest.TestCase):
                 self.assertIn("#ff8c95", window.terminate_all.styleSheet())
                 until(lambda: window.status is not None and not window.pending)
                 self.assertTrue(window.clear_instruments.isEnabled())
+                FakeClient.run = {"run_id": "1abc4de" + "0" * 25, "name": "vna_sweep_003", "orphaned": True}
+                window._request("STATUS")
+                until(lambda: not window.pending)
+                self.assertIn("vna_sweep_003 [1abc4de]", window.domain.text())
+                self.assertNotIn(FakeClient.run["run_id"], window.domain.text())
+                FakeClient.run = None
+                window._request("STATUS")
+                until(lambda: not window.pending)
                 button(window, "Connect").click()
                 until(lambda: FakeClient.state == "CONNECTED" and not window.pending)
                 self.assertIn("Last action: CONNECT src", window.message.text())
                 window._request("STATUS")
                 until(lambda: not window.pending)
                 self.assertIn("Last action: CONNECT src", window.message.text())
+                FakeClient.live_owner = {"id": "abc1234", "label": "notebook", "revoking": False}
+                window._request("STATUS")
+                until(lambda: not window.pending)
+                self.assertIn("notebook [abc1234]", window.table.item(0, 4).text())
+                self.assertFalse(button(window, "Disconnect").isEnabled())
+                confirm.return_value = QtWidgets.QMessageBox.StandardButton.No
+                button(window, "Release live ownership…").click()
+                self.assertEqual(FakeClient.released, [])
+                self.assertIn("notebook [abc1234]", confirm.call_args.args[2])
+                confirm.return_value = QtWidgets.QMessageBox.StandardButton.Yes
+                button(window, "Release live ownership…").click()
+                until(lambda: not window.pending)
+                self.assertEqual(FakeClient.released, [{"name": "src", "session_id": "abc1234"}])
+                self.assertEqual(FakeClient.state, "CONNECTED")
+                self.assertTrue(button(window, "Disconnect").isEnabled())
                 FakeClient.status_error = True
                 window._request("STATUS")
                 until(lambda: not window.pending)
                 self.assertIn("status failed: offline", window.connection.text())
-                self.assertIn("Last action: CONNECT src", window.message.text())
+                self.assertIn("Last action: RELEASE_LIVE src", window.message.text())
                 FakeClient.status_error = False
                 window._request("STATUS")
                 until(lambda: not window.pending)
@@ -109,12 +139,12 @@ class InstrumentGuiTest(unittest.TestCase):
                 self.assertFalse(button(window, "Disconnect").isEnabled())
                 button(window, "Recover").click()
                 until(lambda: FakeClient.state == "DISCONNECTED" and not window.pending)
-                self.assertEqual(confirm.call_count, 0)  # no per-row recover/terminate prompts
+                self.assertEqual(confirm.call_count, 2)  # only the two live-release prompts
                 button(window, "Clear").click()
                 until(lambda: not FakeClient.present and not window.pending)
                 self.assertEqual(window.table.rowCount(), 0)
-                self.assertEqual(confirm.call_count, 1)
+                self.assertEqual(confirm.call_count, 3)
                 self.assertEqual(set(FakeClient.calls), {"STATUS", "CONNECT", "DISCONNECT",
-                                                        "TERMINATE", "RECOVER", "DEREGISTER"})
+                                                        "TERMINATE", "RECOVER", "DEREGISTER", "RELEASE_LIVE"})
             finally:
                 window.close()

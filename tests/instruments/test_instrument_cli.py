@@ -143,7 +143,7 @@ class InstrumentServerCliTest(unittest.TestCase):
             cli.terminal_commands("socket", iter(("shutdown", "y", "help")))
         self.assertEqual(calls, ["disconnect"])
         self.assertIn("Disconnect failures", output.getvalue())
-        self.assertIn("Letters stay stable", output.getvalue().split("Command failed:", 1)[1])
+        self.assertIn("Letters remain stable", output.getvalue().split("Command failed:", 1)[1])
 
     def test_terminal_inventory_actions_and_confirmations(self):
         """Resolve numbered IDs, reject bulk recovery, and confirm destructive actions."""

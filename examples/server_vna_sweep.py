@@ -58,7 +58,7 @@ def main():
     experiment.add_sweep(experiment.source_frequency, [5e9, 5.1e9, 5.2e9, 5.3e9])
     plan = experiment.compile()
     run = ExperimentServerClient(args.socket).submit(plan, name="vna", dir=args.directory, date=True)
-    print(f"Submitted {run.run_id}\nFolder: {run.path}\nThis client now exits; reconnect by run ID.")
+    print(f"Submitted {run}\nThis client now exits; reconnect by full or unambiguous short run ID.")
 
 
 if __name__ == "__main__":

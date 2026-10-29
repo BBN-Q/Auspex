@@ -80,7 +80,7 @@ class GraphEdge(SharedEdge):
                 return False
             if not self.backpressure:
                 raise PipelineError(f"Capacity exhausted: {self.label} data slots")
-            time.sleep(0.005)  # a killed worker must not hold Event's condition lock
+            time.sleep(0.005)  # Poll the one-way stop flag while waiting for slot credit.
         raise PipelineError("Graph cancelled")
 
     def close(self):

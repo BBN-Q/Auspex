@@ -5,6 +5,7 @@ import socket
 import time
 
 from .compiler import CompiledPlan
+from ..run_display import format_experiment_summary, run_label
 from .protocol import MAX_MESSAGE, PROTOCOL_VERSION, TERMINAL, default_socket
 
 
@@ -43,12 +44,29 @@ class ExperimentServerClient:
     def status(self):
         return self.request("server_status")
 
+    def summary(self):
+        """Print fresh readable server/run state, progress and diagnostics, without path fields."""
+        try:
+            text = format_experiment_summary(self.status(), self.list_runs())
+        except (OSError, RuntimeError) as exc:
+            text = f"ExperimentServer unavailable: {exc}"
+        print(text)
+
     def run(self, run_id):
+        """Reconnect using a full ID or an unambiguous prefix from the current catalog."""
         status = self.request("status", run_id=run_id)
-        return RunHandle(self, run_id, status["path"])
+        return RunHandle(self, status["run_id"], status["path"])
 
 
 class RunHandle:
+    """Reconnectable run identity; human representations abbreviate, operations use the full ID."""
+
+    def __str__(self):
+        return run_label(self.run_id, self.path)
+
+    def __repr__(self):
+        return f"<RunHandle {self}>"
+
     def __init__(self, client, run_id, path):
         self.client, self.run_id, self.path = client, run_id, Path(path)
 

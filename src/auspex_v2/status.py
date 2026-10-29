@@ -3,6 +3,7 @@ import json
 import socket
 
 from .experiment.client import ExperimentServerClient
+from .run_display import progress_text, run_label
 from .instruments.server.bulk import decode_result
 from .instruments.server.service import PROTOCOL_VERSION
 
@@ -44,20 +45,6 @@ def inspect_services(instrument_socket, experiment_socket, *, timeout=1):
     return result
 
 
-def progress_text(progress):
-    completed, total = progress["completed"], progress["total"]
-    if total is None:
-        count = f"{completed} points completed"
-    else:
-        fraction = min(1, completed / total) if total else 0
-        bars = int(20 * fraction)
-        count = f"[{'#' * bars}{'-' * (20 - bars)}] {fraction:.0%}  {completed}/{total} points completed"
-    units = progress.get("coordinate_units", {})
-    coordinates = ", ".join(f"{name}={value}" + (f" {units[name]}" if units.get(name) else "")
-                            for name, value in progress.get("coordinates", {}).items())
-    return f"{progress['phase']}: {count}" + (f"  ({coordinates})" if coordinates else "")
-
-
 def format_status(snapshot):
     lines = []
     instruments = snapshot["instruments"]
@@ -80,7 +67,7 @@ def format_status(snapshot):
             lines.append(f"REGISTRATION ERROR — {name}: {error}")
         lease = instruments.get("run")
         if lease:
-            lines.append(f"Instrument lease: {lease['run_id']}" + (" ORPHANED; inspect hardware, then reconcile explicitly" if lease["orphaned"] else " (domain locked)"))
+            lines.append(f"Instrument lease: {run_label(lease['run_id'], name=lease.get('name'))}" + (" ORPHANED; inspect hardware, then reconcile explicitly" if lease["orphaned"] else " (domain locked)"))
     experiments = snapshot["experiments"]
     if not experiments["reachable"]:
         lines.append(f"ExperimentServer unavailable: {experiments['error']}")
@@ -89,7 +76,7 @@ def format_status(snapshot):
             lines.append(f"ExperimentServer degraded: {experiments['degraded']}")
         run = experiments.get("run")
         if run:
-            lines.append(f"Experiment: {run['run_id']} {run['state']} — {run['path']}")
+            lines.append(f"Experiment: {run_label(run['run_id'], run['path'])} {run['state']}")
             if run.get("progress"):
                 lines.append("  " + progress_text(run["progress"]))
                 lines.append(f"  Last progress update: {run['progress'].get('updated_at', 'unknown')}")

@@ -81,7 +81,7 @@ def main():
     print(plan.explain())
     run = ExperimentServerClient(args.socket).submit(
         plan, name="source_vna", dir=args.directory, date=False)
-    print(f"Submitted {run.run_id}\nFolder: {run.path}")
+    print(f"Submitted {run}")
 # --8<-- [end:submission]
 
 

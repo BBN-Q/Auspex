@@ -59,6 +59,14 @@ with FilterServer(schema, nodes, edges, results, backpressure=True) as graph:
 
 `failed` is a thread event for the future runner/coordinator. `check()`, submission, and result/completion waits raise the latched error. Required errors stop admission, wake blocked producers, and trigger cooperative shutdown followed by termination if necessary. `cancel()` requests this failure path; `close()` joins cleanup and cancels an unfinished run. Neither cancellation nor a timeout counts as successful completion. The coordinator remains responsible for stopping the experiment and hardware; killing a filter does not stop an instrument.
 
+Cancellation uses a private, monotonic shared-byte flag, not a multiprocessing
+Event: even `Event.is_set()` takes a process-shared lock that a killed worker can
+strand. On supported Linux hosts, the flag uses single-byte loads/stores; every
+writer only stores true. It is never cleared and does not publish other memory.
+Parent-only thread events/conditions retain their ordinary synchronization role.
+Workers are still reaped before shared slots are reclaimed. This removes the
+stop-event deadlock, not every possible IPC or uninterruptible-I/O failure.
+
 ### Scan boundaries and graph-backed persistence
 
 `Batch(scan="sweep_000", sweep=(SweepPosition("bias", 0.2, "V"), ...))` carries the runner-supplied actual sweep position. `PortSchema` declares the value name/unit and per-batch measurement-axis meaning. `FilterServer(input_name="vna_s21", ...)` names the acquisition ingress; saved datasets identify both that input and their producing output port. After its final `end_window`, the runner calls `end_scan("sweep_000")`, then may `wait_scan("sweep_000")`. The averager rejects unfinished groups at scan end and may not average across sweep positions or scans. `finish()` requires an explicit scan end for any non-default scan. The runner cannot switch scans before closing the previous one. `scan` must be a safe file-name component.

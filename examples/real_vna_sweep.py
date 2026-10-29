@@ -49,7 +49,7 @@ def main():
     experiment.add_sweep(experiment.center, [5.98e9, 5.99e9, 6.00e9, 6.01e9, 6.02e9])
     run = ExperimentServerClient(args.socket).submit(
         experiment.compile(), name="vna_sweep", dir=args.directory, date=True)
-    print(run.run_id, run.path)
+    print(run)
 
 
 if __name__ == "__main__":

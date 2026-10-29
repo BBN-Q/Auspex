@@ -78,6 +78,14 @@ warn in the discovery summary rather than guessing an endpoint.
 
 ## Inventory actions
 
+Live ownership shows the optional notebook label and short session ID. Per-device
+**Release live ownership…** requires confirmation identifying that owner, even if
+the notebook cannot be found. It leaves hardware connected and outputs unchanged,
+and cannot release run ownership. A changed owner rejects the stale action. Old
+handles lose access; an in-flight command may finish while ownership stays locked.
+A pending release is labelled `releasing`; a stuck command still requires the
+termination/quarantine procedure. This is separate from run reconciliation.
+
 Global actions:
 
 - **Terminate All** quarantines all registered instruments and attempts to kill every worker, without releasing leases or run locks. Confirmation and a software-only warning are shown. This is **not** an emergency off.

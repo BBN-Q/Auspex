@@ -1,6 +1,7 @@
 """Retention, GUI lifecycle and shared-renderer checks for detached live plots."""
 
 import copy
+import json
 from dataclasses import replace
 import importlib.util
 import os
@@ -65,11 +66,16 @@ class PlotClientGuiTest(unittest.TestCase):
                     pipeline.submit(np.array([1+2j, 3+4j, 5+6j]) + bias,
                         axes=[Axis("frequency", [2., 4., 7.], "Hz")],
                         sweep={"bias": bias}, sweep_units={"bias": "V"})
+            run_id = "1abc4de" + "0" * 25
+            (path / "status.json").write_text(json.dumps({"run_id": run_id, "state": "SUCCEEDED"}))
             window = self.module.PlotClient([path], discover=False, auto_poll=False)
             try:
                 initial = poll_run(path)
                 window.apply_updates([initial])
                 self.assertEqual(window.tabs.count(), 2)
+                self.assertIn("run [1abc4de]", window.tree.topLevelItem(0).text(0))
+                self.assertIn("run [1abc4de]", window.tabs.tabText(0))
+                self.assertNotIn(run_id, window.tree.topLevelItem(0).text(0))
                 run = poll_run(path, wanted=["bias_map", "current_trace"])
                 window.apply_updates([run])
                 window.show()
@@ -105,11 +111,15 @@ class PlotClientGuiTest(unittest.TestCase):
                 self.assertEqual(trace.component.currentText(), "Imaginary")
                 window.tabs.setCurrentWidget(window.open_tabs[map_key])
                 focused = window.tabs.currentWidget()
-                second = {**run, "id": "second", "name": "New experiment", "order": run["order"] + 1}
+                second_id = "2abc4de" + "0" * 25
+                second = {**run, "id": second_id, "name": "New experiment",
+                          "path": str(Path(directory) / "new_experiment_003.auspex"),
+                          "status": {"run_id": second_id, "state": "SUCCEEDED"},
+                          "order": run["order"] + 1}
                 window.apply_updates([second])
                 self.assertEqual(window.tabs.count(), 4)
                 self.assertIs(window.tabs.currentWidget(), focused)
-                self.assertIn("New experiment", window.tree.topLevelItem(0).text(0))
+                self.assertIn("new_experiment_003 [2abc4de]", window.tree.topLevelItem(0).text(0))
                 self.assertGreater(window.metadata.topLevelItemCount(), 0)
                 window.close_tab(window.tabs.indexOf(focused))
                 self.assertIn(map_key, window.catalog.plots)

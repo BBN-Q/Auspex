@@ -3,18 +3,48 @@
 from dataclasses import dataclass
 
 from auspex_v2.experiment.client import ExperimentServerClient
+from auspex_v2.run_display import format_experiment_summary, format_runs, run_label
 from auspex_v2.instruments.server import InstrumentServerClient
 from auspex_v2.instruments.server.discovery import hidden_reason, bulk_identifiable, filter_summary
 
 
-ENUMERATE_HELP = "enumerate visa [--serial] [--prologix] [--show-permission-denied]"
-INSTRUMENT_HELP = (ENUMERATE_HELP + "; identify <letter|all>; register <letter> <driver>; list; "
-                   "connect <id|all>; disconnect <id|all>; recover <id>; terminate <id|all>; clear <id|all>; help")
-DISCOVERY_HELP = ("Discovery defaults: serial/Prologix hidden; permission-denied hidden. "
-                  "Server $AUSPEX_HOME/instrument_whitelist.txt (HOME fallback) overrides visibility. "
-                  "identify all confirms and probes visible non-serial/non-Prologix candidates only; "
-                  "identify <letter> can retry a hidden candidate. Letters stay stable until enumeration.")
-EXPERIMENT_HELP = "status; runs; cancel <run-id>; help; instruments"
+INSTRUMENT_HELP = """Instruments — discover devices and manage inventory/connections.
+
+Discovery:
+  enumerate visa [options]     List VISA candidates without opening devices.
+  identify <letter|all>       Probe identity and suggest drivers; all confirms first.
+  register <letter> <driver>  Register a candidate; prompts for an inventory name.
+                             Registration leaves the device disconnected.
+
+Inventory:
+  list                       Show numeric IDs, connection states and ownership.
+  connect <id|all>            Connect devices; all selects disconnected devices.
+  disconnect <id|all>         Disconnect devices from the server.
+  release <id>               Confirm revocation of live ownership; stay connected.
+  recover <id>               Acknowledge inspection; reset to disconnected.
+  terminate <id|all>          Stop device workers; does not switch off outputs.
+  clear <id|all>              Remove disconnected, worker-free, unowned entries.
+
+Discovery options (enumerate visa):
+  --serial                   Show serial candidates (hidden by default).
+  --prologix                 Show Prologix candidates (hidden by default).
+  --show-permission-denied   Show permission-denied candidates (hidden by default).
+
+Notes:
+  Use letters from enumerate visa for discovery, numeric IDs from list for inventory.
+  Letters remain stable until the next enumeration.
+  identify all skips hidden, serial, Prologix and registered candidates.
+  identify <letter> can retry a hidden candidate.
+  Visibility overrides: server $AUSPEX_HOME/instrument_whitelist.txt (HOME fallback).
+  Release revokes live access only; in-flight commands finish before lock release.
+  Recovery and termination do not guarantee that physical outputs are off."""
+
+EXPERIMENT_HELP = """Experiment — inspect runs and request cancellation.
+
+Commands:
+  status                     Show ExperimentServer status.
+  runs                       List known runs.
+  cancel <run-id>             Request cancellation; unambiguous short IDs accepted."""
 
 
 @dataclass(frozen=True)
@@ -42,6 +72,7 @@ class OperatorCommands:
         self.mode = "Instruments"
         self.names = []
         self.identities = {}
+        self.owners = {}  # Snapshot shown before confirming individual live revocation.
         self.candidates = {}
         self.filters = {}
         self.whitelist_warning = None
@@ -79,21 +110,30 @@ class OperatorCommands:
                      command == "identify" and len(parts) == 2 or
                      command == "register" and len(parts) == (4 if registration_name else 3) or
                      command == "list" and len(parts) == 1 or
-                     command in ("connect", "disconnect", "recover", "terminate", "clear") and len(parts) == 2)
+                     command in ("connect", "disconnect", "recover", "terminate", "clear", "release") and len(parts) == 2)
             if not valid:
                 raise ValueError("Invalid command; type help.")
-            if command == "recover" and parts[1].lower() == "all":
-                raise ValueError("Recovery must be individual; type help.")
+            if command in ("recover", "release") and parts[1].lower() == "all":
+                raise ValueError("Recovery must be individual; type help." if command == "recover" else
+                                 "Live release must be individual; type help.")
         elif not (command in ("status", "runs") and len(parts) == 1 or
                   command == "cancel" and len(parts) == 2):
             raise ValueError("Invalid command; type help.")
 
     def help_text(self):
         """Describe only commands available in this console's current context and mode."""
-        if self.mode == "Experiment":
-            return EXPERIMENT_HELP
-        extra = "experiment" if self.context == "launcher" else "shutdown"
-        return f"{INSTRUMENT_HELP}; {extra}\n{DISCOVERY_HELP}"
+        text = EXPERIMENT_HELP if self.mode == "Experiment" else INSTRUMENT_HELP
+        lines = [text, "", "Console:",
+                 "  help                       Show this help."]
+        if self.context == "launcher":
+            if self.mode == "Instruments":
+                lines.append("  experiment                 Switch to experiment commands.")
+            else:
+                lines.append("  instruments                Switch to instrument commands.")
+            lines.append("  Ctrl+C                     Stop launcher/services; preserve registrations.")
+        else:
+            lines.append("  shutdown                   Confirm disconnect, clear inventory and stop server.")
+        return "\n".join(lines)
 
     @staticmethod
     def is_local(parts):
@@ -103,8 +143,22 @@ class OperatorCommands:
     def confirmation(self, parts):
         """Bulk termination and inventory removal require an explicit operator yes."""
         return (self.mode == "Instruments" and
-                (parts[0].lower() in ("clear", "shutdown") or
+                (parts[0].lower() in ("clear", "shutdown", "release") or
                  parts[0].lower() in ("terminate", "identify") and parts[1].lower() == "all"))
+
+    def confirmation_text(self, parts):
+        """Describe cached ownership without IPC on the TUI thread; execution rechecks it."""
+        if parts[0].lower() != "release":
+            return " ".join(parts)
+        target = parts[1]
+        if not target.isdecimal() or not 1 <= int(target) <= len(self.names):
+            raise ValueError("Unknown ID; run list first")
+        name = self.names[int(target) - 1]
+        owner = self.owners.get(name)
+        if owner is None:
+            raise ValueError("No live owner in snapshot; run list first")
+        return (f"release live ownership of {name}: {owner['label'] or 'unlabelled'} "
+                f"[{owner['id']}] (outputs unchanged; in-flight command may finish)")
 
     def registration_prompt(self, parts):
         """Return a cached registration-name prompt, or None when no name is needed."""
@@ -200,11 +254,12 @@ class OperatorCommands:
         """Query or cancel through the independent experiment client; never supervise its process."""
         client = ExperimentServerClient(self.experiment_socket)
         if parts[0].lower() == "status":
-            return f"ExperimentServer: {client.status()}"
+            return format_experiment_summary(client.status(), client.list_runs())
         if parts[0].lower() == "runs":
-            return f"Runs: {client.list_runs()}"
+            return "Runs:\n" + format_runs(client.list_runs())
         run = client.run(parts[1])
-        return f"Cancel requested for {run.run_id}: {run.cancel()}"
+        run.cancel()
+        return f"Cancel requested for {run}"
 
     def _instrument_command(self, client, parts):
         """Execute shared discovery/inventory policy, revalidating snapshot IDs before acting."""
@@ -216,13 +271,21 @@ class OperatorCommands:
             self.names = sorted(status["instruments"])
             self.identities = {name: (spec["driver"], spec["physical"])
                                for name, spec in status["instruments"].items()}
+            self.owners = {name: spec.get("live_owner")
+                           for name, spec in status["instruments"].items()}
             run = status["run"]
-            lines = [f"Run: {run or 'none'}"]
+            label = run_label(run["run_id"], name=run.get("name")) if run else "none"
+            lines = [f"Run: {label}" + (" (orphaned)" if run and run["orphaned"] else "")]
             lines.extend(f"REGISTRATION ERROR — {name}: {error}"
                          for name, error in sorted(status.get("registration_errors", {}).items()))
             for index, name in enumerate(self.names, 1):
                 spec = status["instruments"][name]
-                owner = "run locked" if run else "live session" if spec["live_sessions"] else "free"
+                live = spec.get("live_owner")
+                owner = ("run locked" if run else
+                         f"live: {live['label'] or ''} [{live['id']}]" if live else
+                         "live session" if spec["live_sessions"] else "free")
+                if live and live["revoking"]:
+                    owner += " (releasing)"
                 lines.append(f"{index}. {name} — {spec['state']} — {owner} ({spec['driver']}, {spec['physical']})")
             return "\n".join(lines + (["No registered instruments"] if not self.names else []))
         target = parts[1].lower()
@@ -254,8 +317,12 @@ class OperatorCommands:
         spec = status["instruments"].get(name)
         if spec is None or (spec["driver"], spec["physical"]) != self.identities[name]:
             raise ValueError("Inventory changed; run list again")
-        method = "deregister" if command == "clear" else command
-        result = getattr(client, method)(name)
+        method = {"clear": "deregister", "release": "revoke_live"}.get(command, command)
+        if command == "release":
+            self.confirmation_text(parts)
+            result = client.revoke_live(name, session_id=self.owners[name]["id"])
+        else:
+            result = getattr(client, method)(name)
         if command == "clear":
             self.names = []
         return f"{command} {name}: {result if result is not None else 'done'}"

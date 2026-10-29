@@ -64,7 +64,7 @@ print(plan.explain())
 # Start the services and register a matching source first. These abstract
 # source commands illustrate the API; adapt them to your admitted driver.
 run = ExperimentServerClient().submit(plan, name="measurement", dir="/path/to/data")
-print(run.run_id, run.path)
+print(run)  # measurement_000 [1abc4de]
 ```
 
 Instrument roles use the fixed, case-sensitive `InstrumentKind` vocabulary. An
@@ -244,7 +244,7 @@ from auspex_v2.experiment import CompiledPlan, ExperimentServerClient
 
 plan = CompiledPlan.load("measurement.plan.json")
 run = ExperimentServerClient().submit(plan, name="measurement", dir="/path/to/data")
-print(run.run_id, run.path)
+print(run)  # measurement_000 [1abc4de]
 # Optional: result = run.wait(timeout=60)
 ```
 

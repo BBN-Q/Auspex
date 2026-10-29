@@ -8,6 +8,7 @@ import threading
 from PySide6 import QtCore, QtWidgets
 
 from auspex_v2.experiment.client import ExperimentServerClient
+from auspex_v2.run_display import run_label
 from auspex_v2.filters.preview_client import poll_run
 from src.data_trace import DataTab
 from src.data_heatmap import HeatmapTab
@@ -193,7 +194,7 @@ class PlotClient(QtWidgets.QMainWindow):
         pane = PlotPane(key)
         self.open_tabs[key] = pane
         record = self.catalog.plots[key]
-        self.tabs.addTab(pane, f"{record['run']['name']} — {key[1]}")
+        self.tabs.addTab(pane, f"{run_label(record['run']['status'].get('run_id'), record['run']['path'])} — {key[1]}")
         self._update_pane(key)
         if focus:
             self.tabs.setCurrentWidget(pane)
@@ -230,7 +231,7 @@ class PlotClient(QtWidgets.QMainWindow):
         for key, record in sorted(self.catalog.plots.items(), key=lambda p: p[1]["order"], reverse=True):
             run = record["run"]
             if key[0] not in roots:
-                root = QtWidgets.QTreeWidgetItem([f"{run['name']} — {Path(run['path']).stem} [{record['state']}]"])
+                root = QtWidgets.QTreeWidgetItem([f"{run_label(run['status'].get('run_id'), run['path'])} — {record['state']}"])
                 self.tree.addTopLevelItem(root)
                 roots[key[0]] = root
                 root.setData(0, ROLE, ("run", key[0]))

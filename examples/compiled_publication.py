@@ -57,7 +57,7 @@ def main():
     plan = experiment.compile()
     run = ExperimentServerClient(args.socket).submit(
         plan, name="publication", dir=args.directory, date=False)
-    print(f"Submitted {run.run_id}\nFolder: {run.path}\nDataset: measurement/response")
+    print(f"Submitted {run}\nDataset: measurement/response")
 
 
 if __name__ == "__main__":
